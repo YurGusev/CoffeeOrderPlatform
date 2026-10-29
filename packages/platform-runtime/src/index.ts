@@ -1,4 +1,6 @@
-import { readFile, stat } from "node:fs/promises";
+import { constants } from "node:fs";
+import { lstat, open, readFile, realpath, stat } from "node:fs/promises";
+import { dirname, isAbsolute, resolve } from "node:path";
 import {
   monitorEventLoopDelay,
   PerformanceObserver,
@@ -15,7 +17,12 @@ import {
   type Span,
 } from "@opentelemetry/api";
 import {
-  loadPlatformConfig,
+  deriveRuntimeDatabaseTarget,
+  deriveRuntimeKafkaTarget,
+  loadPlatformConfigWithSource,
+  validateLaunchDatabaseIdentity,
+  verifyLaunchConfigBytes,
+  type LaunchDatabaseIdentity,
   type HealthConfig,
   type PlatformConfig,
   type RuntimeName,
@@ -200,6 +207,70 @@ export class RuntimeError extends Error {
     super(code);
     this.name = "RuntimeError";
     this.code = code;
+  }
+}
+
+export async function readLaunchDatabaseIdentity(
+  contextPath: string,
+): Promise<LaunchDatabaseIdentity> {
+  if (
+    !isAbsolute(contextPath) ||
+    resolve(contextPath) !== contextPath ||
+    (await realpath(contextPath).catch(() => null)) !== contextPath
+  )
+    throw new RuntimeError("RUNTIME_LAUNCH_CONTEXT_PATH_INVALID");
+  const before = await lstat(contextPath).catch(() => null);
+  if (
+    !before?.isFile() ||
+    before.isSymbolicLink() ||
+    (before.mode & 0o222) !== 0 ||
+    before.size > 16 * 1024
+  )
+    throw new RuntimeError("RUNTIME_LAUNCH_CONTEXT_FILE_INVALID");
+  let handle;
+  try {
+    handle = await open(contextPath, constants.O_RDONLY | constants.O_NOFOLLOW);
+    const opened = await handle.stat();
+    if (
+      !opened.isFile() ||
+      (opened.mode & 0o222) !== 0 ||
+      opened.size > 16 * 1024 ||
+      opened.dev !== before.dev ||
+      opened.ino !== before.ino
+    )
+      throw new RuntimeError("RUNTIME_LAUNCH_CONTEXT_FILE_INVALID");
+    const bytes = await handle.readFile();
+    if (bytes.byteLength > 16 * 1024)
+      throw new RuntimeError("RUNTIME_LAUNCH_CONTEXT_FILE_INVALID");
+    const after = await lstat(contextPath).catch(() => null);
+    if (
+      !after?.isFile() ||
+      after.isSymbolicLink() ||
+      (after.mode & 0o222) !== 0 ||
+      after.dev !== opened.dev ||
+      after.ino !== opened.ino
+    )
+      throw new RuntimeError("RUNTIME_LAUNCH_CONTEXT_FILE_INVALID");
+    const document = JSON.parse(bytes.toString("utf8")) as unknown;
+    if (!secretRecord(document))
+      throw new RuntimeError("RUNTIME_LAUNCH_CONTEXT_INVALID");
+    let identity: LaunchDatabaseIdentity;
+    try {
+      identity = validateLaunchDatabaseIdentity({
+        schemaVersion: document["schemaVersion"],
+        runId: document["runId"],
+        candidateSha: document["candidateSha"],
+        baseConfigSha256: document["baseConfigSha256"],
+      });
+    } catch {
+      throw new RuntimeError("RUNTIME_LAUNCH_CONTEXT_INVALID");
+    }
+    return identity;
+  } catch (error) {
+    if (error instanceof RuntimeError) throw error;
+    throw new RuntimeError("RUNTIME_LAUNCH_CONTEXT_INVALID");
+  } finally {
+    await handle?.close().catch(() => undefined);
   }
 }
 
@@ -1173,7 +1244,8 @@ export async function startConfiguredRuntime(
     if (
       (key.startsWith("COFFEE_") || key.startsWith("SOPS_")) &&
       key !== "COFFEE_CONFIG_FILE" &&
-      key !== "COFFEE_RUNTIME_SECRETS_FILE"
+      key !== "COFFEE_RUNTIME_SECRETS_FILE" &&
+      key !== "COFFEE_LAUNCH_CONTEXT_FILE"
     )
       throw new Error(
         `${key}: runtime accepts only configuration locator variables`,
@@ -1181,12 +1253,59 @@ export async function startConfiguredRuntime(
   }
   const configPath = process.env["COFFEE_CONFIG_FILE"];
   const secretsPath = process.env["COFFEE_RUNTIME_SECRETS_FILE"];
+  const launchContextPath = process.env["COFFEE_LAUNCH_CONTEXT_FILE"];
   if (!configPath) throw new Error("COFFEE_CONFIG_FILE: locator is required");
   if (!secretsPath)
     throw new Error("COFFEE_RUNTIME_SECRETS_FILE: locator is required");
-  const config = await loadPlatformConfig(configPath, (text) =>
+  const loadedConfig = await loadPlatformConfigWithSource(configPath, (text) =>
     parseYaml(text, { json: true }),
   );
+  const config = loadedConfig.config;
+  if (/^\/dev\/shm\/coffee-g17-[a-f0-9]{16,64}$/u.test(config.postgres.host))
+    throw new RuntimeError("RUNTIME_G17_SOCKET_STANDALONE_ONLY");
+  if (config.databaseIsolation.enabled !== Boolean(launchContextPath))
+    throw new RuntimeError("RUNTIME_LAUNCH_CONTEXT_POLICY_MISMATCH");
+  if (launchContextPath && config.environment === "production")
+    throw new RuntimeError("RUNTIME_LAUNCH_CONTEXT_PRODUCTION_DENIED");
+  const service = config.services[name];
+  let launchIdentity: LaunchDatabaseIdentity | undefined;
+  if (launchContextPath)
+    launchIdentity = await readLaunchDatabaseIdentity(launchContextPath);
+  if (launchIdentity) {
+    try {
+      verifyLaunchConfigBytes({
+        actualConfigBytes: loadedConfig.sourceBytes,
+        baseConfigSha256: launchIdentity.baseConfigSha256,
+        runtime: name,
+        environment: config.environment,
+        databaseIsolationEnabled: config.databaseIsolation.enabled,
+        mutationsEnabled: service.mutationsEnabled,
+      });
+    } catch {
+      throw new RuntimeError("RUNTIME_LAUNCH_CONFIG_SHA_MISMATCH");
+    }
+  }
+  let databaseTarget:
+    ReturnType<typeof deriveRuntimeDatabaseTarget> | undefined;
+  if (service.database !== null) {
+    let ownership: unknown;
+    try {
+      ownership = JSON.parse(
+        await readFile(
+          resolve(dirname(configPath), "database-ownership.json"),
+          "utf8",
+        ),
+      ) as unknown;
+    } catch {
+      throw new RuntimeError("RUNTIME_DATABASE_OWNERSHIP_UNAVAILABLE");
+    }
+    databaseTarget = deriveRuntimeDatabaseTarget({
+      config,
+      runtime: name,
+      ownership,
+      ...(launchIdentity ? { launchIdentity } : {}),
+    });
+  }
   const secretStat = await stat(secretsPath);
   if ((secretStat.mode & 0o777) !== 0o400)
     throw new Error(`${secretsPath}: scoped secrets mode must be 0400`);
@@ -1199,7 +1318,6 @@ export async function startConfiguredRuntime(
     config.environment,
     config.services[name].secretRefs,
   );
-  const service = config.services[name];
   const shutdownGraceMs =
     service.realtime?.shutdownGraceMs ?? config.platform["shutdownGraceMs"];
   if (typeof shutdownGraceMs !== "number")
@@ -1229,8 +1347,8 @@ export async function startConfiguredRuntime(
       );
       database = createDatabase({
         owner: name,
-        database: service.database,
-        allowedDatabase: service.database,
+        database: databaseTarget!.database,
+        allowedDatabase: databaseTarget!.allowedDatabase,
         host: config.postgres.host,
         port: config.postgres.port,
         user: credential.username,
@@ -1248,6 +1366,13 @@ export async function startConfiguredRuntime(
         runtime: name,
         config: config.kafka,
         service: service.kafka,
+        physicalTargets: deriveRuntimeKafkaTarget({
+          config: config.kafka,
+          service: service.kafka,
+          enabled: config.kafkaNamespaceIsolation,
+          environment: config.environment,
+          ...(launchIdentity ? { launchIdentity } : {}),
+        }),
         credentials: ownKafkaCredential(
           secretDocument as ScopedSecretDocument,
           service.secretRefs,

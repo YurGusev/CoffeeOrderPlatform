@@ -4,7 +4,7 @@ import test from "node:test";
 import {
   createOidcAuthority,
   OidcDependencyUnavailableError,
-} from "../../apps/edge-gateway/src/oidc-auth.ts";
+} from "../../apps/edge-gateway/dist/oidc-auth.js";
 
 const BASE = 1_800_000_000_000;
 const PROFILE = Object.freeze({

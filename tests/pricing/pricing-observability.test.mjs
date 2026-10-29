@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { trace } from "@opentelemetry/api";
-import { PricingTelemetry } from "../../apps/pricing-service/src/observability.ts";
+import { createPricingAdapters } from "../../apps/pricing-service/dist/http/index.js";
+import { PricingStore } from "../../apps/pricing-service/dist/infrastructure/database/pricing-store.js";
+import { PricingTelemetry } from "../../apps/pricing-service/dist/observability.js";
 
 const createOutcomes = [
   "created",
@@ -63,6 +65,225 @@ trace.setGlobalTracerProvider({
 function installTracer(spans) {
   activeSpans = spans;
 }
+
+void test("Pricing adapters preserve owner and Catalog outcomes in telemetry", async (t) => {
+  const policy = {
+    policyVersionRef: `pvr_${"0".repeat(26)}`,
+    version: "1",
+    currency: "RUB",
+    markupBasisPoints: 3000,
+    minimumMarginMinor: "0",
+    quoteTtlSeconds: 900,
+    quantityScale: 3,
+    roundingMode: "CEILING",
+  };
+  const quote = { status: 201, body: { lines: [{}] }, replayed: false };
+  const verified = { valid: true };
+  const catalogFact = {
+    productRef: `prd_${"0".repeat(26)}`,
+    variantRef: `var_${"0".repeat(26)}`,
+    offerRef: `off_${"0".repeat(26)}`,
+    snapshotRevision: "1",
+    supplierUnitMinor: "100",
+    currency: "RUB",
+    unit: "piece",
+    availability: "Available",
+    mappingRevision: "1",
+    displayName: "Coffee",
+  };
+  const request = {
+    customerRef: `cus_${"0".repeat(26)}`,
+    lines: [
+      {
+        productRef: catalogFact.productRef,
+        variantRef: catalogFact.variantRef,
+        quantity: "2.500",
+      },
+    ],
+  };
+  const identity = {
+    actorRef: "operator-1",
+    scope: "a".repeat(64),
+    key: "00000000-0000-4000-8000-000000000001",
+  };
+  const context = {
+    correlationId: "00000000-0000-4000-8000-000000000002",
+    traceparent: "00-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-bbbbbbbbbbbbbbbb-01",
+    signal: new AbortController().signal,
+  };
+  let precheckResult = { kind: "not_retained" };
+  let precheckError;
+  let createResult = quote;
+  let createError;
+  let catalogError;
+  let verifyResult = verified;
+  let verifyError;
+  const calls = { create: [], catalog: [], sign: [], verify: [] };
+  t.mock.method(PricingStore.prototype, "precheck", async () => {
+    if (precheckError) throw precheckError;
+    return precheckResult;
+  });
+  t.mock.method(PricingStore.prototype, "readActivePolicy", async () => policy);
+  t.mock.method(PricingStore.prototype, "create", async (input) => {
+    calls.create.push(input);
+    if (createError) throw createError;
+    return createResult;
+  });
+  t.mock.method(PricingStore.prototype, "verify", async (input) => {
+    calls.verify.push(input);
+    if (verifyError) throw verifyError;
+    return verifyResult;
+  });
+
+  const telemetry = new PricingTelemetry();
+  const adapters = createPricingAdapters(
+    {},
+    {
+      signCatalogDelegation: (received) => {
+        calls.sign.push(received);
+        return "signed-catalog-delegation";
+      },
+    },
+    {
+      async getPricingInput(input) {
+        calls.catalog.push(input);
+        if (catalogError) throw catalogError;
+        return catalogFact;
+      },
+    },
+    telemetry,
+  );
+  assert.equal(
+    await adapters.owner.create({ request, identity, context }),
+    quote,
+  );
+  assert.equal(calls.create[0].lines[0].quantity, "2.5");
+  assert.equal(calls.catalog[0].delegation, "signed-catalog-delegation");
+  assert.equal(calls.catalog[0].traceparent, context.traceparent);
+  assert.equal(calls.catalog[0].signal.aborted, false);
+  assert.equal(calls.sign[0].correlationId, context.correlationId);
+
+  precheckResult = { kind: "completed", ...quote, replayed: true };
+  assert.deepEqual(
+    await adapters.owner.create({ request, identity, context }),
+    {
+      status: 201,
+      body: quote.body,
+      replayed: true,
+    },
+  );
+  for (const [kind, code] of [
+    ["conflict", "IDEMPOTENCY_CONFLICT"],
+    ["in_progress", "IDEMPOTENCY_REQUEST_IN_PROGRESS"],
+  ]) {
+    precheckResult = { kind };
+    await assert.rejects(
+      adapters.owner.create({ request, identity, context }),
+      {
+        code,
+      },
+    );
+  }
+  precheckResult = { kind: "not_retained" };
+
+  catalogError = { code: "CATALOG_UNAVAILABLE" };
+  await assert.rejects(adapters.owner.create({ request, identity, context }), {
+    code: "CATALOG_UNAVAILABLE",
+  });
+  catalogError = undefined;
+  createResult = { ...quote, replayed: true };
+  await adapters.owner.create({ request, identity, context });
+  createResult = quote;
+  createError = { code: "DB_QUERY_FAILED" };
+  await assert.rejects(adapters.owner.create({ request, identity, context }), {
+    code: "DB_QUERY_FAILED",
+  });
+  createError = { code: "TRANSACTION_OUTCOME_UNKNOWN" };
+  await assert.rejects(adapters.owner.create({ request, identity, context }), {
+    code: "TRANSACTION_OUTCOME_UNKNOWN",
+  });
+  createError = undefined;
+  createError = new Error("private database detail");
+  await assert.rejects(adapters.owner.create({ request, identity, context }), {
+    message: "private database detail",
+  });
+  createError = undefined;
+  const contextWithoutTraceparent = {
+    correlationId: context.correlationId,
+    signal: context.signal,
+  };
+  assert.equal(
+    await adapters.owner.create({
+      request,
+      identity,
+      context: contextWithoutTraceparent,
+    }),
+    quote,
+  );
+
+  precheckResult = { kind: "completed", ...quote, replayed: true };
+  assert.equal(
+    (await adapters.owner.replay(identity, context.signal)).kind,
+    "completed",
+  );
+  for (const kind of ["in_progress", "conflict", "not_retained"]) {
+    precheckResult = { kind };
+    assert.equal(
+      (await adapters.owner.replay(identity, context.signal)).kind,
+      kind,
+    );
+  }
+  precheckError = { code: "DB_QUERY_FAILED" };
+  await assert.rejects(adapters.owner.replay(identity, context.signal), {
+    code: "DB_QUERY_FAILED",
+  });
+  precheckError = undefined;
+
+  assert.equal(await adapters.owner.verify({}, context), verified);
+  for (const code of [
+    "PRICING_QUOTE_NOT_FOUND",
+    "PRICING_QUOTE_HASH_MISMATCH",
+    "PRICING_QUOTE_EXPIRED",
+    "PRICING_QUOTE_SCOPE_MISMATCH",
+    "DB_QUERY_FAILED",
+  ]) {
+    verifyError = { code };
+    await assert.rejects(adapters.owner.verify({}, context), { code });
+  }
+  verifyError = new Error("private verification detail");
+  await assert.rejects(adapters.owner.verify({}, context), {
+    message: "private verification detail",
+  });
+  verifyError = undefined;
+  verifyResult = undefined;
+
+  const rendered = telemetry.render().join("\n");
+  for (const [metric, outcome, count] of [
+    ["coffee_pricing_quote_create_results_total", "created", 2],
+    ["coffee_pricing_quote_create_results_total", "replayed", 3],
+    ["coffee_pricing_quote_create_results_total", "conflict", 2],
+    ["coffee_pricing_quote_create_results_total", "in_progress", 2],
+    ["coffee_pricing_quote_create_results_total", "error", 5],
+    ["coffee_pricing_catalog_read_results_total", "success", 6],
+    ["coffee_pricing_catalog_read_results_total", "error", 1],
+    ["coffee_pricing_catalog_retry_results_total", "no_retry", 6],
+    ["coffee_pricing_database_results_total", "committed", 2],
+    ["coffee_pricing_database_results_total", "replayed", 3],
+    ["coffee_pricing_database_results_total", "error", 1],
+    ["coffee_pricing_database_results_total", "unknown", 1],
+    ["coffee_pricing_quote_verify_results_total", "valid", 1],
+    ["coffee_pricing_quote_verify_results_total", "not_found", 1],
+    ["coffee_pricing_quote_verify_results_total", "hash_mismatch", 1],
+    ["coffee_pricing_quote_verify_results_total", "expired", 1],
+    ["coffee_pricing_quote_verify_results_total", "scope_mismatch", 1],
+    ["coffee_pricing_quote_verify_results_total", "error", 2],
+  ]) {
+    assert.match(
+      rendered,
+      new RegExp(`${metric}\\{outcome="${outcome}"\\} ${count}(?:\\n|$)`, "u"),
+    );
+  }
+});
 
 void test("Pricing metrics initialize every fixed outcome and reject dynamic labels", () => {
   const telemetry = new PricingTelemetry();

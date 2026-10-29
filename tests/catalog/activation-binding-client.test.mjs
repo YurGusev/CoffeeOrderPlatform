@@ -3,7 +3,7 @@ import test from "node:test";
 import {
   CatalogActivationBindingClient,
   CatalogBindingClientError,
-} from "../../apps/catalog-activation-worker/src/gateway-binding-client.ts";
+} from "../../apps/catalog-activation-worker/dist/gateway-binding-client.js";
 
 const request = {
   offerRef: "off_00000000000000000000000001",

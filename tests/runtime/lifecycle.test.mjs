@@ -1,12 +1,20 @@
 import assert from "node:assert/strict";
-import { chmod, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import {
+  chmod,
+  mkdir,
+  mkdtemp,
+  readFile,
+  rm,
+  writeFile,
+} from "node:fs/promises";
 import { request as httpRequest } from "node:http";
+import dns from "node:dns";
 import {
   createServer as createHttpsServer,
   request as httpsRequest,
 } from "node:https";
 import { execFileSync, spawn } from "node:child_process";
-import { createServer } from "node:net";
+import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -18,11 +26,12 @@ import {
   trace,
 } from "@opentelemetry/api";
 import { createServer as createHttpServer } from "node:http";
-import { load as parseYaml } from "js-yaml";
+import { dump as dumpYaml, load as parseYaml } from "js-yaml";
 import {
   RUNTIME_NAMES,
+  deriveRuntimeKafkaTarget,
   loadPlatformConfig,
-} from "../../packages/platform-config/src/index.ts";
+} from "../../packages/platform-config/dist/index.js";
 import {
   assertScopedSecrets,
   completeRuntimeRequestTelemetry,
@@ -31,19 +40,35 @@ import {
   RuntimeError,
   startConfiguredRuntime,
   startRuntime,
-} from "../../packages/platform-runtime/src/index.ts";
-import { createHttpClient } from "../../packages/platform-http/src/index.ts";
+} from "../../packages/platform-runtime/dist/index.js";
+import { createHttpClient } from "../../packages/platform-http/dist/index.js";
 import { nowInstant } from "../../packages/platform-time/src/index.ts";
 import {
   readRuntimeHealthStatuses,
   runRuntimeHealthcheck,
-} from "../../packages/platform-runtime/src/healthcheck.ts";
+} from "../../packages/platform-runtime/dist/healthcheck.js";
 import {
   parsePublicTlsMaterial,
   parseServiceTransportMaterial,
   verifyTransportPeer,
-} from "../../packages/platform-security/src/index.ts";
-import { checkInternalApiReady } from "../../apps/orders-service/src/infrastructure/internal-api-readiness.ts";
+} from "../../packages/platform-security/dist/index.js";
+import { checkInternalApiReady } from "../../apps/orders-service/dist/infrastructure/internal-api-readiness.js";
+import {
+  configuredCatalogOrigin as configuredPublicCatalogOrigin,
+  configuredCatalogTls as configuredPublicCatalogTls,
+  configuredCustomerOrigin as configuredPublicCustomerOrigin,
+  configuredCustomerTls as configuredPublicCustomerTls,
+  configuredOrdersOrigin as configuredPublicOrdersOrigin,
+  configuredOrdersTls as configuredPublicOrdersTls,
+  configuredPricingOrigin as configuredPublicPricingOrigin,
+  configuredPricingTls as configuredPublicPricingTls,
+} from "../../apps/api-public/dist/index.js";
+import {
+  configuredAromaGatewayOrigin as configuredInternalAromaGatewayOrigin,
+  configuredAromaGatewayTls as configuredInternalAromaGatewayTls,
+  configuredCustomerOrigin as configuredInternalCustomerOrigin,
+  configuredCustomerTls as configuredInternalCustomerTls,
+} from "../../apps/api-internal/dist/index.js";
 import {
   createTelemetryResource,
   telemetryDiagnostics,
@@ -51,6 +76,24 @@ import {
 import { createTelemetryResource as createSourceTelemetryResource } from "../../packages/platform-observability/src/index.ts";
 
 const root = fileURLToPath(new URL("../../", import.meta.url));
+async function writeOrdinaryRuntimeConfig(directory) {
+  const document = parseYaml(
+    await readFile(join(root, "config/platform.yaml"), "utf8"),
+    { json: true },
+  );
+  document.verification.databaseIsolation.enabled = false;
+  document.verification.kafkaNamespaceIsolation = false;
+  const configDirectory = join(directory, "config");
+  await mkdir(configDirectory, { recursive: true });
+  const configPath = join(configDirectory, "platform.yaml");
+  await writeFile(configPath, dumpYaml(document, { noRefs: true }), "utf8");
+  await writeFile(
+    join(configDirectory, "database-ownership.json"),
+    await readFile(join(root, "config/database-ownership.json")),
+  );
+  return configPath;
+}
+
 const health = {
   livePath: "/health/live",
   readyPath: "/health/ready",
@@ -61,6 +104,47 @@ const health = {
   failureThreshold: 3,
   successThreshold: 1,
 };
+
+void test("ordinary configured runtimes reject the standalone G17 Unix socket endpoint", async (t) => {
+  const directory = await mkdtemp(
+    join(tmpdir(), "coffee-g17-runtime-endpoint-"),
+  );
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const config = parseYaml(
+    await readFile(join(root, "config/platform.yaml"), "utf8"),
+    { json: true },
+  );
+  config.postgres.host = `/dev/shm/coffee-g17-${"a".repeat(16)}`;
+  config.verification.databaseIsolation.enabled = true;
+  const configPath = join(directory, "platform.yaml");
+  await writeFile(configPath, dumpYaml(config), "utf8");
+  const previous = Object.fromEntries(
+    [
+      "COFFEE_CONFIG_FILE",
+      "COFFEE_RUNTIME_SECRETS_FILE",
+      "COFFEE_LAUNCH_CONTEXT_FILE",
+    ].map((key) => [key, process.env[key]]),
+  );
+  process.env.COFFEE_CONFIG_FILE = configPath;
+  process.env.COFFEE_RUNTIME_SECRETS_FILE = join(
+    directory,
+    "unused-secrets.yaml",
+  );
+  delete process.env.COFFEE_LAUNCH_CONTEXT_FILE;
+  try {
+    await assert.rejects(
+      startConfiguredRuntime("edge-gateway"),
+      (error) =>
+        error instanceof RuntimeError &&
+        error.code === "RUNTIME_G17_SOCKET_STANDALONE_ONLY",
+    );
+  } finally {
+    for (const [key, value] of Object.entries(previous)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
+});
 
 function identity(name, options = {}) {
   return {
@@ -316,7 +400,7 @@ function requestHttps(port, options = {}) {
 
 function runHealthcheckChild(environment) {
   const moduleUrl = new URL(
-    "../../packages/platform-runtime/src/healthcheck.ts",
+    "../../packages/platform-runtime/dist/healthcheck.js",
     import.meta.url,
   ).href;
   const child = spawn(
@@ -325,7 +409,7 @@ function runHealthcheckChild(environment) {
       "--experimental-strip-types",
       "--input-type=module",
       "-e",
-      `import {runRuntimeHealthcheck} from ${JSON.stringify(moduleUrl)}; const statuses = await runRuntimeHealthcheck(["/health/live"]); if (statuses[0] !== 200) process.exitCode = 1;`,
+      `import {main} from ${JSON.stringify(moduleUrl)}; await main(["/health/live"]);`,
     ],
     { env: environment, stdio: ["ignore", "pipe", "pipe"] },
   );
@@ -1115,6 +1199,170 @@ void test("public Edge TLS accepts a browser client while internal TLS rejects a
   }
 
   const apiPublicMaterial = await tlsMaterial(t, "edge.test", "api-public");
+  const apiPublicConfig = await loadPlatformConfig(
+    join(root, "config/platform.yaml"),
+    (text) => parseYaml(text, { json: true }),
+  );
+  const apiPublicTransportSecret = (material) =>
+    JSON.stringify({
+      keyPem: material.keyPem,
+      certPem: material.certPem,
+      caPem: material.caPem,
+    });
+  const apiPublicContext = {
+    config: apiPublicConfig,
+    secrets: {
+      security: {
+        serviceTransportKeys: {
+          "api-public": apiPublicTransportSecret(apiPublicMaterial.serviceTls),
+        },
+      },
+    },
+  };
+  assert.deepEqual(configuredPublicCustomerTls(apiPublicContext), {
+    material: apiPublicMaterial.serviceTls,
+    targetEnvironment: "development",
+    targetRuntime: "customer-service",
+  });
+  assert.equal(
+    configuredPublicCustomerOrigin(apiPublicContext),
+    "https://customer-service:4101",
+  );
+  const publicOwnerBindings = [
+    {
+      origin: configuredPublicCatalogOrigin,
+      tls: configuredPublicCatalogTls,
+      expectedOrigin: "https://catalog-service:4102",
+      expectedRuntime: "catalog-service",
+    },
+    {
+      origin: configuredPublicPricingOrigin,
+      tls: configuredPublicPricingTls,
+      expectedOrigin: "https://pricing-service:4103",
+      expectedRuntime: "pricing-service",
+    },
+    {
+      origin: configuredPublicOrdersOrigin,
+      tls: configuredPublicOrdersTls,
+      expectedOrigin: "https://orders-service:4104",
+      expectedRuntime: "orders-service",
+    },
+  ];
+  for (const binding of publicOwnerBindings) {
+    assert.equal(binding.origin(apiPublicContext), binding.expectedOrigin);
+    assert.deepEqual(binding.tls(apiPublicContext), {
+      material: apiPublicMaterial.serviceTls,
+      targetEnvironment: "development",
+      targetRuntime: binding.expectedRuntime,
+    });
+  }
+  const noCatalogOutboundContext = {
+    ...apiPublicContext,
+    config: {
+      ...apiPublicContext.config,
+      services: {
+        ...apiPublicContext.config.services,
+        "api-public": {
+          ...apiPublicContext.config.services["api-public"],
+          outbound: apiPublicContext.config.services[
+            "api-public"
+          ].outbound.filter((entry) => !entry.startsWith("catalog-service:")),
+        },
+      },
+    },
+  };
+  assert.throws(
+    () => configuredPublicCatalogOrigin(noCatalogOutboundContext),
+    /PUBLIC_API_CATALOG_ORIGIN_NOT_CONFIGURED/u,
+  );
+  const wrongApiRuntime = await tlsMaterial(t, "edge.test", "api-internal");
+  assert.throws(
+    () =>
+      configuredPublicCustomerTls({
+        ...apiPublicContext,
+        secrets: {
+          security: {
+            serviceTransportKeys: {
+              "api-public": apiPublicTransportSecret(
+                wrongApiRuntime.serviceTls,
+              ),
+            },
+          },
+        },
+      }),
+    { code: "TRANSPORT_IDENTITY_INVALID" },
+  );
+  const foreignApiRuntimeContext = {
+    ...apiPublicContext,
+    secrets: {
+      security: {
+        serviceTransportKeys: {
+          "api-public": apiPublicTransportSecret(wrongApiRuntime.serviceTls),
+        },
+      },
+    },
+  };
+  for (const binding of publicOwnerBindings) {
+    assert.throws(() => binding.tls(foreignApiRuntimeContext), {
+      code: "TRANSPORT_IDENTITY_INVALID",
+    });
+  }
+  const apiInternalMaterial = await tlsMaterial(t, "edge.test", "api-internal");
+  const apiInternalTransportSecret = (material) =>
+    JSON.stringify({
+      keyPem: material.keyPem,
+      certPem: material.certPem,
+      caPem: material.caPem,
+    });
+  const apiInternalContext = {
+    config: apiPublicConfig,
+    secrets: {
+      security: {
+        serviceTransportKeys: {
+          "api-internal": apiInternalTransportSecret(
+            apiInternalMaterial.serviceTls,
+          ),
+        },
+      },
+    },
+  };
+  assert.equal(
+    configuredInternalCustomerOrigin(apiInternalContext),
+    "https://customer-service:4101",
+  );
+  assert.deepEqual(configuredInternalCustomerTls(apiInternalContext), {
+    material: apiInternalMaterial.serviceTls,
+    targetEnvironment: "development",
+    targetRuntime: "customer-service",
+  });
+  assert.equal(
+    configuredInternalAromaGatewayOrigin(apiInternalContext),
+    "https://aroma-gateway:4301",
+  );
+  assert.deepEqual(configuredInternalAromaGatewayTls(apiInternalContext), {
+    material: apiInternalMaterial.serviceTls,
+    targetEnvironment: "development",
+    targetRuntime: "aroma-gateway",
+  });
+  const wrongApiInternalContext = {
+    ...apiInternalContext,
+    secrets: {
+      security: {
+        serviceTransportKeys: {
+          "api-internal": apiInternalTransportSecret(
+            apiPublicMaterial.serviceTls,
+          ),
+        },
+      },
+    },
+  };
+  assert.throws(() => configuredInternalCustomerTls(wrongApiInternalContext), {
+    code: "TRANSPORT_IDENTITY_INVALID",
+  });
+  assert.throws(
+    () => configuredInternalAromaGatewayTls(wrongApiInternalContext),
+    { code: "TRANSPORT_IDENTITY_INVALID" },
+  );
   const healthcheckSecretsDirectory = await mkdtemp(
     join(tmpdir(), "coffee-healthcheck-secrets-"),
   );
@@ -1196,34 +1444,20 @@ void test("public Edge TLS accepts a browser client while internal TLS rejects a
   }
 });
 
-async function freePort() {
-  const server = createServer();
-  await new Promise((resolve, reject) => {
-    server.once("error", reject);
-    server.listen(0, "127.0.0.1", resolve);
-  });
-  const port = server.address().port;
-  await new Promise((resolve, reject) =>
-    server.close((error) => (error === undefined ? resolve() : reject(error))),
-  );
-  return port;
-}
-
 void test("configured private Edge startup requires mTLS and validates its service hostname", async (t) => {
   const hostname = "edge-gateway";
   const material = await tlsMaterial(t, hostname);
   const directory = await mkdtemp(join(tmpdir(), "coffee-configured-edge-"));
   t.after(() => rm(directory, { recursive: true, force: true }));
-  const port = await freePort();
-  const source = await readFile(join(root, "config/platform.yaml"), "utf8");
   const configPath = join(directory, "platform.yaml");
-  await writeFile(
-    configPath,
-    source.replace(
-      "listen: {host: 0.0.0.0, port: 4000}",
-      `listen: {host: 0.0.0.0, port: ${port}}`,
-    ),
+  const testDocument = parseYaml(
+    await readFile(join(root, "config/platform.yaml"), "utf8"),
+    { json: true },
   );
+  testDocument.verification.databaseIsolation.enabled = false;
+  testDocument.verification.kafkaNamespaceIsolation = false;
+  testDocument.services["edge-gateway"].listen.port = 0;
+  await writeFile(configPath, dumpYaml(testDocument, { noRefs: true }), "utf8");
   const config = await loadPlatformConfig(configPath, (text) =>
     parseYaml(text, { json: true }),
   );
@@ -1258,11 +1492,14 @@ void test("configured private Edge startup requires mTLS and validates its servi
   await chmod(secretsPath, 0o400);
   const previousConfig = process.env.COFFEE_CONFIG_FILE;
   const previousSecrets = process.env.COFFEE_RUNTIME_SECRETS_FILE;
+  const previousLaunchContext = process.env.COFFEE_LAUNCH_CONTEXT_FILE;
   let app;
   process.env.COFFEE_CONFIG_FILE = configPath;
   process.env.COFFEE_RUNTIME_SECRETS_FILE = secretsPath;
+  delete process.env.COFFEE_LAUNCH_CONTEXT_FILE;
   try {
     app = await startConfiguredRuntime("edge-gateway");
+    const port = addressOf(app).port;
     const peer = {
       path: "/health/live",
       ca: material.serviceTls.caPem,
@@ -1323,6 +1560,15 @@ void test("configured private Edge startup requires mTLS and validates its servi
     const noBundleResult = await runHealthcheckChild(childEnvironment);
     assert.equal(noBundleResult.code, 0, noBundleResult.output);
     assert.equal(noBundleResult.signal, null);
+    const invalidPortResult = await runHealthcheckChild({
+      ...childEnvironment,
+      PORT: "0",
+    });
+    assert.equal(invalidPortResult.code, 1);
+    assert.match(
+      invalidPortResult.output,
+      /runtime healthcheck configuration is invalid/u,
+    );
   } finally {
     await app?.runtimeController.closeRuntime("SIGTERM").catch(() => {});
     if (previousConfig === undefined) delete process.env.COFFEE_CONFIG_FILE;
@@ -1330,6 +1576,9 @@ void test("configured private Edge startup requires mTLS and validates its servi
     if (previousSecrets === undefined)
       delete process.env.COFFEE_RUNTIME_SECRETS_FILE;
     else process.env.COFFEE_RUNTIME_SECRETS_FILE = previousSecrets;
+    if (previousLaunchContext === undefined)
+      delete process.env.COFFEE_LAUNCH_CONTEXT_FILE;
+    else process.env.COFFEE_LAUNCH_CONTEXT_FILE = previousLaunchContext;
   }
 });
 
@@ -1504,7 +1753,7 @@ void test("readiness checks fail closed, recover, and expose correlation context
 
 void test("automatic request logs carry validated correlation fields", async () => {
   const runtimePath = new URL(
-    "../../packages/platform-runtime/src/index.ts",
+    "../../packages/platform-runtime/dist/index.js",
     import.meta.url,
   ).href;
   const script = `
@@ -2295,14 +2544,131 @@ void test("AROMA worker compositions preserve consumer bindings and fail readine
     ["aroma-convergence", "createAromaConvergenceComposition"],
     ["orders-aroma-preparation", "createAromaPreparationComposition"],
   ]) {
-    const tls =
-      runtime === "orders-aroma-preparation"
-        ? undefined
-        : await tlsMaterial(t, "edge.test", runtime);
+    let observerReadiness;
+    let tls;
+    if (runtime === "orders-aroma-preparation") {
+      tls = undefined;
+    } else if (runtime === "aroma-observer") {
+      const directory = await mkdtemp(
+        join(tmpdir(), "coffee-observer-readiness-"),
+      );
+      t.after(() => rm(directory, { recursive: true, force: true }));
+      const authority = await certificateAuthority(
+        directory,
+        "service-ca",
+        "/CN=coffee-observer-readiness-ca",
+      );
+      const issue = async (serviceRuntime) => {
+        const leaf = await signedCertificate(
+          directory,
+          serviceRuntime,
+          `/CN=${serviceRuntime}`,
+          `URI:spiffe://coffee-platform/development/${serviceRuntime},DNS:${serviceRuntime}`,
+          authority,
+          "serverAuth,clientAuth",
+        );
+        return parseServiceTransportMaterial(
+          JSON.stringify({ ...leaf, caPem: authority.certPem }),
+          "development",
+          serviceRuntime,
+        );
+      };
+      const [observerTls, apiInternalTls] = await Promise.all([
+        issue("aroma-observer"),
+        issue("api-internal"),
+      ]);
+      let responseMode = "ready";
+      let readinessRequests = 0;
+      let canceledResponses = 0;
+      let mappedLookups = 0;
+      const server = createHttpsServer(
+        {
+          key: apiInternalTls.keyPem,
+          cert: apiInternalTls.certPem,
+          ca: authority.certPem,
+          requestCert: true,
+          rejectUnauthorized: true,
+        },
+        (request, response) => {
+          verifyTransportPeer(
+            request.socket.getPeerCertificate(),
+            "development",
+            "aroma-observer",
+          );
+          assert.equal(request.method, "GET");
+          assert.equal(request.url, "/health/ready");
+          readinessRequests++;
+          const mode = responseMode;
+          if (mode !== "ready")
+            response.once("close", () => {
+              canceledResponses++;
+            });
+          if (mode === "unavailable") {
+            response.writeHead(503, { "content-type": "text/plain" });
+            response.write("not ready");
+            return;
+          }
+          if (mode === "hold") return;
+          response.writeHead(200).end("ready");
+        },
+      );
+      await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+      t.after(async () => {
+        server.closeAllConnections();
+        if (server.listening)
+          await new Promise((resolve) => server.close(resolve));
+      });
+      const address = server.address();
+      assert.ok(address && typeof address === "object");
+      const originalLookup = dns.lookup.bind(dns);
+      t.mock.method(dns, "lookup", (hostname, options, callback) => {
+        if (typeof options === "function") {
+          callback = options;
+          options = undefined;
+        }
+        if (hostname !== "api-internal")
+          return originalLookup(hostname, options, callback);
+        mappedLookups++;
+        if (options?.all)
+          return callback(null, [{ address: "127.0.0.1", family: 4 }]);
+        return callback(null, "127.0.0.1", 4);
+      });
+      observerReadiness = {
+        server,
+        setMode: (mode) => {
+          responseMode = mode;
+        },
+        get readinessRequests() {
+          return readinessRequests;
+        },
+        get canceledResponses() {
+          return canceledResponses;
+        },
+        get mappedLookups() {
+          return mappedLookups;
+        },
+        outbound: `api-internal:${address.port}`,
+      };
+      tls = { serviceTls: observerTls };
+    } else {
+      tls = await tlsMaterial(t, "edge.test", runtime);
+    }
+    const runtimeConfig =
+      observerReadiness === undefined ? config : structuredClone(config);
+    if (observerReadiness)
+      runtimeConfig.services[runtime].outbound = [observerReadiness.outbound];
     const module = await import(
       `../../apps/${runtime}/dist/runtime-composition.js`
     );
     const composition = module[factory]();
+    if (runtime !== "orders-aroma-preparation") {
+      assert.equal(
+        await composition.readinessChecks[1].check(
+          new AbortController().signal,
+        ),
+        false,
+      );
+    }
     const database = createDatabase({
       owner: runtime,
       database: "coffee_platform_orders",
@@ -2318,6 +2684,7 @@ void test("AROMA worker compositions preserve consumer bindings and fail readine
     const bindings = new Map();
     const errors = [];
     let relayDone;
+    let relayCalls = 0;
     let usedSignal;
     const relayed = new Promise((resolve) => {
       relayDone = resolve;
@@ -2325,6 +2692,7 @@ void test("AROMA worker compositions preserve consumer bindings and fail readine
     const kafka = {
       bind: (groupId, binding) => bindings.set(groupId, binding),
       relay: async (_outbox, db, signal) => {
+        relayCalls++;
         assert.strictEqual(db, database);
         usedSignal = signal;
         relayDone();
@@ -2339,7 +2707,7 @@ void test("AROMA worker compositions preserve consumer bindings and fail readine
         database,
         kafka,
         {
-          config,
+          config: runtimeConfig,
           secrets:
             tls === undefined
               ? {}
@@ -2356,6 +2724,32 @@ void test("AROMA worker compositions preserve consumer bindings and fail readine
                 },
         },
       );
+      if (runtime !== "orders-aroma-preparation") {
+        assert.equal(
+          await composition.readinessChecks[1].check(AbortSignal.abort()),
+          false,
+        );
+      }
+      if (observerReadiness) {
+        const readiness = composition.readinessChecks[1].check;
+        assert.equal(await readiness(new AbortController().signal), true);
+        assert.equal(observerReadiness.readinessRequests, 1);
+        assert.ok(observerReadiness.mappedLookups > 0);
+
+        observerReadiness.setMode("unavailable");
+        assert.equal(await readiness(new AbortController().signal), false);
+        assert.equal(observerReadiness.readinessRequests, 2);
+        await waitFor(() => observerReadiness.canceledResponses === 1);
+
+        observerReadiness.setMode("hold");
+        const caller = new AbortController();
+        const pending = readiness(caller.signal);
+        await waitFor(() => observerReadiness.readinessRequests === 3);
+        const cancellation = new Error("caller canceled readiness probe");
+        caller.abort(cancellation);
+        await assert.rejects(pending, (error) => error === cancellation);
+        await waitFor(() => observerReadiness.canceledResponses === 2);
+      }
       assert.deepEqual(
         [...bindings.keys()],
         config.services[runtime].kafka.consumers.map((entry) => entry.groupId),
@@ -2394,12 +2788,19 @@ void test("AROMA worker compositions preserve consumer bindings and fail readine
         ]);
       }
       assert.ok(!JSON.stringify(errors).includes("synthetic-not-production"));
+      processSignal.abort();
+      assert.equal(
+        usedSignal.aborted,
+        true,
+        `${runtime} process cancellation reaches the owned worker signal`,
+      );
     } finally {
       await resource.stop(AbortSignal.timeout(5000));
       resource.destroy();
       database.resource.destroy();
     }
     assert.equal(usedSignal.aborted, true);
+    assert.equal(relayCalls, 1);
     assert.equal(composition.readinessChecks[0].check(), false);
   }
 });
@@ -2621,12 +3022,7 @@ void test("configured roots preserve null deadlines for api-internal and realtim
   }
 });
 
-void test("configured owner receives the runtime's single opaque database resource", async () => {
-  const config = await loadPlatformConfig(
-    join(root, "config/platform.yaml"),
-    (text) => parseYaml(text, { json: true }),
-  );
-  const runtime = "customer-service";
+function scopedOwnerTestSecrets(config, runtime, credential) {
   const secrets = {};
   for (const ref of config.services[runtime].secretRefs) {
     const segments = ref.split(".");
@@ -2635,26 +3031,226 @@ void test("configured owner receives the runtime's single opaque database resour
       current[segment] ??= {};
       current = current[segment];
     }
-    current[segments.at(-1)] = ref.startsWith("postgres.")
-      ? { username: "coffee_customer_rw", password: "test-password" }
-      : "test-secret";
+    current[segments.at(-1)] =
+      ref.startsWith("postgres.") || ref.startsWith("kafka.")
+        ? credential
+        : "test-secret";
   }
+  return {
+    schemaVersion: 1,
+    environment: config.environment,
+    runtime,
+    secrets,
+  };
+}
+
+void test("configured runtime binds readonly launch identity to isolated database and Kafka startup", async (t) => {
+  const runtime = "orders-aroma-preparation";
+  const directory = await mkdtemp(
+    join(tmpdir(), "coffee-runtime-launch-identity-"),
+  );
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const configDirectory = join(directory, "config");
+  await mkdir(configDirectory);
+  const configPath = join(configDirectory, "platform.yaml");
+  const ownershipPath = join(configDirectory, "database-ownership.json");
+  const contextPath = join(directory, "context.json");
+  const secretsPath = join(directory, "orders-aroma-preparation.yaml");
+  const sourceDocument = parseYaml(
+    await readFile(join(root, "config/platform.yaml"), "utf8"),
+    { json: true },
+  );
+  const candidateSha = `1234567${"0".repeat(33)}`;
+  const runId = `20261024T123456Z-${candidateSha.slice(0, 7)}`;
+  const launchIdentity = { schemaVersion: 1, runId, candidateSha };
+  const keys = [
+    "COFFEE_CONFIG_FILE",
+    "COFFEE_RUNTIME_SECRETS_FILE",
+    "COFFEE_LAUNCH_CONTEXT_FILE",
+  ];
+  const previous = Object.fromEntries(
+    keys.map((key) => [key, process.env[key]]),
+  );
+
+  const writeFixture = async ({
+    environment = "development",
+    baseConfigSha256,
+  } = {}) => {
+    await rm(contextPath, { force: true });
+    await rm(secretsPath, { force: true });
+    const document = structuredClone(sourceDocument);
+    document.environment = environment;
+    document.verification.databaseIsolation = { enabled: true };
+    document.verification.kafkaNamespaceIsolation = true;
+    if (environment === "production")
+      document.telemetry.releaseDigest = `sha256:${"a".repeat(64)}`;
+    const configBytes = Buffer.from(
+      dumpYaml(document, { noRefs: true }),
+      "utf8",
+    );
+    await writeFile(configPath, configBytes);
+    await writeFile(
+      ownershipPath,
+      await readFile(join(root, "config/database-ownership.json")),
+    );
+    const exactConfigSha256 = createHash("sha256")
+      .update(configBytes)
+      .digest("hex");
+    await writeFile(
+      contextPath,
+      `${JSON.stringify({ ...launchIdentity, baseConfigSha256: baseConfigSha256 ?? exactConfigSha256 })}\n`,
+      { mode: 0o400 },
+    );
+    await chmod(contextPath, 0o400);
+    await writeFile(
+      secretsPath,
+      `${JSON.stringify(scopedOwnerTestSecrets(sourceDocument, runtime, { username: "test-owner", password: "test-password" }))}\n`,
+      { mode: 0o400 },
+    );
+    await chmod(secretsPath, 0o400);
+    return { exactConfigSha256 };
+  };
+
+  const withFixtureEnvironment = async (action) => {
+    process.env.COFFEE_CONFIG_FILE = configPath;
+    process.env.COFFEE_RUNTIME_SECRETS_FILE = secretsPath;
+    process.env.COFFEE_LAUNCH_CONTEXT_FILE = contextPath;
+    try {
+      await action();
+    } finally {
+      for (const [key, value] of Object.entries(previous)) {
+        if (value === undefined) delete process.env[key];
+        else process.env[key] = value;
+      }
+    }
+  };
+
+  try {
+    const { exactConfigSha256 } = await writeFixture();
+    await withFixtureEnvironment(async () => {
+      let configured = false;
+      await assert.rejects(
+        startConfiguredRuntime(runtime, {
+          configure: (_app, _signal, database, kafka, context) => {
+            configured = true;
+            assert.ok(database);
+            assert.equal(kafka.resource.name, "kafka");
+            assert.equal(context.config.databaseIsolation.enabled, true);
+            assert.equal(context.config.kafkaNamespaceIsolation, true);
+            const targets = deriveRuntimeKafkaTarget({
+              config: context.config.kafka,
+              service: context.config.services[runtime].kafka,
+              enabled: context.config.kafkaNamespaceIsolation,
+              environment: context.config.environment,
+              launchIdentity: {
+                ...launchIdentity,
+                baseConfigSha256: exactConfigSha256,
+              },
+            });
+            assert.equal(
+              targets.topics["coffee.catalog.mapping.v2"],
+              `${runId}.coffee.catalog.mapping.v2`,
+            );
+            assert.equal(
+              targets.groups["orders-catalog-mapping-v2"],
+              `${runId}.orders-catalog-mapping-v2`,
+            );
+            assert.equal(
+              targets.groups["orders-aroma-preparation-v1"],
+              `${runId}.orders-aroma-preparation-v1`,
+            );
+            assert.equal(
+              Object.values(targets.topics).some(
+                (name) => name === "coffee.catalog.mapping.v2",
+              ),
+              false,
+            );
+            throw new Error(
+              "stop after validating launch-scoped target admission",
+            );
+          },
+        }),
+        /stop after validating launch-scoped target admission/u,
+      );
+      assert.equal(
+        configured,
+        true,
+        "validated isolated runtime reaches configure before resource startup",
+      );
+    });
+
+    await writeFixture({ baseConfigSha256: "f".repeat(64) });
+    await withFixtureEnvironment(async () => {
+      let configured = false;
+      await assert.rejects(
+        startConfiguredRuntime(runtime, {
+          configure: () => {
+            configured = true;
+          },
+        }),
+        (error) =>
+          error instanceof RuntimeError &&
+          error.code === "RUNTIME_LAUNCH_CONFIG_SHA_MISMATCH",
+      );
+      assert.equal(
+        configured,
+        false,
+        "a mismatched YAML digest is rejected before configure or resources",
+      );
+    });
+
+    await writeFixture({ environment: "production" });
+    await rm(secretsPath, { force: true });
+    await withFixtureEnvironment(async () => {
+      let configured = false;
+      await assert.rejects(
+        startConfiguredRuntime(runtime, {
+          configure: () => {
+            configured = true;
+          },
+        }),
+        (error) =>
+          error instanceof RuntimeError &&
+          error.code === "RUNTIME_LAUNCH_CONTEXT_PRODUCTION_DENIED",
+      );
+      assert.equal(
+        configured,
+        false,
+        "production is rejected before reading secrets or acquiring resources",
+      );
+    });
+  } finally {
+    for (const [key, value] of Object.entries(previous)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
+});
+
+void test("configured owner receives the runtime's single opaque database resource", async () => {
+  const runtime = "customer-service";
   const tempDir = await mkdtemp(join("/tmp", "coffee-runtime-owner-test-"));
+  const configPath = await writeOrdinaryRuntimeConfig(tempDir);
+  const config = await loadPlatformConfig(configPath, (text) =>
+    parseYaml(text, { json: true }),
+  );
   const secretPath = join(tempDir, "customer-service.yaml");
   await writeFile(
     secretPath,
-    `${JSON.stringify({
-      schemaVersion: 1,
-      environment: config.environment,
-      runtime,
-      secrets,
-    })}\n`,
+    `${JSON.stringify(
+      scopedOwnerTestSecrets(config, runtime, {
+        username: "coffee_customer_rw",
+        password: "test-password",
+      }),
+    )}\n`,
   );
   await chmod(secretPath, 0o400);
   const previousConfig = process.env.COFFEE_CONFIG_FILE;
   const previousSecrets = process.env.COFFEE_RUNTIME_SECRETS_FILE;
-  process.env.COFFEE_CONFIG_FILE = join(root, "config/platform.yaml");
+  const previousLaunchContext = process.env.COFFEE_LAUNCH_CONTEXT_FILE;
+  process.env.COFFEE_CONFIG_FILE = configPath;
   process.env.COFFEE_RUNTIME_SECRETS_FILE = secretPath;
+  delete process.env.COFFEE_LAUNCH_CONTEXT_FILE;
   let received;
   let destroyed = false;
   try {
@@ -2689,12 +3285,95 @@ void test("configured owner receives the runtime's single opaque database resour
     if (previousSecrets === undefined)
       delete process.env.COFFEE_RUNTIME_SECRETS_FILE;
     else process.env.COFFEE_RUNTIME_SECRETS_FILE = previousSecrets;
+    if (previousLaunchContext === undefined)
+      delete process.env.COFFEE_LAUNCH_CONTEXT_FILE;
+    else process.env.COFFEE_LAUNCH_CONTEXT_FILE = previousLaunchContext;
     await rm(tempDir, { recursive: true, force: true });
   }
 });
 
+void test("configured Kafka owner validates scoped credentials before any native connection and destroys its resource on startup failure", async (t) => {
+  const runtime = "realtime-gateway";
+  const directory = await mkdtemp(
+    join(tmpdir(), "coffee-runtime-kafka-owner-"),
+  );
+  const configPath = await writeOrdinaryRuntimeConfig(directory);
+  const config = await loadPlatformConfig(configPath, (text) =>
+    parseYaml(text, { json: true }),
+  );
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const keys = [
+    "COFFEE_CONFIG_FILE",
+    "COFFEE_RUNTIME_SECRETS_FILE",
+    "COFFEE_LAUNCH_CONTEXT_FILE",
+  ];
+  const previous = Object.fromEntries(
+    keys.map((key) => [key, process.env[key]]),
+  );
+  process.env.COFFEE_CONFIG_FILE = configPath;
+  delete process.env.COFFEE_LAUNCH_CONTEXT_FILE;
+  try {
+    const valid = {
+      username: "synthetic-runtime",
+      password: "synthetic-password",
+    };
+    const credentials = [
+      valid,
+      { ...valid, caPem: "synthetic-ca" },
+      null,
+      [],
+      {},
+      { ...valid, extra: true },
+      { ...valid, username: "" },
+      { ...valid, password: 7 },
+      { ...valid, caPem: "" },
+      { ...valid, caPem: 7 },
+    ];
+    for (const [index, credential] of credentials.entries()) {
+      const path = join(directory, `${index}.yaml`);
+      await writeFile(
+        path,
+        JSON.stringify(scopedOwnerTestSecrets(config, runtime, credential)),
+        { mode: 0o400 },
+      );
+      process.env.COFFEE_RUNTIME_SECRETS_FILE = path;
+      let configured = false;
+      let destroyed = false;
+      await assert.rejects(
+        startConfiguredRuntime(runtime, {
+          configure: (_app, _signal, database, kafka) => {
+            configured = true;
+            assert.equal(database, undefined);
+            assert.equal(kafka.resource.name, "kafka");
+            assert.equal(kafka.readiness.name, "kafka");
+            assert.equal(kafka.metrics().pending, 0);
+            const destroy = kafka.resource.destroy;
+            kafka.resource.destroy = () => {
+              destroyed = true;
+              destroy();
+            };
+            throw new Error("stop before native resource start");
+          },
+        }),
+        (error) =>
+          index < 2
+            ? error.message === "stop before native resource start"
+            : error instanceof RuntimeError &&
+              error.code === "RUNTIME_KAFKA_SECRET_INVALID",
+      );
+      assert.equal(configured, index < 2);
+      assert.equal(destroyed, index < 2);
+    }
+  } finally {
+    for (const [key, value] of Object.entries(previous)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
+});
+
 void test("startRuntime removes signal listeners and repeated process signals perform one shutdown in a child", async () => {
-  const runtimePath = join(root, "packages/platform-runtime/src/index.ts");
+  const runtimePath = join(root, "packages/platform-runtime/dist/index.js");
   const script = `
     import {startRuntime} from ${JSON.stringify(runtimePath)};
     const app = await startRuntime({
@@ -2797,6 +3476,43 @@ void test("scoped secrets fail closed on foreign identity or missing refs", () =
       ),
     /unknown or missing metadata key/,
   );
+  for (const invalid of [null, [], "foreign-document"])
+    assert.throws(
+      () => assertScopedSecrets(invalid, "customer-service", "development", []),
+      /object is required/u,
+    );
+  for (const invalid of [
+    { ...valid, schemaVersion: 2 },
+    { ...valid, environment: "production" },
+  ])
+    assert.throws(
+      () =>
+        assertScopedSecrets(invalid, "customer-service", "development", [
+          "postgres.customer",
+        ]),
+      /identity mismatch/u,
+    );
+  for (const secrets of [null, [], "foreign-scope"])
+    assert.throws(
+      () =>
+        assertScopedSecrets(
+          { ...valid, secrets },
+          "customer-service",
+          "development",
+          ["postgres.customer"],
+        ),
+      /secrets object is required/u,
+    );
+  assert.throws(
+    () =>
+      assertScopedSecrets(
+        { ...valid, secrets: { postgres: [] } },
+        "customer-service",
+        "development",
+        ["postgres.customer"],
+      ),
+    /required ref postgres\.customer is missing/u,
+  );
 });
 
 void test("runtime metrics endpoint appends bounded composition metrics", async (t) => {
@@ -2847,9 +3563,9 @@ void test("AROMA worker telemetry keeps span names and metric series bounded and
       { AromaObserverTelemetry },
       { AromaConvergenceTelemetry },
     ] = await Promise.all([
-      import("../../apps/orders-aroma-preparation/src/observability.ts"),
-      import("../../apps/aroma-observer/src/observability.ts"),
-      import("../../apps/aroma-convergence/src/observability.ts"),
+      import("../../apps/orders-aroma-preparation/dist/observability.js"),
+      import("../../apps/aroma-observer/dist/observability.js"),
+      import("../../apps/aroma-convergence/dist/observability.js"),
     ]);
     const preparation = new AromaPreparationTelemetry();
     const observer = new AromaObserverTelemetry();

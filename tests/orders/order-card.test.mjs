@@ -318,4 +318,44 @@ void test("inconsistent persisted facts never grant Confirm or reconciliation", 
     permissions: ["orders:edit:any", "orders:confirm:any"],
   });
   assert.deepEqual(invalidStatus.allowedActions, []);
+
+  const unsafeCards = [
+    projectOrderCard({
+      order: order(),
+      items: [item({ lineTotalMinor: "not-a-money-amount" })],
+      nowEpochMs,
+      permissions: ["orders:edit:any", "orders:confirm:any"],
+    }),
+    projectOrderCard({
+      order: order(),
+      items: [
+        item({
+          quantity: "1",
+          unitMinor: "5000000000000000000",
+          lineTotalMinor: "5000000000000000000",
+        }),
+        item({
+          itemRef: "itm_01ARZ3NDEKTSV4RRFFQ69G5FAW",
+          linePosition: 2,
+          quoteLineNumber: 2,
+          quantity: "1",
+          unitMinor: "5000000000000000000",
+          lineTotalMinor: "5000000000000000000",
+        }),
+      ],
+      nowEpochMs,
+      permissions: ["orders:edit:any", "orders:confirm:any"],
+    }),
+  ];
+  for (const unsafe of unsafeCards) {
+    assert.equal(isOrderCardResponse(unsafe), true);
+    assert.equal(unsafe.aroma.state, "Blocked");
+    assert.deepEqual(
+      unsafe.aroma.blockers.map((blocker) => blocker.code),
+      ["ORDER_STATE_INCONSISTENT"],
+    );
+    assert.equal(unsafe.pricing, null);
+    assert.deepEqual(unsafe.items, []);
+    assert.deepEqual(unsafe.allowedActions, []);
+  }
 });

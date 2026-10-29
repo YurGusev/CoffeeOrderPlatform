@@ -195,6 +195,46 @@ void test("grind membership is checked against Catalog and distinguishes idempot
   assert.equal(unknown.calls.create.length, 0);
 });
 
+void test("duplicate Catalog grind metadata is rejected before quote persistence", async () => {
+  const { calls, store, catalog } = fixture();
+  const option = {
+    sourceGrindKeyHash: "a".repeat(64),
+    displayName: "Средний",
+  };
+  catalog.getPricingInput = async (input) => {
+    calls.catalog.push(input);
+    return {
+      ...fact(input),
+      grindOptions: [option, { ...option }],
+    };
+  };
+
+  await assert.rejects(createPricingQuote(store, catalog, command()), {
+    code: "CATALOG_UNAVAILABLE",
+  });
+  assert.equal(calls.catalog.length, 1);
+  assert.equal(calls.create.length, 0);
+});
+
+void test("Catalog rejects signed supplier cost and stopped offers before persistence", async () => {
+  for (const [override, expectedCode] of [
+    [{ supplierUnitMinor: "-1" }, "CATALOG_UNAVAILABLE"],
+    [{ availability: "Stopped" }, "CATALOG_PRODUCT_UNAVAILABLE"],
+  ]) {
+    const { calls, store, catalog } = fixture();
+    catalog.getPricingInput = async (input) => {
+      calls.catalog.push(input);
+      return { ...fact(input), ...override };
+    };
+
+    await assert.rejects(createPricingQuote(store, catalog, command()), {
+      code: expectedCode,
+    });
+    assert.equal(calls.catalog.length, 1);
+    assert.equal(calls.create.length, 0);
+  }
+});
+
 void test("bounds simultaneous Catalog requests to eight and retains order", async () => {
   const { calls, store, catalog } = fixture();
   let active = 0,

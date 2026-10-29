@@ -14,6 +14,7 @@ import {
   createProviderCatalogSource,
   sourceIdentityForOffer,
 } from "../../apps/aroma-gateway/dist/application/provider-catalog-source.js";
+import { createSourceIdentity } from "../../apps/aroma-gateway/dist/domain/source-identity.js";
 import { MemoryProviderSessionStore } from "../../apps/aroma-gateway/dist/infrastructure/database/provider-session-store.js";
 import { GatewayMetrics } from "../../apps/aroma-gateway/dist/infrastructure/observability.js";
 import { ProviderHttpClient } from "../../apps/aroma-gateway/dist/infrastructure/provider/http-client.js";
@@ -110,6 +111,9 @@ function boundary({
       ...(persistence.failExport === undefined
         ? {}
         : { failExport: persistence.failExport }),
+      ...(persistence.abortExport === undefined
+        ? {}
+        : { abortExport: persistence.abortExport }),
     },
   };
 }
@@ -395,6 +399,180 @@ void test("catalog export keeps the real provider source demand-driven between p
   );
   assert.equal(new URL(calls[2].url).searchParams.get("page"), "2");
   await stream.return();
+});
+
+void test("real provider grind options are fetched once and never complete an incomplete batch", async (t) => {
+  const credentials = {
+    scopeRef: "aroma-primary",
+    email: "canonical@example.test",
+    password: "test-only",
+  };
+  const sourceIdentityKey = Buffer.from("identity-key");
+  const calls = [];
+  const groundOffers = ["101", "102"].map((id, index) => ({
+    id,
+    name: `Coffee ${id}`,
+    vendor_code: `C-${id}`,
+    price: 12 + index,
+    params: [{ param: { slug: "is_grinded" }, param_value: { value: "1" } }],
+  }));
+  let rejectGrinds = false;
+  const client = new ProviderHttpClient({
+    origin: "https://provider.test",
+    timeoutMs: 1_000,
+    maxResponseBytes: 64 * 1024,
+    connections: 1,
+  });
+  const manager = new ProviderSessionManager({
+    transport: client,
+    store: new MemoryProviderSessionStore(),
+    encryptionKey: Buffer.alloc(32, 8),
+  });
+  t.after(() => manager.close());
+  t.mock.method(globalThis, "fetch", async (url) => {
+    const parsed = new URL(url);
+    calls.push(parsed.pathname);
+    if (parsed.pathname === "/api/v1/auth/login") {
+      return new Response(
+        JSON.stringify({
+          data: { email: credentials.email, wholesale: true, retail: false },
+        }),
+        {
+          headers: {
+            "content-type": "application/json",
+            "set-cookie":
+              "october_session=provider-session; Domain=provider.test; Path=/; HttpOnly",
+          },
+        },
+      );
+    }
+    if (parsed.pathname === "/api/v1/catalog/grinds") {
+      if (rejectGrinds)
+        return new Response("private provider failure", { status: 503 });
+      return new Response(
+        JSON.stringify([
+          { id: "41", name: "Fine" },
+          { id: "42", name: "Coarse" },
+        ]),
+        { headers: { "content-type": "application/json" } },
+      );
+    }
+    assert.equal(parsed.pathname, "/api/v1/catalog/wholesale/products");
+    return new Response(
+      JSON.stringify({
+        data: [
+          {
+            id: 1,
+            name: "Coffee",
+            discount: [],
+            product_on_stop: false,
+            show_on_wholesale: true,
+            sold_by_piece: true,
+            offers: groundOffers,
+          },
+        ],
+        links: { first: null, last: null, prev: null, next: null },
+        meta: { current_page: 1, last_page: 1, per_page: 1, total: 1 },
+      }),
+      { headers: { "content-type": "application/json" } },
+    );
+  });
+
+  const runExport = (events) => {
+    const source = createProviderCatalogSource({
+      sessions: manager,
+      credentials,
+      supplierRef: request.supplierRef,
+      sourceIdentityKey,
+      pageSize: 1,
+    });
+    return collect(
+      createCatalogExportStream({
+        source,
+        request,
+        boundary: boundary({
+          identity: (value) =>
+            sourceIdentityForOffer(
+              value,
+              request.supplierRef,
+              sourceIdentityKey,
+            ),
+          persistence: {
+            recordBatch: ({ record }) => {
+              events.batches.push(record);
+            },
+            completeExport: (summary) => {
+              events.completed.push(summary);
+            },
+            failExport: ({ record }) => {
+              events.failures.push(record);
+            },
+          },
+        }),
+        limits: { maxOffersPerBatch: 2 },
+      }),
+    );
+  };
+
+  const success = { batches: [], completed: [], failures: [] };
+  const records = parse(await runExport(success));
+  assert.deepEqual(calls, [
+    "/api/v1/auth/login",
+    "/api/v1/catalog/wholesale/products",
+    "/api/v1/catalog/grinds",
+  ]);
+  assert.deepEqual(
+    records.map((record) => record.recordType),
+    ["snapshot-started", "snapshot-batch", "snapshot-completed"],
+  );
+  const batch = records[1];
+  assert.equal(batch.items.length, 2);
+  const expectedGrinds = [
+    { id: "41", displayName: "Fine" },
+    { id: "42", displayName: "Coarse" },
+  ].map(({ id, displayName }) => ({
+    sourceGrindKeyHash: createSourceIdentity({
+      supplierRef: request.supplierRef,
+      entityType: "grind",
+      rawProviderIdentifier: id,
+      sourceIdentityKey,
+    }).sourceIdentityHash,
+    displayName,
+  }));
+  for (const item of batch.items)
+    assert.deepEqual(item.grindOptions, expectedGrinds);
+  const itemBytes = Buffer.from(canonicalCatalogJson(batch.items), "utf8");
+  assert.equal(batch.uncompressedBytes, itemBytes.byteLength);
+  assert.equal(
+    batch.batchHash,
+    createHash("sha256").update(itemBytes).digest("hex"),
+  );
+  assert.equal(success.batches.length, 1);
+  assert.equal(success.completed.length, 1);
+  assert.deepEqual(success.failures, []);
+  assert.doesNotMatch(JSON.stringify(batch), /"rawId"|"id":"4[12]"/u);
+
+  calls.length = 0;
+  rejectGrinds = true;
+  const failure = { batches: [], completed: [], failures: [] };
+  const failedRecords = parse(await runExport(failure));
+  assert.deepEqual(calls, [
+    "/api/v1/catalog/wholesale/products",
+    "/api/v1/catalog/grinds",
+  ]);
+  assert.deepEqual(
+    failedRecords.map((record) => record.recordType),
+    ["snapshot-started", "snapshot-failed"],
+  );
+  assert.equal(failedRecords.at(-1).code, "PROVIDER_UNAVAILABLE");
+  assert.equal(failure.batches.length, 0);
+  assert.equal(failure.completed.length, 0);
+  assert.equal(failure.failures.length, 1);
+  assert.equal(failure.failures[0].code, "PROVIDER_UNAVAILABLE");
+  assert.doesNotMatch(
+    JSON.stringify(failedRecords),
+    /private provider failure/u,
+  );
 });
 
 void test("catalog export carries normalized supplier promotions and strips provider fields", async () => {
@@ -762,6 +940,48 @@ void test("total offer and idle limits fail closed", async () => {
   );
   assert.equal(idleRecords.at(-1).code, "PROVIDER_TIMEOUT");
   assert.equal(returned, true);
+
+  let totalSignal;
+  let totalSourceClosed = false;
+  let totalCompleteCalls = 0;
+  const totalTimeoutRecords = parse(
+    await collect(
+      makeStream([], {
+        source: {
+          async next() {
+            return await new Promise(() => {});
+          },
+          async return() {
+            totalSourceClosed = true;
+            return { done: true, value: undefined };
+          },
+        },
+        limits: { totalTimeoutMs: 25, idleTimeoutMs: 1_000 },
+        boundary: boundary({
+          persistence: {
+            beginExport: (_record, signal) => {
+              totalSignal = signal;
+            },
+            completeExport: () => {
+              totalCompleteCalls += 1;
+            },
+          },
+        }),
+      }),
+    ),
+  );
+  assert.deepEqual(
+    totalTimeoutRecords.map((record) => record.recordType),
+    ["snapshot-started", "snapshot-failed"],
+  );
+  assert.equal(totalTimeoutRecords.at(-1).code, "PROVIDER_TIMEOUT");
+  assert.equal(
+    totalSignal?.reason?.message,
+    "catalog export total deadline exceeded",
+  );
+  assert.equal(totalSignal?.aborted, true);
+  assert.equal(totalSourceClosed, true);
+  assert.equal(totalCompleteCalls, 0);
 });
 
 void test("hash mismatch fails closed without a completed terminal record", async () => {
@@ -801,6 +1021,34 @@ void test("persistence count acknowledgement mismatch fails closed", async () =>
   );
   assert.equal(records[1].code, "INVALID_STREAM");
   assert.deepEqual(events, ["INVALID_STREAM"]);
+
+  const persistenceFailures = [];
+  const rejectedBatch = parse(
+    await collect(
+      makeStream([offer(0)], {
+        boundary: boundary({
+          persistence: {
+            recordBatch: () => {
+              throw new Error("database endpoint secret must not escape");
+            },
+            failExport: ({ record, errorCode }) => {
+              persistenceFailures.push([record.code, errorCode]);
+            },
+          },
+        }),
+      }),
+    ),
+  );
+  assert.deepEqual(
+    rejectedBatch.map((record) => record.recordType),
+    ["snapshot-started", "snapshot-failed"],
+  );
+  assert.equal(rejectedBatch.at(-1).code, "INVALID_STREAM");
+  assert.doesNotMatch(
+    JSON.stringify(rejectedBatch),
+    /database endpoint secret/,
+  );
+  assert.deepEqual(persistenceFailures, [["INVALID_STREAM", "INVALID_STREAM"]]);
 });
 
 void test("completed persistence is not called when terminal timestamp resolution fails", async () => {
@@ -1099,12 +1347,23 @@ void test("live catalog export propagates paused downstream backpressure to prov
   const providerCalls = [];
   const pageBodyPulls = { 1: 0, 2: 0 };
   const pageBodyDone = { 1: false, 2: false };
+  const persistenceCalls = [];
+  let sourceFactoryCalls = 0;
   const nativeFetch = globalThis.fetch.bind(globalThis);
   const largeImageUrl = `https://images.example.test/${"x".repeat(2_000)}`;
   let releasePage1Body = () => {};
   const page1MayFinish = new Promise((resolve) => {
     releasePage1Body = resolve;
   });
+  let releaseDisconnectPage = () => {};
+  const disconnectPageMayFinish = new Promise((resolve) => {
+    releaseDisconnectPage = resolve;
+  });
+  let disconnectPageStarted = false;
+  let pageOneResponses = 0;
+  let disconnectPageBodyDone = false;
+  let disconnectPageSignal;
+  let sourceIteratorClosures = 0;
   async function waitFor(predicate, message) {
     for (let attempt = 0; attempt < 100; attempt += 1) {
       if (predicate()) return;
@@ -1157,7 +1416,12 @@ void test("live catalog export propagates paused downstream backpressure to prov
         }
         sent = true;
         controller.enqueue(bytes);
-        if (pageNumber === 1) await page1MayFinish;
+        if (pageNumber === 1 && pageOneResponses === 1) await page1MayFinish;
+        if (pageNumber === 1 && pageOneResponses === 2) {
+          disconnectPageStarted = true;
+          await disconnectPageMayFinish;
+          disconnectPageBodyDone = !disconnectPageSignal?.aborted;
+        }
         controller.close();
         pageBodyDone[pageNumber] = true;
       },
@@ -1186,6 +1450,12 @@ void test("live catalog export propagates paused downstream backpressure to prov
       );
     }
     const pageNumber = Number(new URL(href).searchParams.get("page"));
+    if (pageNumber === 1 && ++pageOneResponses === 2) {
+      disconnectPageSignal = init.signal;
+      init.signal.addEventListener("abort", releaseDisconnectPage, {
+        once: true,
+      });
+    }
     return providerPageResponse(pageNumber);
   });
 
@@ -1230,8 +1500,9 @@ void test("live catalog export propagates paused downstream backpressure to prov
   });
   registerAromaCatalogExportRoute(
     app,
-    (_supplierRef, signal) =>
-      createProviderCatalogSource({
+    (_supplierRef, signal) => {
+      sourceFactoryCalls += 1;
+      const source = createProviderCatalogSource({
         sessions: manager,
         credentials,
         sourceIdentityKey,
@@ -1253,51 +1524,151 @@ void test("live catalog export propagates paused downstream backpressure to prov
             grindId: null,
           },
         }),
-      }),
+      });
+      return (async function* () {
+        try {
+          yield* source;
+        } finally {
+          sourceIteratorClosures++;
+        }
+      })();
+    },
     boundary({
       identity: (value) =>
         sourceIdentityForOffer(value, request.supplierRef, sourceIdentityKey),
-      persistence: { recordBatch: () => {} },
+      persistence: {
+        beginExport: () => {
+          persistenceCalls.push("begin");
+        },
+        recordBatch: () => {
+          persistenceCalls.push("batch");
+        },
+        completeExport: () => {
+          persistenceCalls.push("complete");
+        },
+        abortExport: (snapshotRef, signal) => {
+          persistenceCalls.push(["abort", snapshotRef, signal.aborted]);
+        },
+      },
     }),
     routeContext,
     request.supplierRef,
   );
 
   let reader;
+  const disconnectController = new AbortController();
   try {
     await app.runtimeController.start();
     const address = app.server.address();
     assert.ok(address && typeof address === "object");
     const now = Math.floor(Date.now() / 1_000);
-    const delegation = signServiceDelegation(
-      {
-        iss: "api-internal",
-        aud: "aroma-gateway",
-        originalCaller: "catalog-supplier-sync",
-        operationId: "exportAromaCatalog",
-        correlationId: "corr_catalog_backpressure",
-        traceparent: "00-00000000000000000000000000000000-0000000000000000-01",
-        iat: now,
-        exp: now + 60,
-        jti: randomUUID(),
-        kid: "catalog-backpressure-test",
-      },
-      privateKey,
+    const signCatalogDelegation = (
+      originalCaller,
+      operationId,
+      correlationId,
+    ) =>
+      signServiceDelegation(
+        {
+          iss: "api-internal",
+          aud: "aroma-gateway",
+          originalCaller,
+          operationId,
+          correlationId,
+          traceparent:
+            "00-00000000000000000000000000000000-0000000000000000-01",
+          iat: now,
+          exp: now + 60,
+          jti: randomUUID(),
+          kid: "catalog-backpressure-test",
+        },
+        privateKey,
+      );
+    const delegation = signCatalogDelegation(
+      "catalog-supplier-sync",
+      "exportAromaCatalog",
+      "corr_catalog_backpressure",
     );
-    const response = await nativeFetch(
-      `http://127.0.0.1:${address.port}/api/internal-v1/aroma/catalog-exports`,
-      {
+    const invalidCorrelation = "00000000-0000-4000-8000-000000000042";
+    const routeUrl = `http://127.0.0.1:${address.port}/api/internal-v1/aroma/catalog-exports`;
+    const postExport = (token, supplierRef = request.supplierRef) =>
+      nativeFetch(routeUrl, {
         method: "POST",
         headers: {
           "content-type": "application/json",
-          "x-service-delegation": delegation,
+          "x-service-delegation": token,
         },
         body: JSON.stringify({
           snapshotRef: request.snapshotRef,
-          supplierRef: request.supplierRef,
+          supplierRef,
         }),
-      },
+      });
+
+    const invalidBodies = [
+      '{"privateProof":"CATALOG_BODY_CANARY"',
+      JSON.stringify({
+        snapshotRef: request.snapshotRef,
+        supplierRef: request.supplierRef,
+      }) + " ".repeat(64 * 1024),
+    ];
+    for (const body of invalidBodies) {
+      const invalid = await nativeFetch(routeUrl, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-correlation-id": invalidCorrelation,
+          "x-service-delegation": delegation,
+        },
+        body,
+      });
+      assert.equal(invalid.status, 400);
+      assert.equal(invalid.headers.get("cache-control"), "no-store");
+      assert.equal(
+        invalid.headers.get("content-type"),
+        "application/problem+json; charset=utf-8",
+      );
+      assert.equal(invalid.headers.get("x-correlation-id"), invalidCorrelation);
+      assert.deepEqual(await invalid.json(), {
+        type: "about:blank",
+        title: "VALIDATION_FAILED",
+        status: 400,
+        code: "VALIDATION_FAILED",
+        detail: "Request validation failed",
+        instance: "/api/internal-v1/aroma/catalog-exports",
+        correlationId: invalidCorrelation,
+        errors: [],
+      });
+      assert.equal(sourceFactoryCalls, 0);
+      assert.deepEqual(persistenceCalls, []);
+    }
+
+    for (const [caller, operation] of [
+      ["aroma-convergence", "exportAromaCatalog"],
+      ["catalog-supplier-sync", "readAromaCartSnapshot"],
+    ]) {
+      const rejected = await postExport(
+        signCatalogDelegation(caller, operation, `corr_rejected_${operation}`),
+      );
+      assert.equal(rejected.status, 403);
+    }
+    const wrongSupplier = await postExport(
+      delegation,
+      "sup_01ARZ3NDEKTSV4RRFFQ69G5FAX",
     );
+    assert.equal(wrongSupplier.status, 400);
+    assert.equal(sourceFactoryCalls, 0);
+    assert.deepEqual(persistenceCalls, []);
+
+    const response = await nativeFetch(routeUrl, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-service-delegation": delegation,
+      },
+      body: JSON.stringify({
+        snapshotRef: request.snapshotRef,
+        supplierRef: request.supplierRef,
+      }),
+    });
     assert.equal(response.status, 200);
     assert.equal(response.headers.get("content-type"), "application/x-ndjson");
     assert.ok(response.body);
@@ -1395,10 +1766,250 @@ void test("live catalog export propagates paused downstream backpressure to prov
         .map((call) => new URL(call.url).searchParams.get("page")),
       ["1", "2"],
     );
+    assert.equal(sourceIteratorClosures, 1);
+    assert.equal(
+      persistenceCalls.filter((call) => call === "complete").length,
+      1,
+    );
+
+    const secondSnapshotRef = "snp_01ARZ3NDEKTSV4RRFFQ69G5FAX";
+    const interruptedResponse = await nativeFetch(
+      `http://127.0.0.1:${address.port}/api/internal-v1/aroma/catalog-exports`,
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-service-delegation": delegation,
+        },
+        body: JSON.stringify({
+          snapshotRef: secondSnapshotRef,
+          supplierRef: request.supplierRef,
+        }),
+        signal: disconnectController.signal,
+      },
+    );
+    assert.equal(interruptedResponse.status, 200);
+    assert.ok(interruptedResponse.body);
+    reader = interruptedResponse.body.getReader();
+    const startedLine = await reader.read();
+    assert.equal(startedLine.done, false);
+    assert.equal(
+      JSON.parse(new TextDecoder().decode(startedLine.value)).recordType,
+      "snapshot-started",
+    );
+    await waitFor(
+      () => disconnectPageStarted,
+      "provider page did not remain pending before the client disconnect",
+    );
+    assert.equal(disconnectPageBodyDone, false);
+    assert.equal(disconnectPageSignal?.aborted, false);
+    const batchesBeforeDisconnect = persistenceCalls.filter(
+      (call) => call === "batch",
+    ).length;
+
+    disconnectController.abort(new Error("test client disconnected"));
+    await reader.cancel().catch(() => {});
+    await waitFor(
+      () => disconnectPageSignal?.aborted === true,
+      "HTTP disconnect did not abort the provider page request",
+    );
+    await waitFor(
+      () => sourceIteratorClosures === 2,
+      "HTTP disconnect did not close the provider source iterator",
+    );
+    await waitFor(
+      () =>
+        persistenceCalls.some(
+          (call) => Array.isArray(call) && call[0] === "abort",
+        ),
+      "HTTP disconnect did not abort durable export state",
+    );
+    assert.equal(disconnectPageSignal?.aborted, true);
+    assert.equal(
+      disconnectPageSignal?.reason?.code,
+      "RUNTIME_CLIENT_DISCONNECTED",
+    );
+    assert.equal(disconnectPageBodyDone, false);
+    assert.equal(
+      persistenceCalls.filter((call) => call === "complete").length,
+      1,
+    );
+    assert.equal(
+      persistenceCalls.filter((call) => call === "batch").length,
+      batchesBeforeDisconnect,
+    );
+    assert.deepEqual(
+      persistenceCalls.filter(
+        (call) => Array.isArray(call) && call[0] === "abort",
+      ),
+      [["abort", secondSnapshotRef, false]],
+    );
   } finally {
     releasePage1Body();
-    await reader?.cancel();
+    disconnectController.abort(new Error("test cleanup"));
+    releaseDisconnectPage();
+    await reader?.cancel().catch(() => {});
     await app.runtimeController.closeRuntime("test");
     await manager.close();
   }
+});
+
+void test("catalog export rejects invalid source facts and identity without persisting a batch", async () => {
+  const cases = [
+    { item: { ...offer(0), displayName: "" }, code: "INVALID_STREAM" },
+    { item: { ...offer(0), availability: "Unknown" }, code: "INVALID_STREAM" },
+    { item: { ...offer(0), imageUrl: "not a URL" }, code: "INVALID_STREAM" },
+    {
+      item: {
+        ...offer(0),
+        supplierPromotions: [{ discountBasisPoints: 10001 }],
+      },
+      code: "INVALID_STREAM",
+    },
+    { item: { ...offer(0), grindOptions: [] }, code: "INVALID_STREAM" },
+    {
+      identity: (item, context) => ({
+        ...identityFor(item, context),
+        supplierRef: "wrong-supplier",
+      }),
+      code: "SOURCE_IDENTITY_COLLISION",
+    },
+    {
+      identity: () => {
+        throw new Error("identity-secret");
+      },
+      code: "SOURCE_IDENTITY_COLLISION",
+    },
+    {
+      hashResolver: () => {
+        throw new Error("hash-secret");
+      },
+      code: "BATCH_HASH_CONFLICT",
+    },
+  ];
+  for (const entry of cases) {
+    let batches = 0;
+    let completed = 0;
+    const records = parse(
+      await collect(
+        makeStream([entry.item ?? offer(0)], {
+          boundary: boundary({
+            identity: entry.identity,
+            hashResolver: entry.hashResolver,
+            persistence: {
+              recordBatch: () => {
+                batches += 1;
+              },
+              completeExport: () => {
+                completed += 1;
+              },
+            },
+          }),
+        }),
+      ),
+    );
+    assert.deepEqual(
+      records.map((record) => record.recordType),
+      ["snapshot-started", "snapshot-failed"],
+    );
+    assert.equal(records.at(-1).code, entry.code);
+    assert.equal(batches, 0);
+    assert.equal(completed, 0);
+    assert.doesNotMatch(JSON.stringify(records), /identity-secret|hash-secret/);
+  }
+});
+
+void test("catalog export fails closed on inconsistent persistence acknowledgements", async () => {
+  const cases = [
+    {
+      stage: "batch",
+      ack: { batchHash: "0".repeat(64) },
+      code: "BATCH_HASH_CONFLICT",
+    },
+    { stage: "batch", ack: { uncompressedBytes: 0 }, code: "INVALID_STREAM" },
+    { stage: "complete", ack: null, code: "INVALID_STREAM" },
+    ...["batchCount", "productCount", "variantCount", "offerCount"].map(
+      (field) => ({
+        stage: "complete",
+        ack: { [field]: 999 },
+        code: "INVALID_STREAM",
+      }),
+    ),
+    {
+      stage: "complete",
+      ack: { contentHash: "0".repeat(64) },
+      code: "BATCH_HASH_CONFLICT",
+    },
+    { stage: "complete", error: true, code: "INVALID_STREAM" },
+  ];
+  for (const entry of cases) {
+    const failures = [];
+    const acknowledge = () => {
+      if (entry.error) throw new Error("persistence-secret");
+      return entry.ack;
+    };
+    const records = parse(
+      await collect(
+        makeStream([offer(0)], {
+          boundary: boundary({
+            persistence: {
+              recordBatch: entry.stage === "batch" ? acknowledge : () => {},
+              completeExport:
+                entry.stage === "complete"
+                  ? acknowledge
+                  : () => {
+                      throw new Error("unexpected completion");
+                    },
+              failExport: ({ errorCode }) => {
+                failures.push(errorCode);
+                throw new Error("failure-secret");
+              },
+            },
+          }),
+        }),
+      ),
+    );
+    assert.deepEqual(
+      records.map((record) => record.recordType),
+      entry.stage === "batch"
+        ? ["snapshot-started", "snapshot-failed"]
+        : ["snapshot-started", "snapshot-batch", "snapshot-failed"],
+    );
+    assert.equal(records.at(-1).code, entry.code);
+    assert.deepEqual(failures, [entry.code]);
+    assert.doesNotMatch(
+      JSON.stringify(records),
+      /persistence-secret|failure-secret/,
+    );
+  }
+});
+
+void test("catalog export validates request and resource limits before starting persistence", () => {
+  let begins = 0;
+  const exportBoundary = boundary({
+    persistence: {
+      beginExport: () => {
+        begins += 1;
+      },
+    },
+  });
+  const base = {
+    source: sourceFrom([]),
+    request,
+    boundary: exportBoundary,
+    clock,
+  };
+  for (const options of [
+    { request: { ...request, supplierRef: "invalid" } },
+    { request: { ...request, providerSnapshotRef: "" } },
+    { limits: { maxItemBytes: 0 } },
+    { limits: { maxTotalOffers: -1 } },
+    { limits: { maxOffersPerBatch: 1_000_000 } },
+    { limits: { maxBatchBytes: 1_000_000_000 } },
+  ]) {
+    assert.throws(() => createCatalogExportStream({ ...base, ...options }), {
+      code: "INVALID_STREAM",
+    });
+  }
+  assert.equal(begins, 0);
 });

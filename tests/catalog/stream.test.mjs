@@ -518,6 +518,8 @@ for (const mode of [
   "scheduler-recovery",
   "readiness-reject",
   "readiness-resolve",
+  "catalog-service",
+  "catalog-activation-worker",
 ]) {
   void test(`production composition ${mode}`, async () => {
     await promisify(execFile)(process.execPath, [
@@ -768,16 +770,120 @@ void test("create and started reconciliation require their exact durable postcon
     received_at: null,
   };
   const signal = new AbortController().signal;
-  await assert.rejects(
-    () =>
-      reconcileCreate(
-        { getSnapshot: async () => ({ ...base, next_batch_number: 1 }) },
-        snapshotRef,
-        supplierRef,
-        signal,
-      ),
-    /ReconciledFailure:create:CONFLICTING_DURABLE_STATE/u,
+  assert.equal(
+    await reconcileCreate(
+      { getSnapshot: async () => base },
+      snapshotRef,
+      supplierRef,
+      signal,
+    ),
+    true,
   );
+  const writes = { create: 0, reject: 0 };
+  assert.equal(
+    await reconcileCreate(
+      {
+        getSnapshot: async () => null,
+        create: async () => {
+          writes.create += 1;
+        },
+      },
+      snapshotRef,
+      supplierRef,
+      signal,
+    ),
+    true,
+  );
+  assert.equal(writes.create, 1);
+  const createdConflicts = [
+    ["supplier_ref", "sup_00000000000000000000000002"],
+    ["state", "Receiving"],
+    ["provider_snapshot_ref", "unexpected-provider-ref"],
+    ["next_batch_number", 1],
+    ["declared_batch_count", 0],
+    ["declared_product_count", 0],
+    ["declared_variant_count", 0],
+    ["declared_offer_count", 0],
+    ["received_batch_count", 1],
+    ["received_product_count", 1],
+    ["received_variant_count", 1],
+    ["received_offer_count", 1],
+    ["content_hash", "a".repeat(64)],
+    ["failure_code", "INVALID_STREAM"],
+    ["received_at", new Date("2026-09-20T00:00:00Z")],
+  ];
+  for (const [field, value] of createdConflicts) {
+    await assert.rejects(
+      () =>
+        reconcileCreate(
+          {
+            getSnapshot: async () => ({ ...base, [field]: value }),
+            create: async () => {
+              writes.create += 1;
+            },
+          },
+          snapshotRef,
+          supplierRef,
+          signal,
+        ),
+      /ReconciledFailure:create:CONFLICTING_DURABLE_STATE/u,
+      `create reconciliation must reject a changed ${String(field)}`,
+    );
+    assert.equal(
+      writes.create,
+      1,
+      `must not recreate conflicting ${String(field)}`,
+    );
+  }
+
+  const receiving = {
+    ...base,
+    state: "Receiving",
+    provider_snapshot_ref: "provider-stream-test",
+  };
+  assert.equal(
+    await reconcileStarted(
+      { getSnapshot: async () => receiving },
+      snapshotRef,
+      "provider-stream-test",
+      signal,
+    ),
+    true,
+  );
+  const startedConflicts = [
+    ["provider_snapshot_ref", "unexpected-provider-ref"],
+    ["next_batch_number", 1],
+    ["declared_batch_count", 0],
+    ["declared_product_count", 0],
+    ["declared_variant_count", 0],
+    ["declared_offer_count", 0],
+    ["received_batch_count", 1],
+    ["received_product_count", 1],
+    ["received_variant_count", 1],
+    ["received_offer_count", 1],
+    ["content_hash", "a".repeat(64)],
+    ["failure_code", "INVALID_STREAM"],
+    ["received_at", new Date("2026-09-20T00:00:00Z")],
+  ];
+  for (const [field, value] of startedConflicts) {
+    await assert.rejects(
+      () =>
+        reconcileStarted(
+          {
+            getSnapshot: async () => ({ ...receiving, [field]: value }),
+            reject: async () => {
+              writes.reject += 1;
+            },
+          },
+          snapshotRef,
+          "provider-stream-test",
+          signal,
+        ),
+      /ReconciledFailure:started:CONFLICTING_DURABLE_STATE/u,
+      `started reconciliation must reject a changed ${String(field)}`,
+    );
+    assert.equal(writes.reject, 0, `must not reject changed ${String(field)}`);
+  }
   await assert.rejects(
     () =>
       reconcileStarted(
@@ -794,6 +900,57 @@ void test("create and started reconciliation require their exact durable postcon
       ),
     /ReconciledFailure:started:CONFLICTING_DURABLE_STATE/u,
   );
+});
+
+void test("reconciliation accepts an exact committed batch and terminal snapshot", async () => {
+  const batchCalls = [];
+  const batchStore = {
+    verifyBatchReplay: async (record, signal) => {
+      batchCalls.push({ record, signal });
+      return true;
+    },
+    getSnapshot: async () => {
+      throw new Error("an exact batch replay does not need a snapshot reread");
+    },
+  };
+  const signal = new AbortController().signal;
+  assert.equal(await reconcileBatch(batchStore, emptyBatch, signal), true);
+  assert.deepEqual(batchCalls, [{ record: emptyBatch, signal }]);
+
+  const terminalReads = [];
+  let completedAgain = false;
+  const terminalStore = {
+    getSnapshot: async (ref, readSignal) => {
+      terminalReads.push({ ref, signal: readSignal });
+      return {
+        snapshot_ref: snapshotRef,
+        supplier_ref: supplierRef,
+        provider_snapshot_ref: "provider-stream-test",
+        state: "Received",
+        next_batch_number: 0,
+        declared_batch_count: 0,
+        declared_product_count: 0,
+        declared_variant_count: 0,
+        declared_offer_count: 0,
+        received_batch_count: 0,
+        received_product_count: 0,
+        received_variant_count: 0,
+        received_offer_count: 0,
+        content_hash: completedRecord.contentHash,
+        failure_code: null,
+        received_at: new Date(completedRecord.completedAt),
+      };
+    },
+    complete: async () => {
+      completedAgain = true;
+    },
+  };
+  assert.equal(
+    await reconcileCompleted(terminalStore, completedRecord, signal),
+    true,
+  );
+  assert.deepEqual(terminalReads, [{ ref: snapshotRef, signal }]);
+  assert.equal(completedAgain, false);
 });
 
 void test("terminal reconciliation retries only its guarded transition when verification left Receiving", async () => {
@@ -837,6 +994,63 @@ void test("terminal reconciliation retries only its guarded transition when veri
     `complete:${snapshotRef}`,
     `reject:${snapshotRef}:INVALID_STREAM`,
   ]);
+
+  const createdCalls = [];
+  const createdStore = {
+    getSnapshot: async () => ({ ...base, state: "Created" }),
+    reject: async (ref, code) => {
+      createdCalls.push(`reject:${ref}:${code}`);
+    },
+  };
+  assert.equal(
+    await reconcileRejected(
+      createdStore,
+      snapshotRef,
+      "INVALID_STREAM",
+      signal,
+    ),
+    true,
+  );
+  assert.deepEqual(createdCalls, [`reject:${snapshotRef}:INVALID_STREAM`]);
+
+  const rejected = {
+    ...base,
+    state: "Rejected",
+    failure_code: "INVALID_STREAM",
+  };
+  let rejectedWrites = 0;
+  const rejectedStore = {
+    getSnapshot: async () => rejected,
+    reject: async () => {
+      rejectedWrites += 1;
+    },
+  };
+  assert.equal(
+    await reconcileRejected(
+      rejectedStore,
+      snapshotRef,
+      "INVALID_STREAM",
+      signal,
+    ),
+    true,
+  );
+  await assert.rejects(
+    () =>
+      reconcileRejected(rejectedStore, snapshotRef, "PROVIDER_TIMEOUT", signal),
+    /ReconciledFailure:reject:CONFLICTING_DURABLE_STATE/u,
+  );
+  const receivedStore = {
+    getSnapshot: async () => ({ ...rejected, state: "Received" }),
+    reject: async () => {
+      rejectedWrites += 1;
+    },
+  };
+  await assert.rejects(
+    () =>
+      reconcileRejected(receivedStore, snapshotRef, "INVALID_STREAM", signal),
+    /ReconciledFailure:reject:CONFLICTING_DURABLE_STATE/u,
+  );
+  assert.equal(rejectedWrites, 0);
 });
 
 void test("started and batch reconciliation close a definitely unadvanced generation", async () => {

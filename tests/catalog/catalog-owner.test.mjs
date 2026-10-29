@@ -1,12 +1,17 @@
 import assert from "node:assert/strict";
+import { EventEmitter } from "node:events";
 import { readFile } from "node:fs/promises";
-import { createHash, generateKeyPairSync } from "node:crypto";
+import { createHash, generateKeyPairSync, sign } from "node:crypto";
+import pg from "pg";
 import test from "node:test";
-import { createRuntime } from "../../packages/platform-runtime/src/index.ts";
+import { createDatabase } from "../../packages/platform-database/dist/index.js";
+import { createRuntime } from "../../packages/platform-runtime/dist/index.js";
 import {
+  CatalogOwnerError,
   createCatalogCursorSigner,
   searchCatalog,
 } from "../../apps/catalog-service/dist/application/search-catalog.js";
+import { CatalogStore } from "../../apps/catalog-service/dist/infrastructure/postgres/catalog-store.js";
 
 const productRef = "prd_01ARZ3NDEKTSV4RRFFQ69G5FAV";
 const variantRef = "var_01ARZ3NDEKTSV4RRFFQ69G5FAV";
@@ -243,6 +248,141 @@ void test("catalog search normalizes query and binds signed keyset cursor to rev
   );
 });
 
+void test("catalog search preserves request cancellation metadata and supported optional fields", async () => {
+  const keys = generateKeyPairSync("ed25519");
+  const signer = createCatalogCursorSigner(keys.privateKey, keys.publicKey);
+  const signal = new AbortController().signal;
+  let seen;
+  const result = await searchCatalog(
+    {
+      search: async (input) => {
+        seen = input;
+        return {
+          snapshotRevision: "17",
+          cursorValid: false,
+          rows: [
+            row({
+              imageUrl: "https://catalog.example.test/coffee.png",
+              grindOptions: [
+                { sourceGrindKeyHash: "a".repeat(64), displayName: "Espresso" },
+              ],
+            }),
+          ],
+        };
+      },
+    },
+    {
+      query: "coffee",
+      limit: 1,
+      signal,
+      correlationId: "catalog-search-context",
+    },
+    signer,
+  );
+
+  assert.equal(seen.signal, signal);
+  assert.equal(seen.correlationId, "catalog-search-context");
+  assert.equal(seen.limit, 2);
+  assert.deepEqual(result.items[0].grindOptions, [
+    { sourceGrindKeyHash: "a".repeat(64), displayName: "Espresso" },
+  ]);
+  assert.equal(
+    result.items[0].imageUrl,
+    "https://catalog.example.test/coffee.png",
+  );
+});
+
+void test("catalog search fails closed on malformed signed cursor claims", async () => {
+  const keys = generateKeyPairSync("ed25519");
+  const signer = createCatalogCursorSigner(keys.privateKey, keys.publicKey, {
+    nowEpochSeconds: () => 1_000,
+  });
+  const valid = {
+    v: 1,
+    kid: "catalog-v1",
+    iat: 1_000,
+    exp: 2_000,
+    snapshotRevision: "17",
+    filterHash: createHash("sha256")
+      .update(JSON.stringify(["coffee", null]))
+      .digest("base64url"),
+    sortKeyHash: "a".repeat(64),
+    productRef,
+    variantRef,
+  };
+  const invalidPayloads = [
+    null,
+    [],
+    { ...valid, v: 2 },
+    { ...valid, kid: "retired-key" },
+    { ...valid, iat: "1000" },
+    { ...valid, exp: 995 },
+    { ...valid, iat: 1_006 },
+    { ...valid, exp: 1_000 },
+    { ...valid, exp: 87_406 },
+    { ...valid, snapshotRevision: "0" },
+    { ...valid, filterHash: "different-query" },
+    { ...valid, sortKeyHash: "not-a-hash" },
+    { ...valid, productRef: "unknown-product" },
+    { ...valid, variantRef: "unknown-variant" },
+  ];
+  const store = {
+    search: async () => {
+      throw new Error("invalid cursor reached the Catalog store");
+    },
+  };
+  const signedCursor = (payload) => {
+    const bytes = Buffer.from(JSON.stringify(payload), "utf8");
+    return `${bytes.toString("base64url")}${sign(null, bytes, keys.privateKey).toString("base64url")}`;
+  };
+
+  for (const cursor of ["!", "A".repeat(86), "A".repeat(513)]) {
+    await assert.rejects(
+      () => searchCatalog(store, { query: "coffee", cursor }, signer),
+      { code: "INVALID_CURSOR" },
+    );
+  }
+  for (const payload of invalidPayloads) {
+    await assert.rejects(
+      () =>
+        searchCatalog(
+          store,
+          { query: "coffee", cursor: signedCursor(payload) },
+          signer,
+        ),
+      { code: "INVALID_CURSOR" },
+    );
+  }
+});
+
+void test("Catalog rejects malformed persisted search rows before exposing them", async () => {
+  const keys = generateKeyPairSync("ed25519");
+  const signer = createCatalogCursorSigner(keys.privateKey, keys.publicKey);
+  for (const malformed of [
+    { unit: "unknown-unit" },
+    { availability: "unknown-state" },
+    { mappingAvailable: null },
+    { displayNameSortKey: undefined },
+    { grindOptions: [null] },
+    { grindOptions: Array.from({ length: 101 }, () => ({})) },
+  ]) {
+    await assert.rejects(
+      () =>
+        searchCatalog(
+          {
+            search: async () => ({
+              snapshotRevision: "17",
+              rows: [row(malformed)],
+            }),
+          },
+          { query: "coffee" },
+          signer,
+        ),
+      { code: "CATALOG_UNAVAILABLE" },
+    );
+  }
+});
+
 void test("Catalog exposes only complete persisted grind options and rejects duplicate hashes", async () => {
   const keys = generateKeyPairSync("ed25519");
   const signer = createCatalogCursorSigner(keys.privateKey, keys.publicKey);
@@ -277,6 +417,33 @@ void test("Catalog exposes only complete persisted grind options and rejects dup
         signer,
       ),
       { code: "CATALOG_UNAVAILABLE" },
+    );
+  }
+});
+
+void test("Catalog pricing refuses unavailable and non-RUB offer mappings", async () => {
+  const { createCatalogOwner } =
+    await import("../../apps/catalog-service/dist/http/index.js");
+  const complete = { ...row(), snapshotFresh: true };
+  for (const unavailable of [
+    { ...complete, mappingAvailable: false },
+    { ...complete, currency: "USD" },
+  ]) {
+    const owner = createCatalogOwner({
+      search: async () => ({ snapshotRevision: "17", rows: [] }),
+      pricingInput: async () => unavailable,
+    });
+    await assert.rejects(
+      () =>
+        owner.pricingInput({
+          productRef,
+          variantRef,
+          context: {
+            signal: new AbortController().signal,
+            correlationId: "catalog-pricing-context",
+          },
+        }),
+      { code: "CATALOG_PRODUCT_NOT_FOUND" },
     );
   }
 });
@@ -504,6 +671,191 @@ void test("catalog owner reads only active views in one parameterized SELECT and
       }),
     { code: "CATALOG_UNAVAILABLE" },
   );
+});
+
+void test("CatalogStore calls its repository with exact search and pricing parameters and handles empty active metadata", async (t) => {
+  const searchRow = row({
+    snapshotRevision: "42",
+    displayName: "Coffee Arabica",
+  });
+  const searchCalls = [];
+  const pricingCalls = [];
+  let searchRows = [
+    { ...searchRow, cursorValid: true },
+    { ...searchRow, productRef: null, variantRef: null, cursorValid: true },
+  ];
+  let pricingRows = [{ ...searchRow, snapshotFresh: true }];
+  const connection = new EventEmitter();
+  connection.query = async (query) => {
+    const sql = typeof query === "string" ? query : query.text;
+    const values = typeof query === "string" ? [] : query.values;
+    if (["BEGIN", "COMMIT", "ROLLBACK"].includes(sql))
+      return { rows: [], rowCount: 0, command: sql };
+    if (sql.startsWith("SET LOCAL "))
+      return { rows: [], rowCount: 0, command: "SET" };
+    if (sql.includes("FROM metadata LEFT JOIN candidates")) {
+      searchCalls.push({ sql, values });
+      return {
+        rows: searchRows,
+        rowCount: searchRows.length,
+        command: "SELECT",
+      };
+    }
+    if (
+      sql.includes("FROM metadata") &&
+      sql.includes("LEFT JOIN catalog.active_products")
+    ) {
+      pricingCalls.push({ sql, values });
+      return {
+        rows: pricingRows,
+        rowCount: pricingRows.length,
+        command: "SELECT",
+      };
+    }
+    throw new Error(`unexpected CatalogStore SQL: ${sql}`);
+  };
+  connection.release = () => {};
+  t.mock.method(pg.Pool.prototype, "connect", async () => connection);
+  t.mock.method(pg.Pool.prototype, "end", async () => {});
+  const database = createDatabase({
+    owner: "catalog-service",
+    database: "coffee_platform_catalog",
+    allowedDatabase: "coffee_platform_catalog",
+    host: "127.0.0.1",
+    port: 5432,
+    user: "catalog-unit",
+    password: "catalog-unit-only",
+    ssl: false,
+    pool: {
+      max: 2,
+      checkoutTimeoutMs: 100,
+      lockTimeoutMs: 100,
+      interactiveStatementTimeoutMs: 1000,
+      backgroundStatementTimeoutMs: 1000,
+      terminalTimeoutMs: 100,
+      transactionTimeoutMs: 2000,
+      idleTimeoutMs: 5000,
+      maxLifetimeMs: 10_000,
+    },
+    shutdownGraceMs: 5000,
+  });
+  t.after(() => database.resource.destroy());
+  await database.resource.start(new AbortController().signal);
+  const store = new CatalogStore(database);
+  const after = { sortKeyHash: "a".repeat(64), productRef, variantRef };
+  const page = await store.search({
+    query: "coffee",
+    availability: "Available",
+    after,
+    limit: 5,
+    signal: new AbortController().signal,
+    correlationId: "catalog-store-unit",
+  });
+  assert.deepEqual(page, {
+    snapshotRevision: "42",
+    cursorValid: true,
+    rows: [{ ...searchRow, cursorValid: true }],
+  });
+  assert.deepEqual(searchCalls[0].values, [
+    "coffee",
+    "Available",
+    after.sortKeyHash,
+    productRef,
+    variantRef,
+    5,
+  ]);
+  assert.match(searchCalls[0].sql, /catalog\.active_snapshot_metadata/u);
+  assert.match(searchCalls[0].sql, /catalog\.active_offer_mappings/u);
+  assert.doesNotMatch(
+    searchCalls[0].sql,
+    /catalog\.(?:catalog_state|offer_mappings|snapshot_[a-z_]+)/u,
+  );
+
+  const { createCatalogAdapters } =
+    await import("../../apps/catalog-service/dist/http/index.js");
+  const keys = generateKeyPairSync("ed25519");
+  const signer = createCatalogCursorSigner(keys.privateKey, keys.publicKey);
+  const security = {
+    verifyTransport: () => true,
+    verifyPublicDelegation: () => claims("searchCatalogProducts"),
+    verifyInternalDelegation: () => ({
+      iss: "api-internal",
+      aud: "catalog-service",
+      originalCaller: "pricing-service",
+      operationId: "getCatalogPricingInput",
+    }),
+  };
+  const adapters = createCatalogAdapters(database, security, signer, 60_000);
+  assert.equal(adapters.verifyTransport, security.verifyTransport);
+  assert.equal(
+    adapters.verifyPublicDelegation,
+    security.verifyPublicDelegation,
+  );
+  assert.equal(
+    adapters.verifyInternalDelegation,
+    security.verifyInternalDelegation,
+  );
+  assert.equal(adapters.snapshotProofMaxAgeMs, 60_000);
+  const adaptedSearch = await adapters.owner.search({
+    query: "Coffee",
+    availability: "Available",
+    limit: 3,
+    context: {
+      signal: new AbortController().signal,
+      correlationId: "catalog-adapter-search",
+    },
+  });
+  assert.equal(adaptedSearch.status, 200);
+  assert.equal(adaptedSearch.body.items[0].productRef, productRef);
+  assert.equal(
+    searchCalls.length,
+    2,
+    "the adapter must use its real CatalogStore",
+  );
+  assert.deepEqual(searchCalls[1].values, [
+    "coffee",
+    "Available",
+    null,
+    null,
+    null,
+    4,
+  ]);
+
+  searchRows = [];
+  assert.deepEqual(
+    await store.search({
+      query: "coffee",
+      availability: null,
+      after: null,
+      limit: 5,
+    }),
+    { snapshotRevision: null, cursorValid: false, rows: [] },
+  );
+  const pricing = await store.pricingInput(
+    productRef,
+    variantRef,
+    undefined,
+    "catalog-pricing-unit",
+    60_000,
+  );
+  assert.deepEqual(pricing, pricingRows[0]);
+  assert.deepEqual(pricingCalls[0].values, [productRef, variantRef, 60_000]);
+  assert.match(pricingCalls[0].sql, /catalog\.active_snapshot_metadata/u);
+  assert.match(pricingCalls[0].sql, /snapshotFresh/u);
+  const adaptedPricing = await adapters.owner.pricingInput({
+    productRef,
+    variantRef,
+    maxSnapshotAgeMs: 60_000,
+    context: {
+      signal: new AbortController().signal,
+      correlationId: "catalog-adapter-pricing",
+    },
+  });
+  assert.equal(adaptedPricing.status, 200);
+  assert.equal(adaptedPricing.body.offerRef, searchRow.offerRef);
+  assert.deepEqual(pricingCalls[1].values, [productRef, variantRef, 60_000]);
+  pricingRows = [];
+  assert.equal(await store.pricingInput(productRef, variantRef), undefined);
 });
 
 void test("catalog routes enforce verified public and pricing audiences before owner calls", async (t) => {
@@ -767,6 +1119,58 @@ void test("Catalog pricing-input accepts exact convergence delegation only from 
   assert.equal(reads, 1);
 });
 
+void test("catalog framework rejects invalid pricing params before transport or owner access", async (t) => {
+  const { registerCatalogRoutes } =
+    await import("../../apps/catalog-service/dist/http/index.js");
+  let transportChecks = 0;
+  let delegationChecks = 0;
+  let ownerCalls = 0;
+  const owner = {
+    search: async () => {
+      ownerCalls++;
+      return {
+        status: 200,
+        body: { snapshotRevision: "17", items: [], nextCursor: null },
+      };
+    },
+    pricingInput: async () => {
+      ownerCalls++;
+      return { status: 200, body: {} };
+    },
+  };
+  const app = await runtime(t, (value) =>
+    registerCatalogRoutes(
+      value,
+      adapters(owner, undefined, {
+        verifyTransport: () => {
+          transportChecks++;
+          return true;
+        },
+        verifyInternalDelegation: (_token, operationId) => {
+          delegationChecks++;
+          return {
+            iss: "api-internal",
+            aud: "catalog-service",
+            originalCaller: "pricing-service",
+            operationId,
+          };
+        },
+      }),
+    ),
+  );
+  const result = await app.inject({
+    method: "GET",
+    url: `/api/internal-v1/catalog/products/not-a-product/variants/${variantRef}/pricing-input`,
+    headers: { "x-service-delegation": "signed-test" },
+  });
+  assert.equal(result.statusCode, 400);
+  assert.equal(result.json().code, "VALIDATION_FAILED");
+  assert.equal(result.json().detail, "request is invalid");
+  assert.equal(transportChecks, 0);
+  assert.equal(delegationChecks, 0);
+  assert.equal(ownerCalls, 0);
+});
+
 void test("catalog owner maps database failures without leaking details", async (t) => {
   const { createCatalogOwner, registerCatalogRoutes } =
     await import("../../apps/catalog-service/dist/http/index.js");
@@ -829,4 +1233,161 @@ void test("catalog owner rejects error codes outside the operation contract", as
   });
   assert.equal(pricing.statusCode, 503);
   assert.equal(pricing.json().code, "CATALOG_UNAVAILABLE");
+});
+
+void test("Catalog search maps typed owner failures to safe public problems", async (t) => {
+  const cases = [
+    ["VALIDATION_FAILED", 400],
+    ["INVALID_CURSOR", 400],
+    ["CATALOG_SNAPSHOT_INCOMPLETE", 503],
+    ["CATALOG_PRODUCT_NOT_FOUND", 404],
+  ];
+  let failure;
+  const owner = {
+    search: async () => {
+      throw failure;
+    },
+    pricingInput: async () => ({ status: 200, body: {} }),
+  };
+  const { registerCatalogRoutes } =
+    await import("../../apps/catalog-service/dist/http/index.js");
+  const app = await runtime(t, (value) =>
+    registerCatalogRoutes(value, adapters(owner)),
+  );
+
+  for (const [code, status] of cases) {
+    failure = new CatalogOwnerError(code);
+    const result = await app.inject({
+      method: "GET",
+      url: "/api/client-v1/catalog/products?query=coffee",
+      headers: { "x-actor-context": "signed-test" },
+    });
+    assert.equal(result.statusCode, status, code);
+    assert.equal(result.json().code, code, code);
+    assert.equal(result.json().detail.includes(code), false, code);
+  }
+});
+
+void test("Catalog routes reject forged identities and under-scoped claims before owner access", async (t) => {
+  let ownerCalls = 0;
+  let delegationChecks = 0;
+  const owner = {
+    search: async () => {
+      ownerCalls += 1;
+      return {
+        status: 200,
+        body: { snapshotRevision: "17", items: [], nextCursor: null },
+      };
+    },
+    pricingInput: async () => {
+      ownerCalls += 1;
+      return { status: 200, body: {} };
+    },
+  };
+  const { registerCatalogRoutes } =
+    await import("../../apps/catalog-service/dist/http/index.js");
+  const app = await runtime(t, (value) =>
+    registerCatalogRoutes(
+      value,
+      adapters(owner, undefined, {
+        verifyPublicDelegation: (_token, operationId) => {
+          delegationChecks += 1;
+          return { ...claims(operationId), permissions: [] };
+        },
+      }),
+    ),
+  );
+
+  for (const header of ["x-original-caller", "x-service-delegation"]) {
+    const result = await app.inject({
+      method: "GET",
+      url: "/api/client-v1/catalog/products?query=coffee",
+      headers: {
+        "x-actor-context": "signed-test",
+        [header]: "forged-canary",
+      },
+    });
+    assert.equal(result.statusCode, 403);
+    assert.equal(result.json().code, "ACTOR_CONTEXT_INVALID");
+  }
+  const underScoped = await app.inject({
+    method: "GET",
+    url: "/api/client-v1/catalog/products?query=coffee",
+    headers: { "x-actor-context": "missing-catalog-permission" },
+  });
+  assert.equal(delegationChecks, 1);
+  assert.equal(ownerCalls, 0);
+  assert.equal(underScoped.statusCode, 403);
+  assert.equal(underScoped.json().code, "ACTOR_CONTEXT_INVALID");
+});
+
+void test("Catalog pricing forwards a typed not-found result without leaking owner details", async (t) => {
+  const owner = {
+    search: async () => ({
+      status: 200,
+      body: { snapshotRevision: "17", items: [], nextCursor: null },
+    }),
+    pricingInput: async () => ({
+      status: 404,
+      body: {
+        type: "about:blank",
+        title: "CATALOG_PRODUCT_NOT_FOUND",
+        status: 404,
+        code: "CATALOG_PRODUCT_NOT_FOUND",
+        detail: "supplier-secret-canary",
+        instance: "/internal-source",
+        correlationId: "11111111-1111-4111-8111-111111111111",
+        errors: [],
+      },
+    }),
+  };
+  const { registerCatalogRoutes } =
+    await import("../../apps/catalog-service/dist/http/index.js");
+  const app = await runtime(t, (value) =>
+    registerCatalogRoutes(value, adapters(owner)),
+  );
+  const result = await app.inject({
+    method: "GET",
+    url: `/api/internal-v1/catalog/products/${productRef}/variants/${variantRef}/pricing-input`,
+    headers: { "x-service-delegation": "signed-test" },
+  });
+
+  assert.equal(result.statusCode, 404);
+  assert.equal(result.json().code, "CATALOG_PRODUCT_NOT_FOUND");
+  assert.equal(result.json().detail, "catalog request failed");
+  assert.equal(
+    JSON.stringify(result.json()).includes("supplier-secret-canary"),
+    false,
+  );
+  assert.equal(result.headers["cache-control"], "no-store");
+});
+
+void test("Catalog pricing rejects malformed successful owner DTOs", async (t) => {
+  const owner = {
+    search: async () => ({
+      status: 200,
+      body: { snapshotRevision: "17", items: [], nextCursor: null },
+    }),
+    pricingInput: async () => ({
+      status: 200,
+      body: { offerRef: "private-owner-payload" },
+    }),
+  };
+  const { registerCatalogRoutes } =
+    await import("../../apps/catalog-service/dist/http/index.js");
+  const app = await runtime(t, (value) =>
+    registerCatalogRoutes(value, adapters(owner)),
+  );
+  const result = await app.inject({
+    method: "GET",
+    url: `/api/internal-v1/catalog/products/${productRef}/variants/${variantRef}/pricing-input`,
+    headers: { "x-service-delegation": "signed-test" },
+  });
+
+  assert.equal(result.statusCode, 503);
+  assert.equal(result.json().code, "CATALOG_UNAVAILABLE");
+  assert.equal(
+    JSON.stringify(result.json()).includes("private-owner-payload"),
+    false,
+  );
 });

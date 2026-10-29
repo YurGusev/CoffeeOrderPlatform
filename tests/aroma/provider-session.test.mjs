@@ -126,20 +126,28 @@ function recordingTelemetry() {
   };
 }
 
-void test("session acquisition is concurrent single-flight and DB material is encrypted", async () => {
+void test("session acquisition is concurrent single-flight, cache bounded, and DB material is encrypted", async () => {
   const store = new MemoryProviderSessionStore();
   let loginCalls = 0;
   const transport = {
-    login: async () => {
+    login: async ({ email }) => {
       loginCalls++;
       await new Promise((resolve) => setTimeout(resolve, 10));
-      return loginResult();
+      return {
+        ...loginResult(),
+        profile: { ...profile, email: email.trim().toLowerCase() },
+      };
+    },
+    read: async function* (_operation, _signal, cookies) {
+      yield Buffer.from(cookies[0].value);
+      return [];
     },
   };
   const manager = new ProviderSessionManager({
     transport,
     store,
     encryptionKey: Buffer.alloc(32, 7),
+    cacheMaxEntries: 1,
   });
   const [a, b] = await Promise.all([
     manager.acquire(scope),
@@ -164,6 +172,25 @@ void test("session acquisition is concurrent single-flight and DB material is en
   );
   await manager.acquire({ ...scope, email: "canonical@example.test" });
   assert.equal(loginCalls, 1);
+
+  await manager.acquire({
+    ...scope,
+    scopeRef: "aroma-second-scope",
+    email: "second@example.test",
+  });
+  assert.equal(loginCalls, 2);
+  await assert.rejects(
+    collect(a.read({ kind: "cart" }, new AbortController().signal)),
+    { code: "ProviderSessionUnavailable" },
+  );
+  const reloaded = await manager.acquire(scope);
+  assert.equal(loginCalls, 2, "evicted session reloads from encrypted storage");
+  assert.equal(
+    await collect(
+      reloaded.read({ kind: "cart" }, new AbortController().signal),
+    ),
+    "secret-cookie",
+  );
   await manager.close();
 });
 
@@ -211,52 +238,122 @@ void test("session rejects a login profile that does not match the configured sc
   await manager.close();
 });
 
-void test("successful read persists rotated cookies and reuses them after restart", async () => {
+void test("successful read persists rotated cookies and reuses them after restart", async (t) => {
   const store = new MemoryProviderSessionStore();
-  const rotated = { ...cookie, value: "rotated-secret-cookie" };
-  const seen = [];
-  const transport = {
-    login: async () => loginResult(),
-    read: async function* (_operation, _signal, cookies) {
-      seen.push(cookies);
-      yield Buffer.from("{}");
-      return [rotated];
-    },
-  };
   const key = Buffer.alloc(32, 11);
+  const cartCookieHeaders = [];
+  let cartReads = 0;
+  const fetch = async (url, init) => {
+    if (url.endsWith("/api/v1/auth/login")) {
+      const headers = new Headers({ "content-type": "application/json" });
+      headers.append(
+        "set-cookie",
+        "october_session=secret-cookie; Domain=provider.test; Path=/; HttpOnly; Secure",
+      );
+      headers.append(
+        "set-cookie",
+        "dcCNXv=companion-cookie; Path=/; HttpOnly; Secure",
+      );
+      return new Response(JSON.stringify({ data: profile }), {
+        status: 200,
+        headers,
+      });
+    }
+
+    assert.equal(url, "https://provider.test/api/v1/cart/");
+    assert.equal(init.method, "GET");
+    cartCookieHeaders.push(new Headers(init.headers).get("cookie"));
+    const headers = new Headers({ "content-type": "application/json" });
+    if (cartReads++ === 0) {
+      headers.append(
+        "set-cookie",
+        "october_session=deleted; Domain=provider.test; Path=/; Expires=Tue, 14 Sep 2021 00:00:00 GMT; HttpOnly; Secure",
+      );
+      headers.append(
+        "set-cookie",
+        "dcCNXv=rotated-companion-cookie; Path=/; HttpOnly; Secure",
+      );
+    }
+    return new Response("{}", { status: 200, headers });
+  };
+
+  const firstClient = new ProviderHttpClient(httpOptions);
+  const secondClient = new ProviderHttpClient(httpOptions);
+  t.mock.method(globalThis, "fetch", fetch);
   const first = new ProviderSessionManager({
-    transport,
+    transport: firstClient,
     store,
     encryptionKey: key,
   });
-  const session = await first.acquire(scope);
-  for await (const _chunk of session.read(
-    { kind: "cart" },
-    new AbortController().signal,
-  )) {
-    /* consume */
-  }
-  assert.equal(store.saveCalls, 2);
-  assert.equal(
-    decryptCookieMaterial(store.lastSaved.encryptedCookieMaterial, key)[0]
-      .value,
-    "rotated-secret-cookie",
-  );
-  await first.close();
   const second = new ProviderSessionManager({
-    transport,
+    transport: secondClient,
     store,
     encryptionKey: key,
   });
-  const restored = await second.acquire(scope);
-  for await (const _chunk of restored.read(
-    { kind: "cart" },
-    new AbortController().signal,
-  )) {
-    /* consume */
+  try {
+    const session = await first.acquire(scope);
+    for await (const _chunk of session.read(
+      { kind: "cart" },
+      new AbortController().signal,
+    )) {
+      /* consume */
+    }
+    assert.equal(store.saveCalls, 2);
+    assert.equal(
+      cartCookieHeaders[0],
+      "october_session=secret-cookie; dcCNXv=companion-cookie",
+    );
+    const afterExpiry = decryptCookieMaterial(
+      store.lastSaved.encryptedCookieMaterial,
+      key,
+    );
+    assert.deepEqual(
+      afterExpiry.map(({ name, value, domain, path }) => ({
+        name,
+        value,
+        domain,
+        path,
+      })),
+      [
+        {
+          name: "dcCNXv",
+          value: "rotated-companion-cookie",
+          domain: null,
+          path: "/",
+        },
+      ],
+    );
+    assert.doesNotMatch(
+      Buffer.from(store.lastSaved.encryptedCookieMaterial).toString("utf8"),
+      /secret-cookie|rotated-companion-cookie/,
+    );
+    await first.close();
+
+    const restored = await second.acquire(scope);
+    for await (const _chunk of restored.read(
+      { kind: "cart" },
+      new AbortController().signal,
+    )) {
+      /* consume */
+    }
+    assert.equal(cartCookieHeaders[1], "dcCNXv=rotated-companion-cookie");
+    assert.doesNotMatch(cartCookieHeaders[1], /october_session|secret-cookie/);
+    assert.deepEqual(
+      decryptCookieMaterial(store.lastSaved.encryptedCookieMaterial, key).map(
+        ({ name, value, domain }) => ({ name, value, domain }),
+      ),
+      [
+        {
+          name: "dcCNXv",
+          value: "rotated-companion-cookie",
+          domain: null,
+        },
+      ],
+    );
+  } finally {
+    await first.close();
+    await second.close();
   }
-  assert.equal(seen[1][0].value, "rotated-secret-cookie");
-  await second.close();
 });
 
 void test("provider 401 invalidates cache and persisted session before single-flight re-login", async () => {
@@ -829,7 +926,7 @@ void test("force destroy reaches a non-cooperative active read and closes transp
   void active;
 });
 
-void test("safe pre-dispatch read re-authenticates once after an empty 401 and never logs in a third time", async () => {
+void test("safe read retries only an empty pre-dispatch 401 and never retries after yielding bytes", async () => {
   const store = new MemoryProviderSessionStore();
   let loginCalls = 0;
   let readCalls = 0;
@@ -866,6 +963,41 @@ void test("safe pre-dispatch read re-authenticates once after an empty 401 and n
   assert.equal(loginCalls, 2);
   assert.equal(readCalls, 2);
   await manager.close();
+
+  let partialLoginCalls = 0;
+  let partialReadCalls = 0;
+  const partialManager = new ProviderSessionManager({
+    transport: {
+      login: async () => {
+        partialLoginCalls++;
+        return loginResult();
+      },
+      read: async function* () {
+        partialReadCalls++;
+        yield Buffer.from("partial-cart-prefix");
+        throw new ProviderError("ProviderAuthenticationFailed");
+      },
+    },
+    store: new MemoryProviderSessionStore(),
+    encryptionKey: Buffer.alloc(32, 27),
+  });
+  const partialChunks = [];
+  await assert.rejects(
+    async () => {
+      for await (const chunk of readProviderSafely(
+        partialManager,
+        scope,
+        { kind: "cart" },
+        new AbortController().signal,
+      ))
+        partialChunks.push(Buffer.from(chunk).toString());
+    },
+    { code: "ProviderAuthenticationFailed" },
+  );
+  assert.deepEqual(partialChunks, ["partial-cart-prefix"]);
+  assert.equal(partialLoginCalls, 1);
+  assert.equal(partialReadCalls, 1);
+  await partialManager.close();
 });
 
 void test("concurrent safe reads share the re-authenticated session and a failed re-auth cannot trigger a third login", async () => {
@@ -1465,4 +1597,128 @@ void test("typed provider failure crash output excludes credential, cookie, and 
     assert.doesNotMatch(result.stdout, new RegExp(canary));
     assert.doesNotMatch(result.stderr, new RegExp(canary));
   }
+});
+
+void test("invalid session inputs are rejected before contacting provider", async () => {
+  let logins = 0;
+  const transport = {
+    login: async () => {
+      logins += 1;
+      return loginResult();
+    },
+  };
+  const store = new MemoryProviderSessionStore();
+  for (const options of [
+    { encryptionKey: Buffer.alloc(31) },
+    { encryptionKey: Buffer.alloc(32), cacheMaxAgeMs: 0 },
+    { encryptionKey: Buffer.alloc(32), cacheMaxEntries: -1 },
+  ]) {
+    assert.throws(
+      () => new ProviderSessionManager({ transport, store, ...options }),
+      { code: "ProviderProtocolViolation" },
+    );
+  }
+  const manager = new ProviderSessionManager({
+    transport,
+    store,
+    encryptionKey: Buffer.alloc(32),
+  });
+  for (const invalid of [
+    { ...scope, scopeRef: "" },
+    { ...scope, scopeRef: "bad\0scope" },
+    { ...scope, email: "invalid" },
+    { ...scope, password: "" },
+  ]) {
+    assert.throws(() => manager.acquire(invalid), {
+      code: "ProviderProtocolViolation",
+    });
+  }
+  assert.equal(logins, 0);
+  await manager.close();
+});
+
+void test("session persistence failure never exposes or caches login cookies", async () => {
+  let logins = 0;
+  const store = new MemoryProviderSessionStore();
+  store.save = async () => {
+    throw new Error("storage-secret");
+  };
+  const manager = new ProviderSessionManager({
+    transport: {
+      login: async () => {
+        logins += 1;
+        return loginResult();
+      },
+    },
+    store,
+    encryptionKey: Buffer.alloc(32),
+  });
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    await assert.rejects(manager.acquire(scope), (error) => {
+      assert.equal(error.code, "ProviderSessionUnavailable");
+      assert.doesNotMatch(String(error), /storage-secret|secret-cookie/);
+      return true;
+    });
+  }
+  assert.equal(logins, 2);
+  await manager.close();
+});
+
+void test("a concurrent login with different credentials cannot join the existing flight", async () => {
+  const entered = Promise.withResolvers();
+  const release = Promise.withResolvers();
+  let logins = 0;
+  const manager = new ProviderSessionManager({
+    transport: {
+      login: async () => {
+        logins += 1;
+        entered.resolve();
+        await release.promise;
+        return loginResult();
+      },
+    },
+    store: new MemoryProviderSessionStore(),
+    encryptionKey: Buffer.alloc(32),
+  });
+  const first = manager.acquire(scope);
+  await entered.promise;
+  await assert.rejects(manager.acquire({ ...scope, password: "different" }), {
+    code: "ProviderProtocolViolation",
+  });
+  release.resolve();
+  await first;
+  assert.equal(logins, 1);
+  await manager.close();
+});
+
+void test("removing the last session cookie invalidates the persisted session before re-login", async () => {
+  const store = new MemoryProviderSessionStore();
+  let logins = 0;
+  const manager = new ProviderSessionManager({
+    transport: {
+      login: async () => {
+        logins += 1;
+        return loginResult();
+      },
+      read: async function* () {
+        yield Buffer.from("{}");
+        return [{ ...cookie, value: "" }];
+      },
+    },
+    store,
+    encryptionKey: Buffer.alloc(32),
+  });
+  const session = await manager.acquire(scope);
+  await assert.rejects(
+    collect(session.read({ kind: "cart" }, new AbortController().signal)),
+    { code: "ProviderSessionUnavailable" },
+  );
+  assert.equal(store.inspect(session.scopeHash), undefined);
+  await assert.rejects(
+    collect(session.read({ kind: "cart" }, new AbortController().signal)),
+    { code: "ProviderSessionUnavailable" },
+  );
+  await manager.acquire(scope);
+  assert.equal(logins, 2);
+  await manager.close();
 });

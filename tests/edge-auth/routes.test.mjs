@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import { generateKeyPairSync } from "node:crypto";
 import { createConnection } from "node:net";
 import test from "node:test";
-import { createRuntime } from "../../packages/platform-runtime/src/index.ts";
-import { verifyActorContextWithKeySet } from "../../packages/platform-security/src/index.ts";
+import { createRuntime } from "../../packages/platform-runtime/dist/index.js";
+import { verifyActorContextWithKeySet } from "../../packages/platform-security/dist/index.js";
 import {
   createConfiguredEdgeAuthAdapters,
   createEdgeAuthComposition,
@@ -217,10 +217,46 @@ void test("default edge composition registers routes but has no active authentic
   const app = await makeApp(t, fixture(), createEdgeAuthComposition(), {
     config: { browserOidc: null },
   });
-  assert.equal(
-    (await app.inject({ method: "GET", url: "/auth/login" })).statusCode,
-    503,
-  );
+  const assertNoBrowserAuthority = (result) => {
+    const cookies = [].concat(result.headers["set-cookie"] ?? []);
+    assert.equal(result.headers["x-actor-context"], undefined);
+    assert.equal(
+      cookies.some((cookie) => /__Host-coffee-(?:session|csrf)=/u.test(cookie)),
+      false,
+    );
+  };
+  const login = await app.inject({ method: "GET", url: "/auth/login" });
+  assert.equal(login.statusCode, 503);
+  assertNoBrowserAuthority(login);
+
+  const callback = await app.inject({
+    method: "GET",
+    url: "/auth/callback?state=forged-state&code=forged-code",
+    headers: { cookie: `__Host-coffee-login=${LOGIN_BINDING}` },
+  });
+  assert.equal(callback.statusCode, 401);
+  assertNoBrowserAuthority(callback);
+
+  const session = await app.inject({
+    method: "GET",
+    url: "/auth/session",
+    headers: { cookie: sessionCookie },
+  });
+  assert.equal(session.statusCode, 401);
+  assertNoBrowserAuthority(session);
+
+  const logout = await app.inject({
+    method: "POST",
+    url: "/auth/logout",
+    headers: {
+      origin: ORIGIN,
+      cookie: `${sessionCookie}; ${csrfCookie}`,
+      "x-csrf-token": "csrf-fixture",
+    },
+  });
+  assert.equal(logout.statusCode, 401);
+  assertNoBrowserAuthority(logout);
+
   const denied = await app.inject({
     method: "GET",
     url: "/_edge/authorize",
@@ -231,6 +267,7 @@ void test("default edge composition registers routes but has no active authentic
     },
   });
   assert.equal(denied.statusCode, 401);
+  assertNoBrowserAuthority(denied);
 });
 
 void test("runtime Edge enables OIDC only with an explicit provider and actor claim mapping", async (t) => {
@@ -400,6 +437,58 @@ void test("login and callback use authority state, local return path, no-store a
     cookies[2],
     /^__Host-coffee-login=; Path=\/; Max-Age=0; Secure; HttpOnly; SameSite=Lax$/u,
   );
+
+  for (const attempt of [
+    {
+      authorizationUrl: "http://idp.fixture.invalid/authorize",
+      loginBinding: LOGIN_BINDING,
+    },
+    {
+      authorizationUrl: "https://idp.fixture.invalid/authorize",
+      loginBinding: "invalid-binding",
+    },
+  ]) {
+    const invalid = fixture();
+    invalid.adapters.authority.begin = async () => attempt;
+    const invalidApp = await makeApp(t, invalid);
+    const rejected = await invalidApp.inject({
+      method: "GET",
+      url: "/auth/login",
+    });
+    assert.equal(rejected.statusCode, 503);
+    assert.equal(rejected.json().code, "AUTH_UNAVAILABLE");
+    assert.equal(rejected.headers.location, undefined);
+    assert.equal(rejected.headers["set-cookie"], undefined);
+    assert.equal(rejected.headers["cache-control"], "no-store");
+  }
+
+  const unsafeCallback = fixture();
+  unsafeCallback.adapters.authority.complete = async (state, code, binding) => {
+    unsafeCallback.calls.complete.push([state, code, binding]);
+    return {
+      sessionId: "session-fixture",
+      csrf: "csrf-fixture",
+      actorRef: "actor:fixture",
+      expiresAt: NOW + 120_000,
+      returnTo: "https://attacker.fixture.invalid/collect",
+    };
+  };
+  const unsafeCallbackApp = await makeApp(t, unsafeCallback);
+  const unsafe = await unsafeCallbackApp.inject({
+    method: "GET",
+    url: "/auth/callback?state=state-fixture&code=fixture-code",
+    headers: { cookie: `__Host-coffee-login=${LOGIN_BINDING}` },
+  });
+  assert.equal(unsafe.statusCode, 401);
+  assert.equal(unsafe.json().code, "AUTHENTICATION_REQUIRED");
+  assert.equal(unsafe.headers.location, undefined);
+  assert.equal(
+    unsafe.headers["set-cookie"],
+    "__Host-coffee-login=; Path=/; Max-Age=0; Secure; HttpOnly; SameSite=Lax",
+  );
+  assert.deepEqual(unsafeCallback.calls.complete, [
+    ["state-fixture", "fixture-code", LOGIN_BINDING],
+  ]);
 });
 
 void test("callback without the browser's login-binding cookie never invokes the authority", async (t) => {
@@ -471,6 +560,71 @@ void test("session exposes only server identity and expiry; logout requires same
   assert.equal(logout.statusCode, 204);
   assert.equal(logout.headers["set-cookie"].length, 3);
   assert.deepEqual(f.calls.logout, ["session-fixture"]);
+
+  const unknownSession = await app.inject({
+    method: "GET",
+    url: "/auth/session",
+    headers: { cookie: "__Host-coffee-session=unknown-session" },
+  });
+  assert.equal(unknownSession.statusCode, 401);
+  assert.equal(unknownSession.json().code, "AUTHENTICATION_REQUIRED");
+  assert.equal(unknownSession.json().actorRef, undefined);
+
+  const unavailable = fixture();
+  unavailable.adapters.authority.session = () => {
+    throw new Error("private session store detail");
+  };
+  const unavailableApp = await makeApp(t, unavailable);
+  const unavailableSession = await unavailableApp.inject({
+    method: "GET",
+    url: "/auth/session",
+    headers: { cookie: sessionCookie },
+  });
+  assert.equal(unavailableSession.statusCode, 503);
+  assert.equal(unavailableSession.json().code, "AUTH_UNAVAILABLE");
+  assert.equal(unavailableSession.json().detail.includes("private"), false);
+  assert.equal(unavailableSession.json().actorRef, undefined);
+
+  const failedLogout = fixture();
+  failedLogout.adapters.authority.logout = (id) => {
+    failedLogout.calls.logout.push(id);
+    throw new Error("private logout store detail");
+  };
+  const failedLogoutApp = await makeApp(t, failedLogout);
+  const logoutUnavailable = await failedLogoutApp.inject({
+    method: "POST",
+    url: "/auth/logout",
+    headers: {
+      cookie: `${sessionCookie}; ${csrfCookie}`,
+      origin: ORIGIN,
+      "x-csrf-token": "csrf-fixture",
+    },
+  });
+  assert.equal(logoutUnavailable.statusCode, 503);
+  assert.equal(logoutUnavailable.json().code, "AUTH_UNAVAILABLE");
+  assert.equal(logoutUnavailable.json().detail.includes("private"), false);
+  assert.equal(logoutUnavailable.headers["set-cookie"], undefined);
+  assert.deepEqual(failedLogout.calls.logout, ["session-fixture"]);
+
+  const rejectedLogout = fixture();
+  rejectedLogout.adapters.authority.logout = (id) => {
+    rejectedLogout.calls.logout.push(id);
+    return false;
+  };
+  const rejectedLogoutApp = await makeApp(t, rejectedLogout);
+  const logoutRejected = await rejectedLogoutApp.inject({
+    method: "POST",
+    url: "/auth/logout",
+    headers: {
+      cookie: `${sessionCookie}; ${csrfCookie}`,
+      origin: ORIGIN,
+      "x-csrf-token": "csrf-fixture",
+    },
+  });
+  assert.equal(logoutRejected.statusCode, 401);
+  assert.equal(logoutRejected.json().code, "AUTHENTICATION_REQUIRED");
+  assert.equal(logoutRejected.headers["set-cookie"], undefined);
+  assert.deepEqual(rejectedLogout.calls.logout, ["session-fixture"]);
 });
 
 void test("private authorizer requires nginx peer, contract operation, clean raw target and session", async (t) => {
@@ -506,6 +660,51 @@ void test("private authorizer requires nginx peer, contract operation, clean raw
   });
   assert.equal(badPath.statusCode, 403);
   assert.equal(f.calls.resolve.length, 1);
+
+  let signerCalls = 0;
+  const expired = fixture({
+    session: {
+      actorRef: "actor:fixture",
+      permissions: ["orders:read"],
+      csrf: "csrf-fixture",
+      expiresAt: NOW,
+    },
+  });
+  expired.adapters.signActorContext = () => {
+    signerCalls += 1;
+    return "signed.actor.context";
+  };
+  const expiredApp = await makeApp(t, expired);
+  const expiredResult = await expiredApp.inject({
+    method: "GET",
+    url: "/_edge/authorize",
+    headers,
+  });
+  assert.equal(expiredResult.statusCode, 401);
+  assert.equal(expiredResult.json().code, "AUTHENTICATION_REQUIRED");
+  assert.equal(signerCalls, 0);
+  assert.equal(expiredResult.headers["x-actor-context"], undefined);
+
+  for (const sign of [
+    () => "",
+    () => {
+      throw new Error("private signing key detail");
+    },
+  ]) {
+    const failedSigning = fixture();
+    failedSigning.adapters.signActorContext = sign;
+    const failedSigningApp = await makeApp(t, failedSigning);
+    const result = await failedSigningApp.inject({
+      method: "GET",
+      url: "/_edge/authorize",
+      headers,
+    });
+    assert.equal(result.statusCode, 503);
+    assert.equal(result.json().code, "AUTH_UNAVAILABLE");
+    assert.equal(result.json().detail.includes("private"), false);
+    assert.equal(result.headers["x-actor-context"], undefined);
+    assert.equal(result.headers["cache-control"], "no-store");
+  }
 });
 
 void test("authorization fails closed on peer, unknown operation, forged headers, duplicates and CSRF failures", async (t) => {

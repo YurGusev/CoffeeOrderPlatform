@@ -195,6 +195,7 @@ void test("decoder preserves only normalized discount facts and rejects incomple
     },
   ]);
   for (const bad of [
+    { ...rule, user_id: 123 },
     { ...rule, discount: 0 },
     { ...rule, min_weight: "-1" },
     { ...rule, created_at: "not-a-date" },

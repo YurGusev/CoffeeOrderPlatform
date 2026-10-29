@@ -1,7 +1,13 @@
 import assert from "node:assert/strict";
+import { generateKeyPairSync, randomUUID } from "node:crypto";
 import test from "node:test";
 import { createRuntime } from "../../packages/platform-runtime/dist/index.js";
 import {
+  signActorContext,
+  verifyActorContextWithKeySet,
+} from "../../packages/platform-security/dist/index.js";
+import {
+  createConfiguredPublicAdapters,
   createHttpCatalogClient,
   registerPublicRoutes,
 } from "../../apps/api-public/dist/index.js";
@@ -253,6 +259,173 @@ void test("public Catalog route validates actor/query, forwards to owner, and re
     JSON.stringify(acceptedError.json()).includes("private-canary"),
     false,
   );
+
+  const delegationKeys = generateKeyPairSync("ed25519");
+  const edgeKeys = generateKeyPairSync("ed25519");
+  const edgePublicKey = edgeKeys.publicKey.export({
+    type: "spki",
+    format: "pem",
+  });
+  const configuredContext = {
+    config: {
+      environment: "development",
+      services: {
+        "api-public": {
+          outbound: [
+            "customer-service:4101",
+            "catalog-service:4102",
+            "pricing-service:4103",
+            "orders-service:4104",
+          ],
+        },
+      },
+    },
+    secrets: {
+      security: {
+        apiPublicDelegationSigningPrivateKey: delegationKeys.privateKey.export({
+          type: "pkcs8",
+          format: "pem",
+        }),
+        actorContextEdgeVerificationPublicKeys: {
+          active: edgePublicKey,
+          previous: edgePublicKey,
+        },
+      },
+    },
+  };
+  const ownerCalls = [];
+  let ownerResult = { status: 200, body: searchResponse };
+  const configured = createConfiguredPublicAdapters(configuredContext, {
+    fetch: async (path, options) => {
+      ownerCalls.push({ path, options });
+      const problemResponse = ownerResult.status !== 200;
+      return new Response(JSON.stringify(ownerResult.body), {
+        status: ownerResult.status,
+        headers: {
+          "content-type": problemResponse
+            ? "application/problem+json"
+            : "application/json",
+        },
+      });
+    },
+  });
+  const configuredApp = await runtime(
+    t,
+    (value) => registerPublicRoutes(value, configured),
+    "edge-nginx",
+  );
+  const traceparent = `00-${randomUUID().replaceAll("-", "")}-${randomUUID().replaceAll("-", "").slice(0, 16)}-01`;
+  const issueActor = (correlationId, permissions) => {
+    const now = Math.floor(Date.now() / 1_000);
+    return signActorContext(
+      {
+        iss: "edge-gateway",
+        aud: "api-public",
+        originalIssuer: "edge-gateway",
+        sub: "usr_configured_catalog",
+        permissions,
+        operationId: "searchCatalogProducts",
+        correlationId,
+        traceparent,
+        iat: now,
+        exp: now + 45,
+        jti: randomUUID(),
+        kid: "edge-test",
+      },
+      edgeKeys.privateKey,
+    );
+  };
+  const requestFor = (correlationId, permissions) => ({
+    method: "GET",
+    url: "/api/client-v1/catalog/products?query=coffee&availability=Available&limit=5",
+    headers: {
+      "x-actor-context": issueActor(correlationId, permissions),
+      "x-correlation-id": correlationId,
+      traceparent,
+    },
+  });
+
+  const configuredCorrelationId = randomUUID();
+  const configuredResponse = await configuredApp.inject(
+    requestFor(configuredCorrelationId, ["catalog:read"]),
+  );
+  assert.equal(configuredResponse.statusCode, 200, configuredResponse.body);
+  assert.deepEqual(configuredResponse.json(), searchResponse);
+  assert.equal(configuredResponse.headers["cache-control"], "no-store");
+  assert.equal(ownerCalls.length, 1);
+  const ownerCall = ownerCalls[0];
+  assert.equal(
+    ownerCall.path,
+    "/api/client-v1/catalog/products?query=coffee&availability=Available&limit=5",
+  );
+  assert.equal(ownerCall.options.method, "GET");
+  assert.equal(
+    ownerCall.options.headers["x-correlation-id"],
+    configuredCorrelationId,
+  );
+  assert.equal(ownerCall.options.headers.traceparent, traceparent);
+  assert.equal(
+    ownerCall.options.headers.accept,
+    "application/json, application/problem+json",
+  );
+  const delegation = verifyActorContextWithKeySet(
+    ownerCall.options.headers["x-actor-context"],
+    {
+      publicKeys: [delegationKeys.publicKey],
+      issuer: "api-public",
+      audience: "catalog-service",
+      nowEpochSeconds: Math.floor(Date.now() / 1_000),
+      clockSkewSeconds: 5,
+    },
+  );
+  assert.equal(delegation.originalIssuer, "edge-gateway");
+  assert.equal(delegation.sub, "usr_configured_catalog");
+  assert.equal(delegation.operationId, "searchCatalogProducts");
+  assert.equal(delegation.correlationId, configuredCorrelationId);
+  assert.equal(delegation.traceparent, traceparent);
+  assert.deepEqual(delegation.permissions, ["catalog:read"]);
+
+  const denied = await configuredApp.inject(
+    requestFor(randomUUID(), ["orders:read:any"]),
+  );
+  assert.equal(denied.statusCode, 403);
+  assert.equal(denied.json().code, "ACTOR_CONTEXT_INVALID");
+  assert.equal(ownerCalls.length, 1);
+
+  const ownerProblem = {
+    ...problem404,
+    status: 503,
+    title: "CATALOG_UNAVAILABLE",
+    code: "CATALOG_UNAVAILABLE",
+    detail: "owner-private-detail-canary",
+    instance: "/private/owner/instance-canary",
+    correlationId: randomUUID(),
+  };
+  ownerResult = { status: 503, body: ownerProblem };
+  const failureCorrelationId = randomUUID();
+  const failed = await configuredApp.inject(
+    requestFor(failureCorrelationId, ["catalog:read"]),
+  );
+  assert.equal(failed.statusCode, 503);
+  assert.match(
+    failed.headers["content-type"],
+    /^application\/problem\+json(?:;|$)/u,
+  );
+  assert.equal(failed.headers["cache-control"], "no-store");
+  assert.equal(failed.json().code, "CATALOG_UNAVAILABLE");
+  assert.equal(failed.json().detail, "catalog request failed");
+  assert.equal(failed.json().instance, "/api/client-v1/catalog/products");
+  assert.equal(failed.json().correlationId, failureCorrelationId);
+  assert.equal(JSON.stringify(failed.json()).includes("owner-private"), false);
+  assert.equal(ownerCalls.length, 2);
+
+  const oversizedUrlRequest = requestFor(randomUUID(), ["catalog:read"]);
+  oversizedUrlRequest.url += "&".repeat(8 * 1024 + 1);
+  const oversizedUrl = await configuredApp.inject(oversizedUrlRequest);
+  assert.equal(oversizedUrl.statusCode, 400);
+  assert.equal(oversizedUrl.json().code, "VALIDATION_FAILED");
+  assert.equal(oversizedUrl.headers["cache-control"], "no-store");
+  assert.equal(ownerCalls.length, 2);
 });
 
 void test("public Catalog owner client signs delegation, fixes path, and rejects invalid transport DTOs", async () => {

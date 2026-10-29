@@ -992,16 +992,14 @@ export async function relayOutboxBatch(
           isRemote: true,
         });
       }
-      const delivery = trace
-        .getTracer("coffee-platform.outbox")
-        .startSpan(
-          "Outbox.relay",
-          {
-            kind: SpanKind.PRODUCER,
-            attributes: { "messaging.destination.name": claim.message.topic },
-          },
-          parent,
-        );
+      const delivery = trace.getTracer("coffee-platform.outbox").startSpan(
+        "Outbox.relay",
+        {
+          kind: SpanKind.PRODUCER,
+          attributes: { "messaging.destination.name": claim.message.topic },
+        },
+        parent,
+      );
       try {
         return await context.with(trace.setSpan(parent, delivery), async () => {
           if (options.signal?.aborted)

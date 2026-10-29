@@ -1,11 +1,17 @@
 import assert from "node:assert/strict";
 import { generateKeyPairSync, randomUUID } from "node:crypto";
 import test from "node:test";
-import { createRuntime } from "../../packages/platform-runtime/src/index.ts";
-import { verifyActorContextWithKeySet } from "../../packages/platform-security/src/index.ts";
+import { createRuntime } from "../../packages/platform-runtime/dist/index.js";
 import {
+  signActorContext,
+  verifyActorContextWithKeySet,
+} from "../../packages/platform-security/dist/index.js";
+import {
+  configuredPricingOrigin,
+  configuredPricingTls,
   createConfiguredPublicAdapters,
   createHttpPricingClient,
+  createUnavailablePublicAdapters,
   registerPublicRoutes,
 } from "../../apps/api-public/dist/index.js";
 
@@ -193,6 +199,24 @@ void test("pricing validates UUID, request guard, and replay-only empty body", a
     assert.equal(result.statusCode, 400, JSON.stringify(input));
     assert.equal(result.json().code, "VALIDATION_FAILED");
   }
+  const malformedJson = await app.inject({
+    method: "POST",
+    url: path,
+    headers: { ...headers(), "content-type": "application/json" },
+    payload: '{"private":"PRICING_JSON_PARSER_CANARY"',
+  });
+  assert.equal(malformedJson.statusCode, 400);
+  assert.equal(
+    malformedJson.headers["content-type"].split(";")[0],
+    "application/problem+json",
+  );
+  assert.equal(malformedJson.headers["cache-control"], "no-store");
+  assert.equal(malformedJson.json().code, "VALIDATION_FAILED");
+  assert.equal(malformedJson.json().detail, "Request validation failed");
+  assert.doesNotMatch(
+    malformedJson.body,
+    /PRICING_JSON_PARSER_CANARY|Unexpected|JSON/u,
+  );
   assert.equal(calls.length, 0);
   const created = await app.inject({
     method: "POST",
@@ -344,11 +368,27 @@ void test("configured outbound client signs pricing delegation and forwards only
   assert.equal(calls[1].options.headers["content-type"], undefined);
 });
 
-void test("configured public adapters sign pricing-service delegation; outbound rejects supplier fields and invalid owner problems", async () => {
+void test("configured public adapters sign pricing-service delegation; outbound rejects supplier fields and invalid owner problems", async (t) => {
   const keys = generateKeyPairSync("ed25519");
-  const publicKey = keys.publicKey.export({ type: "spki", format: "pem" });
+  const edgeKeys = generateKeyPairSync("ed25519");
+  const edgePublicKey = edgeKeys.publicKey.export({
+    type: "spki",
+    format: "pem",
+  });
   const fakeContext = {
-    config: { services: { "api-public": { outbound: [] } } },
+    config: {
+      environment: "development",
+      services: {
+        "api-public": {
+          outbound: [
+            "customer-service:4101",
+            "catalog-service:4102",
+            "pricing-service:4103",
+            "orders-service:4104",
+          ],
+        },
+      },
+    },
     secrets: {
       security: {
         apiPublicDelegationSigningPrivateKey: keys.privateKey.export({
@@ -356,8 +396,8 @@ void test("configured public adapters sign pricing-service delegation; outbound 
           format: "pem",
         }),
         actorContextEdgeVerificationPublicKeys: {
-          active: publicKey,
-          previous: publicKey,
+          active: edgePublicKey,
+          previous: edgePublicKey,
         },
       },
     },
@@ -377,6 +417,28 @@ void test("configured public adapters sign pricing-service delegation; outbound 
     pricingClient,
     pricingClient,
     pricingClient,
+  );
+  assert.equal(
+    configuredPricingOrigin(fakeContext),
+    "https://pricing-service:4103",
+  );
+  assert.throws(
+    () => configuredPricingTls(fakeContext),
+    /PUBLIC_API_TRANSPORT_NOT_CONFIGURED/u,
+  );
+  assert.throws(
+    () =>
+      configuredPricingTls({
+        ...fakeContext,
+        secrets: {
+          ...fakeContext.secrets,
+          security: {
+            ...fakeContext.secrets.security,
+            serviceTransportKeys: { "api-public": "not-json" },
+          },
+        },
+      }),
+    /must be JSON/u,
   );
   const correlationId = randomUUID();
   const forwardContext = {
@@ -402,6 +464,152 @@ void test("configured public adapters sign pricing-service delegation; outbound 
   assert.equal(signed.operationId, "createPricingQuote");
   assert.equal(signed.correlationId, correlationId);
   assert.ok(signed.permissions.includes("pricing:create"));
+
+  const ingressCorrelationId = randomUUID();
+  const ingressIdempotencyKey = randomUUID();
+  const traceparent = `00-${randomUUID().replaceAll("-", "")}-${randomUUID().replaceAll("-", "").slice(0, 16)}-01`;
+  const now = Math.floor(Date.now() / 1_000);
+  const ingressActor = signActorContext(
+    {
+      iss: "edge-gateway",
+      aud: "api-public",
+      originalIssuer: "edge-gateway",
+      sub: "usr_configured_pricing",
+      permissions: ["pricing:create"],
+      operationId: "createPricingQuote",
+      correlationId: ingressCorrelationId,
+      traceparent,
+      iat: now,
+      exp: now + 45,
+      jti: randomUUID(),
+      kid: "edge-test",
+    },
+    edgeKeys.privateKey,
+  );
+  const app = await runtime(t, {
+    ...configured,
+    verifyTransport: () => true,
+  });
+  const response = await app.inject({
+    method: "POST",
+    url: path,
+    headers: {
+      "x-actor-context": ingressActor,
+      "x-correlation-id": ingressCorrelationId,
+      traceparent: traceparent,
+      "idempotency-key": ingressIdempotencyKey,
+    },
+    payload: body,
+  });
+  assert.equal(response.statusCode, 201, response.body);
+  assert.deepEqual(response.json(), quote);
+  assert.equal(response.headers["cache-control"], "no-store");
+  assert.equal(response.headers["x-correlation-id"], ingressCorrelationId);
+  const routed = captures[1];
+  assert.equal(routed.url, path);
+  assert.equal(routed.options.method, "POST");
+  assert.equal(routed.options.headers["content-type"], "application/json");
+  assert.equal(
+    routed.options.headers["x-correlation-id"],
+    ingressCorrelationId,
+  );
+  assert.equal(
+    routed.options.headers["idempotency-key"],
+    ingressIdempotencyKey,
+  );
+  assert.deepEqual(JSON.parse(routed.options.body), body);
+  const routedClaims = verifyActorContextWithKeySet(
+    routed.options.headers["x-actor-context"],
+    {
+      publicKeys: [keys.publicKey],
+      issuer: "api-public",
+      audience: "pricing-service",
+      nowEpochSeconds: Math.floor(Date.now() / 1_000),
+      clockSkewSeconds: 5,
+    },
+  );
+  assert.equal(routedClaims.originalIssuer, "edge-gateway");
+  assert.equal(routedClaims.sub, "usr_configured_pricing");
+  assert.equal(routedClaims.operationId, "createPricingQuote");
+  assert.equal(routedClaims.correlationId, ingressCorrelationId);
+  assert.deepEqual(routedClaims.permissions, ["pricing:create"]);
+
+  const grindUnavailable = {
+    type: "about:blank",
+    title: "Private pricing failure",
+    status: 422,
+    code: "PRICING_GRIND_NOT_AVAILABLE",
+    detail: "PRICING_PRIVATE_DETAIL_CANARY",
+    instance: path,
+    correlationId: ingressCorrelationId,
+    errors: [],
+  };
+  pricingClient.fetch = async () =>
+    new Response(JSON.stringify(grindUnavailable), {
+      status: 422,
+      headers: { "content-type": "application/problem+json" },
+    });
+  const unavailableResponse = await app.inject({
+    method: "POST",
+    url: path,
+    headers: {
+      "x-actor-context": ingressActor,
+      "x-correlation-id": ingressCorrelationId,
+      traceparent,
+      "idempotency-key": randomUUID(),
+    },
+    payload: body,
+  });
+  assert.equal(unavailableResponse.statusCode, 422, unavailableResponse.body);
+  assert.equal(unavailableResponse.json().code, "PRICING_GRIND_NOT_AVAILABLE");
+  assert.equal(unavailableResponse.json().detail, "pricing request failed");
+  assert.equal(unavailableResponse.headers["cache-control"], "no-store");
+  assert.equal(
+    unavailableResponse.headers["x-correlation-id"],
+    ingressCorrelationId,
+  );
+  assert.doesNotMatch(
+    unavailableResponse.body,
+    /Private pricing failure|PRICING_PRIVATE_DETAIL_CANARY/u,
+  );
+
+  for (const invalid422 of [
+    { ...grindUnavailable, code: "CATALOG_PRODUCT_NOT_FOUND" },
+    { ...grindUnavailable, status: 409 },
+  ]) {
+    pricingClient.fetch = async () =>
+      new Response(JSON.stringify(invalid422), {
+        status: 422,
+        headers: { "content-type": "application/problem+json" },
+      });
+    const invalidResponse = await app.inject({
+      method: "POST",
+      url: path,
+      headers: {
+        "x-actor-context": ingressActor,
+        "x-correlation-id": ingressCorrelationId,
+        traceparent,
+        "idempotency-key": randomUUID(),
+      },
+      payload: body,
+    });
+    assert.equal(invalidResponse.statusCode, 503, invalidResponse.body);
+    assert.equal(invalidResponse.json().code, "CATALOG_UNAVAILABLE");
+    assert.equal(
+      invalidResponse.json().detail,
+      "pricing service is unavailable",
+    );
+    assert.equal(invalidResponse.headers["cache-control"], "no-store");
+    assert.equal(
+      invalidResponse.headers["x-correlation-id"],
+      ingressCorrelationId,
+    );
+    assert.doesNotMatch(
+      invalidResponse.body,
+      /Private pricing failure|PRICING_PRIVATE_DETAIL_CANARY/u,
+    );
+  }
+
   pricingClient.fetch = async () =>
     new Response(JSON.stringify({ ...quote, supplierCostMinor: "42" }), {
       status: 201,
@@ -428,5 +636,148 @@ void test("configured public adapters sign pricing-service delegation; outbound 
   await assert.rejects(
     configured.pricing.create(body, forwardContext),
     /invalid problem/,
+  );
+  pricingClient.fetch = async (url, options) => {
+    captures.push({ url, options });
+    return new Response(
+      JSON.stringify({
+        type: "about:blank",
+        title: "Private pricing failure",
+        status: 409,
+        code: "OTHER",
+        detail: "pricing-upstream-secret",
+        instance: path,
+        correlationId: ingressCorrelationId,
+        errors: [],
+      }),
+      {
+        status: 409,
+        headers: { "content-type": "application/problem+json" },
+      },
+    );
+  };
+  const failedRoute = await app.inject({
+    method: "POST",
+    url: path,
+    headers: {
+      "x-actor-context": ingressActor,
+      "x-correlation-id": ingressCorrelationId,
+      traceparent,
+      "idempotency-key": randomUUID(),
+    },
+    payload: body,
+  });
+  assert.equal(failedRoute.statusCode, 503);
+  assert.equal(failedRoute.json().code, "CATALOG_UNAVAILABLE");
+  assert.equal(failedRoute.json().detail, "pricing service is unavailable");
+  assert.equal(failedRoute.body.includes("pricing-upstream-secret"), false);
+  assert.equal(failedRoute.body.includes("Private pricing failure"), false);
+  const failedOwnerCall = captures[2];
+  assert.equal(failedOwnerCall.url, path);
+  const failedDelegation = verifyActorContextWithKeySet(
+    failedOwnerCall.options.headers["x-actor-context"],
+    {
+      publicKeys: [keys.publicKey],
+      issuer: "api-public",
+      audience: "pricing-service",
+      nowEpochSeconds: Math.floor(Date.now() / 1_000),
+      clockSkewSeconds: 5,
+    },
+  );
+  assert.equal(failedDelegation.operationId, "createPricingQuote");
+  assert.equal(failedDelegation.sub, "usr_configured_pricing");
+  assert.equal(failedDelegation.correlationId, ingressCorrelationId);
+  assert.deepEqual(failedDelegation.permissions, ["pricing:create"]);
+});
+
+void test("public configured and unavailable adapters fail closed without scoped credentials", async () => {
+  const key = generateKeyPairSync("ed25519");
+  const publicPem = key.publicKey.export({ type: "spki", format: "pem" });
+  const context = {
+    config: {
+      environment: "development",
+      services: { "api-public": { outbound: ["pricing-service:4103"] } },
+    },
+    secrets: { security: {} },
+  };
+  assert.throws(
+    () =>
+      createConfiguredPublicAdapters(context, {
+        fetch: async () => {
+          throw new Error("must not fetch");
+        },
+      }),
+    /PUBLIC_API_DELEGATION_KEY_NOT_CONFIGURED/u,
+  );
+  assert.throws(
+    () =>
+      createConfiguredPublicAdapters(
+        {
+          ...context,
+          secrets: {
+            security: { apiPublicDelegationSigningPrivateKey: "not-a-key" },
+          },
+        },
+        {
+          fetch: async () => {
+            throw new Error("must not fetch");
+          },
+        },
+      ),
+    /DECODER/u,
+  );
+  const noSigningKey = {
+    ...context,
+    secrets: {
+      security: {
+        actorContextEdgeVerificationPublicKeys: {
+          active: publicPem,
+          previous: publicPem,
+        },
+      },
+    },
+  };
+  assert.throws(
+    () =>
+      createConfiguredPublicAdapters(noSigningKey, {
+        fetch: async () => {
+          throw new Error("must not fetch");
+        },
+      }),
+    /PUBLIC_API_DELEGATION_KEY_NOT_CONFIGURED/u,
+  );
+  const noActorKeys = {
+    ...noSigningKey,
+    secrets: {
+      security: {
+        apiPublicDelegationSigningPrivateKey: key.privateKey.export({
+          type: "pkcs8",
+          format: "pem",
+        }),
+      },
+    },
+  };
+  assert.throws(
+    () =>
+      createConfiguredPublicAdapters(noActorKeys, {
+        fetch: async () => {
+          throw new Error("must not fetch");
+        },
+      }),
+    /PUBLIC_API_ACTOR_VERIFICATION_KEYS_NOT_CONFIGURED/u,
+  );
+  const unavailable = createUnavailablePublicAdapters();
+  assert.equal(unavailable.verifyTransport({}, "edge-nginx"), false);
+  await assert.rejects(
+    unavailable.pricing.create(body, {
+      actor: actor("createPricingQuote"),
+      context: {
+        correlationId: randomUUID(),
+        signal: new AbortController().signal,
+      },
+      idempotencyKey: randomUUID(),
+      replayOnly: false,
+    }),
+    /PUBLIC_API_PRICING_CLIENT_NOT_CONFIGURED/u,
   );
 });

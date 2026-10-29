@@ -1,8 +1,14 @@
 import assert from "node:assert/strict";
-import { randomUUID } from "node:crypto";
+import { generateKeyPairSync, randomUUID } from "node:crypto";
 import test from "node:test";
-import { createRuntime } from "../../packages/platform-runtime/src/index.ts";
+import { createRuntime } from "../../packages/platform-runtime/dist/index.js";
 import {
+  signActorContext,
+  verifyActorContextWithKeySet,
+} from "../../packages/platform-security/dist/index.js";
+import {
+  configuredOrdersOrigin,
+  createConfiguredPublicAdapters,
   createHttpOrdersClient,
   registerPublicRoutes,
 } from "../../apps/api-public/dist/index.js";
@@ -312,12 +318,44 @@ void test("Orders operations require their exact permission before owner calls, 
 
 void test("requires transport and signed operation/correlation actor; rejects malformed refs, keys and replay requests", async (t) => {
   const calls = [];
-  const app = await runtime(t, fakeAdapters(calls));
+  const verifyCalls = [];
+  const adapters = fakeAdapters(calls);
+  const verifyActor = adapters.verifyActor;
+  adapters.verifyActor = (...args) => {
+    verifyCalls.push(args[0]);
+    return verifyActor(...args);
+  };
+  const app = await runtime(t, adapters);
+  const url = `/api/client-v1/orders/${orderRef}/commands/confirm`;
+  const valid = await app.inject({
+    method: "POST",
+    url,
+    headers: commandHeaders(),
+    payload: commandBody,
+  });
+  assert.equal(valid.statusCode, 200);
+  assert.equal(verifyCalls.length, 1);
+  assert.equal(calls.length, 1);
+  calls.length = 0;
+  verifyCalls.length = 0;
+
+  for (const spoofedHeader of ["x-actor-ref", "x-actor-role"]) {
+    const denied = await app.inject({
+      method: "POST",
+      url,
+      headers: commandHeaders({ [spoofedHeader]: "attacker" }),
+      payload: commandBody,
+    });
+    assert.equal(denied.statusCode, 403, spoofedHeader);
+    assert.equal(denied.json().code, "ACTOR_CONTEXT_INVALID", spoofedHeader);
+    assert.equal(denied.headers["cache-control"], "no-store", spoofedHeader);
+    assert.equal(verifyCalls.length, 0, spoofedHeader);
+    assert.equal(calls.length, 0, spoofedHeader);
+  }
   const noTransport = await runtime(
     t,
     fakeAdapters(calls, { verifyTransport: () => false }),
   );
-  const url = `/api/client-v1/orders/${orderRef}/commands/confirm`;
   assert.equal(
     (
       await noTransport.inject({
@@ -568,8 +606,446 @@ void test("mTLS Orders client scopes signed delegation to the exact operation an
   assert.equal(observed.options.headers["idempotency-key"].length, 36);
 });
 
+void test("configured public Orders route signs a scoped owner request and validates its response", async (t) => {
+  const apiKeys = generateKeyPairSync("ed25519");
+  const edgeKeys = generateKeyPairSync("ed25519");
+  const edgePublicKey = edgeKeys.publicKey.export({
+    type: "spki",
+    format: "pem",
+  });
+  const context = {
+    config: {
+      environment: "development",
+      services: {
+        "api-public": {
+          outbound: [
+            "customer-service:4101",
+            "catalog-service:4102",
+            "pricing-service:4103",
+            "orders-service:4104",
+          ],
+        },
+      },
+    },
+    secrets: {
+      security: {
+        apiPublicDelegationSigningPrivateKey: apiKeys.privateKey.export({
+          type: "pkcs8",
+          format: "pem",
+        }),
+        actorContextEdgeVerificationPublicKeys: {
+          active: edgePublicKey,
+          previous: edgePublicKey,
+        },
+      },
+    },
+  };
+  const captures = [];
+  let ownerPayload = card;
+  let ownerStatus = 201;
+  let ownerContentType = "application/json";
+  let ownerReplay = true;
+  let ownerResponseHeaders = {};
+  let ownerResponse;
+  const configured = createConfiguredPublicAdapters(context, {
+    fetch: async (path, options) => {
+      captures.push({ path, options });
+      ownerResponse = new Response(JSON.stringify(ownerPayload), {
+        status: ownerStatus,
+        headers: {
+          "content-type": ownerContentType,
+          "cache-control": "no-store",
+          "x-correlation-id": options.headers["x-correlation-id"],
+          ...(ownerReplay ? { "idempotency-replayed": "true" } : {}),
+          ...ownerResponseHeaders,
+        },
+      });
+      return ownerResponse;
+    },
+  });
+  assert.equal(configuredOrdersOrigin(context), "https://orders-service:4104");
+  const app = await runtime(t, {
+    ...configured,
+    verifyTransport: () => true,
+  });
+  const correlationId = randomUUID();
+  const idempotencyKey = randomUUID();
+  const traceparent = `00-${randomUUID().replaceAll("-", "")}-${randomUUID().replaceAll("-", "").slice(0, 16)}-01`;
+  const now = Math.floor(Date.now() / 1_000);
+  const actorToken = signActorContext(
+    {
+      iss: "edge-gateway",
+      aud: "api-public",
+      originalIssuer: "edge-gateway",
+      sub: "usr_configured_orders",
+      permissions: ["orders:create"],
+      operationId: "createOrderDraft",
+      correlationId,
+      traceparent,
+      iat: now,
+      exp: now + 45,
+      jti: randomUUID(),
+      kid: "edge-test",
+    },
+    edgeKeys.privateKey,
+  );
+  const response = await app.inject({
+    method: "POST",
+    url: "/api/client-v1/orders/drafts",
+    headers: {
+      "x-actor-context": actorToken,
+      "x-correlation-id": correlationId,
+      traceparent,
+      "idempotency-key": idempotencyKey,
+    },
+    payload: orderBody,
+  });
+
+  assert.equal(response.statusCode, 201, response.body);
+  assert.deepEqual(response.json(), card);
+  assert.equal(response.headers["cache-control"], "no-store");
+  assert.equal(response.headers["x-correlation-id"], correlationId);
+  assert.equal(response.headers["idempotency-replayed"], "true");
+  assert.equal(captures.length, 1);
+  assert.equal(captures[0].path, "/api/client-v1/orders/drafts");
+  assert.equal(captures[0].options.method, "POST");
+  assert.equal(captures[0].options.headers["content-type"], "application/json");
+  assert.equal(captures[0].options.headers["x-correlation-id"], correlationId);
+  assert.equal(captures[0].options.headers["traceparent"], traceparent);
+  assert.equal(captures[0].options.headers["idempotency-key"], idempotencyKey);
+  assert.deepEqual(JSON.parse(captures[0].options.body), orderBody);
+  const delegated = verifyActorContextWithKeySet(
+    captures[0].options.headers["x-actor-context"],
+    {
+      publicKeys: [apiKeys.publicKey],
+      issuer: "api-public",
+      audience: "orders-service",
+      nowEpochSeconds: Math.floor(Date.now() / 1_000),
+      clockSkewSeconds: 5,
+    },
+  );
+  assert.equal(delegated.originalIssuer, "edge-gateway");
+  assert.equal(delegated.sub, "usr_configured_orders");
+  assert.equal(delegated.operationId, "createOrderDraft");
+  assert.equal(delegated.correlationId, correlationId);
+  assert.deepEqual(delegated.permissions, ["orders:create"]);
+
+  ownerPayload = reconciliation;
+  ownerStatus = 202;
+  ownerReplay = false;
+  const reconciliationCorrelationId = randomUUID();
+  const reconciliationIdempotencyKey = randomUUID();
+  const reconciliationActorToken = signActorContext(
+    {
+      iss: "edge-gateway",
+      aud: "api-public",
+      originalIssuer: "edge-gateway",
+      sub: "usr_configured_orders",
+      permissions: ["orders:reconcile:any"],
+      operationId: "requestAromaReconciliation",
+      correlationId: reconciliationCorrelationId,
+      traceparent,
+      iat: now,
+      exp: now + 45,
+      jti: randomUUID(),
+      kid: "edge-test",
+    },
+    edgeKeys.privateKey,
+  );
+  const reconciliationPath = `/api/client-v1/orders/${orderRef}/commands/request-aroma-reconciliation`;
+  const accepted = await app.inject({
+    method: "POST",
+    url: reconciliationPath,
+    headers: {
+      "x-actor-context": reconciliationActorToken,
+      "x-correlation-id": reconciliationCorrelationId,
+      traceparent,
+      "idempotency-key": reconciliationIdempotencyKey,
+    },
+    payload: reconciliationBody,
+  });
+  assert.equal(accepted.statusCode, 202, accepted.body);
+  assert.deepEqual(accepted.json(), reconciliation);
+  assert.equal(accepted.headers["cache-control"], "no-store");
+  assert.equal(
+    accepted.headers["x-correlation-id"],
+    reconciliationCorrelationId,
+  );
+  assert.equal(accepted.headers["idempotency-replayed"], undefined);
+  assert.equal(captures.length, 2);
+  const acceptedCall = captures[1];
+  assert.equal(acceptedCall.path, reconciliationPath);
+  assert.equal(acceptedCall.options.method, "POST");
+  assert.equal(
+    acceptedCall.options.headers["content-type"],
+    "application/json",
+  );
+  assert.equal(
+    acceptedCall.options.headers["x-correlation-id"],
+    reconciliationCorrelationId,
+  );
+  assert.equal(acceptedCall.options.headers.traceparent, traceparent);
+  assert.equal(
+    acceptedCall.options.headers["idempotency-key"],
+    reconciliationIdempotencyKey,
+  );
+  assert.deepEqual(JSON.parse(acceptedCall.options.body), reconciliationBody);
+  const reconciliationDelegation = verifyActorContextWithKeySet(
+    acceptedCall.options.headers["x-actor-context"],
+    {
+      publicKeys: [apiKeys.publicKey],
+      issuer: "api-public",
+      audience: "orders-service",
+      nowEpochSeconds: Math.floor(Date.now() / 1_000),
+      clockSkewSeconds: 5,
+    },
+  );
+  assert.equal(reconciliationDelegation.originalIssuer, "edge-gateway");
+  assert.equal(reconciliationDelegation.sub, "usr_configured_orders");
+  assert.equal(
+    reconciliationDelegation.operationId,
+    "requestAromaReconciliation",
+  );
+  assert.equal(
+    reconciliationDelegation.correlationId,
+    reconciliationCorrelationId,
+  );
+  assert.deepEqual(reconciliationDelegation.permissions, [
+    "orders:reconcile:any",
+  ]);
+
+  ownerReplay = true;
+  const replayed = await app.inject({
+    method: "POST",
+    url: reconciliationPath,
+    headers: {
+      "x-actor-context": reconciliationActorToken,
+      "x-correlation-id": reconciliationCorrelationId,
+      traceparent,
+      "idempotency-key": reconciliationIdempotencyKey,
+      "idempotency-replay-only": "true",
+    },
+  });
+  assert.equal(replayed.statusCode, 202, replayed.body);
+  assert.deepEqual(replayed.json(), reconciliation);
+  assert.equal(replayed.headers["idempotency-replayed"], "true");
+  assert.equal(captures.length, 3);
+  assert.equal(captures[2].path, reconciliationPath);
+  assert.equal(captures[2].options.method, "POST");
+  assert.equal(
+    captures[2].options.headers["idempotency-key"],
+    reconciliationIdempotencyKey,
+  );
+  assert.equal(captures[2].options.headers["idempotency-replay-only"], "true");
+  assert.equal(captures[2].options.headers["content-type"], undefined);
+  assert.equal(captures[2].options.body, undefined);
+
+  ownerPayload = {
+    ...reconciliation,
+    orderRef: "ord_01ARZ3NDEKTSV4RRFFQ69G5FAW",
+  };
+  ownerReplay = false;
+  const mismatched = await app.inject({
+    method: "POST",
+    url: reconciliationPath,
+    headers: {
+      "x-actor-context": reconciliationActorToken,
+      "x-correlation-id": reconciliationCorrelationId,
+      traceparent,
+      "idempotency-key": reconciliationIdempotencyKey,
+    },
+    payload: reconciliationBody,
+  });
+  assert.equal(mismatched.statusCode, 503);
+  assert.equal(
+    mismatched.headers["content-type"].split(";", 1)[0],
+    "application/problem+json",
+  );
+  assert.equal(mismatched.headers["cache-control"], "no-store");
+  assert.deepEqual(mismatched.json(), {
+    type: "about:blank",
+    title: "ORDERS_UNAVAILABLE",
+    status: 503,
+    code: "ORDERS_UNAVAILABLE",
+    detail: "orders owner returned an invalid response",
+    instance:
+      "/api/client-v1/orders/:orderRef/commands/request-aroma-reconciliation",
+    correlationId: reconciliationCorrelationId,
+    errors: [],
+  });
+  assert.equal(
+    mismatched.body.includes("ord_01ARZ3NDEKTSV4RRFFQ69G5FAW"),
+    false,
+  );
+  assert.equal(captures.length, 4);
+
+  ownerStatus = 409;
+  ownerContentType = "application/problem+json";
+  ownerPayload = {
+    type: "about:blank",
+    title: "ORDER_VERSION_CONFLICT",
+    status: 422,
+    code: "ORDER_VERSION_CONFLICT",
+    detail: "private owner problem canary",
+    instance: "/internal/orders/private-order",
+    correlationId: reconciliationCorrelationId,
+    errors: [],
+  };
+  const invalidProblem = await app.inject({
+    method: "POST",
+    url: reconciliationPath,
+    headers: {
+      "x-actor-context": reconciliationActorToken,
+      "x-correlation-id": reconciliationCorrelationId,
+      traceparent,
+      "idempotency-key": reconciliationIdempotencyKey,
+    },
+    payload: reconciliationBody,
+  });
+  assert.equal(invalidProblem.statusCode, 503);
+  assert.equal(invalidProblem.headers["cache-control"], "no-store");
+  assert.equal(
+    invalidProblem.headers["x-correlation-id"],
+    reconciliationCorrelationId,
+  );
+  assert.deepEqual(invalidProblem.json(), {
+    type: "about:blank",
+    title: "ORDERS_UNAVAILABLE",
+    status: 503,
+    code: "ORDERS_UNAVAILABLE",
+    detail: "orders service is unavailable",
+    instance:
+      "/api/client-v1/orders/:orderRef/commands/request-aroma-reconciliation",
+    correlationId: reconciliationCorrelationId,
+    errors: [],
+  });
+  assert.doesNotMatch(
+    invalidProblem.body,
+    /private owner problem canary|private-order/u,
+  );
+  assert.equal(captures.length, 5);
+
+  const malformedJson = await app.inject({
+    method: "POST",
+    url: "/api/client-v1/orders/drafts",
+    headers: {
+      "content-type": "application/json",
+      "x-actor-context": actorToken,
+      "x-correlation-id": correlationId,
+      traceparent,
+      "idempotency-key": randomUUID(),
+    },
+    payload: '{"private-parser-canary":',
+  });
+  assert.equal(malformedJson.statusCode, 400);
+  assert.equal(
+    malformedJson.headers["content-type"].split(";", 1)[0],
+    "application/problem+json",
+  );
+  assert.equal(malformedJson.headers["cache-control"], "no-store");
+  assert.equal(malformedJson.headers["x-correlation-id"], correlationId);
+  assert.deepEqual(malformedJson.json(), {
+    type: "about:blank",
+    title: "VALIDATION_FAILED",
+    status: 400,
+    code: "VALIDATION_FAILED",
+    detail: "Request validation failed",
+    instance: "/api/client-v1/orders/drafts",
+    correlationId,
+    errors: [],
+  });
+  assert.doesNotMatch(
+    malformedJson.body,
+    /private-parser-canary|JSON|Unexpected/u,
+  );
+  assert.equal(captures.length, 5);
+
+  for (const invalidOwnerResponse of [
+    {
+      name: "mismatched correlation",
+      status: 202,
+      contentType: "application/json",
+      headers: { "x-correlation-id": "private-owner-correlation-canary" },
+    },
+    {
+      name: "cacheable owner response",
+      status: 202,
+      contentType: "application/json",
+      headers: { "cache-control": "private, max-age=60" },
+    },
+    {
+      name: "invalid replay marker",
+      status: 202,
+      contentType: "application/json",
+      headers: { "idempotency-replayed": "false" },
+    },
+    {
+      name: "unsupported owner status",
+      status: 418,
+      contentType: "application/problem+json",
+      headers: {},
+    },
+    {
+      name: "unsupported owner media type",
+      status: 202,
+      contentType: "text/plain",
+      headers: {},
+    },
+  ]) {
+    ownerPayload = reconciliation;
+    ownerStatus = invalidOwnerResponse.status;
+    ownerContentType = invalidOwnerResponse.contentType;
+    ownerReplay = false;
+    ownerResponseHeaders = {
+      "x-private-proof": "private-owner-header-canary",
+      ...invalidOwnerResponse.headers,
+    };
+    const rejected = await app.inject({
+      method: "POST",
+      url: reconciliationPath,
+      headers: {
+        "x-actor-context": reconciliationActorToken,
+        "x-correlation-id": reconciliationCorrelationId,
+        traceparent,
+        "idempotency-key": reconciliationIdempotencyKey,
+      },
+      payload: reconciliationBody,
+    });
+    assert.equal(rejected.statusCode, 503, invalidOwnerResponse.name);
+    assert.equal(
+      rejected.headers["content-type"].split(";", 1)[0],
+      "application/problem+json",
+      invalidOwnerResponse.name,
+    );
+    assert.equal(rejected.headers["cache-control"], "no-store");
+    assert.equal(
+      rejected.headers["x-correlation-id"],
+      reconciliationCorrelationId,
+    );
+    assert.equal(rejected.headers["idempotency-replayed"], undefined);
+    assert.deepEqual(rejected.json(), {
+      type: "about:blank",
+      title: "ORDERS_UNAVAILABLE",
+      status: 503,
+      code: "ORDERS_UNAVAILABLE",
+      detail: "orders service is unavailable",
+      instance:
+        "/api/client-v1/orders/:orderRef/commands/request-aroma-reconciliation",
+      correlationId: reconciliationCorrelationId,
+      errors: [],
+    });
+    assert.equal(ownerResponse.bodyUsed, false, invalidOwnerResponse.name);
+    assert.doesNotMatch(
+      rejected.body,
+      /private-owner-(?:correlation|header)-canary/u,
+    );
+  }
+  assert.equal(captures.length, 10);
+});
+
 async function ownerErrorProxy(t, code) {
   const observed = [];
+  let confirmCalls = 0;
   const owner = await createRuntime({
     name: "orders-owner-errors",
     host: "127.0.0.1",
@@ -603,6 +1079,7 @@ async function ownerErrorProxy(t, code) {
           throw Object.assign(new Error("private owner cause"), { code });
         },
         confirm: async () => {
+          confirmCalls++;
           throw Object.assign(new Error("private owner cause"), { code });
         },
       },
@@ -663,8 +1140,47 @@ async function ownerErrorProxy(t, code) {
     },
     () => "fixture-delegation",
   );
-  return { observed, forward: client.forward };
+  return {
+    observed,
+    forward: client.forward,
+    runtime: owner,
+    get confirmCalls() {
+      return confirmCalls;
+    },
+  };
 }
+
+void test("Orders route sanitizes malformed JSON before calling the owner", async (t) => {
+  const owner = await ownerErrorProxy(t, "ORDER_EMPTY");
+  const correlationId = "11111111-1111-4111-8111-111111111111";
+  const response = await owner.runtime.inject({
+    method: "POST",
+    url: `/api/client-v1/orders/${orderRef}/commands/confirm`,
+    headers: {
+      "content-type": "application/json",
+      "x-actor-context": "fixture-delegation",
+      "x-correlation-id": correlationId,
+      "idempotency-key": randomUUID(),
+    },
+    payload: '{"expectedVersion": "private-parser-canary"',
+  });
+
+  assert.equal(response.statusCode, 400);
+  assert.match(response.headers["content-type"], /application\/problem\+json/u);
+  assert.deepEqual(response.json(), {
+    type: "about:blank",
+    title: "VALIDATION_FAILED",
+    status: 400,
+    code: "VALIDATION_FAILED",
+    detail: "Request could not be completed",
+    instance: "/api/client-v1/orders/:orderRef/commands/confirm",
+    correlationId,
+    errors: [],
+  });
+  assert.equal(response.body.includes("private-parser-canary"), false);
+  assert.equal(response.body.includes("JSON"), false);
+  assert.equal(owner.confirmCalls, 0);
+});
 
 void test("four typed owner failures cross api-public with exact HTTP status/code pairs", async (t) => {
   const cases = [

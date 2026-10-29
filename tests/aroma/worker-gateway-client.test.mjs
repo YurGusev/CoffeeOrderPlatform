@@ -654,15 +654,108 @@ void test("Catalog proof uses the existing bounded read-only route with exact id
   assert.equal(calls, 1);
   for (const body of [
     { ...proof, productRef: "prd_01ARZ3NDEKTSV4RRFFQ69G5FAA" },
+    { ...proof, variantRef: "var_01ARZ3NDEKTSV4RRFFQ69G5FAA" },
     { ...proof, extra: true },
   ]) {
+    let badCalls = 0;
     const bad = new AromaConvergenceGatewayClient(
-      { fetch: async () => json(body) },
+      {
+        fetch: async (path, init) => {
+          badCalls++;
+          assert.equal(
+            path,
+            `/api/internal-v1/catalog/products/${productRef}/variants/${variantRef}/pricing-input`,
+          );
+          assert.equal(init.method, "GET");
+          assert.equal(init.body, undefined);
+          return json(body);
+        },
+      },
       options,
     );
     await assert.rejects(
       bad.catalogInput(productRef, variantRef, context()),
       expectError("InvalidResponse"),
     );
+    assert.equal(badCalls, 1);
   }
+
+  const proofJson = JSON.stringify(proof);
+  const maxGetResponseBytes = 64 * 1024;
+  const oversizedProof = `${proofJson}${" ".repeat(
+    maxGetResponseBytes - Buffer.byteLength(proofJson, "utf8") + 1,
+  )}`;
+  assert.equal(
+    Buffer.byteLength(oversizedProof, "utf8"),
+    maxGetResponseBytes + 1,
+  );
+  let oversizedCalls = 0;
+  const oversizedClient = new AromaConvergenceGatewayClient(
+    {
+      fetch: async (path, init) => {
+        oversizedCalls++;
+        assert.equal(
+          path,
+          `/api/internal-v1/catalog/products/${productRef}/variants/${variantRef}/pricing-input`,
+        );
+        assert.equal(init.method, "GET");
+        assert.equal(init.body, undefined);
+        return new Response(oversizedProof, {
+          headers: { "content-type": "application/json" },
+        });
+      },
+    },
+    options,
+  );
+  await assert.rejects(
+    oversizedClient.catalogInput(productRef, variantRef, context()),
+    expectError("InvalidResponse"),
+  );
+  assert.equal(oversizedCalls, 1);
+
+  let stalledCalls = 0,
+    stalledBodyCanceled = false;
+  const stalledClient = new AromaConvergenceGatewayClient(
+    {
+      fetch: async (path, init) => {
+        stalledCalls++;
+        assert.equal(
+          path,
+          `/api/internal-v1/catalog/products/${productRef}/variants/${variantRef}/pricing-input`,
+        );
+        assert.equal(init.method, "GET");
+        assert.equal(init.body, undefined);
+        return new Response(
+          new ReadableStream({
+            cancel() {
+              stalledBodyCanceled = true;
+            },
+          }),
+          { headers: { "content-type": "application/json" } },
+        );
+      },
+    },
+    options,
+  );
+  const startedAt = Date.now();
+  let guardTimer;
+  try {
+    await Promise.race([
+      assert.rejects(
+        stalledClient.catalogInput(productRef, variantRef, context()),
+        expectError("TransportUnavailable"),
+      ),
+      new Promise((_, reject) => {
+        guardTimer = setTimeout(
+          () => reject(new Error("Catalog proof GET exceeded its test guard")),
+          5_000,
+        );
+      }),
+    ]);
+  } finally {
+    clearTimeout(guardTimer);
+  }
+  assert.ok(Date.now() - startedAt < 5_000);
+  assert.equal(stalledCalls, 1);
+  assert.equal(stalledBodyCanceled, true);
 });

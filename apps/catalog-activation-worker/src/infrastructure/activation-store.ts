@@ -115,9 +115,10 @@ export function createCatalogActivationStore(database: Database): Readonly<{
   const identityRows = query<IdentityRow>(
     "SELECT entity_type,source_identity_hash,stable_ref,semantic_fingerprint,first_seen_snapshot_ref FROM catalog.source_identities WHERE supplier_ref=$1",
   );
-  const insertIdentity = query<never>(`INSERT INTO catalog.source_identities
+  const insertIdentities = query<never>(`INSERT INTO catalog.source_identities
     (supplier_ref,entity_type,source_identity_scheme,source_identity_hash,stable_ref,semantic_fingerprint,first_seen_snapshot_ref,last_seen_snapshot_ref,state)
-    VALUES($1,$2,$3,$4,$5,$6,$7,$7,'Present')`);
+    SELECT $1,x.entity_type,$2,x.source_identity_hash,x.stable_ref,x.semantic_fingerprint,$3,$3,'Present'
+    FROM jsonb_to_recordset($4::jsonb) AS x(entity_type text,source_identity_hash char(64),stable_ref varchar(30),semantic_fingerprint char(64))`);
   const bound = query<BindingRow>(
     "SELECT source_offer_key_hash,offer_ref,first_snapshot_ref FROM catalog.offer_binding_acks WHERE snapshot_ref=$1",
   );
@@ -134,46 +135,21 @@ export function createCatalogActivationStore(database: Database): Readonly<{
   const outbox = createSqlOutboxStore(database, { schema: "catalog" });
   const insertProducts =
     query<never>(`INSERT INTO catalog.products(snapshot_ref,product_ref,display_name,display_name_sort_key)
-    SELECT DISTINCT ON (p.source_product_key_hash) $1::varchar(30),identity.stable_ref,v.display_name,lower(v.display_name)
-    FROM catalog.snapshot_products p JOIN catalog.snapshot_variants v USING(snapshot_ref,source_product_key_hash)
-    JOIN catalog.source_identities identity ON identity.supplier_ref=$2 AND identity.entity_type='product'
-      AND identity.source_identity_scheme='hmac-sha256-v1' AND identity.source_identity_hash=p.source_product_key_hash
-    WHERE p.snapshot_ref=$1::varchar(30) ORDER BY p.source_product_key_hash,v.source_variant_key_hash`);
+    SELECT $1,x.product_ref,x.display_name,lower(x.display_name)
+    FROM jsonb_to_recordset($2::jsonb) AS x(product_ref varchar(30),display_name text)`);
   const insertVariants =
     query<never>(`INSERT INTO catalog.variants(snapshot_ref,variant_ref,product_ref,unit,image_url,grind_options)
-    SELECT $1::varchar(30),variant_identity.stable_ref,product_identity.stable_ref,v.unit,p.image_url,o.grind_options
-    FROM catalog.snapshot_variants v JOIN catalog.snapshot_products p USING(snapshot_ref,source_product_key_hash)
-    JOIN catalog.snapshot_offers o USING(snapshot_ref,source_variant_key_hash)
-    JOIN catalog.source_identities variant_identity ON variant_identity.supplier_ref=$2 AND variant_identity.entity_type='variant'
-      AND variant_identity.source_identity_scheme='hmac-sha256-v1' AND variant_identity.source_identity_hash=v.source_variant_key_hash
-    JOIN catalog.source_identities product_identity ON product_identity.supplier_ref=$2 AND product_identity.entity_type='product'
-      AND product_identity.source_identity_scheme='hmac-sha256-v1' AND product_identity.source_identity_hash=v.source_product_key_hash
-    WHERE v.snapshot_ref=$1::varchar(30)`);
+    SELECT $1,x.variant_ref,x.product_ref,x.unit,x.image_url,x.grind_options
+    FROM jsonb_to_recordset($2::jsonb) AS x(variant_ref varchar(30),product_ref varchar(30),unit varchar(16),image_url text,grind_options jsonb)`);
   const insertMappings = query<never>(`INSERT INTO catalog.offer_mappings
     (snapshot_ref,variant_ref,offer_ref,mapping_revision,mapping_state,supplier_unit_minor,currency,effective_at)
-    SELECT $1::varchar(30),variant_identity.stable_ref,
-      CASE WHEN a.availability='Stopped' THEN NULL ELSE offer_identity.stable_ref END,
-      CASE WHEN old.mapping_state IS NOT DISTINCT FROM CASE WHEN a.availability='Stopped' THEN 'Stopped' ELSE 'Active' END
-        AND old.offer_ref IS NOT DISTINCT FROM CASE WHEN a.availability='Stopped' THEN NULL ELSE offer_identity.stable_ref END
-        AND old_a.state IS NOT DISTINCT FROM a.availability THEN old.mapping_revision ELSE COALESCE(old.mapping_revision,0)+1 END,
-      CASE WHEN a.availability='Stopped' THEN 'Stopped' ELSE 'Active' END,
-      CASE WHEN a.availability='Stopped' THEN NULL ELSE o.supplier_unit_minor::bigint END,
-      CASE WHEN a.availability='Stopped' THEN NULL ELSE o.currency END,$4::timestamptz
-    FROM catalog.snapshot_offers o JOIN catalog.snapshot_availability a USING(snapshot_ref,source_offer_key_hash)
-    JOIN catalog.source_identities variant_identity ON variant_identity.supplier_ref=$2 AND variant_identity.entity_type='variant'
-      AND variant_identity.source_identity_scheme='hmac-sha256-v1' AND variant_identity.source_identity_hash=o.source_variant_key_hash
-    JOIN catalog.source_identities offer_identity ON offer_identity.supplier_ref=$2 AND offer_identity.entity_type='offer'
-      AND offer_identity.source_identity_scheme='hmac-sha256-v1' AND offer_identity.source_identity_hash=o.source_offer_key_hash
-    LEFT JOIN catalog.offer_mappings old ON old.snapshot_ref=$3 AND old.variant_ref=variant_identity.stable_ref
-    LEFT JOIN catalog.availability old_a ON old_a.snapshot_ref=$3 AND old_a.variant_ref=old.variant_ref
-    WHERE o.snapshot_ref=$1::varchar(30)`);
+    SELECT $1,x.variant_ref,x.offer_ref,x.mapping_revision::bigint,x.mapping_state,x.supplier_unit_minor::bigint,x.currency,$2::timestamptz
+    FROM jsonb_to_recordset($3::jsonb) AS x(variant_ref varchar(30),offer_ref varchar(30),mapping_revision text,
+      mapping_state varchar(16),supplier_unit_minor text,currency char(3))`);
   const insertAvailability =
     query<never>(`INSERT INTO catalog.availability(snapshot_ref,variant_ref,state,checked_at)
-    SELECT $1::varchar(30),identity.stable_ref,a.availability,$3::timestamptz FROM catalog.snapshot_availability a
-    JOIN catalog.snapshot_offers o USING(snapshot_ref,source_offer_key_hash)
-    JOIN catalog.source_identities identity ON identity.supplier_ref=$2 AND identity.entity_type='variant'
-      AND identity.source_identity_scheme='hmac-sha256-v1' AND identity.source_identity_hash=o.source_variant_key_hash
-    WHERE a.snapshot_ref=$1::varchar(30)`);
+    SELECT $1,x.variant_ref,x.availability,$2::timestamptz
+    FROM jsonb_to_recordset($3::jsonb) AS x(variant_ref varchar(30),availability varchar(16))`);
   const previousMappings =
     query<MappingRow>(`SELECT m.variant_ref,v.product_ref,m.offer_ref,m.mapping_state,
     m.mapping_revision,a.state AS availability FROM catalog.offer_mappings m
@@ -214,8 +190,10 @@ export function createCatalogActivationStore(database: Database): Readonly<{
     query<never>(`UPDATE catalog.catalog_state SET active_snapshot_ref=$1,active_snapshot_revision=$2,
     active_content_hash=$3,updated_at=clock_timestamp() WHERE id=true`);
   const updateKnown =
-    query<never>(`UPDATE catalog.source_identities SET last_seen_snapshot_ref=$2,state=$5
-    WHERE supplier_ref=$1 AND source_identity_hash=$3 AND entity_type=$4 AND source_identity_scheme='hmac-sha256-v1'`);
+    query<never>(`UPDATE catalog.source_identities identity SET last_seen_snapshot_ref=$2,state=x.state
+    FROM jsonb_to_recordset($3::jsonb) AS x(entity_type text,source_identity_hash char(64),state text)
+    WHERE identity.supplier_ref=$1 AND identity.entity_type=x.entity_type
+      AND identity.source_identity_hash=x.source_identity_hash AND identity.source_identity_scheme='hmac-sha256-v1'`);
   const updateMissing = query<never>(
     "UPDATE catalog.source_identities SET state='Missing' WHERE supplier_ref=$1 AND last_seen_snapshot_ref<>$2 AND state IN ('Present','Stopped')",
   );
@@ -303,16 +281,23 @@ export function createCatalogActivationStore(database: Database): Readonly<{
       if (old === undefined)
         missing.push({ ...identity, stableRef, fingerprint });
     }
-    for (const identity of missing)
-      await insertIdentity(tx, [
+    if (missing.length > 0) {
+      const inserted = await insertIdentities(tx, [
         generation.snapshot.supplier_ref,
-        identity.entityType,
         SCHEME,
-        identity.sourceHash,
-        identity.stableRef,
-        identity.fingerprint,
         generation.snapshot.snapshot_ref,
+        JSON.stringify(
+          missing.map((identity) => ({
+            entity_type: identity.entityType,
+            source_identity_hash: identity.sourceHash,
+            stable_ref: identity.stableRef,
+            semantic_fingerprint: identity.fingerprint,
+          })),
+        ),
       ]);
+      if (inserted.rowCount !== missing.length)
+        throw new CatalogActivationError("ACTIVATION_INVALID_REFERENCE");
+    }
     return refs;
   }
 
@@ -386,30 +371,127 @@ export function createCatalogActivationStore(database: Database): Readonly<{
   async function materialize(
     tx: Transaction,
     generation: VerifiedGeneration,
-    previous: string | null,
+    known: Map<string, IdentityRow>,
+    previousRef: string | null,
+    previous: Map<string, MappingRow>,
     revision: string,
     at: string,
   ): Promise<void> {
     const snapshotRef = generation.snapshot.snapshot_ref;
     const supplierRef = generation.snapshot.supplier_ref;
-    const productRows = await insertProducts(tx, [snapshotRef, supplierRef]);
-    const variantRows = await insertVariants(tx, [snapshotRef, supplierRef]);
+    const ref = (entityType: string, sourceHash: string) => {
+      const identity = known.get(`${entityType}:${sourceHash}`);
+      if (identity === undefined)
+        throw new CatalogActivationError("ACTIVATION_INVALID_REFERENCE");
+      return identity.stable_ref;
+    };
+    const displayVariants = new Map<
+      string,
+      VerifiedGeneration["variants"][number]
+    >();
+    for (const variant of generation.variants) {
+      const current = displayVariants.get(variant.source_product_key_hash);
+      if (
+        current === undefined ||
+        variant.source_variant_key_hash < current.source_variant_key_hash
+      )
+        displayVariants.set(variant.source_product_key_hash, variant);
+    }
+    const productByHash = new Map(
+      generation.products.map((product) => [
+        product.source_product_key_hash,
+        product,
+      ]),
+    );
+    const offerByVariant = new Map(
+      generation.offers.map((offer) => [offer.source_variant_key_hash, offer]),
+    );
+    const availabilityByOffer = new Map(
+      generation.availability.map((row) => [
+        row.source_offer_key_hash,
+        row.availability,
+      ]),
+    );
+    const productRows = await insertProducts(tx, [
+      snapshotRef,
+      JSON.stringify(
+        generation.products.map((product) => {
+          const variant = displayVariants.get(product.source_product_key_hash);
+          if (variant === undefined)
+            throw new CatalogActivationError("ACTIVATION_INVALID_REFERENCE");
+          return {
+            product_ref: ref("product", product.source_product_key_hash),
+            display_name: variant.display_name,
+          };
+        }),
+      ),
+    ]);
+    const variantRows = await insertVariants(tx, [
+      snapshotRef,
+      JSON.stringify(
+        generation.variants.map((variant) => {
+          const offer = offerByVariant.get(variant.source_variant_key_hash);
+          const product = productByHash.get(variant.source_product_key_hash);
+          if (offer === undefined || product === undefined)
+            throw new CatalogActivationError("ACTIVATION_INVALID_REFERENCE");
+          return {
+            variant_ref: ref("variant", variant.source_variant_key_hash),
+            product_ref: ref("product", variant.source_product_key_hash),
+            unit: variant.unit,
+            image_url: product.image_url,
+            grind_options: offer.grind_options,
+          };
+        }),
+      ),
+    ]);
     if (
       productRows.rowCount !== generation.products.length ||
       variantRows.rowCount !== generation.variants.length
     ) {
       throw new CatalogActivationError("ACTIVATION_INVALID_REFERENCE");
     }
+    const mappings = generation.offers.map((offer) => {
+      const availability = availabilityByOffer.get(offer.source_offer_key_hash);
+      if (availability === undefined)
+        throw new CatalogActivationError("ACTIVATION_INVALID_REFERENCE");
+      const variantRef = ref("variant", offer.source_variant_key_hash);
+      const offerRef =
+        availability === "Stopped"
+          ? null
+          : ref("offer", offer.source_offer_key_hash);
+      const mappingState = availability === "Stopped" ? "Stopped" : "Active";
+      const old = previous.get(variantRef);
+      const mappingRevision =
+        old !== undefined &&
+        old.mapping_state === mappingState &&
+        old.offer_ref === offerRef &&
+        old.availability === availability
+          ? old.mapping_revision
+          : String(BigInt(old?.mapping_revision ?? "0") + 1n);
+      return {
+        variant_ref: variantRef,
+        offer_ref: offerRef,
+        mapping_revision: mappingRevision,
+        mapping_state: mappingState,
+        supplier_unit_minor:
+          availability === "Stopped" ? null : offer.supplier_unit_minor,
+        currency: availability === "Stopped" ? null : offer.currency,
+      };
+    });
     const mappingRows = await insertMappings(tx, [
       snapshotRef,
-      supplierRef,
-      previous,
       at,
+      JSON.stringify(mappings),
     ]);
     const availabilityRows = await insertAvailability(tx, [
       snapshotRef,
-      supplierRef,
       at,
+      JSON.stringify(
+        generation.offers.map((offer) => ({
+          variant_ref: ref("variant", offer.source_variant_key_hash),
+          availability: availabilityByOffer.get(offer.source_offer_key_hash),
+        })),
+      ),
     ]);
     if (
       mappingRows.rowCount !== generation.variants.length ||
@@ -417,31 +499,35 @@ export function createCatalogActivationStore(database: Database): Readonly<{
     ) {
       throw new CatalogActivationError("ACTIVATION_INVALID_REFERENCE");
     }
-    if (previous !== null) {
-      await copyMissingProducts(tx, [snapshotRef, previous]);
-      await copyMissingVariants(tx, [snapshotRef, previous]);
-      await markMissing(tx, [snapshotRef, previous, at]);
-      await markMissingAvailability(tx, [snapshotRef, previous, at]);
+    if (previousRef !== null) {
+      await copyMissingProducts(tx, [snapshotRef, previousRef]);
+      await copyMissingVariants(tx, [snapshotRef, previousRef]);
+      await markMissing(tx, [snapshotRef, previousRef, at]);
+      await markMissingAvailability(tx, [snapshotRef, previousRef, at]);
     }
     const stoppedOffers = new Set(
       generation.availability
         .filter((row) => row.availability === "Stopped")
         .map((row) => row.source_offer_key_hash),
     );
-    for (const identity of identities(generation)) {
-      await updateKnown(tx, [
-        supplierRef,
-        snapshotRef,
-        identity.sourceHash,
-        identity.entityType,
+    const knownUpdates = identities(generation).map((identity) => ({
+      entity_type: identity.entityType,
+      source_identity_hash: identity.sourceHash,
+      state:
         identity.entityType === "offer" &&
         stoppedOffers.has(identity.sourceHash)
           ? "Stopped"
           : "Present",
-      ]);
-    }
+    }));
+    const updated = await updateKnown(tx, [
+      supplierRef,
+      snapshotRef,
+      JSON.stringify(knownUpdates),
+    ]);
+    if (updated.rowCount !== knownUpdates.length)
+      throw new CatalogActivationError("ACTIVATION_INVALID_REFERENCE");
     await updateMissing(tx, [supplierRef, snapshotRef]);
-    if (previous !== null) await markOld(tx, [previous]);
+    if (previousRef !== null) await markOld(tx, [previousRef]);
     await activate(tx, [snapshotRef]);
     await switchPointer(tx, [
       snapshotRef,
@@ -510,7 +596,9 @@ export function createCatalogActivationStore(database: Database): Readonly<{
       await materialize(
         tx,
         generation,
+        known,
         pointer.active_snapshot_ref,
+        previous,
         revision,
         at,
       );

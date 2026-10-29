@@ -50,6 +50,7 @@ import {
   ROLE,
   ROLES,
   MIGRATIONS,
+  pool,
   ref,
   customer,
   mapping,
@@ -2471,6 +2472,19 @@ void test("Desired arithmetic never rounds physical units or overflows int64", a
         2,
       ),
     (error) => error.code === "AROMA_DESIRED_OVERFLOW",
+  );
+  const aggregateUnits = BigInt(Number.MAX_SAFE_INTEGER) / 2n + 1n;
+  const aggregateLeft = pair((aggregateUnits * 1000n).toString());
+  const aggregateRight = pair((aggregateUnits * 1000n).toString());
+  assert.throws(
+    () =>
+      buildDesired(
+        [aggregateLeft.contribution, aggregateRight.contribution],
+        [aggregateLeft.line, aggregateRight.line],
+        2,
+        2,
+      ),
+    (error) => error.code === "AROMA_QUANTITY_NOT_SUPPORTED",
   );
   const unsupported = pair(
     ((BigInt(Number.MAX_SAFE_INTEGER) + 1n) * 1000n).toString(),

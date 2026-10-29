@@ -171,6 +171,45 @@ void test("catalog source fails closed on metadata drift and when no explicit no
   });
   assert.equal(calls, 2);
 
+  const gapCalls = [];
+  const gapSource = createProviderCatalogSource({
+    sessions: {
+      acquire: async () => ({
+        read: async function* (operation) {
+          gapCalls.push(operation.page);
+          const response = page(operation.page, 3, 3);
+          response.meta.per_page = 2;
+          if (operation.page === 1) {
+            const secondProduct = response.data[0];
+            response.data.push({
+              ...secondProduct,
+              id: 101,
+              name: "Product 101",
+              offers: secondProduct.offers.map((offer) => ({
+                ...offer,
+                id: "101",
+                name: "Offer 101",
+              })),
+            });
+          } else if (operation.page === 2) {
+            response.data = [];
+          }
+          yield bytes(response);
+        },
+      }),
+    },
+    credentials,
+    sourceIdentityKey: Buffer.from("identity-key"),
+    pageSize: 2,
+    normalize,
+  });
+  assert.equal((await gapSource.next()).value.displayName, "Offer 1");
+  assert.equal((await gapSource.next()).value.displayName, "Offer 101");
+  await assert.rejects(() => gapSource.next(), {
+    code: "ProviderReadIncomplete",
+  });
+  assert.deepEqual(gapCalls, [1, 2]);
+
   const unconfigured = createProviderCatalogSource({
     sessions: {
       acquire: async () => ({

@@ -42,7 +42,9 @@ void test("create prepares bounded money facts before opening its owner transact
     source.indexOf("  public async create("),
     source.indexOf("  /** Only the authenticated"),
   );
-  const transaction = create.indexOf("const persist = () => withTransaction<");
+  const transaction = create.search(
+    /const persist = \(\) =>\s*withTransaction</u,
+  );
   assert.ok(transaction > 0);
   assert.match(create.slice(0, transaction), /calculatePricingLine\(/u);
   assert.match(create.slice(0, transaction), /sumLineTotals\(/u);

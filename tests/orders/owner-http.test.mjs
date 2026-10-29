@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { randomUUID } from "node:crypto";
-import { createRuntime } from "../../packages/platform-runtime/src/index.ts";
+import { createRuntime } from "../../packages/platform-runtime/dist/index.js";
 import { registerOrdersRoutes } from "../../apps/orders-service/dist/http/index.js";
 import { createDraft } from "../../apps/orders-service/dist/application/create-draft.js";
 import { upsertItem } from "../../apps/orders-service/dist/application/upsert-item.js";
@@ -45,16 +45,19 @@ function setup(t, permission = "orders:create", overrides = {}) {
   });
   return appPromise.then(async (app) => {
     registerOrdersRoutes(app, {
-      verifyTransport: (_r, c) => c === "api-public",
-      verifyPublicDelegation: (_token, operation) => ({
-        iss: "api-public",
-        aud: "orders-service",
-        originalIssuer: "edge-gateway",
-        sub: "actor-a",
-        permissions: Array.isArray(permission) ? permission : [permission],
-        operationId: operation,
-        correlationId: cid,
-      }),
+      verifyTransport:
+        overrides.verifyTransport ?? ((_r, c) => c === "api-public"),
+      verifyPublicDelegation:
+        overrides.verifyPublicDelegation ??
+        ((_token, operation) => ({
+          iss: "api-public",
+          aud: "orders-service",
+          originalIssuer: "edge-gateway",
+          sub: "actor-a",
+          permissions: Array.isArray(permission) ? permission : [permission],
+          operationId: operation,
+          correlationId: cid,
+        })),
       signInternalDelegation: () => "fixture-delegation",
       owner: {
         store: {
@@ -79,7 +82,7 @@ function setup(t, permission = "orders:create", overrides = {}) {
           async getCard(...args) {
             calls.push(["getCard", ...args]);
             if (overrides.getCardError) throw overrides.getCardError;
-            return card;
+            return overrides.getCardResult ?? card;
           },
           async createDraft(...args) {
             calls.push(["createDraft", ...args]);
@@ -91,15 +94,24 @@ function setup(t, permission = "orders:create", overrides = {}) {
           },
           async deleteItem(...args) {
             calls.push(["deleteItem", ...args]);
+            if (overrides.deleteItemError) throw overrides.deleteItemError;
             return { status: 200, body: card, replayed: false };
           },
           async confirm(...args) {
             calls.push(["confirm", ...args]);
             if (overrides.confirmError) throw overrides.confirmError;
-            return { status: 200, body: card, replayed: false };
+            return (
+              overrides.confirmResult ?? {
+                status: 200,
+                body: card,
+                replayed: false,
+              }
+            );
           },
           async requestReconciliation(...args) {
             calls.push(["requestReconciliation", ...args]);
+            if (overrides.requestReconciliationResult)
+              return overrides.requestReconciliationResult;
             throw Object.assign(new Error("no owner-local projection"), {
               code: "AROMA_RECONCILIATION_NOT_ALLOWED",
             });
@@ -108,11 +120,12 @@ function setup(t, permission = "orders:create", overrides = {}) {
         customer: {
           async getOrderInput(...args) {
             calls.push(["customer", ...args]);
+            if (overrides.customerError) throw overrides.customerError;
             return {
               customerRef: card.customer.customerRef,
               customerVersion: "1",
               displayName: "Ada",
-              state: "Active",
+              state: overrides.customerState ?? "Active",
             };
           },
         },
@@ -374,15 +387,223 @@ void test("six application workflows run without Fastify and preserve the owner 
   assert.deepEqual(calls, ["replay"]);
 });
 void test("orders owner independently authorizes before create precheck and Customer read", async (t) => {
-  const { app, calls } = await setup(t, "orders:read:any");
-  const response = await app.inject({
+  const rejectedPermission = await setup(t, "orders:read:any");
+  const rejected = await rejectedPermission.app.inject({
     method: "POST",
     url: "/api/client-v1/orders/drafts",
     headers: headers(),
     payload: { customerRef: "cus_01ARZ3NDEKTSV4RRFFQ69G5FAV" },
   });
-  assert.equal(response.statusCode, 403);
-  assert.equal(calls.length, 0);
+  assert.equal(rejected.statusCode, 403);
+  assert.equal(rejectedPermission.calls.length, 0);
+
+  const allowed = await setup(t);
+  const request = {
+    method: "POST",
+    url: "/api/client-v1/orders/drafts",
+    payload: { customerRef: "cus_01ARZ3NDEKTSV4RRFFQ69G5FAV" },
+  };
+  const accepted = await allowed.app.inject({ ...request, headers: headers() });
+  assert.equal(accepted.statusCode, 201);
+  const callsBeforeSpoofing = allowed.calls.map(([operation]) => operation);
+  assert.deepEqual(callsBeforeSpoofing, [
+    "precheck",
+    "customer",
+    "createDraft",
+  ]);
+
+  let verifierCalls = 0;
+  const invalidDelegation = await setup(t, "orders:create", {
+    verifyPublicDelegation() {
+      verifierCalls += 1;
+      throw new Error("private-verifier-canary");
+    },
+  });
+  const invalid = await invalidDelegation.app.inject({
+    ...request,
+    headers: headers(),
+  });
+  assert.equal(invalid.statusCode, 403);
+  assert.equal(invalid.json().code, "ACTOR_CONTEXT_INVALID");
+  assert.equal(invalid.headers["cache-control"], "no-store");
+  assert.doesNotMatch(invalid.body, /private-verifier-canary/);
+  assert.equal(verifierCalls, 1);
+  assert.deepEqual(invalidDelegation.calls, []);
+
+  for (const [name, value] of [
+    ["x-actor-ref", "attacker-actor"],
+    ["x-original-caller", "attacker-caller"],
+    ["x-service-delegation", "forged-delegation"],
+  ]) {
+    const response = await allowed.app.inject({
+      ...request,
+      headers: { ...headers(), [name]: value },
+    });
+    assert.equal(response.statusCode, 403, name);
+    assert.equal(response.json().code, "ACTOR_CONTEXT_INVALID", name);
+    assert.equal(response.headers["cache-control"], "no-store", name);
+    assert.deepEqual(
+      allowed.calls.map(([operation]) => operation),
+      callsBeforeSpoofing,
+      `${name} must be rejected before owner or upstream work`,
+    );
+  }
+});
+
+void test("owner rejects untrusted transport and missing actor context before any lookup", async (t) => {
+  const untrusted = await setup(t, "orders:create", {
+    verifyTransport: () => false,
+  });
+  const request = {
+    method: "POST",
+    url: "/api/client-v1/orders/drafts",
+    payload: { customerRef: card.customer.customerRef },
+  };
+  const rejected = await untrusted.app.inject({
+    ...request,
+    headers: headers(),
+  });
+  assert.equal(rejected.statusCode, 401);
+  assert.equal(rejected.json().code, "AUTHENTICATION_REQUIRED");
+  assert.deepEqual(untrusted.calls, []);
+
+  const trusted = await setup(t);
+  for (const [actor, status, code] of [
+    [undefined, 401, "AUTHENTICATION_REQUIRED"],
+    ["", 403, "ACTOR_CONTEXT_INVALID"],
+  ]) {
+    const { "x-actor-context": _, ...rest } = headers();
+    const response = await trusted.app.inject({
+      ...request,
+      headers:
+        actor === undefined ? rest : { ...rest, "x-actor-context": actor },
+    });
+    assert.equal(response.statusCode, status);
+    assert.equal(response.json().code, code);
+    assert.deepEqual(trusted.calls, []);
+  }
+});
+
+void test("owner rejects invalid command identity, payload and replay mode before work", async (t) => {
+  const { app, calls } = await setup(t, [
+    "orders:create",
+    "orders:edit:any",
+    "orders:confirm:any",
+    "orders:reconcile:any",
+  ]);
+  const routes = [
+    {
+      method: "POST",
+      url: "/api/client-v1/orders/drafts",
+      payload: { customerRef: card.customer.customerRef },
+    },
+    {
+      method: "PUT",
+      url: `/api/client-v1/orders/${orderRef}/items/${itemRef}`,
+      payload: {},
+    },
+    {
+      method: "DELETE",
+      url: `/api/client-v1/orders/${orderRef}/items/${itemRef}`,
+    },
+    {
+      method: "POST",
+      url: `/api/client-v1/orders/${orderRef}/commands/confirm`,
+      payload: { expectedVersion: "1" },
+    },
+    {
+      method: "POST",
+      url: `/api/client-v1/orders/${orderRef}/commands/request-aroma-reconciliation`,
+      payload: { expectedVersion: "1", reason: "operator-request" },
+    },
+  ];
+  for (const route of routes) {
+    const cases = [
+      { ...route, headers: { ...headers(), "idempotency-key": "invalid" } },
+      {
+        ...route,
+        headers: { ...headers(), "idempotency-replay-only": "false" },
+      },
+      { ...route, headers: headers(), payload: {} },
+    ];
+    if (route.url.includes(orderRef)) {
+      cases.push({
+        ...route,
+        url: route.url.replace(orderRef, "invalid"),
+        headers: headers(),
+      });
+    }
+    if (route.url.includes(itemRef)) {
+      cases.push({
+        ...route,
+        url: route.url.replace(itemRef, "invalid"),
+        headers: headers(),
+      });
+    }
+    for (const request of cases) {
+      const response = await app.inject(request);
+      assert.equal(
+        response.statusCode,
+        400,
+        `${request.method} ${request.url}`,
+      );
+      assert.equal(response.json().code, "VALIDATION_FAILED");
+      assert.deepEqual(calls, []);
+    }
+  }
+});
+
+void test("replay-only commands report retained-result failures without mutations", async (t) => {
+  for (const [kind, status, code] of [
+    ["not_retained", 410, "IDEMPOTENCY_RESULT_NOT_RETAINED"],
+    ["in_progress", 409, "IDEMPOTENCY_REQUEST_IN_PROGRESS"],
+    ["conflict", 409, "IDEMPOTENCY_CONFLICT"],
+    ["invalid", 500, "IDEMPOTENCY_RESULT_INVALID"],
+  ]) {
+    const { app, calls } = await setup(
+      t,
+      ["orders:create", "orders:reconcile:any"],
+      {
+        replayResult: { kind },
+      },
+    );
+    for (const url of [
+      "/api/client-v1/orders/drafts",
+      `/api/client-v1/orders/${orderRef}/commands/request-aroma-reconciliation`,
+    ]) {
+      const response = await app.inject({
+        method: "POST",
+        url,
+        headers: { ...headers(), "idempotency-replay-only": "true" },
+      });
+      assert.equal(response.statusCode, status, kind);
+      assert.equal(response.json().code, code);
+      assert.equal(response.headers["cache-control"], "no-store");
+    }
+    assert.deepEqual(
+      calls.map(([operation]) => operation),
+      ["replay", "replay"],
+    );
+  }
+});
+
+void test("DELETE reports concurrent version conflicts without returning a card", async (t) => {
+  const { app, calls } = await setup(t, "orders:edit:any", {
+    deleteItemError: Object.assign(new Error("stale"), {
+      code: "ORDER_VERSION_CONFLICT",
+    }),
+  });
+  const response = await app.inject({
+    method: "DELETE",
+    url: `/api/client-v1/orders/${orderRef}/items/${itemRef}`,
+    headers: { ...headers(), "if-match-version": "1" },
+  });
+  assert.equal(response.statusCode, 409);
+  assert.equal(response.json().code, "ORDER_VERSION_CONFLICT");
+  assert.deepEqual(
+    calls.map(([operation]) => operation),
+    ["precheck", "deleteItem"],
+  );
 });
 void test("bodyless create replay authorizes first and never calls Customer or command", async (t) => {
   const { app, calls } = await setup(t);
@@ -396,6 +617,127 @@ void test("bodyless create replay authorizes first and never calls Customer or c
     calls.map((x) => x[0]),
     ["replay"],
   );
+});
+void test("reconciliation returns and replays only the validated stored 202", async (t) => {
+  const key = randomUUID();
+  const accepted = {
+    orderRef,
+    orderVersion: "2",
+    requestedAt: "2026-10-26T10:00:00Z",
+    aromaState: "PendingObservation",
+  };
+  const initial = await setup(t, "orders:reconcile:any", {
+    requestReconciliationResult: {
+      status: 202,
+      body: accepted,
+      replayed: false,
+    },
+  });
+  const command = await initial.app.inject({
+    method: "POST",
+    url: `/api/client-v1/orders/${orderRef}/commands/request-aroma-reconciliation`,
+    headers: { ...headers(), "idempotency-key": key },
+    payload: { expectedVersion: "1", reason: "operator-request" },
+  });
+  assert.equal(command.statusCode, 202);
+  assert.deepEqual(command.json(), accepted);
+  assert.equal(command.headers["cache-control"], "no-store");
+  assert.equal(command.headers["idempotency-replayed"], undefined);
+  assert.deepEqual(
+    initial.calls.map((x) => x[0]),
+    ["precheck", "requestReconciliation"],
+  );
+  assert.equal(initial.calls[0][1].key, key);
+  assert.equal(initial.calls[1][1].identity.key, key);
+  assert.equal(initial.calls[1][1].orderRef, orderRef);
+
+  const replay = await setup(t, "orders:reconcile:any", {
+    replayResult: {
+      kind: "completed",
+      response: { status: 202, resourceRef: orderRef, body: accepted },
+    },
+  });
+  const saved = await replay.app.inject({
+    method: "POST",
+    url: `/api/client-v1/orders/${orderRef}/commands/request-aroma-reconciliation`,
+    headers: {
+      ...headers(),
+      "idempotency-key": key,
+      "idempotency-replay-only": "true",
+    },
+  });
+  assert.equal(saved.statusCode, 202);
+  assert.deepEqual(saved.json(), accepted);
+  assert.equal(saved.headers["cache-control"], "no-store");
+  assert.equal(saved.headers["idempotency-replayed"], "true");
+  assert.deepEqual(
+    replay.calls.map((x) => x[0]),
+    ["replay"],
+  );
+  assert.equal(replay.calls[0][1].key, key);
+
+  for (const invalidCommandResult of [
+    {
+      status: 200,
+      body: accepted,
+      replayed: false,
+    },
+    {
+      status: 202,
+      body: {
+        ...accepted,
+        orderRef: "ord_01ARZ3NDEKTSV4RRFFQ69G5FAW",
+      },
+      replayed: true,
+    },
+  ]) {
+    const invalidCommand = await setup(t, "orders:reconcile:any", {
+      requestReconciliationResult: invalidCommandResult,
+    });
+    const rejectedCommand = await invalidCommand.app.inject({
+      method: "POST",
+      url: `/api/client-v1/orders/${orderRef}/commands/request-aroma-reconciliation`,
+      headers: { ...headers(), "idempotency-key": key },
+      payload: { expectedVersion: "1", reason: "operator-request" },
+    });
+    assert.equal(rejectedCommand.statusCode, 500);
+    assert.equal(rejectedCommand.json().code, "INTERNAL_ERROR");
+    assert.equal(rejectedCommand.headers["cache-control"], "no-store");
+    assert.equal(rejectedCommand.headers["idempotency-replayed"], undefined);
+    assert.doesNotMatch(rejectedCommand.body, /FAW|PendingObservation/u);
+    assert.deepEqual(
+      invalidCommand.calls.map((x) => x[0]),
+      ["precheck", "requestReconciliation"],
+    );
+  }
+
+  for (const response of [
+    { status: 200, resourceRef: orderRef, body: accepted },
+    {
+      status: 202,
+      resourceRef: "ord_01ARZ3NDEKTSV4RRFFQ69G5FAW",
+      body: accepted,
+    },
+  ]) {
+    const invalid = await setup(t, "orders:reconcile:any", {
+      replayResult: { kind: "completed", response },
+    });
+    const rejected = await invalid.app.inject({
+      method: "POST",
+      url: `/api/client-v1/orders/${orderRef}/commands/request-aroma-reconciliation`,
+      headers: {
+        ...headers(),
+        "idempotency-key": key,
+        "idempotency-replay-only": "true",
+      },
+    });
+    assert.equal(rejected.statusCode, 500);
+    assert.equal(rejected.json().code, "IDEMPOTENCY_RESULT_INVALID");
+    assert.deepEqual(
+      invalid.calls.map((x) => x[0]),
+      ["replay"],
+    );
+  }
 });
 void test("bodyless DELETE replays the exact stored card without If-Match-Version", async (t) => {
   const saved = { ...card, allowedActions: ["edit-items"] };
@@ -557,6 +899,48 @@ void test("draft hash precheck conflict stops before Customer network read", asy
   );
 });
 
+void test("inactive and unavailable Customer outcomes stop before the owner command", async (t) => {
+  const customerRef = card.customer.customerRef;
+  const { app, calls } = await setup(t, "orders:create", {
+    customerState: "Inactive",
+  });
+  const response = await app.inject({
+    method: "POST",
+    url: "/api/client-v1/orders/drafts",
+    headers: headers(),
+    payload: { customerRef },
+  });
+
+  assert.equal(response.statusCode, 409);
+  assert.equal(response.json().code, "CUSTOMER_NOT_ACTIVE");
+  assert.deepEqual(
+    calls.map(([operation]) => operation),
+    ["precheck", "customer"],
+  );
+  assert.equal(calls[1][1].customerRef, customerRef);
+  assert.ok(!calls.some(([operation]) => operation === "createDraft"));
+
+  const unavailable = await setup(t, "orders:create", {
+    customerError: Object.assign(new Error("customer-private-canary"), {
+      code: "CUSTOMER_UNAVAILABLE",
+    }),
+  });
+  const unavailableResponse = await unavailable.app.inject({
+    method: "POST",
+    url: "/api/client-v1/orders/drafts",
+    headers: headers(),
+    payload: { customerRef },
+  });
+  assert.equal(unavailableResponse.statusCode, 503);
+  assert.equal(unavailableResponse.json().code, "CUSTOMER_UNAVAILABLE");
+  assert.equal(unavailableResponse.headers["cache-control"], "no-store");
+  assert.doesNotMatch(unavailableResponse.body, /customer-private-canary/u);
+  assert.deepEqual(
+    unavailable.calls.map(([operation]) => operation),
+    ["precheck", "customer"],
+  );
+});
+
 void test("item hash precheck conflict stops before full card read and Pricing network read", async (t) => {
   const { app, calls } = await setup(t, "orders:edit:any", {
     preflightResult: { kind: "conflict" },
@@ -647,6 +1031,24 @@ void test("GET independently requires read permission and performs only the owne
   assert.equal(response.statusCode, 200);
   assert.deepEqual(
     allowed.calls.map((x) => x[0]),
+    ["getCard"],
+  );
+
+  const foreignOrderRef = "ord_01ARZ3NDEKTSV4RRFFQ69G5FAW";
+  const foreign = await setup(t, "orders:read:any", {
+    getCardResult: { ...card, orderRef: foreignOrderRef },
+  });
+  const rejected = await foreign.app.inject({
+    method: "GET",
+    url: `/api/client-v1/orders/${orderRef}`,
+    headers: headers(),
+  });
+  assert.equal(rejected.statusCode, 500);
+  assert.equal(rejected.json().code, "INTERNAL_ERROR");
+  assert.equal(rejected.headers["cache-control"], "no-store");
+  assert.doesNotMatch(rejected.body, new RegExp(foreignOrderRef, "u"));
+  assert.deepEqual(
+    foreign.calls.map((x) => x[0]),
     ["getCard"],
   );
 });
@@ -757,6 +1159,23 @@ void test("pre-#11 reconciliation refuses without claiming a durable 202", async
     calls.map((x) => x[0]),
     ["precheck", "requestReconciliation"],
   );
+
+  const conflicted = await setup(t, "orders:reconcile:any", {
+    precheckResult: { kind: "conflict" },
+  });
+  const conflict = await conflicted.app.inject({
+    method: "POST",
+    url: `/api/client-v1/orders/${orderRef}/commands/request-aroma-reconciliation`,
+    headers: headers(),
+    payload: { expectedVersion: "1", reason: "operator-request" },
+  });
+  assert.equal(conflict.statusCode, 409);
+  assert.equal(conflict.json().code, "IDEMPOTENCY_CONFLICT");
+  assert.deepEqual(
+    conflicted.calls.map((x) => x[0]),
+    ["precheck"],
+    "a conflicting key must stop before the durable reconciliation request",
+  );
 });
 
 void test("owner errors preserve public Order not-found and optimistic conflict codes", async (t) => {
@@ -785,6 +1204,33 @@ void test("owner errors preserve public Order not-found and optimistic conflict 
   });
   assert.equal(confirm.statusCode, 409);
   assert.equal(confirm.json().code, "ORDER_VERSION_CONFLICT");
+
+  const foreignOrderRef = "ord_01ARZ3NDEKTSV4RRFFQ69G5FAW";
+  const mismatched = await setup(t, "orders:confirm:any", {
+    confirmResult: {
+      status: 200,
+      body: {
+        ...card,
+        orderRef: foreignOrderRef,
+        customer: { ...card.customer, displayName: "foreign-card-canary" },
+      },
+      replayed: false,
+    },
+  });
+  const rejected = await mismatched.app.inject({
+    method: "POST",
+    url: `/api/client-v1/orders/${orderRef}/commands/confirm`,
+    headers: headers(),
+    payload: { expectedVersion: "1" },
+  });
+  assert.equal(rejected.statusCode, 500);
+  assert.equal(rejected.json().code, "INTERNAL_ERROR");
+  assert.equal(rejected.headers["cache-control"], "no-store");
+  assert.doesNotMatch(rejected.body, /foreign-card-canary|G5FAW/u);
+  assert.deepEqual(
+    mismatched.calls.map(([operation]) => operation),
+    ["precheck", "confirm"],
+  );
 });
 
 void test("selected Pricing line scope mismatch returns the exact code before item persistence", async (t) => {
@@ -835,6 +1281,27 @@ void test("selected Pricing line scope mismatch returns the exact code before it
     calls.map((x) => x[0]),
     ["preflightPut", "pricing"],
   );
+
+  for (const mismatchedIdentity of [
+    { customerRef: "cus_01ARZ3NDEKTSV4RRFFQ69G5FAW" },
+    { quoteRef: "prq_01ARZ3NDEKTSV4RRFFQ69G5FAW" },
+  ]) {
+    const foreignPricing = await setup(t, "orders:edit:any", {
+      pricingResult: { ...pricingResult, ...mismatchedIdentity },
+    });
+    const unavailable = await foreignPricing.app.inject({
+      method: "PUT",
+      url: `/api/client-v1/orders/${orderRef}/items/${itemRef}`,
+      headers: headers(),
+      payload: body,
+    });
+    assert.equal(unavailable.statusCode, 503);
+    assert.equal(unavailable.json().code, "PRICING_UNAVAILABLE");
+    assert.deepEqual(
+      foreignPricing.calls.map((x) => x[0]),
+      ["preflightPut", "pricing"],
+    );
+  }
 });
 
 void test("aborted PUT preflight maps lookup failure without Pricing or write, while full-card not-found remains 404", async (t) => {

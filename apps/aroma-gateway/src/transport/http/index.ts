@@ -136,9 +136,7 @@ function frameworkError(request: Request, reply: Reply, error: unknown): Reply {
   );
 }
 
-function context(
-  request: Request,
-): Readonly<{
+function context(request: Request): Readonly<{
   correlationId: string;
   traceparent?: string;
   signal: AbortSignal;
@@ -390,9 +388,7 @@ export function createUnavailableAromaBindingRoutes(app: RuntimeApp): void {
   registerRoute(app, undefined, undefined, undefined);
 }
 
-function cartContext(
-  request: Request,
-): Readonly<{
+function cartContext(request: Request): Readonly<{
   correlationId: string;
   traceparent?: string;
   signal: AbortSignal;

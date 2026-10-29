@@ -179,18 +179,18 @@ void test("Provider read returns validated cookie rotation only after the comple
 void test("Provider read accepts the observed hyphenated cookie Expires without weakening domain checks", async (t) => {
   const client = new ProviderHttpClient(options);
   t.after(() => client.close());
-  t.mock.method(
-    globalThis,
-    "fetch",
-    async () =>
-      new Response("{}", {
-        headers: {
-          "content-type": "application/json",
-          "set-cookie":
-            "october_session=rotated-secret; Domain=provider.test; Path=/; Expires=Tue, 14-Sep-2027 10:11:12 GMT; Secure; HttpOnly",
-        },
-      }),
-  );
+  let setCookie =
+    "october_session=rotated-secret; Domain=provider.test; Path=/; Expires=Tue, 14-Sep-2027 10:11:12 GMT; Secure; HttpOnly";
+  let fetchCalls = 0;
+  t.mock.method(globalThis, "fetch", async () => {
+    fetchCalls++;
+    return new Response("{}", {
+      headers: {
+        "content-type": "application/json",
+        "set-cookie": setCookie,
+      },
+    });
+  });
   const source = client.read({ kind: "cart" }, signal());
   await source.next();
   const completed = await source.next();
@@ -198,6 +198,28 @@ void test("Provider read accepts the observed hyphenated cookie Expires without 
   assert.equal(completed.value[0].expiresAt, "2027-09-14T10:11:12Z");
   assert.equal(completed.value[0].domain, "provider.test");
   assert.equal(completed.value[0].secure, true);
+  assert.equal(fetchCalls, 1);
+
+  for (const [index, invalidCookie] of [
+    "october_session=secret-cookie-canary; Domain=attacker.test; Path=/",
+    "october_session=secret-cookie-canary; Domain=provider.test; Domain=provider.test; Path=/",
+    "october_session=secret-cookie-canary; Domain=provider.test; Path=/; Expires=not-a-date",
+  ].entries()) {
+    setCookie = invalidCookie;
+    await assert.rejects(
+      collect(client.read({ kind: "cart" }, signal())),
+      (error) => {
+        assert.equal(error.code, "ProviderProtocolViolation");
+        assert.equal(error.responseBytesReceived, false);
+        assert.doesNotMatch(
+          `${error.name}:${error.message}`,
+          /secret-cookie-canary/u,
+        );
+        return true;
+      },
+    );
+    assert.equal(fetchCalls, 2 + index);
+  }
 });
 
 void test("persisted cookie material cannot inject request headers", () => {
@@ -611,8 +633,14 @@ void test("Provider mutation transport uses the exact observed cart URLs and typ
     httpOnly: true,
     sameSite: "lax",
   };
+  let redirectMutation = false;
   t.mock.method(globalThis, "fetch", async (url, init) => {
     calls.push({ url, init });
+    if (redirectMutation)
+      return new Response(null, {
+        status: 307,
+        headers: { location: "https://foreign.test/redirected-cart" },
+      });
     return new Response("{}", {
       status: 200,
       headers: { "content-type": "application/json" },
@@ -663,6 +691,25 @@ void test("Provider mutation transport uses the exact observed cart URLs and typ
   assert.equal(calls[2].url, "https://provider.test/api/v1/cart/300001");
   assert.equal(calls[2].init.method, "DELETE");
   assert.equal("body" in calls[2].init, false);
+
+  calls.length = 0;
+  redirectMutation = true;
+  await assert.rejects(
+    client.mutate(
+      { kind: "add-cart-line", offerId: "300000", quantity: 1 },
+      signal(),
+      [cookie],
+    ),
+    (error) => {
+      assert.equal(error.code, "ProviderProtocolViolation");
+      assert.equal(error.statusCode, 307);
+      return true;
+    },
+  );
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].url, "https://provider.test/api/v1/cart/");
+  assert.equal(calls[0].init.redirect, "manual");
+  assert.equal(calls[0].init.headers.cookie, "october_session=secret");
 });
 
 void test("Provider mutation transport decodes a typed provider rejection without retry", async (t) => {
@@ -672,15 +719,16 @@ void test("Provider mutation transport decodes a typed provider rejection withou
   });
   t.after(() => client.close());
   let calls = 0;
+  let providerBody = JSON.stringify({
+    error: "duplicate",
+    errors: { offer_id: ["already in cart"] },
+  });
   t.mock.method(globalThis, "fetch", async () => {
     calls += 1;
-    return new Response(
-      JSON.stringify({
-        error: "duplicate",
-        errors: { offer_id: ["already in cart"] },
-      }),
-      { status: 422, headers: { "content-type": "application/json" } },
-    );
+    return new Response(providerBody, {
+      status: 422,
+      headers: { "content-type": "application/json" },
+    });
   });
   const result = await client.mutate(
     { kind: "add-cart-line", offerId: "300000", quantity: 1 },
@@ -693,6 +741,31 @@ void test("Provider mutation transport decodes a typed provider rejection withou
     errorFieldNames: ["offer_id"],
   });
   assert.equal(calls, 1);
+
+  for (const body of [
+    "not JSON secret-provider-canary",
+    JSON.stringify({ error: "duplicate", errors: { offer_id: 42 } }),
+  ]) {
+    providerBody = body;
+    const callsBefore = calls;
+    await assert.rejects(
+      client.mutate(
+        { kind: "add-cart-line", offerId: "300000", quantity: 1 },
+        signal(),
+      ),
+      (error) => {
+        assert.equal(error.code, "ProviderProtocolViolation");
+        assert.equal(error.responseBytesReceived, true);
+        assert.equal(error.statusCode, 422);
+        assert.doesNotMatch(
+          String(error.stack) + JSON.stringify(error),
+          /secret-provider-canary/,
+        );
+        return true;
+      },
+    );
+    assert.equal(calls, callsBefore + 1, "malformed rejection is not retried");
+  }
 });
 
 void test("provider client readiness is local and closes without a provider call", async () => {

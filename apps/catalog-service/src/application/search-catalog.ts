@@ -173,9 +173,7 @@ function encodeCursor(
   return encoded;
 }
 
-function validRow(
-  row: CatalogSearchRow,
-): row is CatalogSearchRow &
+function validRow(row: CatalogSearchRow): row is CatalogSearchRow &
   Readonly<{
     productRef: string;
     variantRef: string;

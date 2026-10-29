@@ -157,6 +157,12 @@ void test("private proof commits to each private fact and applied policy", () =>
     /PRICING_PROOF_LINES_INVALID/,
   );
   assert.throws(
+    () =>
+      hashInternalQuote(quote, policy, [{ ...proofLines[0], lineNumber: 2 }]),
+    /PRICING_PROOF_LINES_INVALID/,
+    "every public line must have its matching private proof",
+  );
+  assert.throws(
     () => hashInternalQuote(quote, policy, [proofLines[0], proofLines[0]]),
     /PRICING_PROOF_LINES_INVALID/,
   );

@@ -299,6 +299,7 @@ function frameworkError(request: Request, reply: Reply, error: unknown): Reply {
       : undefined;
   const validation =
     code === "FST_ERR_CTP_INVALID_JSON_BODY" ||
+    code === "FST_ERR_CTP_EMPTY_JSON_BODY" ||
     code === "FST_ERR_CTP_BODY_TOO_LARGE" ||
     code === "FST_ERR_CTP_INVALID_MEDIA_TYPE";
   const policy = validation
@@ -315,7 +316,11 @@ function frameworkError(request: Request, reply: Reply, error: unknown): Reply {
   );
 }
 
-function forwardedProblem(request: Request, value: unknown): Problem {
+function forwardedProblem(
+  request: Request,
+  status: number,
+  value: unknown,
+): Problem {
   if (!isCustomerProblem(value))
     return problem(
       request,
@@ -324,7 +329,9 @@ function forwardedProblem(request: Request, value: unknown): Problem {
       customerErrorPolicy.CUSTOMER_UNAVAILABLE.detail,
     );
   const policy = customerErrorPolicyEntry(value.code);
-  return policy !== undefined && policy.status === value.status
+  return policy !== undefined &&
+    policy.status === value.status &&
+    policy.status === status
     ? problem(request, policy.status, value.code, policy.detail)
     : problem(
         request,
@@ -342,8 +349,13 @@ function sendForward(
 ): Reply {
   reply.header("cache-control", "no-store");
   if (result.status >= 400)
-    return sendProblem(reply, forwardedProblem(request, result.body));
+    return sendProblem(
+      reply,
+      forwardedProblem(request, result.status, result.body),
+    );
+  const expectedSuccessStatus = kind === "create" ? 201 : 200;
   if (
+    result.status !== expectedSuccessStatus ||
     (kind === "create"
       ? isCustomerResponse(result.body)
       : isCustomerSearchResponse(result.body)) === false
@@ -397,6 +409,7 @@ const pricingErrorCodes: Readonly<Record<number, readonly string[]>> =
     401: ["AUTHENTICATION_REQUIRED"],
     403: ["ACTOR_CONTEXT_INVALID"],
     404: ["CATALOG_PRODUCT_NOT_FOUND"],
+    422: ["PRICING_GRIND_NOT_AVAILABLE"],
     409: [
       "CATALOG_PRODUCT_UNAVAILABLE",
       "CATALOG_REVISION_CHANGED",
@@ -972,7 +985,7 @@ export function registerPublicRoutes(
       response: pricingResponseSchema(
         pricingContractSchemas.response,
         201,
-        [400, 401, 403, 404, 409, 410, 500, 503],
+        [400, 401, 403, 404, 409, 410, 422, 500, 503],
       ),
     },
     handler: async (request, reply) => {

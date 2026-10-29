@@ -195,15 +195,16 @@ void test("Compose recovery proof applies Catalog migrations before runtime star
     assert.match(source, new RegExp(`"${migration}"`, "u"));
   }
   const migrations = source.indexOf("await applyCatalogMigrations(");
-  const startup = source.indexOf(
-    "runCompose(projectName, secretsDir, upArguments",
-  );
+  const startup =
+    source.match(
+      /runTrackedRollbackCompose\(\s*"runtime-stack-up",\s*projectName,\s*secretsDir,\s*upArguments/u,
+    )?.index ?? -1;
   assert.notEqual(
     migrations,
     -1,
     "recovery proof must apply Catalog migrations",
   );
-  assert.notEqual(startup, -1, "Compose startup boundary is missing");
+  assert.notEqual(startup, -1, "tracked Compose startup boundary is missing");
   assert.ok(
     migrations < startup,
     "Catalog migrations must precede Compose runtime startup",
@@ -239,7 +240,7 @@ void test("Compose recovery proof routes startup export only to the local provid
   );
   assert.match(
     source,
-    /network === "coffee_provider_egress" && \(options\.aromaCartProof \|\| options\.recoveryProof\)[\s\S]*?\? \["    internal: true"\]/u,
+    /network === "coffee_provider_egress" &&\s*\(options\.aromaCartProof \|\| options\.recoveryProof\)[\s\S]*?\? \["    internal: true"\]/u,
     "recovery provider network must be internal so public egress is impossible",
   );
   assert.match(
@@ -259,7 +260,7 @@ void test("Compose recovery proof routes startup export only to the local provid
   );
   assert.match(
     source,
-    /assert\.ok\(providerFixtureCalls\.catalog >= 1,[^\n]+local provider fixture/u,
+    /assert\.ok\(\s*providerFixtureCalls\.catalog >= 1,\s*"recovery proof did not reach the local provider fixture for Catalog traversal",?\s*\)/u,
     "recovery proof must reject a run that did not reach the local Catalog fixture",
   );
   assert.match(

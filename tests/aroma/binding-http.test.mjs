@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
-import { generateKeyPairSync } from "node:crypto";
+import { createHash, generateKeyPairSync } from "node:crypto";
+import { EventEmitter } from "node:events";
+import pg from "pg";
 import test from "node:test";
+import { createDatabase } from "../../packages/platform-database/dist/index.js";
+import { canonicalCatalogJson } from "../../apps/aroma-gateway/dist/application/catalog-export.js";
 import { createRuntime } from "../../packages/platform-runtime/dist/index.js";
 import {
   createHttpAromaBindingClient,
@@ -215,18 +219,97 @@ void test("Gateway binding verifies signed delegation before store and rejects c
     ).statusCode,
     200,
   );
+  const spoofedActor = await app.inject({
+    method: "POST",
+    url: "/api/internal-v1/aroma/offer-bindings",
+    headers: { ...headers(), "x-actor-ref": "forged-actor" },
+    payload: body,
+  });
+  assert.equal(spoofedActor.statusCode, 401);
+  assert.equal(spoofedActor.json().code, "SERVICE_AUTHENTICATION_REQUIRED");
+  assert.equal(calls, 1);
   const malformed = await app.inject({
     method: "POST",
     url: "/api/internal-v1/aroma/offer-bindings",
-    headers: { ...headers(), "content-type": "application/json" },
-    payload: "{",
+    headers: {
+      ...headers(),
+      "content-type": "application/json",
+      "x-correlation-id": "00000000-0000-4000-8000-000000000031",
+    },
+    payload: '{"privateCanary":"gateway-body-private-canary',
   });
   assert.equal(malformed.statusCode, 400);
   assert.equal(
     malformed.headers["content-type"].startsWith("application/problem+json"),
     true,
   );
-  assert.equal(malformed.json().code, "VALIDATION_FAILED");
+  assert.equal(malformed.headers["cache-control"], "no-store");
+  assert.equal(
+    malformed.headers["x-correlation-id"],
+    "00000000-0000-4000-8000-000000000031",
+  );
+  const malformedProblem = malformed.json();
+  assert.deepEqual(
+    {
+      type: malformedProblem.type,
+      title: malformedProblem.title,
+      status: malformedProblem.status,
+      code: malformedProblem.code,
+      detail: malformedProblem.detail,
+      correlationId: malformedProblem.correlationId,
+    },
+    {
+      type: "about:blank",
+      title: "VALIDATION_FAILED",
+      status: 400,
+      code: "VALIDATION_FAILED",
+      detail: "Request validation failed",
+      correlationId: "00000000-0000-4000-8000-000000000031",
+    },
+  );
+  assert.doesNotMatch(malformed.body, /gateway-body-private-canary/u);
+  assert.equal(calls, 1);
+
+  const overflowCorrelation = "00000000-0000-4000-8000-000000000032";
+  const oversizedPayload = JSON.stringify(body) + " ".repeat(64 * 1024);
+  assert.ok(Buffer.byteLength(oversizedPayload) > 64 * 1024);
+  const overflow = await app.inject({
+    method: "POST",
+    url: "/api/internal-v1/aroma/offer-bindings",
+    headers: {
+      ...headers(),
+      "content-type": "application/json",
+      "x-correlation-id": overflowCorrelation,
+    },
+    payload: oversizedPayload,
+  });
+  assert.equal(overflow.statusCode, 400);
+  assert.equal(
+    overflow.headers["content-type"].startsWith("application/problem+json"),
+    true,
+  );
+  assert.equal(overflow.headers["cache-control"], "no-store");
+  assert.equal(overflow.headers["x-correlation-id"], overflowCorrelation);
+  const overflowProblem = overflow.json();
+  assert.deepEqual(
+    {
+      type: overflowProblem.type,
+      title: overflowProblem.title,
+      status: overflowProblem.status,
+      code: overflowProblem.code,
+      detail: overflowProblem.detail,
+      correlationId: overflowProblem.correlationId,
+    },
+    {
+      type: "about:blank",
+      title: "VALIDATION_FAILED",
+      status: 400,
+      code: "VALIDATION_FAILED",
+      detail: "Request validation failed",
+      correlationId: overflowCorrelation,
+    },
+  );
+  assert.doesNotMatch(overflow.body, /gateway-body-private-canary/u);
   assert.equal(calls, 1);
   const empty = await app.inject({
     method: "POST",
@@ -424,4 +507,449 @@ void test("Gateway cart snapshot route verifies delegation, returns only the con
     ).statusCode,
     401,
   );
+});
+
+void test("binding store rejects corrupt mappings and unproven export recovery", async (t) => {
+  const binding = {
+    offer_ref: body.offerRef,
+    supplier_ref: body.supplierRef,
+    source_identity_scheme: body.sourceIdentityScheme,
+    source_offer_key_hash: body.sourceOfferKeyHash,
+    first_snapshot_ref: body.snapshotRef,
+    state: "Bound",
+  };
+  const provider = {
+    ...binding,
+    raw_provider_offer_id: "provider-offer",
+    raw_provider_product_id: "provider-product",
+    raw_provider_variant_id: "provider-variant",
+    provider_packing: "",
+    provider_grind_id: null,
+  };
+  const identity = { offerId: "provider-offer", packing: null, grindId: null };
+  const queryLog = [];
+  let matches = [];
+  let membership = {
+    source_exists: true,
+    snapshot_state: "Completed",
+    member: true,
+  };
+  let exportRow;
+  let batchRow;
+  let batchOffers = [];
+  let sourceRow;
+  let lostCommit;
+  const connection = new EventEmitter();
+  connection.query = async (query) => {
+    const sql = typeof query === "string" ? query : query.text;
+    const values = typeof query === "string" ? [] : query.values;
+    queryLog.push({ sql, values });
+    if (sql === "COMMIT" && lostCommit !== undefined) {
+      exportRow = lostCommit.row;
+      if (lostCommit.batchOffers !== undefined)
+        batchOffers = lostCommit.batchOffers;
+      lostCommit = undefined;
+      return { rows: [], rowCount: 0, command: "UNKNOWN" };
+    }
+    if (sql.includes("AS source_exists"))
+      return { rows: [membership], rowCount: 1 };
+    if (
+      sql.includes(
+        "FROM integration.provider_export_batches WHERE snapshot_ref",
+      ) &&
+      sql.includes("batch_number = $2")
+    )
+      return {
+        rows: batchRow === undefined ? [] : [batchRow],
+        rowCount: Number(batchRow !== undefined),
+      };
+    if (
+      sql.includes(
+        "FROM integration.provider_export_batch_offers WHERE snapshot_ref",
+      ) &&
+      sql.includes("ORDER BY ordinal")
+    )
+      return { rows: batchOffers, rowCount: batchOffers.length };
+    if (
+      sql.includes("FROM integration.provider_source_offers WHERE supplier_ref")
+    )
+      return {
+        rows: sourceRow === undefined ? [] : [sourceRow],
+        rowCount: Number(sourceRow !== undefined),
+      };
+    if (
+      sql.includes(
+        "FROM integration.provider_catalog_exports WHERE snapshot_ref",
+      )
+    )
+      return {
+        rows: exportRow === undefined ? [] : [exportRow],
+        rowCount: Number(exportRow !== undefined),
+      };
+    if (
+      (sql.includes("integration.provider_offer_bindings") &&
+        sql.startsWith("SELECT")) ||
+      sql.startsWith("WITH requested")
+    )
+      return { rows: matches, rowCount: matches.length };
+    return { rows: [], rowCount: 0, command: sql.split(" ")[0] };
+  };
+  connection.release = () => {};
+  t.mock.method(pg.Pool.prototype, "connect", async () => connection);
+  t.mock.method(pg.Pool.prototype, "end", async () => {});
+  const database = createDatabase({
+    owner: "binding-unit",
+    database: "owner",
+    allowedDatabase: "owner",
+    host: "localhost",
+    port: 5432,
+    user: "owner",
+    password: "test-only",
+    ssl: false,
+    pool: {
+      max: 2,
+      checkoutTimeoutMs: 50,
+      lockTimeoutMs: 40,
+      interactiveStatementTimeoutMs: 100,
+      backgroundStatementTimeoutMs: 200,
+      terminalTimeoutMs: 40,
+      transactionTimeoutMs: 300,
+      idleTimeoutMs: 1000,
+      maxLifetimeMs: 1000,
+    },
+    shutdownGraceMs: 1000,
+  });
+  t.after(() => database.resource.destroy());
+  const store = new OfferBindingStore(database);
+  assert.equal(
+    await store.resolve(body.supplierRef, body.sourceOfferKeyHash),
+    undefined,
+  );
+  matches = [binding];
+  assert.deepEqual(
+    await store.resolve(body.supplierRef, body.sourceOfferKeyHash),
+    response,
+  );
+  for (const invalid of [
+    { offer_ref: null },
+    { supplier_ref: 7 },
+    { source_identity_scheme: "wrong" },
+    { source_offer_key_hash: null },
+    { first_snapshot_ref: null },
+    { state: "Stopped" },
+  ]) {
+    matches = [{ ...binding, ...invalid }];
+    await assert.rejects(
+      store.resolve(body.supplierRef, body.sourceOfferKeyHash),
+      { code: "AROMA_BINDING_CONFLICT" },
+    );
+  }
+  matches = [];
+  assert.equal(
+    await store.resolveProviderOffer(body.offerRef, body.supplierRef),
+    undefined,
+  );
+  matches = [provider];
+  const resolved = await store.resolveProviderOffer(
+    body.offerRef,
+    body.supplierRef,
+  );
+  assert.equal(resolved.packing, null);
+  assert.equal("grindId" in resolved, false);
+  for (const invalid of [
+    { offer_ref: null },
+    { supplier_ref: null },
+    { source_offer_key_hash: null },
+    { raw_provider_offer_id: null },
+    { raw_provider_product_id: null },
+    { raw_provider_variant_id: null },
+    { provider_packing: 1 },
+    { provider_grind_id: 1 },
+  ]) {
+    matches = [{ ...provider, ...invalid }];
+    await assert.rejects(
+      store.resolveProviderOffer(body.offerRef, body.supplierRef),
+      { code: "AROMA_BINDING_CONFLICT" },
+    );
+  }
+  matches = [provider, provider];
+  await assert.rejects(
+    store.resolveProviderOffer(body.offerRef, body.supplierRef),
+    { code: "AROMA_BINDING_CONFLICT" },
+  );
+  for (const invalid of ["", "id\0private"])
+    await assert.rejects(
+      store.resolveByRawProviderOfferId(invalid, body.supplierRef),
+      { code: "AROMA_BINDING_CONFLICT" },
+    );
+  matches = [binding, binding];
+  await assert.rejects(
+    store.resolveByRawProviderOfferId("provider-offer", body.supplierRef),
+    { code: "AROMA_BINDING_CONFLICT" },
+  );
+  await assert.rejects(
+    store.resolveByProviderIdentity(identity, body.supplierRef),
+    { code: "AROMA_BINDING_CONFLICT" },
+  );
+  matches = [];
+  assert.equal(
+    await store.resolveByProviderIdentity(identity, body.supplierRef),
+    undefined,
+  );
+  matches = [binding];
+  assert.deepEqual(
+    (await store.resolveByProviderIdentity(identity, body.supplierRef))
+      .providerIdentity,
+    identity,
+  );
+
+  const identities = [
+    identity,
+    { offerId: "missing", packing: "pack", grindId: null },
+  ];
+  matches = [{ ...binding, ordinal: 0 }];
+  const bulk = await store.resolveByProviderIdentities(
+    identities,
+    body.supplierRef,
+  );
+  assert.deepEqual(bulk[0].providerIdentity, identity);
+  assert.equal(bulk[1], undefined);
+  const bulkQuery = queryLog.findLast(({ sql }) =>
+    sql.startsWith("WITH requested"),
+  );
+  assert.deepEqual(JSON.parse(bulkQuery.values[2]), [
+    { offer_id: "provider-offer", packing: "", grind_id: "" },
+    { offer_id: "missing", packing: "pack", grind_id: "" },
+  ]);
+  for (const rows of [
+    [{ ...binding, ordinal: -1 }],
+    [{ ...binding, ordinal: 2 }],
+    [
+      { ...binding, ordinal: 0 },
+      { ...binding, ordinal: 0 },
+    ],
+    [{ ...binding, ordinal: "not-a-number" }],
+  ]) {
+    matches = rows;
+    await assert.rejects(
+      store.resolveByProviderIdentities(identities, body.supplierRef),
+      { code: "AROMA_BINDING_CONFLICT" },
+    );
+  }
+  await assert.rejects(
+    store.resolveByProviderIdentities(
+      Array(10001).fill(identity),
+      body.supplierRef,
+    ),
+    { code: "AROMA_BINDING_CONFLICT" },
+  );
+
+  for (const [candidate, code] of [
+    [
+      { source_exists: false, snapshot_state: "Completed", member: true },
+      "AROMA_BINDING_SOURCE_NOT_FOUND",
+    ],
+    [
+      { source_exists: true, snapshot_state: "Exporting", member: true },
+      "AROMA_BINDING_SNAPSHOT_INCOMPLETE",
+    ],
+    [
+      { source_exists: true, snapshot_state: "Completed", member: false },
+      "AROMA_BINDING_SNAPSHOT_INCOMPLETE",
+    ],
+  ]) {
+    membership = candidate;
+    const before = queryLog.length;
+    await assert.rejects(store.register(body), { code });
+    assert.equal(
+      queryLog
+        .slice(before)
+        .some(({ sql }) =>
+          sql.startsWith("INSERT INTO integration.provider_offer_bindings"),
+        ),
+      false,
+    );
+  }
+
+  const sourceIdentity = {
+    supplierRef: body.supplierRef,
+    sourceIdentityScheme: body.sourceIdentityScheme,
+    sourceOfferKeyHash: body.sourceOfferKeyHash,
+    sourceProductKeyHash: "b".repeat(64),
+    sourceVariantKeyHash: "c".repeat(64),
+    rawProviderOfferId: "provider-offer",
+    rawProviderProductId: "provider-product",
+    rawProviderVariantId: "provider-variant",
+    packing: null,
+    grindId: "fine",
+  };
+  const items = [
+    {
+      sourceOfferKeyHash: sourceIdentity.sourceOfferKeyHash,
+      sourceProductKeyHash: sourceIdentity.sourceProductKeyHash,
+      sourceVariantKeyHash: sourceIdentity.sourceVariantKeyHash,
+    },
+  ];
+  const itemBytes = Buffer.from(canonicalCatalogJson(items));
+  const batchHash = createHash("sha256").update(itemBytes).digest("hex");
+  const batch = {
+    streamVersion: "1",
+    recordType: "snapshot-batch",
+    snapshotRef: body.snapshotRef,
+    batchNumber: 0,
+    offerCount: 1,
+    uncompressedBytes: itemBytes.length,
+    batchHash,
+    previousBatchHash: null,
+    items,
+  };
+  exportRow = {
+    supplier_ref: body.supplierRef,
+    source_identity_scheme: body.sourceIdentityScheme,
+    state: "Exporting",
+    next_batch_number: 1,
+    last_batch_hash: batchHash,
+  };
+  batchRow = {
+    batch_number: 0,
+    offer_count: 1,
+    uncompressed_bytes: itemBytes.length,
+    batch_hash: batchHash,
+    previous_batch_hash: null,
+  };
+  batchOffers = [
+    { ordinal: 0, source_offer_key_hash: sourceIdentity.sourceOfferKeyHash },
+  ];
+  sourceRow = {
+    supplier_ref: sourceIdentity.supplierRef,
+    source_identity_scheme: sourceIdentity.sourceIdentityScheme,
+    source_offer_key_hash: sourceIdentity.sourceOfferKeyHash,
+    source_product_key_hash: sourceIdentity.sourceProductKeyHash,
+    source_variant_key_hash: sourceIdentity.sourceVariantKeyHash,
+    raw_provider_offer_id: sourceIdentity.rawProviderOfferId,
+    raw_provider_product_id: sourceIdentity.rawProviderProductId,
+    raw_provider_variant_id: sourceIdentity.rawProviderVariantId,
+    provider_packing: "",
+    provider_grind_id: "fine",
+  };
+  const batchStart = queryLog.length;
+  await store.recordBatch(body.snapshotRef, body.supplierRef, batch, [
+    sourceIdentity,
+  ]);
+  assert.equal(
+    queryLog
+      .slice(batchStart)
+      .some(({ sql }) => /^(INSERT|UPDATE|DELETE)\b/u.test(sql)),
+    false,
+  );
+  for (const invalid of [
+    { ...batch, batchHash: "0".repeat(64) },
+    { ...batch, offerCount: 2 },
+    { ...batch, uncompressedBytes: 0 },
+    { ...batch, snapshotRef: "wrong" },
+  ]) {
+    await assert.rejects(
+      store.recordBatch(body.snapshotRef, body.supplierRef, invalid, [
+        sourceIdentity,
+      ]),
+      { code: "AROMA_BINDING_CONFLICT" },
+    );
+  }
+  for (const changes of [
+    { offer_count: 2 },
+    { uncompressed_bytes: 0 },
+    { batch_hash: "0".repeat(64) },
+    { previous_batch_hash: "1".repeat(64) },
+  ]) {
+    batchRow = {
+      batch_number: 0,
+      offer_count: 1,
+      uncompressed_bytes: itemBytes.length,
+      batch_hash: batchHash,
+      previous_batch_hash: null,
+      ...changes,
+    };
+    await assert.rejects(
+      store.recordBatch(body.snapshotRef, body.supplierRef, batch, [
+        sourceIdentity,
+      ]),
+      { code: "AROMA_BINDING_CONFLICT" },
+    );
+  }
+  batchRow = {
+    batch_number: 0,
+    offer_count: 1,
+    uncompressed_bytes: itemBytes.length,
+    batch_hash: batchHash,
+    previous_batch_hash: null,
+  };
+  batchOffers = [
+    { ordinal: 1, source_offer_key_hash: sourceIdentity.sourceOfferKeyHash },
+  ];
+  await assert.rejects(
+    store.recordBatch(body.snapshotRef, body.supplierRef, batch, [
+      sourceIdentity,
+    ]),
+    { code: "AROMA_BINDING_CONFLICT" },
+  );
+  batchOffers = [
+    { ordinal: 0, source_offer_key_hash: sourceIdentity.sourceOfferKeyHash },
+  ];
+  sourceRow = { ...sourceRow, raw_provider_offer_id: "different" };
+  await assert.rejects(
+    store.recordBatch(body.snapshotRef, body.supplierRef, batch, [
+      sourceIdentity,
+    ]),
+    { code: "AROMA_BINDING_CONFLICT" },
+  );
+  sourceRow = {
+    ...sourceRow,
+    raw_provider_offer_id: sourceIdentity.rawProviderOfferId,
+  };
+  lostCommit = { row: exportRow };
+  await store.recordBatch(body.snapshotRef, body.supplierRef, batch, [
+    sourceIdentity,
+  ]);
+  lostCommit = { row: exportRow, batchOffers: [] };
+  await assert.rejects(
+    store.recordBatch(body.snapshotRef, body.supplierRef, batch, [
+      sourceIdentity,
+    ]),
+    { code: "TRANSACTION_OUTCOME_UNKNOWN" },
+  );
+
+  const digest = createHash("sha256").update("completed").digest("hex");
+  const summary = {
+    snapshotRef: body.snapshotRef,
+    supplierRef: body.supplierRef,
+    batchCount: 1,
+    productCount: 1,
+    variantCount: 1,
+    offerCount: 1,
+    contentHash: digest,
+  };
+  const complete = {
+    snapshot_ref: body.snapshotRef,
+    supplier_ref: body.supplierRef,
+    source_identity_scheme: body.sourceIdentityScheme,
+    state: "Completed",
+    content_hash: digest,
+    batch_count: 1,
+    product_count: 1,
+    variant_count: 1,
+    offer_count: 1,
+  };
+  exportRow = complete;
+  lostCommit = { row: complete };
+  await store.completeExport(summary);
+  exportRow = complete;
+  lostCommit = { row: { ...complete, offer_count: 2 } };
+  await assert.rejects(store.completeExport(summary), {
+    code: "TRANSACTION_OUTCOME_UNKNOWN",
+  });
+  exportRow = complete;
+  lostCommit = { row: { ...complete, offer_count: "bad" } };
+  await assert.rejects(store.completeExport(summary), {
+    code: "TRANSACTION_OUTCOME_UNKNOWN",
+  });
 });

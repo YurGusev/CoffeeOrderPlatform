@@ -5,7 +5,7 @@ import { createTelemetryResource } from "../../packages/platform-observability/d
 import {
   createHttpClient,
   HttpOriginError,
-} from "../../packages/platform-http/src/index.ts";
+} from "../../packages/platform-http/dist/index.js";
 
 async function withServer(handler, callback) {
   const server = createServer(handler);

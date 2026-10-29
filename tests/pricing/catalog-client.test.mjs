@@ -55,6 +55,11 @@ void test("Pricing calls only the allowlisted internal pricing-input path with s
   assert.equal(calls[0].options.method, "GET");
   assert.equal(calls[0].options.headers["x-service-delegation"], "signed");
   assert.ok(calls[0].options.signal instanceof AbortSignal);
+  const traceparent = "00-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-bbbbbbbbbbbbbbbb-01";
+  await client(200, valid, (path, options) =>
+    calls.push({ path, options }),
+  ).getPricingInput({ ...request, traceparent });
+  assert.equal(calls[1].options.headers.traceparent, traceparent);
 });
 
 void test("Pricing rejects missing and unavailable Catalog facts without leaking owner data", async () => {
@@ -87,6 +92,14 @@ void test("Pricing fails closed on invalid response body and never fetches after
     () => client(200, { supplierUnitMinor: "100" }).getPricingInput(request),
     { code: "CATALOG_UNAVAILABLE" },
   );
+  const bodyless = createCatalogPricingClient({
+    async fetch() {
+      return new Response(null, { status: 200 });
+    },
+  });
+  await assert.rejects(() => bodyless.getPricingInput(request), {
+    code: "CATALOG_UNAVAILABLE",
+  });
   const controller = new AbortController();
   controller.abort();
   let called = false;
@@ -96,6 +109,35 @@ void test("Pricing fails closed on invalid response body and never fetches after
     }).getPricingInput({ ...request, signal: controller.signal }),
   );
   assert.equal(called, false);
+});
+
+void test("Pricing rejects invalid references before fetch and bounds transport errors", async () => {
+  let calls = 0;
+  const owner = createCatalogPricingClient({
+    async fetch() {
+      calls += 1;
+      throw new Error("private upstream detail");
+    },
+  });
+
+  await assert.rejects(
+    owner.getPricingInput({ ...request, productRef: "invalid" }),
+    (error) => {
+      assert.ok(error instanceof CatalogPricingError);
+      assert.equal(error.code, "CATALOG_UNAVAILABLE");
+      assert.equal(error.message, "CATALOG_UNAVAILABLE");
+      return true;
+    },
+  );
+  assert.equal(calls, 0);
+
+  await assert.rejects(owner.getPricingInput(request), (error) => {
+    assert.ok(error instanceof CatalogPricingError);
+    assert.equal(error.code, "CATALOG_UNAVAILABLE");
+    assert.equal(error.message.includes("private upstream detail"), false);
+    return true;
+  });
+  assert.equal(calls, 1);
 });
 
 void test("Pricing abort closes an in-flight Catalog HTTP response body", async (t) => {

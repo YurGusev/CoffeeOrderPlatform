@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { randomUUID } from "node:crypto";
-import { createRuntime } from "../../packages/platform-runtime/src/index.ts";
+import { createRuntime } from "../../packages/platform-runtime/dist/index.js";
 import { isPricingProblem } from "../../packages/contracts/pricing-v1/dist/index.js";
 import { registerPricingRoutes } from "../../apps/pricing-service/dist/http/index.js";
 
@@ -96,6 +96,7 @@ function adapters(calls, changes = {}) {
       },
       async replay(identity, signal) {
         calls.replay.push({ identity, signal });
+        if (changes.replayError) throw changes.replayError;
         return (
           changes.replayResult ?? {
             kind: "completed",
@@ -107,6 +108,7 @@ function adapters(calls, changes = {}) {
       },
       async verify(body, context) {
         calls.verify.push({ body, context });
+        if (changes.verifyError) throw changes.verifyError;
         return changes.verifyResult ?? verified;
       },
     },
@@ -235,6 +237,130 @@ void test("bodyless replay reads only owner precheck, never creates", async (t) 
   );
   assert.equal(unavailable.calls.create.length, 0);
 });
+void test("pricing handlers fail closed without runtime context and bound replay input", async () => {
+  const calls = {
+    transport: [],
+    create: [],
+    replay: [],
+    verify: [],
+    correlationId: randomUUID(),
+  };
+  const changes = {};
+  const routes = new Map();
+  registerPricingRoutes(
+    { post: (path, options) => routes.set(path, options) },
+    adapters(calls, changes),
+  );
+  const invoke = async (path, options = {}) => {
+    const state = { headers: {}, statusCode: 200 };
+    const reply = {
+      header(name, value) {
+        state.headers[name] = value;
+        return this;
+      },
+      code(statusCode) {
+        state.statusCode = statusCode;
+        return this;
+      },
+      type(contentType) {
+        state.headers["content-type"] = contentType;
+        return this;
+      },
+      send(body) {
+        state.body = body;
+        return this;
+      },
+    };
+    await routes.get(path).handler(
+      {
+        headers: {},
+        id: calls.correlationId,
+        url: path,
+        body: undefined,
+        runtimeContext: null,
+        routeOptions: { url: undefined },
+        ...options,
+      },
+      reply,
+    );
+    return state;
+  };
+  const publicHeaders = {
+    "x-actor-context": "signed",
+    "idempotency-key": randomUUID(),
+  };
+  const created = await invoke(CREATE, {
+    headers: publicHeaders,
+    body: request,
+  });
+  assert.equal(created.statusCode, 201);
+  assert.equal(calls.create[0].context.correlationId, calls.correlationId);
+  assert.equal(calls.create[0].context.traceparent, undefined);
+  assert.equal(calls.create[0].context.signal instanceof AbortSignal, true);
+
+  const noAuth = await invoke(CREATE, { body: request });
+  assert.equal(noAuth.statusCode, 401);
+  assert.equal(noAuth.body.instance, CREATE);
+  assert.equal(noAuth.body.correlationId, calls.correlationId);
+  const emptyAuth = await invoke(CREATE, {
+    headers: { ...publicHeaders, "x-actor-context": "" },
+    body: request,
+  });
+  assert.equal(emptyAuth.body.code, "ACTOR_CONTEXT_INVALID");
+  const duplicateLength = await invoke(CREATE, {
+    headers: {
+      ...publicHeaders,
+      "content-length": ["1", "2"],
+    },
+    body: request,
+  });
+  assert.equal(duplicateLength.body.code, "VALIDATION_FAILED");
+  const oversized = await invoke(CREATE, {
+    headers: publicHeaders,
+    body: { content: "x".repeat(16 * 1024) },
+  });
+  assert.equal(oversized.body.code, "VALIDATION_FAILED");
+  const circular = {};
+  circular.self = circular;
+  const unserializable = await invoke(CREATE, {
+    headers: publicHeaders,
+    body: circular,
+  });
+  assert.equal(unserializable.body.code, "VALIDATION_FAILED");
+  assert.equal(calls.create.length, 1);
+
+  const replayHeaders = {
+    ...publicHeaders,
+    "idempotency-replay-only": "true",
+  };
+  changes.replayResult = { kind: "in_progress" };
+  assert.equal(
+    (await invoke(CREATE, { headers: replayHeaders })).body.code,
+    "IDEMPOTENCY_REQUEST_IN_PROGRESS",
+  );
+  changes.replayResult = { kind: "conflict" };
+  assert.equal(
+    (await invoke(CREATE, { headers: replayHeaders })).body.code,
+    "IDEMPOTENCY_RESULT_INVALID",
+  );
+  changes.replayError = { code: "DB_QUERY_FAILED" };
+  assert.equal(
+    (await invoke(CREATE, { headers: replayHeaders })).body.code,
+    "IDEMPOTENCY_LOOKUP_UNAVAILABLE",
+  );
+  changes.replayError = { code: "IDEMPOTENCY_NOT_ACQUIRED" };
+  assert.equal(
+    (await invoke(CREATE, { headers: replayHeaders })).body.code,
+    "IDEMPOTENCY_RESULT_INVALID",
+  );
+  changes.replayError = new Error("private replay detail");
+  const unknownReplayError = await invoke(CREATE, { headers: replayHeaders });
+  assert.equal(unknownReplayError.body.code, "INTERNAL_ERROR");
+  assert.equal(
+    JSON.stringify(unknownReplayError.body).includes("private"),
+    false,
+  );
+});
 void test("verify accepts orders-service only and keeps audit owner operation", async (t) => {
   const { calls, internal } = await setup(t);
   const result = await internal();
@@ -292,4 +418,36 @@ void test("missing policy returns the typed public 503; unknown commit never bec
   });
   problem(await uncertain.client(), 500, "INTERNAL_ERROR");
   assert.equal(uncertain.calls.create.length, 1);
+});
+
+void test("public and internal owner errors map only to their declared problem codes", async (t) => {
+  for (const [code, status, expected] of [
+    ["IDEMPOTENCY_CONFLICT", 409, "IDEMPOTENCY_CONFLICT"],
+    ["CATALOG_PRODUCT_NOT_FOUND", 404, "CATALOG_PRODUCT_NOT_FOUND"],
+    ["CATALOG_REVISION_CHANGED", 409, "CATALOG_REVISION_CHANGED"],
+    ["PRICING_PERSISTED_FACTS_INVALID", 500, "INTERNAL_ERROR"],
+    ["PRICING_QUOTE_NOT_FOUND", 500, "INTERNAL_ERROR"],
+  ]) {
+    const owner = await setup(t, { createError: { code } });
+    problem(await owner.client(), status, expected);
+    assert.equal(owner.calls.create.length, 1);
+  }
+  const unknown = await setup(t, {
+    createError: new Error("private owner detail"),
+  });
+  const unknownResponse = await unknown.client();
+  problem(unknownResponse, 500, "INTERNAL_ERROR");
+  assert.doesNotMatch(
+    JSON.stringify(unknownResponse.json()),
+    /private owner detail/u,
+  );
+
+  for (const [code, status] of [
+    ["PRICING_QUOTE_NOT_FOUND", 404],
+    ["PRICING_QUOTE_HASH_MISMATCH", 409],
+  ]) {
+    const owner = await setup(t, { verifyError: { code } });
+    problem(await owner.internal(), status, code);
+    assert.equal(owner.calls.verify.length, 1);
+  }
 });

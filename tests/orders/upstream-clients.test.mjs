@@ -122,6 +122,42 @@ void test("Customer client calls only the internal order-input route with signed
 });
 
 void test("Customer client rejects inactive, identity-mismatched, malformed, and oversized responses", async () => {
+  const invalidReference = captureClient(json(customerInput()));
+  await assert.rejects(
+    createCustomerOrderInputClient(invalidReference.client).getOrderInput({
+      ...getCustomerRequest(),
+      customerRef: "not-a-customer-ref",
+    }),
+    (error) =>
+      error instanceof CustomerOrderInputClientError &&
+      error.code === "CUSTOMER_UNAVAILABLE",
+  );
+  assert.equal(invalidReference.calls.length, 0);
+
+  let declaredBodyCancelled = false;
+  let declaredBodyReaderCalled = false;
+  const declaredOversizeResponse = new Response(
+    new ReadableStream({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode("{}"));
+      },
+      cancel() {
+        declaredBodyCancelled = true;
+      },
+    }),
+    {
+      headers: {
+        "content-type": "application/json",
+        "content-length": String(256 * 1024 + 1),
+      },
+    },
+  );
+  const customerBody = declaredOversizeResponse.body;
+  const customerGetReader = customerBody.getReader.bind(customerBody);
+  customerBody.getReader = (...args) => {
+    declaredBodyReaderCalled = true;
+    return customerGetReader(...args);
+  };
   for (const [response, code] of [
     [json(customerInput({ state: "Inactive" })), "CUSTOMER_NOT_ACTIVE"],
     [
@@ -136,6 +172,11 @@ void test("Customer client rejects inactive, identity-mismatched, malformed, and
       new Response("{}", { headers: { "content-type": "text/plain" } }),
       "CUSTOMER_UNAVAILABLE",
     ],
+    [
+      new Response(null, { headers: { "content-type": "application/json" } }),
+      "CUSTOMER_UNAVAILABLE",
+    ],
+    [declaredOversizeResponse, "CUSTOMER_UNAVAILABLE"],
     [
       new Response("x".repeat(256 * 1024 + 1), {
         headers: { "content-type": "application/json" },
@@ -154,6 +195,8 @@ void test("Customer client rejects inactive, identity-mismatched, malformed, and
       },
     );
   }
+  assert.equal(declaredBodyCancelled, true);
+  assert.equal(declaredBodyReaderCalled, false);
 });
 
 void test("Customer client maps only a valid not-found problem and treats invalid status payloads as unavailable", async () => {
@@ -238,6 +281,20 @@ void test("Pricing client posts exact quote scope to the internal verify route a
     variantRef: ids.variant,
     quantity: "2",
   });
+
+  for (const request of [
+    { ...getPricingRequest(), quoteRef: "not-a-quote-ref" },
+    { ...getPricingRequest(), quantity: "0" },
+  ]) {
+    const rejected = captureClient(json(expected));
+    await assert.rejects(
+      createPricingQuoteClient(rejected.client).verify(request),
+      (error) =>
+        error instanceof PricingQuoteClientError &&
+        error.code === "PRICING_UNAVAILABLE",
+    );
+    assert.equal(rejected.calls.length, 0);
+  }
 });
 
 void test("Pricing client rejects quote/customer/selected-line/expiry/currency mismatches, malformed, and oversized bodies", async () => {
@@ -286,6 +343,75 @@ void test("Pricing client rejects quote/customer/selected-line/expiry/currency m
       error instanceof PricingQuoteClientError &&
       error.code === "PRICING_UNAVAILABLE",
   );
+
+  await assert.rejects(
+    createPricingQuoteClient(
+      captureClient(
+        new Response(null, { headers: { "content-type": "application/json" } }),
+      ).client,
+    ).verify(getPricingRequest()),
+    (error) =>
+      error instanceof PricingQuoteClientError &&
+      error.code === "PRICING_UNAVAILABLE",
+  );
+
+  let declaredBodyCancelled = false;
+  let declaredBodyReaderCalled = false;
+  const declaredOversizeResponse = new Response(
+    new ReadableStream({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode("{}"));
+      },
+      cancel() {
+        declaredBodyCancelled = true;
+      },
+    }),
+    {
+      headers: {
+        "content-type": "application/json",
+        "content-length": String(256 * 1024 + 1),
+      },
+    },
+  );
+  const pricingBody = declaredOversizeResponse.body;
+  const pricingGetReader = pricingBody.getReader.bind(pricingBody);
+  pricingBody.getReader = (...args) => {
+    declaredBodyReaderCalled = true;
+    return pricingGetReader(...args);
+  };
+  await assert.rejects(
+    createPricingQuoteClient(
+      captureClient(declaredOversizeResponse).client,
+    ).verify(getPricingRequest()),
+    (error) =>
+      error instanceof PricingQuoteClientError &&
+      error.code === "PRICING_UNAVAILABLE",
+  );
+  assert.equal(declaredBodyCancelled, true);
+  assert.equal(declaredBodyReaderCalled, false);
+
+  let bodyCancelled = false;
+  const unsupportedBody = new ReadableStream({
+    start(controller) {
+      controller.enqueue(new TextEncoder().encode("not-json"));
+    },
+    cancel() {
+      bodyCancelled = true;
+    },
+  });
+  await assert.rejects(
+    createPricingQuoteClient(
+      captureClient(
+        new Response(unsupportedBody, {
+          headers: { "content-type": "text/plain" },
+        }),
+      ).client,
+    ).verify(getPricingRequest()),
+    (error) =>
+      error instanceof PricingQuoteClientError &&
+      error.code === "PRICING_UNAVAILABLE",
+  );
+  assert.equal(bodyCancelled, true);
 });
 
 void test("Pricing client maps only contract-valid stale, scope, and unavailable problems", async () => {
@@ -330,6 +456,53 @@ void test("Pricing client maps only contract-valid stale, scope, and unavailable
       return true;
     },
   );
+});
+
+void test("Pricing verification binds the selected grind and fails closed on malformed error responses", async () => {
+  const grind = "b".repeat(64);
+  const response = pricingResponse({
+    line: {
+      ...pricingResponse().line,
+      sourceGrindKeyHash: grind,
+      grindDisplayName: "Средний",
+    },
+  });
+  const { client, calls } = captureClient(json(response));
+  const request = { ...getPricingRequest(), sourceGrindKeyHash: grind };
+  assert.deepEqual(
+    await createPricingQuoteClient(client).verify(request),
+    response,
+  );
+  assert.equal(JSON.parse(calls[0].options.body).sourceGrindKeyHash, grind);
+  await assert.rejects(
+    createPricingQuoteClient(captureClient(json(response)).client).verify({
+      ...request,
+      sourceGrindKeyHash: "c".repeat(64),
+    }),
+    { code: "PRICING_UNAVAILABLE" },
+  );
+
+  for (const invalid of [
+    new Response("unavailable", {
+      status: 503,
+      headers: { "content-type": "text/plain" },
+    }),
+    new Response("{", {
+      status: 503,
+      headers: { "content-type": "application/problem+json" },
+    }),
+    new Response("{}", {
+      status: 418,
+      headers: { "content-type": "application/problem+json" },
+    }),
+  ]) {
+    await assert.rejects(
+      createPricingQuoteClient(captureClient(invalid).client).verify(
+        getPricingRequest(),
+      ),
+      { code: "PRICING_UNAVAILABLE" },
+    );
+  }
 });
 
 void test("both clients enforce a one-second deadline and preserve caller cancellation", async () => {
@@ -382,5 +555,40 @@ void test("both clients enforce a one-second deadline and preserve caller cancel
       pending,
       (error) => error.message === "caller cancelled",
     );
+
+    let readerStartedResolve;
+    const readerStarted = new Promise((resolve) => {
+      readerStartedResolve = resolve;
+    });
+    let partialBodySent = false;
+    let bodyCancelled = false;
+    const body = new ReadableStream({
+      pull(controller) {
+        if (!partialBodySent) {
+          partialBodySent = true;
+          controller.enqueue(new TextEncoder().encode("{"));
+          return;
+        }
+        readerStartedResolve();
+      },
+      cancel() {
+        bodyCancelled = true;
+      },
+    });
+    const bodyCaller = new AbortController();
+    const bodyClient = {
+      fetch: async () =>
+        new Response(body, { headers: { "content-type": "application/json" } }),
+    };
+    const bodyPending = factory(bodyClient)[invoke](
+      invoke === "getOrderInput"
+        ? getCustomerRequest(bodyCaller.signal)
+        : getPricingRequest(bodyCaller.signal),
+    );
+    await readerStarted;
+    const cancellation = new Error("caller cancelled during body read");
+    bodyCaller.abort(cancellation);
+    await assert.rejects(bodyPending, (error) => error === cancellation);
+    assert.equal(bodyCancelled, true);
   }
 });

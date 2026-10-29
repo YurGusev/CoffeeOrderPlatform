@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { readFileSync, readdirSync } from "node:fs";
+import { readFile, readdir } from "node:fs/promises";
 import { randomBytes, randomUUID, createHash } from "node:crypto";
 import {
   canonicalJson,
@@ -13,43 +14,60 @@ import {
   createDatabase,
   withTransaction,
 } from "../../packages/platform-database/dist/index.js";
+import {
+  applyMigrations,
+  migrationChecksum,
+} from "../../packages/platform-migrations/dist/index.js";
+import {
+  deriveLaunchDatabaseName,
+  validateLaunchDatabaseIdentity,
+} from "../../packages/platform-config/dist/index.js";
+import {
+  projectLaunchDatabaseTargets,
+  renderDatabaseSql,
+  renderRoleSql,
+  validateRoleMap,
+} from "../../scripts/db-bootstrap.mjs";
 import { withCatalogPostgres } from "../../scripts/catalog-live-harness.mjs";
 
 export const DATABASE = "coffee_platform_orders";
 export const ROLE = "coffee_orders_prepare_rw";
-export const ROLES = [
-  "coffee_orders_migrator",
-  "coffee_orders_service_rw",
-  ROLE,
-  "coffee_orders_observer_rw",
-  "coffee_orders_convergence_rw",
-];
-export const MIGRATIONS = [
-  "0001_create_orders",
-  "0002_create_order_items",
-  "0003_create_order_history",
-  "0004_create_order_contributions",
-  "0005_create_orders_idempotency",
-  "0006_create_orders_outbox",
-  "0007_order_grind_selection",
-  "0008_create_orders_inbox",
-  "0009_create_catalog_mapping_projection",
-  "0010_create_cart_desired",
-  "0011_create_cart_observed",
-  "0012_create_convergence_attempts",
-  "0013_create_convergence_leases",
-  "0014_create_mutation_reservations",
-  "0015_create_order_aroma_projections",
-  "0016_create_aroma_work_schedules",
-  "0017_allow_cart_outbox",
-  "0018_guard_order_card_projection",
-  "0019_read_guarded_aroma_card",
-  "0020_guard_cart_fact_batches",
-  "0021_optimize_observed_format_checks",
-  "0022_terminal_cart_item_rejection",
-  "0023_ascii_observed_identity",
-];
-const pool = {
+const ordersOwnershipPath = new URL(
+  "../../config/database-ownership.json",
+  import.meta.url,
+);
+const ordersRoleMapPath = new URL(
+  "../../config/database-role-map.json",
+  import.meta.url,
+);
+const canonicalOrdersOwnership = JSON.parse(
+  readFileSync(ordersOwnershipPath, "utf8"),
+).databases.find((database) => database.owner === "orders");
+const canonicalOrdersRoleMap = JSON.parse(
+  readFileSync(ordersRoleMapPath, "utf8"),
+).databases.find(
+  (database) => database.name === canonicalOrdersOwnership?.name,
+);
+assert.ok(
+  canonicalOrdersOwnership,
+  "canonical Orders database ownership exists",
+);
+assert.ok(canonicalOrdersRoleMap, "canonical Orders role map exists");
+export const ROLES = Object.freeze([
+  canonicalOrdersOwnership.migratorRole,
+  ...canonicalOrdersRoleMap.runtimeRoles.map(({ role }) => role),
+]);
+export const MIGRATIONS = Object.freeze(
+  readdirSync(new URL("../../apps/orders-service/migrations/", import.meta.url))
+    .filter((file) => file.endsWith(".sql"))
+    .map((file) => {
+      const match = /^(\d{4}_[a-z][a-z0-9_]*)\.sql$/u.exec(file);
+      assert.ok(match, `unexpected Orders migration filename: ${file}`);
+      return match[1];
+    })
+    .sort(),
+);
+export const pool = {
   max: 2,
   checkoutTimeoutMs: 2_000,
   lockTimeoutMs: 1_000,
@@ -116,41 +134,118 @@ export const product = () => ({
 });
 
 export async function fixture(run, options = {}) {
+  const launchIdentity =
+    options.launchIdentity === undefined
+      ? undefined
+      : validateLaunchDatabaseIdentity(options.launchIdentity);
+  const ownership = JSON.parse(
+    await readFile(
+      new URL("../../config/database-ownership.json", import.meta.url),
+      "utf8",
+    ),
+  );
+  const canonicalRoleMap = JSON.parse(
+    await readFile(
+      new URL("../../config/database-role-map.json", import.meta.url),
+      "utf8",
+    ),
+  );
+  const projected = launchIdentity
+    ? projectLaunchDatabaseTargets({
+        ownership,
+        roleMap: canonicalRoleMap,
+        launchIdentity,
+      })
+    : { ownership, roleMap: canonicalRoleMap };
+  if (!launchIdentity) validateRoleMap(projected.roleMap, projected.ownership);
+  const ordersOwnership = projected.ownership.databases.find(
+    (database) => database.owner === "orders",
+  );
+  const ordersRoleMap = projected.roleMap.databases.find(
+    (database) => database.name === ordersOwnership?.name,
+  );
+  assert.ok(ordersOwnership);
+  assert.ok(ordersRoleMap);
+  const databaseName = ordersOwnership.name;
+  assert.equal(
+    databaseName,
+    launchIdentity
+      ? deriveLaunchDatabaseName(launchIdentity, "orders")
+      : DATABASE,
+  );
+  const roles = [
+    ordersOwnership.migratorRole,
+    ...ordersRoleMap.runtimeRoles.map(({ role }) => role),
+  ];
+  const runtimeCredentialRoles = new Set(
+    ordersRoleMap.runtimeRoles.map(({ role }) => role),
+  );
+  const migrationDirectory = new URL(
+    "../../apps/orders-service/migrations/",
+    import.meta.url,
+  );
+  const migrationFiles = (await readdir(migrationDirectory))
+    .filter((file) => file.endsWith(".sql"))
+    .sort();
+  const migrations = await Promise.all(
+    migrationFiles.map(async (file) => {
+      const match = /^(\d{4}_[a-z][a-z0-9_]*)\.sql$/u.exec(file);
+      assert.ok(match, `unexpected Orders migration filename: ${file}`);
+      const sql = await readFile(new URL(file, migrationDirectory), "utf8");
+      return { id: match[1], sql, checksum: migrationChecksum(sql) };
+    }),
+  );
   const { createAromaPreparationStore } =
     await import("../../apps/orders-aroma-preparation/dist/infrastructure/preparation-store.js");
   const { decodeAromaPreparationEnvelope } =
     await import("../../apps/orders-aroma-preparation/dist/application/messages.js");
   const receipt = await withCatalogPostgres(
-    async ({ adminClient, port, container }) => {
+    async ({
+      adminClient,
+      port,
+      container,
+      containerId,
+      containerImageId,
+      databaseName: connectedDatabaseName,
+      catalogInitialized,
+      runLabel,
+    }) => {
       const passwords = new Map();
-      for (const role of ROLES) {
+      for (const role of roles) {
         const password = randomBytes(24).toString("hex");
         passwords.set(role, password);
-        await adminClient.query(
-          `CREATE ROLE ${role} LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS PASSWORD '${password}'`,
-        );
+        await adminClient.query(renderRoleSql(role, password));
       }
       await adminClient.query(
-        `CREATE DATABASE ${DATABASE} OWNER coffee_orders_migrator`,
+        `CREATE DATABASE ${databaseName} OWNER ${ordersOwnership.migratorRole}`,
       );
-      await adminClient.query(`REVOKE ALL ON DATABASE ${DATABASE} FROM PUBLIC`);
-      await adminClient.query(
-        `GRANT CONNECT ON DATABASE ${DATABASE} TO ${ROLE},coffee_orders_service_rw,coffee_orders_convergence_rw`,
-      );
+      const migratorRole = ordersOwnership.migratorRole;
       const migrator = new Client({
         host: "127.0.0.1",
         port,
-        database: DATABASE,
-        user: "coffee_orders_migrator",
-        password: passwords.get("coffee_orders_migrator"),
+        database: databaseName,
+        user: migratorRole,
+        password: passwords.get(migratorRole),
         connectionTimeoutMillis: 2_000,
         ssl: false,
+      });
+      const migrationDatabase = createDatabase({
+        owner: ordersOwnership.migrationOwner,
+        database: databaseName,
+        allowedDatabase: databaseName,
+        host: "127.0.0.1",
+        port,
+        user: migratorRole,
+        password: passwords.get(migratorRole),
+        ssl: false,
+        pool,
+        shutdownGraceMs: 40_000,
       });
       const open = async (role = ROLE, connectionPort = port) => {
         const database = createDatabase({
           owner: role === ROLE ? "orders-aroma-preparation" : "orders-service",
-          database: DATABASE,
-          allowedDatabase: DATABASE,
+          database: databaseName,
+          allowedDatabase: databaseName,
           host: "127.0.0.1",
           port: connectionPort,
           user: role,
@@ -164,19 +259,43 @@ export async function fixture(run, options = {}) {
       };
       let database;
       let core;
+      let migrationDatabaseStarted = false;
       try {
+        await migrationDatabase.resource.start(AbortSignal.timeout(5_000));
+        migrationDatabaseStarted = true;
         await migrator.connect();
-        await migrator.query("REVOKE CREATE ON SCHEMA public FROM PUBLIC");
-        for (const id of MIGRATIONS)
-          await migrator.query(
-            await readFile(
-              new URL(
-                `../../apps/orders-service/migrations/${id}.sql`,
-                import.meta.url,
-              ),
-              "utf8",
-            ),
-          );
+        await migrator.query(
+          renderDatabaseSql(ordersRoleMap, { includeRoleAttributes: false }),
+        );
+        const applied = await applyMigrations(migrationDatabase, migrations, {
+          schema: ordersRoleMap.schema,
+          ledgerTable: "platform_schema_migrations",
+          lockKey: "g14:orders:observability-fixture:v1",
+        });
+        assert.deepEqual(
+          applied,
+          migrations.map(({ id }) => id),
+        );
+        assert.deepEqual(
+          await applyMigrations(migrationDatabase, migrations, {
+            schema: ordersRoleMap.schema,
+            ledgerTable: "platform_schema_migrations",
+            lockKey: "g14:orders:observability-fixture:v1",
+          }),
+          [],
+        );
+        const ledger = await migrator.query(
+          `SELECT id, btrim(checksum) AS checksum FROM ${ordersRoleMap.schema}.platform_schema_migrations ORDER BY id`,
+        );
+        assert.deepEqual(
+          ledger.rows,
+          migrations.map(({ id, checksum }) => ({ id, checksum })),
+        );
+        await migrator.query(
+          renderDatabaseSql(ordersRoleMap, { includeRoleAttributes: false }),
+        );
+        await migrationDatabase.resource.stop(AbortSignal.timeout(5_000));
+        migrationDatabaseStarted = false;
         database = await open();
         core = await open("coffee_orders_service_rw");
         const settings = {
@@ -550,8 +669,8 @@ export async function fixture(run, options = {}) {
         };
         const publisherConnection = {
           owner: "orders-aroma-preparation",
-          database: DATABASE,
-          allowedDatabase: DATABASE,
+          database: databaseName,
+          allowedDatabase: databaseName,
           host: "127.0.0.1",
           port,
           user: ROLE,
@@ -565,6 +684,11 @@ export async function fixture(run, options = {}) {
             return store;
           },
           container,
+          containerId,
+          containerImageId,
+          runLabel,
+          catalogInitialized,
+          connectedDatabaseName,
           publisherConnection,
           port,
           database: () => database,
@@ -581,17 +705,23 @@ export async function fixture(run, options = {}) {
           proof,
           acceptIntent,
           commits: () => commits,
-          runtimeCredential: (role) => ({
-            username: role,
-            password: passwords.get(role),
-          }),
+          runtimeCredential: (role) => {
+            if (!runtimeCredentialRoles.has(role))
+              throw new Error("ORDERS_FIXTURE_ROLE_NOT_CANONICAL");
+            return { username: role, password: passwords.get(role) };
+          },
+          databaseName,
+          launchIdentity,
         });
       } finally {
         if (database) await database.resource.stop(AbortSignal.timeout(5_000));
         if (core) await core.resource.stop(AbortSignal.timeout(5_000));
+        if (migrationDatabaseStarted)
+          await migrationDatabase.resource.stop(AbortSignal.timeout(5_000));
         await migrator.end();
       }
     },
+    launchIdentity ? { skipCatalogInitialization: true, launchIdentity } : {},
   );
   assert.equal(receipt.cleanup.containerRemoved, true);
   return receipt;

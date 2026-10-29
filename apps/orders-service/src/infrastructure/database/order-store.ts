@@ -591,12 +591,10 @@ export class OrderStore {
       desiredRevision: string(row["desired_revision"]),
       observedRevision: string(row["observed_revision"]),
       lastObservedAt: last === null ? null : timestamp(last.toISOString()),
-      blockers: [...new Set(codes as string[])]
-        .sort()
-        .map((code) => ({
-          code: code as OrderCardResponse["aroma"]["blockers"][number]["code"],
-          message: "Сходимость корзины требует проверки",
-        })),
+      blockers: [...new Set(codes as string[])].sort().map((code) => ({
+        code: code as OrderCardResponse["aroma"]["blockers"][number]["code"],
+        message: "Сходимость корзины требует проверки",
+      })),
     };
   }
   private async response(

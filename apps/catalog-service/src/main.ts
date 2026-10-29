@@ -47,9 +47,7 @@ function verificationKeys(context: RuntimeCompositionContext, path: string) {
     );
   return [createPublicKey(active), createPublicKey(previous)];
 }
-function catalogCursorPolicy(
-  context: RuntimeCompositionContext,
-): Readonly<{
+function catalogCursorPolicy(context: RuntimeCompositionContext): Readonly<{
   activeKid: string;
   maxAgeSeconds: number;
   clockSkewSeconds: number;

@@ -35,6 +35,7 @@ import {
   type RuntimeName,
   type KafkaConfig,
   type KafkaServiceConfig,
+  type LaunchKafkaTarget,
 } from "@coffee-platform/config";
 import { isTraceparent } from "@coffee-platform/observability";
 import {
@@ -786,6 +787,7 @@ export type KafkaRuntimeOptions = Readonly<{
   config: KafkaConfig;
   service: KafkaServiceConfig;
   credentials: KafkaCredentials;
+  physicalTargets?: LaunchKafkaTarget;
 }>;
 export type KafkaSendAck = Readonly<{
   kind: "ack";
@@ -929,6 +931,9 @@ export function createKafkaRuntime(input: KafkaRuntimeOptions): KafkaRuntime {
     receiveTimeoutMs: policy.receiveTimeoutMs,
     commitTimeoutMs: policy.commitTimeoutMs,
     shutdownTimeoutMs: policy.shutdownTimeoutMs,
+    ...(options.physicalTargets
+      ? { physicalTargets: options.physicalTargets }
+      : {}),
   } as const;
   function track<T>(promise: Promise<T>): Promise<T> {
     pending.add(promise);
@@ -1169,17 +1174,29 @@ export function createKafkaRuntime(input: KafkaRuntimeOptions): KafkaRuntime {
       }
       if (state.revoked && !stopping) {
         // A normal rebalance keeps its group member; reconnecting would trigger another rebalance.
-        await track(port.unassign());
-        executor.resetAssignment();
-        state.current = true;
-        state.restart = false;
-        delete state.revoked;
-        if (state.assignment) {
-          executor.assign(state.assignment);
-          await track(port.assign(state.assignment));
+        try {
+          await track(port.unassign());
+          executor.resetAssignment();
+          state.current = true;
+          state.restart = false;
+          delete state.revoked;
+          if (state.assignment) {
+            executor.assign(state.assignment);
+            await track(port.assign(state.assignment));
+            delete state.assignment;
+          }
+          continue;
+        } catch (error) {
+          lastCode =
+            error instanceof KafkaRuntimeError
+              ? error.code
+              : "KAFKA_CONNECTION_FAILED";
+          state.current = false;
+          state.restart = true;
+          executor.stopIntake();
+          delete state.revoked;
           delete state.assignment;
         }
-        continue;
       }
       await deadline(
         track(port.close()),

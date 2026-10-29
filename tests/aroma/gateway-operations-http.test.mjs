@@ -265,11 +265,14 @@ void test("Gateway matches literal-colon mutation URLs and extracts only the pub
     };
   });
   const calls = [];
+  let behavior;
   registerAromaMutationRoutes(
     app,
     {
       execute: async (body, delegation) => {
         calls.push({ body, delegation });
+        if (behavior?.throws) throw behavior.error;
+        if (behavior?.result) return behavior.result;
         return {
           state: "Acknowledged",
           statusCode: 200,
@@ -297,7 +300,7 @@ void test("Gateway matches literal-colon mutation URLs and extracts only the pub
   );
   await app.runtimeController.start();
   t.after(() => app.runtimeController.closeRuntime("SIGTERM"));
-  const signed = (operationId) => {
+  const signed = (operationId, overrides = {}) => {
     const iat = Math.floor(Date.now() / 1000);
     return signServiceDelegation(
       {
@@ -311,6 +314,7 @@ void test("Gateway matches literal-colon mutation URLs and extracts only the pub
         exp: iat + 60,
         jti: `jti-${operationId}`,
         kid: "test",
+        ...overrides,
       },
       privateKey,
     );
@@ -325,6 +329,54 @@ void test("Gateway matches literal-colon mutation URLs and extracts only the pub
   assert.equal(calls[0].body.offerRef, offerRef);
   assert.equal(calls[0].body.operationKind, "SetLineQuantity");
   assert.equal(calls[0].body.sourceGrindKeyHash, selectedGrindKeyHash);
+  const invalidBodies = [
+    '{"privateProof":"MUTATION_BODY_CANARY"',
+    JSON.stringify(setBody) + " ".repeat(64 * 1024),
+  ];
+  const invalidCorrelation = "00000000-0000-4000-8000-000000000041";
+  for (const payload of invalidBodies) {
+    const response = await app.inject({
+      method: "POST",
+      url: `/api/internal-v1/aroma/cart-lines/${offerRef}:set-quantity`,
+      headers: {
+        "content-type": "application/json",
+        "x-correlation-id": invalidCorrelation,
+        "x-service-delegation": signed("setAromaCartLineQuantity"),
+      },
+      payload,
+    });
+    assert.equal(response.statusCode, 400);
+    assert.equal(response.headers["cache-control"], "no-store");
+    assert.equal(
+      response.headers["content-type"],
+      "application/problem+json; charset=utf-8",
+    );
+    assert.equal(response.headers["x-correlation-id"], invalidCorrelation);
+    assert.deepEqual(response.json(), {
+      type: "about:blank",
+      title: "VALIDATION_FAILED",
+      status: 400,
+      code: "VALIDATION_FAILED",
+      detail: "Request validation failed",
+      instance: "/api/internal-v1/aroma/cart-lines/:mutationTarget",
+      correlationId: invalidCorrelation,
+      errors: [],
+    });
+    assert.doesNotMatch(response.body, /MUTATION_BODY_CANARY/u);
+    assert.equal(calls.length, 1);
+  }
+  const wrongOperationDelegation = await app.inject({
+    method: "POST",
+    url: `/api/internal-v1/aroma/cart-lines/${offerRef}:set-quantity`,
+    headers: { "x-service-delegation": signed("removeAromaCartLine") },
+    payload: setBody,
+  });
+  assert.equal(wrongOperationDelegation.statusCode, 403);
+  assert.equal(
+    wrongOperationDelegation.json().code,
+    "SERVICE_DELEGATION_INVALID",
+  );
+  assert.equal(calls.length, 1);
   const removeResponse = await app.inject({
     method: "POST",
     url: `/api/internal-v1/aroma/cart-lines/${offerRef}:remove`,
@@ -380,4 +432,165 @@ void test("Gateway matches literal-colon mutation URLs and extracts only the pub
     assert.equal(response.statusCode, 400);
   }
   assert.equal(calls.length, 3);
+
+  const url = `/api/internal-v1/aroma/cart-lines/${offerRef}:set-quantity`;
+  const validHeaders = {
+    "x-service-delegation": signed("setAromaCartLineQuantity"),
+  };
+  for (const invalid of [
+    {
+      url: "/api/internal-v1/aroma/cart-lines/not-an-offer:set-quantity",
+      headers: validHeaders,
+      payload: setBody,
+      status: 400,
+      code: "VALIDATION_FAILED",
+    },
+    {
+      url,
+      headers: {},
+      payload: setBody,
+      status: 401,
+      code: "SERVICE_AUTHENTICATION_REQUIRED",
+    },
+    {
+      url,
+      headers: { ...validHeaders, "x-actor-ref": "forged" },
+      payload: setBody,
+      status: 401,
+      code: "SERVICE_AUTHENTICATION_REQUIRED",
+    },
+    {
+      url,
+      headers: { "x-service-delegation": "tampered-token" },
+      payload: setBody,
+      status: 403,
+      code: "SERVICE_DELEGATION_INVALID",
+    },
+    {
+      url,
+      headers: {
+        "x-service-delegation": signed("setAromaCartLineQuantity", {
+          originalCaller: "orders-service",
+        }),
+      },
+      payload: setBody,
+      status: 403,
+      code: "SERVICE_DELEGATION_INVALID",
+    },
+    {
+      url,
+      headers: {
+        "x-service-delegation": signed("setAromaCartLineQuantity", {
+          aud: "wrong-audience",
+        }),
+      },
+      payload: setBody,
+      status: 403,
+      code: "SERVICE_DELEGATION_INVALID",
+    },
+    {
+      url,
+      headers: validHeaders,
+      payload: { ...setBody, operationRef: "not-an-operation-ref" },
+      status: 400,
+      code: "VALIDATION_FAILED",
+    },
+    {
+      url,
+      headers: validHeaders,
+      payload: { ...setBody, cartScopeRef: "" },
+      status: 400,
+      code: "VALIDATION_FAILED",
+    },
+  ]) {
+    const result = await app.inject({
+      method: "POST",
+      url: invalid.url,
+      headers: invalid.headers,
+      payload: invalid.payload,
+    });
+    assert.equal(result.statusCode, invalid.status);
+    assert.equal(result.json().code, invalid.code);
+    assert.equal(calls.length, 3);
+  }
+
+  for (const [error, status, code] of [
+    [
+      { code: "AROMA_MUTATION_INVALID", message: "private-executor-canary" },
+      400,
+      "VALIDATION_FAILED",
+    ],
+    [
+      {
+        code: "AROMA_OPERATION_REF_CONFLICT",
+        message: "private-executor-canary",
+      },
+      409,
+      "AROMA_OPERATION_REF_CONFLICT",
+    ],
+    [
+      { code: "DB_UNAVAILABLE", message: "private-executor-canary" },
+      503,
+      "AROMA_PROVIDER_UNAVAILABLE",
+    ],
+    [new Error("private-executor-canary"), 503, "AROMA_PROVIDER_UNAVAILABLE"],
+    [
+      { code: 42, message: "private-executor-canary" },
+      503,
+      "AROMA_PROVIDER_UNAVAILABLE",
+    ],
+    [null, 503, "AROMA_PROVIDER_UNAVAILABLE"],
+  ]) {
+    behavior = { throws: true, error };
+    const result = await app.inject({
+      method: "POST",
+      url,
+      headers: validHeaders,
+      payload: setBody,
+    });
+    assert.equal(result.statusCode, status);
+    assert.equal(result.json().code, code);
+    assert.equal(result.headers["cache-control"], "no-store");
+    assert.match(
+      result.headers["content-type"],
+      /^application\/problem\+json/u,
+    );
+    assert.doesNotMatch(result.body, /private-executor-canary|DB_UNAVAILABLE/u);
+  }
+  const rejected = {
+    type: "about:blank",
+    title: "AROMA_PROVIDER_REJECTED",
+    status: 409,
+    code: "AROMA_PROVIDER_REJECTED",
+    detail: "The typed gateway mutation was rejected.",
+    instance: url,
+    correlationId: "00000000-0000-4000-8000-000000000000",
+    errors: [],
+  };
+  for (const [resultValue, expectedCode] of [
+    [
+      {
+        state: "Rejected",
+        statusCode: 409,
+        responseBodyBytes: Buffer.from(JSON.stringify(rejected)),
+      },
+      "AROMA_PROVIDER_REJECTED",
+    ],
+    [
+      { state: "UnknownOutcome", failureCode: "AROMA_PROVIDER_TIMEOUT" },
+      "AROMA_OPERATION_UNKNOWN_OUTCOME",
+    ],
+    [{ state: "InProgress" }, "AROMA_OPERATION_IN_PROGRESS"],
+  ]) {
+    behavior = { result: resultValue };
+    const result = await app.inject({
+      method: "POST",
+      url,
+      headers: validHeaders,
+      payload: setBody,
+    });
+    assert.equal(result.statusCode, 409);
+    assert.equal(result.json().code, expectedCode);
+    assert.equal(result.headers["cache-control"], "no-store");
+  }
 });

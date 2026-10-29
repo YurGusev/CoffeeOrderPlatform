@@ -4,19 +4,19 @@ import {
   decodeOrderItemRow,
   decodeOrderRow,
   OrderRowDecodeError,
-} from "../../apps/orders-service/src/infrastructure/database/row-schemas.ts";
+} from "../../apps/orders-service/dist/infrastructure/database/row-schemas.js";
 import {
   decodePreparationDesiredRow,
   AromaPreparationRowDecodeError,
-} from "../../apps/orders-aroma-preparation/src/infrastructure/row-schemas.ts";
+} from "../../apps/orders-aroma-preparation/dist/infrastructure/row-schemas.js";
 import {
   decodeObserverPermitRow,
   AromaObserverRowDecodeError,
-} from "../../apps/aroma-observer/src/infrastructure/row-schemas.ts";
+} from "../../apps/aroma-observer/dist/infrastructure/row-schemas.js";
 import {
   decodeConvergenceLineRow,
   AromaConvergenceRowDecodeError,
-} from "../../apps/aroma-convergence/src/infrastructure/row-schemas.ts";
+} from "../../apps/aroma-convergence/dist/infrastructure/row-schemas.js";
 
 const order = {
   order_ref: `ord_${"0".repeat(26)}`,
