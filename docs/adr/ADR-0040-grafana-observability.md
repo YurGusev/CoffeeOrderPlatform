@@ -1,7 +1,7 @@
 # ADR-0040: отдельные Grafana, Loki, Prometheus и Tempo
 
 Дата: 29.10.2026. Решение владельца: переход разрешён в [#210](https://github.com/YurGusev/CoffeeOrderPlatform/issues/210).
-Статус реализации: проверяется; этот ADR не является runtime/security admission.
+Статус реализации: компонентная поставка #210 подтверждена; [отчёт и границы](../reports/observability-delivery.md). Полная приёмка #13 выполняется отдельно.
 
 ## Решение
 
@@ -144,10 +144,12 @@ run, manifest/platform и image ID. Любой иной HIGH, CRITICAL или н
 identity блокирует допуск. VEX для неисправленной `go-jose 4.1.5` запрещён.
 MEDIUM/LOW/UNKNOWN остаются в отчётах; «0 CVE» не утверждается.
 
-Диагностические prototypes подтвердили три сигнала, подписи plugins, запрос
-метрики через Grafana и stop/recreate Grafana на том же fixture volume. Они
-не имеют G12 BuildKit attestation. Полные G12/G14, runtime matrix,
-persistence/TTL/restore и accepted handoff #210 ещё должны пройти до merge.
+Кандидат `e6c2e7d` прошёл независимые компонентные G12/G14: три сигнала,
+15-runtime matrix, alert transitions, native pressure/recovery, persistence,
+TTL и backup/restore. [Отчёт](../reports/observability-delivery.md) фиксирует
+source/hash bindings и ограничения, [handoff](../../evidence/handoffs/issue-210.yaml)
+передаёт Operations в #13. Формальный G00/G12/G14 admission и full-system #13
+не подменяются этим компонентным доказательством.
 
 ## Источники
 
