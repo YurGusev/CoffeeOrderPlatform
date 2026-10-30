@@ -9,11 +9,11 @@ import {loadVerifiedGateImage} from '../verified-infrastructure-image.mjs';
 export function provisionStorage({name, maxDiskBytes, storageHelperImage, backingDirectory, run = args => execFileSync('docker', args, {encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe']}).trim()}) {
   if (!/^coffee-[a-z0-9-]+$/u.test(name) || !Number.isSafeInteger(maxDiskBytes) || maxDiskBytes < 268435456 || !/^sha256:[0-9a-f]{64}$/u.test(storageHelperImage)) throw new Error('Invalid bounded telemetry storage specification');
   const backingVolume = `${name}-backing`;
-  const lifecycle = /^coffee-g14-[a-f0-9-]{36}-(?:grafana|loki|prometheus|tempo)-data$/u.test(name) ? 'fixture' : 'persistent';
+  const lifecycle = /^coffee-observability-[a-f0-9-]{36}-(?:grafana|loki|prometheus|tempo)-data$/u.test(name) ? 'fixture' : 'persistent';
   let directoryIdentity;
   if (backingDirectory !== undefined) {
     if (lifecycle !== 'fixture' || !isAbsolute(backingDirectory) || basename(backingDirectory) !== name ||
-        !/^coffee-g14-[a-f0-9-]{36}-storage-[A-Za-z0-9]{6}$/u.test(basename(dirname(backingDirectory))) ||
+        !/^coffee-observability-[a-f0-9-]{36}-storage-[A-Za-z0-9]{6}$/u.test(basename(dirname(backingDirectory))) ||
         realpathSync(backingDirectory) !== backingDirectory) throw new Error('Invalid fixture backing directory');
     const parent = lstatSync(dirname(backingDirectory));
     const directory = lstatSync(backingDirectory);
@@ -104,11 +104,11 @@ export function provisionStorage({name, maxDiskBytes, storageHelperImage, backin
 
 export function removeStorage({storage, storageHelperImage, run = args => execFileSync('docker', args, {encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe']})}) {
   if (!/^sha256:[0-9a-f]{64}$/u.test(storageHelperImage)) throw new Error('Invalid verified telemetry storage helper image');
-  if (!/^coffee-g14-[a-f0-9-]{36}-(?:grafana|loki|prometheus|tempo)-data$/u.test(storage.volumeName) || storage.backingVolume !== `${storage.volumeName}-backing` || !/^\/dev\/loop[0-9]+$/u.test(storage.device)) throw new Error('Cleanup is restricted to disposable G14 storage');
+  if (!/^coffee-observability-[a-f0-9-]{36}-(?:grafana|loki|prometheus|tempo)-data$/u.test(storage.volumeName) || storage.backingVolume !== `${storage.volumeName}-backing` || !/^\/dev\/loop[0-9]+$/u.test(storage.device)) throw new Error('Cleanup is restricted to disposable G14 storage');
   if (storage.backingDirectory !== undefined) {
     const path = storage.backingDirectory;
     if (!isAbsolute(path) || basename(path) !== storage.volumeName || realpathSync(path) !== path ||
-        !/^coffee-g14-[a-f0-9-]{36}-storage-[A-Za-z0-9]{6}$/u.test(basename(dirname(path)))) throw new Error('Invalid fixture backing directory');
+        !/^coffee-observability-[a-f0-9-]{36}-storage-[A-Za-z0-9]{6}$/u.test(basename(dirname(path)))) throw new Error('Invalid fixture backing directory');
     const parent = lstatSync(dirname(path));
     const dir = lstatSync(path);
     const file = lstatSync(`${path}/telemetry.ext4`);

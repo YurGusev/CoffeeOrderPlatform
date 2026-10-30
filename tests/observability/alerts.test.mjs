@@ -480,7 +480,7 @@ void test('generated Node image probe accepts nameless nested package metadata b
   assert.equal(linkedForbidden.packageScanComplete,true);assert.deepEqual(linkedForbidden.forbiddenPackages,['typescript']);assert.equal(linkedForbidden.pass,false);
 });
 
-void test('issue 64 metric matrix requires a source identity callback before any Docker work', async () => {
+void test('runtime metric matrix requires a source identity callback before any Docker work', async () => {
   const args = {
     projectName: 'coffee-launch-20261024t120000z-a12bc34', exporterToken: 'fixture-token',
     onRolesReady: async () => {}, onCleanup: async () => {}, verifyMetricFamily: async () => {},
@@ -493,7 +493,7 @@ void test('issue 64 metric matrix requires a source identity callback before any
     }), /runtime matrix inputs invalid/u);
   }
   let identityCalls = 0;
-  for (const projectName of ['coffee-issue64-final-aaaaaaaa', 'coffee-launch-20261024t120000z-a12bc340',
+  for (const projectName of ['coffee-legacy-runtime-aaaaaaaa', 'coffee-launch-20261024t120000z-a12bc340',
     'coffee-launch-20261024T120000Z-a12bc34', 'coffee-launch-local-20261024t120000z-a12bc34', 'coffee-platform']) {
     await assert.rejects(verifyRuntimeMetricMatrix({
       ...args, projectName,
@@ -534,7 +534,7 @@ void test('issue 64 evidence distinguishes selected live roles from full 14-runt
       aromaConvergenceProof: {owner: 'aroma-convergence'},
     },
   });
-  assert.equal(coverage.verificationScope, 'issue-64-operations-predecessor');
+  assert.equal(coverage.verificationScope, 'operations-component');
   assert.equal(coverage.fullSystemG14.status, 'NOT_RUN');
   assert.equal(coverage.fullSystemG14.owner, '#13');
   assert.equal(coverage.fullSystemG14.requiredNodeRuntimeCount, 14);

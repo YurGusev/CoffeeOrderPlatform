@@ -482,7 +482,7 @@ function runOwnedImageProbe(runDocker, args, name, imageId, code) {
 }
 
 function scanNodeImage(runDocker, image, nodeVersion, projectSuffix, forbiddenNames) {
-  const name = `coffee-issue64-runtime-matrix-${projectSuffix}-${image.role}`;
+  const name = `coffee-runtime-matrix-${projectSuffix}-${image.role}`;
   const existing = safeDocker(runDocker, ['ps', '-aq', '--filter', `name=^/${name}$`]);
   if (existing !== '') fail('runtime matrix scanner name collision');
   const script = nodeImageProbe(image.role, nodeVersion, forbiddenNames);
@@ -502,7 +502,7 @@ function scanNodeImage(runDocker, image, nodeVersion, projectSuffix, forbiddenNa
 }
 
 function scanNginxImage(runDocker, image, version, projectSuffix) {
-  const name = `coffee-issue64-runtime-matrix-${projectSuffix}-edge-nginx`;
+  const name = `coffee-runtime-matrix-${projectSuffix}-edge-nginx`;
   if (safeDocker(runDocker, ['ps', '-aq', '--filter', `name=^/${name}$`]) !== '') fail('runtime matrix scanner name collision');
   const args = [
     'run', '--rm', '--name', name, '--network', 'none', '--cap-drop', 'ALL', '--read-only',

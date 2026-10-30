@@ -17,6 +17,8 @@ import { dirname, join } from "node:path";
 import test from "node:test";
 import {
   adjudicateGrafanaFindings,
+  createBuildInputSnapshot,
+  verifyBuildInputSnapshot,
   buildOpenVex,
   validateOpenVex,
   assertSbomPackageInventory,
@@ -76,6 +78,37 @@ function buildMetadata() {
     },
   };
 }
+
+void test("build snapshot retains committed modes, omits ignored files and detects tampering", async (t) => {
+  const temporary = await mkdtemp(join(tmpdir(), "coffee-build-context-test-"));
+  t.after(() => rm(temporary, { recursive: true, force: true }));
+  const candidateRoot = join(temporary, "candidate");
+  const snapshotRoot = join(temporary, "snapshot");
+  await mkdir(candidateRoot);
+  await mkdir(snapshotRoot);
+  await mkdir(join(candidateRoot, "config"));
+  await writeFile(join(candidateRoot, ".gitignore"), "*.pyc\n");
+  await writeFile(join(candidateRoot, "config", "platform.yaml"), "fixture\n", { mode: 0o664 });
+  await chmod(join(candidateRoot, "config", "platform.yaml"), 0o664);
+  execFileSync("git", ["init", "--quiet"], { cwd: candidateRoot });
+  execFileSync("git", ["add", ".gitignore", "config/platform.yaml"], { cwd: candidateRoot });
+  execFileSync("git", ["-c", "user.name=Test", "-c", "user.email=test@example.invalid", "commit", "--quiet", "-m", "fixture"], { cwd: candidateRoot });
+  await writeFile(join(candidateRoot, "ignored.pyc"), "not tracked\n");
+  const candidateSha = execFileSync("git", ["rev-parse", "HEAD"], { cwd: candidateRoot, encoding: "utf8" }).trim();
+  const snapshot = await createBuildInputSnapshot({ candidateRoot, candidateSha, temporary: snapshotRoot });
+  const source = join(snapshot.contextPath, "config", "platform.yaml");
+  assert.equal((await stat(source)).mode & 0o777, 0o644);
+  assert.equal((await stat(join(candidateRoot, "config", "platform.yaml"))).mode & 0o777, 0o664);
+  assert.deepEqual(await readFile(source), await readFile(join(candidateRoot, "config", "platform.yaml")));
+  await assert.rejects(lstat(join(snapshot.contextPath, "ignored.pyc")), { code: "ENOENT" });
+  await verifyBuildInputSnapshot(snapshot);
+  await chmod(source, 0o664);
+  await assert.rejects(verifyBuildInputSnapshot(snapshot), /BUILD_CONTEXT_CHANGED/u);
+  await chmod(source, 0o644);
+  await verifyBuildInputSnapshot(snapshot);
+  await writeFile(snapshot.archivePath, "changed");
+  await assert.rejects(verifyBuildInputSnapshot(snapshot), /BUILD_CONTEXT_CHANGED/u);
+});
 
 void test("G12 accepts Buildx mode=min metadata shape and requires statement subject to match", () => {
   const metadata = buildMetadata();
@@ -497,7 +530,7 @@ void test("G12 failed commands expose only bounded finite stderr diagnostics", a
 });
 
 void test("G12 image inspection treats only an exact daemon not-found as absence", async (t) => {
-  const temp = await mkdtemp(join(tmpdir(), "g12-image-inspect-command-"));
+  const temp = await mkdtemp(join(tmpdir(), "image-inspect-command-"));
   t.after(() => rm(temp, { recursive: true, force: true }));
   const dockerPath = join(temp, "docker");
   const reference = `ghcr.io/example/image@sha256:${"a".repeat(64)}`;
@@ -527,7 +560,7 @@ void test("G12 image inspection treats only an exact daemon not-found as absence
 });
 
 void test("G12 candidate index checks retain tracked flags beyond the old output boundary", async (t) => {
-  const candidateRoot = await mkdtemp(join(tmpdir(), "g12-index-flags-"));
+  const candidateRoot = await mkdtemp(join(tmpdir(), "image-index-flags-"));
   t.after(() => rm(candidateRoot, { recursive: true, force: true }));
   const trackedDirectory = join(candidateRoot, "many-files");
   await mkdir(trackedDirectory);
@@ -578,7 +611,7 @@ void test("G12 candidate index checks retain tracked flags beyond the old output
 });
 
 void test("G12 Git output cap rejects overflow even when child can otherwise finish", async (t) => {
-  const temp = await mkdtemp(join(tmpdir(), "g12-git-output-cap-"));
+  const temp = await mkdtemp(join(tmpdir(), "git-output-cap-"));
   t.after(() => rm(temp, { recursive: true, force: true }));
   const bin = join(temp, "bin");
   await mkdir(bin);
@@ -599,7 +632,7 @@ void test("G12 Git output cap rejects overflow even when child can otherwise fin
 });
 
 void test("G12 verifies BuildKit nested OCI index and platform-manifest attestation", async (t) => {
-  const temp = await mkdtemp(join(tmpdir(), "g12-oci-attestation-"));
+  const temp = await mkdtemp(join(tmpdir(), "oci-attestation-"));
   t.after(() => rm(temp, { recursive: true, force: true }));
   const { createHash } = await import("node:crypto");
   const hash = (bytes) => createHash("sha256").update(bytes).digest("hex");
@@ -889,7 +922,7 @@ void test("G12 compares only Trivy package components and binds image SBOMs", ()
 });
 
 void test("G12 Grafana effective binary proof rejects later links, files and whiteouts in protected paths", async (t) => {
-  const temp = await mkdtemp(join(tmpdir(), "g12-grafana-layers-"));
+  const temp = await mkdtemp(join(tmpdir(), "grafana-layers-"));
   t.after(async () => rm(temp, {recursive: true, force: true}));
   const layout = join(temp, "layout");
   const root = join(temp, "root");
@@ -1098,7 +1131,7 @@ void test("G12 scanner arguments constrain the input and include lockfile dev de
 });
 
 void test("G12 builds product images, records pinned upstream identity, and fails on findings or tampered OCI proof", async (t) => {
-  const temp = await mkdtemp(join(tmpdir(), "g12-synthetic-test-"));
+  const temp = await mkdtemp(join(tmpdir(), "image-scan-fixture-"));
   t.after(() => rm(temp, { recursive: true, force: true }));
   const candidateRoot = join(temp, "candidate");
   const evidenceDir = join(temp, "evidence");
@@ -3529,7 +3562,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
   failContainerRemoval = false;
 
   const collisionNonce = "90000000-0000-4000-8000-000000000003";
-  const collisionName = `coffee-g12-${collisionNonce}`;
+  const collisionName = `coffee-image-scan-${collisionNonce}`;
   const collision = {
     id: "f".repeat(64),
     name: collisionName,

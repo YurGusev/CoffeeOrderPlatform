@@ -559,8 +559,8 @@ void test("generated Collector and backend configs preserve bounded delivery and
       assert.throws(() => createComposeOverride({...args, alertEvidenceDir: evidenceDir}), /owned by UID 1000/u);
       return;
     }
-    const isolated = createComposeOverride({...args, alertEvidenceDir: evidenceDir, observabilityNetworkName: "coffee-g14-proof"});
-    assert.deepEqual(isolated.networks.coffee_observability, {name: "coffee-g14-proof", internal: true});
+    const isolated = createComposeOverride({...args, alertEvidenceDir: evidenceDir, observabilityNetworkName: "coffee-observability-network"});
+    assert.deepEqual(isolated.networks.coffee_observability, {name: "coffee-observability-network", internal: true});
     assert.ok(isolated.services["otel-collector"].networks.includes("coffee_observability"));
     assert.equal(isolated.services["alert-sink"].tmpfs, undefined);
     assert.deepEqual(isolated.services["alert-sink"].volumes.at(-1), {type: "bind", source: evidenceDir, target: "/run/alerts"});

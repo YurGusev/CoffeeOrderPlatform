@@ -117,7 +117,7 @@ export async function runLaunchPath({telemetry,onNetwork,onNetworkCleanup,onRole
   assert.equal(typeof telemetry.exporterToken,'string');assert.ok(telemetry.exporterToken.length>0);
   assert.equal(typeof onNetwork,'function');assert.equal(typeof onNetworkCleanup,'function');assert.equal(typeof onRolesReady,'function');assert.equal(typeof onConvergenceMetrics,'function');assert.equal(typeof observeBaseline,'function');assert.equal(typeof observeProof,'function');
   let phase='fixture-preparation';
-  const options=parse(['--smoke','--profile','reference-512','--smoke-clients','1','--smoke-duration-ms','45000','--result-dir',resultDir??`${process.env.TMPDIR??'/tmp'}/coffee-g14-launch-${randomUUID()}`]);
+  const options=parse(['--smoke','--profile','reference-512','--smoke-clients','1','--smoke-duration-ms','45000','--result-dir',resultDir??`${process.env.TMPDIR??'/tmp'}/coffee-observability-transport-${randomUUID()}`]);
   options.launchPath={telemetryConfig:telemetry.config,telemetryEndpoint:telemetry.endpoint,exporterToken:telemetry.exporterToken};
   let proofReceipt;
   const result=await fixture(async f=>{
@@ -130,7 +130,7 @@ export async function runLaunchPath({telemetry,onNetwork,onNetworkCleanup,onRole
       const fixture=JSON.parse(await readFile(`${setup.privateDir}/fixture.json`,'utf8'));
       const key=fixture.launchPath.ordersServiceSigningPrivateKey;
       assert.ok(key);
-      const nginxImage=`coffee-issue64-launch-path:${options.runId}`;
+      const nginxImage=`coffee-observability-edge:${options.runId}`;
       let imageBuildAttempted=false,databaseAttached=false;
       const stop=async()=>{
         const failures=[];

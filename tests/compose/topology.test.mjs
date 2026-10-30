@@ -339,7 +339,16 @@ void test("smoke accepts only runtime image IDs verified by G12 before startup",
     assert.equal(calls.at(-1)[1].at(-1), "coffee-platform-edge-nginx:local");
     const source = await readFile(join(REPO_ROOT, "tools/compose-smoke.mjs"), "utf8");
     const binding = source.indexOf("const verifiedImages = await readVerifiedRuntimeImages(");
-    assert.ok(binding > source.indexOf("if (!options.noBuild)\n      buildRuntimeImages("));
+    const build = source.indexOf("buildRuntimeImages(", source.indexOf('markRollbackStage("build")'));
+    assert.ok(build >= 0 && binding > build);
+    assert.ok(source.indexOf("verifyBuildInputSnapshot(snapshot)", build) < binding);
+    const predicate = source.match(/const bindRuntimeImages = ([^\n]+);/u)?.[1];
+    assert.ok(predicate);
+    for (const flag of ["databaseProof", "customerProof", "aromaBindingProof", "aromaCartProof", "mutationDisableRollback"])
+      assert.equal(runInNewContext(predicate, { options: { [flag]: true }, browser: undefined }), false);
+    assert.equal(runInNewContext(predicate, { options: {}, browser: {} }), false);
+    assert.equal(runInNewContext(predicate, { options: {}, browser: undefined }), true);
+    assert.ok(source.includes("if (launchIdentity && bindRuntimeImages)"));
     assert.ok(binding < source.indexOf("composeAttempted = true;", binding));
   } finally {
     t.mock.restoreAll();

@@ -9,7 +9,7 @@ import {provisionStorage, removeStorage} from '../../tools/observability/storage
 import {loadVerifiedGateImage} from '../../tools/verified-infrastructure-image.mjs';
 import {RUNTIME_NAMES} from '../../packages/platform-config/src/index.ts';
 
-const name = 'coffee-g14-00000000-0000-4000-8000-000000000001-loki-data';
+const name = 'coffee-observability-00000000-0000-4000-8000-000000000001-loki-data';
 const storageHelperImage = `sha256:${'a'.repeat(64)}`;
 const labels = lifecycle => ({'coffee.owner': 'operations', 'coffee.lifecycle': lifecycle});
 
@@ -113,7 +113,10 @@ void test('bounded telemetry storage preserves unrelated volumes and cleanup exc
   };
   assert.throws(() => provisionStorage({name, maxDiskBytes: 1073741824, storageHelperImage, run}), /unrelated telemetry volume/u);
   assert.equal(calls.length, 1, 'no creation, mount, formatting or delete before ownership validation');
-  assert.throws(() => removeStorage({storage: {volumeName: 'coffee-platform-observability-data', backingVolume: 'coffee-platform-observability-data-backing', device: '/dev/loop17'}, storageHelperImage, run}), /disposable G14 storage/u);
+  for (const foreign of ['coffee-platform-observability-data', 'coffee-observability-grafana-data',
+    'coffee-observability-00000000-grafana-data']) {
+    assert.throws(() => removeStorage({storage: {volumeName: foreign, backingVolume: `${foreign}-backing`, device: '/dev/loop17'}, storageHelperImage, run}), /disposable G14 storage/u);
+  }
   assert.equal(calls.length, 1);
   assert.throws(() => provisionStorage({name, maxDiskBytes: Infinity, storageHelperImage, run}), /Invalid bounded/u);
 });
@@ -304,7 +307,7 @@ void test('G12 binds storage helper to the Node base, receipt, index and image',
 });
 
 void test('fixture backing placement binds an owned empty directory and cleans its exact file', () => {
-  const root = mkdtempSync(join(tmpdir(), 'coffee-g14-00000000-0000-4000-8000-000000000001-storage-'));
+  const root = mkdtempSync(join(tmpdir(), 'coffee-observability-00000000-0000-4000-8000-000000000001-storage-'));
   const dir = join(root, name);
   mkdirSync(dir, {mode: 0o700});
   const calls = [];
@@ -355,7 +358,7 @@ void test('fixture backing placement binds an owned empty directory and cleans i
 });
 
 void test('fixture backing placement refuses persistent names, symlinks and reused directories', () => {
-  const root = mkdtempSync(join(tmpdir(), 'coffee-g14-00000000-0000-4000-8000-000000000001-storage-'));
+  const root = mkdtempSync(join(tmpdir(), 'coffee-observability-00000000-0000-4000-8000-000000000001-storage-'));
   const dir = join(root, name);
   mkdirSync(dir, {mode: 0o700});
   const calls = [];

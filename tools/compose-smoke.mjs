@@ -20,6 +20,7 @@ import { request as httpsRequest } from "node:https";
 import { dirname, join, resolve } from "node:path";
 import { createHash, generateKeyPairSync, randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
+import { tmpdir } from "node:os";
 import { dump as dumpYaml, load as parseYaml } from "js-yaml";
 import { parsePublicTlsHostname } from "../packages/platform-security/src/index.ts";
 import {
@@ -71,6 +72,7 @@ import {
   dropDeliveryTables,
 } from "../scripts/db-live-proof.mjs";
 import { createRuntimeLoggingOverride } from "./observability/generate.mjs";
+import { createBuildInputSnapshot, verifyBuildInputSnapshot } from "./security-scan.mjs";
 import { validateLaunchContext } from "../verification/launch/v1/report.mjs";
 import {
   loadVerifiedGateImage,
@@ -9289,18 +9291,39 @@ export async function runComposeSmoke({
       }
     }
     if (options.mutationDisableRollback) markRollbackStage("build");
-    if (!options.noBuild)
-      buildRuntimeImages(
-        projectName,
-        options.databaseProof || options.customerProof
-          ? [DATABASE_PROOF_RUNTIME]
-          : options.aromaBindingProof || options.aromaCartProof
-            ? ["api-internal", "aroma-gateway"]
-            : RUNTIMES,
-        builtImages,
-        ROOT,
-      );
-    if (!(options.databaseProof || options.customerProof || options.aromaBindingProof || options.aromaCartProof || browser || options.mutationDisableRollback)) {
+    const bindRuntimeImages = !(options.databaseProof || options.customerProof || options.aromaBindingProof || options.aromaCartProof || browser || options.mutationDisableRollback);
+    if (!options.noBuild) {
+      let temporary;
+      let snapshot;
+      try {
+        if (launchIdentity && bindRuntimeImages) {
+          temporary = await mkdtemp(join(tmpdir(), "coffee-runtime-build-"));
+          snapshot = await createBuildInputSnapshot({
+            candidateRoot: launchIdentity.candidateRoot,
+            candidateSha: launchIdentity.context.candidateSha,
+            temporary,
+          });
+          await verifyBuildInputSnapshot(snapshot);
+        }
+        try {
+          buildRuntimeImages(
+            projectName,
+            options.databaseProof || options.customerProof
+              ? [DATABASE_PROOF_RUNTIME]
+              : options.aromaBindingProof || options.aromaCartProof
+                ? ["api-internal", "aroma-gateway"]
+                : RUNTIMES,
+            builtImages,
+            snapshot?.contextPath ?? ROOT,
+          );
+        } finally {
+          if (snapshot) await verifyBuildInputSnapshot(snapshot);
+        }
+      } finally {
+        if (temporary) await rm(temporary, { recursive: true, force: true });
+      }
+    }
+    if (bindRuntimeImages) {
       const verifiedImages = await readVerifiedRuntimeImages({contextFile: launchContextPath});
       assertVerifiedRuntimeImages({projectName, verifiedImages, noBuild: options.noBuild});
     }

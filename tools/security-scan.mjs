@@ -742,12 +742,12 @@ async function createManifestInput(root, target) {
   }
 }
 
-async function createBuildInputSnapshot({
+export async function createBuildInputSnapshot({
   candidateRoot,
   candidateSha,
   temporary,
-  run,
-  onChild,
+  run = runCommand,
+  onChild = () => {},
 }) {
   const archivePath = join(temporary, "candidate-source.tar");
   const contextPath = join(temporary, "candidate-source");
@@ -850,6 +850,16 @@ async function createBuildInputSnapshot({
     extractedBytes: extractedTree.bytes,
     size,
   });
+}
+
+
+export async function verifyBuildInputSnapshot(sourceSnapshot) {
+  const tree = await hashDirectoryTree(sourceSnapshot.contextPath);
+  if (
+    tree.sha256 !== sourceSnapshot.extractedTreeSha256 ||
+    tree.bytes !== sourceSnapshot.extractedBytes ||
+    (await hashRegularFile(sourceSnapshot.archivePath, MAX_BUILD_CONTEXT_BYTES)) !== sourceSnapshot.archiveSha256
+  ) fail("BUILD_CONTEXT_CHANGED");
 }
 
 async function hashRegularFile(path, maxBytes) {
@@ -1948,16 +1958,7 @@ async function buildProductImages({
     });
     const contextPath = sourceSnapshot.contextPath;
     args.push(contextPath);
-    const beforeBuild = await hashDirectoryTree(sourceSnapshot.contextPath);
-    if (
-      beforeBuild.sha256 !== sourceSnapshot.extractedTreeSha256 ||
-      beforeBuild.bytes !== sourceSnapshot.extractedBytes ||
-      (await hashRegularFile(
-        sourceSnapshot.archivePath,
-        MAX_BUILD_CONTEXT_BYTES,
-      )) !== sourceSnapshot.archiveSha256
-    )
-      fail("BUILD_CONTEXT_CHANGED");
+    await verifyBuildInputSnapshot(sourceSnapshot);
     if (service === "grafana") {
       const before = await hashDirectoryTree(vendorPlugins.path);
       if (before.sha256 !== vendorPlugins.treeSha256 || before.bytes !== vendorPlugins.treeBytes) fail("PLUGIN_CONTEXT_CHANGED");
@@ -1967,16 +1968,7 @@ async function buildProductImages({
       const after = await hashDirectoryTree(vendorPlugins.path);
       if (after.sha256 !== vendorPlugins.treeSha256 || after.bytes !== vendorPlugins.treeBytes) fail("PLUGIN_CONTEXT_CHANGED");
     }
-    const afterBuild = await hashDirectoryTree(sourceSnapshot.contextPath);
-    if (
-      afterBuild.sha256 !== sourceSnapshot.extractedTreeSha256 ||
-      afterBuild.bytes !== sourceSnapshot.extractedBytes ||
-      (await hashRegularFile(
-        sourceSnapshot.archivePath,
-        MAX_BUILD_CONTEXT_BYTES,
-      )) !== sourceSnapshot.archiveSha256
-    )
-      fail("BUILD_CONTEXT_CHANGED");
+    await verifyBuildInputSnapshot(sourceSnapshot);
     const metadataBytes = await readRegular(metadataPath);
     const metadata = parseJson(metadataBytes, "PROVENANCE_METADATA_INVALID");
     const record = verifyBuildxMetadata(
@@ -2366,7 +2358,7 @@ export async function runSecurityScan({
     const nonce = nonceFactory();
     if (typeof nonce !== "string" || !/^[a-f0-9-]{16,64}$/u.test(nonce))
       fail("CONTAINER_LIFECYCLE_INVALID");
-    const name = `coffee-g12-${nonce}`;
+    const name = `coffee-image-scan-${nonce}`;
     const cidDirectory = join(temporary, "container-ids");
     await mkdir(cidDirectory, { recursive: true, mode: 0o700 });
     const spec = Object.freeze({
@@ -2537,7 +2529,7 @@ export async function runSecurityScan({
     if (!lockHandle) fail("SCANNER_ALREADY_RUNNING");
     await lockHandle.writeFile(`${process.pid} ${identity.context.runId}\n`);
     await lockHandle.sync();
-    temporary = await mkdtemp(join(tmpdir(), "coffee-g12-scan-"));
+    temporary = await mkdtemp(join(tmpdir(), "coffee-image-scan-"));
     await chmod(temporary, 0o700);
     const cacheDir = join(temporary, "cache");
     const inputDir = join(temporary, "manifests");

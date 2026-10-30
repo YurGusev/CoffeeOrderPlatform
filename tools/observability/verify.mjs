@@ -267,7 +267,7 @@ set -eu
 token="$1"
 case "$token" in *[!a-f0-9]*|'') exit 2 ;; esac
 umask 077
-stop_path="/tmp/issue64-memory-stop-$token"
+stop_path="/tmp/collector-memory-stop-$token"
 pid=$$
 exec 3<&0
 printf '{"kind":"started","pid":%s}\\n' "$pid"
@@ -304,7 +304,7 @@ function startCollectorMemorySampler({name, token, config}) {
   const collector = config.telemetry.collector;
   const containerMemoryMiB = collector.containerMemoryMiB;
   const guardBytes = (containerMemoryMiB - collector.memorySpikeMiB) * MEMORY_MIB_BYTES;
-  const child = spawn('docker', ['exec', '-i', name, '/busybox', 'sh', '-c', collectorMemorySamplerScript, 'issue64-memory-sampler', token], {
+  const child = spawn('docker', ['exec', '-i', name, '/busybox', 'sh', '-c', collectorMemorySamplerScript, 'collector-memory-sampler', token], {
     stdio: ['pipe', 'pipe', 'ignore'],
   });
   let buffer = '';
@@ -382,7 +382,7 @@ function startCollectorMemorySampler({name, token, config}) {
     while (!closed && Date.now() < deadline) await sleep(25);
     if (child.exitCode === null && Number.isSafeInteger(samplerPid)) {
       const killScript = 'p="$1"; t="$2"; case "$p" in *[!0-9]*|"") exit 2 ;; esac; [ "$p" -gt 1 ] || exit 2; c=$(/busybox tr "\\000" " " < "/proc/$p/cmdline") || exit 3; case "$c" in *"$t"*) /busybox kill -TERM "$p" ;; *) exit 4 ;; esac';
-      try { run(['exec', name, '/busybox', 'sh', '-c', killScript, 'issue64-memory-kill', String(samplerPid), token]); } catch { failure ??= new Error('collector memory sampler cleanup failed'); }
+      try { run(['exec', name, '/busybox', 'sh', '-c', killScript, 'collector-memory-kill', String(samplerPid), token]); } catch { failure ??= new Error('collector memory sampler cleanup failed'); }
       const killDeadline = Date.now() + 3000;
       while (!closed && Date.now() < killDeadline) await sleep(25);
     }
@@ -1241,8 +1241,8 @@ export function observabilityVerificationCoverage(evidence) {
     ? (evidence.runtimeMetricMatrix.runtimeMetrics?.roles ?? []).map(({role}) => role).filter(role => NODE_RUNTIME_TARGETS.includes(role))
     : [];
   return {
-    verificationScope: 'issue-64-operations-predecessor',
-    statusAppliesTo: 'issue-64 mandatory Operations backend and instrumentation gates',
+    verificationScope: 'operations-component',
+    statusAppliesTo: 'mandatory Operations backend and instrumentation gates',
     fullSystemG14: {
       status: 'NOT_RUN',
       owner: '#13',
@@ -1400,7 +1400,7 @@ export function durationMilliseconds(value) {
 
 export async function runObservabilityVerification({root = REPO_ROOT, run = docker, probePath = '/usr/bin/busybox'} = {}) {
   const runId = newRunId();
-  const project = `coffee-g14-${runId}`;
+  const project = `coffee-observability-${runId}`;
   const provenanceStart = await sourceIdentity(root);
   const workDir = await mkdtemp(`/dev/shm/${project}-`);
   const backendNetwork = `${project}-backend`;
@@ -1633,7 +1633,7 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
       return nonDisk.every(rule => events.some(item => item.name === rule.name && item.status === 'resolved' && item.episodeId === firing.get(rule.name)));
     }, {timeoutMs: maxForMs + 5 * config.telemetry.alerts.evaluationIntervalMs + 130000, intervalMs: 5000, description: 'four Grafana alert resolved episodes'});
     const diskRule = definitions.find(rule => rule.key === 'diskWatermark');
-    const diskFile = '/data/g14-pressure';
+    const diskFile = '/data/disk-watermark-fill';
     const diskWriter = (script) => run(['run', '--rm', '--network', 'none', '--read-only', '--user', '472:472', '--cap-drop', 'ALL',
       '--security-opt', 'no-new-privileges:true', '--memory', '64m', '--pids-limit', '16',
       '--mount', `type=volume,source=${storage.grafana.volumeName},target=/data`, '--entrypoint', 'node', toolchain.nodeImage, '-e', script, diskFile]);
@@ -1669,7 +1669,7 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
       if (diskPressureIdentity) {
         run(['run', '--rm', '--network', 'none', '--read-only', '--user', '472:472', '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges:true',
           '--memory', '64m', '--pids-limit', '16', '--mount', `type=volume,source=${storage.grafana.volumeName},target=/data`, '--entrypoint', 'node', toolchain.nodeImage,
-          '-e', `const fs=require('node:fs'),p='/data/g14-pressure',expected=${JSON.stringify(diskPressureIdentity)},s=fs.lstatSync(p);if(!s.isFile()||s.isSymbolicLink()||s.dev!==expected.dev||s.ino!==expected.ino)throw Error('pressure file identity changed');fs.unlinkSync(p)`]);
+          '-e', `const fs=require('node:fs'),p='/data/disk-watermark-fill',expected=${JSON.stringify(diskPressureIdentity)},s=fs.lstatSync(p);if(!s.isFile()||s.isSymbolicLink()||s.dev!==expected.dev||s.ino!==expected.ino)throw Error('pressure file identity changed');fs.unlinkSync(p)`]);
         diskPressureIdentity = undefined;
       }
     }
@@ -2089,7 +2089,7 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
 
     startPhase('diskRecovery');
     let lokiPressureIdentity;
-    const pressureFile = '/data/g14-native-pressure';
+    const pressureFile = '/data/loki-wal-fill';
     const lokiWriter = script => run(['run', '--rm', '--network', 'none', '--read-only', '--user', '10001:10001', '--cap-drop', 'ALL',
       '--security-opt', 'no-new-privileges:true', '--memory', '64m', '--pids-limit', '16',
       '--mount', `type=volume,source=${storage.loki.volumeName},target=/data`, '--entrypoint', 'node', toolchain.nodeImage, '-e', script, pressureFile]);
@@ -2279,7 +2279,7 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
     let backendStopStarted = false;
     try {
       backupDir = await mkdtemp(join(tmpdir(), `${project}-backup-`));
-      const restoreProject = `coffee-g14-${newRunId()}`;
+      const restoreProject = `coffee-observability-${newRunId()}`;
       for (const name of backupNames) {
         const volumeName = `${restoreProject}-${name}-data`;
         const backingDirectory = join(storageRoot, volumeName);
@@ -2647,7 +2647,7 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
     if (diskPressureIdentity && storage.grafana && toolchain) {
       try { run(['run', '--rm', '--network', 'none', '--read-only', '--user', '472:472', '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges:true',
         '--memory', '64m', '--pids-limit', '16', '--mount', `type=volume,source=${storage.grafana.volumeName},target=/data`, '--entrypoint', 'node', toolchain.nodeImage,
-        '-e', `const fs=require('node:fs'),p='/data/g14-pressure',expected=${JSON.stringify(diskPressureIdentity)};try{const s=fs.lstatSync(p);if(!s.isFile()||s.isSymbolicLink()||s.dev!==expected.dev||s.ino!==expected.ino)throw Error('pressure file identity changed');fs.unlinkSync(p)}catch(e){if(e.code!=='ENOENT')throw e}`]); }
+        '-e', `const fs=require('node:fs'),p='/data/disk-watermark-fill',expected=${JSON.stringify(diskPressureIdentity)};try{const s=fs.lstatSync(p);if(!s.isFile()||s.isSymbolicLink()||s.dev!==expected.dev||s.ino!==expected.ino)throw Error('pressure file identity changed');fs.unlinkSync(p)}catch(e){if(e.code!=='ENOENT')throw e}`]); }
       catch (error) { cleanupErrors.push(`pressure cleanup: ${cleanError(error)}`); }
     }
     if (composeStarted) {

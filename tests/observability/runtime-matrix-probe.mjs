@@ -172,7 +172,7 @@ function parse(body){const families=new Map();for(const line of body.split('\\n'
 }return families;}
 let output;
 try{
-  const [live,ready,metrics,unknown]=await Promise.all([get('/health/live'),get('/health/ready'),get('/metrics',true),get('/__issue64_runtime_matrix_unknown__')]);
+  const [live,ready,metrics,unknown]=await Promise.all([get('/health/live'),get('/health/ready'),get('/metrics',true),get('/__runtime_health_unknown__')]);
   const families=parse(metrics.body),expected=[...matrix.common,...(matrix.owned[matrix.role]??[])];
   for(const name of expected)if(!families.has(name))throw new Error('expected metric family missing');
   for(const name of families.keys()){const owners=matrix.ownerByFamily[name];if(owners&&!owners.includes(matrix.role))throw new Error('foreign owner family');}
