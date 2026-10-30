@@ -5,10 +5,10 @@ import { load as parseYaml } from "js-yaml";
 const alphabet = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
 const owners = ["customer", "catalog", "pricing", "orders", "integration"];
 const sha = (value) => createHash("sha256").update(value).digest("hex");
-const G17_ADMIN_QUERY_TIMEOUT_MS = 25_000;
-const G17_ADMIN_LOCK_TIMEOUT_MS = 5_000;
+const RECOVERY_ADMIN_QUERY_TIMEOUT_MS = 25_000;
+const RECOVERY_ADMIN_LOCK_TIMEOUT_MS = 5_000;
 
-function g17Ref(prefix, seed) {
+function recoveryFixtureRef(prefix, seed) {
   const bytes = createHash("sha256").update(seed).digest();
   let value = BigInt(`0x${bytes.subarray(0, 16).toString("hex")}`);
   let suffix = "";
@@ -40,7 +40,7 @@ function waitFor(ms, signal) {
   });
 }
 
-export function verifyG17UnknownOutcomeTrace(trace, oldOperationRef) {
+export function verifyRecoveryUnknownOutcomeTrace(trace, oldOperationRef) {
   requireProof(
     Array.isArray(trace) && trace[0]?.kind === "GET",
     "G17_UNKNOWN_OUTCOME_RECOVERY_NOT_GET_FIRST",
@@ -85,7 +85,7 @@ async function openDatabase(factory, options, signal) {
   return database;
 }
 
-export async function openG17AdminClient({
+export async function openRecoveryAdminClient({
   host,
   port,
   database,
@@ -103,9 +103,9 @@ export async function openG17AdminClient({
     password,
     ssl: false,
     connectionTimeoutMillis: 3_000,
-    query_timeout: G17_ADMIN_QUERY_TIMEOUT_MS,
-    statement_timeout: G17_ADMIN_QUERY_TIMEOUT_MS,
-    lock_timeout: G17_ADMIN_LOCK_TIMEOUT_MS,
+    query_timeout: RECOVERY_ADMIN_QUERY_TIMEOUT_MS,
+    statement_timeout: RECOVERY_ADMIN_QUERY_TIMEOUT_MS,
+    lock_timeout: RECOVERY_ADMIN_LOCK_TIMEOUT_MS,
   });
   const abortClient = () => {
     Promise.resolve(client.end()).catch(() => {});
@@ -124,10 +124,10 @@ export async function openG17AdminClient({
 }
 
 async function openAdminClient(host, port, database, password, signal) {
-  return openG17AdminClient({ host, port, database, password, signal });
+  return openRecoveryAdminClient({ host, port, database, password, signal });
 }
 
-export function queryG17InboxByMessageIds(client, messageIds) {
+export function queryRecoveryInboxByMessageIds(client, messageIds) {
   requireProof(
     Array.isArray(messageIds) &&
       messageIds.length > 0 &&
@@ -234,14 +234,17 @@ async function seedConfirmedContribution({
 }) {
   const { canonicalRequestHash } =
     await import("../../../../packages/platform-idempotency/dist/index.js");
-  const orderRef = g17Ref(
+  const orderRef = recoveryFixtureRef(
     "ord",
     suffix === "primary" ? `${runId}:orders` : `${runId}:orders:${suffix}`,
   );
-  const customerRef = g17Ref("cus", `${runId}:${suffix}`);
-  const itemRef = g17Ref("itm", `${runId}:items:${suffix}`);
-  const quoteRef = g17Ref("prq", `${runId}:quotes:${suffix}`);
-  const policyVersionRef = g17Ref("pvr", `${runId}:policy:${suffix}`);
+  const customerRef = recoveryFixtureRef("cus", `${runId}:${suffix}`);
+  const itemRef = recoveryFixtureRef("itm", `${runId}:items:${suffix}`);
+  const quoteRef = recoveryFixtureRef("prq", `${runId}:quotes:${suffix}`);
+  const policyVersionRef = recoveryFixtureRef(
+    "pvr",
+    `${runId}:policy:${suffix}`,
+  );
   const itemHash = canonicalRequestHash({ itemRef });
   await admin.query(
     `INSERT INTO orders.orders(order_ref,status,version,projection_version,customer_ref,customer_version,
@@ -287,7 +290,7 @@ async function seedConfirmedContribution({
 }
 
 async function seedDraftOutboxAggregate({ admin, runId, customerRef }) {
-  const orderRef = g17Ref("ord", `${runId}:outbox-aggregate`);
+  const orderRef = recoveryFixtureRef("ord", `${runId}:outbox-aggregate`);
   await admin.query(
     `INSERT INTO orders.orders(order_ref,status,version,projection_version,customer_ref,customer_version,
       customer_display_name,customer_state,customer_state_proof_hash,currency,created_by_actor_ref,last_modified_by_actor_ref)
@@ -297,7 +300,7 @@ async function seedDraftOutboxAggregate({ admin, runId, customerRef }) {
   return orderRef;
 }
 
-async function expectedG17DesiredPlan(
+async function expectedRecoveryDesiredPlan(
   runId,
   { offerRef, productRef, variantRef },
 ) {
@@ -306,11 +309,11 @@ async function expectedG17DesiredPlan(
   const { buildDesired } =
     await import("../../../../apps/orders-aroma-preparation/dist/domain/desired.js");
   const contributions = ["primary", "secondary"].map((suffix) => {
-    const orderRef = g17Ref(
+    const orderRef = recoveryFixtureRef(
       "ord",
       suffix === "primary" ? `${runId}:orders` : `${runId}:orders:${suffix}`,
     );
-    const itemRef = g17Ref("itm", `${runId}:items:${suffix}`);
+    const itemRef = recoveryFixtureRef("itm", `${runId}:items:${suffix}`);
     const contributionHash = canonicalRequestHash({ itemRef });
     return {
       order: {
@@ -438,9 +441,9 @@ async function orderFixture({ database, runId, signal }) {
       "G17_SOURCE_FIXTURE_TARGET_NOT_EMPTY",
     );
 
-    const offerRef = g17Ref("off", `${runId}:offer`);
-    const productRef = g17Ref("prd", `${runId}:product`);
-    const variantRef = g17Ref("var", `${runId}:variant`);
+    const offerRef = recoveryFixtureRef("off", `${runId}:offer`);
+    const productRef = recoveryFixtureRef("prd", `${runId}:product`);
+    const variantRef = recoveryFixtureRef("var", `${runId}:variant`);
     const now = new Date().toISOString();
     await admin.query(
       `INSERT INTO orders.catalog_mapping_projection(product_ref,variant_ref,offer_ref,mapping_revision,
@@ -563,7 +566,7 @@ async function orderFixture({ database, runId, signal }) {
     const currentDesired = await admin.query(
       "SELECT desired_revision::text AS revision,desired_hash FROM orders.cart_desired_revisions WHERE state='Current'",
     );
-    const expectedPlan = await expectedG17DesiredPlan(runId, {
+    const expectedPlan = await expectedRecoveryDesiredPlan(runId, {
       offerRef,
       productRef,
       variantRef,
@@ -591,7 +594,10 @@ async function orderFixture({ database, runId, signal }) {
         beforeTrace[1] === "MUTATION",
       "G17_SOURCE_UNKNOWN_OUTCOME_FIXTURE_FAILED",
     );
-    const interruptedAttempt = g17Ref("att", `${runId}:unfinished-attempt`);
+    const interruptedAttempt = recoveryFixtureRef(
+      "att",
+      `${runId}:unfinished-attempt`,
+    );
     await admin.query(
       `INSERT INTO orders.convergence_attempts(attempt_ref,cart_scope_ref,desired_revision,desired_hash,
       owner_instance_id,fence_epoch,state) VALUES($1,'aroma-primary',2,$2,$3::uuid,999,'Started')`,
@@ -602,7 +608,7 @@ async function orderFixture({ database, runId, signal }) {
       schema: "orders",
       consumerName: "g17-backup-restore-v1",
     });
-    const inboxId = g17Ref("msg", `${runId}:inbox`);
+    const inboxId = recoveryFixtureRef("msg", `${runId}:inbox`);
     const inboxPayload = { fixture: "g17", runId };
     const inboxMessage = {
       messageId: inboxId,
@@ -616,7 +622,7 @@ async function orderFixture({ database, runId, signal }) {
     ).canonicalRequestHash(inboxPayload);
     inboxMessage.payloadHash = inboxHash;
     const processed = {
-      messageId: g17Ref("msg", `${runId}:inbox-completed`),
+      messageId: recoveryFixtureRef("msg", `${runId}:inbox-completed`),
       messageType: "G17Fixture.v1",
       receivedAt: now,
       payloadHash: inboxHash,
@@ -696,7 +702,7 @@ async function orderFixture({ database, runId, signal }) {
       [outboxOrderRef],
     );
     const outboxMessages = ["completed", "pending"].map((state, index) => {
-      const messageId = g17Ref("msg", `${runId}:outbox:${state}`);
+      const messageId = recoveryFixtureRef("msg", `${runId}:outbox:${state}`);
       const messageType = `G17BackupRestore${state === "completed" ? "Completed" : "Pending"}.v1`;
       const aggregateSequence =
         BigInt(previousSequence.rows[0].sequence) + BigInt(index) + 1n;
@@ -828,10 +834,10 @@ async function gatewayFixture({ database, runId, signal }) {
     );
     const journal = new ProviderMutationJournalStore(db);
     const request = {
-      operationRef: g17Ref("op", `${runId}:gateway-operation`),
+      operationRef: recoveryFixtureRef("op", `${runId}:gateway-operation`),
       cartScopeRef: "aroma-primary",
       operationKind: "SetLineQuantity",
-      offerRef: g17Ref("off", `${runId}:gateway-offer`),
+      offerRef: recoveryFixtureRef("off", `${runId}:gateway-offer`),
       quantityMilli: "1000",
     };
     const delegation = {
@@ -864,7 +870,7 @@ async function gatewayFixture({ database, runId, signal }) {
 }
 
 /** Explicit pre-snapshot operation; never call this from the backup/restore gate. */
-export async function prepareG17RecoveryFixtures({
+export async function prepareRecoveryFixtures({
   target,
   password,
   runtimeCredentials,
@@ -943,7 +949,7 @@ export async function prepareG17RecoveryFixtures({
 }
 
 /** Read-only pre-dump check for fixtures created by the separate setup operation. */
-export async function inspectG17RecoveryFixtures({
+export async function inspectRecoveryFixtures({
   target,
   password,
   runtimeCredentials,
@@ -975,15 +981,15 @@ export async function inspectG17RecoveryFixtures({
   );
   let orderFacts;
   try {
-    const orderRef = g17Ref("ord", `${runId}:orders`);
-    const offerRef = g17Ref("off", `${runId}:offer`);
-    const productRef = g17Ref("prd", `${runId}:product`);
-    const variantRef = g17Ref("var", `${runId}:variant`);
+    const orderRef = recoveryFixtureRef("ord", `${runId}:orders`);
+    const offerRef = recoveryFixtureRef("off", `${runId}:offer`);
+    const productRef = recoveryFixtureRef("prd", `${runId}:product`);
+    const variantRef = recoveryFixtureRef("var", `${runId}:variant`);
     const desired = await ordersAdmin.query(
       `SELECT desired_revision, state, desired_hash FROM orders.cart_desired_revisions
        WHERE cart_scope_ref='aroma-primary' AND desired_revision IN (1,2) ORDER BY desired_revision`,
     );
-    const expectedPlan = await expectedG17DesiredPlan(runId, {
+    const expectedPlan = await expectedRecoveryDesiredPlan(runId, {
       offerRef,
       productRef,
       variantRef,
@@ -999,7 +1005,7 @@ export async function inspectG17RecoveryFixtures({
     );
     const exactOrder = await ordersAdmin.query(
       "SELECT count(*)::int AS count FROM orders.orders WHERE order_ref = ANY($1::varchar(30)[])",
-      [[orderRef, g17Ref("ord", `${runId}:orders:secondary`)]],
+      [[orderRef, recoveryFixtureRef("ord", `${runId}:orders:secondary`)]],
     );
     const exactMapping = await ordersAdmin.query(
       `SELECT count(*)::int AS count FROM orders.catalog_mapping_projection
@@ -1022,7 +1028,10 @@ export async function inspectG17RecoveryFixtures({
       `SELECT count(*)::int AS count FROM orders.convergence_attempts
        WHERE state='NoOpInSync' AND cart_scope_ref='aroma-primary'`,
     );
-    const interruptedAttempt = g17Ref("att", `${runId}:unfinished-attempt`);
+    const interruptedAttempt = recoveryFixtureRef(
+      "att",
+      `${runId}:unfinished-attempt`,
+    );
     const unfinished = await ordersAdmin.query(
       "SELECT state FROM orders.convergence_attempts WHERE attempt_ref=$1",
       [interruptedAttempt],
@@ -1043,15 +1052,17 @@ export async function inspectG17RecoveryFixtures({
         unknown.rows[0]?.desired_milli === "2000",
       "G17_RECOVERY_FIXTURE_ATTEMPTS_MISSING",
     );
-    const inbox = await queryG17InboxByMessageIds(ordersAdmin, [
-      g17Ref("msg", `${runId}:inbox`),
-      g17Ref("msg", `${runId}:inbox-completed`),
+    const inbox = await queryRecoveryInboxByMessageIds(ordersAdmin, [
+      recoveryFixtureRef("msg", `${runId}:inbox`),
+      recoveryFixtureRef("msg", `${runId}:inbox-completed`),
     ]);
     const inboxById = new Map(inbox.rows.map((row) => [row.message_id, row]));
     const completedInbox = inboxById.get(
-      g17Ref("msg", `${runId}:inbox-completed`),
+      recoveryFixtureRef("msg", `${runId}:inbox-completed`),
     );
-    const pendingInbox = inboxById.get(g17Ref("msg", `${runId}:inbox`));
+    const pendingInbox = inboxById.get(
+      recoveryFixtureRef("msg", `${runId}:inbox`),
+    );
     requireProof(
       completedInbox?.state === "Processed" &&
         pendingInbox?.state === "Processing" &&
@@ -1062,16 +1073,22 @@ export async function inspectG17RecoveryFixtures({
       `SELECT message_id,state FROM orders.outbox_messages WHERE message_id = ANY($1::text[])`,
       [
         [
-          g17Ref("msg", `${runId}:outbox:completed`),
-          g17Ref("msg", `${runId}:outbox:pending`),
+          recoveryFixtureRef("msg", `${runId}:outbox:completed`),
+          recoveryFixtureRef("msg", `${runId}:outbox:pending`),
         ],
       ],
     );
     const outboxById = new Map(
       outbox.rows.map((row) => [row.message_id, row.state]),
     );
-    const completedOutboxId = g17Ref("msg", `${runId}:outbox:completed`);
-    const pendingOutboxId = g17Ref("msg", `${runId}:outbox:pending`);
+    const completedOutboxId = recoveryFixtureRef(
+      "msg",
+      `${runId}:outbox:completed`,
+    );
+    const pendingOutboxId = recoveryFixtureRef(
+      "msg",
+      `${runId}:outbox:pending`,
+    );
     requireProof(
       outboxById.get(completedOutboxId) === "Published" &&
         outboxById.get(pendingOutboxId) === "Pending" &&
@@ -1121,7 +1138,7 @@ export async function inspectG17RecoveryFixtures({
     const { ProviderMutationJournalStore } =
       await import("../../../../apps/aroma-gateway/dist/infrastructure/database/provider-mutation-journal.js");
     const journal = new ProviderMutationJournalStore(integration);
-    const operationRef = g17Ref("op", `${runId}:gateway-operation`);
+    const operationRef = recoveryFixtureRef("op", `${runId}:gateway-operation`);
     const record = await journal.get(operationRef, signal);
     requireProof(
       record?.state === "UnknownOutcome" &&
@@ -1163,7 +1180,7 @@ export async function inspectG17RecoveryFixtures({
   }
 }
 
-export async function proveG17RecoveryAfterRestore({
+export async function proveRecoveryAfterRestore({
   target,
   password,
   runtimeCredentials,
@@ -1295,7 +1312,7 @@ export async function proveG17RecoveryAfterRestore({
       WHERE r.operation_ref=$1`,
       [fixtures.orders.operationRef],
     );
-    const traceProof = verifyG17UnknownOutcomeTrace(
+    const traceProof = verifyRecoveryUnknownOutcomeTrace(
       trace,
       fixtures.orders.operationRef,
     );

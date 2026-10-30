@@ -18,10 +18,10 @@ import { isDeepStrictEqual } from "node:util";
 import { loadPlatformConfig } from "../../../../scripts/config-lib.mjs";
 import {
   fixtureConfigText,
-  validateG15FixtureGitLineage,
-  validateG15FixtureLineage,
+  validateBrowserFixtureGitLineage,
+  validateBrowserFixtureLineage,
 } from "../../../../tools/config-bootstrap/browser-fixture.mjs";
-import { validateG15BrowserRuntimeArtifact } from "../../../../tools/g15-browser-proof.mjs";
+import { validateBrowserRuntimeArtifact } from "../../../../tools/browser-proof.mjs";
 import { validateLaunchContext } from "../report.mjs";
 import { inspectLaunchCheckout, runManagedRollbackChild } from "./rollback.mjs";
 
@@ -70,14 +70,14 @@ const CHILD_KEYS = Object.freeze([
   "githubSnapshotPath",
   "resources",
 ]);
-const G15_FAILURE_ERROR_NAMES = new Set([
+const BROWSER_FAILURE_ERROR_NAMES = new Set([
   "Error",
   "AssertionError",
   "AggregateError",
   "TypeError",
   "RangeError",
 ]);
-const G15_FAILURE_SIGNALS = new Set([
+const BROWSER_FAILURE_SIGNALS = new Set([
   "SIGABRT",
   "SIGINT",
   "SIGKILL",
@@ -85,21 +85,21 @@ const G15_FAILURE_SIGNALS = new Set([
   "SIGTERM",
   "SIGHUP",
 ]);
-const G15_OPERATION_FAILURE_CLASSES = new Set([
+const BROWSER_OPERATION_FAILURE_CLASSES = new Set([
   "timeout",
   "nonzero-exit",
   "signal",
   "spawn-error",
   "operation-error",
 ]);
-const G15_CONTAINER_SNAPSHOT_STATUSES = new Set([
+const BROWSER_CONTAINER_SNAPSHOT_STATUSES = new Set([
   "captured",
   "partial",
   "unavailable",
   "invalid-input",
   "limit-exceeded",
 ]);
-const G15_CONTAINER_SERVICES = new Set([
+const BROWSER_CONTAINER_SERVICES = new Set([
   "web",
   "edge-gateway",
   "api-public",
@@ -121,7 +121,7 @@ const G15_CONTAINER_SERVICES = new Set([
   "postgres-proof",
   "unknown",
 ]);
-const G15_CONTAINER_STATES = new Set([
+const BROWSER_CONTAINER_STATES = new Set([
   "created",
   "dead",
   "exited",
@@ -131,8 +131,8 @@ const G15_CONTAINER_STATES = new Set([
   "running",
   "unknown",
 ]);
-const G15_CONTAINER_HEALTH = new Set(["healthy", "starting", "unhealthy"]);
-const G15_CONTAINER_LIMIT = 32;
+const BROWSER_CONTAINER_HEALTH = new Set(["healthy", "starting", "unhealthy"]);
+const BROWSER_CONTAINER_LIMIT = 32;
 
 function fail(code) {
   throw Object.assign(new Error(code), { code });
@@ -325,7 +325,7 @@ function failureSourceLocationIsValid(value) {
   );
 }
 
-function g15OperationDiagnosticIsValid(value) {
+function browserOperationDiagnosticIsValid(value) {
   if (
     !exactKeys(value, [
       "operation",
@@ -336,17 +336,17 @@ function g15OperationDiagnosticIsValid(value) {
       "containerSnapshot",
     ]) ||
     value.operation !== "runtime-stack-up" ||
-    !G15_OPERATION_FAILURE_CLASSES.has(value.failureClass) ||
+    !BROWSER_OPERATION_FAILURE_CLASSES.has(value.failureClass) ||
     (value.exitCode !== null &&
       (!Number.isSafeInteger(value.exitCode) ||
         value.exitCode < 0 ||
         value.exitCode > 255)) ||
-    (value.signal !== null && !G15_FAILURE_SIGNALS.has(value.signal)) ||
+    (value.signal !== null && !BROWSER_FAILURE_SIGNALS.has(value.signal)) ||
     typeof value.timedOut !== "boolean" ||
     !exactKeys(value.containerSnapshot, ["status", "containers"]) ||
-    !G15_CONTAINER_SNAPSHOT_STATUSES.has(value.containerSnapshot.status) ||
+    !BROWSER_CONTAINER_SNAPSHOT_STATUSES.has(value.containerSnapshot.status) ||
     !Array.isArray(value.containerSnapshot.containers) ||
-    value.containerSnapshot.containers.length > G15_CONTAINER_LIMIT
+    value.containerSnapshot.containers.length > BROWSER_CONTAINER_LIMIT
   )
     return false;
   return value.containerSnapshot.containers.every(
@@ -358,10 +358,10 @@ function g15OperationDiagnosticIsValid(value) {
         "exitCode",
         "oomKilled",
       ]) &&
-      G15_CONTAINER_SERVICES.has(container.service) &&
-      G15_CONTAINER_STATES.has(container.state) &&
+      BROWSER_CONTAINER_SERVICES.has(container.service) &&
+      BROWSER_CONTAINER_STATES.has(container.state) &&
       (container.health === null ||
-        G15_CONTAINER_HEALTH.has(container.health)) &&
+        BROWSER_CONTAINER_HEALTH.has(container.health)) &&
       (container.exitCode === null ||
         (Number.isSafeInteger(container.exitCode) &&
           container.exitCode >= 0 &&
@@ -370,7 +370,7 @@ function g15OperationDiagnosticIsValid(value) {
   );
 }
 
-export function validateG15BrowserChildFailureDiagnostic(
+export function validateBrowserChildFailureDiagnostic(
   diagnostic,
   { runId, candidateSha },
 ) {
@@ -394,18 +394,18 @@ export function validateG15BrowserChildFailureDiagnostic(
     diagnostic.outcome !== "FAIL" ||
     diagnostic.runId !== runId ||
     diagnostic.candidateSha !== candidateSha ||
-    !G15_FAILURE_ERROR_NAMES.has(diagnostic.errorName) ||
+    !BROWSER_FAILURE_ERROR_NAMES.has(diagnostic.errorName) ||
     !/^[0-9a-f]{64}$/u.test(diagnostic.messageSha256 ?? "") ||
     (Object.hasOwn(diagnostic ?? {}, "sourceLocation") &&
       !failureSourceLocationIsValid(diagnostic.sourceLocation)) ||
     (Object.hasOwn(diagnostic ?? {}, "operationDiagnostic") &&
-      !g15OperationDiagnosticIsValid(diagnostic.operationDiagnostic))
+      !browserOperationDiagnosticIsValid(diagnostic.operationDiagnostic))
   )
     fail("G15_CHILD_FAILURE_DIAGNOSTIC_INVALID");
   return true;
 }
 
-export async function persistG15BrowserFailureFromChild({
+export async function persistBrowserFailureFromChild({
   error,
   parentContext,
   childContext,
@@ -415,7 +415,7 @@ export async function persistG15BrowserFailureFromChild({
   if (
     processResult?.joined !== true ||
     (processResult.signal !== null &&
-      !G15_FAILURE_SIGNALS.has(processResult.signal)) ||
+      !BROWSER_FAILURE_SIGNALS.has(processResult.signal)) ||
     (processResult.signal === null &&
       (!Number.isSafeInteger(processResult.code) ||
         processResult.code <= 0 ||
@@ -425,7 +425,7 @@ export async function persistG15BrowserFailureFromChild({
   let diagnostic;
   try {
     diagnostic = lastJsonLine(processResult.stdout ?? "");
-    validateG15BrowserChildFailureDiagnostic(diagnostic, {
+    validateBrowserChildFailureDiagnostic(diagnostic, {
       runId: childContext.runId,
       candidateSha: childContext.candidateSha,
     });
@@ -472,7 +472,7 @@ export async function persistG15BrowserFailureFromChild({
   return { path, sha256: sha256(bytes) };
 }
 
-export function validateG15BrowserFailureReceipt(
+export function validateBrowserFailureReceipt(
   receipt,
   { parentContext, childContext },
 ) {
@@ -500,18 +500,18 @@ export function validateG15BrowserFailureReceipt(
     receipt.parentCandidateSha !== parentContext.candidateSha ||
     receipt.childRunId !== childContext.runId ||
     receipt.childCandidateSha !== childContext.candidateSha ||
-    !G15_FAILURE_ERROR_NAMES.has(receipt.errorName) ||
+    !BROWSER_FAILURE_ERROR_NAMES.has(receipt.errorName) ||
     !SHA256.test(receipt.messageSha256 ?? "") ||
     (Object.hasOwn(receipt, "sourceLocation") &&
       !failureSourceLocationIsValid(receipt.sourceLocation)) ||
     (Object.hasOwn(receipt, "operationDiagnostic") &&
-      !g15OperationDiagnosticIsValid(receipt.operationDiagnostic))
+      !browserOperationDiagnosticIsValid(receipt.operationDiagnostic))
   )
     fail("G15_BROWSER_FAILURE_RECEIPT_INVALID");
   return true;
 }
 
-export function validateG15BrowserChildContext(
+export function validateBrowserChildContext(
   childContext,
   parentContext,
   parentCandidateRoot,
@@ -548,7 +548,7 @@ export function validateG15BrowserChildContext(
     fail("G15_CHILD_CONTEXT_INVALID");
 }
 
-export function validateG15BrowserChildProcess(
+export function validateBrowserChildProcess(
   processResult,
   childContext,
   childRuntime,
@@ -585,7 +585,7 @@ export function validateG15BrowserChildProcess(
   return callbackProof;
 }
 
-export async function verifyG15BrowserChildBundle({
+export async function verifyBrowserChildBundle({
   bundlePath,
   baseCandidateSha,
   childContext,
@@ -653,7 +653,7 @@ export async function verifyG15BrowserChildBundle({
       "G15_BUNDLE_CHECKOUT_FAILED",
       { stdio: "ignore", timeout: 60_000 },
     );
-    const checked = await validateG15FixtureGitLineage({
+    const checked = await validateBrowserFixtureGitLineage({
       candidateRoot: checkoutRoot,
       baseCandidateSha,
       candidateSha: childContext.candidateSha,
@@ -685,7 +685,7 @@ export async function verifyG15BrowserChildBundle({
   }
 }
 
-export async function prepareG15BrowserChildCheckout(childRoot) {
+export async function prepareBrowserChildCheckout(childRoot) {
   const canonicalRoot = resolve(childRoot);
   const rootInfo = await lstat(canonicalRoot).catch(() => null);
   if (
@@ -761,7 +761,7 @@ export async function prepareG15BrowserChildCheckout(childRoot) {
   }
 }
 
-export async function validateG15BrowserParentRuntime({
+export async function validateBrowserParentRuntime({
   evidenceDir,
   parentContext,
   stdoutReceipt,
@@ -820,11 +820,7 @@ export async function validateG15BrowserParentRuntime({
   );
   const childContext = JSON.parse(childContextBytes.toString("utf8"));
   const parentCheckoutRoot = resolve(parentContext.checkoutDir);
-  validateG15BrowserChildContext(
-    childContext,
-    parentContext,
-    parentCheckoutRoot,
-  );
+  validateBrowserChildContext(childContext, parentContext, parentCheckoutRoot);
   if (
     child.runId !== childContext.runId ||
     child.candidateSha !== childContext.candidateSha ||
@@ -877,13 +873,13 @@ export async function validateG15BrowserParentRuntime({
     child.childConfigSha256Artifact !== sha256(childConfigBytes)
   )
     fail("G15_CHILD_ARTIFACT_HASH_MISMATCH");
-  validateG15BrowserRuntimeArtifact(childRuntime, {
+  validateBrowserRuntimeArtifact(childRuntime, {
     runId: childContext.runId,
     candidateSha: childContext.candidateSha,
     baseConfigSha256: childContext.baseConfigSha256,
     lineage,
   });
-  const callbackProof = validateG15BrowserChildProcess(
+  const callbackProof = validateBrowserChildProcess(
     child.process,
     childContext,
     childRuntime,
@@ -904,7 +900,7 @@ export async function validateG15BrowserParentRuntime({
     })
   )
     fail("G15_PARENT_OUTPUT_MISMATCH");
-  const verifiedLineage = await verifyG15BrowserChildBundle({
+  const verifiedLineage = await verifyBrowserChildBundle({
     bundlePath,
     baseCandidateSha: parent.candidateSha,
     childContext,
@@ -921,7 +917,7 @@ export async function validateG15BrowserParentRuntime({
   };
 }
 
-export async function runG15BrowserParent() {
+export async function runBrowserParent() {
   const contextPath = process.env.COFFEE_LAUNCH_CONTEXT_FILE;
   if (!contextPath) fail("G15_LAUNCH_CONTEXT_REQUIRED");
   const launch = await validateLaunchContext(contextPath);
@@ -1015,7 +1011,7 @@ export async function runG15BrowserParent() {
       childInfo.parents[0] !== parentContext.candidateSha
     )
       fail("G15_CHILD_PARENT_INVALID");
-    await prepareG15BrowserChildCheckout(childRoot);
+    await prepareBrowserChildCheckout(childRoot);
     await inspectLaunchCheckout(childRoot, childSha);
     childRunId = newChildRunId(childSha);
     childEvidenceDir = await ensureChildEvidenceDirectory(
@@ -1034,7 +1030,7 @@ export async function runG15BrowserParent() {
     });
     childContext = contextRecord.context;
     await validateLaunchContext(contextRecord.path);
-    const lineage = await validateG15FixtureLineage({
+    const lineage = await validateBrowserFixtureLineage({
       root: candidateRoot,
       contextPath: contextRecord.path,
       baseCandidateSha: parentContext.candidateSha,
@@ -1086,13 +1082,13 @@ export async function runG15BrowserParent() {
       fail("G15_CHILD_RUNTIME_ARTIFACT_INVALID");
     const childRuntimeBytes = await readFile(childRuntimePath);
     const childRuntime = JSON.parse(childRuntimeBytes.toString("utf8"));
-    validateG15BrowserRuntimeArtifact(childRuntime, {
+    validateBrowserRuntimeArtifact(childRuntime, {
       runId: childContext.runId,
       candidateSha: childContext.candidateSha,
       baseConfigSha256: childContext.baseConfigSha256,
       lineage: lineage,
     });
-    const callbackProof = validateG15BrowserChildProcess(
+    const callbackProof = validateBrowserChildProcess(
       {
         exitCode: childProcessResult.code,
         signal: childProcessResult.signal,
@@ -1189,7 +1185,7 @@ export async function runG15BrowserParent() {
         evidenceRemoved: true,
       },
     };
-    const admitted = await validateG15BrowserParentRuntime({
+    const admitted = await validateBrowserParentRuntime({
       evidenceDir,
       parentContext,
       stdoutReceipt: runnerReceipt,
@@ -1200,7 +1196,7 @@ export async function runG15BrowserParent() {
     // Retain an uncertain child checkout and its evidence as a failure witness.
     if (childContext && childRunId && childSha) {
       try {
-        await persistG15BrowserFailureFromChild({
+        await persistBrowserFailureFromChild({
           error,
           parentContext,
           childContext,
@@ -1219,7 +1215,7 @@ if (
   resolve(process.argv[1]) === fileURLToPath(import.meta.url)
 ) {
   try {
-    const receipt = await runG15BrowserParent();
+    const receipt = await runBrowserParent();
     console.log(JSON.stringify(receipt));
   } catch (error) {
     console.error(error instanceof Error ? error.message : "G15_PARENT_FAILED");

@@ -372,7 +372,7 @@ void test(
     const settings = config.services["orders-service"];
     const receiptPath = join(
       process.env.TMPDIR ?? tmpdir(),
-      `issue12-owner-peak-${process.pid}.json`,
+      `realtime-owner-peak-${process.pid}.json`,
     );
     const receipt = {
       scope:

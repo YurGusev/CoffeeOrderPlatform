@@ -33,11 +33,11 @@ import {
 } from "../../packages/platform-config/src/index.ts";
 import { isExpectedMissingDockerInspect } from "../../verification/launch/v1/scenarios/aroma-sandbox-resources.mjs";
 import {
-  buildG08MigrationPlan,
-  cleanupG08Databases,
-  createG08Database,
+  buildMigrationPlan,
+  cleanupMigrationDatabases,
+  createMigrationDatabase,
 } from "../../verification/launch/v1/scenarios/migrations.mjs";
-import { validateG08PreparationArtifact } from "../../tools/config-bootstrap/index.mjs";
+import { validateMigrationPreparationArtifact } from "../../tools/config-bootstrap/index.mjs";
 
 const ROOT = resolve(fileURLToPath(new URL("../..", import.meta.url)));
 const OWNERSHIP_PATH = join(ROOT, "config/database-ownership.json");
@@ -343,7 +343,7 @@ void test("G08 derives only the five run databases and validates its exact prepa
     candidateSha: "abcdef0123456789abcdef0123456789abcdef01",
     baseConfigSha256: "a".repeat(64),
   };
-  const { owners } = buildG08MigrationPlan({
+  const { owners } = buildMigrationPlan({
     launchIdentity: context,
     ownership,
     roleMap,
@@ -395,12 +395,12 @@ void test("G08 derives only the five run databases and validates its exact prepa
     preparation: prep,
   };
   assert.equal(
-    validateG08PreparationArtifact(artifact, context, "c".repeat(64)),
+    validateMigrationPreparationArtifact(artifact, context, "c".repeat(64)),
     prep,
   );
   assert.throws(
     () =>
-      validateG08PreparationArtifact(
+      validateMigrationPreparationArtifact(
         artifact,
         { ...context, runId: "wrong" },
         "c".repeat(64),
@@ -408,12 +408,13 @@ void test("G08 derives only the five run databases and validates its exact prepa
     /CONFIG-G08-PREPARATION/u,
   );
   assert.throws(
-    () => validateG08PreparationArtifact(artifact, context, "d".repeat(64)),
+    () =>
+      validateMigrationPreparationArtifact(artifact, context, "d".repeat(64)),
     /CONFIG-G08-PREPARATION/u,
   );
   assert.throws(
     () =>
-      buildG08MigrationPlan({
+      buildMigrationPlan({
         launchIdentity: context,
         ownership: { ...ownership, databases: ownership.databases.slice(1) },
         roleMap,
@@ -431,7 +432,7 @@ void test("G08 retains a late CREATE after an initial absent inspection", async 
   let databaseExists = false;
   let dropCalls = 0;
   await assert.rejects(
-    createG08Database(
+    createMigrationDatabase(
       database,
       resources,
       async () => {
@@ -449,9 +450,12 @@ void test("G08 retains a late CREATE after an initial absent inspection", async 
   assert.equal(resources[0].state, "ambiguous");
   assert.deepEqual(resources[0].inspection, { exists: false });
 
-  const cleanupReceipt = await cleanupG08Databases(resources, async () => {
-    dropCalls += 1;
-  });
+  const cleanupReceipt = await cleanupMigrationDatabases(
+    resources,
+    async () => {
+      dropCalls += 1;
+    },
+  );
   assert.deepEqual(cleanupReceipt, {
     verified: false,
     removed: [],
@@ -460,14 +464,14 @@ void test("G08 retains a late CREATE after an initial absent inspection", async 
   assert.equal(dropCalls, 0);
 
   const acknowledged = [];
-  await createG08Database(
+  await createMigrationDatabase(
     database,
     acknowledged,
     async () => {},
     async () => {},
   );
   assert.equal(acknowledged[0].state, "created-acknowledged");
-  const acknowledgedCleanup = await cleanupG08Databases(
+  const acknowledgedCleanup = await cleanupMigrationDatabases(
     acknowledged,
     async () => {
       dropCalls += 1;

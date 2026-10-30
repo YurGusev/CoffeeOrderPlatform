@@ -34,7 +34,7 @@ const OWNERS = Object.freeze({
   integration: { current: 7, prefix: 7 },
 });
 const DENIED_DATABASES = new Set(["coffeeorderdb", "coffeeorder_staging"]);
-const G08_FAILURE = Symbol("G08 migration failure");
+const MIGRATION_FAILURE = Symbol("G08 migration failure");
 const OWNER_PHASES = new Set([
   "callerprefix",
   "seed",
@@ -55,14 +55,14 @@ const ROLE_ATTRIBUTES = Object.freeze({
 
 function fail(code, message = code) {
   const error = new Error(`G08_MIGRATIONS ${code}: ${message}`);
-  error[G08_FAILURE] = true;
+  error[MIGRATION_FAILURE] = true;
   throw error;
 }
 
 export function formatOwnerStageFailure(owner, phase, error) {
   if (!Object.hasOwn(OWNERS, owner) || !OWNER_PHASES.has(phase))
     throw new TypeError("Invalid G08 owner stage");
-  if (error?.[G08_FAILURE]) return error;
+  if (error?.[MIGRATION_FAILURE]) return error;
   const sqlState = [error?.sqlState, error?.code].find(
     (candidate) =>
       typeof candidate === "string" && /^[0-9A-Z]{5}$/.test(candidate),
@@ -89,7 +89,7 @@ function canonicalRoles(ownership, roleMap) {
   ]);
 }
 
-export function buildG08MigrationPlan({ launchIdentity, ownership, roleMap }) {
+export function buildMigrationPlan({ launchIdentity, ownership, roleMap }) {
   const identity = validateLaunchDatabaseIdentity(launchIdentity);
   const projected = projectLaunchDatabaseTargets({
     ownership,
@@ -189,9 +189,9 @@ async function readPreparation(context, evidenceDir, root) {
   }
   const secretsPath = join(root, "secrets/platform.secrets.sops.yaml");
   const secretsBytes = await readFile(secretsPath);
-  const { validateG08PreparationArtifact } =
+  const { validateMigrationPreparationArtifact } =
     await import("../../../../tools/config-bootstrap/index.mjs");
-  const prep = validateG08PreparationArtifact(
+  const prep = validateMigrationPreparationArtifact(
     JSON.parse(bytes.toString("utf8")),
     context,
     hash(secretsBytes),
@@ -200,7 +200,7 @@ async function readPreparation(context, evidenceDir, root) {
   return { prep, sha256: hash(bytes), path };
 }
 
-export async function readG08ApprovedTarget(context, evidenceDir) {
+export async function readApprovedMigrationTarget(context, evidenceDir) {
   const path = join(
     evidenceDir,
     "gates/G08_MIGRATIONS/artifacts/approved-target.json",
@@ -243,7 +243,7 @@ export async function readG08ApprovedTarget(context, evidenceDir) {
       sha256: hash(bytes),
     };
   } catch (error) {
-    if (error?.[G08_FAILURE]) throw error;
+    if (error?.[MIGRATION_FAILURE]) throw error;
     fail("APPROVED_TARGET_INVALID");
   } finally {
     await file?.close();
@@ -1059,7 +1059,7 @@ async function assertOwnedRunDatabase(
     fail("RUN_DATABASE_OWNERSHIP_MISMATCH", database.owner);
 }
 
-export async function createG08Database(
+export async function createMigrationDatabase(
   database,
   resources,
   create,
@@ -1083,7 +1083,7 @@ export async function createG08Database(
   }
 }
 
-export async function cleanupG08Databases(resources, removeOwned) {
+export async function cleanupMigrationDatabases(resources, removeOwned) {
   const removed = [];
   const retained = [];
   for (const resource of [...resources].reverse()) {
@@ -1140,7 +1140,7 @@ async function setupDatabase(
   expectedSystemIdentifier,
 ) {
   await probeServerIdentity(config, credentials, expectedSystemIdentifier);
-  await createG08Database(
+  await createMigrationDatabase(
     database,
     resources,
     () =>
@@ -1200,7 +1200,7 @@ async function cleanup(
   credentials,
   expectedSystemIdentifier,
 ) {
-  return cleanupG08Databases(resources, async (database) => {
+  return cleanupMigrationDatabases(resources, async (database) => {
     await probeServerIdentity(config, credentials, expectedSystemIdentifier);
     await assertOwnedRunDatabase(
       admin,
@@ -1230,9 +1230,9 @@ function retainedResourceDetails(resources, retained) {
 }
 
 async function openAdmin({ root, contextPath, owner, prep, config }) {
-  const { readG08MigrationCredential } =
+  const { readMigrationCredential } =
     await import("../../../../tools/config-bootstrap/index.mjs");
-  const credential = await readG08MigrationCredential({
+  const credential = await readMigrationCredential({
     root,
     contextPath,
     owner,
@@ -1291,17 +1291,17 @@ async function runStage(
     candidateSha: context.candidateSha,
     baseConfigSha256: context.baseConfigSha256,
   };
-  const plan = buildG08MigrationPlan({ launchIdentity, ownership, roleMap });
+  const plan = buildMigrationPlan({ launchIdentity, ownership, roleMap });
   if (mode === "clean") {
-    const approved = await readG08ApprovedTarget(context, evidenceDir);
-    const { attestG08CanonicalPreparation } =
+    const approved = await readApprovedMigrationTarget(context, evidenceDir);
+    const { attestCanonicalMigrationPreparation } =
       await import("../../../../tools/config-bootstrap/index.mjs");
-    const proof = await attestG08CanonicalPreparation({
+    const proof = await attestCanonicalMigrationPreparation({
       root,
       contextPath,
       expectedSystemIdentifier: approved.systemIdentifier,
     });
-    const current = await readG08ApprovedTarget(context, evidenceDir);
+    const current = await readApprovedMigrationTarget(context, evidenceDir);
     if (JSON.stringify(approved) !== JSON.stringify(current))
       fail("APPROVED_TARGET_CHANGED");
     await writeFile(
@@ -1418,7 +1418,7 @@ async function runStage(
       const stage = sets.get(database.owner);
       const ownerCredential = await (
         await import("../../../../tools/config-bootstrap/index.mjs")
-      ).readG08MigrationCredential({
+      ).readMigrationCredential({
         root,
         contextPath,
         owner: database.owner,
@@ -1680,13 +1680,13 @@ async function runStage(
   return receipt;
 }
 
-export async function runG08MigrationStage(mode, options) {
+export async function runMigrationStage(mode, options) {
   if (mode !== "clean" && mode !== "forward")
     fail("USAGE", "expected clean|forward");
   return runStage(mode, options);
 }
 
-export async function runG09DatabaseBoundaryStage(options) {
+export async function runDatabaseBoundaryStage(options) {
   return runStage("boundaries", options);
 }
 
@@ -1695,7 +1695,7 @@ if (
   resolve(process.argv[1]) === fileURLToPath(import.meta.url)
 ) {
   try {
-    await runG08MigrationStage(process.argv[2]);
+    await runMigrationStage(process.argv[2]);
   } catch (error) {
     process.stderr.write(
       `${error.message.startsWith("G08_MIGRATIONS") ? error.message : "G08_MIGRATIONS FAILED"}\n`,

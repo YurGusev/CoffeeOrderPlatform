@@ -14,8 +14,8 @@ import { ProviderSessionManager } from "../apps/aroma-gateway/dist/infrastructur
 const { Client } = pg;
 const POSTGRES_IMAGE =
   "postgres:17.11-alpine@sha256:18cfe3ef5e6815560c98237d6216d1e5119702fb0f3894c8785dd58b8bbe5d73";
-const runId = `issue10_${randomUUID().replaceAll("-", "").slice(0, 12)}`;
-const container = `issue10-safe-read-pg-${runId.slice(-8)}`;
+const runId = `aroma_session_${randomUUID().replaceAll("-", "").slice(0, 12)}`;
+const container = `aroma-safe-read-pg-${runId.slice(-8)}`;
 const database = `coffee_verify_${runId}_integration`;
 const adminPassword = `proof-admin-${randomUUID()}`;
 const migratorPassword = `proof-migrator-${randomUUID()}`;

@@ -38,7 +38,7 @@ export async function runServedProof() {
   const root = resolve(import.meta.dirname, "../../..");
   const evidence =
     process.env.WEB_SERVED_EVIDENCE ??
-    resolve(process.env.TMPDIR ?? "/dev/shm", `issue9-served-${process.pid}`);
+    resolve(process.env.TMPDIR ?? "/dev/shm", `web-served-${process.pid}`);
   await mkdir(evidence, { recursive: true });
   const tmpfs = await mkdtemp("/dev/shm/coffee-served-");
   await chmod(tmpfs, 0o755);

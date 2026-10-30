@@ -152,7 +152,7 @@ async function journalLiveProof({ port, roleMap, rolePasswords }) {
       {
         schema: "integration",
         ledgerTable: "platform_schema_migrations",
-        lockKey: "issue10-mutation-journal",
+        lockKey: "mutation-journal-proof",
       },
     );
     await migrator.resource.stop(AbortSignal.timeout(1000));
@@ -584,7 +584,7 @@ void test(
   { skip: process.env.COFFEE_DB_LIVE_PROOF !== "1" },
   async () => {
     const result = await runLiveProof({
-      runId: `issue10journal${Date.now().toString(36)}`,
+      runId: `journalproof${Date.now().toString(36)}`,
       bindingProof: journalLiveProof,
     });
     assert.deepEqual(result.binding, {

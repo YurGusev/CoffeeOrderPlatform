@@ -27,7 +27,7 @@ const G15_ACCOUNTS = Object.freeze({
   }),
 });
 
-export function selectG15FixtureAccount(req) {
+export function selectBrowserFixtureAccount(req) {
   const cookie = req.headers.cookie;
   if (cookie === undefined || cookie === "") return G15_ACCOUNTS.operator;
   if (typeof cookie !== "string" || cookie.length > 256)
@@ -166,7 +166,7 @@ export function createOidcProviderServer({
   return server;
 }
 
-async function runG15Fixture() {
+async function runBrowserFixture() {
   const [mode, root, fixtureDir, ...extra] = process.argv.slice(2);
   assert.equal(mode, "--serve-g15");
   assert.ok(root && fixtureDir && extra.length === 0);
@@ -178,7 +178,7 @@ async function runG15Fixture() {
   const profile = config.browserOidc;
   assert.deepEqual(profile, {
     issuer: "https://idp.fixture.invalid",
-    clientId: "issue12-fixture",
+    clientId: "realtime-browser-fixture",
     authorizationUrl: "https://idp.fixture.invalid/authorize",
     tokenUrl: "https://idp.fixture.invalid/token",
     jwksUrl: "https://idp.fixture.invalid/keys",
@@ -213,7 +213,7 @@ async function runG15Fixture() {
     profile,
     signingKey,
     jwk,
-    selectAccount: selectG15FixtureAccount,
+    selectAccount: selectBrowserFixtureAccount,
   });
   server.listen(443, "0.0.0.0");
   return server;
@@ -229,7 +229,7 @@ if (
     server?.closeAllConnections();
   };
   for (const signal of ["SIGTERM", "SIGINT"]) process.once(signal, shutdown);
-  runG15Fixture()
+  runBrowserFixture()
     .then((started) => {
       server = started;
       server.on("error", () => {

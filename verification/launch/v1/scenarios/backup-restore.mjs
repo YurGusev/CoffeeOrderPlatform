@@ -25,7 +25,7 @@ const RUN_ID = /^[0-9]{8}T[0-9]{6}Z-[0-9a-f]{7}$/u;
 const AGE_RECIPIENT = /^age1[02-9ac-hj-np-z]{58}$/u;
 const TIMEOUT_MS = 10 * 60_000;
 const OUTPUT_LIMIT = 1024 * 1024;
-const G17_OPERATION_STAGES = new Set([
+const BACKUP_OPERATION_STAGES = new Set([
   "inspect-fixtures",
   "dump-encrypt",
   "create-restore",
@@ -40,7 +40,7 @@ const G17_OPERATION_STAGES = new Set([
   "compare-source-restore",
   "recover-restored-state",
 ]);
-const G17_DATABASE_ERROR_CODES = new Set([
+const BACKUP_DATABASE_ERROR_CODES = new Set([
   "DB_POOL_EXHAUSTED",
   "DB_INVALID_CONFIGURATION",
   "DB_CONNECTION_LOST",
@@ -53,7 +53,7 @@ const G17_DATABASE_ERROR_CODES = new Set([
   "DB_TRANSACTION_ROLLED_BACK",
   "DB_STOPPED",
 ]);
-const G17_FAILURE_ERROR_NAMES = new Set([
+const BACKUP_FAILURE_ERROR_NAMES = new Set([
   "Error",
   "TypeError",
   "RangeError",
@@ -84,7 +84,7 @@ export function restoreDatabaseName(runId, owner) {
   return name;
 }
 
-const G17_SCHEMA_RESTRICT_KEY = "coffeeG17SchemaCompareV1";
+const BACKUP_SCHEMA_RESTRICT_KEY = "coffeeG17SchemaCompareV1";
 
 export function schemaSnapshotArguments(database) {
   quoteIdentifier(database);
@@ -93,7 +93,7 @@ export function schemaSnapshotArguments(database) {
     "--no-owner",
     "--no-acl",
     "--format=plain",
-    `--restrict-key=${G17_SCHEMA_RESTRICT_KEY}`,
+    `--restrict-key=${BACKUP_SCHEMA_RESTRICT_KEY}`,
     "--dbname",
     database,
   ];
@@ -169,9 +169,11 @@ export function buildBackupRestorePlan(
   };
 }
 
-export function safeG17FailureDiagnostics(error) {
+export function safeBackupFailureDiagnostics(error) {
   const diagnostic = {
-    errorName: G17_FAILURE_ERROR_NAMES.has(error?.name) ? error.name : "Error",
+    errorName: BACKUP_FAILURE_ERROR_NAMES.has(error?.name)
+      ? error.name
+      : "Error",
     closedDatabaseErrorCode: null,
     sqlState: null,
     previousDatabaseCode: null,
@@ -186,12 +188,12 @@ export function safeG17FailureDiagnostics(error) {
     seen.add(node);
     if (
       diagnostic.closedDatabaseErrorCode === null &&
-      G17_DATABASE_ERROR_CODES.has(node.code)
+      BACKUP_DATABASE_ERROR_CODES.has(node.code)
     )
       diagnostic.closedDatabaseErrorCode = node.code;
     if (
       diagnostic.previousDatabaseCode === null &&
-      G17_DATABASE_ERROR_CODES.has(node.previousCode)
+      BACKUP_DATABASE_ERROR_CODES.has(node.previousCode)
     )
       diagnostic.previousDatabaseCode = node.previousCode;
     const sqlState = node.sqlState ?? node.code;
@@ -473,7 +475,7 @@ const SCHEMA_DIFF_CLASSES = Object.freeze([
   "otherSql",
 ]);
 
-const G17_VERIFIED_SCHEMA_COMPARISONS = Object.freeze([
+const BACKUP_VERIFIED_SCHEMA_COMPARISONS = Object.freeze([
   Object.freeze({
     owner: "customer",
     sourceSchemaSha256:
@@ -516,7 +518,7 @@ const G17_VERIFIED_SCHEMA_COMPARISONS = Object.freeze([
   }),
 ]);
 
-export function g17SchemaComparisonMode(
+export function resolveBackupSchemaComparisonMode(
   owner,
   sourceSchemaSha256,
   restoreSchemaSha256,
@@ -529,7 +531,7 @@ export function g17SchemaComparisonMode(
     fail("G17_SCHEMA_COMPARISON_INPUT_INVALID");
   if (sourceSchemaSha256 === restoreSchemaSha256)
     return "raw-sha256-equality-v1";
-  const approved = G17_VERIFIED_SCHEMA_COMPARISONS.find(
+  const approved = BACKUP_VERIFIED_SCHEMA_COMPARISONS.find(
     (entry) =>
       entry.owner === owner &&
       entry.sourceSchemaSha256 === sourceSchemaSha256 &&
@@ -628,7 +630,7 @@ export function quoteIdentifier(value) {
   return `"${value.replaceAll('"', '""')}"`;
 }
 
-export function g17RoutineAclSnapshotSql(schema) {
+export function restoreRoutineAclSnapshotSql(schema) {
   if (typeof schema !== "string" || !/^[a-z][a-z_]*$/u.test(schema))
     fail("G17_ROUTINE_SCHEMA_INVALID");
   return `SELECT COALESCE(json_agg(json_build_array(n.nspname,p.proname,p.prokind,pg_get_function_identity_arguments(p.oid),owner.rolname,CASE WHEN acl.grantee=0 THEN 'PUBLIC' ELSE grantee.rolname END,acl.privilege_type,acl.is_grantable) ORDER BY p.proname,pg_get_function_identity_arguments(p.oid),CASE WHEN acl.grantee=0 THEN 'PUBLIC' ELSE grantee.rolname END,acl.privilege_type,acl.is_grantable),'[]'::json)::text
@@ -640,7 +642,7 @@ LEFT JOIN pg_roles AS grantee ON grantee.oid=acl.grantee
 WHERE n.nspname='${schema}' AND p.prokind IN ('f','p','a','w')`;
 }
 
-export function renderG17RestoreFunctionAclSql(ownerPlan) {
+export function renderRestoreFunctionAclSql(ownerPlan) {
   if (
     !ownerPlan ||
     !CANONICAL_DATABASE_OWNERS.includes(ownerPlan.owner) ||
@@ -670,7 +672,10 @@ export function renderG17RestoreFunctionAclSql(ownerPlan) {
   return statements.join("\n");
 }
 
-export function verifyG17RoutineAclSnapshots(sourceSnapshot, restoreSnapshot) {
+export function verifyRestoreRoutineAclSnapshots(
+  sourceSnapshot,
+  restoreSnapshot,
+) {
   const parse = (value) => {
     let rows;
     try {
@@ -701,7 +706,7 @@ export function verifyG17RoutineAclSnapshots(sourceSnapshot, restoreSnapshot) {
   return source;
 }
 
-const G17_TABLE_PRIVILEGES = new Set([
+const RESTORE_TABLE_PRIVILEGES = new Set([
   "SELECT",
   "INSERT",
   "UPDATE",
@@ -711,15 +716,15 @@ const G17_TABLE_PRIVILEGES = new Set([
   "TRIGGER",
   "MAINTAIN",
 ]);
-const G17_COLUMN_PRIVILEGES = new Set([
+const RESTORE_COLUMN_PRIVILEGES = new Set([
   "SELECT",
   "INSERT",
   "UPDATE",
   "REFERENCES",
 ]);
-const G17_RELATION_KINDS = new Set(["r", "p", "v", "m", "f"]);
+const RESTORE_RELATION_KINDS = new Set(["r", "p", "v", "m", "f"]);
 
-export function g17TableAclSnapshotSql(schema) {
+export function restoreTableAclSnapshotSql(schema) {
   if (typeof schema !== "string" || !/^[a-z][a-z_]*$/u.test(schema))
     fail("G17_TABLE_SCHEMA_INVALID");
   return `WITH relations AS (
@@ -759,7 +764,7 @@ SELECT COALESCE(json_agg(json_build_array(relname,relkind,owner_name,column_name
 FROM acl_rows`;
 }
 
-function parseG17TableAclSnapshot(snapshot, ownerPlan) {
+function parseRestoreTableAclSnapshot(snapshot, ownerPlan) {
   let rows;
   try {
     rows = JSON.parse(snapshot);
@@ -799,15 +804,15 @@ function parseG17TableAclSnapshot(snapshot, ownerPlan) {
     ] = row;
     if (
       !/^[a-z][a-z0-9_]*$/u.test(relation) ||
-      !G17_RELATION_KINDS.has(kind) ||
+      !RESTORE_RELATION_KINDS.has(kind) ||
       owner !== ownerPlan.migratorRole ||
       grantor !== ownerPlan.migratorRole ||
       (grantee !== "PUBLIC" && !allowedRoles.has(grantee)) ||
       grantable ||
       (column === null
-        ? !G17_TABLE_PRIVILEGES.has(privilege)
+        ? !RESTORE_TABLE_PRIVILEGES.has(privilege)
         : !/^[a-z][a-z0-9_]*$/u.test(column) ||
-          !G17_COLUMN_PRIVILEGES.has(privilege))
+          !RESTORE_COLUMN_PRIVILEGES.has(privilege))
     )
       fail("G17_TABLE_ACL_UNSUPPORTED");
     if (relationKinds.has(relation) && relationKinds.get(relation) !== kind)
@@ -820,14 +825,14 @@ function parseG17TableAclSnapshot(snapshot, ownerPlan) {
   return rows;
 }
 
-export function renderG17RestoreTableAclSql(ownerPlan, sourceSnapshot) {
+export function renderRestoreTableAclSql(ownerPlan, sourceSnapshot) {
   if (
     !ownerPlan ||
     !CANONICAL_DATABASE_OWNERS.includes(ownerPlan.owner) ||
     ownerPlan.schema !== ownerPlan.owner
   )
     fail("G17_TABLE_SCHEMA_INVALID");
-  const rows = parseG17TableAclSnapshot(sourceSnapshot, ownerPlan);
+  const rows = parseRestoreTableAclSnapshot(sourceSnapshot, ownerPlan);
   const roles = [
     ...new Set((ownerPlan.runtimeRoles ?? []).map(({ role }) => role)),
   ];
@@ -885,20 +890,20 @@ export function renderG17RestoreTableAclSql(ownerPlan, sourceSnapshot) {
   return statements.join("\n");
 }
 
-export function verifyG17TableAclSnapshots(
+export function verifyRestoreTableAclSnapshots(
   sourceSnapshot,
   restoreSnapshot,
   ownerPlan,
 ) {
-  const source = parseG17TableAclSnapshot(sourceSnapshot, ownerPlan);
-  const restored = parseG17TableAclSnapshot(restoreSnapshot, ownerPlan);
+  const source = parseRestoreTableAclSnapshot(sourceSnapshot, ownerPlan);
+  const restored = parseRestoreTableAclSnapshot(restoreSnapshot, ownerPlan);
   const sort = (rows) => rows.map((row) => JSON.stringify(row)).sort();
   if (JSON.stringify(sort(source)) !== JSON.stringify(sort(restored)))
     fail("G17_TABLE_ACL_MISMATCH");
   return source;
 }
 
-export function g17OrdersAclInvariantSql(ownerPlan) {
+export function restoreOrdersAclInvariantSql(ownerPlan) {
   if (
     !ownerPlan ||
     ownerPlan.owner !== "orders" ||
@@ -936,7 +941,7 @@ export function g17OrdersAclInvariantSql(ownerPlan) {
 )::text`;
 }
 
-export function verifyG17OrdersAclInvariants(snapshot) {
+export function verifyRestoreOrdersAclInvariants(snapshot) {
   let values;
   try {
     values = JSON.parse(snapshot);
@@ -1031,7 +1036,7 @@ function sameRestoreOwnership(actual, expected) {
   );
 }
 
-export async function createG17OwnedRestoreDatabase({
+export async function createOwnedRestoreDatabase({
   ownerPlan,
   identity,
   createDatabase,
@@ -1078,7 +1083,7 @@ export async function createG17OwnedRestoreDatabase({
   return record;
 }
 
-export async function cleanupG17OwnedRestoreDatabases({
+export async function cleanupOwnedRestoreDatabases({
   created,
   createAttempts,
   verifyServer,
@@ -1193,7 +1198,7 @@ async function snapshotDatabase({ ownerPlan, target, password, root, io }) {
   });
   const sourceSchemaHash = sourceSchema.sha256;
   const schemaHash = restoredSchema.sha256;
-  const schemaComparisonMode = g17SchemaComparisonMode(
+  const schemaComparisonMode = resolveBackupSchemaComparisonMode(
     ownerPlan.owner,
     sourceSchemaHash,
     schemaHash,
@@ -1487,7 +1492,7 @@ export async function runBackupRestoreScenario({
     integration: ["aroma-gateway"],
   };
   for (const owner of plan.owners) {
-    const credential = await bootstrap.readG17BackupCredential({
+    const credential = await bootstrap.readBackupCredential({
       root,
       runId: plan.runId,
       candidateSha: plan.candidateSha,
@@ -1503,7 +1508,7 @@ export async function runBackupRestoreScenario({
     for (const runtime of runtimeByOwner[owner.owner] ?? []) {
       credentials.runtimes.set(
         runtime,
-        await bootstrap.readG17BackupCredential({
+        await bootstrap.readBackupCredential({
           root,
           runId: plan.runId,
           candidateSha: plan.candidateSha,
@@ -1544,17 +1549,17 @@ export async function runBackupRestoreScenario({
       await queryText(
         owner.owner,
         owner.sourceDatabase,
-        g17RoutineAclSnapshotSql(owner.schema),
+        restoreRoutineAclSnapshotSql(owner.schema),
         { target, password: credentials.admin.get(owner.owner), root, io },
       ),
     );
     const sourceTableAcl = await queryText(
       owner.owner,
       owner.sourceDatabase,
-      g17TableAclSnapshotSql(owner.schema),
+      restoreTableAclSnapshotSql(owner.schema),
       { target, password: credentials.admin.get(owner.owner), root, io },
     );
-    verifyG17TableAclSnapshots(sourceTableAcl, sourceTableAcl, owner);
+    verifyRestoreTableAclSnapshots(sourceTableAcl, sourceTableAcl, owner);
     sourceTableAcls.set(owner.owner, sourceTableAcl);
   }
   const existing = await queryText(
@@ -1597,7 +1602,7 @@ export async function runBackupRestoreScenario({
   const aggregateStartedAt = Date.now();
   let operationStage = "inspect-fixtures";
   try {
-    const fixtures = await recovery.inspectG17RecoveryFixtures({
+    const fixtures = await recovery.inspectRecoveryFixtures({
       target,
       password,
       runtimeCredentials: Object.fromEntries(credentials.runtimes),
@@ -1658,7 +1663,7 @@ export async function runBackupRestoreScenario({
       const ciphertextSizeBytes = (await lstat(ciphertextPath)).size;
       const createSql = `CREATE DATABASE ${quoteIdentifier(owner.restoreDatabase)} OWNER ${quoteIdentifier(owner.migratorRole)} TEMPLATE template0`;
       operationStage = "create-restore";
-      const ownedRestore = await createG17OwnedRestoreDatabase({
+      const ownedRestore = await createOwnedRestoreDatabase({
         ownerPlan: owner,
         identity: plan,
         created,
@@ -1722,24 +1727,24 @@ export async function runBackupRestoreScenario({
       await queryText(
         owner.owner,
         owner.restoreDatabase,
-        renderG17RestoreTableAclSql(owner, sourceTableAcls.get(owner.owner)),
+        renderRestoreTableAclSql(owner, sourceTableAcls.get(owner.owner)),
         { target, password: credentials.admin.get(owner.owner), root, io },
       );
       operationStage = "restore-routine-acl";
       await queryText(
         owner.owner,
         owner.restoreDatabase,
-        renderG17RestoreFunctionAclSql(owner),
+        renderRestoreFunctionAclSql(owner),
         { target, password: credentials.admin.get(owner.owner), root, io },
       );
       operationStage = "verify-routine-acl";
       const restoredRoutineAcl = await queryText(
         owner.owner,
         owner.restoreDatabase,
-        g17RoutineAclSnapshotSql(owner.schema),
+        restoreRoutineAclSnapshotSql(owner.schema),
         { target, password: credentials.admin.get(owner.owner), root, io },
       );
-      const routineAcl = verifyG17RoutineAclSnapshots(
+      const routineAcl = verifyRestoreRoutineAclSnapshots(
         sourceRoutineAcls.get(owner.owner),
         restoredRoutineAcl,
       );
@@ -1747,10 +1752,10 @@ export async function runBackupRestoreScenario({
       const restoredTableAcl = await queryText(
         owner.owner,
         owner.restoreDatabase,
-        g17TableAclSnapshotSql(owner.schema),
+        restoreTableAclSnapshotSql(owner.schema),
         { target, password: credentials.admin.get(owner.owner), root, io },
       );
-      const tableAcl = verifyG17TableAclSnapshots(
+      const tableAcl = verifyRestoreTableAclSnapshots(
         sourceTableAcls.get(owner.owner),
         restoredTableAcl,
         owner,
@@ -1761,10 +1766,11 @@ export async function runBackupRestoreScenario({
         const invariantSnapshot = await queryText(
           owner.owner,
           owner.restoreDatabase,
-          g17OrdersAclInvariantSql(owner),
+          restoreOrdersAclInvariantSql(owner),
           { target, password: credentials.admin.get(owner.owner), root, io },
         );
-        ordersAclInvariants = verifyG17OrdersAclInvariants(invariantSnapshot);
+        ordersAclInvariants =
+          verifyRestoreOrdersAclInvariants(invariantSnapshot);
       }
       operationStage = "verify-restore-identity";
       await serverIdentity({
@@ -1817,7 +1823,7 @@ export async function runBackupRestoreScenario({
       await writeEvidence(evidencePath, evidence);
     }
     operationStage = "recover-restored-state";
-    const recoveryResult = await recovery.proveG17RecoveryAfterRestore({
+    const recoveryResult = await recovery.proveRecoveryAfterRestore({
       target,
       password,
       runtimeCredentials: Object.fromEntries(credentials.runtimes),
@@ -1839,14 +1845,14 @@ export async function runBackupRestoreScenario({
     evidence.status = "PASS";
   } catch (error) {
     evidence.status = "FAIL";
-    evidence.failureStage = G17_OPERATION_STAGES.has(operationStage)
+    evidence.failureStage = BACKUP_OPERATION_STAGES.has(operationStage)
       ? operationStage
       : "inspect-fixtures";
     evidence.failureCode =
       typeof error?.code === "string" && /^G17_[A-Z0-9_:,-]+$/u.test(error.code)
         ? error.code
         : "G17_OPERATION_FAILED";
-    evidence.failureDiagnostic = safeG17FailureDiagnostics(error);
+    evidence.failureDiagnostic = safeBackupFailureDiagnostics(error);
     if (error?.code === "G17_SCHEMA_MISMATCH") {
       evidence.schemaComparisonDiagnostic =
         error.schemaComparisonDiagnostic ?? { diagnosticFailed: true };
@@ -1867,7 +1873,7 @@ export async function runBackupRestoreScenario({
     evidence.endedAt = new Date().toISOString();
     evidence.totalElapsedMs = Date.now() - aggregateStartedAt;
     await writeEvidence(evidencePath, evidence).catch(() => {});
-    const cleanupResult = await cleanupG17OwnedRestoreDatabases({
+    const cleanupResult = await cleanupOwnedRestoreDatabases({
       created,
       createAttempts,
       verifyServer: () =>
@@ -1922,15 +1928,15 @@ async function hashFile(path) {
   return hash.digest("hex");
 }
 
-export async function resolveG17Target({
+export async function resolveBackupTarget({
   root = ROOT,
   contextPath = process.env.COFFEE_LAUNCH_CONTEXT_FILE,
 } = {}) {
   if (!contextPath) fail("G17_LAUNCH_CONTEXT_REQUIRED");
   try {
-    const { validateG17BackupTarget } =
+    const { validateBackupTarget } =
       await import("../../../../tools/config-bootstrap/index.mjs");
-    return (await validateG17BackupTarget({ root, contextPath })).target;
+    return (await validateBackupTarget({ root, contextPath })).target;
   } catch {
     fail("G17_TARGET_TRUST_INVALID");
   }
@@ -1939,7 +1945,7 @@ export async function resolveG17Target({
 async function main() {
   try {
     if (process.argv.length !== 2) fail("G17_ARGUMENTS_INVALID");
-    const target = await resolveG17Target();
+    const target = await resolveBackupTarget();
     const result = await runBackupRestoreScenario({
       target,
     });
@@ -1952,7 +1958,7 @@ async function main() {
         : "G17_OPERATION_FAILED";
     console.log(
       JSON.stringify(
-        { status: "FAIL", code, ...safeG17FailureDiagnostics(error) },
+        { status: "FAIL", code, ...safeBackupFailureDiagnostics(error) },
         null,
         2,
       ),

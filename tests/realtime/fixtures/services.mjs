@@ -49,7 +49,7 @@ if (kind === "idp") {
   const key = generateKeyPairSync("rsa", { modulusLength: 2048 });
   const jwk = {
     ...key.publicKey.export({ format: "jwk" }),
-    kid: "issue12-idp",
+    kid: "realtime-idp",
     use: "sig",
     alg: "RS256",
   };
@@ -60,7 +60,7 @@ if (kind === "idp") {
     profile: fixture.config.browserOidc,
     signingKey: key.privateKey,
     jwk,
-    actorRef: "actor:issue12-transport",
+    actorRef: "actor:realtime-transport",
     permissions: ["orders:read:any", "orders:reconcile:any"],
     onFail: (res, status, code) => fail(res, status, code),
   });

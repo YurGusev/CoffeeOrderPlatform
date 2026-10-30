@@ -506,7 +506,7 @@ function allowConfirmResponseExpansion(sourcePath, route, at, before, after) {
     JSON.stringify(evidence.fixtureCases) !== JSON.stringify(variants)
   ) {
     fail(
-      `${at}: issue-8 response expansion evidence is incomplete or has drifted`,
+      `${at}: Confirm response expansion evidence is incomplete or has drifted`,
     );
   }
   const fixturePath = resolve(root, evidence.fixture);
@@ -554,7 +554,7 @@ function allowConfirmResponseExpansion(sourcePath, route, at, before, after) {
       "Confirmation is rejected, or the completed rejection is replayed."
   )
     fail(
-      `${at}: issue-8 response expansion does not match the approved branches`,
+      `${at}: Confirm response expansion does not match the approved branches`,
     );
   return true;
 }
@@ -722,14 +722,18 @@ function compareResponse(before, after, at, sourcePath, route) {
           },
         }),
   );
-  const issue8Expansion = allowConfirmResponseExpansion(
+  const confirmResponseExpansion = allowConfirmResponseExpansion(
     sourcePath,
     route,
     at,
     before,
     after,
   );
-  if (before.$ref !== after.$ref && !catalogExtension && !issue8Expansion)
+  if (
+    before.$ref !== after.$ref &&
+    !catalogExtension &&
+    !confirmResponseExpansion
+  )
     fail(`${at}: response $ref changed`);
   compareMedia(before.content, after.content, `${at}.content`, sourcePath);
   for (const [name, header] of Object.entries(before.headers ?? {})) {

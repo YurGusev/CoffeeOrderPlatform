@@ -28,18 +28,18 @@ export const POSTGRES_IMAGE =
   "postgres:17.11-alpine@sha256:18cfe3ef5e6815560c98237d6216d1e5119702fb0f3894c8785dd58b8bbe5d73";
 const LEGACY_DATABASES = ["coffeeorderdb", "coffeeorder_staging"];
 const RUN_ID_PATTERN = /^[a-z0-9][a-z0-9_-]{5,31}$/;
-const PROBE_TABLE = "issue3_db_live_permission_probe";
+const PROBE_TABLE = "db_live_permission_probe";
 const FOUNDATION_DATABASE = "coffee_platform_orders";
 const FOUNDATION_SCHEMA = "orders";
-const FOUNDATION_RECORDS = "issue62_live_transaction_records";
-const IDEMPOTENCY_RECORDS = "issue62_live_idempotency_records";
-const COPY_RECORDS = "issue62_live_copy_records";
-const MIGRATION_LEDGER = "issue62_live_migration_ledger";
-const MIGRATION_TABLE = "issue62_live_migrated_records";
-const DELIVERY_INBOX = "issue63_live_inbox_messages";
-const DELIVERY_QUARANTINE = "issue63_live_inbox_quarantine";
-const DELIVERY_OUTBOX = "issue63_live_outbox_messages";
-const DELIVERY_OWNER = "issue63_live_owner_effects";
+const FOUNDATION_RECORDS = "db_live_transaction_records";
+const IDEMPOTENCY_RECORDS = "db_live_idempotency_records";
+const COPY_RECORDS = "db_live_copy_records";
+const MIGRATION_LEDGER = "db_live_migration_ledger";
+const MIGRATION_TABLE = "db_live_migrated_records";
+const DELIVERY_INBOX = "delivery_live_inbox_messages";
+const DELIVERY_QUARANTINE = "delivery_live_inbox_quarantine";
+const DELIVERY_OUTBOX = "delivery_live_outbox_messages";
+const DELIVERY_OWNER = "delivery_live_owner_effects";
 
 function fail(message) {
   throw new Error(`DB-LIVE-PROOF ${message}`);
@@ -342,7 +342,7 @@ function databaseConnectionOptions(
 ) {
   const parsed = new URL(adminUrl);
   return {
-    owner: "issue62-live-proof",
+    owner: "db-live-proof",
     database: roleEntry.database,
     allowedDatabase: roleEntry.database,
     host: parsed.hostname,
@@ -548,7 +548,7 @@ function deliveryMessage(
   aggregateRef,
   aggregateSequence,
   payload,
-  messageType = "Issue63.LiveEvent",
+  messageType = "DeliveryProof.LiveEvent",
 ) {
   // Preserve a nanosecond envelope even though PostgreSQL timestamps round to microseconds.
   const occurredAt = new Date().toISOString().replace("Z", "123456Z");
@@ -558,7 +558,7 @@ function deliveryMessage(
   return {
     messageId,
     messageType,
-    topic: "coffee.issue63.live.v1",
+    topic: "coffee.delivery-proof.live.v1",
     aggregateRef,
     aggregateSequence,
     ownerVersion,
@@ -574,7 +574,7 @@ function deliveryMessage(
       causationId: null,
       traceparent,
       aggregate: {
-        type: "Issue63Aggregate",
+        type: "DeliveryProofAggregate",
         ref: aggregateRef,
         version: ownerVersion,
       },
@@ -689,7 +689,7 @@ async function runDeliveryProof({ adminUrl, port, roleMap, rolePasswords }) {
       databaseA,
       defineStatement,
     );
-    const base = deliveryMessage("issue63-base", "aggregate-base", 1, {
+    const base = deliveryMessage("delivery-proof-base", "aggregate-base", 1, {
       value: "base",
     });
     const toInbox = (message) => inboxMessage(message, canonicalRequestHash);
@@ -698,7 +698,7 @@ async function runDeliveryProof({ adminUrl, port, roleMap, rolePasswords }) {
     let baseOutbox;
     await withTransaction(
       databaseA,
-      { mode: "interactive", correlationId: "issue63-base" },
+      { mode: "interactive", correlationId: "delivery-proof-base" },
       async (transaction) => {
         baseBegin = await inboxA.begin(
           transaction,
@@ -756,7 +756,7 @@ async function runDeliveryProof({ adminUrl, port, roleMap, rolePasswords }) {
       fail("Inbox, owner state and Outbox were not committed atomically");
 
     const rolledBack = deliveryMessage(
-      "issue63-rollback",
+      "delivery-proof-rollback",
       "aggregate-rollback",
       1,
       { value: "rollback" },
@@ -765,7 +765,7 @@ async function runDeliveryProof({ adminUrl, port, roleMap, rolePasswords }) {
     try {
       await withTransaction(
         databaseA,
-        { mode: "interactive", correlationId: "issue63-rollback" },
+        { mode: "interactive", correlationId: "delivery-proof-rollback" },
         async (transaction) => {
           const begin = await inboxA.begin(
             transaction,
@@ -825,7 +825,7 @@ async function runDeliveryProof({ adminUrl, port, roleMap, rolePasswords }) {
       fail("rollback left partial Inbox, owner or Outbox state");
     await withTransaction(
       databaseA,
-      { mode: "interactive", correlationId: "issue63-rollback-retry" },
+      { mode: "interactive", correlationId: "delivery-proof-rollback-retry" },
       async (transaction) => {
         const begin = await inboxA.begin(
           transaction,
@@ -878,7 +878,7 @@ async function runDeliveryProof({ adminUrl, port, roleMap, rolePasswords }) {
     let quarantineDecision;
     await withTransaction(
       databaseA,
-      { mode: "interactive", correlationId: "issue63-duplicate" },
+      { mode: "interactive", correlationId: "delivery-proof-duplicate" },
       async (transaction) => {
         duplicateDecision = await inboxA.begin(
           transaction,
@@ -900,7 +900,7 @@ async function runDeliveryProof({ adminUrl, port, roleMap, rolePasswords }) {
     };
     await withTransaction(
       databaseA,
-      { mode: "interactive", correlationId: "issue63-conflict" },
+      { mode: "interactive", correlationId: "delivery-proof-conflict" },
       async (transaction) => {
         conflictDecision = await inboxA.begin(
           transaction,
@@ -951,18 +951,18 @@ async function runDeliveryProof({ adminUrl, port, roleMap, rolePasswords }) {
 
     const sameSequenceAggregate = "aggregate-different-message-types";
     const differentTypeA = deliveryMessage(
-      "issue63-type-a",
+      "delivery-proof-type-a",
       sameSequenceAggregate,
       1,
       { value: "type-a" },
-      "Issue63.TypeA",
+      "DeliveryProof.TypeA",
     );
     const differentTypeB = deliveryMessage(
-      "issue63-type-b",
+      "delivery-proof-type-b",
       sameSequenceAggregate,
       1,
       { value: "type-b" },
-      "Issue63.TypeB",
+      "DeliveryProof.TypeB",
     );
     const directOutboxInsert = (database) =>
       defineStatement(
@@ -999,13 +999,13 @@ async function runDeliveryProof({ adminUrl, port, roleMap, rolePasswords }) {
     const [differentTypeResultA, differentTypeResultB] = await Promise.all([
       withTransaction(
         databaseA,
-        { mode: "interactive", correlationId: "issue63-type-a" },
+        { mode: "interactive", correlationId: "delivery-proof-type-a" },
         (transaction) =>
           insertDifferentType(directOutboxInsertA, transaction, differentTypeA),
       ),
       withTransaction(
         databaseB,
-        { mode: "interactive", correlationId: "issue63-type-b" },
+        { mode: "interactive", correlationId: "delivery-proof-type-b" },
         (transaction) =>
           insertDifferentType(directOutboxInsertB, transaction, differentTypeB),
       ),
@@ -1053,26 +1053,26 @@ async function runDeliveryProof({ adminUrl, port, roleMap, rolePasswords }) {
     );
 
     const orderedOne = deliveryMessage(
-      "issue63-order-1",
+      "delivery-proof-order-1",
       "aggregate-a-order",
       1,
       { value: "one" },
     );
     const orderedTwo = deliveryMessage(
-      "issue63-order-2",
+      "delivery-proof-order-2",
       "aggregate-a-order",
       2,
       { value: "two" },
     );
     const independent = deliveryMessage(
-      "issue63-independent-1",
+      "delivery-proof-independent-1",
       "aggregate-b-independent",
       1,
       { value: "independent" },
     );
     await withTransaction(
       databaseA,
-      { mode: "interactive", correlationId: "issue63-order-seed" },
+      { mode: "interactive", correlationId: "delivery-proof-order-seed" },
       async (transaction) => {
         for (const message of [orderedOne, orderedTwo, independent]) {
           if ((await outboxA.enqueue(transaction, message)) !== "created")
@@ -1155,7 +1155,7 @@ async function runDeliveryProof({ adminUrl, port, roleMap, rolePasswords }) {
       table: DELIVERY_OUTBOX,
     });
     const crashMessage = deliveryMessage(
-      "issue63-lease-recovery",
+      "delivery-proof-lease-recovery",
       "aggregate-lease",
       1,
       { value: "lease" },
@@ -1238,7 +1238,7 @@ async function runDeliveryProof({ adminUrl, port, roleMap, rolePasswords }) {
     recoveredDatabase = undefined;
 
     const unknownMessage = deliveryMessage(
-      "issue63-db-unknown",
+      "delivery-proof-db-unknown",
       "aggregate-unknown",
       1,
       { value: "unknown" },
@@ -1266,7 +1266,7 @@ async function runDeliveryProof({ adminUrl, port, roleMap, rolePasswords }) {
       try {
         await withTransaction(
           unknownDatabase,
-          { mode: "interactive", correlationId: "issue63-db-unknown" },
+          { mode: "interactive", correlationId: "delivery-proof-db-unknown" },
           async (transaction) => {
             const begin = await unknownInbox.begin(
               transaction,
@@ -1832,7 +1832,7 @@ async function runCommitBlackholeProof({
     try {
       await withTransaction(
         database,
-        { mode: "interactive", correlationId: "issue62-commit-blackhole" },
+        { mode: "interactive", correlationId: "db-commit-blackhole" },
         async (transaction) => {
           const acquired = await idempotency.acquire(
             transaction,
@@ -1983,7 +1983,7 @@ async function runCaughtSqlRollbackProof({
   );
   const failingStatement = defineStatement(
     databaseA,
-    "SELECT * FROM issue62_missing_table",
+    "SELECT * FROM db_missing_table",
   );
   let code;
   let retryDecision;
@@ -2169,8 +2169,8 @@ async function runIdempotencyProof(adminUrl, roleEntry, password, port) {
     scope: "orders-command",
     key: "request-62",
   };
-  const requestHash = canonicalRequestHash({ command: "issue-62", value: 62 });
-  const otherHash = canonicalRequestHash({ command: "issue-62", value: 63 });
+  const requestHash = canonicalRequestHash({ command: "db-proof", value: 62 });
+  const otherHash = canonicalRequestHash({ command: "db-proof", value: 63 });
   const now = Date.now();
   const response = { status: 201, body: { accepted: true } };
   const ownerWriteA = defineStatement(
@@ -2375,7 +2375,7 @@ async function runMigrationDriftProof(adminUrl, database, rolePasswords) {
   );
   const parsed = new URL(adminUrl);
   const foundation = createDatabase({
-    owner: "issue62-live-migration-proof",
+    owner: "db-live-migration-proof",
     database: database.name,
     allowedDatabase: database.name,
     host: parsed.hostname,
@@ -2388,7 +2388,7 @@ async function runMigrationDriftProof(adminUrl, database, rolePasswords) {
   const schema = foundationIdentifier(FOUNDATION_SCHEMA);
   const migrationSql = `CREATE TABLE ${schema}.${foundationIdentifier(MIGRATION_TABLE)} (value text PRIMARY KEY)`;
   const migration = {
-    id: "0001_issue62_live",
+    id: "0001_db_live",
     sql: migrationSql,
     checksum: migrationChecksum(migrationSql),
   };
@@ -2398,7 +2398,7 @@ async function runMigrationDriftProof(adminUrl, database, rolePasswords) {
     await applyMigrations(foundation, [migration], {
       schema: FOUNDATION_SCHEMA,
       ledgerTable: MIGRATION_LEDGER,
-      lockKey: "issue62-live-migration-proof",
+      lockKey: "db-live-migration-proof",
     });
     const driftSql = "SELECT 62";
     await applyMigrations(
@@ -2413,7 +2413,7 @@ async function runMigrationDriftProof(adminUrl, database, rolePasswords) {
       {
         schema: FOUNDATION_SCHEMA,
         ledgerTable: MIGRATION_LEDGER,
-        lockKey: "issue62-live-migration-proof",
+        lockKey: "db-live-migration-proof",
       },
     );
   } catch (error) {
@@ -2977,20 +2977,20 @@ async function writeEvidence(evidenceDir, result) {
   await mkdir(evidenceDir, { recursive: true });
   const { foundation, delivery, ...legacyResult } = result;
   await writeFile(
-    join(evidenceDir, `issue-3-db-live-proof-${result.runId}.json`),
+    join(evidenceDir, `db-live-proof-${result.runId}.json`),
     `${JSON.stringify(legacyResult, null, 2)}\n`,
     "utf8",
   );
   if (foundation) {
     await writeFile(
-      join(evidenceDir, `issue-62-db-live-proof-${result.runId}.json`),
+      join(evidenceDir, `db-foundation-live-proof-${result.runId}.json`),
       `${JSON.stringify({ schemaVersion: 1, runId: result.runId, foundation }, null, 2)}\n`,
       "utf8",
     );
   }
   if (delivery) {
     await writeFile(
-      join(evidenceDir, `issue-63-db-live-proof-${result.runId}.json`),
+      join(evidenceDir, `delivery-live-proof-${result.runId}.json`),
       `${JSON.stringify({ schemaVersion: 1, runId: result.runId, delivery }, null, 2)}\n`,
       "utf8",
     );
@@ -3003,7 +3003,7 @@ export async function runLiveProof({
   bindingProof,
 } = {}) {
   const proofRunId = safeRunId(requestedRunId);
-  const containerName = `coffee-issue3-db-proof-${proofRunId}`;
+  const containerName = `coffee-db-proof-${proofRunId}`;
   const adminPassword = randomBytes(32).toString("base64url");
   let adminUrl;
   let containerStarted = false;
@@ -3018,7 +3018,7 @@ export async function runLiveProof({
       "--name",
       containerName,
       "--label",
-      "coffee.platform.issue=3",
+      "coffee.platform.proof=db-live",
       "--label",
       `coffee.platform.run=${proofRunId}`,
       "--publish",

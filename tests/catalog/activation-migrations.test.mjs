@@ -289,7 +289,7 @@ void test(
     const migrationOptions = {
       schema: "catalog",
       ledgerTable: "platform_schema_migrations",
-      lockKey: "issue16-activation-proof",
+      lockKey: "catalog-activation-proof",
     };
     assert.deepEqual(
       await applyMigrations(migrator, migrations.slice(0, 1), migrationOptions),
@@ -612,7 +612,7 @@ void test(
     });
     const occurredAt = new Date().toISOString();
     const outboxMessage = {
-      messageId: "msg_issue16_activation_0001",
+      messageId: "msg_catalog_activation_0001",
       messageType: "CatalogSnapshotActivated.v1",
       topic: "coffee.catalog.snapshot.v1",
       aggregateRef: "catalog",
@@ -621,15 +621,15 @@ void test(
       partitionKey: "catalog",
       schemaVersion: "1",
       occurredAt,
-      correlationId: "corr_issue16_activation",
+      correlationId: "corr_catalog_activation",
       traceparent: "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01",
       envelope: {
         envelopeVersion: "1",
-        messageId: "msg_issue16_activation_0001",
+        messageId: "msg_catalog_activation_0001",
         messageType: "CatalogSnapshotActivated.v1",
         occurredAt,
         producer: "catalog-activation-worker",
-        correlationId: "corr_issue16_activation",
+        correlationId: "corr_catalog_activation",
         causationId: null,
         traceparent: "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01",
         aggregate: { type: "Catalog", ref: "catalog", version: "1" },

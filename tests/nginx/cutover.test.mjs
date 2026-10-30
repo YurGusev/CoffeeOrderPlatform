@@ -32,11 +32,11 @@ const registry = JSON.parse(
   await readFile(join(root, "config/toolchain-versions.json"), "utf8"),
 );
 const suffix = `${process.pid}`;
-const nginxImage = `coffee-edge-nginx:issue162-${suffix}`;
-const backendImage = `coffee-edge-cutover-fixture:issue162-${suffix}`;
-const network = `edge162-${suffix}`;
+const nginxImage = `coffee-edge-nginx:cutover-${suffix}`;
+const backendImage = `coffee-edge-cutover-fixture:cutover-${suffix}`;
+const network = `edge-cutover-${suffix}`;
 const hostPort = 24000 + (process.pid % 20000);
-const scratch = await mkdtemp(join(tmpdir(), "edge162-"));
+const scratch = await mkdtemp(join(tmpdir(), "edge-cutover-"));
 const certDir = join(scratch, "certs");
 const activeConfig = join(scratch, "nginx.conf");
 const eventLog = join(scratch, "requests.jsonl");
@@ -261,7 +261,7 @@ try {
     "-out",
     "ca.crt",
     "-subj",
-    "/CN=issue162-cutover-ca",
+    "/CN=cutover-ca",
     "-days",
     "2",
   );
@@ -272,7 +272,7 @@ try {
       "extendedKeyUsage=serverAuth",
     ].join("\n") + "\n",
   );
-  issue("server", "issue162-upstream", "server.ext");
+  issue("server", "cutover-upstream", "server.ext");
   openssl(
     "req",
     "-x509",
@@ -284,7 +284,7 @@ try {
     "-out",
     "api-ca.crt",
     "-subj",
-    "/CN=issue162-api-ca",
+    "/CN=cutover-api-ca",
     "-days",
     "2",
   );
@@ -328,7 +328,7 @@ try {
     join(certDir, "client.ext"),
     "extendedKeyUsage=clientAuth\nsubjectAltName=URI:spiffe://coffee-platform/development/edge-nginx\n",
   );
-  issue("client", "issue162-edge-nginx", "client.ext");
+  issue("client", "cutover-edge-nginx", "client.ext");
   await writeFile(
     join(certDir, "public.ext"),
     "subjectAltName=DNS:localhost\nextendedKeyUsage=serverAuth\n",
@@ -482,7 +482,7 @@ try {
     method: "POST",
     headers: {
       cookie: "__Host-coffee-session=allow",
-      "idempotency-key": "issue162-allowed",
+      "idempotency-key": "cutover-allowed",
     },
   });
   assert.equal(
@@ -538,7 +538,7 @@ try {
     method: "POST",
     headers: {
       cookie: "__Host-coffee-session=allow-next",
-      "idempotency-key": "issue162-allowed-next",
+      "idempotency-key": "cutover-allowed-next",
     },
   });
   assert.equal(
@@ -622,7 +622,7 @@ try {
     method: "POST",
     headers: {
       cookie: "__Host-coffee-session=allow-recovery",
-      "idempotency-key": "issue162-auth-backend-down",
+      "idempotency-key": "cutover-auth-backend-down",
     },
     timeout: 5_000,
   });
@@ -688,7 +688,7 @@ try {
     duringBackendFailure.filter(
       (event) =>
         event.role === "api" &&
-        event.headers["idempotency-key"] === "issue162-auth-backend-down",
+        event.headers["idempotency-key"] === "cutover-auth-backend-down",
     ).length,
     0,
     "authorization failure never reaches the business API",
@@ -700,7 +700,7 @@ try {
       method: "POST",
       headers: {
         cookie: "__Host-coffee-session=allow-recovery",
-        "idempotency-key": "issue162-auth-backend-recovered",
+        "idempotency-key": "cutover-auth-backend-recovered",
       },
       timeout: 3_000,
     });
@@ -752,7 +752,7 @@ try {
     beforeBackendFailure.filter(
       (event) =>
         event.role === "api" &&
-        event.headers["idempotency-key"] === "issue162-auth-backend-down",
+        event.headers["idempotency-key"] === "cutover-auth-backend-down",
     ).length,
     0,
   );
@@ -837,7 +837,7 @@ try {
   assert.equal(
     eventsBeforeRejection.filter(
       (e) =>
-        e.role === "api" && e.headers["idempotency-key"] === "issue162-allowed",
+        e.role === "api" && e.headers["idempotency-key"] === "cutover-allowed",
     ).length,
     1,
   );
@@ -850,7 +850,7 @@ try {
     eventsBeforeRejection.filter(
       (e) =>
         e.role === "api" &&
-        e.headers["idempotency-key"] === "issue162-allowed-next",
+        e.headers["idempotency-key"] === "cutover-allowed-next",
     ).length,
     1,
   );
@@ -858,7 +858,7 @@ try {
     eventsBeforeRejection.filter(
       (e) =>
         e.role === "api" &&
-        e.headers["idempotency-key"] === "issue162-auth-backend-down",
+        e.headers["idempotency-key"] === "cutover-auth-backend-down",
     ).length,
     0,
   );
@@ -866,7 +866,7 @@ try {
     eventsBeforeRejection.filter(
       (e) =>
         e.role === "api" &&
-        e.headers["idempotency-key"] === "issue162-auth-backend-recovered",
+        e.headers["idempotency-key"] === "cutover-auth-backend-recovered",
     ).length,
     1,
   );
@@ -930,7 +930,7 @@ try {
     method: "POST",
     headers: {
       cookie: "__Host-coffee-session=allow",
-      "idempotency-key": "issue162-revoked",
+      "idempotency-key": "cutover-revoked",
     },
     timeout: 4_000,
   });
@@ -954,7 +954,7 @@ try {
   assert.equal(
     eventsAfterRejection.filter(
       (e) =>
-        e.role === "api" && e.headers["idempotency-key"] === "issue162-revoked",
+        e.role === "api" && e.headers["idempotency-key"] === "cutover-revoked",
     ).length,
     0,
     "untrusted upstream certificate must send no business HTTP request",
@@ -1014,7 +1014,7 @@ try {
     method: "POST",
     headers: {
       cookie: "__Host-coffee-session=allow",
-      "idempotency-key": "issue162-recovered",
+      "idempotency-key": "cutover-recovered",
     },
   });
   assert.equal(
@@ -1169,12 +1169,12 @@ try {
     finalEvents.some(
       (e) =>
         e.role === "api" &&
-        e.headers["idempotency-key"] === "issue162-recovered",
+        e.headers["idempotency-key"] === "cutover-recovered",
     ),
     "API resumed after rejected config and trust rollback",
   );
   console.log(
-    `PASS issue162 active cutover: real config/platform.yaml generator; exact upstreams and runtime DNS SANs; HTTPS + mutual TLS + signed Ed25519 204 assertion verified and forwarded; absent auth denied; >5s SSE and Last-Event-ID verified; withdrawn API issuer trust returns 502 with no API request; invalid nginx reload rejected with old workers healthy; valid reload recovers; TLS certificate rotation/rollback verified; no production secrets; nginx=${docker("image", "inspect", "--format", "{{.Id}}", nginxImage).trim()}`,
+    `PASS active cutover: real config/platform.yaml generator; exact upstreams and runtime DNS SANs; HTTPS + mutual TLS + signed Ed25519 204 assertion verified and forwarded; absent auth denied; >5s SSE and Last-Event-ID verified; withdrawn API issuer trust returns 502 with no API request; invalid nginx reload rejected with old workers healthy; valid reload recovers; TLS certificate rotation/rollback verified; no production secrets; nginx=${docker("image", "inspect", "--format", "{{.Id}}", nginxImage).trim()}`,
   );
 } finally {
   if (nginxId) spawnSync("docker", ["rm", "-f", nginxId], { stdio: "ignore" });

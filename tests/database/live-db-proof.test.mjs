@@ -21,7 +21,7 @@ void test(
   { skip: process.env.COFFEE_DB_LIVE_PROOF !== "1" },
   async () => {
     const { runLiveProof } = await import("../../scripts/db-live-proof.mjs");
-    const result = await runLiveProof({ runId: "issue3proof" });
+    const result = await runLiveProof({ runId: "dbproof" });
     assert.deepEqual(result.bootstrap, {
       firstCreatedDatabaseCount: 5,
       secondExistingDatabaseCount: 5,

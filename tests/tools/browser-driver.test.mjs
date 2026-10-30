@@ -13,7 +13,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { PassThrough } from "node:stream";
 import test from "node:test";
-import { startG15Browser } from "../../tools/g15-browser-driver.mjs";
+import { startBrowser } from "../../tools/browser-driver.mjs";
 
 const nginxId = "a".repeat(64);
 const browserId = "b".repeat(64);
@@ -28,7 +28,7 @@ const nodeImageDigest = JSON.parse(
     "utf8",
   ),
 ).browserHelperNodeImage.split("@")[1];
-const endpointCanary = "ws://0.0.0.0:43210/g15EndpointCanary123456";
+const endpointCanary = "ws://0.0.0.0:43210/browserEndpointCanary123456";
 
 async function makeFixtureHome() {
   const root = await mkdtemp(join(tmpdir(), "g15-driver-test-"));
@@ -240,7 +240,7 @@ void test("G15 browser driver binds Chromium to the verified edge namespace and 
   const fakeDocker = createFakeDocker();
   const chromium = fakeChromium(home.executablePath);
   const server = fakeServerProcess();
-  const result = await startG15Browser(makeContext(home), {
+  const result = await startBrowser(makeContext(home), {
     runDocker: fakeDocker.runDocker,
     spawnProcess: () => server,
     chromium,
@@ -250,7 +250,7 @@ void test("G15 browser driver binds Chromium to the verified edge namespace and 
   assert.equal(result.witness.endpointStored, false);
   assert.match(result.witness.endpointSha256, /^[0-9a-f]{64}$/u);
   assert.equal(
-    JSON.stringify(result.witness).includes("g15EndpointCanary"),
+    JSON.stringify(result.witness).includes("browserEndpointCanary"),
     false,
   );
   assert.match(chromium.calls[0], /^ws:\/\/172\.28\.0\.3:43210\//u);
@@ -283,7 +283,7 @@ void test("G15 browser driver rejects a foreign nginx identity before creating a
   t.after(() => rm(home.root, { recursive: true, force: true }));
   const fakeDocker = createFakeDocker({ nginxService: "api-public" });
   await assert.rejects(
-    startG15Browser(makeContext(home), {
+    startBrowser(makeContext(home), {
       runDocker: fakeDocker.runDocker,
       chromium: fakeChromium(home.executablePath),
       spawnProcess: () => assert.fail("browser process must not start"),
@@ -303,7 +303,7 @@ void test("G15 browser driver rejects a network name scoped to a different Compo
   const context = makeContext(home);
   context.networks.coffee_edge_backend = "another-project_coffee_edge_backend";
   await assert.rejects(
-    startG15Browser(context, {
+    startBrowser(context, {
       runDocker: fakeDocker.runDocker,
       spawnProcess: () => assert.fail("browser process must not start"),
       chromium: fakeChromium(home.executablePath),
@@ -322,7 +322,7 @@ void test("G15 browser driver preserves a created container whose exact ownershi
   const fakeDocker = createFakeDocker({ mismatchedContainerLabel: true });
   let cidfile;
   await assert.rejects(
-    startG15Browser(makeContext(home), {
+    startBrowser(makeContext(home), {
       runDocker: async (args, options) => {
         if (args[0] === "create") cidfile = args[args.indexOf("--cidfile") + 1];
         return fakeDocker.runDocker(args, options);
@@ -351,7 +351,7 @@ void test("G15 browser driver sanitizes connect errors and removes its exact own
   t.after(() => rm(home.root, { recursive: true, force: true }));
   const fakeDocker = createFakeDocker();
   await assert.rejects(
-    startG15Browser(makeContext(home), {
+    startBrowser(makeContext(home), {
       runDocker: fakeDocker.runDocker,
       spawnProcess: () => fakeServerProcess(),
       chromium: fakeChromium(home.executablePath, {
@@ -361,7 +361,7 @@ void test("G15 browser driver sanitizes connect errors and removes its exact own
     (error) => {
       assert.equal(error.message, "G15_BROWSER_CONNECT_FAILED");
       assert.equal(error.message.includes("transport-secret-canary"), false);
-      assert.equal(error.message.includes("g15EndpointCanary"), false);
+      assert.equal(error.message.includes("browserEndpointCanary"), false);
       return true;
     },
   );
@@ -374,11 +374,11 @@ void test("G15 browser driver rejects WebSocket endpoint userinfo before connect
   const fakeDocker = createFakeDocker();
   const chromium = fakeChromium(home.executablePath);
   await assert.rejects(
-    startG15Browser(makeContext(home), {
+    startBrowser(makeContext(home), {
       runDocker: fakeDocker.runDocker,
       spawnProcess: () =>
         fakeServerProcess(
-          "ws://username:privateCanary@0.0.0.0:43210/g15EndpointCanary123456",
+          "ws://username:privateCanary@0.0.0.0:43210/browserEndpointCanary123456",
         ),
       chromium,
     }),
@@ -396,7 +396,7 @@ void test("G15 browser driver fails closed when exact-container cleanup cannot b
   const home = await makeFixtureHome();
   t.after(() => rm(home.root, { recursive: true, force: true }));
   const fakeDocker = createFakeDocker({ failRemove: true });
-  const result = await startG15Browser(makeContext(home), {
+  const result = await startBrowser(makeContext(home), {
     runDocker: fakeDocker.runDocker,
     spawnProcess: () => fakeServerProcess(),
     chromium: fakeChromium(home.executablePath),
@@ -414,7 +414,7 @@ void test("G15 browser driver retains cidfile ownership evidence after an ambigu
   const fakeDocker = createFakeDocker({ failCreate: true });
   let cidfile;
   await assert.rejects(
-    startG15Browser(makeContext(home), {
+    startBrowser(makeContext(home), {
       runDocker: async (args, options) => {
         if (args[0] === "create") cidfile = args[args.indexOf("--cidfile") + 1];
         return fakeDocker.runDocker(args, options);
@@ -438,7 +438,7 @@ void test("G15 browser driver recovers and removes a late container after create
   t.after(() => rm(home.root, { recursive: true, force: true }));
   const fakeDocker = createFakeDocker({ throwCreate: true });
   await assert.rejects(
-    startG15Browser(makeContext(home), {
+    startBrowser(makeContext(home), {
       runDocker: fakeDocker.runDocker,
       chromium: fakeChromium(home.executablePath),
       spawnProcess: () =>
@@ -464,7 +464,7 @@ void test("G15 browser driver retains a thrown-create witness when recovery insp
   });
   let cidfile;
   await assert.rejects(
-    startG15Browser(makeContext(home), {
+    startBrowser(makeContext(home), {
       runDocker: async (args, options) => {
         if (args[0] === "create") cidfile = args[args.indexOf("--cidfile") + 1];
         return fakeDocker.runDocker(args, options);
@@ -502,7 +502,7 @@ void test("G15 browser driver never cleans a foreign container found after creat
   });
   let cidfile;
   await assert.rejects(
-    startG15Browser(makeContext(home), {
+    startBrowser(makeContext(home), {
       runDocker: async (args, options) => {
         if (args[0] === "create") cidfile = args[args.indexOf("--cidfile") + 1];
         return fakeDocker.runDocker(args, options);

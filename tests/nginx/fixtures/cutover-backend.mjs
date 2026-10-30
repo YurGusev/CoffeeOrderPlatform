@@ -78,7 +78,7 @@ for (const [host, port, role] of services) {
             const header = Buffer.from(
               JSON.stringify({
                 alg: "EdDSA",
-                kid: "issue162-fixture",
+                kid: "cutover-fixture",
                 typ: "JWT",
               }),
             ).toString("base64url");

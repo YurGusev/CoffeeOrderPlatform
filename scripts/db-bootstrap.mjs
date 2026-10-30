@@ -26,7 +26,7 @@ const DENIED_ROLES = new Set([
   "coffee_platform_superuser",
 ]);
 const IDENTIFIER = /^[a-z][a-z0-9_]{0,62}$/;
-const G17_RESTORE_DATABASE =
+const BACKUP_RESTORE_DATABASE =
   /^coffee_restore_[0-9]{8}T[0-9]{6}Z-[0-9a-f]{7}_(customer|catalog|pricing|orders|integration)$/;
 const ROLE = /^coffee_[a-z_]+_(?:migrator|rw|ro)$/;
 const PRIVILEGES = new Set(["SELECT", "INSERT", "UPDATE", "DELETE"]);
@@ -94,11 +94,11 @@ function quoteIdentifier(value) {
 }
 
 function quoteDatabaseIdentifier(value) {
-  const isCanonicalG17Restore =
+  const isCanonicalBackupRestore =
     typeof value === "string" &&
     Buffer.byteLength(value, "utf8") <= 63 &&
-    G17_RESTORE_DATABASE.test(value);
-  if (!IDENTIFIER.test(value ?? "") && !isCanonicalG17Restore)
+    BACKUP_RESTORE_DATABASE.test(value);
+  if (!IDENTIFIER.test(value ?? "") && !isCanonicalBackupRestore)
     fail("database name is not a canonical identifier or G17 restore target");
   return `"${value.replaceAll('"', '""')}"`;
 }
