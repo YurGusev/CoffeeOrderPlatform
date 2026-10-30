@@ -2765,6 +2765,7 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
       tempoProfile.backend_scheduler.provider = {retention: {interval: '30s'}};
       tempoProfile.live_store.max_block_duration = '30s';
       tempoProfile.live_store.complete_block_timeout = '1m';
+      tempoProfile.live_store.flush_op_timeout = '30s';
       tempoProfile.live_store.block_reclaim_grace = '1m';
       tempoProfile.storage.trace.blocklist_poll = '30s';
       tempoProfile.query_frontend = {search: {query_backend_after: '1m'}};
@@ -2777,6 +2778,7 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
           interval: durationMilliseconds(actual?.backend_scheduler?.provider?.retention?.interval),
           maxBlock: durationMilliseconds(actual?.live_store?.max_block_duration),
           complete: durationMilliseconds(actual?.live_store?.complete_block_timeout),
+          cleanup: durationMilliseconds(actual?.live_store?.flush_op_timeout),
           reclaim: durationMilliseconds(actual?.live_store?.block_reclaim_grace),
           poll: durationMilliseconds(actual?.storage?.trace?.blocklist_poll),
           queryAfter: durationMilliseconds(actual?.query_frontend?.search?.query_backend_after)};
@@ -2793,7 +2795,7 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
         await writeTempoConfig(tempoProfile);
         await recreateBackend('tempo');
         const activeTempo = await readTempoKnobs();
-        const expectedTempo = {retention: 120000, interval: 30000, maxBlock: 30000, complete: 60000, reclaim: 60000, poll: 30000, queryAfter: 60000};
+        const expectedTempo = {retention: 120000, interval: 30000, maxBlock: 30000, complete: 60000, cleanup: 30000, reclaim: 60000, poll: 30000, queryAfter: 60000};
         if (Object.keys(expectedTempo).some(key => activeTempo[key] !== expectedTempo[key])) throw new Error('Tempo fixture retention profile was not effective');
         const otlpUrl = `http://${new URL(baseUrls.tempo).hostname}:${new URL(config.telemetry.tempo.otlpEndpoint).port}`;
         const putTrace = async name => {
@@ -2807,31 +2809,37 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
         };
         const tempoMarkerAtMs = Date.now();
         const expiredTraceId = await putTrace('g14.retention.expired');
+        evidence.retention.tempoObservation = {effective: activeTempo, traceId: expiredTraceId};
         await waitForSameTraceSpans({baseUrl: baseUrls.tempo, traceId: expiredTraceId,
           expectedSpanNames: {'g14-retention': ['g14.retention.expired']}, timeoutMs: 120000});
         let traceAbsentSince;
         await waitFor(async () => {
           try {
           const response = await fetch(new URL(`/api/traces/${expiredTraceId}`, baseUrls.tempo), {signal: AbortSignal.timeout(5000)});
+          evidence.retention.tempoObservation = {effective: activeTempo, traceId: expiredTraceId,
+            observedAt: new Date().toISOString(), markerAgeMs: Date.now() - tempoMarkerAtMs, httpStatus: response.status};
           if (response.status !== 200 && response.status !== 404) throw new Error(`Tempo retention query HTTP ${response.status}`);
           if (response.status === 200) {
             const result = JSON.parse(await boundedResponseText(response, 8 * 1024 * 1024));
             if (result?.metrics?.failedBlocks > 0) throw new Error('Tempo retention query is partial');
             const groups = result?.batches ?? result?.resourceSpans ?? result?.trace?.resourceSpans;
             if (!Array.isArray(groups)) throw new Error('Tempo retention query returned invalid trace data');
+            evidence.retention.tempoObservation.oldTraceVisible = groups.length > 0;
             if (groups.length > 0) { traceAbsentSince = undefined; return false; }
           }
+          evidence.retention.tempoObservation.oldTraceVisible = false;
           if (Date.now() < tempoMarkerAtMs + 120000) throw Object.assign(new Error('Tempo trace disappeared before fixture retention elapsed'), {fatal: true});
           const controlId = await putTrace('g14.retention.control');
           await waitForSameTraceSpans({baseUrl: baseUrls.tempo, traceId: controlId,
             expectedSpanNames: {'g14-retention': ['g14.retention.control']}, timeoutMs: 30000, intervalMs: 1000});
           traceAbsentSince ??= Date.now();
+          Object.assign(evidence.retention.tempoObservation, {liveControlVisible: true, absentForMs: Date.now() - traceAbsentSince});
           return Date.now() - traceAbsentSince >= 2 * 60 * 1000;
           } catch (error) { traceAbsentSince = undefined; throw error; }
         }, {timeoutMs: 6 * 60 * 1000, intervalMs: 10000, description: 'Tempo TTL removes exact trace with live control'});
         evidence.retention.tempo = {status: 'PASS', fixtureOnly: true, sourceConfigSha256: configSourceSha256, schemaSourceSha256,
           profileSha256: profileHash(tempoProfile), traceId: expiredTraceId, visibleBeforeExpiry: true, liveControlVisible: true,
-          profile: {retention: '2m', retentionInterval: '30s', completeBlockTimeout: '1m', blocklistPoll: '30s'}};
+          profile: {retention: '2m', retentionInterval: '30s', completeBlockTimeout: '1m', cleanupInterval: '30s', blocklistPoll: '30s'}};
       } finally {
         try {
           await writeTempoConfig(originalTempoConfig);

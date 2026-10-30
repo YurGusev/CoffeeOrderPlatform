@@ -964,6 +964,34 @@ void test('Loki retention fixture changes cache TTL on a clone of the original p
   }
 });
 
+void test('Tempo retention fixture accelerates cleanup and verifies the effective cadence', async () => {
+  const source = await readFile(new URL('../../tools/observability/verify.mjs', import.meta.url), 'utf8');
+  const start = source.indexOf('const originalTempoConfig = configs.tempo;');
+  const end = source.indexOf('const originalTempoBytes =', start);
+  const readerStart = source.indexOf('const readTempoKnobs = async () =>', end);
+  const readerEnd = source.indexOf('const originalTempoKnobs =', readerStart);
+  const checkStart = source.indexOf('const activeTempo = await readTempoKnobs();', readerEnd);
+  const checkEnd = source.indexOf('const otlpUrl =', checkStart);
+  assert.ok(start >= 0 && end > start && readerStart > end && readerEnd > readerStart && checkEnd > checkStart);
+  const original = {backend_worker: {compaction: {block_retention: '72h'}}, backend_scheduler: {},
+    live_store: {wal: {path: '/var/tempo/live-wal'}, flush_op_timeout: '5m'}, storage: {trace: {}}};
+  const configs = {tempo: structuredClone(original)};
+  const profile = runInNewContext(`(() => {${source.slice(start, end)}return tempoProfile;})()`, {configs, structuredClone});
+  assert.deepEqual(configs.tempo, original);
+  assert.equal(profile.live_store.flush_op_timeout, '30s');
+  assert.equal(profile.live_store.wal.path, original.live_store.wal.path);
+  const readKnobs = runInNewContext(`(() => {${source.slice(readerStart, readerEnd)}return readTempoKnobs;})()`, {
+    api: async () => profile, baseUrls: {}, parseTempoStatusConfigResponse: value => value, durationMilliseconds,
+  });
+  const effective = await readKnobs();
+  assert.equal(effective.cleanup, 30000);
+  const check = value => runInNewContext(`(async () => {${source.slice(checkStart, checkEnd)}})()`, {
+    readTempoKnobs: async () => value, Error,
+  });
+  await check(effective);
+  await assert.rejects(check({...effective, cleanup: 300000}), /fixture retention profile was not effective/u);
+});
+
 void test('restoration preserves proof failure and reports both failures without a false pass', async () => {
   const source = await readFile(new URL('../../tools/observability/verify.mjs', import.meta.url), 'utf8');
   const restorations = [

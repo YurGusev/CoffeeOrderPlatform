@@ -72,6 +72,11 @@ SQLite-full и WAL ENOSPC. После освобождения места пре
 ENOSPC до запроса, identity, точное удаление filler и recovery остаются обязательными.
 Loki TTL fixture сохраняет включённый chunk cache с тестовым TTL 30 секунд;
 effective профиль и восстановление проверяются отдельно, production TTL не меняется.
+Tempo TTL fixture задаёт cleanup `live_store.flush_op_timeout: 30s` и проверяет
+effective/restored значение: исходный период 5 минут оставлял меньше обязательных
+двух минут отсутствия в шестиминутной пробе. Парный native опыт без producer
+подтвердил RED→GREEN при изменении только cleanup. Production cadence, compaction
+и окна доказательства не меняются.
 
 Grafana получает минимум 512 MiB. Реальный прогон с 256 MiB зафиксировал
 OOM/restart, поэтому проверяется также неизменность исходного процесса до
