@@ -36,16 +36,14 @@ HTTP и trust surface описаны в
 node .cursor/skills/orders-slice-verify/run.mjs
 ```
 
-Нужны Node 26.8.1, pnpm, Docker, `openssl`, `keytool`, `python3`, `make` и
-`g++`. Перед контейнерами скрипт запускает инкрементальный
-`tsc -b apps/orders-service`. Процесс `orders-service` запускает тот же
-бинарник Node, которым запущен скрипт, через динамический линкер хоста.
-Образы Postgres, Node и Kafka читаются из `config/toolchain-versions.json`
-(`postgresImage`, `nodeBookwormSlimImage`, `kafkaImage`).
-
-У `@confluentinc/kafka-javascript` 1.10.0 нет готового бинарника для Node ABI
-147. Если модуль не загружается, скрипт один раз собирает уже объявленную
-зависимость, а `ar-mri` убирает `+` из путей pnpm: иначе `ar -M` обрывает сборку.
+Нужны Node 26.8.1, pnpm, Docker, `openssl` и `keytool`. Перед контейнерами
+скрипт запускает инкрементальный `tsc -b apps/orders-service`. Процесс
+`orders-service` запускает тот же бинарник Node, которым запущен скрипт,
+через динамический линкер хоста. Образы Postgres, Node и Kafka читаются из
+`config/toolchain-versions.json` (`postgresImage`, `nodeBookwormSlimImage`,
+`kafkaImage`). Запускающий Node уже должен загружать
+`@confluentinc/kafka-javascript`. У версии 1.10.0 нет бинарника для ABI 147,
+на этой машине модуль уже собран локально.
 
 Контейнеры фикстуры и `orders-service` идут от uid и gid запускающего
 пользователя. Postgres стартует от root образа и читает файл пароля.

@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 
 import { execFileSync, spawn } from "node:child_process";
-import { createRequire } from "node:module";
 import { randomBytes, randomUUID, generateKeyPairSync, sign } from "node:crypto";
 import { existsSync } from "node:fs";
 import {
@@ -12,7 +11,6 @@ import {
   readdir,
   rm,
   statfs,
-  symlink,
   writeFile,
 } from "node:fs/promises";
 import { createServer } from "node:net";
@@ -94,7 +92,6 @@ const PERMISSION = {
 };
 
 const secrets = [];
-const require = createRequire(join(ROOT, "package.json"));
 
 function remember(value) {
   if (typeof value === "string" && value.length >= 8) secrets.push(value);
@@ -552,30 +549,13 @@ async function ensureDependencies() {
     "apps/orders-service/dist/main.js was not produced",
   );
   hostNodeLaunch();
-  const probe = () => run(process.execPath, ["-e", "require('@confluentinc/kafka-javascript')"]);
   try {
-    await probe();
-    return;
+    await run(process.execPath, ["-e", "require('@confluentinc/kafka-javascript')"]);
   } catch (error) {
-    process.stderr.write(
-      `orders-slice-verify: kafka binding is not loadable by the runner Node (${redact(error.message)})\n`,
+    throw new Error(
+      `runner Node cannot load @confluentinc/kafka-javascript (${redact(error.message)})`,
     );
   }
-  const pkg = dirname(require.resolve("@confluentinc/kafka-javascript/package.json"));
-  const prebuild = join(pkg, "node_modules/.bin/node-pre-gyp");
-  assert(existsSync(prebuild), "node-pre-gyp is not installed for @confluentinc/kafka-javascript");
-  const arBin = join(SECRET_ROOT, "orders-slice-verify-ar");
-  await mkdir(arBin, { recursive: true, mode: 0o700 });
-  await rm(join(arBin, "ar"), { force: true });
-  await symlink(join(dirname(fileURLToPath(import.meta.url)), "ar-mri"), join(arBin, "ar"));
-  process.stderr.write("orders-slice-verify: build kafka binding with the runner Node\n");
-  await run(prebuild, ["install", "--fallback-to-build"], {
-    cwd: pkg,
-    inherit: true,
-    env: { ...process.env, PATH: `${arBin}:${process.env.PATH ?? ""}` },
-  });
-  await probe();
-  await rm(arBin, { recursive: true, force: true });
 }
 
 function header(headers, name) {
