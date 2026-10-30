@@ -16,10 +16,20 @@ permissions:
 
 jobs:
   check:
+    # Runner стоит на dev-machine. Чужой код туда не пускаем:
+    # только PR из этого же репозитория и только от владельца.
+    if: >-
+      github.event_name != 'pull_request' ||
+      (github.event.pull_request.head.repo.full_name == github.repository &&
+       github.event.pull_request.user.login == github.repository_owner)
     runs-on: [self-hosted, coffee-local]
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+        with:
+          # pnpm contracts:breaking сравнивает контракты с origin/develop.
+          fetch-depth: 0
+          persist-credentials: false
       - name: Install
         run: pnpm install --frozen-lockfile
       - name: pnpm check
