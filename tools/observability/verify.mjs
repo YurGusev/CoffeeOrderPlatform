@@ -168,10 +168,10 @@ export function nativeNormalEvaluationAdvanced(previousOutcomeAtUs, currentOutco
     Number.isSafeInteger(currentOutcomeAtUs) && currentOutcomeAtUs > previousOutcomeAtUs;
 }
 
-async function waitFor(predicate, {timeoutMs, intervalMs = 2000, description}) {
-  const until = Date.now() + timeoutMs;
+async function waitFor(predicate, {timeoutMs, intervalMs = 2000, description, now = Date.now, sleep: pause = sleep}) {
+  const until = now() + timeoutMs;
   let lastError;
-  while (Date.now() < until) {
+  while (now() < until) {
     try {
       const value = await predicate();
       if (value) return value;
@@ -179,12 +179,12 @@ async function waitFor(predicate, {timeoutMs, intervalMs = 2000, description}) {
       if (error.fatal) throw error;
       lastError = error;
     }
-    await sleep(intervalMs);
+    await pause(intervalMs);
   }
   throw new Error(`${description} did not complete${lastError ? `: ${lastError.message}` : ''}`);
 }
 
-export async function waitForDiskGuardBaseline({readDiskRows, readGuardStatus, timeoutMs = 30000, intervalMs = 1000}) {
+export async function waitForDiskGuardBaseline({readDiskRows, readGuardStatus, timeoutMs = 30000, intervalMs = 1000, now = Date.now, sleep: pause = sleep}) {
   let latestRows = null;
   let guardExit = null;
   let attempts = 0;
@@ -216,7 +216,7 @@ export async function waitForDiskGuardBaseline({readDiskRows, readGuardStatus, t
         return {status: 'PASS', rows: latestRows, guardExit, attempts};
       }
       return false;
-    }, {timeoutMs, intervalMs, description: 'OpenObserve native disk watermark guard preflight'});
+    }, {timeoutMs, intervalMs, description: 'OpenObserve native disk watermark guard preflight', now, sleep: pause});
   } catch (error) {
     error.diskPressurePreflight = {status: 'FAIL', rows: latestRows, guardExit, attempts, failurePhase};
     throw error;

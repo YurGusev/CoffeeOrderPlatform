@@ -63,17 +63,23 @@ void test('disk pressure baseline waits for a clear native guard and retains its
     {mountPoint: '/data', totalBytes: 2048000, usedBytes: 512000, usedPercent: 25},
   ];
 
+  let now = 0;
+  const clockNow = () => now;
+  const clockSleep = async (ms) => { now += ms; };
   let guardCalls = 0;
   const baseline = await waitForDiskGuardBaseline({readDiskRows: () => rows,
-    readGuardStatus: () => ++guardCalls === 1 ? 1 : 0, timeoutMs: 50, intervalMs: 1});
+    readGuardStatus: () => ++guardCalls === 1 ? 1 : 0, timeoutMs: 50, intervalMs: 1,
+    now: clockNow, sleep: clockSleep});
   assert.equal(baseline.status, 'PASS');
   assert.equal(baseline.guardExit, 0);
   assert.equal(baseline.attempts, 2, 'a transient native guard exit 1 is retried until exact exit 0');
   assert.deepEqual(baseline.rows, rows);
 
+  now = 0;
   let timeoutFailure;
   try {
-    await waitForDiskGuardBaseline({readDiskRows: () => rows, readGuardStatus: () => 1, timeoutMs: 10, intervalMs: 1});
+    await waitForDiskGuardBaseline({readDiskRows: () => rows, readGuardStatus: () => 1, timeoutMs: 10, intervalMs: 1,
+      now: clockNow, sleep: clockSleep});
   } catch (error) { timeoutFailure = error; }
   assert.ok(timeoutFailure, 'a persistent native guard exit 1 must remain fatal within the bounded wait');
   assert.match(timeoutFailure.message, /disk watermark guard preflight did not complete/u);
