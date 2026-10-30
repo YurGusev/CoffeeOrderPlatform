@@ -23,7 +23,7 @@ import { availableParallelism, totalmem, cpus } from "node:os";
 import { load as yaml, dump } from "js-yaml";
 import Ajv2020 from "ajv/dist/2020.js";
 import { deriveRuntimeKafkaTarget } from "../../../packages/platform-config/dist/index.js";
-import { readG15FixtureLineage } from "../../../tools/config-bootstrap/browser-fixture.mjs";
+import { readBrowserFixtureLineage } from "../../../tools/config-bootstrap/browser-fixture.mjs";
 import {
   loadVerifiedGateImage,
   removeVerifiedGateImage,
@@ -32,7 +32,7 @@ import { validateLaunchContext } from "../../../verification/launch/v1/report.mj
 import { isoNow, FULL, THRESHOLDS } from "./protocol.mjs";
 
 export const ROOT = resolve(import.meta.dirname, "../../..");
-export const LABEL = "coffee.issue12.realtime-soak";
+export const LABEL = "coffee.realtime.fixture";
 export const PRODUCT_BUILD_TARGETS = Object.freeze([
   "packages/contracts/pricing-v1",
   "packages/contracts/orders-v1",
@@ -234,7 +234,7 @@ async function readFixtureLaunchPath(launchPath) {
   const resources = active.context.resources;
   assert.equal(typeof resources?.g15ParentCandidateSha, "string");
   assert.equal(resources.g15ParentCheckoutRoot, active.sourceRoot);
-  const lineage = await readG15FixtureLineage({
+  const lineage = await readBrowserFixtureLineage({
     root: active.sourceRoot,
     contextPath,
     baseCandidateSha: resources.g15ParentCandidateSha,
@@ -282,7 +282,7 @@ function assertFixtureLaunchConfig(config, configBytes, launchPath) {
   assert.equal(config.verification.kafkaNamespaceIsolation, true);
   assert.deepEqual(config.browserOidc, {
     issuer: "https://idp.fixture.invalid",
-    clientId: "issue12-fixture",
+    clientId: "realtime-browser-fixture",
     authorizationUrl: "https://idp.fixture.invalid/authorize",
     tokenUrl: "https://idp.fixture.invalid/token",
     jwksUrl: "https://idp.fixture.invalid/keys",
@@ -540,7 +540,7 @@ async function certificates(dir, environment, { launchPath = false } = {}) {
     "-out",
     "ca.crt",
     "-subj",
-    "/CN=issue12-disposable-ca",
+    "/CN=realtime-disposable-ca",
     "-days",
     "2",
   );
@@ -804,7 +804,7 @@ export async function prepare(resultDir, options) {
     config.nginxTransport.publicHost = "localhost";
     config.browserOidc = {
       issuer: "https://idp.fixture.invalid",
-      clientId: "issue12-fixture",
+      clientId: "realtime-browser-fixture",
       authorizationUrl: "https://idp.fixture.invalid/authorize",
       tokenUrl: "https://idp.fixture.invalid/token",
       jwksUrl: "https://idp.fixture.invalid/keys",

@@ -375,7 +375,7 @@ export async function nativeProducer() {
     username: fixture.credentials.publisher.username,
     password: fixture.credentials.publisher.password,
     sslCaPem: fixture.credentials.publisher.caPem,
-    clientId: `issue12-publisher-${process.pid}`,
+    clientId: `realtime-publisher-${process.pid}`,
     maxPending: 10000,
     maxMessageBytes: 1048576,
     physicalTargets,

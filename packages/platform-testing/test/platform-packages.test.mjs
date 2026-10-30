@@ -4687,7 +4687,7 @@ function outboxFixture(
   aggregateSequence,
   payload = { value: messageId },
 ) {
-  const messageType = "Issue63.TestEvent";
+  const messageType = "DeliveryTest.Event";
   const occurredAt = "2026-01-01T00:00:00.123456789Z";
   const correlationId = `correlation-${messageId}`;
   const traceparent = "00-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-bbbbbbbbbbbbbbbb-01";
@@ -4695,7 +4695,7 @@ function outboxFixture(
   return {
     messageId,
     messageType,
-    topic: "coffee.issue63.test.v1",
+    topic: "coffee.delivery.test.v1",
     aggregateRef,
     aggregateSequence,
     ownerVersion,
@@ -4711,7 +4711,7 @@ function outboxFixture(
       causationId: null,
       traceparent,
       aggregate: {
-        type: "Issue63Aggregate",
+        type: "DeliveryTestAggregate",
         ref: aggregateRef,
         version: ownerVersion,
       },
@@ -5021,7 +5021,10 @@ void test("SQL Outbox rejects envelopes that do not preserve event identity", as
         ...message,
         envelope: {
           ...message.envelope,
-          aggregate: { type: "Issue63Aggregate", ref: message.aggregateRef },
+          aggregate: {
+            type: "DeliveryTestAggregate",
+            ref: message.aggregateRef,
+          },
         },
       }),
     ],
@@ -5267,7 +5270,7 @@ void test("SQL Outbox immutable envelope bytes fence duplicate and claimed recor
 });
 
 void test("SQL Outbox age diagnostics are scoped and reject invalid persisted ages", async (t) => {
-  const topic = "coffee.issue63.test.v1";
+  const topic = "coffee.delivery.test.v1";
   const scoped = deliverySqlDatabase(t, {
     ageRows: [{ topic, age_ms: "1500" }],
   });
@@ -5310,7 +5313,7 @@ void test("SQL Outbox age diagnostics are scoped and reject invalid persisted ag
 });
 
 void test("SQL Outbox scoped age diagnostics remain best-effort across query failure", async (t) => {
-  const topic = "coffee.issue63.diagnostics.v1";
+  const topic = "coffee.delivery.diagnostics.v1";
   let failAgeQuery = false;
   let ageCalls = 0;
   const { database, statements } = mockDatabase(t, (sql) => {
@@ -6056,7 +6059,7 @@ void test("Inbox rejects an unknown persisted state instead of acquiring it", as
         rows: [
           {
             message_id: "persisted-unknown-state",
-            message_type: "Issue63.TestEvent",
+            message_type: "DeliveryTest.Event",
             received_at: "2026-01-01 00:00:00+00",
             payload: { stable: true },
             payload_hash: canonicalRequestHash({ stable: true }),
@@ -6076,7 +6079,7 @@ void test("Inbox rejects an unknown persisted state instead of acquiring it", as
   const payload = { stable: true };
   const message = {
     messageId: "persisted-unknown-state",
-    messageType: "Issue63.TestEvent",
+    messageType: "DeliveryTest.Event",
     receivedAt: "2026-01-01T00:00:00Z",
     payload,
     payloadHash: canonicalRequestHash(payload),
@@ -6099,7 +6102,7 @@ void test("Inbox does not grant a permit for malformed persisted Processing rows
   const payload = { stable: true };
   const message = {
     messageId: "inbox-malformed-row",
-    messageType: "Issue63.TestEvent",
+    messageType: "DeliveryTest.Event",
     receivedAt: "2026-01-01T00:00:00Z",
     payload,
     payloadHash: canonicalRequestHash(payload),
@@ -6223,7 +6226,7 @@ void test("Inbox distinguishes active leases from durable terminal duplicates", 
   const payload = { stable: true };
   const message = {
     messageId: "inbox-existing-state",
-    messageType: "Issue63.TestEvent",
+    messageType: "DeliveryTest.Event",
     receivedAt: "2026-01-01T00:00:00Z",
     payload,
     payloadHash: canonicalRequestHash(payload),

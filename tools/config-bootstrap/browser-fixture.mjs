@@ -24,7 +24,7 @@ const RECEIPT = "gates/G15_BROWSER/artifacts/oidc-fixture-lineage.json";
 const SHA = /^[0-9a-f]{40}$/u;
 const FIXTURE_PROFILE = Object.freeze({
   issuer: "https://idp.fixture.invalid",
-  clientId: "issue12-fixture",
+  clientId: "realtime-browser-fixture",
   authorizationUrl: "https://idp.fixture.invalid/authorize",
   tokenUrl: "https://idp.fixture.invalid/token",
   jwksUrl: "https://idp.fixture.invalid/keys",
@@ -93,7 +93,7 @@ export function fixtureConfigText(baseText) {
   return baseText.replace(marker, profile);
 }
 
-export async function validateG15FixtureGitLineage({
+export async function validateBrowserFixtureGitLineage({
   candidateRoot,
   baseCandidateSha,
   candidateSha,
@@ -218,7 +218,7 @@ async function checkedLineage({ contextPath, baseCandidateSha }) {
   )
     fail("G15_CONTEXT_MODE_INVALID");
   if (candidateRoot === sourceRoot) fail("G15_CANDIDATE_INVALID");
-  const checked = await validateG15FixtureGitLineage({
+  const checked = await validateBrowserFixtureGitLineage({
     candidateRoot,
     baseCandidateSha,
     candidateSha: context.candidateSha,
@@ -295,7 +295,7 @@ async function verifyPrivateDirectoryTree(root, target) {
   }
 }
 
-export async function validateG15FixtureLineage({
+export async function validateBrowserFixtureLineage({
   root,
   contextPath,
   baseCandidateSha,
@@ -315,7 +315,7 @@ export async function validateG15FixtureLineage({
   return { ...checked.receipt, receiptPath: path };
 }
 
-export async function readG15FixtureLineage({
+export async function readBrowserFixtureLineage({
   root,
   contextPath,
   baseCandidateSha,
@@ -383,7 +383,7 @@ async function assertTmpfsDirectory(root) {
     fail("G15_TMPFS_REQUIRED");
 }
 
-export async function materializeG15BrowserFixture({
+export async function materializeBrowserFixture({
   root,
   contextPath,
   lineageArtifactLoc,
@@ -591,7 +591,7 @@ export async function materializeG15BrowserFixture({
       nssResult = execFileSync(
         "/usr/bin/python3",
         [
-          fileURLToPath(new URL("./g15-nss-trust.py", import.meta.url)),
+          fileURLToPath(new URL("./browser-nss-trust.py", import.meta.url)),
           "--database",
           nssDir,
           "--certificate",
@@ -673,4 +673,4 @@ export async function materializeG15BrowserFixture({
   }
 }
 
-export const G15_FIXTURE_LINEAGE_ARTIFACT = RECEIPT;
+export const BROWSER_FIXTURE_LINEAGE_ARTIFACT = RECEIPT;

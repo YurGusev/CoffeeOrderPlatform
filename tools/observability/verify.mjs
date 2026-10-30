@@ -434,7 +434,7 @@ set -eu
 token="$1"
 case "$token" in *[!a-f0-9]*|'') exit 2 ;; esac
 umask 077
-stop_path="/tmp/issue64-memory-stop-$token"
+stop_path="/tmp/observability-memory-stop-$token"
 pid=$$
 exec 3<&0
 printf '{"kind":"started","pid":%s}\\n' "$pid"
@@ -471,7 +471,7 @@ function startCollectorMemorySampler({name, token, config}) {
   const collector = config.telemetry.collector;
   const containerMemoryMiB = collector.containerMemoryMiB;
   const guardBytes = (containerMemoryMiB - collector.memorySpikeMiB) * MEMORY_MIB_BYTES;
-  const child = spawn('docker', ['exec', '-i', name, '/busybox', 'sh', '-c', collectorMemorySamplerScript, 'issue64-memory-sampler', token], {
+  const child = spawn('docker', ['exec', '-i', name, '/busybox', 'sh', '-c', collectorMemorySamplerScript, 'observability-memory-sampler', token], {
     stdio: ['pipe', 'pipe', 'ignore'],
   });
   let buffer = '';
@@ -549,7 +549,7 @@ function startCollectorMemorySampler({name, token, config}) {
     while (!closed && Date.now() < deadline) await sleep(25);
     if (child.exitCode === null && Number.isSafeInteger(samplerPid)) {
       const killScript = 'p="$1"; t="$2"; case "$p" in *[!0-9]*|"") exit 2 ;; esac; [ "$p" -gt 1 ] || exit 2; c=$(/busybox tr "\\000" " " < "/proc/$p/cmdline") || exit 3; case "$c" in *"$t"*) /busybox kill -TERM "$p" ;; *) exit 4 ;; esac';
-      try { run(['exec', name, '/busybox', 'sh', '-c', killScript, 'issue64-memory-kill', String(samplerPid), token]); } catch { failure ??= new Error('collector memory sampler cleanup failed'); }
+      try { run(['exec', name, '/busybox', 'sh', '-c', killScript, 'observability-memory-kill', String(samplerPid), token]); } catch { failure ??= new Error('collector memory sampler cleanup failed'); }
       const killDeadline = Date.now() + 3000;
       while (!closed && Date.now() < killDeadline) await sleep(25);
     }
@@ -2881,7 +2881,7 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
       else process.env.TMPDIR = previousTmpDir;
     }
 
-    const matrixProject = `coffee-issue64-final-${runId.slice(0, 8)}`;
+    const matrixProject = `coffee-observability-final-${runId.slice(0, 8)}`;
     let matrixNetworks = [];
     const detachMatrixNetworks = () => {
       if (matrixNetworks.length === 0) return;

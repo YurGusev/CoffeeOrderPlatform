@@ -589,7 +589,7 @@ void test('convergence phase acknowledgement follows backend PASS and rejects fa
   } finally {await rm(dir, {recursive: true, force: true});}
 });
 
-void test('issue 64 metric matrix derives all runtime owners and sanitizes probe receipts', () => {
+void test('runtime metric matrix derives all runtime owners and sanitizes probe receipts', () => {
   const databaseOwners = new Set([
     'customer-service', 'catalog-service', 'catalog-supplier-sync', 'catalog-activation-worker', 'pricing-service',
     'orders-service', 'orders-aroma-preparation', 'aroma-observer', 'aroma-convergence', 'aroma-gateway',
@@ -641,7 +641,7 @@ void test('issue 64 metric matrix derives all runtime owners and sanitizes probe
   }), /runtime metrics probe assertion failed/u);
 });
 
-void test('issue 64 failure diagnostics retain only allowlisted error codes and local frame coordinates', () => {
+void test('runtime failure diagnostics retain only allowlisted error codes and local frame coordinates', () => {
   const secret = 'canary-secret-must-not-escape';
   const cause = new Error(`${secret} in message`);
   cause.name = 'AssertionError';
@@ -985,9 +985,9 @@ void test('generated Node image probe accepts nameless nested package metadata b
   assert.equal(linkedForbidden.packageScanComplete,true);assert.deepEqual(linkedForbidden.forbiddenPackages,['typescript']);assert.equal(linkedForbidden.pass,false);
 });
 
-void test('issue 64 metric matrix requires a source identity callback before any Docker work', async () => {
+void test('runtime metric matrix requires a source identity callback before any Docker work', async () => {
   const args = {
-    projectName: 'coffee-issue64-final-aaaaaaaa', exporterToken: 'fixture-token',
+    projectName: 'coffee-observability-final-aaaaaaaa', exporterToken: 'fixture-token',
     onRolesReady: async () => {}, onCleanup: async () => {}, verifyMetricFamily: async () => {},
     nodeVersion: '1.2.3', nginxVersion: '1.2.3',
   };
@@ -1019,7 +1019,7 @@ void test('verification provenance hashes the non-ignored source tree and compil
   assert.match(identity.identityHash, /^[a-f0-9]{64}$/u);
 });
 
-void test('issue 64 evidence distinguishes selected live roles from full 14-runtime G14 coverage', () => {
+void test('observability evidence distinguishes selected live roles from full 14-runtime G14 coverage', () => {
   const coverage = observabilityVerificationCoverage({
     launchPathProof: {roles: [
       {role: 'edge-nginx'}, {role: 'edge-gateway'}, {role: 'api-public'}, {role: 'api-internal'}, {role: 'orders-service'},

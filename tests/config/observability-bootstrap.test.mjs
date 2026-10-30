@@ -49,6 +49,7 @@ import {
 } from "../../tools/observability/generate.mjs";
 import {
   checkBootstrap,
+  attestCanonicalMigrationPreparation,
   ensureNginxSecretOwnership,
   finalizeAromaSandboxDatabase,
   loadRuntimeConfig,
@@ -57,26 +58,27 @@ import {
   materializeOpenObserveAdminSecret,
   materializeRuntimeSecrets,
   openAromaSandboxMigrator,
-  probeG08CanonicalTarget,
-  prepareG08CanonicalMigratorRoles,
-  readG08PreparedPostgresIdentity,
-  readG08MigrationCredential,
+  probeCanonicalMigrationTarget,
+  prepareCanonicalMigratorRoles,
+  readPreparedPostgresIdentity,
+  readMigrationCredential,
   readTastyCredentials,
   provisionAromaSandboxDatabases,
   removeMaterializedSecrets,
-  synchronizeG08AdminCredential,
-  validateG08PreparationArtifact,
-  validateG08PreparationConfigTransition,
-  validateG17BackupTarget,
+  synchronizeMigrationAdminCredential,
+  validateMigrationPreparationArtifact,
+  validateMigrationPreparationConfigTransition,
+  validateBackupTarget,
 } from "../../tools/config-bootstrap/index.mjs";
 import {
   fixtureConfigText,
-  materializeG15BrowserFixture,
-  readG15FixtureLineage,
-  validateG15FixtureGitLineage,
-  validateG15FixtureLineage,
+  materializeBrowserFixture,
+  readBrowserFixtureLineage,
+  validateBrowserFixtureGitLineage,
+  validateBrowserFixtureLineage,
 } from "../../tools/config-bootstrap/browser-fixture.mjs";
-import { verifyG15BrowserChildBundle } from "../../verification/launch/v1/scenarios/browser.mjs";
+import { verifyBrowserChildBundle } from "../../verification/launch/v1/scenarios/browser.mjs";
+import { runMigrationStage } from "../../verification/launch/v1/scenarios/migrations.mjs";
 import { validateLaunchContext } from "../../verification/launch/v1/report.mjs";
 import { assertScopedSecrets } from "../../packages/platform-runtime/dist/index.js";
 import { initializeOpenObserve } from "../../tools/observability/bootstrap.mjs";
@@ -84,7 +86,7 @@ import { checkObservabilityHealth } from "../../tools/observability/health.mjs";
 import { verifyCollectorQueueMetrics } from "../../tools/observability/verify.mjs";
 import {
   createOidcProviderServer,
-  selectG15FixtureAccount,
+  selectBrowserFixtureAccount,
 } from "../realtime/fixtures/oidc-provider.mjs";
 
 const REPO_ROOT = resolve(fileURLToPath(new URL("../..", import.meta.url)));
@@ -2536,7 +2538,7 @@ void test("config-bootstrap validates the synthetic encrypted config without dec
 });
 
 void test("G08 canonical target probe is read-only and reports only bounded identity and role inventory", async (t) => {
-  const launch = await createG08LaunchFixture();
+  const launch = await createMigrationLaunchFixture();
   const {
     fixture,
     runId,
@@ -2563,7 +2565,7 @@ void test("G08 canonical target probe is read-only and reports only bounded iden
     const originalRoleMapBytes = await readFile(roleMapPath);
     const expectRejectedBeforeTrustedOperations = async () => {
       await assert.rejects(
-        probeG08CanonicalTarget({
+        probeCanonicalMigrationTarget({
           root: fixture.root,
           contextPath,
           env: fixture.env,
@@ -2666,7 +2668,7 @@ void test("G08 canonical target probe is read-only and reports only bounded iden
       assert.fail(`unexpected G08 probe query: ${sql}`);
     });
 
-    const absent = await probeG08CanonicalTarget({
+    const absent = await probeCanonicalMigrationTarget({
       root: fixture.root,
       contextPath,
       env: fixture.env,
@@ -2712,7 +2714,7 @@ void test("G08 canonical target probe is read-only and reports only bounded iden
       rolbypassrls: false,
       rolconnlimit: 20,
     });
-    const existing = await probeG08CanonicalTarget({
+    const existing = await probeCanonicalMigrationTarget({
       root: fixture.root,
       contextPath,
       env: fixture.env,
@@ -2732,7 +2734,7 @@ void test("G08 canonical target probe is read-only and reports only bounded iden
     const canonicalRole = { ...roleRows[0] };
     roleRows.push({ ...canonicalRole });
     await assert.rejects(
-      probeG08CanonicalTarget({
+      probeCanonicalMigrationTarget({
         root: fixture.root,
         contextPath,
         env: fixture.env,
@@ -2747,7 +2749,7 @@ void test("G08 canonical target probe is read-only and reports only bounded iden
       rolname: "coffee_foreign_migrator",
     });
     await assert.rejects(
-      probeG08CanonicalTarget({
+      probeCanonicalMigrationTarget({
         root: fixture.root,
         contextPath,
         env: fixture.env,
@@ -2770,7 +2772,8 @@ void test("G08 canonical target probe is read-only and reports only bounded iden
 });
 
 void test("G08 canonical target probe returns finite sanitized database failure facts", async (t) => {
-  const { fixture, evidenceDir, contextPath } = await createG08LaunchFixture();
+  const { fixture, evidenceDir, contextPath } =
+    await createMigrationLaunchFixture();
   const credentialCanary = "synthetic-pg-password-detail-canary";
   try {
     t.mock.method(Client.prototype, "connect", async () => {
@@ -2785,7 +2788,7 @@ void test("G08 canonical target probe returns finite sanitized database failure 
     });
 
     await assert.rejects(
-      probeG08CanonicalTarget({
+      probeCanonicalMigrationTarget({
         root: fixture.root,
         contextPath,
         env: fixture.env,
@@ -2844,7 +2847,7 @@ void test("G08 canonical target probe sanitizes identity and role-inventory quer
   ])
     await t.test(scenario.name, async (t) => {
       const { fixture, evidenceDir, contextPath } =
-        await createG08LaunchFixture();
+        await createMigrationLaunchFixture();
       let endCalls = 0;
       try {
         t.mock.method(Client.prototype, "connect", async () => {});
@@ -2880,7 +2883,7 @@ void test("G08 canonical target probe sanitizes identity and role-inventory quer
         });
 
         await assert.rejects(
-          probeG08CanonicalTarget({
+          probeCanonicalMigrationTarget({
             root: fixture.root,
             contextPath,
             env: fixture.env,
@@ -2904,14 +2907,14 @@ void test("G08 canonical target probe sanitizes identity and role-inventory quer
 
 void test("G08 admin credential sync uses the configured user and does not rewrite a valid SOPS credential", async (t) => {
   const { fixture, evidenceDir, contextPath, adminPassword } =
-    await createG08LaunchFixture();
+    await createMigrationLaunchFixture();
   const bundlePath = join(fixture.root, "secrets/platform.secrets.sops.yaml");
   const bundleBefore = await readFile(bundlePath);
   const connections = [];
   const queries = [];
   try {
-    await installFakeG08Sops(fixture);
-    await installFakeG08AdminDocker(fixture);
+    await installFakeMigrationSops(fixture);
+    await installFakeMigrationAdminDocker(fixture);
     t.mock.method(Client.prototype, "connect", async function () {
       connections.push({
         host: this.host,
@@ -2941,7 +2944,7 @@ void test("G08 admin credential sync uses the configured user and does not rewri
       assert.fail("G08 admin verification must remain read-only");
     });
 
-    const result = await synchronizeG08AdminCredential({
+    const result = await synchronizeMigrationAdminCredential({
       root: fixture.root,
       contextPath,
       env: fixture.env,
@@ -2978,7 +2981,7 @@ void test("G08 admin credential sync uses the configured user and does not rewri
 
 void test("G08 admin credential sync falls back only on exact 28P01 and persists only the encrypted admin field", async (t) => {
   const { fixture, evidenceDir, contextPath, adminPassword } =
-    await createG08LaunchFixture();
+    await createMigrationLaunchFixture();
   const bundlePath = join(fixture.root, "secrets/platform.secrets.sops.yaml");
   const initialBundle = await readFile(bundlePath);
   const initialPlain = JSON.parse(await readFile(fixture.plainPath, "utf8"));
@@ -2987,8 +2990,10 @@ void test("G08 admin credential sync falls back only on exact 28P01 and persists
   const queries = [];
   let connectCalls = 0;
   try {
-    await installFakeG08Sops(fixture);
-    await installFakeG08AdminDocker(fixture, { password: sourcePassword });
+    await installFakeMigrationSops(fixture);
+    await installFakeMigrationAdminDocker(fixture, {
+      password: sourcePassword,
+    });
     t.mock.method(Client.prototype, "connect", async function () {
       connectCalls += 1;
       connections.push({
@@ -3023,7 +3028,7 @@ void test("G08 admin credential sync falls back only on exact 28P01 and persists
       assert.fail("G08 credential synchronization must not execute DDL");
     });
 
-    const result = await synchronizeG08AdminCredential({
+    const result = await synchronizeMigrationAdminCredential({
       root: fixture.root,
       contextPath,
       env: fixture.env,
@@ -3255,16 +3260,16 @@ void test("G08 admin credential sync refuses non-auth failures, changed source i
   ];
   for (const scenario of scenarios) {
     const { fixture, evidenceDir, contextPath } =
-      await createG08LaunchFixture();
+      await createMigrationLaunchFixture();
     const bundlePath = join(fixture.root, "secrets/platform.secrets.sops.yaml");
     const bundleBefore = await readFile(bundlePath);
     let connectCalls = 0;
     const adminQueries = [];
     try {
-      await installFakeG08Sops(fixture, {
+      await installFakeMigrationSops(fixture, {
         savedBundleMutation: scenario.savedBundleMutation,
       });
-      await installFakeG08AdminDocker(fixture, scenario.docker);
+      await installFakeMigrationAdminDocker(fixture, scenario.docker);
       t.mock.method(Client.prototype, "connect", async () => {
         connectCalls += 1;
         await scenario.connect(connectCalls);
@@ -3315,7 +3320,7 @@ void test("G08 admin credential sync refuses non-auth failures, changed source i
         assert.fail("unexpected G08 admin query");
       });
       await assert.rejects(
-        synchronizeG08AdminCredential({
+        synchronizeMigrationAdminCredential({
           root: fixture.root,
           contextPath,
           env: fixture.env,
@@ -3414,7 +3419,9 @@ void test("G08 admin credential sync refuses non-auth failures, changed source i
 });
 
 void test("G17 target binds readonly context, isolated config, and server identity before secret access", async (t) => {
-  const launch = await createG08LaunchFixture({ databaseIsolation: true });
+  const launch = await createMigrationLaunchFixture({
+    databaseIsolation: true,
+  });
   const { fixture, evidenceDir, contextPath } = launch;
   t.after(async () => {
     await rm(evidenceDir, { recursive: true, force: true });
@@ -3433,18 +3440,18 @@ void test("G17 target binds readonly context, isolated config, and server identi
     [{ port: 5433 }, "CONFIG-G17-CONFIG"],
     [{ expectedSystemIdentifier: "not-numeric" }, "CONFIG-G17-CONFIG"],
   ]) {
-    await assert.rejects(validateG17BackupTarget({ ...args, ...override }), {
+    await assert.rejects(validateBackupTarget({ ...args, ...override }), {
       ruleId,
     });
   }
   await chmod(contextPath, 0o600);
   try {
-    await assert.rejects(validateG17BackupTarget(args), {
+    await assert.rejects(validateBackupTarget(args), {
       ruleId: "CONFIG-G17-CONTEXT",
     });
     await writeFile(contextPath, "{invalid context");
     await chmod(contextPath, 0o400);
-    await assert.rejects(validateG17BackupTarget(args), {
+    await assert.rejects(validateBackupTarget(args), {
       ruleId: "CONFIG-G17-CONTEXT",
     });
   } finally {
@@ -3456,7 +3463,7 @@ void test("G17 target binds readonly context, isolated config, and server identi
   const configBytes = await readFile(configPath);
   await writeFile(configPath, Buffer.concat([configBytes, Buffer.from("\n")]));
   try {
-    await assert.rejects(validateG17BackupTarget(args), {
+    await assert.rejects(validateBackupTarget(args), {
       ruleId: "CONFIG-G17-CONFIG",
     });
   } finally {
@@ -3475,22 +3482,22 @@ void test("G17 target binds readonly context, isolated config, and server identi
     systemIdentifier: "7613370342949990434",
   };
   await writeFile(identityPath, "{invalid identity", { mode: 0o600 });
-  await assert.rejects(validateG17BackupTarget(args), {
+  await assert.rejects(validateBackupTarget(args), {
     ruleId: "CONFIG-G17-SERVER-IDENTITY",
   });
   await writeFile(identityPath, JSON.stringify(identity));
   await assert.rejects(
-    validateG17BackupTarget({ ...args, expectedSystemIdentifier: "999" }),
+    validateBackupTarget({ ...args, expectedSystemIdentifier: "999" }),
     { ruleId: "CONFIG-G17-SERVER-IDENTITY" },
   );
-  const result = await validateG17BackupTarget(args);
+  const result = await validateBackupTarget(args);
   assert.deepEqual(result.target, {
     host: "coffee_postgres",
     port: 5432,
     systemIdentifier: identity.systemIdentifier,
   });
   await chmod(identityPath, 0o666);
-  await assert.rejects(validateG17BackupTarget(args), {
+  await assert.rejects(validateBackupTarget(args), {
     ruleId: "CONFIG-G17-SERVER-IDENTITY",
   });
   assert.deepEqual(JSON.parse(await readFile(identityPath, "utf8")), identity);
@@ -3519,19 +3526,274 @@ void test("G08 credential reader rejects malformed requests before accessing sec
   ];
   for (const request of invalid) {
     await assert.rejects(
-      readG08MigrationCredential({ ...valid, ...request }),
+      readMigrationCredential({ ...valid, ...request }),
       /CONFIG-G08-CREDENTIAL-REQUEST/u,
     );
   }
 });
 
+void test("G08 current attestation requires password authentication and unchanged canonical inputs", async (t) => {
+  const launch = await createMigrationLaunchFixture({
+    migratorBlock: true,
+    alignedRunId: true,
+  });
+  const { fixture, contextPath, evidenceDir } = launch;
+  const { roleNames, artifactPath } =
+    await writeMigrationPreparationArtifact(launch);
+  const args = {
+    root: fixture.root,
+    contextPath,
+    env: fixture.env,
+    expectedSystemIdentifier: "7613370342949990434",
+  };
+  const configPath = join(fixture.root, "config/platform.yaml");
+  const bundlePath = join(fixture.root, "secrets/platform.secrets.sops.yaml");
+  const closed = [];
+  let mode = "valid";
+  let roleConnections = 0;
+  try {
+    await installFakeMigrationSops(fixture);
+    t.mock.method(Client.prototype, "connect", async function () {
+      if (this.user !== "coffeeuser") {
+        roleConnections += 1;
+        if (mode === "wrong-password" && roleConnections === 4)
+          throw new Error("private error");
+        if (roleConnections === 1 && mode === "config")
+          await writeFile(configPath, "changed");
+        if (roleConnections === 1 && mode === "bundle")
+          await writeFile(bundlePath, "changed");
+        if (roleConnections === 1 && mode === "context") {
+          await chmod(contextPath, 0o600);
+          await writeFile(contextPath, "changed");
+          await chmod(contextPath, 0o400);
+        }
+        if (mode !== "trust") {
+          this.connection.emit(
+            mode === "md5" ? "authenticationMD5Password" : "authenticationSASL",
+            {},
+          );
+          if (mode !== "md5" && mode !== "sasl-incomplete")
+            this.connection.emit("authenticationSASLFinal", {});
+        }
+      }
+    });
+    t.mock.method(Client.prototype, "end", async function () {
+      closed.push(this.user);
+    });
+    t.mock.method(Client.prototype, "query", async function (sql) {
+      if (sql.includes("pg_control_system()"))
+        return {
+          rows: [
+            {
+              current_database: "postgres",
+              current_user: "coffeeuser",
+              server_version: "17.11 (fixture)",
+              server_version_num: "170011",
+              is_superuser: true,
+              system_identifier: "7613370342949990434",
+            },
+          ],
+        };
+      if (sql.startsWith("SELECT rolname,"))
+        return {
+          rows: [...roleNames, ...(mode === "extra-role" ? ["foreign"] : [])]
+            .filter((_, index) => mode !== "missing-role" || index !== 0)
+            .map((rolname, index) => ({
+              rolname,
+              rolcanlogin: true,
+              rolsuper: mode === "attributes" && index === 0,
+              rolcreatedb: false,
+              rolcreaterole: false,
+              rolinherit: false,
+              rolreplication: false,
+              rolbypassrls: false,
+              rolconnlimit: 20,
+            })),
+        };
+      assert.equal(sql, "SELECT current_user, current_database()");
+      return {
+        rows: [
+          {
+            current_user: mode === "wrong-user" ? "foreign" : this.user,
+            current_database: "postgres",
+          },
+        ],
+      };
+    });
+    const context = JSON.parse(await readFile(contextPath, "utf8"));
+    const approvedPath = join(
+      evidenceDir,
+      "gates/G08_MIGRATIONS/artifacts/approved-target.json",
+    );
+    await writeFile(
+      approvedPath,
+      JSON.stringify({
+        schemaVersion: 1,
+        runId: context.runId,
+        candidateSha: context.candidateSha,
+        baseConfigSha256: context.baseConfigSha256,
+        systemIdentifier: args.expectedSystemIdentifier,
+      }),
+      { mode: 0o400 },
+    );
+    await rm(artifactPath);
+    mode = "trust";
+    const previousPath = process.env.PATH;
+    try {
+      process.env.PATH = fixture.env.PATH;
+      await assert.rejects(
+        runMigrationStage("clean", { root: fixture.root, contextPath }),
+        {
+          ruleId: "CONFIG-G08-ROLE-AUTH",
+        },
+      );
+      assert.equal(roleConnections, 1);
+      await assert.rejects(lstat(artifactPath), { code: "ENOENT" });
+      mode = "valid";
+      roleConnections = 0;
+      await assert.rejects(
+        runMigrationStage("clean", { root: fixture.root, contextPath }),
+        { code: "ENOENT" },
+      );
+      assert.equal(roleConnections, 15);
+      const generated = JSON.parse(await readFile(artifactPath, "utf8"));
+      assert.equal(generated.preparation.stage, "roles-verified");
+      assert.deepEqual(
+        validateMigrationPreparationArtifact(
+          generated,
+          context,
+          generated.preparation.bundle.resultingSha256,
+        ),
+        generated.preparation,
+      );
+      await rm(artifactPath);
+    } finally {
+      if (previousPath === undefined) delete process.env.PATH;
+      else process.env.PATH = previousPath;
+    }
+    mode = "valid";
+    roleConnections = 0;
+    closed.length = 0;
+    const preparation = await attestCanonicalMigrationPreparation(args);
+    assert.equal(preparation.stage, "roles-verified");
+    assert.equal(preparation.createdCount, 0);
+    assert.equal(roleConnections, 15);
+    assert.equal(closed.length, 17);
+    const wrapper = {
+      schemaVersion: 1,
+      runId: context.runId,
+      candidateSha: context.candidateSha,
+      baseConfigSha256: context.baseConfigSha256,
+      preparation,
+    };
+    assert.deepEqual(
+      validateMigrationPreparationArtifact(
+        wrapper,
+        context,
+        preparation.bundle.resultingSha256,
+      ),
+      preparation,
+    );
+    for (const mutation of [
+      { createdCount: 15 },
+      { transaction: "committed" },
+      { runId: `20261025T000000Z-${context.candidateSha.slice(0, 7)}` },
+      {
+        runId: "20261025T000000Z-abcdef0",
+        candidateSha: `abcdef0${"a".repeat(33)}`,
+      },
+      { baseConfigSha256: "a".repeat(64), configSha256: "a".repeat(64) },
+      { bundle: { ...preparation.bundle, beforeSha256: "a".repeat(64) } },
+    ])
+      assert.throws(
+        () =>
+          validateMigrationPreparationArtifact(
+            { ...wrapper, preparation: { ...preparation, ...mutation } },
+            context,
+            preparation.bundle.resultingSha256,
+          ),
+        /CONFIG-G08-PREPARATION/u,
+      );
+    await assert.rejects(
+      attestCanonicalMigrationPreparation({
+        ...args,
+        expectedSystemIdentifier: undefined,
+      }),
+      { ruleId: "CONFIG-G08-IDENTITY" },
+    );
+    await assert.rejects(
+      attestCanonicalMigrationPreparation({
+        ...args,
+        expectedSystemIdentifier: "999",
+      }),
+      { ruleId: "CONFIG-G08-PROBE" },
+    );
+    mode = "md5";
+    await attestCanonicalMigrationPreparation(args);
+    for (mode of [
+      "trust",
+      "sasl-incomplete",
+      "wrong-password",
+      "wrong-user",
+      "attributes",
+      "missing-role",
+      "extra-role",
+    ]) {
+      roleConnections = 0;
+      const start = closed.length;
+      await assert.rejects(attestCanonicalMigrationPreparation(args), {
+        ruleId:
+          mode === "extra-role"
+            ? "CONFIG-G08-PROBE"
+            : ["attributes", "missing-role"].includes(mode)
+              ? "CONFIG-G08-ROLE-INVENTORY"
+              : "CONFIG-G08-ROLE-AUTH",
+      });
+      assert.equal(closed.length - start, roleConnections + 1);
+    }
+    for (const [change, path, ruleId] of [
+      ["config", configPath, "CONFIG-G08-CONFIG"],
+      ["bundle", bundlePath, "CONFIG-G08-BUNDLE_CHANGED"],
+      ["context", contextPath, "CONFIG-G08-CONTEXT"],
+    ]) {
+      mode = change;
+      roleConnections = 0;
+      const bytes = await readFile(path);
+      try {
+        await assert.rejects(attestCanonicalMigrationPreparation(args), {
+          ruleId,
+        });
+      } finally {
+        if (change === "context") await chmod(path, 0o600);
+        await writeFile(path, bytes);
+        if (change === "context") await chmod(path, 0o400);
+      }
+    }
+    mode = "valid";
+    const plain = JSON.parse(await readFile(fixture.plainPath, "utf8"));
+    delete plain.environments.development.bootstrap.migrators.customer;
+    await writeFile(fixture.plainPath, JSON.stringify(plain));
+    await assert.rejects(attestCanonicalMigrationPreparation(args), {
+      ruleId: "CONFIG-G08-ADMIN-SECRET",
+    });
+    assert.equal(
+      (await readdir(fixture.bin)).includes("g08-encrypt-invoked"),
+      false,
+    );
+  } finally {
+    await rm(evidenceDir, { recursive: true, force: true });
+    await rm(fixture.root, { recursive: true, force: true });
+    await rm(fixture.bin, { recursive: true, force: true });
+  }
+});
+
 void test("G15 child credentials reuse the unchanged parent G08 receipt only through exact OIDC lineage", async (t) => {
-  const parent = await createG08LaunchFixture({
+  const parent = await createMigrationLaunchFixture({
     migratorBlock: true,
     databaseIsolation: true,
   });
-  const { roleNames } = await writeG08PreparationArtifact(parent);
-  const child = await createG15ChildG08LaunchFixture(parent);
+  const { roleNames } = await writeMigrationPreparationArtifact(parent);
+  const child = await createBrowserChildMigrationLaunchFixture(parent);
   const childBundlePath = join(
     child.root,
     "secrets/platform.secrets.sops.yaml",
@@ -3557,7 +3819,7 @@ void test("G15 child credentials reuse the unchanged parent G08 receipt only thr
     await rm(parent.fixture.root, { recursive: true, force: true });
     await rm(parent.fixture.bin, { recursive: true, force: true });
   });
-  await installFakeG08Sops(parent.fixture, {
+  await installFakeMigrationSops(parent.fixture, {
     additionalBundlePaths: [childBundlePath],
   });
   t.mock.method(Client.prototype, "connect", async function () {
@@ -3605,13 +3867,13 @@ void test("G15 child credentials reuse the unchanged parent G08 receipt only thr
     assert.fail("G15 inherited preparation must use readonly identity queries");
   });
 
-  const identity = await readG08PreparedPostgresIdentity({
+  const identity = await readPreparedPostgresIdentity({
     root: child.root,
     contextPath: child.contextPath,
     preparationContextPath: parent.contextPath,
     env: parent.fixture.env,
   });
-  const migrator = await readG08MigrationCredential({
+  const migrator = await readMigrationCredential({
     root: child.root,
     contextPath: child.contextPath,
     preparationContextPath: parent.contextPath,
@@ -3645,7 +3907,7 @@ void test("G15 child credentials reuse the unchanged parent G08 receipt only thr
     { code: "ENOENT" },
   );
   await assert.rejects(
-    readG08MigrationCredential({
+    readMigrationCredential({
       root: child.root,
       contextPath: child.contextPath,
       preparationContextPath: join(child.evidenceDir, "context.json"),
@@ -3665,7 +3927,7 @@ void test("G15 child credentials reuse the unchanged parent G08 receipt only thr
   await writeFile(dirtyParentMarker, "uncommitted source change\n");
   try {
     await assert.rejects(
-      readG08MigrationCredential({
+      readMigrationCredential({
         root: child.root,
         contextPath: child.contextPath,
         preparationContextPath: parent.contextPath,
@@ -3689,7 +3951,7 @@ void test("G15 child credentials reuse the unchanged parent G08 receipt only thr
   replaceParentContextDuringProbe = true;
   try {
     await assert.rejects(
-      readG08MigrationCredential({
+      readMigrationCredential({
         root: child.root,
         contextPath: child.contextPath,
         preparationContextPath: parent.contextPath,
@@ -3719,16 +3981,16 @@ void test("G15 child credentials reuse the unchanged parent G08 receipt only thr
 });
 
 void test("G15 child G08 credential admission rejects non-profile config changes before PostgreSQL connection", async (t) => {
-  const parent = await createG08LaunchFixture({
+  const parent = await createMigrationLaunchFixture({
     migratorBlock: true,
     databaseIsolation: true,
   });
-  await writeG08PreparationArtifact(parent);
-  const child = await createG15ChildG08LaunchFixture(parent, {
+  await writeMigrationPreparationArtifact(parent);
+  const child = await createBrowserChildMigrationLaunchFixture(parent, {
     skipLineageValidation: true,
     mutateConfig: (text) =>
       text.replace(
-        "clientId: issue12-fixture",
+        "clientId: realtime-browser-fixture",
         "clientId: unauthorized-fixture",
       ),
   });
@@ -3740,7 +4002,7 @@ void test("G15 child G08 credential admission rejects non-profile config changes
     await rm(parent.fixture.root, { recursive: true, force: true });
     await rm(parent.fixture.bin, { recursive: true, force: true });
   });
-  await installFakeG08Sops(parent.fixture, {
+  await installFakeMigrationSops(parent.fixture, {
     additionalBundlePaths: [
       join(child.root, "secrets/platform.secrets.sops.yaml"),
     ],
@@ -3749,7 +4011,7 @@ void test("G15 child G08 credential admission rejects non-profile config changes
     connectCalls += 1;
   });
   await assert.rejects(
-    readG08MigrationCredential({
+    readMigrationCredential({
       root: child.root,
       contextPath: child.contextPath,
       preparationContextPath: parent.contextPath,
@@ -3794,7 +4056,7 @@ void test("G08 preparation binds its committed config and permits only the appro
     .digest("hex");
 
   assert.equal(
-    validateG08PreparationConfigTransition(
+    validateMigrationPreparationConfigTransition(
       preparedConfigBytes,
       preparedConfigBytes,
       preparedConfigSha256,
@@ -3802,7 +4064,7 @@ void test("G08 preparation binds its committed config and permits only the appro
     true,
   );
   assert.equal(
-    validateG08PreparationConfigTransition(
+    validateMigrationPreparationConfigTransition(
       preparedConfigBytes,
       transitioned,
       preparedConfigSha256,
@@ -3874,7 +4136,7 @@ void test("G08 preparation binds its committed config and permits only the appro
     );
   const coverageTransitionedBytes = Buffer.from(coverageTransitionedText);
   assert.equal(
-    validateG08PreparationConfigTransition(
+    validateMigrationPreparationConfigTransition(
       coveragePreparedConfigBytes,
       coverageTransitionedBytes,
       coveragePreparedConfigSha256,
@@ -3885,7 +4147,7 @@ void test("G08 preparation binds its committed config and permits only the appro
   const rejectsCoverageTransition = (text) =>
     assert.throws(
       () =>
-        validateG08PreparationConfigTransition(
+        validateMigrationPreparationConfigTransition(
           coveragePreparedConfigBytes,
           Buffer.from(text),
           coveragePreparedConfigSha256,
@@ -3965,7 +4227,7 @@ void test("G08 preparation binds its committed config and permits only the appro
     transaction: "committed",
   };
   assert.equal(
-    validateG08PreparationArtifact(
+    validateMigrationPreparationArtifact(
       {
         schemaVersion: 1,
         runId: context.runId,
@@ -4025,7 +4287,8 @@ void test("G08 preparation binds its committed config and permits only the appro
     const receipt = structuredClone(validReceipt);
     setValueAtPath(receipt, path, value);
     assert.throws(
-      () => validateG08PreparationArtifact(receipt, context, bundleSha256),
+      () =>
+        validateMigrationPreparationArtifact(receipt, context, bundleSha256),
       /CONFIG-G08-PREPARATION/u,
       path,
     );
@@ -4034,7 +4297,7 @@ void test("G08 preparation binds its committed config and permits only the appro
   const rejectsTransition = (current) =>
     assert.throws(
       () =>
-        validateG08PreparationConfigTransition(
+        validateMigrationPreparationConfigTransition(
           preparedConfigBytes,
           current,
           preparedConfigSha256,
@@ -4071,7 +4334,7 @@ void test("G08 preparation binds its committed config and permits only the appro
   );
   assert.throws(
     () =>
-      validateG08PreparationConfigTransition(
+      validateMigrationPreparationConfigTransition(
         transitioned,
         preparedConfigBytes,
         createHash("sha256").update(transitioned).digest("hex"),
@@ -4080,7 +4343,7 @@ void test("G08 preparation binds its committed config and permits only the appro
   );
   assert.throws(
     () =>
-      validateG08PreparationConfigTransition(
+      validateMigrationPreparationConfigTransition(
         preparedConfigBytes,
         transitioned,
         "a".repeat(64),
@@ -4366,7 +4629,7 @@ void test("G08 credential reader rejects stale receipts, invalid identities, uns
   });
 
   for (const scenario of cases) {
-    const launch = await createG08LaunchFixture({
+    const launch = await createMigrationLaunchFixture({
       migratorBlock: true,
       databaseIsolation: scenario.options?.databaseIsolation !== false,
     });
@@ -4379,8 +4642,8 @@ void test("G08 credential reader rejects stale receipts, invalid identities, uns
         await writeFile(contextPath, `${JSON.stringify(context)}\n`);
         await chmod(contextPath, 0o400);
       }
-      await installFakeG08Sops(fixture);
-      const artifact = await writeG08PreparationArtifact(
+      await installFakeMigrationSops(fixture);
+      const artifact = await writeMigrationPreparationArtifact(
         launch,
         scenario.options?.receipt,
       );
@@ -4450,7 +4713,7 @@ void test("G08 credential reader rejects stale receipts, invalid identities, uns
       const queriesBefore = queryCalls.length;
       try {
         await assert.rejects(
-          readG08MigrationCredential({
+          readMigrationCredential({
             root: fixture.root,
             contextPath: scenario.missingContext
               ? join(fixture.root, "missing-context.json")
@@ -4542,7 +4805,7 @@ void test("G08 credential reader rejects stale receipts, invalid identities, uns
 });
 
 void test("G08 role preparation rechecks roles, stores only encrypted credentials and creates all roles in one transaction", async (t) => {
-  const launch = await createG08LaunchFixture();
+  const launch = await createMigrationLaunchFixture();
   const { fixture, evidenceDir, contextPath, adminPassword } = launch;
   const bundlePath = join(fixture.root, "secrets/platform.secrets.sops.yaml");
   const initialBundle = await readFile(bundlePath);
@@ -4567,7 +4830,7 @@ void test("G08 role preparation rechecks roles, stores only encrypted credential
   let closeFails = false;
   let closeCalls = 0;
   try {
-    await installFakeG08Sops(fixture);
+    await installFakeMigrationSops(fixture);
     t.mock.method(Client.prototype, "connect", async function () {
       connections.push({
         host: this.host,
@@ -4651,7 +4914,7 @@ void test("G08 role preparation rechecks roles, stores only encrypted credential
 
     systemIdentifier = "7613370342949990435";
     await assert.rejects(
-      prepareG08CanonicalMigratorRoles({
+      prepareCanonicalMigratorRoles({
         root: fixture.root,
         contextPath,
         env: fixture.env,
@@ -4694,7 +4957,7 @@ void test("G08 role preparation rechecks roles, stores only encrypted credential
     createStatements.length = 0;
     changeIdentityOnTransactionProbe = true;
     await assert.rejects(
-      prepareG08CanonicalMigratorRoles({
+      prepareCanonicalMigratorRoles({
         root: fixture.root,
         contextPath,
         env: fixture.env,
@@ -4748,7 +5011,7 @@ void test("G08 role preparation rechecks roles, stores only encrypted credential
       rolconnlimit: 20,
     });
     await assert.rejects(
-      prepareG08CanonicalMigratorRoles({
+      prepareCanonicalMigratorRoles({
         root: fixture.root,
         contextPath,
         env: fixture.env,
@@ -4784,7 +5047,7 @@ void test("G08 role preparation rechecks roles, stores only encrypted credential
     inventoryCalls = 0;
     conflictOnTransaction = true;
     await assert.rejects(
-      prepareG08CanonicalMigratorRoles({
+      prepareCanonicalMigratorRoles({
         root: fixture.root,
         contextPath,
         env: fixture.env,
@@ -4818,7 +5081,7 @@ void test("G08 role preparation rechecks roles, stores only encrypted credential
     queries.length = 0;
     createStatements.length = 0;
     await assert.rejects(
-      prepareG08CanonicalMigratorRoles({
+      prepareCanonicalMigratorRoles({
         root: fixture.root,
         contextPath,
         env: fixture.env,
@@ -4848,7 +5111,7 @@ void test("G08 role preparation rechecks roles, stores only encrypted credential
     conflictOnTransaction = false;
     replaceBundleOnTransactionInventory = true;
     await assert.rejects(
-      prepareG08CanonicalMigratorRoles({
+      prepareCanonicalMigratorRoles({
         root: fixture.root,
         contextPath,
         env: fixture.env,
@@ -4876,7 +5139,7 @@ void test("G08 role preparation rechecks roles, stores only encrypted credential
     queries.length = 0;
     createFailureAt = 3;
     await assert.rejects(
-      prepareG08CanonicalMigratorRoles({
+      prepareCanonicalMigratorRoles({
         root: fixture.root,
         contextPath,
         env: fixture.env,
@@ -4908,7 +5171,7 @@ void test("G08 role preparation rechecks roles, stores only encrypted credential
     createFailureAt = 3;
     rollbackFails = true;
     await assert.rejects(
-      prepareG08CanonicalMigratorRoles({
+      prepareCanonicalMigratorRoles({
         root: fixture.root,
         contextPath,
         env: fixture.env,
@@ -4935,7 +5198,7 @@ void test("G08 role preparation rechecks roles, stores only encrypted credential
     createStatements.length = 0;
     conflictOnTransaction = false;
     queries.length = 0;
-    const prepared = await prepareG08CanonicalMigratorRoles({
+    const prepared = await prepareCanonicalMigratorRoles({
       root: fixture.root,
       contextPath,
       env: fixture.env,
@@ -5005,7 +5268,7 @@ void test("G08 role preparation rechecks roles, stores only encrypted credential
     queries.length = 0;
     commitFails = true;
     await assert.rejects(
-      prepareG08CanonicalMigratorRoles({
+      prepareCanonicalMigratorRoles({
         root: fixture.root,
         contextPath,
         env: fixture.env,
@@ -5042,7 +5305,7 @@ void test("G08 role preparation rechecks roles, stores only encrypted credential
     queries.length = 0;
     const closesBefore = closeCalls;
     await assert.rejects(
-      prepareG08CanonicalMigratorRoles({
+      prepareCanonicalMigratorRoles({
         root: fixture.root,
         contextPath,
         env: fixture.env,
@@ -5079,7 +5342,7 @@ void test("G08 role preparation rechecks roles, stores only encrypted credential
 });
 
 void test("G08 role preparation refuses an existing migrator block and a changed bundle snapshot", async (t) => {
-  const launch = await createG08LaunchFixture({ migratorBlock: true });
+  const launch = await createMigrationLaunchFixture({ migratorBlock: true });
   const { fixture, evidenceDir, contextPath } = launch;
   const bundlePath = join(fixture.root, "secrets/platform.secrets.sops.yaml");
   const initialBundle = await readFile(bundlePath);
@@ -5111,7 +5374,7 @@ void test("G08 role preparation refuses an existing migrator block and a changed
     });
 
     await assert.rejects(
-      prepareG08CanonicalMigratorRoles({
+      prepareCanonicalMigratorRoles({
         root: fixture.root,
         contextPath,
         env: fixture.env,
@@ -5130,7 +5393,7 @@ void test("G08 role preparation refuses an existing migrator block and a changed
     await rm(evidenceDir, { recursive: true, force: true });
     await rm(fixture.root, { recursive: true, force: true });
     await rm(fixture.bin, { recursive: true, force: true });
-    cleanLaunch = await createG08LaunchFixture();
+    cleanLaunch = await createMigrationLaunchFixture();
     const cleanBundlePath = join(
       cleanLaunch.fixture.root,
       "secrets/platform.secrets.sops.yaml",
@@ -5138,13 +5401,13 @@ void test("G08 role preparation refuses an existing migrator block and a changed
     const changedBundleBytes = Buffer.from(
       "fixture external bundle replacement\n",
     );
-    await installFakeG08Sops(cleanLaunch.fixture, {
+    await installFakeMigrationSops(cleanLaunch.fixture, {
       mutateBundleDuringEncrypt: changedBundleBytes.toString("utf8"),
     });
     inventoryCalls = 0;
     roleRows = [];
     await assert.rejects(
-      prepareG08CanonicalMigratorRoles({
+      prepareCanonicalMigratorRoles({
         root: cleanLaunch.fixture.root,
         contextPath: cleanLaunch.contextPath,
         env: cleanLaunch.fixture.env,
@@ -5250,7 +5513,7 @@ void test("G08 role preparation validates temporary ciphertext and plaintext bef
 
   for (const scenario of cases) {
     const { fixture, evidenceDir, contextPath } =
-      await createG08LaunchFixture();
+      await createMigrationLaunchFixture();
     const bundlePath = join(fixture.root, "secrets/platform.secrets.sops.yaml");
     const originalBundle = await readFile(bundlePath);
     const originalSha = createHash("sha256")
@@ -5259,7 +5522,7 @@ void test("G08 role preparation validates temporary ciphertext and plaintext bef
     const foreignReplacement = Buffer.from("foreign bundle replacement\n");
     let renameMock;
     try {
-      await installFakeG08Sops(fixture, scenario.options);
+      await installFakeMigrationSops(fixture, scenario.options);
       if (scenario.replaceAfterRename) {
         const originalRename = fsPromises.rename.bind(fsPromises);
         renameMock = t.mock.method(
@@ -5278,7 +5541,7 @@ void test("G08 role preparation validates temporary ciphertext and plaintext bef
       }
       queries = [];
       await assert.rejects(
-        prepareG08CanonicalMigratorRoles({
+        prepareCanonicalMigratorRoles({
           root: fixture.root,
           contextPath,
           env: fixture.env,
@@ -6230,8 +6493,11 @@ async function createSecretMaterializationFixture() {
   }
 }
 
-async function createG15LaunchFixture({ mutateConfig, extraTrackedFile } = {}) {
-  const launch = await createG08LaunchFixture();
+async function createBrowserLaunchFixture({
+  mutateConfig,
+  extraTrackedFile,
+} = {}) {
+  const launch = await createMigrationLaunchFixture();
   const { fixture, evidenceDir, contextPath } = launch;
   try {
     const configPath = join(fixture.root, "config/platform.yaml");
@@ -6291,7 +6557,7 @@ async function createG15LaunchFixture({ mutateConfig, extraTrackedFile } = {}) {
   }
 }
 
-async function createG15ChildG08LaunchFixture(
+async function createBrowserChildMigrationLaunchFixture(
   parent,
   { mutateConfig, skipLineageValidation = false } = {},
 ) {
@@ -6384,7 +6650,7 @@ async function createG15ChildG08LaunchFixture(
     await chmod(contextPath, 0o400);
     await validateLaunchContext(contextPath);
     if (!skipLineageValidation)
-      await validateG15FixtureLineage({
+      await validateBrowserFixtureLineage({
         root: REPO_ROOT,
         contextPath,
         baseCandidateSha: parent.candidateSha,
@@ -6398,7 +6664,7 @@ async function createG15ChildG08LaunchFixture(
 }
 
 void test("G15 generated child clone replaces its local origin before context validation", async (t) => {
-  const launch = await createG15LaunchFixture();
+  const launch = await createBrowserLaunchFixture();
   const runId = `${new Date().toISOString().replace(/[-:]/gu, "").slice(0, 15)}Z-${randomBytes(4).toString("hex").slice(0, 7)}`;
   const childRoot = await mkdtemp(join(tmpdir(), "g15-origin-child-"));
   const evidenceDir = join(REPO_ROOT, "evidence/launch", runId);
@@ -6457,7 +6723,7 @@ void test("G15 generated child clone replaces its local origin before context va
 });
 
 void test("G15 fixture lineage, tmpfs trust, and PKCE account switching stay isolated", async (t) => {
-  const launch = await createG15LaunchFixture();
+  const launch = await createBrowserLaunchFixture();
   const ingressCaDir = await mkdtemp("/dev/shm/g15-ingress-ca-");
   let materialized;
   let idpServer;
@@ -6496,7 +6762,7 @@ void test("G15 fixture lineage, tmpfs trust, and PKCE account switching stay iso
     const canonicalIngressCaPem = new X509Certificate(
       publicIngressCaPem,
     ).toString();
-    const lineage = await validateG15FixtureLineage({
+    const lineage = await validateBrowserFixtureLineage({
       root: REPO_ROOT,
       contextPath: launch.contextPath,
       baseCandidateSha: launch.baseCandidateSha,
@@ -6519,7 +6785,7 @@ void test("G15 fixture lineage, tmpfs trust, and PKCE account switching stay iso
     await writeFile(lineage.receiptPath, JSON.stringify(tamperedLineage));
     await chmod(lineage.receiptPath, 0o400);
     await assert.rejects(
-      readG15FixtureLineage({
+      readBrowserFixtureLineage({
         root: REPO_ROOT,
         contextPath: launch.contextPath,
         baseCandidateSha: launch.baseCandidateSha,
@@ -6530,7 +6796,7 @@ void test("G15 fixture lineage, tmpfs trust, and PKCE account switching stay iso
     await writeFile(lineage.receiptPath, lineageReceiptBytes);
     await chmod(lineage.receiptPath, 0o400);
     await assert.rejects(
-      materializeG15BrowserFixture({
+      materializeBrowserFixture({
         root: REPO_ROOT,
         contextPath: launch.contextPath,
         lineageArtifactLoc: lineage.receiptPath,
@@ -6540,7 +6806,7 @@ void test("G15 fixture lineage, tmpfs trust, and PKCE account switching stay iso
       { code: "G15_TMPFS_REQUIRED" },
     );
     await assert.rejects(
-      materializeG15BrowserFixture({
+      materializeBrowserFixture({
         root: REPO_ROOT,
         contextPath: launch.contextPath,
         lineageArtifactLoc: lineage.receiptPath,
@@ -6594,7 +6860,7 @@ void test("G15 fixture lineage, tmpfs trust, and PKCE account switching stay iso
     syncBuiltinESMExports();
     try {
       await assert.rejects(
-        materializeG15BrowserFixture({
+        materializeBrowserFixture({
           root: REPO_ROOT,
           contextPath: launch.contextPath,
           lineageArtifactLoc: lineage.receiptPath,
@@ -6603,7 +6869,10 @@ void test("G15 fixture lineage, tmpfs trust, and PKCE account switching stay iso
         { code: "G15_NSS_IMPORT_FAILED" },
       );
       assert.equal(nssImportCalls, 1);
-      assert.equal(nssObservation.script.endsWith("/g15-nss-trust.py"), true);
+      assert.equal(
+        nssObservation.script.endsWith("/browser-nss-trust.py"),
+        true,
+      );
       assert.equal(nssObservation.hasDatabaseArgument, true);
       assert.equal(nssObservation.fixtureOnTmpfs, true);
       assert.equal(nssObservation.publicCaMaterialized, true);
@@ -6628,7 +6897,7 @@ void test("G15 fixture lineage, tmpfs trust, and PKCE account switching stay iso
         nssReply = invalidReceipt;
         partialFixtureRoot = undefined;
         await assert.rejects(
-          materializeG15BrowserFixture({
+          materializeBrowserFixture({
             root: REPO_ROOT,
             contextPath: launch.contextPath,
             lineageArtifactLoc: lineage.receiptPath,
@@ -6645,7 +6914,7 @@ void test("G15 fixture lineage, tmpfs trust, and PKCE account switching stay iso
       syncBuiltinESMExports();
       await rm(sentinelRoot, { recursive: true, force: true });
     }
-    materialized = await materializeG15BrowserFixture({
+    materialized = await materializeBrowserFixture({
       root: REPO_ROOT,
       contextPath: launch.contextPath,
       lineageArtifactLoc: lineage.receiptPath,
@@ -6669,7 +6938,7 @@ void test("G15 fixture lineage, tmpfs trust, and PKCE account switching stay iso
     assert.equal(importedIngressCa.includes(ingressPrivateKeyCanary), false);
     assert.equal(importedIngressCa.includes("PRIVATE KEY"), false);
     await assert.rejects(
-      materializeG15BrowserFixture({
+      materializeBrowserFixture({
         root: REPO_ROOT,
         contextPath: launch.contextPath,
         lineageArtifactLoc: lineage.receiptPath,
@@ -6728,7 +6997,7 @@ void test("G15 fixture lineage, tmpfs trust, and PKCE account switching stay iso
       profile,
       signingKey: createPrivateKey(signingKeyPem),
       jwk,
-      selectAccount: selectG15FixtureAccount,
+      selectAccount: selectBrowserFixtureAccount,
     });
     await new Promise((resolve, reject) => {
       idpServer.once("error", reject);
@@ -7090,7 +7359,7 @@ void test("G15 programmatic browser hooks reject runs without validated context"
 });
 
 void test("G15 lineage rejects a non-profile config edit and an extra committed path", async (t) => {
-  const badProfile = await createG15LaunchFixture({
+  const badProfile = await createBrowserLaunchFixture({
     mutateConfig: (text) =>
       text.replace(
         "https://idp.fixture.invalid",
@@ -7103,7 +7372,7 @@ void test("G15 lineage rejects a non-profile config edit and an extra committed 
     await rm(badProfile.fixture.bin, { recursive: true, force: true });
   });
   await assert.rejects(
-    validateG15FixtureLineage({
+    validateBrowserFixtureLineage({
       root: REPO_ROOT,
       contextPath: badProfile.contextPath,
       baseCandidateSha: badProfile.baseCandidateSha,
@@ -7111,7 +7380,7 @@ void test("G15 lineage rejects a non-profile config edit and an extra committed 
     { code: "G15_CONFIG_DELTA_INVALID" },
   );
 
-  const extraPath = await createG15LaunchFixture({
+  const extraPath = await createBrowserLaunchFixture({
     extraTrackedFile: "config/g15-extra.txt",
   });
   t.after(async () => {
@@ -7120,7 +7389,7 @@ void test("G15 lineage rejects a non-profile config edit and an extra committed 
     await rm(extraPath.fixture.bin, { recursive: true, force: true });
   });
   await assert.rejects(
-    validateG15FixtureLineage({
+    validateBrowserFixtureLineage({
       root: REPO_ROOT,
       contextPath: extraPath.contextPath,
       baseCandidateSha: extraPath.baseCandidateSha,
@@ -7128,14 +7397,14 @@ void test("G15 lineage rejects a non-profile config edit and an extra committed 
     { code: "G15_CONFIG_ONLY_LINEAGE_REQUIRED" },
   );
 
-  const staleContext = await createG15LaunchFixture();
+  const staleContext = await createBrowserLaunchFixture();
   t.after(async () => {
     await rm(staleContext.evidenceDir, { recursive: true, force: true });
     await rm(staleContext.fixture.root, { recursive: true, force: true });
     await rm(staleContext.fixture.bin, { recursive: true, force: true });
   });
   await assert.rejects(
-    validateG15FixtureLineage({
+    validateBrowserFixtureLineage({
       root: REPO_ROOT,
       contextPath: staleContext.contextPath,
       baseCandidateSha: staleContext.candidateSha,
@@ -7150,7 +7419,7 @@ void test("G15 lineage rejects a non-profile config edit and an extra committed 
   });
   await chmod(staleContext.contextPath, 0o400);
   await assert.rejects(
-    validateG15FixtureLineage({
+    validateBrowserFixtureLineage({
       root: REPO_ROOT,
       contextPath: staleContext.contextPath,
       baseCandidateSha: staleContext.baseCandidateSha,
@@ -7160,7 +7429,7 @@ void test("G15 lineage rejects a non-profile config edit and an extra committed 
 });
 
 void test("G15 child Compose preamble reads the parent-sealed lineage without rewriting it", async (t) => {
-  const launch = await createG15LaunchFixture();
+  const launch = await createBrowserLaunchFixture();
   t.after(async () => {
     await rm(launch.evidenceDir, { recursive: true, force: true });
     await rm(launch.fixture.root, { recursive: true, force: true });
@@ -7187,7 +7456,7 @@ void test("G15 child Compose preamble reads the parent-sealed lineage without re
     [{ runId: "invalid" }, "G15_CANDIDATE_INVALID"],
   ]) {
     await assert.rejects(
-      validateG15FixtureGitLineage({ ...pureInputs, ...override }),
+      validateBrowserFixtureGitLineage({ ...pureInputs, ...override }),
       { code },
     );
   }
@@ -7201,7 +7470,7 @@ void test("G15 child Compose preamble reads the parent-sealed lineage without re
     "gates/G15_BROWSER/artifacts/oidc-fixture-lineage.json",
   );
   await assert.rejects(
-    validateG15FixtureLineage({
+    validateBrowserFixtureLineage({
       ...lineageArgs,
       root: "/tmp/foreign-g15-source",
     }),
@@ -7210,16 +7479,16 @@ void test("G15 child Compose preamble reads the parent-sealed lineage without re
   assert.equal(await lstat(expectedReceiptPath).catch(() => null), null);
   await chmod(launch.contextPath, 0o600);
   try {
-    await assert.rejects(validateG15FixtureLineage(lineageArgs), {
+    await assert.rejects(validateBrowserFixtureLineage(lineageArgs), {
       code: "G15_CONTEXT_MODE_INVALID",
     });
     assert.equal(await lstat(expectedReceiptPath).catch(() => null), null);
   } finally {
     await chmod(launch.contextPath, 0o400);
   }
-  const created = await validateG15FixtureLineage(lineageArgs);
+  const created = await validateBrowserFixtureLineage(lineageArgs);
   const beforeBytes = await readFile(created.receiptPath);
-  const verified = await readG15FixtureLineage({
+  const verified = await readBrowserFixtureLineage({
     root: REPO_ROOT,
     contextPath: launch.contextPath,
     baseCandidateSha: launch.baseCandidateSha,
@@ -7228,11 +7497,14 @@ void test("G15 child Compose preamble reads the parent-sealed lineage without re
   assert.deepEqual(await readFile(created.receiptPath), beforeBytes);
   assert.equal((await stat(created.receiptPath)).mode & 0o777, 0o400);
   await assert.rejects(
-    readG15FixtureLineage({ ...lineageArgs, root: "/tmp/foreign-g15-source" }),
+    readBrowserFixtureLineage({
+      ...lineageArgs,
+      root: "/tmp/foreign-g15-source",
+    }),
     { code: "G15_SOURCE_ROOT_INVALID" },
   );
   await assert.rejects(
-    materializeG15BrowserFixture({
+    materializeBrowserFixture({
       ...lineageArgs,
       lineageArtifactLoc: join(launch.evidenceDir, "foreign-receipt.json"),
       publicIngressCaPem: "unused",
@@ -7242,7 +7514,7 @@ void test("G15 child Compose preamble reads the parent-sealed lineage without re
   const artifactsDir = dirname(created.receiptPath);
   await chmod(artifactsDir, 0o755);
   try {
-    await assert.rejects(readG15FixtureLineage(lineageArgs), {
+    await assert.rejects(readBrowserFixtureLineage(lineageArgs), {
       code: "G15_RECEIPT_DIRECTORY_INVALID",
     });
     assert.deepEqual(await readFile(created.receiptPath), beforeBytes);
@@ -7255,7 +7527,7 @@ void test("G15 child Compose preamble reads the parent-sealed lineage without re
   await rm(created.receiptPath);
   await symlink(foreignPath, created.receiptPath);
   try {
-    await assert.rejects(readG15FixtureLineage(lineageArgs), {
+    await assert.rejects(readBrowserFixtureLineage(lineageArgs), {
       code: "G15_RECEIPT_FILE_INVALID",
     });
     assert.deepEqual(await readFile(foreignPath), foreignBytes);
@@ -7265,7 +7537,7 @@ void test("G15 child Compose preamble reads the parent-sealed lineage without re
     await chmod(created.receiptPath, 0o400);
   }
   await assert.rejects(
-    materializeG15BrowserFixture({
+    materializeBrowserFixture({
       ...lineageArgs,
       lineageArtifactLoc: created.receiptPath,
       publicIngressCaPem: "-----BEGIN CERTIFICATE-----\ninvalid",
@@ -7274,7 +7546,7 @@ void test("G15 child Compose preamble reads the parent-sealed lineage without re
   );
   assert.deepEqual(await readFile(created.receiptPath), beforeBytes);
   await assert.rejects(
-    readG15FixtureLineage({
+    readBrowserFixtureLineage({
       root: REPO_ROOT,
       contextPath: launch.contextPath,
       baseCandidateSha: launch.candidateSha,
@@ -7292,7 +7564,7 @@ void test("G15 child Compose preamble reads the parent-sealed lineage without re
   );
   await chmod(created.receiptPath, 0o400);
   await assert.rejects(
-    readG15FixtureLineage({
+    readBrowserFixtureLineage({
       root: REPO_ROOT,
       contextPath: launch.contextPath,
       baseCandidateSha: launch.baseCandidateSha,
@@ -7304,7 +7576,7 @@ void test("G15 child Compose preamble reads the parent-sealed lineage without re
   await writeFile(created.receiptPath, beforeBytes);
   await chmod(created.receiptPath, 0o600);
   await assert.rejects(
-    readG15FixtureLineage({
+    readBrowserFixtureLineage({
       root: REPO_ROOT,
       contextPath: launch.contextPath,
       baseCandidateSha: launch.baseCandidateSha,
@@ -7314,7 +7586,7 @@ void test("G15 child Compose preamble reads the parent-sealed lineage without re
 });
 
 void test("G15 parent admission restores and verifies the child bundle after checkout removal", async (t) => {
-  const launch = await createG15LaunchFixture();
+  const launch = await createBrowserLaunchFixture();
   const bundleDirectory = await mkdtemp(join(tmpdir(), "g15-parent-bundle-"));
   t.after(async () => {
     await rm(launch.evidenceDir, { recursive: true, force: true });
@@ -7323,7 +7595,7 @@ void test("G15 parent admission restores and verifies the child bundle after che
     await rm(bundleDirectory, { recursive: true, force: true });
   });
   const context = JSON.parse(await readFile(launch.contextPath, "utf8"));
-  const lineageWithPath = await validateG15FixtureLineage({
+  const lineageWithPath = await validateBrowserFixtureLineage({
     root: REPO_ROOT,
     contextPath: launch.contextPath,
     baseCandidateSha: launch.baseCandidateSha,
@@ -7331,7 +7603,7 @@ void test("G15 parent admission restores and verifies the child bundle after che
   const lineage = JSON.parse(
     await readFile(lineageWithPath.receiptPath, "utf8"),
   );
-  const pureLineage = await validateG15FixtureGitLineage({
+  const pureLineage = await validateBrowserFixtureGitLineage({
     candidateRoot: launch.fixture.root,
     baseCandidateSha: launch.baseCandidateSha,
     candidateSha: launch.candidateSha,
@@ -7340,7 +7612,7 @@ void test("G15 parent admission restores and verifies the child bundle after che
   });
   assert.deepEqual(pureLineage.receipt, lineage);
   await assert.rejects(
-    validateG15FixtureGitLineage({
+    validateBrowserFixtureGitLineage({
       candidateRoot: launch.fixture.root,
       baseCandidateSha: launch.candidateSha,
       candidateSha: launch.candidateSha,
@@ -7386,7 +7658,7 @@ void test("G15 parent admission restores and verifies the child bundle after che
   );
   await rm(launch.fixture.root, { recursive: true, force: true });
   assert.equal(
-    await verifyG15BrowserChildBundle({
+    await verifyBrowserChildBundle({
       bundlePath,
       baseCandidateSha: launch.baseCandidateSha,
       childContext: context,
@@ -7403,7 +7675,7 @@ void test("G15 parent admission restores and verifies the child bundle after che
     Buffer.concat([await readFile(bundlePath), Buffer.from("tamper")]),
   );
   await assert.rejects(
-    verifyG15BrowserChildBundle({
+    verifyBrowserChildBundle({
       bundlePath: corruptedBundle,
       baseCandidateSha: launch.baseCandidateSha,
       childContext: context,
@@ -7415,7 +7687,7 @@ void test("G15 parent admission restores and verifies the child bundle after che
   );
 });
 
-async function writeG08PreparationArtifact(
+async function writeMigrationPreparationArtifact(
   launch,
   {
     systemIdentifier = "7613370342949990434",
@@ -7479,7 +7751,7 @@ async function writeG08PreparationArtifact(
   return { artifactPath, roleNames, bundleSha256 };
 }
 
-async function installFakeG08Sops(
+async function installFakeMigrationSops(
   fixture,
   {
     mutateBundleDuringEncrypt,
@@ -7583,7 +7855,7 @@ if (args[0] === "encrypt") {
   return { encryptMarker };
 }
 
-async function installFakeG08AdminDocker(
+async function installFakeMigrationAdminDocker(
   fixture,
   {
     password = "synthetic-g08-container-password",
@@ -7683,18 +7955,19 @@ function syntheticEncryptedSecrets() {
   return result;
 }
 
-async function createG08LaunchFixture({
+async function createMigrationLaunchFixture({
   migratorBlock = false,
   databaseIsolation = false,
+  alignedRunId = false,
 } = {}) {
   const fixture = await createSecretMaterializationFixture();
-  const runId = `${new Date().toISOString().replace(/[-:]/gu, "").slice(0, 15)}Z-${Math.floor(
+  let runId = `${new Date().toISOString().replace(/[-:]/gu, "").slice(0, 15)}Z-${Math.floor(
     Math.random() * 0x10000000,
   )
     .toString(16)
     .padStart(7, "0")}`;
-  const evidenceDir = join(REPO_ROOT, "evidence/launch", runId);
-  const contextPath = join(evidenceDir, "context.json");
+  let evidenceDir = join(REPO_ROOT, "evidence/launch", runId);
+  let contextPath = join(evidenceDir, "context.json");
   const adminPassword = "fixture-g08-admin-canary";
   try {
     const plain = JSON.parse(await readFile(fixture.plainPath, "utf8"));
@@ -7777,6 +8050,11 @@ async function createG08LaunchFixture({
       cwd: fixture.root,
       encoding: "utf8",
     }).trim();
+    if (alignedRunId) {
+      runId = runId.replace(/-[0-9a-f]{7}$/u, `-${candidateSha.slice(0, 7)}`);
+      evidenceDir = join(REPO_ROOT, "evidence/launch", runId);
+      contextPath = join(evidenceDir, "context.json");
+    }
     const baseConfigSha256 = createHash("sha256")
       .update(await readFile(join(fixture.root, "config/platform.yaml")))
       .digest("hex");

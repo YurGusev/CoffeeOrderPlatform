@@ -54,7 +54,7 @@ def set_at(document: object, path: list[object], value: object, operation: str) 
 
 
 def candidate_root(manifest: str, candidate: dict) -> Path:
-    root = Path(tempfile.mkdtemp(prefix="issue19-authority-test-"))
+    root = Path(tempfile.mkdtemp(prefix="authority-test-"))
     platform = root / "platform"
     platform.mkdir()
     for name in (
@@ -207,7 +207,7 @@ class LaunchAuthorityTests(unittest.TestCase):
                 self.assertEqual(before, json.dumps(original, sort_keys=True), case["id"])
 
     def test_duplicate_json_keys_are_rejected(self) -> None:
-        with tempfile.TemporaryDirectory(prefix="issue19-duplicate-json-") as temporary:
+        with tempfile.TemporaryDirectory(prefix="authority-duplicate-json-") as temporary:
             path = Path(temporary) / "duplicate.json"
             path.write_text('{"schemaVersion":1,"schemaVersion":2}\n', encoding="utf-8")
             with self.assertRaises(VALIDATOR.AuthorityError):

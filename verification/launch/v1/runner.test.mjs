@@ -28,7 +28,7 @@ import { Readable } from "node:stream";
 import { pathToFileURL } from "node:url";
 import test from "node:test";
 import {
-  captureG13KafkaNamespaceArtifact,
+  captureKafkaNamespaceArtifact,
   executeArgv,
   gateBudgetMs,
   loadMatrix,
@@ -63,7 +63,7 @@ import { freshOfferRefForProviderId } from "./scenarios/aroma-sandbox-catalog.mj
 import {
   assertRoleMapGrantRows,
   formatOwnerStageFailure,
-  readG08ApprovedTarget,
+  readApprovedMigrationTarget,
 } from "./scenarios/migrations.mjs";
 import {
   appendAromaSandboxDesired,
@@ -141,7 +141,7 @@ import {
   parseTapSummaryDiagnostic,
   runUnitTestChild,
   snapshotReadonlyContext,
-  writeG04EvidenceArtifacts,
+  writeUnitEvidenceArtifacts,
 } from "./scenarios/unit.mjs";
 import { selectFormatPaths } from "../../../scripts/format.mjs";
 
@@ -638,12 +638,12 @@ void test("G08 approved target is explicit, private and bound to the current run
       /system identifier/u,
     );
   await assert.rejects(
-    readG08ApprovedTarget(context, root),
+    readApprovedMigrationTarget(context, root),
     /APPROVED_TARGET_INVALID/u,
   );
   await writeFile(path, JSON.stringify(value), { mode: 0o400 });
   assert.equal(
-    (await readG08ApprovedTarget(context, root)).systemIdentifier,
+    (await readApprovedMigrationTarget(context, root)).systemIdentifier,
     value.systemIdentifier,
   );
   for (const altered of [
@@ -655,14 +655,14 @@ void test("G08 approved target is explicit, private and bound to the current run
     await writeFile(path, JSON.stringify(altered));
     await chmod(path, 0o400);
     await assert.rejects(
-      readG08ApprovedTarget(context, root),
+      readApprovedMigrationTarget(context, root),
       /APPROVED_TARGET_INVALID/u,
     );
   }
   await chmod(path, 0o600);
   await writeFile(path, JSON.stringify(value));
   await assert.rejects(
-    readG08ApprovedTarget(context, root),
+    readApprovedMigrationTarget(context, root),
     /APPROVED_TARGET_INVALID/u,
   );
   await rm(path);
@@ -670,7 +670,7 @@ void test("G08 approved target is explicit, private and bound to the current run
   await writeFile(source, JSON.stringify(value), { mode: 0o400 });
   await symlink(source, path);
   await assert.rejects(
-    readG08ApprovedTarget(context, root),
+    readApprovedMigrationTarget(context, root),
     /APPROVED_TARGET_INVALID/u,
   );
 });
@@ -1972,7 +1972,7 @@ void test("matrix keeps all mandatory launch gates, exact order, commands and ti
     }
     return statuses;
   };
-  const assertG12BlocksConsumers = (candidateGates) => {
+  const assertSupplyChainBlocksConsumers = (candidateGates) => {
     const statuses = statusesAfterFailure("G12_SUPPLY_CHAIN", candidateGates);
     assert.equal(statuses.get("G08_MIGRATIONS"), "PASS");
     assert.equal(statuses.get("G09_DB_BOUNDARIES"), "PASS");
@@ -1981,8 +1981,8 @@ void test("matrix keeps all mandatory launch gates, exact order, commands and ti
     }
     return statuses;
   };
-  assertG12BlocksConsumers(gates);
-  const withoutG12IntegrationEdge = gates.map((gate) =>
+  assertSupplyChainBlocksConsumers(gates);
+  const withoutSupplyChainIntegrationEdge = gates.map((gate) =>
     gate.id === "G10_INTEGRATION"
       ? {
           ...gate,
@@ -1993,7 +1993,7 @@ void test("matrix keeps all mandatory launch gates, exact order, commands and ti
       : gate,
   );
   assert.throws(
-    () => assertG12BlocksConsumers(withoutG12IntegrationEdge),
+    () => assertSupplyChainBlocksConsumers(withoutSupplyChainIntegrationEdge),
     assert.AssertionError,
   );
   const afterRecoveryFailure = statusesAfterFailure("G11_RECOVERY");
@@ -2129,15 +2129,15 @@ void test("G09 accepts only exact context-bound 10/40 runtime database evidence"
     },
     legacyTargetsExcluded: ["coffeeorder_staging", "coffeeorderdb"],
   };
-  const g08ArtifactDir = join(evidenceDir, "gates/G08_MIGRATIONS/artifacts");
-  await mkdir(g08ArtifactDir, { recursive: true });
+  const migrationArtifactDir = join(evidenceDir, "gates/G08_MIGRATIONS/artifacts");
+  await mkdir(migrationArtifactDir, { recursive: true });
   await writeFile(
-    join(g08ArtifactDir, "result.json"),
+    join(migrationArtifactDir, "result.json"),
     JSON.stringify(migrationReceipt),
     { mode: 0o600 },
   );
   await writeFile(
-    join(g08ArtifactDir, "canonical-preparation.json"),
+    join(migrationArtifactDir, "canonical-preparation.json"),
     preparationBytes,
     { mode: 0o400 },
   );
@@ -2212,7 +2212,7 @@ void test("G09 accepts only exact context-bound 10/40 runtime database evidence"
       retained: [],
     },
   };
-  const migrationPath = join(g08ArtifactDir, "result.json");
+  const migrationPath = join(migrationArtifactDir, "result.json");
   const gatePath = join(artifactDir, "result.json");
   const stdoutPath = join(evidenceDir, "gates/G09_DB_BOUNDARIES/stdout.log");
   const prettyEnvelope = `${JSON.stringify(
@@ -3979,23 +3979,23 @@ void test("G16 phase failure keeps bounded convergence evidence and strips unkno
       throw new Error(secret);
     },
   });
-  const consumedByRunG16 = safeAromaPhaseFailureEvidence(
+  const consumedBySandboxRun = safeAromaPhaseFailureEvidence(
     failedPhaseError.phaseFailureFacts,
   );
   assert.equal(
-    consumedByRunG16.partialPhaseEvidence.at(-1).phase,
+    consumedBySandboxRun.partialPhaseEvidence.at(-1).phase,
     "single-mutation",
   );
-  assert.equal(consumedByRunG16.partialPhaseEvidence.at(-1).status, "FAIL");
-  assert.equal(consumedByRunG16.convergenceEvidence, undefined);
+  assert.equal(consumedBySandboxRun.partialPhaseEvidence.at(-1).status, "FAIL");
+  assert.equal(consumedBySandboxRun.convergenceEvidence, undefined);
   assert.equal(
-    JSON.stringify(consumedByRunG16).includes(
+    JSON.stringify(consumedBySandboxRun).includes(
       previousNoopEvidence.latestAttempt.state,
     ),
     false,
   );
   assert.doesNotMatch(
-    JSON.stringify(consumedByRunG16),
+    JSON.stringify(consumedBySandboxRun),
     new RegExp(secret, "u"),
   );
   assert.equal(
@@ -4939,7 +4939,7 @@ void test("G04 preserves private run-scoped TAP/LCOV diagnostics once without ov
     "coverage.lcov": "private LCOV\n",
     "unit-diagnostics.json": "{}\n",
   };
-  const receipts = await writeG04EvidenceArtifacts(context, contents);
+  const receipts = await writeUnitEvidenceArtifacts(context, contents);
   assert.deepEqual(
     receipts
       .map(({ name }) => name)
@@ -4960,7 +4960,7 @@ void test("G04 preserves private run-scoped TAP/LCOV diagnostics once without ov
     assert.equal(await readFile(path, "utf8"), contents[name]);
   }
   await assert.rejects(
-    writeG04EvidenceArtifacts(context, { "unit.tap": "replacement\n" }),
+    writeUnitEvidenceArtifacts(context, { "unit.tap": "replacement\n" }),
     { code: "EEXIST" },
   );
   assert.equal(
@@ -4968,7 +4968,7 @@ void test("G04 preserves private run-scoped TAP/LCOV diagnostics once without ov
     contents["unit.tap"],
   );
   await assert.rejects(
-    writeG04EvidenceArtifacts(
+    writeUnitEvidenceArtifacts(
       { ...context, runId: "20261024T120001Z-bbbbbbb" },
       { "unit.tap": "wrong run\n" },
     ),
@@ -5002,7 +5002,7 @@ void test("G04 rejects a symlinked evidence/launch ancestor before writing artif
   await mkdir(outsideArtifactsDir, { recursive: true, mode: 0o700 });
   await symlink(outsideLaunch, join(sourceRepoRoot, "evidence/launch"));
   await assert.rejects(
-    writeG04EvidenceArtifacts(
+    writeUnitEvidenceArtifacts(
       { runId, candidateSha, sourceRepoRoot, evidenceDir },
       { "unit.tap": "must not escape\n" },
     ),
@@ -5318,7 +5318,7 @@ void test("G13 persists only the top-level validated Kafka inventory from succes
     join(gateDir, "stdout.log"),
     `progress line\n${JSON.stringify({ kafkaNamespaceInventory: receipt })}\n`,
   );
-  const artifact = await captureG13KafkaNamespaceArtifact({
+  const artifact = await captureKafkaNamespaceArtifact({
     evidenceDir,
     gateDir,
     context: { runId, resources: { composeProject: projectName } },
@@ -5335,7 +5335,7 @@ void test("G13 persists only the top-level validated Kafka inventory from succes
     `${JSON.stringify({ kafkaNamespaceInventory: {} })}\n`,
   );
   await assert.rejects(
-    captureG13KafkaNamespaceArtifact({
+    captureKafkaNamespaceArtifact({
       evidenceDir,
       gateDir,
       context: { runId, resources: { composeProject: projectName } },

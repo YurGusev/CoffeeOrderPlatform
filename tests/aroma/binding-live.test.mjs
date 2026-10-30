@@ -111,7 +111,7 @@ async function proof({ adminUrl, port, roleMap, rolePasswords }) {
   let admin;
   try {
     migrator = createDatabase({
-      owner: "issue10-binding-migrator",
+      owner: "binding-proof-migrator",
       database: database.name,
       allowedDatabase: database.name,
       host: "127.0.0.1",
@@ -168,12 +168,12 @@ async function proof({ adminUrl, port, roleMap, rolePasswords }) {
       {
         schema: "integration",
         ledgerTable: "platform_schema_migrations",
-        lockKey: "issue10-binding",
+        lockKey: "binding-proof",
       },
     );
     await migrator.resource.stop(AbortSignal.timeout(1000));
-    a = runtimeDb("issue10-binding-a");
-    b = runtimeDb("issue10-binding-b");
+    a = runtimeDb("binding-proof-a");
+    b = runtimeDb("binding-proof-b");
     await Promise.all([
       a.resource.start(AbortSignal.timeout(1000)),
       b.resource.start(AbortSignal.timeout(1000)),
@@ -628,7 +628,7 @@ async function proof({ adminUrl, port, roleMap, rolePasswords }) {
         .catch((error) => {
           completeBError = error;
         });
-      await waitForLock("issue10-binding-b");
+      await waitForLock("binding-proof-b");
     } finally {
       releaseBatch();
       await Promise.allSettled([batchA, completeB]);
@@ -681,7 +681,7 @@ async function proof({ adminUrl, port, roleMap, rolePasswords }) {
           rawProviderVariantId: "provider-variant-race-7",
         },
       ]);
-      await waitForLock("issue10-binding-b");
+      await waitForLock("binding-proof-b");
     } finally {
       releaseComplete();
       await Promise.allSettled([completeA, batchB]);
@@ -717,7 +717,7 @@ async function proof({ adminUrl, port, roleMap, rolePasswords }) {
       lost,
     );
     await a.resource.stop(AbortSignal.timeout(1000));
-    restarted = runtimeDb("issue10-binding-restart");
+    restarted = runtimeDb("binding-proof-restart");
     await restarted.resource.start(AbortSignal.timeout(1000));
     const restartStore = new OfferBindingStore(restarted);
     assert.deepEqual(
@@ -793,9 +793,9 @@ async function proof({ adminUrl, port, roleMap, rolePasswords }) {
   }
 }
 
-void test("issue 10 binding store: PostgreSQL idempotency, races, restart and grants", async () => {
+void test("binding store: PostgreSQL idempotency, races, restart and grants", async () => {
   const result = await runLiveProof({
-    runId: `issue10${Date.now().toString(36)}`,
+    runId: `binding${Date.now().toString(36)}`,
     bindingProof: proof,
   });
   assert.equal(result.binding.concurrentSamePair, "one-binding");

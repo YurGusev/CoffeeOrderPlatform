@@ -1031,7 +1031,7 @@ const CONVERGENCE_CODES = new Set([
   "MAPPING_STOPPED",
   "PRODUCT_UNAVAILABLE",
 ]);
-const G16_PHASES = new Set([
+const SANDBOX_PHASES = new Set([
   "approval",
   "baseline-read",
   "noop",
@@ -1109,7 +1109,7 @@ export function safeAromaPhaseFailureEvidence(value) {
     !value ||
     typeof value !== "object" ||
     !Array.isArray(value.completedPhases) ||
-    !G16_PHASES.has(value.failedPhase) ||
+    !SANDBOX_PHASES.has(value.failedPhase) ||
     typeof value.failedAtUtc !== "string" ||
     !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?Z$/u.test(
       value.failedAtUtc,
@@ -1119,7 +1119,7 @@ export function safeAromaPhaseFailureEvidence(value) {
   const completedPhases = value.completedPhases
     .flatMap((phase) => {
       if (
-        !G16_PHASES.has(phase?.phase) ||
+        !SANDBOX_PHASES.has(phase?.phase) ||
         phase.status !== "PASS" ||
         typeof phase.capturedAtUtc !== "string" ||
         !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?Z$/u.test(
@@ -1135,7 +1135,7 @@ export function safeAromaPhaseFailureEvidence(value) {
         },
       ];
     })
-    .slice(-G16_PHASES.size);
+    .slice(-SANDBOX_PHASES.size);
   if (completedPhases.length !== value.completedPhases.length) return null;
   return {
     partialPhaseEvidence: [
@@ -1175,7 +1175,7 @@ export async function captureAromaPhaseFailureFacts({
   };
 }
 
-const G16_STAGES = Object.freeze([
+const SANDBOX_STAGES = Object.freeze([
   "resources",
   "migrations",
   "runtime-databases",
@@ -1188,7 +1188,7 @@ const G16_STAGES = Object.freeze([
   "cleanup",
 ]);
 function checkedStage(stage) {
-  return G16_STAGES.includes(stage) ? stage : "resources";
+  return SANDBOX_STAGES.includes(stage) ? stage : "resources";
 }
 
 function migrationDiagnostic(error) {
@@ -1212,7 +1212,7 @@ function migrationDiagnostic(error) {
   };
 }
 
-const G16_DIAGNOSTIC_SUBSTAGES = new Set([
+const SANDBOX_DIAGNOSTIC_SUBSTAGES = new Set([
   "catalog-import",
   "catalog-activation",
   "selection",
@@ -1224,7 +1224,7 @@ export function safeAromaDiagnostic(error) {
   if (
     !value ||
     typeof value !== "object" ||
-    !G16_DIAGNOSTIC_SUBSTAGES.has(value.substage)
+    !SANDBOX_DIAGNOSTIC_SUBSTAGES.has(value.substage)
   )
     return null;
   const validCode = (code) =>
@@ -1263,7 +1263,7 @@ export function captureAromaCatalogPersistenceFailure(operation, capture) {
   };
 }
 
-function g16Diagnostic(error) {
+function sandboxDiagnostic(error) {
   return safeAromaDiagnostic(error) ?? migrationDiagnostic(error);
 }
 
@@ -2194,7 +2194,7 @@ async function waitForApproval(
   return null;
 }
 
-async function migrateG16Databases(root, resources) {
+async function migrateSandboxDatabases(root, resources) {
   const applied = {};
   for (const owner of ["catalog", "orders", "integration"]) {
     const client = await resources.openMigrator(owner);
@@ -2780,7 +2780,7 @@ async function runApprovedPhases({
   }
 }
 
-async function runG16({ approvalFile, env = process.env } = {}) {
+async function runAromaSandbox({ approvalFile, env = process.env } = {}) {
   const contextFile = env.COFFEE_LAUNCH_CONTEXT_FILE;
   if (!contextFile) return { status: "NOT_RUN", code: "LAUNCH_CONTEXT_ABSENT" };
   const identity = await validateContext(contextFile);
@@ -2851,7 +2851,7 @@ async function runG16({ approvalFile, env = process.env } = {}) {
       context: identity.context,
     });
     currentStage = "migrations";
-    const migrations = await migrateG16Databases(root, resources);
+    const migrations = await migrateSandboxDatabases(root, resources);
     currentStage = "runtime-databases";
     databases.gateway = await resources.openDatabase("aroma-gateway");
     databases.catalogImport = await resources.openDatabase(
@@ -3125,8 +3125,8 @@ async function runG16({ approvalFile, env = process.env } = {}) {
             runId,
             stage: checkedStage(currentStage),
             failureCode: safeAromaFailureCode(error),
-            ...(g16Diagnostic(error)
-              ? { diagnostic: g16Diagnostic(error) }
+            ...(sandboxDiagnostic(error)
+              ? { diagnostic: sandboxDiagnostic(error) }
               : {}),
             cartState: "UNRESOLVED_OR_NONBASELINE",
             mutationsDisabled: true,
@@ -3145,7 +3145,9 @@ async function runG16({ approvalFile, env = process.env } = {}) {
       stage: checkedStage(currentStage),
       runMetadata,
       cleanup: cleanupEvidence,
-      ...(g16Diagnostic(error) ? { diagnostic: g16Diagnostic(error) } : {}),
+      ...(sandboxDiagnostic(error)
+        ? { diagnostic: sandboxDiagnostic(error) }
+        : {}),
       ...(failureEvidence ? { failureEvidence } : {}),
     };
   } finally {
@@ -3190,7 +3192,7 @@ export async function main(args = process.argv.slice(2)) {
   try {
     const { approvalFile } = parseArguments(args);
     const outcome = normalizeCleanupFailureOutcome(
-      await runG16({ approvalFile }),
+      await runAromaSandbox({ approvalFile }),
     );
     result(
       outcome.status,

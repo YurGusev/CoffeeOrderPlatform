@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 /**
  * Real transport proof, not a node:test unit suite. Run explicitly:
- *   node tests/realtime/soak.test.mjs --smoke --profile reference-512 --result-dir "$TMPDIR/issue12-smoke"
- *   node tests/realtime/soak.test.mjs --fixture-check --result-dir "$TMPDIR/issue12-fixtures"
- *   node tests/realtime/soak.test.mjs --prepare --profile operator-1 --result-dir "$TMPDIR/issue12-full"
+ *   node tests/realtime/soak.test.mjs --smoke --profile reference-512 --result-dir "$TMPDIR/realtime-smoke"
+ *   node tests/realtime/soak.test.mjs --fixture-check --result-dir "$TMPDIR/realtime-fixtures"
+ *   node tests/realtime/soak.test.mjs --prepare --profile operator-1 --result-dir "$TMPDIR/realtime-full"
  * Inspect/freeze profile-manifest.json, then use its SHA256 (no unattended full run):
- *   node tests/realtime/soak.test.mjs --prepared "$TMPDIR/issue12-full" --approve-manifest <sha256>
+ *   node tests/realtime/soak.test.mjs --prepared "$TMPDIR/realtime-full" --approve-manifest <sha256>
  * Full operator-1 is 1/100/s/1800000ms. Smoke can never return full PASS.
  * Private material is only newly generated synthetic fixture material, deleted after a run.
  */
@@ -489,8 +489,7 @@ export function parse(args) {
     "never shorten full thresholds",
   );
   options.resultDir ??=
-    options.prepared ??
-    join(scratchRoot(), `issue12-realtime-${options.runId}`);
+    options.prepared ?? join(scratchRoot(), `realtime-soak-${options.runId}`);
   const scratch = scratchRoot(),
     rel = relative(scratch, options.resultDir),
     repoRelative = relative(ROOT, options.resultDir);

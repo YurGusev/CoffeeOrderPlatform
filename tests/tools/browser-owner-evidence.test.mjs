@@ -2,9 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createHash } from "node:crypto";
 import {
-  createG15OwnerEvidence,
-  validateG15BrowserProof,
-} from "../../tools/g15-owner-evidence.mjs";
+  createBrowserOwnerEvidence,
+  validateBrowserProof,
+} from "../../tools/browser-owner-evidence.mjs";
 
 const runId = "20261025T132252Z-085cdd6";
 const roleMap = {
@@ -85,7 +85,7 @@ function canonicalOrdersAcl() {
 }
 
 function makeEvidence(connect) {
-  return createG15OwnerEvidence({ connect, roleMap, actorRef, runId });
+  return createBrowserOwnerEvidence({ connect, roleMap, actorRef, runId });
 }
 
 void test("G15 owner snapshot is run-bound, allowlisted, and returns only hashes/counts", async () => {
@@ -247,7 +247,7 @@ void test("G15 owner capability rejects unknown owners, malformed refs, and nonc
   wrongRoleMap.databases[0].runtimeRoles[0].role = "coffee_admin";
   assert.throws(
     () =>
-      createG15OwnerEvidence({
+      createBrowserOwnerEvidence({
         connect: async () => {},
         roleMap: wrongRoleMap,
         actorRef,
@@ -523,7 +523,7 @@ void test("G15 callback proof is exact and bound to this run and candidate", () 
     productionLogin: false,
   };
   assert.deepEqual(
-    validateG15BrowserProof(proof, {
+    validateBrowserProof(proof, {
       runId,
       candidateSha: proof.candidateSha,
     }),
@@ -531,7 +531,7 @@ void test("G15 callback proof is exact and bound to this run and candidate", () 
   );
   assert.throws(
     () =>
-      validateG15BrowserProof(proof, {
+      validateBrowserProof(proof, {
         runId: "20261025T132253Z-085cdd7",
         candidateSha: proof.candidateSha,
       }),
@@ -539,7 +539,7 @@ void test("G15 callback proof is exact and bound to this run and candidate", () 
   );
   assert.throws(
     () =>
-      validateG15BrowserProof(
+      validateBrowserProof(
         { ...proof, recoveryProof: true },
         { runId, candidateSha: proof.candidateSha },
       ),
