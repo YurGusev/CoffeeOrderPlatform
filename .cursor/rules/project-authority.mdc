@@ -1,0 +1,14 @@
+---
+description: Читать AGENTS.md и выбирать навыки проекта через роутер
+alwaysApply: true
+---
+
+# Authority проекта
+
+Перед значимой работой прочитать корневой `AGENTS.md` и соблюдать его.
+
+Навыки задачи выбирать по `.agents/skills/coffee-platform-router/SKILL.md`. Прочитать выбранные `SKILL.md` из `.agents/skills`. Глобальные копии навыков не устанавливать.
+
+В Cursor читать навык с диска. Вызов `skill_view` относится к Hermes.
+
+Внешние действия выполнять так, как разрешает `AGENTS.md`.
