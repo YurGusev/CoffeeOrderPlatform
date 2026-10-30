@@ -10,4 +10,5 @@ __pycache__/
 *.py[cod]
 evidence/observability/
 evidence/grokverify/
+evidence/web-verify/
 /evidence/launch/
