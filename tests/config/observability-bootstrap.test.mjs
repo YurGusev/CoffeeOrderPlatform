@@ -39,12 +39,14 @@ import {
 } from "../../scripts/config-lib.mjs";
 import {
   createCollectorConfig,
+  createAlloyConfig,
   createObservabilityProvenance,
   createComposeOverride,
   discoverContainerLogs,
   ensureCollectorConfigOwnership,
+  ensureBackendOwnership,
   generateRuntimeLoggingOverride,
-  openObserveBufferEnvironment,
+  createBackendConfigs,
   verifyBootstrapProbe,
 } from "../../tools/observability/generate.mjs";
 import {
@@ -55,7 +57,8 @@ import {
   loadRuntimeConfig,
   materializeAromaSandboxSecrets,
   materializeCollectorSecrets,
-  materializeOpenObserveAdminSecret,
+  materializeGrafanaAdminSecret,
+  provisionDevelopmentGrafanaAdmin,
   materializeRuntimeSecrets,
   openAromaSandboxMigrator,
   probeCanonicalMigrationTarget,
@@ -81,9 +84,7 @@ import { verifyBrowserChildBundle } from "../../verification/launch/v1/scenarios
 import { runMigrationStage } from "../../verification/launch/v1/scenarios/migrations.mjs";
 import { validateLaunchContext } from "../../verification/launch/v1/report.mjs";
 import { assertScopedSecrets } from "../../packages/platform-runtime/dist/index.js";
-import { initializeOpenObserve } from "../../tools/observability/bootstrap.mjs";
 import { checkObservabilityHealth } from "../../tools/observability/health.mjs";
-import { verifyCollectorQueueMetrics } from "../../tools/observability/verify.mjs";
 import {
   createOidcProviderServer,
   selectBrowserFixtureAccount,
@@ -109,14 +110,13 @@ const sample = {
     collector: {
       otlpEndpoint: "http://otel-collector:4318",
       healthEndpoint: "http://otel-collector:13133",
-      metricsEndpoint: "http://otel-collector:8888",
       memoryLimitMiB: 128,
       memorySpikeMiB: 32,
       containerMemoryMiB: 512,
       memoryCheckIntervalMs: 1000,
       batchSize: 128,
       batchTimeoutMs: 1000,
-      queueCapacity: 512,
+      queueCapacity: 2048,
       queueConsumers: 2,
       exportTimeoutMs: 2000,
       retryInitialMs: 1000,
@@ -134,32 +134,14 @@ const sample = {
       flushTimeoutMs: 2000,
     },
     logging: { maxSizeMiB: 8, maxFiles: 3 },
-    openObserve: {
-      endpoint: "http://openobserve:5080",
-      organization: "coffee",
-      bootstrapEmail: "operations@coffee-platform.internal",
-      validationMarker: "bootstrap-validation-placeholder",
-      telemetryEnabled: false,
-      mmdbDownloadEnabled: false,
-      modelPricingEnabled: false,
-      memoryLimitMiB: 512,
-      memTableMaxSizeMiB: 128,
-      maxFileSizeInMemoryMiB: 8,
-      maxFileSizeOnDiskMiB: 8,
-      maxFileRetentionSeconds: 30,
-      memPersistIntervalSeconds: 2,
-      streams: {
-        logs: "platform_logs",
-        traces: "platform_traces",
-        metrics: "platform_metrics",
-      },
-      retentionDays: 3,
-      maxDiskBytes: 1073741824,
-      diskWatermarkPercent: 80,
-      compactionIntervalSeconds: 60,
-      deleteFilesDelayMinutes: 1,
-      jobCleanupWaitSeconds: 60,
-    },
+    diskWatermarkPercent: 80,
+    externalReportingEnabled: false,
+    alerts: {evaluationIntervalMs: 60000, diskUsage: {forMs: 0}, sinkMemoryMiB: 128},
+    grafana: {endpoint: "http://grafana:3000", memoryLimitMiB: 512, maxDiskBytes: 1073741824},
+    loki: {endpoint: "http://loki:3100", memoryLimitMiB: 512, maxDiskBytes: 1073741824, retentionDays: 3},
+    prometheus: {endpoint: "http://prometheus:9090", memoryLimitMiB: 512, maxDiskBytes: 1073741824, retentionDays: 3, outOfOrderWindowMs: 1800000},
+    tempo: {endpoint: "http://tempo:3200", otlpEndpoint: "http://tempo:4318", memoryLimitMiB: 768, maxDiskBytes: 1073741824, retentionDays: 3, finishOnShutdownTimeoutMs: 10000},
+
   },
 };
 const logs = [
@@ -175,58 +157,21 @@ const logs = [
   },
 ];
 
-void test("infrastructure secret scopes come from the validated catalog and separate Collector/admin credentials", async () => {
+void test("infrastructure scopes separate Collector and Grafana credentials", async () => {
   const catalog = await loadServiceCatalog(REPO_ROOT);
   assert.deepEqual(catalog.infrastructureSecretScopes, {
-    "otel-collector": [
-      { name: "exporterToken", ref: "telemetry.exporterToken" },
-      {
-        name: "openObserveIngestToken",
-        ref: "telemetry.openObserveIngestToken",
-      },
-    ],
-    "openobserve-bootstrap": [
-      { name: "admin-secret", ref: "telemetry.openObserveAdmin" },
-    ],
+    "otel-collector": [{name: "exporterToken", ref: "telemetry.exporterToken"}],
+    "grafana-bootstrap": [{name: "admin-secret", ref: "telemetry.grafanaAdmin"}],
   });
-  assert.deepEqual(
-    await infrastructureSecretEntries("otel-collector", { root: REPO_ROOT }),
-    [
-      ["exporterToken", "telemetry.exporterToken"],
-      ["openObserveIngestToken", "telemetry.openObserveIngestToken"],
-    ],
-  );
-  assert.deepEqual(
-    await infrastructureSecretEntries("openobserve-bootstrap", {
-      root: REPO_ROOT,
-    }),
-    [["admin-secret", "telemetry.openObserveAdmin"]],
-  );
-  await assert.rejects(
-    infrastructureSecretEntries("openobserve", { root: REPO_ROOT }),
-    /unknown infrastructure secret scope/u,
-  );
-});
-
-void test("catalog schema rejects widening Collector scope to OpenObserve admin", async () => {
+  assert.deepEqual(await infrastructureSecretEntries("grafana-bootstrap", {root: REPO_ROOT}), [["admin-secret", "telemetry.grafanaAdmin"]]);
   const root = await mkdtemp("/dev/shm/coffee-observability-catalog-");
   try {
-    await mkdir(`${root}/config`, { recursive: true });
-    await cp(
-      `${REPO_ROOT}/config/service-catalog.schema.json`,
-      `${root}/config/service-catalog.schema.json`,
-    );
-    const catalogPath = `${root}/config/service-catalog.json`;
-    const catalog = await loadServiceCatalog(REPO_ROOT);
-    catalog.infrastructureSecretScopes["otel-collector"].push({
-      name: "admin-secret",
-      ref: "telemetry.openObserveAdmin",
-    });
-    await writeFile(catalogPath, JSON.stringify(catalog), "utf8");
+    await mkdir(`${root}/config`, {recursive: true});
+    await cp(`${REPO_ROOT}/config/service-catalog.schema.json`, `${root}/config/service-catalog.schema.json`);
+    catalog.infrastructureSecretScopes["otel-collector"].push({name: "admin-secret", ref: "telemetry.grafanaAdmin"});
+    await writeFile(`${root}/config/service-catalog.json`, JSON.stringify(catalog));
     await assert.rejects(loadServiceCatalog(root), /CONFIG-SCHEMA/u);
-  } finally {
-    await rm(root, { recursive: true, force: true });
-  }
+  } finally { await rm(root, {recursive: true, force: true}); }
 });
 
 void test("bootstrap probe is an executable matching the BOM SHA-256", async () => {
@@ -243,102 +188,15 @@ void test("bootstrap probe is an executable matching the BOM SHA-256", async () 
   );
 });
 
-void test("observability health probe uses the configured health timeout", async () => {
-  const requests = [];
-  const timeouts = [];
-  const originalTimeout = AbortSignal.timeout.bind(AbortSignal);
-  AbortSignal.timeout = (timeout) => {
-    timeouts.push(timeout);
-    return new AbortController().signal;
-  };
-  let result;
-  try {
-    result = await checkObservabilityHealth({
-      config: sample,
-      fetchImpl: async (url, options) => {
-        requests.push({ url: url.href, signal: options.signal });
-        return { ok: true, status: 200 };
-      },
-    });
-  } finally {
-    AbortSignal.timeout = originalTimeout;
-  }
-  assert.deepEqual(
-    result.map(({ name, status }) => ({ name, status })),
-    [
-      { name: "otel-collector", status: 200 },
-      { name: "openobserve", status: 200 },
-    ],
-  );
-  assert.deepEqual(timeouts, [
-    sample.platform.health.timeoutMs,
-    sample.platform.health.timeoutMs,
-  ]);
-  assert.ok(requests.every(({ signal }) => signal instanceof AbortSignal));
-  assert.deepEqual(
-    requests.map(({ url }) => url),
-    ["http://otel-collector:13133/", "http://openobserve:5080/healthz"],
-  );
-});
-
-void test("generated provenance records pinned sources and limits without secret values", async () => {
-  const provenance = await createObservabilityProvenance({
-    root: REPO_ROOT,
-    config: sample,
-    imageRefs: {
-      otelCollectorImage: "otel-collector@sha256:" + "a".repeat(64),
-      openObserveImage: "openobserve@sha256:" + "b".repeat(64),
-      bootstrapProbeSha256:
-        "dbac288c29ba568459550a2da9e7ae0ded6b1fc728ee9fad3044c44e62d6ac14",
-    },
-    logFiles: logs,
-    openObserveDataVolume: "coffee-test-openobserve-data",
-    collectorConfigSha256: "c".repeat(64),
-  });
-  assert.equal(provenance.sourceSha256.imageBom.length, 64);
-  assert.equal(provenance.sourceSha256.lockfile.length, 64);
-  assert.equal(provenance.limits.collector.queueCapacity, 512);
-  assert.deepEqual(
-    {
-      memoryLimitMiB: provenance.limits.collector.memoryLimitMiB,
-      memorySpikeMiB: provenance.limits.collector.memorySpikeMiB,
-      containerMemoryMiB: provenance.limits.collector.containerMemoryMiB,
-    },
-    { memoryLimitMiB: 128, memorySpikeMiB: 32, containerMemoryMiB: 512 },
-  );
-  assert.equal(provenance.limits.openObserve.retentionDays, 3);
-  assert.deepEqual(
-    {
-      memTableMaxSizeMiB: provenance.limits.openObserve.memTableMaxSizeMiB,
-      maxFileSizeInMemoryMiB:
-        provenance.limits.openObserve.maxFileSizeInMemoryMiB,
-      maxFileSizeOnDiskMiB: provenance.limits.openObserve.maxFileSizeOnDiskMiB,
-      maxFileRetentionSeconds:
-        provenance.limits.openObserve.maxFileRetentionSeconds,
-      memPersistIntervalSeconds:
-        provenance.limits.openObserve.memPersistIntervalSeconds,
-    },
-    {
-      memTableMaxSizeMiB: 128,
-      maxFileSizeInMemoryMiB: 8,
-      maxFileSizeOnDiskMiB: 8,
-      maxFileRetentionSeconds: 30,
-      memPersistIntervalSeconds: 2,
-    },
-  );
-  assert.deepEqual(
-    [
-      provenance.limits.openObserve.telemetryEnabled,
-      provenance.limits.openObserve.mmdbDownloadEnabled,
-      provenance.limits.openObserve.modelPricingEnabled,
-    ],
-    [false, false, false],
-  );
-  assert.equal(provenance.selectedLogs[0].containerId, logs[0].containerId);
-  assert.doesNotMatch(
-    JSON.stringify(provenance),
-    /producer-token|o2oi-token|openObserveAdmin/u,
-  );
+void test("observability health probes all services with the configured timeout", async () => {
+  const urls = [];
+  const results = await checkObservabilityHealth({config: sample, collectorProbe: () => true, fetchImpl: async (url, options) => {
+    assert.ok(url instanceof URL); urls.push(url.href); assert.ok(options.signal); return {ok: true, status: 200};
+  }});
+  assert.deepEqual(results.map(result => result.name), ["otel-collector", "grafana", "loki", "prometheus", "tempo"]);
+  assert.deepEqual(urls, ["http://grafana:3000/api/health", "http://loki:3100/ready", "http://prometheus:9090/-/ready", "http://tempo:3200/ready"]);
+  await assert.rejects(checkObservabilityHealth({config: sample, fetchImpl: async () => ({ok: true, status: 200})}), /loopback probe is required/u);
+  await assert.rejects(checkObservabilityHealth({config: sample, collectorProbe: () => false, fetchImpl: async () => ({ok: true, status: 200})}), /loopback probe failed/u);
 });
 
 void test("Collector config ownership is changed only by pinned Node with CAP_CHOWN and retains mode 0400", () => {
@@ -428,291 +286,33 @@ void test("observability generator rejects a symlink output directory without ch
   }
 });
 
-void test("OpenObserve seed keeps admin secret file-scoped, networkless, health-bounded, and removes the seed container", async () => {
-  const directory = await mkdtemp("/dev/shm/coffee-openobserve-seed-");
-  const secretPath = `${directory}/admin-secret`;
-  await writeFile(secretPath, "test-only-admin-secret\n", { mode: 0o400 });
-  const commands = [];
-  try {
-    const result = await initializeOpenObserve({
-      config: sample,
-      imageRefs: {
-        openObserveImage: "openobserve@sha256:" + "a".repeat(64),
-        nodeImage: "node@sha256:" + "b".repeat(64),
-        bootstrapProbeSha256:
-          "dbac288c29ba568459550a2da9e7ae0ded6b1fc728ee9fad3044c44e62d6ac14",
-      },
-      openObserveDataVolume: "coffee-test-openobserve-data",
-      adminSecretPath: secretPath,
-      cpuFlags: new Set(["avx", "aes"]),
-      wait: async () => {},
-      runDocker: (args) => {
-        commands.push(args);
-        if (args[0] === "run" && args.includes("--detach"))
-          return "seed-container-id";
-        if (args[0] === "inspect") return "true";
-        return "";
-      },
-    });
-    assert.equal(result.initialized, true);
-    const seed = commands.find(
-      (args) => args[0] === "run" && args.includes("--detach"),
-    );
-    assert.ok(seed.includes("--network") && seed.includes("none"));
-    assert.ok(seed.includes("--env") && seed.includes("ZO_TELEMETRY=false"));
-    assert.ok(seed.includes("ZO_MMDB_DISABLE_DOWNLOAD=true"));
-    assert.ok(seed.includes("ZO_MODEL_PRICING_ENABLED=false"));
-    assert.ok(
-      seed.includes(
-        'export ZO_ROOT_USER_PASSWORD="$(/busybox cat /admin-secret)"; exec /openobserve',
-      ),
-    );
-    assert.ok(
-      seed.some(
-        (arg) =>
-          arg.includes("source=" + secretPath) &&
-          arg.includes("target=/admin-secret,readonly"),
-      ),
-    );
-    assert.equal(seed.includes("test-only-admin-secret"), false);
-    assert.ok(
-      commands.some(
-        (args) =>
-          args[0] === "exec" && args.includes("http://127.0.0.1:5080/healthz"),
-      ),
-    );
-    const validation = commands.find(
-      (args) =>
-        args[0] === "run" &&
-        args.includes("node") &&
-        args.at(-1)?.includes("/api/organizations"),
-    );
-    assert.ok(
-      validation.includes(`container:${seed[seed.indexOf("--name") + 1]}`),
-    );
-    assert.ok(validation.at(-1).includes("/api/organizations"));
-    assert.ok(validation.at(-1).includes("/data/.coffee-initialized-v1"));
-    assert.ok(
-      validation.at(-1).indexOf("if(response.status!==200)") <
-        validation
-          .at(-1)
-          .indexOf('writeFileSync("/data/.coffee-initialized-v1"'),
-    );
-    assert.equal(
-      validation.some((arg) => arg === "test-only-admin-secret"),
-      false,
-    );
-    assert.ok(
-      commands.some((args) => args[0] === "rm" && args.includes("--force")),
-    );
-  } finally {
-    await rm(directory, { recursive: true, force: true });
-  }
+void test("observability provenance includes all pinned images, bounded storage and no credentials", async () => {
+  const imageRefs = Object.fromEntries(["otelCollectorImage", "grafanaImage", "lokiImage", "prometheusImage", "tempoImage", "nodeImage"].map(name => [name, `fixture@sha256:${"a".repeat(64)}`]));
+  imageRefs.bootstrapProbeSha256 = "b".repeat(64);
+  const storageVolumes = Object.fromEntries(["grafana", "loki", "prometheus", "tempo"].map(name => [name, `coffee-test-${name}-data`]));
+  const alertSinkImage = {imageId: `sha256:${"d".repeat(64)}`, receiptSha256: "e".repeat(64), candidateSha: "f".repeat(40), runId: "fixture"};
+  const grafanaImage = {imageId: `sha256:${"1".repeat(64)}`, receiptSha256: "2".repeat(64), candidateSha: "3".repeat(40), runId: "fixture"};
+  const provenance = await createObservabilityProvenance({root: REPO_ROOT, config: sample, imageRefs, grafanaImage, alertSinkImage, logFiles: logs, storageVolumes, collectorConfigSha256: "c".repeat(64)});
+  assert.deepEqual(provenance.storageVolumes, storageVolumes);
+  assert.deepEqual(Object.keys(provenance.images), ["otelCollector", "grafanaBase", "loki", "prometheus", "tempo", "nodeHelper"]);
+  assert.equal(provenance.images.grafanaBase, imageRefs.grafanaImage);
+  assert.deepEqual(provenance.grafanaImage, grafanaImage);
+  assert.deepEqual(provenance.alertSinkImage, alertSinkImage);
+  assert.equal(provenance.limits.loki.maxDiskBytes, 1073741824);
+  assert.doesNotMatch(JSON.stringify(provenance), /producer-token|admin-secret/u);
 });
 
-void test("OpenObserve seed failure reports bounded container state and redacted stdout/stderr diagnostics", async () => {
-  const directory = await mkdtemp("/dev/shm/coffee-openobserve-seed-failure-");
-  const secretPath = `${directory}/admin-secret`;
-  const adminSecret = "admin-canary-secret-84";
-  await writeFile(secretPath, `${adminSecret}\n`, { mode: 0o400 });
-  const commands = [];
-  try {
-    await assert.rejects(
-      initializeOpenObserve({
-        config: sample,
-        imageRefs: {
-          openObserveImage: "openobserve@sha256:" + "a".repeat(64),
-          nodeImage: "node@sha256:" + "b".repeat(64),
-          bootstrapProbeSha256:
-            "dbac288c29ba568459550a2da9e7ae0ded6b1fc728ee9fad3044c44e62d6ac14",
-        },
-        openObserveDataVolume: "coffee-test-openobserve-data",
-        adminSecretPath: secretPath,
-        cpuFlags: new Set(["avx", "aes"]),
-        runDocker: (args) => {
-          commands.push(args);
-          if (args[0] === "run" && args.includes("--detach"))
-            return "seed-container-id";
-          if (
-            args[0] === "inspect" &&
-            args[1] === "--format={{.State.Running}}"
-          )
-            return "false";
-          if (args[0] === "inspect")
-            return JSON.stringify({
-              Running: false,
-              ExitCode: 132,
-              OOMKilled: false,
-              Error: "",
-              StartedAt: "started",
-              FinishedAt: "finished",
-            });
-          if (args[0] === "logs")
-            return `stdout ERROR bootstrap failed\nstderr WARN password=${adminSecret}\nstderr panic token=o2oi-canary\nINFO startup complete`;
-          return "";
-        },
-      }),
-      (error) => {
-        assert.match(error.message, /ExitCode":132/u);
-        assert.match(error.message, /OOMKilled":false/u);
-        assert.match(error.message, /StartedAt":"started"/u);
-        assert.match(error.message, /FinishedAt":"finished"/u);
-        assert.match(error.message, /stdout\+stderr/u);
-        assert.match(error.message, /stdout ERROR bootstrap failed/u);
-        assert.match(error.message, /stderr WARN password=\[REDACTED\]/u);
-        assert.match(error.message, /stderr panic token=\[REDACTED\]/u);
-        assert.doesNotMatch(error.message, new RegExp(adminSecret, "u"));
-        assert.doesNotMatch(error.message, /o2oi-canary/u);
-        assert.deepEqual(error.containerDiagnostics[0], {
-          name: commands.find(
-            (args) => args[0] === "run" && args.includes("--detach"),
-          )[
-            commands
-              .find((args) => args[0] === "run" && args.includes("--detach"))
-              .indexOf("--name") + 1
-          ],
-          stage: "seed",
-          state: {
-            Running: false,
-            ExitCode: 132,
-            OOMKilled: false,
-            Error: "",
-            StartedAt: "started",
-            FinishedAt: "finished",
-          },
-          errorOrWarningLines: [
-            "stdout ERROR bootstrap failed",
-            "stderr WARN password=[REDACTED]",
-            "stderr panic token=[REDACTED]",
-          ],
-        });
-        return true;
-      },
-    );
-    assert.ok(
-      commands.some((args) => args[0] === "rm" && args.includes("--force")),
-    );
-  } finally {
-    await rm(directory, { recursive: true, force: true });
-  }
-});
-
-void test("OpenObserve seed permits explicit executable QEMU only for the isolated test path", async () => {
-  const directory = await mkdtemp("/dev/shm/coffee-openobserve-qemu-");
-  const secretPath = `${directory}/admin-secret`;
-  const emulatorPath = `${directory}/qemu-x86_64`;
-  await writeFile(secretPath, "test-only-admin-secret\n", { mode: 0o400 });
-  await writeFile(
-    emulatorPath,
-    '#!/bin/sh\nprintf "qemu-x86_64 version 7.2.0 (test)\\n"\n',
-    { mode: 0o700 },
-  );
-  const commands = [];
-  try {
-    await initializeOpenObserve({
-      config: sample,
-      imageRefs: {
-        openObserveImage: "openobserve@sha256:" + "a".repeat(64),
-        nodeImage: "node@sha256:" + "b".repeat(64),
-        bootstrapProbeSha256:
-          "dbac288c29ba568459550a2da9e7ae0ded6b1fc728ee9fad3044c44e62d6ac14",
-      },
-      openObserveDataVolume: "coffee-test-openobserve-data",
-      adminSecretPath: secretPath,
-      emulatorPath,
-      cpuFlags: new Set(),
-      wait: async () => {},
-      runDocker: (args) => {
-        commands.push(args);
-        if (args[0] === "run" && args.includes("--detach"))
-          return "seed-container-id";
-        if (args[0] === "inspect") return "true";
-        return "";
-      },
-    });
-    const seed = commands.find(
-      (args) => args[0] === "run" && args.includes("--detach"),
-    );
-    assert.ok(
-      seed.includes(
-        `type=bind,source=${emulatorPath},target=/run/tools/qemu-x86_64,readonly`,
-      ),
-    );
-    assert.ok(
-      seed.includes(
-        'export ZO_ROOT_USER_PASSWORD="$(/busybox cat /admin-secret)"; exec /run/tools/qemu-x86_64 -cpu max /openobserve',
-      ),
-    );
-  } finally {
-    await rm(directory, { recursive: true, force: true });
-  }
-});
-
-void test("OpenObserve seed fails before Docker mutation when host CPU is unsupported", async () => {
-  const directory = await mkdtemp("/dev/shm/coffee-openobserve-cpu-");
-  const secretPath = `${directory}/admin-secret`;
-  await writeFile(secretPath, "test-only-admin-secret\n", { mode: 0o400 });
-  let dockerCalls = 0;
-  try {
-    await assert.rejects(
-      initializeOpenObserve({
-        config: sample,
-        imageRefs: {
-          openObserveImage: "openobserve@sha256:" + "a".repeat(64),
-          nodeImage: "node@sha256:" + "b".repeat(64),
-          bootstrapProbeSha256:
-            "dbac288c29ba568459550a2da9e7ae0ded6b1fc728ee9fad3044c44e62d6ac14",
-        },
-        openObserveDataVolume: "coffee-test-openobserve-data",
-        adminSecretPath: secretPath,
-        cpuFlags: new Set(),
-        runDocker: () => {
-          dockerCalls += 1;
-          return "";
-        },
-      }),
-      /host CPU flag avx/u,
-    );
-    assert.equal(dockerCalls, 0);
-  } finally {
-    await rm(directory, { recursive: true, force: true });
-  }
-});
-
-void test("OpenObserve seed refuses the public runtime validation marker as the admin credential", async () => {
-  const directory = await mkdtemp("/dev/shm/coffee-openobserve-marker-");
-  const secretPath = `${directory}/admin-secret`;
-  await writeFile(
-    secretPath,
-    `${sample.telemetry.openObserve.validationMarker}\n`,
-    { mode: 0o400 },
-  );
-  let dockerCalls = 0;
-  try {
-    await assert.rejects(
-      initializeOpenObserve({
-        config: sample,
-        imageRefs: {
-          openObserveImage: "openobserve@sha256:" + "a".repeat(64),
-          nodeImage: "node@sha256:" + "b".repeat(64),
-          bootstrapProbeSha256:
-            "dbac288c29ba568459550a2da9e7ae0ded6b1fc728ee9fad3044c44e62d6ac14",
-        },
-        openObserveDataVolume: "coffee-test-openobserve-data",
-        adminSecretPath: secretPath,
-        emulatorPath: "/bin/true",
-        cpuFlags: new Set(["avx", "aes"]),
-        runDocker: () => {
-          dockerCalls += 1;
-          return "";
-        },
-      }),
-      /distinct from the runtime validation marker/u,
-    );
-    assert.equal(dockerCalls, 0);
-  } finally {
-    await rm(directory, { recursive: true, force: true });
-  }
+void test("backend ownership helper refuses foreign volumes before changing ownership", () => {
+  const storageVolumes = Object.fromEntries(["grafana", "loki", "prometheus", "tempo"].map(name => [name, `coffee-test-${name}-data`]));
+  const calls = [];
+  const nodeImage = `node:fixture@sha256:${"a".repeat(64)}`;
+  const runDocker = args => {
+    calls.push(args);
+    if (args[0] === "volume") return JSON.stringify([{Driver: "local", Labels: {"coffee.owner": args[2].includes("tempo") ? "foreign" : "operations", "coffee.lifecycle": "fixture"}, Options: {type: "ext4", o: "nodev,nosuid,noexec", device: "/dev/loop1"}}]);
+    throw new Error("unexpected mutation");
+  };
+  assert.throws(() => ensureBackendOwnership({storageVolumes, grafanaAdminSecretPath: "/tmp/admin-secret", nodeImage, runDocker}), /unrelated telemetry volume/u);
+  assert.equal(calls.some(args => args[0] === "run"), false);
 });
 
 void test("Collector config accepts only exact selected log files and bounds export", () => {
@@ -720,7 +320,6 @@ void test("Collector config accepts only exact selected log files and bounds exp
     config: sample,
     logFiles: logs,
     exporterToken: "producer-token",
-    openObserveIngestToken: "o2oi-token",
   });
   assert.deepEqual(config.receivers.filelog.include, [
     `/var/lib/docker/containers/${"a".repeat(64)}/${"a".repeat(64)}-json.log`,
@@ -728,7 +327,7 @@ void test("Collector config accepts only exact selected log files and bounds exp
   ]);
   assert.equal(config.receivers.filelog.storage, "file_storage");
   assert.deepEqual(config.extensions.file_storage, {
-    directory: "/var/lib/otelcol/file_storage",
+    directory: "/var/lib/alloy/file_storage",
     fsync: true,
   });
   assert.ok(config.service.extensions.includes("file_storage"));
@@ -832,122 +431,14 @@ void test("Collector config accepts only exact selected log files and bounds exp
     endpoint: sample.telemetry.nginxStatusEndpoint,
     collection_interval: "5000ms",
   });
-  assert.deepEqual(
-    config.receivers["prometheus/collector"].config.scrape_configs,
-    [
-      {
-        job_name: "otel-collector",
-        scrape_interval: "5000ms",
-        static_configs: [{ targets: ["127.0.0.1:8888"] }],
-      },
-    ],
-  );
   assert.deepEqual(config.service.pipelines["metrics/nginx"].receivers, [
     "nginx",
-  ]);
-  assert.deepEqual(config.service.pipelines["metrics/collector"].receivers, [
-    "prometheus/collector",
   ]);
   assert.deepEqual(
     config.processors["transform/nginx_resource"].metric_statements[0]
       .statements,
     [
       'set(resource.attributes["service.name"], "edge-nginx")',
-      'set(resource.attributes["service.namespace"], "coffee-platform")',
-      'set(resource.attributes["service.version"], "development")',
-      'set(resource.attributes["deployment.environment"], "development")',
-    ],
-  );
-  assert.deepEqual(
-    config.processors["transform/collector_resource"].metric_statements[0]
-      .statements,
-    [
-      'set(resource.attributes["service.name"], "otel-collector")',
-      'set(resource.attributes["service.namespace"], "coffee-platform")',
-      'set(resource.attributes["service.version"], "development")',
-      'set(resource.attributes["deployment.environment"], "development")',
-    ],
-  );
-  assert.deepEqual(config.receivers["http_check/collector"], {
-    collection_interval: "5000ms",
-    targets: [
-      {
-        endpoint: "http://otel-collector:13133/",
-        method: "GET",
-        timeout: "1000ms",
-      },
-    ],
-  });
-  assert.deepEqual(config.receivers["http_check/openobserve"], {
-    collection_interval: "5000ms",
-    targets: [
-      {
-        endpoint: "http://openobserve:5080/healthz",
-        method: "GET",
-        timeout: "1000ms",
-      },
-    ],
-  });
-  assert.deepEqual(config.receivers["http_check/nginx"], {
-    collection_interval: "5000ms",
-    targets: [
-      {
-        endpoint: sample.telemetry.nginxStatusEndpoint,
-        method: "GET",
-        timeout: "1000ms",
-      },
-    ],
-  });
-  for (const service of ["collector", "openobserve"]) {
-    assert.deepEqual(
-      config.service.pipelines[`metrics/health_${service}`].receivers,
-      [`http_check/${service}`],
-    );
-    assert.deepEqual(
-      config.service.pipelines[`metrics/health_${service}`].processors,
-      [
-        "memory_limiter",
-        `transform/health_${service}_resource`,
-        "transform/metric_names",
-        "batch",
-      ],
-    );
-  }
-  assert.deepEqual(config.service.pipelines["metrics/health_nginx"].receivers, [
-    "http_check/nginx",
-  ]);
-  assert.deepEqual(
-    config.service.pipelines["metrics/health_nginx"].processors,
-    [
-      "memory_limiter",
-      "transform/health_nginx_resource",
-      "transform/metric_names",
-      "batch",
-    ],
-  );
-  assert.deepEqual(
-    config.processors["transform/health_nginx_resource"].metric_statements,
-    [
-      {
-        context: "metric",
-        statements: [
-          'set(resource.attributes["service.name"], "edge-nginx")',
-          'set(resource.attributes["service.namespace"], "coffee-platform")',
-          'set(resource.attributes["service.version"], "development")',
-          'set(resource.attributes["deployment.environment"], "development")',
-        ],
-      },
-      {
-        context: "datapoint",
-        statements: ['delete_key(datapoint.attributes, "http.status_code")'],
-      },
-    ],
-  );
-  assert.deepEqual(
-    config.processors["transform/health_openobserve_resource"]
-      .metric_statements[0].statements,
-    [
-      'set(resource.attributes["service.name"], "openobserve")',
       'set(resource.attributes["service.namespace"], "coffee-platform")',
       'set(resource.attributes["service.version"], "development")',
       'set(resource.attributes["deployment.environment"], "development")',
@@ -963,34 +454,12 @@ void test("Collector config accepts only exact selected log files and bounds exp
       },
     ],
     exporterToken: "producer-token",
-    openObserveIngestToken: "o2oi-token",
   });
   assert.equal(minimalConfig.receivers.nginx, undefined);
   assert.equal(minimalConfig.processors["transform/nginx_resource"], undefined);
   assert.equal(minimalConfig.service.pipelines["metrics/nginx"], undefined);
-  assert.equal(minimalConfig.receivers["http_check/nginx"], undefined);
-  assert.equal(
-    minimalConfig.service.pipelines["metrics/health_nginx"],
-    undefined,
-  );
-  assert.equal(
-    minimalConfig.processors["transform/health_nginx_resource"],
-    undefined,
-  );
   assert.deepEqual(
-    minimalConfig.service.pipelines["metrics/collector"].receivers,
-    ["prometheus/collector"],
-  );
-  assert.equal(
-    config.exporters["otlp_http/metrics"].headers["stream-name"],
-    undefined,
-  );
-  assert.deepEqual(
-    config.processors["transform/metric_names"].metric_statements[0].statements,
-    ['set(metric.name, Concat(["platform_metrics", metric.name], "_"))'],
-  );
-  assert.deepEqual(
-    config.processors["transform/metric_names"].metric_statements[1],
+    config.processors["transform/metric_names"].metric_statements[0],
     {
       context: "datapoint",
       statements: [
@@ -1002,97 +471,13 @@ void test("Collector config accepts only exact selected log files and bounds exp
   assert.equal(config.service.pipelines.traces.receivers[0], "otlp");
   assert.equal(config.processors.memory_limiter.limit_mib, 128);
   assert.equal(config.processors.memory_limiter.spike_limit_mib, 32);
-  assert.deepEqual(
-    config.service.telemetry.metrics.readers[0].pull.exporter.prometheus,
-    { host: "0.0.0.0", port: 8888 },
-  );
   assert.equal(
     config.exporters["otlp_http/logs"].sending_queue.queue_size,
-    512,
+    2048,
   );
   assert.equal(
     config.exporters["otlp_http/logs"].retry_on_failure.max_elapsed_time,
     "15000ms",
-  );
-  assert.equal(
-    config.exporters["otlp_http/logs"].headers.Authorization,
-    `Basic ${Buffer.from("coffee:o2oi-token").toString("base64")}`,
-  );
-  const compose = createComposeOverride({
-    config: sample,
-    imageRefs: {
-      otelCollectorImage: "otel-collector@sha256:" + "a".repeat(64),
-      openObserveImage: "openobserve@sha256:" + "b".repeat(64),
-      bootstrapProbeSha256: "c".repeat(64),
-    },
-    logFiles: logs,
-    collectorConfigPath: "/dev/shm/collector.yaml",
-    openObserveDataVolume: "coffee-test-openobserve-data",
-  });
-  const alternateOpenObservePort = createComposeOverride({
-    config: {
-      ...sample,
-      telemetry: {
-        ...sample.telemetry,
-        openObserve: {
-          ...sample.telemetry.openObserve,
-          endpoint: "http://openobserve:5081",
-        },
-      },
-    },
-    imageRefs: {
-      otelCollectorImage: "otel-collector@sha256:" + "a".repeat(64),
-      openObserveImage: "openobserve@sha256:" + "b".repeat(64),
-      bootstrapProbeSha256: "c".repeat(64),
-    },
-    logFiles: logs,
-    collectorConfigPath: "/dev/shm/collector.yaml",
-    openObserveDataVolume: "coffee-test-openobserve-data",
-  });
-  assert.equal(
-    alternateOpenObservePort.services.openobserve.environment.ZO_HTTP_PORT,
-    "5081",
-  );
-  assert.ok(
-    compose.services["otel-collector"].networks.includes("coffee_edge_backend"),
-    "Collector stays in the existing edge trust zone used by edge-nginx",
-  );
-  assert.equal(compose.services["otel-collector"].mem_limit, "512m");
-  assert.ok(
-    compose.services["otel-collector"].volumes.some(
-      ({ type, source, target, read_only }) =>
-        type === "volume" &&
-        source === "collector_checkpoints" &&
-        target === "/var/lib/otelcol/file_storage" &&
-        read_only === undefined,
-    ),
-  );
-  assert.deepEqual(compose.volumes.collector_checkpoints, {});
-  assert.deepEqual(compose.volumes.openobserve_data, {
-    external: true,
-    name: "coffee-test-openobserve-data",
-  });
-  for (const role of ["otel-collector", "openobserve"])
-    assert.equal(compose.services[role].stop_grace_period, "30000ms");
-  const bufferEnvironment = {
-    ZO_MEM_TABLE_MAX_SIZE: "128",
-    ZO_MAX_FILE_SIZE_IN_MEMORY: "8",
-    ZO_MAX_FILE_SIZE_ON_DISK: "8",
-    ZO_MAX_FILE_RETENTION_TIME: "30",
-    ZO_MEM_PERSIST_INTERVAL: "2",
-  };
-  assert.deepEqual(
-    openObserveBufferEnvironment(sample.telemetry.openObserve),
-    bufferEnvironment,
-  );
-  assert.deepEqual(
-    Object.fromEntries(
-      Object.keys(bufferEnvironment).map((name) => [
-        name,
-        compose.services.openobserve.environment[name],
-      ]),
-    ),
-    bufferEnvironment,
   );
   const redaction = config.processors[
     "transform/records"
@@ -1110,316 +495,90 @@ void test("Collector config accepts only exact selected log files and bounds exp
         config: sample,
         logFiles: [{ ...logs[0], logPath: "/tmp/all-containers/*.log" }],
         exporterToken: "x",
-        openObserveIngestToken: "y",
       }),
     /exact Docker json-file paths/u,
   );
 });
 
-void test("OpenObserve healthcheck requires root and data filesystems below the disk watermark", async () => {
-  const directory = await mkdtemp("/dev/shm/coffee-openobserve-healthcheck-");
-  const busybox = join(directory, "busybox");
-  await writeFile(
-    busybox,
-    `#!/bin/sh
-case "$1" in
-  wget) exit 0 ;;
-  df)
-    printf 'Filesystem 1024-blocks Used Available Use%% Mounted on\\n'
-    printf '/dev/root 100 81 19 %s%% /\\n' "$ROOT_USED"
-    printf '/dev/data 100 1 99 %s%% /data\\n' "$DATA_USED"
-    ;;
-  awk) shift; exec /usr/bin/awk "$@" ;;
-  *) exit 127 ;;
-esac
-`,
-    { mode: 0o700 },
-  );
-  try {
-    const compose = createComposeOverride({
-      config: sample,
-      imageRefs: {
-        otelCollectorImage: "otel-collector@sha256:" + "a".repeat(64),
-        openObserveImage: "openobserve@sha256:" + "b".repeat(64),
-        bootstrapProbeSha256: "c".repeat(64),
-      },
-      logFiles: logs,
-      collectorConfigPath: "/dev/shm/collector.yaml",
-      openObserveDataVolume: "coffee-test-openobserve-data",
-    });
-    const [commandType, executable, shell, flag, script] =
-      compose.services.openobserve.healthcheck.test;
-    assert.deepEqual(
-      [commandType, executable, shell, flag],
-      ["CMD", "/busybox", "sh", "-ceu"],
-    );
-    const healthcheck = script.replaceAll("/busybox", busybox);
-    const run = (rootUsed, dataUsed) =>
-      execFileSync("/bin/sh", ["-ceu", healthcheck], {
-        env: {
-          ...process.env,
-          ROOT_USED: String(rootUsed),
-          DATA_USED: String(dataUsed),
-        },
-        stdio: "ignore",
-      });
-    run(77, 1);
-    assert.throws(
-      () => run(81, 1),
-      (error) => error.status === 1,
-    );
-    assert.throws(
-      () => run(1, 81),
-      (error) => error.status === 1,
-    );
-  } finally {
-    await rm(directory, { recursive: true, force: true });
+
+void test("generated Collector and backend configs preserve bounded delivery and isolate each store", async () => {
+  const collector = createCollectorConfig({config: sample, logFiles: logs, exporterToken: "producer-token"});
+  assert.equal(collector.exporters["otlp_http/logs"].endpoint, "http://loki:3100/otlp");
+  assert.equal(collector.exporters["otlp_http/metrics"].endpoint, "http://prometheus:9090/api/v1/otlp");
+  assert.equal(collector.exporters["otlp_http/traces"].endpoint, "http://tempo:4318");
+  assert.equal(collector.receivers.filelog.storage, "file_storage");
+  for (const signal of ["logs", "metrics", "traces"]) assert.equal(collector.exporters[`otlp_http/${signal}`].sending_queue.queue_size, 2048);
+  const alloy = createAlloyConfig({config: sample, logFiles: logs, exporterToken: "producer-token"});
+  assert.match(alloy, /auth = otelcol.auth.bearer.producer.handler/u);
+  assert.match(alloy, /endpoint = "0.0.0.0:4318"/u);
+  assert.match(alloy, /operators = /u);
+  assert.match(alloy, /logs = \[otelcol.processor.memory_limiter.main.input\]/u);
+  assert.match(alloy, /prometheus.exporter.unix "storage"/u);
+  assert.match(alloy, /\/telemetry-storage\/\(grafana\|loki\|prometheus\|tempo\)/u);
+  assert.match(alloy, /prometheus.exporter.blackbox "health"/u);
+  assert.match(alloy, /probe_owner = "edge-nginx"/u);
+  assert.match(alloy, /otelcol.receiver.nginx "edge"/u);
+  const backend = createBackendConfigs(sample);
+  assert.equal(backend.prometheus.storage.tsdb.out_of_order_time_window, "1800000ms");
+  assert.equal(backend.loki.analytics.reporting_enabled, false);
+  assert.equal(backend.tempo.usage_report.reporting_enabled, false);
+  assert.equal(backend.loki.ingester.wal.disk_full_threshold, 0.8);
+  assert.equal(backend.loki.limits_config.retention_period, "72h");
+  assert.equal(backend.tempo.backend_worker.compaction.block_retention, "72h");
+  assert.equal(backend.tempo.backend_worker.finish_on_shutdown_timeout, "10000ms");
+  assert.deepEqual(backend.datasources.datasources.map(source => source.uid), ["loki", "prometheus", "tempo"]);
+  const images = Object.fromEntries(["otelCollectorImage", "grafanaImage", "lokiImage", "prometheusImage", "tempoImage", "nodeImage"].map(name => [name, `fixture@sha256:${"a".repeat(64)}`]));
+  images.bootstrapProbeSha256 = "a".repeat(64);
+  const names = ["grafana", "loki", "prometheus", "tempo"];
+  const storageVolumes = Object.fromEntries(names.map(name => [name, `coffee-test-${name}-data`]));
+  const backendConfigPaths = Object.fromEntries([...names, "datasources", "alerts", "contacts"].map(name => [name, `/tmp/${name}.yaml`]));
+  const alertSinkImage = `sha256:${"b".repeat(64)}`;
+  const grafanaImage = `sha256:${"c".repeat(64)}`;
+  const compose = createComposeOverride({config: sample, imageRefs: images, grafanaImage, alertSinkImage, logFiles: logs, collectorConfigPath: "/tmp/collector.yaml", storageVolumes, backendConfigPaths, grafanaAdminSecretPath: "/tmp/admin-secret"});
+  for (const name of names) {
+    assert.equal(compose.volumes[`${name}_data`].name, storageVolumes[name]);
+    assert.deepEqual(compose.services[name].networks, ["coffee_observability"]);
+    assert.equal(compose.services[name].ports, undefined);
   }
-});
-
-void test("Collector queue verification handles sparse streams without accepting missing required counters", async () => {
-  const names = [
-    "otelcol_exporter_queue_size",
-    "otelcol_exporter_queue_capacity",
-    "otelcol_exporter_enqueue_failed_log_records",
-    "otelcol_exporter_enqueue_failed_metric_points",
-    "otelcol_exporter_enqueue_failed_spans",
-    "otelcol_exporter_send_failed_log_records",
-    "otelcol_exporter_send_failed_metric_points",
-    "otelcol_exporter_send_failed_spans",
-    "otelcol_exporter_sent_log_records",
-    "otelcol_exporter_sent_metric_points",
-    "otelcol_exporter_sent_spans",
-  ];
-  const availableStreams = names
-    .filter((name) => name !== "otelcol_exporter_sent_spans")
-    .map((name) => `platform_metrics_${name}`);
-  let searchCount = 0;
-  const fetchImpl = async (url) => {
-    if (url.pathname === "/api/coffee/streams")
-      return new Response(
-        JSON.stringify({
-          data: availableStreams.map((name) => ({
-            stream_type: "metrics",
-            name,
-          })),
-        }),
-        { status: 200 },
-      );
-    searchCount += 1;
-    return new Response(JSON.stringify({ hits: { hits: [] } }), {
-      status: 200,
-    });
-  };
-  let timeoutError;
-  await assert.rejects(
-    verifyCollectorQueueMetrics({
-      baseUrl: "http://openobserve.test",
-      authorization: "Basic fixture",
-      organization: "coffee",
-      metricsPrefix: "platform_metrics",
-      startTimeUs: 1000,
-      lossStartTimeUs: 500,
-      lossEndTimeUs: 1000,
-      queueCapacity: 512,
-      fetchImpl,
-      timeoutMs: 1000,
-      intervalMs: 20,
-    }),
-    (error) => {
-      timeoutError = error;
-      return /Collector self-scrape queue, send-failure, and recovery counters did not complete/u.test(
-        error.message,
-      );
-    },
-  );
-  const diagnosticJson = timeoutError.message.match(
-    /; last bounded observation=(\{.*\})$/u,
-  )?.[1];
-  assert.ok(
-    diagnosticJson,
-    "timeout reports a bounded last observation instead of hiding the missing metric",
-  );
-  const diagnostics = JSON.parse(diagnosticJson);
-  assert.deepEqual(diagnostics.missingFreshRequiredMetrics, [
-    "otelcol_exporter_queue_size",
-    "otelcol_exporter_queue_capacity",
-    "otelcol_exporter_sent_log_records",
-    "otelcol_exporter_sent_metric_points",
-    "otelcol_exporter_sent_spans",
-  ]);
-  assert.equal(
-    diagnostics.metrics.otelcol_exporter_sent_spans.available,
-    false,
-  );
-  assert.equal(
-    diagnostics.metrics.otelcol_exporter_send_failed_log_records.sampleCount,
-    0,
-    "sparse optional failure streams remain valid empty observations",
-  );
-  assert.deepEqual(diagnostics.positiveOutageLossMetrics, []);
-  assert.ok(
-    searchCount > 0,
-    "available streams were queried while the absent required counter remained pending",
-  );
-
-  const recoveryStartUs = 1_000_000_000_000_000;
-  const failureTimestampUs = 700_000_000_000_000;
-  const optionalFailureStreams = [
-    "otelcol_exporter_enqueue_failed_log_records",
-    "otelcol_exporter_enqueue_failed_metric_points",
-    "otelcol_exporter_enqueue_failed_spans",
-    "otelcol_exporter_send_failed_log_records",
-    "otelcol_exporter_send_failed_spans",
-  ];
-  const recoveryMetrics = new Map([
-    [
-      "otelcol_exporter_queue_size",
-      [
-        {
-          _timestamp: recoveryStartUs + 1,
-          value: 0,
-          service_name: "otel-collector",
-        },
-      ],
-    ],
-    [
-      "otelcol_exporter_queue_capacity",
-      [
-        {
-          _timestamp: recoveryStartUs + 1,
-          value: 512,
-          service_name: "otel-collector",
-        },
-      ],
-    ],
-    [
-      "otelcol_exporter_send_failed_metric_points",
-      [
-        {
-          _timestamp: failureTimestampUs,
-          value: 3,
-          service_name: "otel-collector",
-        },
-      ],
-    ],
-    ...["log_records", "metric_points", "spans"].map((signal) => [
-      `otelcol_exporter_sent_${signal}`,
-      [
-        {
-          _timestamp: recoveryStartUs + 1,
-          value: 1,
-          service_name: "otel-collector",
-        },
-      ],
-    ]),
-  ]);
-  const fetchRecoveryMetrics = (metrics) => async (url, init) => {
-    if (url.pathname === "/api/coffee/streams")
-      return new Response(
-        JSON.stringify({
-          data: [...metrics.keys()].map((name) => ({
-            stream_type: "metrics",
-            name: `platform_metrics_${name}`,
-          })),
-        }),
-        { status: 200 },
-      );
-    const stream =
-      url.searchParams.get("type") === "metrics" &&
-      JSON.parse(init.body).query.sql.match(/FROM "([^"]+)"/u)?.[1];
-    const records = metrics.get(stream?.replace("platform_metrics_", "")) ?? [];
-    return new Response(JSON.stringify({ hits: { hits: records } }), {
-      status: 200,
-    });
-  };
-  const recoveryFetch = fetchRecoveryMetrics(recoveryMetrics);
-  const recoveredBeforeCollectorRestart = await verifyCollectorQueueMetrics({
-    baseUrl: "http://openobserve.test",
-    authorization: "Basic fixture",
-    organization: "coffee",
-    metricsPrefix: "platform_metrics",
-    startTimeUs: recoveryStartUs,
-    lossStartTimeUs: failureTimestampUs - 1,
-    queueCapacity: 512,
-    fetchImpl: recoveryFetch,
-    timeoutMs: 5000,
-    intervalMs: 1,
-  });
-  assert.equal(recoveredBeforeCollectorRestart.status, "PASS");
-  assert.deepEqual(
-    recoveredBeforeCollectorRestart.sendFailureSamples.metric_points
-      .timestampsUs,
-    [failureTimestampUs],
-  );
-  assert.equal(
-    recoveredBeforeCollectorRestart.postRestartMetricTimestampsStrictlyAfterStartedAt,
-    false,
-  );
-  assert.equal(
-    recoveredBeforeCollectorRestart.historicalLossMetricWindowEndedAtRestart,
-    false,
-  );
-
-  const noFailureMetrics = new Map(recoveryMetrics);
-  noFailureMetrics.delete("otelcol_exporter_send_failed_metric_points");
-  let missingLossError;
-  await assert.rejects(
-    verifyCollectorQueueMetrics({
-      baseUrl: "http://openobserve.test",
-      authorization: "Basic fixture",
-      organization: "coffee",
-      metricsPrefix: "platform_metrics",
-      startTimeUs: recoveryStartUs,
-      lossStartTimeUs: failureTimestampUs - 1,
-      queueCapacity: 512,
-      fetchImpl: fetchRecoveryMetrics(noFailureMetrics),
-      timeoutMs: 50,
-      intervalMs: 1,
-    }),
-    (error) => {
-      missingLossError = error;
-      return /Collector self-scrape queue, send-failure, and recovery counters did not complete/u.test(
-        error.message,
-      );
-    },
-  );
-  const missingLossDiagnostic = JSON.parse(
-    missingLossError.message.match(
-      /; last bounded observation=(\{.*\})$/u,
-    )?.[1],
-  );
-  assert.equal(
-    missingLossDiagnostic.outageLossObserved,
-    false,
-    "fresh queue and sent metrics do not pass without a positive outage loss sample",
-  );
-  assert.deepEqual(missingLossDiagnostic.positiveOutageLossMetrics, []);
-
-  const recovered = await verifyCollectorQueueMetrics({
-    baseUrl: "http://openobserve.test",
-    authorization: "Basic fixture",
-    organization: "coffee",
-    metricsPrefix: "platform_metrics",
-    startTimeUs: recoveryStartUs,
-    lossStartTimeUs: failureTimestampUs - 1,
-    lossEndTimeUs: recoveryStartUs,
-    queueCapacity: 512,
-    fetchImpl: recoveryFetch,
-    timeoutMs: 5000,
-    intervalMs: 1,
-  });
-  assert.equal(recovered.status, "PASS");
-  assert.equal(
-    recovered.postRestartMetricTimestampsStrictlyAfterStartedAt,
-    true,
-  );
-  assert.equal(recovered.historicalLossMetricWindowEndedAtRestart, true);
-  assert.equal(recovered.sendFailureSamples.metric_points.values[0], 3);
-  assert.deepEqual(
-    recovered.optionalMetricStreamsAbsent.sort(),
-    optionalFailureStreams.sort(),
-  );
+  assert.equal(compose.services.grafana.mem_limit, "512m");
+  assert.equal(compose.services.grafana.environment.GF_PLUGINS_PREINSTALL_DISABLED, "true");
+  assert.equal(compose.services.grafana.image, grafanaImage);
+  assert.notEqual(compose.services.grafana.image, images.grafanaImage);
+  assert.ok(compose.services.grafana.volumes.some(volume => volume.target === "/var/lib/grafana"));
+  assert.ok(compose.services.grafana.volumes.every(volume => !"/opt/grafana/plugins".startsWith(`${volume.target}/`) && volume.target !== "/opt/grafana/plugins"));
+  assert.match(compose.services.prometheus.command.join(" "), /--web.enable-otlp-receiver/u);
+  assert.deepEqual(compose.services["otel-collector"].expose, ["4318"]);
+  assert.equal(compose.services["otel-collector"].healthcheck.test.at(-1), "http://127.0.0.1:13133/-/ready");
+  assert.ok(compose.services["otel-collector"].command.includes("--server.http.listen-addr=127.0.0.1:13133"));
+  assert.deepEqual(compose.services["otel-collector"].volumes.find(volume => volume.target === "/var/lib/alloy"), {type: "volume", source: "collector_checkpoints", target: "/var/lib/alloy", volume: {nocopy: true}});
+  assert.equal(compose.services["otel-collector"].volumes.filter(volume => volume.target.startsWith("/telemetry-storage/") && volume.read_only).length, 4);
+  assert.deepEqual(compose.services["alert-sink"].tmpfs, ["/run/alerts:rw,noexec,nosuid,nodev,uid=1000,gid=1000,size=32m"]);
+  assert.equal(compose.services["alert-sink"].image, alertSinkImage);
+  assert.notEqual(compose.services["alert-sink"].image, images.nodeImage);
+  const evidenceDir = await mkdtemp("/dev/shm/coffee-alert-evidence-");
+  const link = `${evidenceDir}-link`;
+  const args = {config: sample, imageRefs: images, grafanaImage, alertSinkImage, logFiles: logs, collectorConfigPath: "/tmp/collector.yaml", storageVolumes, backendConfigPaths, grafanaAdminSecretPath: "/tmp/admin-secret"};
+  for (const invalid of [undefined, images.grafanaImage, "sha256:bad"]) assert.throws(() => createComposeOverride({...args, grafanaImage: invalid}), /verified grafanaImage ID is required/u);
+  for (const invalid of [undefined, images.nodeImage, "sha256:bad"]) assert.throws(() => createComposeOverride({...args, alertSinkImage: invalid}), /verified alertSinkImage ID is required/u);
+  try {
+    if (process.getuid() !== 1000) {
+      assert.throws(() => createComposeOverride({...args, alertEvidenceDir: evidenceDir}), /owned by UID 1000/u);
+      return;
+    }
+    const isolated = createComposeOverride({...args, alertEvidenceDir: evidenceDir, observabilityNetworkName: "coffee-observability-network"});
+    assert.deepEqual(isolated.networks.coffee_observability, {name: "coffee-observability-network", internal: true});
+    assert.ok(isolated.services["otel-collector"].networks.includes("coffee_observability"));
+    assert.equal(isolated.services["alert-sink"].tmpfs, undefined);
+    assert.deepEqual(isolated.services["alert-sink"].volumes.at(-1), {type: "bind", source: evidenceDir, target: "/run/alerts"});
+    await symlink(evidenceDir, link, "dir");
+    assert.throws(() => createComposeOverride({...args, alertEvidenceDir: link}), /real mode 0700/u);
+    await chmod(evidenceDir, 0o755);
+    assert.throws(() => createComposeOverride({...args, alertEvidenceDir: evidenceDir}), /real mode 0700/u);
+    for (const name of ["coffee/production", null]) assert.throws(() => createComposeOverride({...args, observabilityNetworkName: name}), /invalid observability network/u);
+  } finally {
+    await rm(link, {force: true});
+    await rm(evidenceDir, {recursive: true, force: true});
+  }
 });
 
 void test("log discovery selects exactly one running container by project and runtime labels", async () => {
@@ -1495,13 +654,8 @@ void test("collector/admin refs remain optional in the shared encrypted-secret i
     await readFile(`${REPO_ROOT}/secrets/platform-secrets.schema.json`, "utf8"),
   );
   const telemetry = schema.$defs.environment.properties.telemetry;
-  assert.equal(telemetry.required.includes("openObserveIngestToken"), false);
-  assert.equal(telemetry.required.includes("openObserveAdmin"), false);
-  assert.equal(
-    telemetry.properties.openObserveIngestToken.$ref,
-    "#/$defs/encrypted",
-  );
-  assert.equal(telemetry.properties.openObserveAdmin.$ref, "#/$defs/encrypted");
+  assert.equal(telemetry.required.includes("grafanaAdmin"), false);
+  assert.equal(telemetry.properties.grafanaAdmin.$ref, "#/$defs/encrypted");
 });
 
 void test("unprovisioned collector and admin credentials fail closed without writing scoped files", async () => {
@@ -1509,7 +663,7 @@ void test("unprovisioned collector and admin credentials fail closed without wri
   const collectorDir = await mkdtemp(
     "/dev/shm/coffee-observability-bootstrap-",
   );
-  const adminDir = await mkdtemp("/dev/shm/coffee-openobserve-admin-");
+  const adminDir = await mkdtemp("/dev/shm/coffee-grafana-admin-");
   try {
     for (const path of ["config", "platform"])
       await cp(`${REPO_ROOT}/${path}`, `${fixtureRoot}/${path}`, {
@@ -1528,20 +682,12 @@ void test("unprovisioned collector and admin credentials fail closed without wri
     );
 
     await assert.rejects(
-      materializeCollectorSecrets({
-        root: fixtureRoot,
-        outputDir: collectorDir,
-        env: {},
-      }),
-      /CONFIG-SECRET-REF.*openObserveIngestToken/u,
-    );
-    await assert.rejects(
-      materializeOpenObserveAdminSecret({
+      materializeGrafanaAdminSecret({
         root: fixtureRoot,
         outputDir: adminDir,
         env: {},
       }),
-      /CONFIG-SECRET-REF.*openObserveAdmin/u,
+      /CONFIG-SECRET-REF.*grafanaAdmin/u,
     );
     assert.deepEqual(await readdir(collectorDir), []);
     assert.deepEqual(await readdir(adminDir), []);
@@ -1549,6 +695,68 @@ void test("unprovisioned collector and admin credentials fail closed without wri
     await rm(fixtureRoot, { recursive: true, force: true });
     await rm(collectorDir, { recursive: true, force: true });
     await rm(adminDir, { recursive: true, force: true });
+  }
+});
+
+void test("development Grafana provisioning creates once through SOPS stdin and preserves other ciphertext", async () => {
+  const fixture = await createSecretMaterializationFixture();
+  const outputDir = await mkdtemp("/dev/shm/coffee-grafana-provision-test-");
+  const secretPath = join(fixture.root, "secrets/platform.secrets.sops.yaml");
+  const callsPath = join(fixture.bin, "provision-calls.json");
+  try {
+    const encrypted = JSON.parse(await readFile(secretPath, "utf8"));
+    const plain = JSON.parse(await readFile(fixture.plainPath, "utf8"));
+    delete encrypted.environments.development.telemetry.grafanaAdmin;
+    delete plain.environments.development.telemetry.grafanaAdmin;
+    await writeFile(secretPath, JSON.stringify(encrypted));
+    await writeFile(fixture.plainPath, JSON.stringify(plain));
+    const source = `#!${process.execPath}
+const fs = require("node:fs");
+const args = process.argv.slice(2);
+const plainPath = ${JSON.stringify(fixture.plainPath)};
+const callsPath = ${JSON.stringify(callsPath)};
+if (args[0] === "set") {
+  const value = JSON.parse(fs.readFileSync(0, "utf8"));
+  if (!/^[a-f0-9]{64}$/.test(value)) process.exit(1);
+  const current = JSON.parse(fs.readFileSync(args[args.length - 2], "utf8"));
+  current.environments.development.telemetry.grafanaAdmin = "ENC[AES256_GCM,data:x,iv:x,tag:x,type:str]";
+  fs.writeFileSync(args[args.length - 2], JSON.stringify(current));
+  const plain = JSON.parse(fs.readFileSync(plainPath, "utf8"));
+  plain.environments.development.telemetry.grafanaAdmin = value;
+  fs.writeFileSync(plainPath, JSON.stringify(plain));
+  fs.writeFileSync(callsPath, JSON.stringify({args, credentialInArgs: args.some(arg => arg.includes(value))}));
+} else if (args[0] === "--decrypt") process.stdout.write(fs.readFileSync(plainPath));
+else process.exit(1);
+`;
+    await writeFile(join(fixture.bin, "sops"), source, {mode: 0o700});
+    const first = await provisionDevelopmentGrafanaAdmin({root: fixture.root, outputDir, env: fixture.env});
+    assert.equal(first.created, true);
+    assert.equal((await stat(secretPath)).mode & 0o777, 0o600);
+    assert.equal((await stat(first.path)).mode & 0o777, 0o400);
+    const credential = (await readFile(first.path, "utf8")).trim();
+    assert.match(credential, /^[a-f0-9]{64}$/u);
+    const args = JSON.parse(await readFile(callsPath, "utf8"));
+    assert.equal(args.credentialInArgs, false);
+    assert.ok(args.args.includes("--value-stdin"));
+    const after = JSON.parse(await readFile(secretPath, "utf8"));
+    delete after.environments.development.telemetry.grafanaAdmin;
+    assert.deepEqual(after.environments, encrypted.environments);
+    const ciphertextBeforeRepeat = await readFile(secretPath, "utf8");
+    const second = await provisionDevelopmentGrafanaAdmin({root: fixture.root, outputDir, env: fixture.env});
+    assert.equal(second.created, false);
+    assert.equal(await readFile(secretPath, "utf8"), ciphertextBeforeRepeat);
+    assert.equal((await readFile(second.path, "utf8")).trim(), credential);
+    const configPath = join(fixture.root, "config/platform.yaml");
+    const config = parseYaml(await readFile(configPath, "utf8"));
+    config.environment = "staging";
+    config.telemetry.releaseDigest = `sha256:${"a".repeat(64)}`;
+    await writeFile(configPath, dumpYaml(config));
+    await assert.rejects(provisionDevelopmentGrafanaAdmin({root: fixture.root, outputDir, env: fixture.env}), /restricted to development/u);
+    assert.equal(await readFile(secretPath, "utf8"), ciphertextBeforeRepeat);
+  } finally {
+    await rm(outputDir, {recursive: true, force: true});
+    await rm(fixture.root, {recursive: true, force: true});
+    await rm(fixture.bin, {recursive: true, force: true});
   }
 });
 
@@ -1563,7 +771,7 @@ void test("collector secret admission rejects a missing encrypted credential bef
       "secrets/platform.secrets.sops.yaml",
     );
     const encrypted = JSON.parse(await readFile(encryptedPath, "utf8"));
-    delete encrypted.environments.development.telemetry.openObserveIngestToken;
+    delete encrypted.environments.development.telemetry.exporterToken;
     await writeFile(encryptedPath, JSON.stringify(encrypted), "utf8");
 
     await assert.rejects(
@@ -1573,8 +781,7 @@ void test("collector secret admission rejects a missing encrypted credential bef
         env: fixture.env,
       }),
       (error) => {
-        assert.equal(error.ruleId, "CONFIG-SECRET-REF");
-        assert.match(error.message, /openObserveIngestToken/u);
+        assert.equal(error.ruleId, "CONFIG-SCHEMA");
         return true;
       },
     );
@@ -1605,7 +812,7 @@ void test("collector/admin materializers reject untrusted output directories and
       /real directory owned by config-bootstrap/u,
     );
     await assert.rejects(
-      materializeOpenObserveAdminSecret({ outputDir: adminLink, env: {} }),
+      materializeGrafanaAdminSecret({ outputDir: adminLink, env: {} }),
       /real directory owned by config-bootstrap/u,
     );
 
@@ -1628,7 +835,7 @@ void test("collector/admin materializers reject untrusted output directories and
       /existing secret output must be a regular file/u,
     );
     await assert.rejects(
-      materializeOpenObserveAdminSecret({
+      materializeGrafanaAdminSecret({
         root: fixture.root,
         outputDir: adminDir,
         env: fixture.env,
@@ -1663,15 +870,14 @@ void test("collector/admin materializers atomically replace owned files with mod
       outputDir: collectorDir,
       env: fixture.env,
     });
-    await materializeOpenObserveAdminSecret({
+    await materializeGrafanaAdminSecret({
       root: fixture.root,
       outputDir: adminDir,
       env: fixture.env,
     });
 
     const collector = JSON.parse(await readFile(collectorPath, "utf8"));
-    assert.equal(collector.exporterToken, "fixture-secret-value");
-    assert.equal(collector.openObserveIngestToken, "fixture-secret-value");
+    assert.deepEqual(collector, {exporterToken: "fixture-secret-value"});
     assert.equal(await readFile(adminPath, "utf8"), "fixture-secret-value\n");
     for (const [path, oldMetadata] of [
       [collectorPath, oldCollector],
@@ -1698,7 +904,7 @@ void test("collector/admin materializers reject directories owned by another use
   assert.notEqual(before.uid, process.getuid());
   for (const materialize of [
     materializeCollectorSecrets,
-    materializeOpenObserveAdminSecret,
+    materializeGrafanaAdminSecret,
   ]) {
     await assert.rejects(
       materialize({ outputDir: "/tmp", env: {} }),
@@ -1806,7 +1012,7 @@ void test("runtime materialization is scope-bound, accepted by runtime loader, a
         undefined,
     );
     assert.ok(
-      valueAt(document.secrets, "telemetry.openObserveAdmin") === undefined,
+      valueAt(document.secrets, "telemetry.grafanaAdmin") === undefined,
     );
 
     const wrongRuntime = { ...document, runtime: "orders-service" };
@@ -6444,9 +5650,7 @@ async function createSecretMaterializationFixture() {
     await cp(`${REPO_ROOT}/.sops.yaml`, `${root}/.sops.yaml`);
     const encrypted = syntheticEncryptedSecrets();
     for (const environment of Object.values(encrypted.environments)) {
-      environment.telemetry.openObserveIngestToken =
-        "ENC[AES256_GCM,data:x,iv:x,tag:x,type:str]";
-      environment.telemetry.openObserveAdmin =
+      environment.telemetry.grafanaAdmin =
         "ENC[AES256_GCM,data:x,iv:x,tag:x,type:str]";
     }
     await writeFile(

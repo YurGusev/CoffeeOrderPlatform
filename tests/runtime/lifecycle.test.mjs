@@ -10,6 +10,10 @@ import {
 import { request as httpRequest } from "node:http";
 import dns from "node:dns";
 import {
+  getDefaultAutoSelectFamily,
+  setDefaultAutoSelectFamily,
+} from "node:net";
+import {
   createServer as createHttpsServer,
   request as httpsRequest,
 } from "node:https";
@@ -690,6 +694,171 @@ void test("telemetry span queue drops at its configured bound and records export
     "dropped span contents are never exported",
   );
   t.after(() => new Promise((resolve) => collector.close(resolve)));
+});
+
+void test("telemetry resolves both exporters without the shared DNS lookup and cancels pending resolution", async (t) => {
+  const paths = [];
+  const collector = createHttpServer((request, response) => {
+    request.resume();
+    request.on("end", () => {
+      paths.push(request.url);
+      response.writeHead(200, { "content-type": "application/x-protobuf" });
+      response.end();
+    });
+  });
+  await new Promise((resolve) => collector.listen(0, "127.0.0.1", resolve));
+  t.after(() => {
+    collector.closeAllConnections();
+    return new Promise((resolve) => collector.close(resolve));
+  });
+  const address = collector.address();
+  assert.ok(address && typeof address === "object");
+
+  let mode = "ready";
+  let calls = 0;
+  let canceled = 0;
+  const pending = [];
+  const cancel = Reflect.get(dns.Resolver.prototype, "cancel");
+  t.mock.method(dns.Resolver.prototype, "resolve4", (hostname, callback) => {
+    assert.equal(hostname, "otel-collector");
+    calls++;
+    if (mode === "hold") pending.push(callback);
+    else if (mode === "failure")
+      queueMicrotask(() =>
+        callback(
+          Object.assign(new Error("DNS failure"), { code: "ENOTFOUND" }),
+        ),
+      );
+    else
+      queueMicrotask(() =>
+        callback(null, mode === "empty" ? [] : ["127.0.0.1"]),
+      );
+  });
+  t.mock.method(dns.Resolver.prototype, "cancel", function () {
+    canceled++;
+    for (const callback of pending.splice(0))
+      callback(
+        Object.assign(new Error("DNS canceled"), { code: "ECANCELLED" }),
+      );
+    return Reflect.apply(cancel, this, []);
+  });
+  t.mock.method(dns, "lookup", () => {
+    assert.fail("OTLP must not use the shared DNS lookup");
+  });
+  t.mock.method(process, "emitWarning", () => {});
+  const autoSelectFamily = getDefaultAutoSelectFamily();
+  t.after(() => setDefaultAutoSelectFamily(autoSelectFamily));
+  setDefaultAutoSelectFamily(true);
+  const config = {
+    environment: "development",
+    namespace: "coffee-platform",
+    releaseDigest: "test",
+    collector: { otlpEndpoint: `http://otel-collector:${address.port}` },
+    producer: {
+      queueCapacity: 16,
+      maxRecordBytes: 16384,
+      batchSize: 1,
+      batchIntervalMs: 250,
+      exportTimeoutMs: 250,
+      diagnosticIntervalMs: 60000,
+      flushTimeoutMs: 250,
+    },
+  };
+  const telemetry = createTelemetryResource(
+    config,
+    "otel-resolver-test",
+    "test-token",
+  );
+  t.after(() => telemetry.destroy());
+  telemetry.start();
+  trace.getTracer("otel-resolver-test").startSpan("resolver-test").end();
+  await waitFor(
+    () => paths.includes("/v1/traces") && paths.includes("/v1/metrics"),
+    3000,
+  );
+  assert.ok(calls >= 2);
+  await telemetry.stop(new AbortController().signal);
+  assert.equal(canceled, 1);
+
+  paths.length = 0;
+  setDefaultAutoSelectFamily(false);
+  const single = createTelemetryResource(
+    config,
+    "otel-resolver-single",
+    "test-token",
+  );
+  t.after(() => single.destroy());
+  single.start();
+  trace.getTracer("otel-resolver-single").startSpan("resolver-single").end();
+  await waitFor(
+    () => paths.includes("/v1/traces") && paths.includes("/v1/metrics"),
+    3000,
+  );
+  await single.stop(new AbortController().signal);
+  assert.equal(canceled, 2);
+
+  paths.length = 0;
+  const beforeLiteral = calls;
+  const literal = createTelemetryResource(
+    {
+      ...config,
+      collector: { otlpEndpoint: `http://127.0.0.1:${address.port}` },
+    },
+    "otel-resolver-literal",
+    "test-token",
+  );
+  t.after(() => literal.destroy());
+  literal.start();
+  trace.getTracer("otel-resolver-literal").startSpan("resolver-literal").end();
+  await waitFor(
+    () => paths.includes("/v1/traces") && paths.includes("/v1/metrics"),
+    3000,
+  );
+  await literal.stop(new AbortController().signal);
+  assert.equal(calls, beforeLiteral);
+  assert.equal(canceled, 3);
+
+  for (mode of ["failure", "empty"]) {
+    const failed = createTelemetryResource(
+      config,
+      "otel-resolver-failure",
+      "test-token",
+    );
+    t.after(() => failed.destroy());
+    const failures = telemetryDiagnostics().exportFailures;
+    failed.start();
+    trace.getTracer("otel-resolver-failure").startSpan("dns-failure").end();
+    await waitFor(() => telemetryDiagnostics().exportFailures > failures, 3000);
+    await failed.stop(AbortSignal.abort());
+  }
+  assert.equal(canceled, 5);
+
+  mode = "hold";
+  const held = createTelemetryResource(
+    config,
+    "otel-resolver-cancel",
+    "test-token",
+  );
+  t.after(() => held.destroy());
+  held.start();
+  trace.getTracer("otel-resolver-cancel").startSpan("dns-pending").end();
+  await waitFor(() => pending.length > 0, 3000);
+  await held.stop(AbortSignal.abort());
+  assert.equal(canceled, 6);
+  assert.equal(pending.length, 0);
+
+  const destroyed = createTelemetryResource(
+    config,
+    "otel-resolver-destroy",
+    "test-token",
+  );
+  t.after(() => destroyed.destroy());
+  destroyed.start();
+  trace.getTracer("otel-resolver-destroy").startSpan("dns-pending").end();
+  await waitFor(() => pending.length > 0, 3000);
+  destroyed.destroy();
+  assert.equal(canceled, 7);
+  assert.equal(pending.length, 0);
 });
 
 void test("telemetry forceFlush immediately drains the final partial span batch", async (t) => {

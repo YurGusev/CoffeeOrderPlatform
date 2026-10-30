@@ -11,6 +11,7 @@ verification:
     parallel: 1
     minimumFreeDiskGiB: 20
     maximumDatabaseAgeHours: 24
+    approvedFixed: [CVE-2026-21728, CVE-2026-28377]
     egressRepositories:
       - ghcr.io/aquasecurity/trivy-db
       - ghcr.io/aquasecurity/trivy-java-db
@@ -296,14 +297,13 @@ telemetry:
   collector:
     otlpEndpoint: http://otel-collector:4318
     healthEndpoint: http://otel-collector:13133
-    metricsEndpoint: http://otel-collector:8888
     memoryLimitMiB: 256
     memorySpikeMiB: 64
     containerMemoryMiB: 1024
     memoryCheckIntervalMs: 1000
     batchSize: 128
     batchTimeoutMs: 1000
-    queueCapacity: 512
+    queueCapacity: 2048
     queueConsumers: 2
     exportTimeoutMs: 2000
     retryInitialMs: 1000
@@ -321,33 +321,18 @@ telemetry:
   logging:
     maxSizeMiB: 8
     maxFiles: 3
-  openObserve:
-    endpoint: http://openobserve:5080
-    organization: default
-    bootstrapEmail: operations@coffee-platform.internal
-    validationMarker: bootstrap-validation-placeholder
-    telemetryEnabled: false
-    mmdbDownloadEnabled: false
-    modelPricingEnabled: false
-    memoryLimitMiB: 2048
-    memTableMaxSizeMiB: 128
-    maxFileSizeInMemoryMiB: 8
-    maxFileSizeOnDiskMiB: 8
-    maxFileRetentionSeconds: 30
-    memPersistIntervalSeconds: 2
-    streams:
-      logs: platform_logs
-      traces: platform_traces
-      metrics: platform_metrics
-    retentionDays: 3
-    deleteFilesDelayMinutes: 1
-    maxDiskBytes: 1073741824
-    diskWatermarkPercent: 80
-    compactionIntervalSeconds: 60
-    jobCleanupWaitSeconds: 60
+  diskWatermarkPercent: 80
+  externalReportingEnabled: false
+  grafana: { endpoint: http://grafana:3000, memoryLimitMiB: 512, maxDiskBytes: 1073741824 }
+  loki: { endpoint: http://loki:3100, memoryLimitMiB: 512, maxDiskBytes: 1073741824, retentionDays: 3 }
+  prometheus: { endpoint: http://prometheus:9090, memoryLimitMiB: 512, maxDiskBytes: 1073741824, retentionDays: 3, outOfOrderWindowMs: 1800000 }
+  tempo: { endpoint: http://tempo:3200, otlpEndpoint: http://tempo:4318, memoryLimitMiB: 768, maxDiskBytes: 1073741824, retentionDays: 3, finishOnShutdownTimeoutMs: 10000 }
   alerts:
     version: 1
     evaluationIntervalMs: 60000
+    notificationEndpoint: http://alert-sink:9091/alerts
+    diskUsage: { forMs: 0 }
+    sinkMemoryMiB: 128
     notReady: { forMs: 300000, threshold: 0 }
     consumerLag: { forMs: 300000, threshold: 0 }
     outboxOldestAge: { forMs: 300000, threshold: 0 }

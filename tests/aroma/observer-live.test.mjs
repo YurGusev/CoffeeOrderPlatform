@@ -1,11 +1,24 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { readFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { execFileSync } from "node:child_process";
+import { createServer as createHttpsServer } from "node:https";
+import dns from "node:dns";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { Client } from "pg";
 import { load as parseYaml } from "js-yaml";
 import { openBlackholeProxy } from "../../scripts/db-live-proof.mjs";
 import { withCatalogPostgres } from "../../scripts/catalog-live-harness.mjs";
+import { loadPlatformConfig } from "../../packages/platform-config/dist/index.js";
+import { createRuntime } from "../../packages/platform-runtime/dist/index.js";
+import {
+  parseServiceTransportMaterial,
+  verifyTransportPeer,
+} from "../../packages/platform-security/dist/index.js";
+import { createAromaObserverComposition } from "../../apps/aroma-observer/dist/runtime-composition.js";
+import { createAromaConvergenceComposition } from "../../apps/aroma-convergence/dist/runtime-composition.js";
 import {
   normalizeAromaCartSnapshot,
   isAromaOwnerMessage,
@@ -570,7 +583,8 @@ void test(
 
 // Separate database/domain fixture: prerequisite observations/events above are
 // never treated as real domain history for the store behavioral proofs.
-async function withObserverDomain(run) {
+async function withObserverDomain(run, owner = "aroma-observer") {
+  const role = owner === "aroma-observer" ? "coffee_orders_observer_rw" : "coffee_orders_convergence_rw";
   return withCatalogPostgres(async ({ adminClient, port }) => {
     const passwords = new Map();
     for (const role of ["coffee_orders_migrator", ...ROLES]) {
@@ -608,16 +622,16 @@ async function withObserverDomain(run) {
       }
     };
     const migrator = await connect("coffee_orders_migrator");
-    const observer = await connect("coffee_orders_observer_rw");
+    const observer = await connect(role);
     const databaseAt = (targetPort) =>
       createDatabase({
-        owner: "aroma-observer",
+        owner,
         database: "coffee_platform_orders",
         allowedDatabase: "coffee_platform_orders",
         host: "127.0.0.1",
         port: targetPort,
-        user: "coffee_orders_observer_rw",
-        password: passwords.get("coffee_orders_observer_rw"),
+        user: role,
+        password: passwords.get(role),
         ssl: false,
         pool: POOL,
         shutdownGraceMs: 40_000,
@@ -641,7 +655,7 @@ async function withObserverDomain(run) {
             "SELECT current_user AS name,rolsuper FROM pg_roles WHERE rolname=current_user",
           )
         ).rows[0],
-        { name: "coffee_orders_observer_rw", rolsuper: false },
+        { name: role, rolsuper: false },
       );
       await runtime.resource.start(signal());
       return await run({ runtime, observer, migrator, databaseAt, port });
@@ -652,6 +666,250 @@ async function withObserverDomain(run) {
     }
   });
 }
+
+for (const owner of ["aroma-observer", "aroma-convergence"]) void test(
+  `${owner} readiness remains available during a held business request`,
+  {
+    timeout: 180_000,
+    skip:
+      process.env.COFFEE_DB_LIVE_PROOF !== "1"
+        ? "disposable PostgreSQL required"
+        : false,
+  },
+  async (t) => {
+    const directory = await mkdtemp(join(tmpdir(), "coffee-observer-wiring-"));
+    t.after(() => rm(directory, { recursive: true, force: true }));
+    const caKey = join(directory, "ca.key"),
+      caCert = join(directory, "ca.crt");
+    const openssl = (...args) =>
+      execFileSync("openssl", args, { stdio: "ignore", timeout: 10_000 });
+    openssl(
+      "req",
+      "-x509",
+      "-newkey",
+      "rsa:2048",
+      "-nodes",
+      "-keyout",
+      caKey,
+      "-out",
+      caCert,
+      "-subj",
+      "/CN=observer-wiring-ca",
+      "-days",
+      "1",
+      "-addext",
+      "basicConstraints=critical,CA:TRUE",
+      "-addext",
+      "keyUsage=critical,keyCertSign,cRLSign",
+    );
+    const caPem = await readFile(caCert, "utf8");
+    const material = async (runtime) => {
+      const key = join(directory, `${runtime}.key`),
+        csr = join(directory, `${runtime}.csr`),
+        cert = join(directory, `${runtime}.crt`);
+      openssl(
+        "req",
+        "-new",
+        "-newkey",
+        "rsa:2048",
+        "-nodes",
+        "-keyout",
+        key,
+        "-out",
+        csr,
+        "-subj",
+        `/CN=${runtime}`,
+        "-addext",
+        `subjectAltName=DNS:${runtime},URI:spiffe://coffee-platform/development/${runtime}`,
+        "-addext",
+        "extendedKeyUsage=serverAuth,clientAuth",
+      );
+      openssl(
+        "x509",
+        "-req",
+        "-in",
+        csr,
+        "-CA",
+        caCert,
+        "-CAkey",
+        caKey,
+        "-CAcreateserial",
+        "-out",
+        cert,
+        "-days",
+        "1",
+        "-sha256",
+        "-copy_extensions",
+        "copyall",
+      );
+      return parseServiceTransportMaterial(
+        JSON.stringify({
+          keyPem: await readFile(key, "utf8"),
+          certPem: await readFile(cert, "utf8"),
+          caPem,
+        }),
+        "development",
+        runtime,
+      );
+    };
+    const runtimeTls = await material(owner),
+      internalTls = await material("api-internal");
+    const businessArrived = Promise.withResolvers(),
+      businessClosed = Promise.withResolvers();
+    const readinessClosed = Promise.withResolvers();
+    let readinessRequests = 0,
+      holdReadiness = false,
+      businessOpen = false;
+    const server = createHttpsServer(
+      {
+        key: internalTls.keyPem,
+        cert: internalTls.certPem,
+        ca: caPem,
+        requestCert: true,
+        rejectUnauthorized: true,
+        minVersion: "TLSv1.3",
+      },
+      (request, response) => {
+        verifyTransportPeer(
+          request.socket.getPeerCertificate(),
+          "development",
+          owner,
+        );
+        if (request.url === "/api/internal-v1/aroma/cart-snapshots:read") {
+          assert.equal(request.method, "POST");
+          businessOpen = true;
+          response.once("close", () => { businessOpen = false; businessClosed.resolve(); });
+          businessArrived.resolve();
+          return;
+        }
+        assert.equal(request.method, "GET");
+        assert.equal(request.url, "/health/ready");
+        readinessRequests++;
+        if (holdReadiness) {
+          response.once("close", () => readinessClosed.resolve());
+          return;
+        }
+        response.writeHead(200).end("ready");
+      },
+    );
+    await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+    t.after(async () => {
+      server.closeAllConnections();
+      if (server.listening)
+        await new Promise((resolve) => server.close(resolve));
+    });
+    const address = server.address();
+    assert.ok(address && typeof address === "object");
+    const originalLookup = dns.lookup.bind(dns);
+    t.mock.method(dns, "lookup", (hostname, options, callback) => {
+      if (typeof options === "function") {
+        callback = options;
+        options = undefined;
+      }
+      if (hostname !== "api-internal")
+        return originalLookup(hostname, options, callback);
+      return options?.all
+        ? callback(null, [{ address: "127.0.0.1", family: 4 }])
+        : callback(null, "127.0.0.1", 4);
+    });
+    const config = structuredClone(
+      await loadPlatformConfig(
+        new URL("../../config/platform.yaml", import.meta.url).pathname,
+        parseYaml,
+      ),
+    );
+    config.services[owner].outbound = [
+      `api-internal:${address.port}`,
+    ];
+    const receipt = await withObserverDomain(async ({ runtime, migrator }) => {
+      if (owner === "aroma-convergence") {
+        await migrator.query("BEGIN");
+        await migrator.query("INSERT INTO orders.cart_desired_revisions VALUES($1,1,'Current',$2,0,transaction_timestamp())", ["aroma-primary", fingerprint]);
+        await migrator.query("INSERT INTO orders.cart_desired_lines VALUES($1,1,$2,NULL,1000,$3,'[]'::jsonb)", ["aroma-primary", "off_00000000000000000000000001", fingerprint]);
+        await migrator.query("INSERT INTO orders.convergence_work(cart_scope_ref,desired_revision,reason,next_attempt_at) VALUES($1,1,'Recovery',transaction_timestamp())", ["aroma-primary"]);
+        await migrator.query("COMMIT");
+      }
+      const composition = owner === "aroma-observer" ? createAromaObserverComposition() : createAromaConvergenceComposition();
+      const kafka = { bind: () => {}, relay: async () => {} };
+      const app = await createRuntime({
+        name: owner,
+        host: "127.0.0.1",
+        port: 0,
+        shutdownGraceMs: 5000,
+        health: config.services[owner].health,
+        readinessChecks: composition.readinessChecks,
+        resources: composition.resources,
+        configure: (app, signal) =>
+          composition.configure(app, signal, runtime, kafka, {
+            config,
+            secrets: {
+              security: {
+                serviceTransportKeys: {
+                  [owner]: JSON.stringify({
+                    keyPem: runtimeTls.keyPem,
+                    certPem: runtimeTls.certPem,
+                    caPem: runtimeTls.caPem,
+                  }),
+                },
+              },
+            },
+          }),
+      });
+      try {
+        await app.runtimeController.start();
+        await Promise.race([
+          businessArrived.promise,
+          new Promise((_, reject) =>
+            setTimeout(
+              () => reject(new Error("business request not received")),
+              10_000,
+            ).unref(),
+          ),
+        ]);
+        assert.equal(businessOpen, true);
+        if (owner === "aroma-convergence") {
+          const attempts = await migrator.query("SELECT state, desired_revision::text AS revision FROM orders.convergence_attempts");
+          assert.deepEqual(attempts.rows, [{ state: "Started", revision: "1" }]);
+        }
+        const ready = await app.inject("/health/ready");
+        assert.equal(businessOpen, true);
+        assert.equal(ready.statusCode, 200);
+        assert.equal(readinessRequests, 1);
+        holdReadiness = true;
+        assert.equal((await app.inject("/health/ready")).statusCode, 503);
+        await Promise.race([
+          readinessClosed.promise,
+          new Promise((_, reject) =>
+            setTimeout(
+              () => reject(new Error("readiness request not canceled")),
+              5000,
+            ).unref(),
+          ),
+        ]);
+        holdReadiness = false;
+        assert.equal((await app.inject("/health/ready")).statusCode, 200);
+        assert.equal(readinessRequests, 3);
+        assert.equal(businessOpen, true);
+      } finally {
+        assert.deepEqual(await app.runtimeController.closeRuntime("SIGTERM"), {
+          status: "stopped",
+          pending: [],
+        });
+      }
+      await Promise.race([
+        businessClosed.promise,
+        new Promise((_, reject) =>
+          setTimeout(
+            () => reject(new Error("business request not canceled")),
+            5000,
+          ).unref(),
+        ),
+      ]);
+      return {};
+    }, owner);
+    assert.equal(receipt.cleanup.containerRemoved, true);
+  },
+);
 
 void test(
   "observer durable safe-only store behavioral proofs under real PostgreSQL role",

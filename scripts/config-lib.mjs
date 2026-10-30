@@ -662,16 +662,6 @@ export async function loadPlatformConfig(
   );
   const config = await readYaml(path);
   validate(schema, config, path, [nginxSchema]);
-  const openObserve = config.telemetry?.openObserve;
-  if (
-    openObserve?.telemetryEnabled !== false ||
-    openObserve?.mmdbDownloadEnabled !== false ||
-    openObserve?.modelPricingEnabled !== false
-  )
-    fail(
-      "CONFIG-OBSERVABILITY-EGRESS",
-      "OpenObserve telemetry, MMDB downloads, and model-pricing sync must remain disabled in the private platform topology",
-    );
   checkConfigKeys(config);
   exactSet(config.services, NODE_RUNTIMES, "platform.yaml Node services");
   checkKafkaConfiguration(config);

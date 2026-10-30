@@ -16,6 +16,7 @@ import {
   open,
   readFile,
   realpath,
+  statfs,
   rename,
   unlink,
 } from "node:fs/promises";
@@ -531,9 +532,9 @@ export async function materializeCollectorSecrets({
   return { path: scopedPath, runtime: "otel-collector" };
 }
 
-export async function materializeOpenObserveAdminSecret({
+export async function materializeGrafanaAdminSecret({
   root = REPO_ROOT,
-  outputDir = "/dev/shm/coffee-platform-openobserve-bootstrap",
+  outputDir = "/dev/shm/coffee-platform-grafana-bootstrap",
   env = process.env,
 } = {}) {
   await ensurePrivateSecretDirectory(outputDir);
@@ -541,10 +542,73 @@ export async function materializeOpenObserveAdminSecret({
   const values = await readTelemetrySecrets({
     root,
     env,
-    scope: "openobserve-bootstrap",
+    scope: "grafana-bootstrap",
   });
   await writePrivateSecret(path, `${values["admin-secret"]}\n`);
   return { path, runtime: "config-bootstrap" };
+}
+
+export async function provisionDevelopmentGrafanaAdmin({
+  root = REPO_ROOT,
+  outputDir = "/dev/shm/coffee-platform-grafana-bootstrap",
+  env = process.env,
+} = {}) {
+  assertLocatorEnv(env, true);
+  const config = await loadPlatformConfig(
+    root,
+    env.COFFEE_CONFIG_FILE ? resolve(env.COFFEE_CONFIG_FILE) : join(root, "config/platform.yaml"),
+  );
+  if (config.environment !== "development")
+    fail("CONFIG-GRAFANA-PROVISION", "Grafana admin provisioning is restricted to development");
+  const secretPath = join(root, "secrets/platform.secrets.sops.yaml");
+  await assertPreparationNoSymlinkPath(secretPath);
+  const encrypted = await loadEncryptedSecrets(root);
+  await ensurePrivateSecretDirectory(outputDir);
+  if ((await statfs(outputDir)).type !== 0x01021994)
+    fail("CONFIG-GRAFANA-PROVISION", "Grafana admin output must be on tmpfs");
+  if (secretValueAt(encrypted.environments.development, "telemetry.grafanaAdmin") !== undefined) {
+    const scoped = await materializeGrafanaAdminSecret({root, outputDir, env});
+    return {created: false, path: scoped.path};
+  }
+  const info = await lstat(secretPath);
+  if (!info.isFile() || info.isSymbolicLink() || info.uid !== process.getuid())
+    fail("CONFIG-GRAFANA-PROVISION", "encrypted secret bundle is not an owned regular file");
+  const original = await readFile(secretPath);
+  const plaintext = assertPlainSecretDocument(encrypted, decryptInMemory(secretPath, env));
+  const credential = randomBytes(32).toString("hex");
+  const expected = structuredClone(plaintext);
+  setSecretAt(expected.environments.development, "telemetry.grafanaAdmin", credential);
+  const temporary = join(outputDir, `.grafana-${randomUUID()}.yaml`);
+  try {
+    const handle = await open(temporary, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600);
+    try { await handle.writeFile(original); } finally { await handle.close(); }
+    try {
+      execFileSync("sops", ["set", "--input-type", "yaml", "--output-type", "yaml", "--value-stdin", temporary,
+        '["environments"]["development"]["telemetry"]["grafanaAdmin"]'], {
+        cwd: root, env, input: JSON.stringify(credential), timeout: 30_000, maxBuffer: 16 * 1024 * 1024,
+        stdio: ["pipe", "pipe", "pipe"],
+      });
+    } catch { fail("CONFIG-GRAFANA-PROVISION", "trusted SOPS update failed"); }
+    const updatedBytes = await readFile(temporary);
+    const updated = parseYaml(updatedBytes.toString("utf8"), {json: true});
+    await validateEncryptedSecretsDocument(root, updated, temporary);
+    const previousLeaves = structuredClone(updated.environments);
+    delete previousLeaves.development.telemetry.grafanaAdmin;
+    if (!isDeepStrictEqual(previousLeaves, encrypted.environments) || updatedBytes.includes(credential))
+      fail("CONFIG-GRAFANA-PROVISION", "SOPS update changed other ciphertext or exposed plaintext");
+    const roundtrip = assertPlainSecretDocument(updated, decryptInMemory(temporary, env));
+    if (!isDeepStrictEqual(roundtrip, expected))
+      fail("CONFIG-GRAFANA-PROVISION", "SOPS update changed existing secret values");
+    const currentInfo = await lstat(secretPath);
+    if (currentInfo.dev !== info.dev || currentInfo.ino !== info.ino || !(await readFile(secretPath)).equals(original))
+      fail("CONFIG-GRAFANA-PROVISION", "encrypted secret bundle changed during provisioning");
+    await writePrivateSecret(secretPath, updatedBytes);
+    await chmod(secretPath, 0o600);
+  } finally {
+    await unlink(temporary).catch(error => { if (error.code !== "ENOENT") throw error; });
+  }
+  const scoped = await materializeGrafanaAdminSecret({root, outputDir, env});
+  return {created: true, path: scoped.path};
 }
 
 export async function ensurePrivateSecretDirectory(directory) {

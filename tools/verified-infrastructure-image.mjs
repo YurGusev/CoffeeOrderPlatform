@@ -4,10 +4,13 @@ import { constants } from "node:fs";
 import { lstat, open, realpath } from "node:fs/promises";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import { isDeepStrictEqual } from "node:util";
+import { load as parseYaml } from "js-yaml";
+import { parseSecurityScanVerification, RUNTIME_NAMES } from "../packages/platform-config/src/index.ts";
+import { adjudicateGrafanaFindings, inspectFindings, validateOpenVex } from "./security-scan.mjs";
 import { validateLaunchContext } from "../verification/launch/v1/report.mjs";
 
 const IMAGE_ID = /^sha256:[a-f0-9]{64}$/u;
-const KAFKA_TAG = /^coffee-g12-[a-f0-9]{12}-kafka:latest$/u;
+const VERIFIED_TAG = /^coffee-g12-[a-f0-9]{12}-(?:kafka|storage-helper|grafana):latest$/u;
 const KAFKA_RUNTIME_MARKER = "coffee-platform-kafka:verified-artifact-required";
 const MAX_EVIDENCE_BYTES = 512 * 1024 * 1024;
 const MAX_METADATA_BYTES = 64 * 1024;
@@ -141,17 +144,17 @@ function inspectDockerImage(run, reference) {
   return Object.freeze({ imageId, tags: tags ?? [] });
 }
 
-function validateBaseMaterial(baseMaterial, kafkaImage) {
+function validateBaseMaterial(baseMaterial, baseImage, target) {
   if (
     !exactKeys(baseMaterial, [
       "sourceRef",
       "platformManifestDigest",
       "indexArtifact",
     ]) ||
-    baseMaterial.sourceRef !== kafkaImage ||
+    baseMaterial.sourceRef !== baseImage ||
     !IMAGE_ID.test(baseMaterial.platformManifestDigest ?? "") ||
     !exactKeys(baseMaterial.indexArtifact, ["path", "sha256", "sizeBytes"]) ||
-    baseMaterial.indexArtifact.path !== "artifacts/kafka-base-index.json" ||
+    baseMaterial.indexArtifact.path !== `artifacts/${target}-base-index.json` ||
     !/^[a-f0-9]{64}$/u.test(baseMaterial.indexArtifact.sha256 ?? "") ||
     !Number.isSafeInteger(baseMaterial.indexArtifact.sizeBytes) ||
     baseMaterial.indexArtifact.sizeBytes < 1 ||
@@ -161,7 +164,16 @@ function validateBaseMaterial(baseMaterial, kafkaImage) {
   return true;
 }
 
-function validateBinding(binding, receipt, context, environment) {
+function validateBinding(binding, receipt, context, environment, target, toolchain) {
+  const grafana = target === "grafana";
+  const vendor = binding?.vendorPlugins;
+  const vendorValid = !grafana || (exactKeys(vendor, ["treeSha256", "treeBytes", "signingKeySourceSha256", "signingKeyFingerprint", "plugins", "effectiveFiles"]) &&
+    /^[0-9a-f]{64}$/u.test(vendor.treeSha256 ?? "") && Number.isSafeInteger(vendor.treeBytes) && vendor.treeBytes > 0 &&
+    vendor.signingKeySourceSha256 === toolchain.grafanaSigningKeySourceSha256 && vendor.signingKeyFingerprint === toolchain.grafanaSigningKeyFingerprint &&
+    isDeepStrictEqual(vendor.plugins, toolchain.grafanaPlugins) && exactKeys(vendor.effectiveFiles, ["loki", "tempo", "prometheus"]) &&
+    ["loki", "tempo", "prometheus"].every((name) => {const file = vendor.effectiveFiles[name]; return exactKeys(file, ["path", "sha256", "sizeBytes", "layerDigest"]) &&
+      file.path === `/opt/grafana/plugins/${name}/gpx_grafana-${name}-datasource_linux_amd64` && file.sha256 === toolchain.grafanaPlugins[name].binarySha256 &&
+      Number.isSafeInteger(file.sizeBytes) && file.sizeBytes > 0 && IMAGE_ID.test(file.layerDigest ?? "");}));
   return (
     exactKeys(binding, [
       "status",
@@ -174,11 +186,13 @@ function validateBinding(binding, receipt, context, environment) {
       "sourceKind",
       "buildkitMaterialsCompleteness",
       "invocation",
+      ...(grafana ? ["vendorPlugins"] : []),
     ]) &&
+    vendorValid &&
     binding.status === "OBSERVED" &&
     binding.sourceCommit === context.candidateSha &&
     binding.sourceTreeSha === environment.treeSha &&
-    binding.sourceKind === "git-archive-local-context" &&
+    binding.sourceKind === (grafana ? "git-archive-plus-verified-plugins" : "git-archive-local-context") &&
     binding.buildkitMaterialsCompleteness === "INCOMPLETE_LOCAL_CONTEXT" &&
     Number.isSafeInteger(binding.archiveSizeBytes) &&
     binding.archiveSizeBytes > 0 &&
@@ -196,22 +210,23 @@ function validateBinding(binding, receipt, context, environment) {
     ]) &&
     binding.invocation.entryPoint === "docker buildx build" &&
     binding.invocation.builder === "coffee-platform-mtu" &&
-    binding.invocation.target === "kafka" &&
+    binding.invocation.target === target &&
     binding.invocation.platform === "linux/amd64" &&
     binding.invocation.provenance === "mode=min" &&
     binding.invocation.output === "oci-layout-directory" &&
-    receipt.target === "kafka"
+    receipt.target === target
   );
 }
 
-export async function loadVerifiedGateImage({
+async function validateGateImage({
   target,
+  readRuntimeImages = false,
   contextFile = process.env.COFFEE_LAUNCH_CONTEXT_FILE,
   run = dockerRun,
   validateContext = validateLaunchContext,
   loadImage = true,
 } = {}) {
-  if (target !== "kafka") fail("G12_KAFKA_TARGET_INVALID");
+  if (!["kafka", "storage-helper", "grafana"].includes(target)) fail("G12_KAFKA_TARGET_INVALID");
   if (typeof contextFile !== "string" || !isAbsolute(contextFile))
     fail("G12_KAFKA_LAUNCH_CONTEXT_REQUIRED");
   const active = await validateContext(contextFile);
@@ -252,7 +267,8 @@ export async function loadVerifiedGateImage({
   )
     fail("G12_KAFKA_SOURCE_IDENTITY_INVALID");
   const toolchain = parseJson(toolchainBytes);
-  if (!/@sha256:[a-f0-9]{64}$/u.test(toolchain.kafkaImage ?? ""))
+  const baseImage = target === "kafka" ? toolchain.kafkaImage : target === "grafana" ? toolchain.grafanaImage : toolchain.nodeImage;
+  if (!/@sha256:[a-f0-9]{64}$/u.test(baseImage ?? ""))
     fail("G12_KAFKA_BASE_IMAGE_INVALID");
 
   const supplyChainDir = join(
@@ -264,14 +280,14 @@ export async function loadVerifiedGateImage({
       maxBytes: MAX_EVIDENCE_BYTES,
     }),
   );
-  const receiptPath = join(supplyChainDir, "artifacts/kafka-receipt.json");
+  const receiptPath = join(supplyChainDir, `artifacts/${target}-receipt.json`);
   const receiptBytes = await readEvidenceFile(receiptPath, {
     maxBytes: MAX_METADATA_BYTES,
   });
   const receiptSha256 = sha256(receiptBytes);
   const receipt = parseJson(receiptBytes);
-  const expectedTag = `coffee-g12-${sha256(Buffer.from(context.runId)).slice(0, 12)}-kafka:latest`;
-  const image = result.kafka;
+  const expectedTag = `coffee-g12-${sha256(Buffer.from(context.runId)).slice(0, 12)}-${target}:latest`;
+  const image = target === "kafka" ? result.kafka : target === "grafana" ? result.grafana : result.storageHelper;
   if (
     !exactKeys(image, [
       "path",
@@ -282,10 +298,10 @@ export async function loadVerifiedGateImage({
       "ociArtifactPath",
       "ociArtifactSha256",
     ]) ||
-    image.path !== "artifacts/kafka-receipt.json" ||
+    image.path !== `artifacts/${target}-receipt.json` ||
     image.receiptSha256 !== receiptSha256 ||
     image.importTag !== expectedTag ||
-    image.ociArtifactPath !== "artifacts/kafka.oci.tar" ||
+    image.ociArtifactPath !== `artifacts/${target}.oci.tar` ||
     !exactKeys(receipt, [
       "schemaVersion",
       "gate",
@@ -318,9 +334,9 @@ export async function loadVerifiedGateImage({
     receipt.configSha256 !== context.baseConfigSha256 ||
     receipt.toolchainVersionsSha256 !== environment.toolchainVersionsSha256 ||
     receipt.lockfileSha256 !== environment.lockfileSha256 ||
-    receipt.target !== "kafka" ||
+    receipt.target !== target ||
     receipt.importTag !== expectedTag ||
-    receipt.baseImage !== toolchain.kafkaImage ||
+    receipt.baseImage !== baseImage ||
     !IMAGE_ID.test(receipt.imageId ?? "") ||
     !IMAGE_ID.test(receipt.manifestDigest ?? "") ||
     !IMAGE_ID.test(receipt.platformManifestDigest ?? "") ||
@@ -332,6 +348,8 @@ export async function loadVerifiedGateImage({
       receipt,
       context,
       environment,
+      target,
+      toolchain,
     ) ||
     !exactKeys(receipt.ociArtifact, [
       "path",
@@ -340,7 +358,7 @@ export async function loadVerifiedGateImage({
       "layoutTreeSha256",
       "layoutBytes",
     ]) ||
-    receipt.ociArtifact.path !== "artifacts/kafka.oci.tar" ||
+    receipt.ociArtifact.path !== `artifacts/${target}.oci.tar` ||
     !/^[a-f0-9]{64}$/u.test(receipt.ociArtifact.sha256 ?? "") ||
     !Number.isSafeInteger(receipt.ociArtifact.sizeBytes) ||
     receipt.ociArtifact.sizeBytes < 1 ||
@@ -367,11 +385,11 @@ export async function loadVerifiedGateImage({
     fail("G12_KAFKA_RECEIPT_INVALID");
 
   const sourceDigest = /@sha256:([a-f0-9]{64})$/u.exec(
-    toolchain.kafkaImage,
+    baseImage,
   )?.[1];
   const baseMaterial = receipt.baseMaterial;
   if (
-    !validateBaseMaterial(baseMaterial, toolchain.kafkaImage) ||
+    !validateBaseMaterial(baseMaterial, baseImage, target) ||
     baseMaterial.indexArtifact.sha256 !== sourceDigest
   )
     fail("G12_KAFKA_BASE_MATERIAL_INVALID");
@@ -407,22 +425,20 @@ export async function loadVerifiedGateImage({
   )
     fail("G12_KAFKA_BASE_MATERIAL_INVALID");
 
-  const artifactPath = join(supplyChainDir, "artifacts/kafka.oci.tar");
+  const artifactPath = join(supplyChainDir, `artifacts/${target}.oci.tar`);
   if (!within(supplyChainDir, artifactPath))
     fail("G12_KAFKA_ARTIFACT_PATH_INVALID");
-  const artifactBytes = await readEvidenceFile(artifactPath, {
-    maxBytes: MAX_EVIDENCE_BYTES,
-  });
-  if (
-    artifactBytes.length !== receipt.ociArtifact.sizeBytes ||
-    sha256(artifactBytes) !== receipt.ociArtifact.sha256
-  )
-    fail("G12_KAFKA_ARTIFACT_HASH_MISMATCH");
+  let artifactBytes;
+  if (!readRuntimeImages) {
+    artifactBytes = await readEvidenceFile(artifactPath, {maxBytes: MAX_EVIDENCE_BYTES});
+    if (artifactBytes.length !== receipt.ociArtifact.sizeBytes || sha256(artifactBytes) !== receipt.ociArtifact.sha256)
+      fail("G12_KAFKA_ARTIFACT_HASH_MISMATCH");
+  }
   const provenanceImages = result.provenance?.images?.filter(
-    (entry) => entry.service === "kafka",
+    (entry) => entry.service === target,
   );
   const expectedProvenanceImage = {
-    service: "kafka",
+    service: target,
     imageId: receipt.imageId,
     manifestDigest: receipt.manifestDigest,
     platformManifestDigest: receipt.platformManifestDigest,
@@ -437,15 +453,100 @@ export async function loadVerifiedGateImage({
   )
     fail("G12_KAFKA_PROVENANCE_INVALID");
 
+  {
+    const grafanaBytes = target === "grafana" ? receiptBytes : await readEvidenceFile(join(supplyChainDir, "artifacts/grafana-receipt.json"), {maxBytes: MAX_METADATA_BYTES});
+    const grafanaReceipt = target === "grafana" ? receipt : parseJson(grafanaBytes);
+    const grafanaImage = result.grafana;
+    const grafanaProvenance = result.provenance?.images?.filter((entry) => entry.service === "grafana");
+    if (grafanaImage?.path !== "artifacts/grafana-receipt.json" || grafanaImage.receiptSha256 !== sha256(grafanaBytes) ||
+        grafanaReceipt.schemaVersion !== 1 || grafanaReceipt.gate !== "G12_SUPPLY_CHAIN" || grafanaReceipt.status !== "PASS" ||
+        grafanaReceipt.target !== "grafana" || grafanaReceipt.runId !== context.runId || grafanaReceipt.candidateSha !== context.candidateSha ||
+        grafanaReceipt.treeSha !== environment.treeSha || grafanaReceipt.configSha256 !== context.baseConfigSha256 ||
+        grafanaReceipt.toolchainVersionsSha256 !== environment.toolchainVersionsSha256 || grafanaReceipt.lockfileSha256 !== environment.lockfileSha256 ||
+        grafanaReceipt.baseImage !== toolchain.grafanaImage || grafanaReceipt.provenanceStatus !== "INCOMPLETE_LOCAL_CONTEXT" ||
+        grafanaImage.imageId !== grafanaReceipt.imageId || grafanaImage.manifestDigest !== grafanaReceipt.manifestDigest ||
+        !validateBinding(grafanaReceipt.buildInputBinding, grafanaReceipt, context, environment, "grafana", toolchain) ||
+        !validateBaseMaterial(grafanaReceipt.baseMaterial, toolchain.grafanaImage, "grafana") || grafanaProvenance?.length !== 1 ||
+        grafanaProvenance[0].imageId !== grafanaReceipt.imageId || grafanaProvenance[0].manifestDigest !== grafanaReceipt.manifestDigest ||
+        grafanaProvenance[0].platformManifestDigest !== grafanaReceipt.platformManifestDigest ||
+        grafanaProvenance[0].provenanceStatus !== "PASS" || grafanaProvenance[0].metadataSha256 !== grafanaReceipt.provenanceSha256 ||
+        grafanaProvenance[0].attestationSha256 !== grafanaReceipt.attestationSha256 || !isDeepStrictEqual(grafanaProvenance[0].baseMaterial, grafanaReceipt.baseMaterial))
+      fail("G12_GRAFANA_ADJUDICATION_INVALID");
+    const decisionRef = result.adjudication;
+    if (!exactKeys(decisionRef, ["path", "sha256"]) || decisionRef.path !== "artifacts/grafana-adjudication.json" || !/^[a-f0-9]{64}$/u.test(decisionRef.sha256 ?? "")) fail("G12_GRAFANA_ADJUDICATION_INVALID");
+    const decisionBytes = await readEvidenceFile(join(supplyChainDir, decisionRef.path), {maxBytes: MAX_METADATA_BYTES});
+    const decision = parseJson(decisionBytes);
+    const rawBytes = await readEvidenceFile(join(supplyChainDir, "artifacts/grafana.vulnerabilities.json"), {maxBytes: MAX_EVIDENCE_BYTES});
+    const raw = parseJson(rawBytes);
+    const targets = [...RUNTIME_NAMES, "grafana", "storage-helper", "edge-nginx", "kafka", "otel-collector", "loki", "prometheus", "tempo", "lockfile"];
+    const expectedPaths = targets.flatMap((name) => [`${name}.sbom.cdx.json`, `${name}.vulnerabilities.json`]);
+    if (!Array.isArray(result.reports) || result.reports.length !== expectedPaths.length ||
+        new Set(result.reports.map((entry) => entry?.path)).size !== expectedPaths.length ||
+        expectedPaths.some((path) => !result.reports.some((entry) => entry?.path === path)))
+      fail("G12_GRAFANA_ADJUDICATION_INVALID");
+    const aggregate = {high: 0, critical: 0};
+    for (const entry of result.reports) {
+      if (!exactKeys(entry, ["path", "sha256", "findings"]) || !/^[a-f0-9]{64}$/u.test(entry.sha256 ?? ""))
+        fail("G12_GRAFANA_ADJUDICATION_INVALID");
+      const bytes = entry.path === "grafana.vulnerabilities.json" ? rawBytes :
+        await readEvidenceFile(join(supplyChainDir, "artifacts", entry.path), {maxBytes: MAX_EVIDENCE_BYTES});
+      if (sha256(bytes) !== entry.sha256) fail("G12_GRAFANA_ADJUDICATION_INVALID");
+      const findings = entry.path.endsWith(".vulnerabilities.json") ? inspectFindings(parseJson(bytes)) : {high: 0, critical: 0};
+      if (!isDeepStrictEqual(entry.findings, findings)) fail("G12_GRAFANA_ADJUDICATION_INVALID");
+      aggregate.high += findings.high;
+      aggregate.critical += findings.critical;
+      if (entry.path.endsWith(".vulnerabilities.json") && entry.path !== "lockfile.vulnerabilities.json") {
+        const name = entry.path.slice(0, -".vulnerabilities.json".length);
+        const images = result.provenance?.images?.filter((item) => item.service === name);
+        if (images?.length !== 1 || parseJson(bytes)?.Metadata?.ImageID !== images[0].imageId)
+          fail("G12_GRAFANA_ADJUDICATION_INVALID");
+      }
+    }
+    if (!isDeepStrictEqual(result.findings, aggregate)) fail("G12_GRAFANA_ADJUDICATION_INVALID");
+    const policy = parseSecurityScanVerification(parseYaml(platformBytes.toString("utf8"), {json: true})?.verification?.securityScan);
+    const expected = adjudicateGrafanaFindings({report: raw, image: {service: "grafana", imageId: grafanaReceipt.imageId, manifestDigest: grafanaReceipt.manifestDigest,
+      platformManifestDigest: grafanaReceipt.platformManifestDigest, buildInputBinding: grafanaReceipt.buildInputBinding}, toolchain, approvedFixed: policy.approvedFixed ?? []});
+    const evaluation = result.evaluation;
+    if (sha256(decisionBytes) !== decisionRef.sha256 || decision.schemaVersion !== 1 || decision.gate !== "G12_SUPPLY_CHAIN" ||
+      decision.runId !== context.runId || decision.candidateSha !== context.candidateSha || decision.treeSha !== environment.treeSha ||
+      decision.configSha256 !== context.baseConfigSha256 || decision.toolchainVersionsSha256 !== environment.toolchainVersionsSha256 || decision.lockfileSha256 !== environment.lockfileSha256 ||
+      decision.imageId !== grafanaReceipt.imageId || decision.manifestDigest !== grafanaReceipt.manifestDigest || decision.platformManifestDigest !== grafanaReceipt.platformManifestDigest ||
+      decision.rawReportSha256 !== sha256(rawBytes) || !isDeepStrictEqual(decision.approvedFixed, policy.approvedFixed ?? []) ||
+      !isDeepStrictEqual(decision.vendorPlugins, grafanaReceipt.buildInputBinding.vendorPlugins) || !isDeepStrictEqual(decision.module, toolchain.grafanaTempoModule) ||
+      !isDeepStrictEqual(decision.decisions, expected) ||
+      !validateOpenVex(decision.openVex, {decisions: expected, runId: context.runId, candidateSha: context.candidateSha,
+        platformManifestDigest: grafanaReceipt.platformManifestDigest, timestamp: decision.evaluatedAt}) || !exactKeys(evaluation, ["rawHigh", "resolvedFixed", "unresolvedHigh", "critical"]) ||
+      evaluation.rawHigh !== result.findings?.high || evaluation.critical !== result.findings?.critical || evaluation.resolvedFixed !== expected.length ||
+      evaluation.unresolvedHigh !== evaluation.rawHigh - expected.length || evaluation.unresolvedHigh !== 0 || evaluation.critical !== 0) fail("G12_GRAFANA_ADJUDICATION_INVALID");
+  }
+
+  let runtimeImages = null;
+  if (readRuntimeImages) {
+    const services = [...RUNTIME_NAMES, "edge-nginx"];
+    const records = result.provenance.images.filter((entry) => services.includes(entry.service));
+    if (records.length !== services.length || new Set(records.map((entry) => entry.service)).size !== services.length ||
+        services.some((service) => !records.some((entry) => entry.service === service)) ||
+        records.some((entry) => !IMAGE_ID.test(entry.imageId ?? "") || !IMAGE_ID.test(entry.manifestDigest ?? "") ||
+          !IMAGE_ID.test(entry.platformManifestDigest ?? "") || entry.provenanceStatus !== "PASS" ||
+          !/^[a-f0-9]{64}$/u.test(entry.metadataSha256 ?? "") || !/^[a-f0-9]{64}$/u.test(entry.attestationSha256 ?? "")))
+      fail("G12_RUNTIME_IMAGE_PROVENANCE_INVALID");
+    runtimeImages = Object.freeze(services.map((service) => {
+      const record = records.find((entry) => entry.service === service);
+      return Object.freeze({service, imageId: record.imageId});
+    }));
+  }
+
   let imported = false;
   if (loadImage) {
-    let runtimeMarker;
-    try {
-      runtimeMarker = inspectDockerImage(run, KAFKA_RUNTIME_MARKER);
-    } catch {
-      fail("G12_KAFKA_RUNTIME_MARKER_UNKNOWN");
+    if (target === "kafka") {
+      let runtimeMarker;
+      try {
+        runtimeMarker = inspectDockerImage(run, KAFKA_RUNTIME_MARKER);
+      } catch {
+        fail("G12_KAFKA_RUNTIME_MARKER_UNKNOWN");
+      }
+      if (runtimeMarker) fail("G12_KAFKA_RUNTIME_MARKER_PRESENT");
     }
-    if (runtimeMarker) fail("G12_KAFKA_RUNTIME_MARKER_PRESENT");
     const priorImage = inspectDockerImage(run, receipt.imageId);
     if (priorImage) {
       if (priorImage.imageId !== receipt.imageId)
@@ -489,7 +590,19 @@ export async function loadVerifiedGateImage({
     runId: receipt.runId,
     importTag: receipt.importTag,
     imported,
+    runtimeImages,
   });
+}
+
+export async function loadVerifiedGateImage(options = {}) {
+  const {runtimeImages, ...image} = await validateGateImage({...options, readRuntimeImages: false});
+  return Object.freeze(image);
+}
+
+export async function readVerifiedRuntimeImages({contextFile, validateContext = validateLaunchContext} = {}) {
+  const {runtimeImages} = await validateGateImage({target: "grafana", contextFile, validateContext, loadImage: false, readRuntimeImages: true});
+  if (!runtimeImages) fail("G12_RUNTIME_IMAGE_PROVENANCE_INVALID");
+  return runtimeImages;
 }
 
 export function removeVerifiedGateImage({
@@ -497,11 +610,12 @@ export function removeVerifiedGateImage({
   image,
   run = dockerRun,
 } = {}) {
-  if (target !== "kafka") fail("G12_KAFKA_TARGET_INVALID");
+  if (!["kafka", "storage-helper", "grafana"].includes(target)) fail("G12_KAFKA_TARGET_INVALID");
   if (!image || image.imported !== true) return false;
   if (
     !IMAGE_ID.test(image.imageId ?? "") ||
-    !KAFKA_TAG.test(image.importTag ?? "")
+    !VERIFIED_TAG.test(image.importTag ?? "") ||
+    !image.importTag.endsWith(`-${target}:latest`)
   )
     fail("G12_KAFKA_CLEANUP_OWNERSHIP_INVALID");
   const inspected = inspectDockerImage(run, image.imageId);

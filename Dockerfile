@@ -7,6 +7,7 @@ ARG NODE_IMAGE=node:26.8.1-alpine@sha256:2d984a15c9b54fd0aeb608b8e0d0d83529eb34d
 # The scanner supplies the exact pinned base only for the Kafka target. The
 # inert default keeps unrelated targets parseable without enabling a fallback.
 ARG KAFKA_IMAGE=scratch
+ARG GRAFANA_IMAGE=scratch
 
 FROM ${NODE_IMAGE} AS librdkafka-build
 
@@ -148,6 +149,18 @@ RUN set -eu; \
     diff -u /tmp/apk.expected /tmp/apk.after; \
     rm -f /tmp/apk.before /tmp/apk.after /tmp/apk.expected
 USER appuser
+
+FROM ${NODE_IMAGE} AS storage-helper
+RUN --network=host apk add --no-cache --upgrade e2fsprogs util-linux libcrypto3 libssl3 \
+  && rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx \
+  && command -v mkfs.ext4 && command -v losetup && command -v blkid && command -v truncate
+
+# G12 supplies the verified, signed vendor plugin context and the pinned base.
+FROM ${GRAFANA_IMAGE} AS grafana
+COPY --from=grafana-plugins --chown=472:472 /loki /opt/grafana/plugins/loki
+COPY --from=grafana-plugins --chown=472:472 /tempo /opt/grafana/plugins/tempo
+COPY --from=grafana-plugins --chown=472:472 /prometheus /opt/grafana/plugins/prometheus
+ENV GF_PATHS_PLUGINS=/opt/grafana/plugins
 
 FROM ${NODE_IMAGE} AS runtime
 

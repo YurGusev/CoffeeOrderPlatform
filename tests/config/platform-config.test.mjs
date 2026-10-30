@@ -365,6 +365,7 @@ void test("G12 scanner policy is strict verification-only configuration", async 
     parallel: 1,
     minimumFreeDiskGiB: 20,
     maximumDatabaseAgeHours: 24,
+    approvedFixed: ["CVE-2026-21728", "CVE-2026-28377"],
     egressRepositories: [
       "ghcr.io/aquasecurity/trivy-db",
       "ghcr.io/aquasecurity/trivy-java-db",
@@ -373,6 +374,19 @@ void test("G12 scanner policy is strict verification-only configuration", async 
   assert.deepEqual(
     parseSecurityScanVerification(document.verification.securityScan),
     expected,
+  );
+  const strict = parseSecurityScanVerification({
+    ...expected,
+    approvedFixed: [],
+  });
+  assert.deepEqual(strict.approvedFixed, []);
+  assert.ok(Object.isFrozen(strict.approvedFixed));
+  assert.deepEqual(
+    parseSecurityScanVerification({
+      ...expected,
+      approvedFixed: [...expected.approvedFixed].reverse(),
+    }).approvedFixed,
+    [...expected.approvedFixed].reverse(),
   );
   const parsed = parsePlatformConfig(document);
   assert.equal(Object.hasOwn(parsed, "verification"), false);
@@ -390,6 +404,13 @@ void test("G12 scanner policy is strict verification-only configuration", async 
       ],
     },
     { ...expected, ignoreUnfixed: true },
+    { ...expected, approvedFixed: ["CVE-2026-116587"] },
+    { ...expected, approvedFixed: ["CVE-2026-21728"] },
+    { ...expected, approvedFixed: ["CVE-2026-21728", "CVE-2026-21728"] },
+    {
+      ...expected,
+      approvedFixed: [...expected.approvedFixed, "CVE-2026-116587"],
+    },
   ])
     assert.throws(
       () => parseSecurityScanVerification(changed),
@@ -431,11 +452,7 @@ void test("telemetry config is strict, immutable, and rejects missing or inconsi
     parsePlatformConfig(collectorRootPath).telemetry.collector.otlpEndpoint,
     "http://otel-collector:4318/",
   );
-  for (const [first, second] of [
-    ["otlpEndpoint", "healthEndpoint"],
-    ["otlpEndpoint", "metricsEndpoint"],
-    ["healthEndpoint", "metricsEndpoint"],
-  ]) {
+  for (const [first, second] of [["otlpEndpoint", "healthEndpoint"]]) {
     const collidingCollectorPorts = structuredClone(document);
     collidingCollectorPorts.telemetry.collector[first] =
       collidingCollectorPorts.telemetry.collector[second];
@@ -447,14 +464,13 @@ void test("telemetry config is strict, immutable, and rejects missing or inconsi
   }
   const minimumTelemetryDiskBytes = 256 * 1024 * 1024;
   const minimumDiskConfig = structuredClone(document);
-  minimumDiskConfig.telemetry.openObserve.maxDiskBytes =
-    minimumTelemetryDiskBytes;
+  minimumDiskConfig.telemetry.loki.maxDiskBytes = minimumTelemetryDiskBytes;
   assert.equal(
-    parsePlatformConfig(minimumDiskConfig).telemetry.openObserve.maxDiskBytes,
+    parsePlatformConfig(minimumDiskConfig).telemetry.loki.maxDiskBytes,
     minimumTelemetryDiskBytes,
   );
   const undersizedDiskConfig = structuredClone(document);
-  undersizedDiskConfig.telemetry.openObserve.maxDiskBytes =
+  undersizedDiskConfig.telemetry.loki.maxDiskBytes =
     minimumTelemetryDiskBytes - 1;
   assert.throws(
     () => parsePlatformConfig(undersizedDiskConfig),
@@ -464,8 +480,8 @@ void test("telemetry config is strict, immutable, and rejects missing or inconsi
     await readFile(join(REPO_ROOT, "config/platform.schema.json"), "utf8"),
   );
   assert.equal(
-    platformSchema.$defs.telemetry.properties.openObserve.properties
-      .maxDiskBytes.minimum,
+    platformSchema.$defs.telemetry.properties.loki.properties.maxDiskBytes
+      .minimum,
     minimumTelemetryDiskBytes,
   );
   const collectorEndpointPattern = new RegExp(
@@ -499,105 +515,37 @@ void test("telemetry config is strict, immutable, and rejects missing or inconsi
     "http://otel-collector:4318#",
   ])
     assert.equal(collectorEndpointPattern.test(endpoint), false, endpoint);
-  const genericOpenObserve = structuredClone(document);
-  genericOpenObserve.telemetry.openObserve.endpoint = "http://openobserve:5081";
-  assert.equal(
-    parsePlatformConfig(genericOpenObserve).telemetry.openObserve.endpoint,
-    "http://openobserve:5081",
-  );
-  const openObserveEndpointPattern = new RegExp(
-    platformSchema.$defs.telemetry.properties.openObserve.properties.endpoint
-      .pattern,
-    "u",
-  );
-  assert.equal(
-    openObserveEndpointPattern.test("http://openobserve:5080"),
-    true,
-  );
-  assert.equal(
-    openObserveEndpointPattern.test("http://openobserve:5081"),
-    true,
-  );
-  for (const endpoint of [
-    "http://openobserve.internal:5080",
-    "http://openobserve",
-    "http://openobserve:0",
-    "http://openobserve:80",
-    "http://openobserve:65536",
-    "http://openobserve:5080/",
-    "http://openobserve:5080/api",
-    "http://openobserve:5080?",
-    "http://openobserve:5080?next=x",
-    "http://openobserve:5080#",
-    "http://openobserve:5080#fragment",
-    "http://user@openobserve:5080",
-    "http://openobserve:5080@other.internal",
-  ])
-    assert.equal(openObserveEndpointPattern.test(endpoint), false, endpoint);
-  for (const endpoint of [
-    "http://openobserve.internal:5080",
-    "http://openobserve",
-    "http://openobserve:0",
-    "http://openobserve:80",
-    "http://openobserve:65536",
-    "http://openobserve:5080/",
-    "http://openobserve:5080/api",
-    "http://openobserve:5080?",
-    "http://openobserve:5080?next=x",
-    "http://openobserve:5080#",
-    "http://openobserve:5080#fragment",
-    "http://user@openobserve:5080",
-    "http://openobserve:5080@other.internal",
-  ]) {
-    const invalidOpenObserveEndpoint = structuredClone(document);
-    invalidOpenObserveEndpoint.telemetry.openObserve.endpoint = endpoint;
-    assert.throws(
-      () => parsePlatformConfig(invalidOpenObserveEndpoint),
-      PlatformConfigError,
-      endpoint,
+  for (const name of ["grafana", "loki", "prometheus", "tempo"]) {
+    const pattern = new RegExp(
+      platformSchema.$defs.telemetry.properties[name].properties.endpoint
+        .pattern,
+      "u",
     );
+    const expected = document.telemetry[name].endpoint;
+    assert.equal(pattern.test(expected), true);
+    for (const endpoint of [
+      `http://${name}.internal:3100`,
+      `http://${name}:0`,
+      `http://${name}:80`,
+      `http://${name}:65536`,
+      `http://${name}:3100/path`,
+      `http://${name}:3100?x`,
+      `http://user@${name}:3100`,
+    ]) {
+      assert.equal(pattern.test(endpoint), false, endpoint);
+      const invalid = structuredClone(document);
+      invalid.telemetry[name].endpoint = endpoint;
+      assert.throws(() => parsePlatformConfig(invalid), PlatformConfigError);
+    }
   }
-  const organizationPattern = new RegExp(
-    platformSchema.$defs.telemetry.properties.openObserve.properties
-      .organization.pattern,
-    "u",
+  assert.equal(parsed.telemetry.grafana.memoryLimitMiB, 512);
+  const undersizedGrafana = structuredClone(document);
+  undersizedGrafana.telemetry.grafana.memoryLimitMiB = 511;
+  assert.throws(() => parsePlatformConfig(undersizedGrafana), PlatformConfigError);
+  assert.equal(
+    platformSchema.$defs.telemetry.properties.grafana.properties.memoryLimitMiB.minimum,
+    512,
   );
-  for (const organization of [
-    "default",
-    "_meta",
-    "acme-corp",
-    "team_1",
-    "Org2",
-  ]) {
-    const validOrganization = structuredClone(document);
-    validOrganization.telemetry.openObserve.organization = organization;
-    assert.equal(organizationPattern.test(organization), true, organization);
-    assert.equal(
-      parsePlatformConfig(validOrganization).telemetry.openObserve.organization,
-      organization,
-    );
-  }
-  for (const organization of [
-    "",
-    "coffee/test",
-    "team.one",
-    "team one",
-    "кофе",
-    "~",
-    "%",
-    "?",
-    "#",
-    `team${String.fromCharCode(1)}1`,
-  ]) {
-    const invalidOrganization = structuredClone(document);
-    invalidOrganization.telemetry.openObserve.organization = organization;
-    assert.equal(organizationPattern.test(organization), false, organization);
-    assert.throws(
-      () => parsePlatformConfig(invalidOrganization),
-      PlatformConfigError,
-      organization,
-    );
-  }
   assert.equal(parsed.telemetry.namespace, "coffee-platform");
   assert.deepEqual(
     [
@@ -607,27 +555,30 @@ void test("telemetry config is strict, immutable, and rejects missing or inconsi
     ],
     [256, 64, 1024],
   );
-  assert.equal(parsed.telemetry.openObserve.retentionDays, 3);
-  assert.deepEqual(
-    [
-      parsed.telemetry.openObserve.memTableMaxSizeMiB,
-      parsed.telemetry.openObserve.maxFileSizeInMemoryMiB,
-      parsed.telemetry.openObserve.maxFileSizeOnDiskMiB,
-      parsed.telemetry.openObserve.maxFileRetentionSeconds,
-      parsed.telemetry.openObserve.memPersistIntervalSeconds,
-    ],
-    [128, 8, 8, 30, 2],
-  );
-  assert.deepEqual(
-    [
-      parsed.telemetry.openObserve.telemetryEnabled,
-      parsed.telemetry.openObserve.mmdbDownloadEnabled,
-      parsed.telemetry.openObserve.modelPricingEnabled,
-    ],
-    [false, false, false],
-  );
-  assert.equal(parsed.telemetry.openObserve.deleteFilesDelayMinutes, 1);
-  assert.equal(parsed.telemetry.openObserve.jobCleanupWaitSeconds, 60);
+  for (const name of ["loki", "prometheus", "tempo"])
+    assert.equal(parsed.telemetry[name].retentionDays, 3);
+  assert.equal(parsed.telemetry.collector.queueCapacity, 2048);
+  assert.equal(parsed.telemetry.prometheus.outOfOrderWindowMs, 1800000);
+  for (const value of [0, 1800001, undefined]) {
+    const changed = structuredClone(document);
+    changed.telemetry.prometheus.outOfOrderWindowMs = value;
+    assert.throws(() => parsePlatformConfig(changed), PlatformConfigError);
+  }
+  assert.equal(parsed.telemetry.tempo.finishOnShutdownTimeoutMs, 10000);
+  for (const value of [0, 9999, 30000, 1.5, undefined]) {
+    const changed = structuredClone(document);
+    changed.telemetry.tempo.finishOnShutdownTimeoutMs = value;
+    assert.throws(() => parsePlatformConfig(changed), PlatformConfigError);
+  }
+  for (const shutdownGraceMs of [10000, 9999]) {
+    const changed = structuredClone(document);
+    changed.platform.shutdownGraceMs = shutdownGraceMs;
+    assert.throws(
+      () => parsePlatformConfig(changed),
+      /timeout Tempo.*platform.shutdownGraceMs/u,
+    );
+  }
+  assert.equal(parsed.telemetry.diskWatermarkPercent, 80);
   assert.equal(parsed.telemetry.alerts.evaluationIntervalMs, 60_000);
   assert.equal(parsed.telemetry.alerts.sseDropRate.threshold, 0.05);
   assert.ok(
@@ -658,7 +609,7 @@ void test("telemetry config is strict, immutable, and rejects missing or inconsi
         nginxStatusEndpoint: "http://edge-nginx:65536/nginx_status",
       },
     },
-    ...["otlpEndpoint", "healthEndpoint", "metricsEndpoint"].flatMap((name) => [
+    ...["otlpEndpoint", "healthEndpoint"].flatMap((name) => [
       {
         ...document,
         telemetry: {
@@ -812,116 +763,27 @@ void test("telemetry config is strict, immutable, and rejects missing or inconsi
         },
       },
     },
-    {
+    ...["loki", "prometheus", "tempo"].map((name) => ({
       ...document,
       telemetry: {
         ...document.telemetry,
-        openObserve: { ...document.telemetry.openObserve, retentionDays: 1 },
-      },
-    },
-    {
-      ...document,
-      telemetry: {
-        ...document.telemetry,
-        openObserve: {
-          ...document.telemetry.openObserve,
-          diskWatermarkPercent: 100,
-        },
-      },
-    },
-    {
-      ...document,
-      telemetry: {
-        ...document.telemetry,
-        openObserve: Object.fromEntries(
-          Object.entries(document.telemetry.openObserve).filter(
-            ([key]) => key !== "memPersistIntervalSeconds",
-          ),
-        ),
-      },
-    },
-    {
-      ...document,
-      telemetry: {
-        ...document.telemetry,
-        openObserve: {
-          ...document.telemetry.openObserve,
-          maxFileSizeInMemoryMiB: 128,
-        },
-      },
-    },
-    {
-      ...document,
-      telemetry: {
-        ...document.telemetry,
-        openObserve: {
-          ...document.telemetry.openObserve,
-          memTableMaxSizeMiB: document.telemetry.openObserve.memoryLimitMiB,
-        },
-      },
-    },
-    {
-      ...document,
-      telemetry: {
-        ...document.telemetry,
-        openObserve: {
-          ...document.telemetry.openObserve,
-          maxFileSizeOnDiskMiB: 1025,
-        },
-      },
-    },
-    {
-      ...document,
-      telemetry: {
-        ...document.telemetry,
-        openObserve: {
-          ...document.telemetry.openObserve,
-          memPersistIntervalSeconds: 31,
-        },
-      },
-    },
-    ...["logs", "traces", "metrics"].map((name) => ({
-      ...document,
-      telemetry: {
-        ...document.telemetry,
-        openObserve: {
-          ...document.telemetry.openObserve,
-          streams: {
-            ...document.telemetry.openObserve.streams,
-            [name]: "Bad-Stream",
-          },
-        },
+        [name]: { ...document.telemetry[name], retentionDays: 1 },
       },
     })),
     {
       ...document,
-      telemetry: {
-        ...document.telemetry,
-        openObserve: {
-          ...document.telemetry.openObserve,
-          bootstrapEmail: "not-an-email",
-        },
-      },
+      telemetry: { ...document.telemetry, diskWatermarkPercent: 100 },
     },
     {
       ...document,
       telemetry: {
         ...document.telemetry,
-        openObserve: {
-          ...document.telemetry.openObserve,
-          deleteFilesDelayMinutes: 0,
+        alerts: {
+          ...document.telemetry.alerts,
+          notificationEndpoint: "http://external:9091/alerts",
         },
       },
     },
-    ...["telemetryEnabled", "mmdbDownloadEnabled", "modelPricingEnabled"].map(
-      (key) => ({
-        ...document,
-        telemetry: {
-          ...document.telemetry,
-          openObserve: { ...document.telemetry.openObserve, [key]: true },
-        },
-      }),
-    ),
     {
       ...document,
       telemetry: {
@@ -948,28 +810,35 @@ void test("telemetry config is strict, immutable, and rejects missing or inconsi
   );
 });
 
-void test("RED: config loader rejects enabling OpenObserve external requests", async () => {
-  for (const key of [
-    "telemetryEnabled",
-    "mmdbDownloadEnabled",
-    "modelPricingEnabled",
-  ]) {
-    const root = await configRoot();
-    try {
-      const path = join(root, "config/platform.yaml");
-      const document = parseYaml(await readFile(path, "utf8"), { json: true });
-      document.telemetry.openObserve[key] = true;
+void test("RED: config loader rejects Grafana memory below 512 MiB", async () => {
+  const root = await configRoot();
+  try {
+    const path = join(root, "config/platform.yaml");
+    const document = parseYaml(await readFile(path, "utf8"), { json: true });
+    assert.equal((await loadPlatformConfig(root)).telemetry.grafana.memoryLimitMiB, 512);
+    document.telemetry.grafana.memoryLimitMiB = 511;
+    await writeFile(path, dumpYaml(document), "utf8");
+    await assert.rejects(loadPlatformConfig(root), /CONFIG-SCHEMA/u);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+void test("RED: config loader rejects invalid Tempo shutdown timeout", async () => {
+  const root = await configRoot();
+  try {
+    const path = join(root, "config/platform.yaml");
+    const document = parseYaml(await readFile(path, "utf8"), { json: true });
+    for (const value of [0, 9999, 30000, null]) {
+      document.telemetry.tempo.finishOnShutdownTimeoutMs = value;
       await writeFile(path, dumpYaml(document), "utf8");
-      const result = run(root);
-      assert.notEqual(result.status, 0, key);
-      assert.match(
-        `${result.stdout}\n${result.stderr}`,
-        /CONFIG-SCHEMA|CONFIG-OBSERVABILITY-EGRESS/u,
-        key,
-      );
-    } finally {
-      await rm(root, { recursive: true, force: true });
+      await assert.rejects(loadPlatformConfig(root), /CONFIG-SCHEMA/u);
     }
+    delete document.telemetry.tempo.finishOnShutdownTimeoutMs;
+    await writeFile(path, dumpYaml(document), "utf8");
+    await assert.rejects(loadPlatformConfig(root), /CONFIG-SCHEMA/u);
+  } finally {
+    await rm(root, { recursive: true, force: true });
   }
 });
 
@@ -978,7 +847,7 @@ void test("RED: config loader rejects colliding Collector listener ports", async
   try {
     const path = join(root, "config/platform.yaml");
     const document = parseYaml(await readFile(path, "utf8"), { json: true });
-    document.telemetry.collector.metricsEndpoint =
+    document.telemetry.collector.healthEndpoint =
       document.telemetry.collector.otlpEndpoint;
     await writeFile(path, dumpYaml(document), "utf8");
     await assert.rejects(loadPlatformConfig(root), /CONFIG-PLATFORM-CONFIG/u);
@@ -993,13 +862,12 @@ void test("RED: config loader rejects colliding Collector listener ports", async
   }
 });
 
-void test("RED: config loader and parser reject OpenObserve hosts outside its private service alias", async () => {
+void test("RED: config loader and parser reject Loki hosts outside its private service alias", async () => {
   const root = await configRoot();
   try {
     const path = join(root, "config/platform.yaml");
     const document = parseYaml(await readFile(path, "utf8"), { json: true });
-    document.telemetry.openObserve.endpoint =
-      "http://openobserve.internal:5080";
+    document.telemetry.loki.endpoint = "http://loki.internal:3100";
     await writeFile(path, dumpYaml(document), "utf8");
     assert.throws(() => parsePlatformConfig(document), PlatformConfigError);
     await assert.rejects(loadPlatformConfig(root), /CONFIG-SCHEMA/u);

@@ -9,20 +9,10 @@
   "exactRuntimeCount": 15,
   "infrastructureSecretScopes": {
     "otel-collector": [
-      {
-        "name": "exporterToken",
-        "ref": "telemetry.exporterToken"
-      },
-      {
-        "name": "openObserveIngestToken",
-        "ref": "telemetry.openObserveIngestToken"
-      }
+      { "name": "exporterToken", "ref": "telemetry.exporterToken" }
     ],
-    "openobserve-bootstrap": [
-      {
-        "name": "admin-secret",
-        "ref": "telemetry.openObserveAdmin"
-      }
+    "grafana-bootstrap": [
+      { "name": "admin-secret", "ref": "telemetry.grafanaAdmin" }
     ]
   },
   "runtimes": [

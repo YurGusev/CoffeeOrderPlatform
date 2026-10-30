@@ -20,7 +20,7 @@ const shutdownProbe = {
   destroy() {},
 };
 const logger = createPinoLogger({service: 'g14-synthetic'}, config.telemetry.producer.maxRecordBytes, undefined, config.telemetry.producer.queueCapacity);
-let active = true;
+let active = false;
 let oldTimestamp = false;
 let consumerLag = 0;
 let oldestOutboxAgeMs = 0;
@@ -48,10 +48,10 @@ function emit(request) {
     sseDrops += 1;
     lastSseCounterIncrementAt = now;
   } else {
-    if (!active) sseAttempts += 1000;
+    if (!active && sseDrops > 0) sseAttempts += 1000;
   }
   const record = {g14_run_id: runId, g14_fixture: true, token: redactionCanary};
-  if (oldTimestamp) record.time = now - ((config.telemetry.openObserve.retentionDays + 1) * 24 * 60 * 60 * 1000);
+  if (oldTimestamp) record.time = now - ((config.telemetry.loki.retentionDays + 1) * 24 * 60 * 60 * 1000);
   request.log.info(record, 'synthetic observability sample');
   logger.info({g14_run_id: runId, g14_fixture: true}, 'synthetic runtime request');
 }

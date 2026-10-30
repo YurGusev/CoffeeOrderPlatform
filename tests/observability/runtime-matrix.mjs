@@ -2,14 +2,14 @@ import {execFileSync} from 'node:child_process';
 import {readFile} from 'node:fs/promises';
 import {resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
-import {createRuntimeLoggingOverride, discoverContainerLogs, OBSERVABILITY_TARGETS} from '../../tools/observability/generate.mjs';
+import {createRuntimeLoggingOverride, discoverContainerLogs, OBSERVABILITY_TARGETS, prometheusMetricName} from '../../tools/observability/generate.mjs';
 import {
   buildRuntimeMatrixProbe, COMMON_TEXT_FAMILIES, NODE_RUNTIME_ROLES, OWNER_TEXT_FAMILIES,
   OPTIONAL_OWNER_TEXT_FAMILIES, summarizeRuntimeProbeOutput,
 } from './runtime-matrix-probe.mjs';
 
 const ROOT = resolve(fileURLToPath(new URL('../..', import.meta.url)));
-const RUN_PROJECT = /^coffee-observability-final-[a-f0-9]{8}$/u;
+const RUN_PROJECT = /^coffee-launch-[0-9]{8}t[0-9]{6}z-[a-f0-9]{7}$/u;
 const IMAGE_ID = /^sha256:[a-f0-9]{64}$/u;
 const CONTAINER_ID = /^[a-f0-9]{64}$/u;
 const TOOLING_NAMES = new Set([
@@ -48,7 +48,7 @@ const FAILURE_METRIC_COMPONENTS = new Map([
     'telemetry_log_records_dropped_total', 'telemetry_records_dropped_total', 'telemetry_export_failures_total',
     'telemetry_serialization_rejections_total', 'telemetry_queue_overflows_total', 'telemetry_shutdown_losses_total',
     'runtime_process_start_time_seconds', 'db.client.connection.waiting', 'messaging.kafka.consumer.lag',
-    'messaging.outbox.oldest_unpublished.age', 'nginx_connections_current', 'httpcheck.status',
+    'messaging.outbox.oldest_unpublished.age', 'nginx_connections_current', 'probe_success',
   ].map(name => [name, ['']]),
 ]);
 const FAILURE_METRIC_OWNERS = new Set([...NODE_RUNTIME_ROLES, 'edge-nginx']);
@@ -106,13 +106,12 @@ export function runtimeMetricFamilies(config) {
     {name: 'messaging.kafka.consumer.lag', owners: durableKafkaOwners, components: ['']},
     {name: 'messaging.outbox.oldest_unpublished.age', owners: REQUIRED_OUTBOX_OWNERS, components: ['']},
     {name: 'nginx_connections_current', owners: ['edge-nginx'], components: ['']},
-    {name: 'httpcheck.status', owners: ['edge-nginx'], components: [''], attributes: {http_status_class: '2xx'}},
+    {name: 'probe_success', owners: ['edge-nginx'], components: [''], ownerLabel: 'probe_owner', attributes: {service_name: 'otel-collector'}},
   ];
 }
 
-export function sanitizeRuntimeMetricMatches(family, matches, metricsPrefix) {
-  if (typeof metricsPrefix !== 'string' || !/^[a-zA-Z0-9_]+$/u.test(metricsPrefix) ||
-      typeof family?.name !== 'string' || family.name.length === 0 ||
+export function sanitizeRuntimeMetricMatches(family, matches) {
+  if (typeof family?.name !== 'string' || family.name.length === 0 ||
       !Array.isArray(family?.owners) || family.owners.length === 0 ||
       family.owners.some(owner => typeof owner !== 'string' || owner.length === 0) ||
       new Set(family.owners).size !== family.owners.length ||
@@ -122,7 +121,7 @@ export function sanitizeRuntimeMetricMatches(family, matches, metricsPrefix) {
   }
   if (!Array.isArray(matches) || matches.length !== family.components.length) fail('runtime matrix OTLP family components incomplete');
   const expectedStreams = family.components.map(component =>
-    `${metricsPrefix}_${family.name.replace(/[^a-zA-Z0-9_]/gu, '_')}${component}`);
+    `${prometheusMetricName(family.name)}${component}`);
   const seen = new Set();
   const sanitized = [];
   for (const match of matches) {
@@ -162,7 +161,7 @@ function sanitizeMetricFamilyObservation(value) {
         component.presentOwners.length + component.missingOwners.length !== value.owners.length ||
         value.owners.some(owner => component.presentOwners.includes(owner) === component.missingOwners.includes(owner)) ||
         (component.presentOwners.length === 0) !== (component.sampleCount === 0) ||
-        (!component.streamPresent && (component.sampleCount !== 0 || component.presentOwners.length > 0 || component.queryFailure !== undefined)) ||
+        (!component.streamPresent && (component.sampleCount !== 0 || component.presentOwners.length > 0)) ||
         (component.queryFailure !== undefined && (component.queryFailure === null || typeof component.queryFailure !== 'object' || Array.isArray(component.queryFailure) ||
           Object.keys(component.queryFailure).some(key => !['outcome', 'httpStatus', 'errorClass'].includes(key)) ||
           component.queryFailure.outcome !== 'QUERY_FAILED' || component.presentOwners.length > 0 || component.sampleCount !== 0))) return undefined;
@@ -548,7 +547,7 @@ async function forbiddenRuntimePackages() {
 function summarizeComposeReceipt(receipt, projectName) {
   const expectedHealth = ['/health/live', '/health/ready', '/metrics'];
   const postgresStorage = receipt?.recoveryProof?.postgresStorage;
-  if (receipt?.project !== projectName || receipt.runtimes !== 14 || receipt.nativeIngress !== 'edge-nginx' ||
+  if (receipt?.proofKind !== 'observability-fixture' || receipt?.project !== projectName || receipt.runtimes !== 14 || receipt.nativeIngress !== 'edge-nginx' ||
       receipt.kafka !== true || receipt.ephemeralKafkaBroker !== true || receipt.credentialSource !== 'local-fixture' ||
       receipt.telemetry !== true || receipt.dbIntegrationProof !== true || receipt.gracefulShutdown !== true ||
       receipt.recoveryProof === null || typeof receipt.recoveryProof !== 'object' ||
@@ -582,7 +581,7 @@ export async function verifyRuntimeMetricMatrix({
       typeof onRolesReady !== 'function' || typeof onCleanup !== 'function' || typeof verifyMetricFamily !== 'function' ||
       typeof sourceIdentity !== 'function' ||
       !/^\d+\.\d+\.\d+$/u.test(nodeVersion ?? '') || !/^\d+\.\d+\.\d+$/u.test(nginxVersion ?? '')) fail('runtime matrix inputs invalid');
-  const projectSuffix = projectName.slice(-8);
+  const projectSuffix = projectName.slice('coffee-launch-'.length);
   const [source, forbiddenPackages] = await Promise.all([sourceEvidence(sourceIdentity), forbiddenRuntimePackages()]);
   const toolchain = parseJson(await readFile(resolve(ROOT, 'config/toolchain-versions.json'), 'utf8'), 'runtime matrix BOM invalid');
   if (toolchain.node !== nodeVersion || toolchain.nginxVersion !== nginxVersion) fail('runtime matrix BOM version mismatch');
@@ -651,7 +650,7 @@ export async function verifyRuntimeMetricMatrix({
     for (const family of expected) {
       setPhase(`otlp-family:${family.name}`);
       const result = await verifyMetricFamily({...family, startTimeUs: phaseStartUs});
-      const matches = sanitizeRuntimeMetricMatches(family, result, config.telemetry.openObserve.streams.metrics);
+      const matches = sanitizeRuntimeMetricMatches(family, result);
       verifiedMetrics.push({name: family.name, owners: [...family.owners], components: [...family.components],
         ...(family.attributes === undefined ? {} : {attributes: {...family.attributes}}), matches, status: 'PASS'});
     }
@@ -671,7 +670,7 @@ export async function verifyRuntimeMetricMatrix({
     const {runComposeSmoke} = await import('../../tools/compose-smoke.mjs');
     if (typeof runComposeSmoke !== 'function') fail('runtime matrix Compose runner unavailable');
     smoke = await runComposeSmoke({
-      args: ['--recovery-proof', '--project-name', projectName],
+      args: ['--recovery-proof', '--observability-fixture', '--project-name', projectName],
       observability: {exporterToken, onReady, onCleanup: cleanup},
     });
   } catch (cause) {
@@ -696,7 +695,7 @@ export async function verifyRuntimeMetricMatrix({
     loggingPolicy: loggingPolicyEvidence,
     runtimeMetrics: {
       status: 'PASS', roles: probes, otlpFamilies: verifiedMetrics,
-      legacyTextScope: 'Only /metrics text callbacks and runtime foundation counters; OTLP-only process, database and Kafka instruments are verified through their OpenObserve streams.',
+      legacyTextScope: 'Only /metrics text callbacks and runtime foundation counters; OTLP-only process, database and Kafka instruments are verified through Prometheus.',
       legacyTextFamilies: {
         common: [...COMMON_TEXT_FAMILIES],
         ownerSpecific: Object.fromEntries(Object.entries(OWNER_TEXT_FAMILIES).map(([role, names]) => [role, [...names]])),

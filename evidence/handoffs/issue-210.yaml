@@ -1,0 +1,158 @@
+issue: 210
+baseCommit: 103359a8d1a1787ff5e4ebc4a522c195165b0a9b
+status: verified
+inputs:
+  - issue: 64
+    acceptedMergeCommit: e6439599be85a5fc8b83d99293064e877a2ff012
+    artifact: evidence/handoffs/issue-64.yaml
+    sha256: 73283a79ba020cb126351506f324be9439975516af42a90b235d6bdf9484afae
+outputs:
+  - artifact: docs/adr/ADR-0040-grafana-observability.md
+    sha256: fc53b8cc3964ca3b044bd2a071b9763b62abb831e6de24603aea2db4b9756663
+    consumers: [13]
+  - artifact: docs/operations/observability.md
+    sha256: 0e6095d8887898c07995e91e3564620ea346030d77b2dbc66114ccd46f3ddc3b
+    consumers: [13]
+  - artifact: docs/launch/13_DELIVERY_DEPENDENCY_GRAPH.md
+    sha256: af8971a9e6ee0275dd8bf14e62617c1d9da924a3062344820e5da057ebb29037
+    consumers: [13]
+  - artifact: docs/launch/21_LAUNCH_VERIFICATION_SPEC.md
+    sha256: dbd52eeb6659ea2caa93d93ce9c07f9a8472f24f3a5c52e10e0d291c3aab60de
+    consumers: [13]
+  - artifact: config/platform.yaml
+    sha256: 891e5a82ffd3ebf647226c07313aca4be426d4ed25b28b7afdf91296db631a8e
+    consumers: [13]
+  - artifact: config/platform.schema.json
+    sha256: c978c011d52e63178bd9416487be7466c2f3514a7392d69570e26a6dc8bb7d98
+    consumers: [13]
+  - artifact: config/service-catalog.json
+    sha256: 577ea595759b91283a90f51219b3bac6bb2bdca7334a41cad195894780a886b3
+    consumers: [13]
+  - artifact: config/service-catalog.schema.json
+    sha256: e6f71bdddf1dde5f59d09cdfb211aebe342496262c8c83c66247dfd20fced0bf
+    consumers: [13]
+  - artifact: config/toolchain-versions.json
+    sha256: 1727e18260772b686080b0893d74550dfde89fa551b8940add34d2434fb79ead
+    consumers: [13]
+  - artifact: config/toolchain-versions.schema.json
+    sha256: 66d4f801d9e08d8c56fde1fbbf0331f0a57b3dbac8ba5a6bc01cb93a3d7762b0
+    consumers: [13]
+  - artifact: secrets/platform-secrets.schema.json
+    sha256: 8d19ad8b2f074834ca4ca916446d5510718f685ad38890fb225594a1802985b3
+    consumers: [13]
+  - artifact: secrets/platform.secrets.sops.yaml
+    sha256: 1adc96a403e7046c7aecb584534ee130b4217acc8f845b4ca30fc78cd8399aab
+    consumers: [13]
+  - artifact: packages/platform-config/src/index.ts
+    sha256: 989ab6d1125ddf696d776d2f29822aec71bfca2bdbc94397de4f59b9f91bd812
+    consumers: [13]
+  - artifact: scripts/config-lib.mjs
+    sha256: cd7a4676ec38af9a4c8343127fbb6652dd2a4eca3209b45e5a49ad9685d27a4a
+    consumers: [13]
+  - artifact: Dockerfile
+    sha256: 01d1686fb2dddb2d6a0a1fcfbfe8a62e9c4fe712925835a8ac43659ec9e38911
+    consumers: [13]
+  - artifact: package.json
+    sha256: f718e6e84ef29178f94d03214b396babf703f752dc838ce30d6f702523bd66f9
+    consumers: [13]
+  - artifact: tools/security-scan.mjs
+    sha256: 87c2f8249e79ab0f3531ebd89329f6a5fffde46af4fc3d9811d626aa2f63e6a4
+    consumers: [13]
+  - artifact: tools/verified-infrastructure-image.mjs
+    sha256: fc154536ea087cec6ab90282558349dc9c231653799806d4aec119e893759e77
+    consumers: [13]
+  - artifact: tools/compose-smoke.mjs
+    sha256: 4a950155c3c01a30022ec664a6285ce5f714908d0097876da9e614925500945a
+    consumers: [13]
+  - artifact: tools/config-bootstrap/index.mjs
+    sha256: 8b7337052a0429f5e6933ef9c2db0989a5ddfb5fda30ec658deec87ae540e4c5
+    consumers: [13]
+  - artifact: tools/observability/alert-sink.mjs
+    sha256: eee11251d0e0a2b068c5bba87ad1ee32f211f0c5b5c8749f23aed7a1892cb38f
+    consumers: [13]
+  - artifact: tools/observability/alerts.mjs
+    sha256: 6bd7aea979acc61da6b89ef3289b335ba9e32f53ddf584bdf04738fe3472a105
+    consumers: [13]
+  - artifact: tools/observability/bootstrap.mjs
+    sha256: ea6bd335eebc2e1460bbde496d28e5b7ec85d1b8c1046b79f5d8fc7bb78c5112
+    consumers: [13]
+  - artifact: tools/observability/generate.mjs
+    sha256: e148faaa556b89b6a981d41e576c05e26a59c719cb12d5aed78a5aadf44a73a1
+    consumers: [13]
+  - artifact: tools/observability/health.mjs
+    sha256: 64b9b3b984e74f73bfb6e11c4f5b1b79c489d20b59c6e5860d28aee1e47c91a4
+    consumers: [13]
+  - artifact: tools/observability/storage.mjs
+    sha256: b7eacffb584bf3cda46d951479664db63600cd79253e92ca35870e80778c6a1d
+    consumers: [13]
+  - artifact: tools/observability/verify.mjs
+    sha256: 4de065f947e051edcf454251f5584d2ac07ca65ed57c0f8815e771ebb97a0043
+    consumers: [13]
+  - artifact: tests/observability/fixture.mjs
+    sha256: 0c3f32d878fa9667c3ec3a7d4aea667dcf2a5fdb28e4bd0dc2a74dd9e81c169f
+    consumers: [13]
+  - artifact: tests/observability/launch-path.mjs
+    sha256: 6db8d8d9bd051bd92560ea76ef88b57991506cb5c05dc48678fec6cf12532c22
+    consumers: [13]
+  - artifact: tests/observability/runtime-matrix.mjs
+    sha256: 0aa5b5d5c5eca5ab39e10b90d196923e78c8e094ca3640c498ef66d987ce554d
+    consumers: [13]
+  - artifact: verification/launch/v1/matrix.yaml
+    sha256: cd87b305471a7d3216d9db92461a8b2085a08409bb0779e5e33fc012dacdecba
+    consumers: [13]
+  - artifact: verification/launch/v1/scenarios/preflight.mjs
+    sha256: 885068e09c79d66108c1456ca03549cc5fc6253e55515aaa6dbf7405e8040caa
+    consumers: [13]
+  - artifact: apps/aroma-observer/src/runtime-composition.ts
+    sha256: cb514778e55fc616846630bdfffe63a3b4931ef80a764f4f78b19520280b3775
+    consumers: [13]
+  - artifact: scripts/catalog-live-harness.mjs
+    sha256: b9bc325b70620531ce3880d0cc785de20f51ab794e16ff47bf073800c62c4afc
+    consumers: [13]
+  - artifact: tests/realtime/soak.test.mjs
+    sha256: c8116048a22a1517b22900e8a07acb86eb169dcdc5e3252543deb3ed24e7dc74
+    consumers: [13]
+  - artifact: apps/aroma-convergence/src/runtime-composition.ts
+    sha256: b2ad070b97face9ed2bc92781f7fd8d1ca16f405c9a2f48cb4a0ac762e115ac1
+    consumers: [13]
+  - artifact: packages/platform-observability/src/index.ts
+    sha256: 241b30c2715e85dad14091878f49b7352dfcb3fa8a3a9cb1be0a712172f7e505
+    consumers: [13]
+  - artifact: scripts/check-service-catalog.mjs
+    sha256: 400c9828572f6e417b7e84da416bd9227a24bd90cbe043c899805e69d1c1d68a
+    consumers: [13]
+  - artifact: scripts/check-toolchain-versions.mjs
+    sha256: e7a160d1116499428b667144de62771e9a7dfbe5b20eaa045eb4402c94b2175c
+    consumers: [13]
+  - artifact: tests/realtime/fixtures/setup.mjs
+    sha256: 8db43fbaf220883c14bf1e1e847b0928504f52b9ffa44ea4eaba5d37b67e5d5b
+    consumers: [13]
+  - artifact: docs/reports/observability-delivery.md
+    sha256: 35b2552825b7be2332f082e09ce98c1c8ba40efa1931141532e0e9f6115b58d6
+    consumers: [13]
+verification:
+  - command: "pnpm versions:check"
+    result: passed
+  - command: "pnpm config:check"
+    result: passed
+  - command: "pnpm security:secrets"
+    result: passed
+  - command: "pnpm lint"
+    result: passed
+  - command: "node --test tests/observability/alerts.test.mjs"
+    result: passed
+  - command: "TMPDIR=/media/yurgusev/coffee-g12-cache-210/coffee-issue-210/tmp COFFEE_LAUNCH_CONTEXT_FILE=/home/yurgusev/.codex/worktrees/preserve-non-openobserve/CoffeeOrderPlatform/evidence/launch/20261030T204719Z-e6c2e7d/context.json node tools/security-scan.mjs"
+    result: passed
+  - command: "TMPDIR=/media/yurgusev/coffee-g12-cache-210/coffee-issue-210/tmp COFFEE_LAUNCH_CONTEXT_FILE=/home/yurgusev/.codex/worktrees/preserve-non-openobserve/CoffeeOrderPlatform/evidence/launch/20261030T204719Z-e6c2e7d/context.json pnpm test:observability"
+    result: passed
+  - command: "git diff --check"
+    result: passed
+limitations:
+  - "Исполняемый кандидат e6c2e7d5af9854cb625e92bd26e6022f8bad18b5; финальный delta только docs/report/handoff, receipts не переименованы в новый HEAD."
+  - "Component proof не является formal G00/G12/G14/full-system #13 admission; G14 3649.763s превышает formal1800s, wrapper ceiling5400s не меняет критерий."
+  - "Постоянный deployment, реальное наблюдение72h, capacity/HA и внешние notifications не выполнялись."
+  - "Tempo dev/local-storage и exact already-fixed VEX двух Tempo-plugin CVE согласованы; неисправленная go-jose не допускается."
+  - "Дополнительный PG fixture scan имеет HIGH/CRITICAL findings вне нормативных22 G12 images; VEX/clean-claim нет, business PostgreSQL внешний."
+  - "INCOMPLETE_LOCAL_CONTEXT дополнен Git archive binding; полной source-to-binary/SLSA completeness и отдельного module-source ZIP/SumDB inclusion proof нет."
+  - "Raw local evidence не является опубликованным GitHub artifact; actual hashes и команды приведены в docs/reports/observability-delivery.md."
+  - "Исторические отрицательные attempts, disk interruption, user volumes и native03 rollback сохранены; archived public binary links требуют дополнительного тома."

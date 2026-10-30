@@ -673,6 +673,25 @@ export async function runTransportFixture(options, hooks = {}) {
       "orders-service",
       "orders-aroma-preparation",
     ].includes(role);
+    const componentOwnership = Boolean(
+      hooks.launchPath &&
+      !setup.launchIdentity &&
+      ["orders-service", "orders-aroma-preparation"].includes(role),
+    );
+    const ownershipFile = setup.launchIdentity
+      ? setup.databaseOwnershipFile
+      : componentOwnership
+        ? join(ROOT, "config/database-ownership.json")
+        : undefined;
+    const expectedOwnershipSha256 = componentOwnership
+      ? setup.manifest.supportingSources["config/database-ownership.json"]
+      : undefined;
+    if (componentOwnership)
+      assert.equal(
+        hash(await readFile(ownershipFile)),
+        expectedOwnershipSha256,
+        "component ownership source changed",
+      );
     const scopedLaunchDriver =
       role === "driver" && Boolean(setup.launchIdentity);
     const base = [
@@ -718,10 +737,13 @@ export async function runTransportFixture(options, hooks = {}) {
           "--mount",
           `type=bind,src=${setup.privateDir}/${role}.yaml,dst=/fixture/${role}.yaml,readonly`,
         );
-        if (setup.launchIdentity) {
+        if (ownershipFile)
           base.push(
             "--mount",
-            `type=bind,src=${setup.databaseOwnershipFile},dst=/fixture/database-ownership.json,readonly`,
+            `type=bind,src=${ownershipFile},dst=/fixture/database-ownership.json,readonly`,
+          );
+        if (setup.launchIdentity) {
+          base.push(
             "--mount",
             `type=bind,src=${setup.launchContextFile},dst=/fixture/launch-context.json,readonly`,
           );
@@ -830,14 +852,18 @@ export async function runTransportFixture(options, hooks = {}) {
           Destination: `/fixture/${role}.yaml`,
           RW: false,
         },
-        ...(setup.launchIdentity
+        ...(ownershipFile
           ? [
               {
                 Type: "bind",
-                Source: setup.databaseOwnershipFile,
+                Source: ownershipFile,
                 Destination: "/fixture/database-ownership.json",
                 RW: false,
               },
+            ]
+          : []),
+        ...(setup.launchIdentity
+          ? [
               {
                 Type: "bind",
                 Source: setup.launchContextFile,
@@ -881,9 +907,8 @@ export async function runTransportFixture(options, hooks = {}) {
       const readablePaths = [
         "/fixture/platform.yaml",
         `/fixture/${role}.yaml`,
-        ...(setup.launchIdentity
-          ? ["/fixture/database-ownership.json", "/fixture/launch-context.json"]
-          : []),
+        ...(ownershipFile ? ["/fixture/database-ownership.json"] : []),
+        ...(setup.launchIdentity ? ["/fixture/launch-context.json"] : []),
         ...(scopedProduct && role === "edge-gateway"
           ? ["/fixture/certs/ca.crt"]
           : []),
@@ -895,7 +920,7 @@ export async function runTransportFixture(options, hooks = {}) {
         "/results/private/fixture.json",
       ];
       const expectedConfigSha256 = setup.manifest.configSha256;
-      const probe = `const fs=require('node:fs/promises');const crypto=require('node:crypto');const readable=${JSON.stringify(readablePaths)},denied=${JSON.stringify(deniedPaths)},expectedConfigSha256=${JSON.stringify(expectedConfigSha256)};(async()=>{const canRead=[];for(const p of readable)try{await fs.readFile(p);canRead.push(p)}catch{}const canReadDenied=[];for(const p of denied)try{await fs.readFile(p);canReadDenied.push(p)}catch{}const configSha256=crypto.createHash('sha256').update(await fs.readFile('/fixture/platform.yaml')).digest('hex');if(canRead.length!==readable.length||canReadDenied.length||configSha256!==expectedConfigSha256)throw new Error('scoped fixture mount access mismatch');console.log(JSON.stringify({readablePaths:canRead,deniedPaths:denied,configSha256}))})().catch(e=>{console.error(e.message);process.exitCode=1});`;
+      const probe = `const fs=require('node:fs/promises');const crypto=require('node:crypto');const readable=${JSON.stringify(readablePaths)},denied=${JSON.stringify(deniedPaths)},expectedConfigSha256=${JSON.stringify(expectedConfigSha256)},expectedOwnershipSha256=${JSON.stringify(expectedOwnershipSha256)};(async()=>{const canRead=[];for(const p of readable)try{await fs.readFile(p);canRead.push(p)}catch{}const canReadDenied=[];for(const p of denied)try{await fs.readFile(p);canReadDenied.push(p)}catch{}const configSha256=crypto.createHash('sha256').update(await fs.readFile('/fixture/platform.yaml')).digest('hex');const ownershipSha256=expectedOwnershipSha256===undefined?undefined:crypto.createHash('sha256').update(await fs.readFile('/fixture/database-ownership.json')).digest('hex');if(canRead.length!==readable.length||canReadDenied.length||configSha256!==expectedConfigSha256||ownershipSha256!==expectedOwnershipSha256)throw new Error('scoped fixture mount access mismatch');console.log(JSON.stringify({readablePaths:canRead,deniedPaths:denied,configSha256,...(ownershipSha256?{ownershipSha256}:{})}))})().catch(e=>{console.error(e.message);process.exitCode=1});`;
       const scope = JSON.parse(
         await docker(
           "exec",
@@ -911,11 +936,16 @@ export async function runTransportFixture(options, hooks = {}) {
       assert.deepEqual(scope.readablePaths, readablePaths);
       assert.deepEqual(scope.deniedPaths, deniedPaths);
       assert.equal(scope.configSha256, expectedConfigSha256);
+      if (componentOwnership)
+        assert.equal(scope.ownershipSha256, expectedOwnershipSha256);
       receipt.scopedMounts = {
         readOnly: true,
         readablePaths: scope.readablePaths,
         deniedPaths: scope.deniedPaths,
         configSha256: scope.configSha256,
+        ...(componentOwnership
+          ? { ownershipSha256: scope.ownershipSha256 }
+          : {}),
       };
     }
     if (scopedLaunchDriver) {

@@ -1,33 +1,112 @@
 import assert from 'node:assert/strict';
-import {execFileSync} from 'node:child_process';
 import test from 'node:test';
 import {runInNewContext} from 'node:vm';
+import {spawnSync} from 'node:child_process';
 import path from 'node:path';
-import {chmod, mkdtemp, readFile, rm, writeFile} from 'node:fs/promises';
+import {mkdtemp, readFile, readdir, rm, stat, writeFile} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
+import {fileURLToPath} from 'node:url';
 import {awaitConvergenceMetricBarrier} from './launch-path.mjs';
-import {createAlertDefinitions, installNativeAlert, installNativeAlerts} from '../../tools/observability/alerts.mjs';
-import {createCollectorConfig, OBSERVABILITY_TARGETS} from '../../tools/observability/generate.mjs';
-import {missingCpuFeatures, nativeAccessLogFilter, nativeFiringProofSatisfied, nativeNormalEvaluationAdvanced, nativePendingWindowSatisfied, observabilityVerificationCoverage, parseCollectorMemoryLimiterMetrics, isCollectorMemoryRefusal, parseNativeAlertState, queryReadinessValue, readinessMetricSamples, sourceIdentity, stopContainerGracefully, traceSpanInventory, validateCollectorMemorySample, waitForDiskGuardBaseline, waitForOwnedMetricFamilySamples, waitForConvergenceMetricSamples, waitForSameTraceSpans, waitForStreamRetentionSettings} from '../../tools/observability/verify.mjs';
+import {createAlertDefinitions, createGrafanaAlertProvisioning} from '../../tools/observability/alerts.mjs';
+import {createAlertSink} from '../../tools/observability/alert-sink.mjs';
+import {createCollectorConfig} from '../../tools/observability/generate.mjs';
+import {parseTempoStatusConfigResponse, captureContainerDiagnostics, observabilityVerificationCoverage, parseCollectorMemoryLimiterMetrics, isCollectorMemoryRefusal, sourceIdentity, stopContainerGracefully, validateCollectorMemorySample, queryPrometheusRange, queryLokiLogs, waitForOwnedMetricFamilySamples, waitForSameTraceSpans, waitForConvergenceMetricSamples, readSinkEvents, durationMilliseconds, parseCollectorExpiredRetryDrops, observabilityGateComplete, persistVerificationResult, collectorMemorySelfTelemetry, isExporterMetricForSignal, parseLokiWalMetrics, parsePrometheusWalFailures, alertEpisodeStartMs} from '../../tools/observability/verify.mjs';
 import {nodeImageProbe, runtimeMetricFamilies, sanitizeRuntimeMatrixFailure, sanitizeRuntimeMetricMatches, verifyRuntimeMetricMatrix} from './runtime-matrix.mjs';
 import {NODE_RUNTIME_ROLES, summarizeRuntimeProbeOutput} from './runtime-matrix-probe.mjs';
 
 const config = {environment: 'development', telemetry: {
   namespace: 'coffee-platform', releaseDigest: 'test-release',
-  openObserve: {organization: 'coffee', streams: {metrics: 'platform_metrics'}},
+  diskWatermarkPercent: 80,
   alerts: {
     version: 1, evaluationIntervalMs: 60000,
     notReady: {forMs: 300000, threshold: 0},
     consumerLag: {forMs: 300000, threshold: 0},
     outboxOldestAge: {forMs: 300000, threshold: 0},
     unknownOutcome: {forMs: 120000, threshold: 0},
-    sseDropRate: {forMs: 300000, threshold: 0.05},
+    sseDropRate: {forMs: 300000, threshold: 0.05}, diskUsage: {forMs: 0},
   },
 }};
 
-void test('OpenObserve runner gates native execution on required CPU features', () => {
-  assert.deepEqual(missingCpuFeatures('processor: 0\nflags: sse4_2 aes avx2 avx\n'), []);
-  assert.deepEqual(missingCpuFeatures('processor: 0\nflags: sse4_2\n'), ['avx', 'aes']);
+void test('Tempo effective config is parsed after its native status request header', () => {
+  const expected = {backend_worker: {finish_on_shutdown_timeout: '10s', compaction: {block_retention: '72h0m0s'}}};
+  assert.deepEqual(parseTempoStatusConfigResponse('GET /status/config\n---\nbackend_worker:\n  finish_on_shutdown_timeout: 10s\n  compaction:\n    block_retention: 72h0m0s\n'), expected);
+  for (const invalid of ['backend_worker: {}', 'GET /other\n---\n{}', 'GET /status/config\n---\nnull',
+    'GET /status/config\n---\n[]', 'GET /status/config\n---\n{}\n---\n{}'])
+    assert.throws(() => parseTempoStatusConfigResponse(invalid));
+});
+
+void test('observability CLI can await its runtime and launch modules without an ESM evaluation cycle', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'coffee-observability-import-'));
+  const loader = path.join(dir, 'loader.mjs');
+  const verify = new URL('../../tools/observability/verify.mjs', import.meta.url);
+  try {
+    await writeFile(loader, `
+export async function load(url, context, nextLoad) {
+  const result = await nextLoad(url, context);
+  if (url === ${JSON.stringify(verify.href)}) {
+    const source = String(result.source);
+    const start = source.indexOf('export async function runObservabilityVerification(');
+    const end = source.indexOf('\\nif (process.argv[1] === fileURLToPath(import.meta.url))', start);
+    if (start < 0 || end < 0) throw new Error('probe cannot locate CLI entry');
+    return {...result, source: source.slice(0, start) + "export async function runObservabilityVerification() { await import('../../tests/observability/runtime-matrix.mjs'); await import('../../tests/observability/launch-path.mjs'); await import('../compose-smoke.mjs'); return {status: 'probe-pass'}; }\\n" + source.slice(end)};
+  }
+  if (process.env.OBSERVABILITY_CYCLE_TEST === '1' && url.endsWith('/tests/observability/runtime-matrix.mjs'))
+    return {...result, source: "import {runObservabilityVerification as cycleProbe} from '../../tools/observability/verify.mjs';\\n" + String(result.source)};
+  return result;
+}
+`);
+    const execute = cycle => spawnSync(process.execPath, ['--no-warnings', '--loader', loader, fileURLToPath(verify)], {
+      encoding: 'utf8', timeout: 20000, env: {...process.env, OBSERVABILITY_CYCLE_TEST: cycle ? '1' : '0'},
+    });
+    const negative = execute(true);
+    assert.equal(negative.status, 13, 'negative control must reproduce the unsettled top-level await');
+    const actual = execute(false);
+    assert.equal(actual.status, 0, actual.stderr);
+    assert.deepEqual(JSON.parse(actual.stdout), {status: 'probe-pass'});
+  } finally {await rm(dir, {recursive: true, force: true});}
+});
+
+void test('synthetic alert fixture starts neutral and dilutes SSE only after a real low-rate drop', async () => {
+  const source = await readFile(new URL('./fixture.mjs', import.meta.url), 'utf8');
+  const start = source.indexOf('let active = ');
+  const end = source.indexOf('\nconst app = await createRuntime(', start);
+  const configureStart = source.indexOf('  configure(server) {', end);
+  const configureEnd = source.indexOf('\n  },\n});', configureStart);
+  assert.ok(start >= 0 && end > start && configureStart > end && configureEnd > configureStart);
+  const handlers = new Map(), readiness = [];
+  const server = {post: (name, handler) => handlers.set(name, handler), get: () => {}};
+  const request = {log: {info() {}}, runtimeSpan: {setAttribute() {}}};
+  const reply = {code() {return this;}, send(value) {return value;}};
+  let now = 1_000_000;
+  const fixture = runInNewContext(`(() => {${source.slice(start, end)}\nconst app = {${source.slice(configureStart, configureEnd)}\n}}; app.configure(server); return {emit, state: () => ({active, consumerLag, oldestOutboxAgeMs, unknownOutcomes, sseAttempts, sseDrops})};})()`, {
+    server, Date: {now: () => now}, config: {telemetry: {alerts: {outboxOldestAge: {threshold: 0}}, loki: {retentionDays: 3}}},
+    logger: {info() {}}, runId: 'fixture', redactionCanary: 'fixture-canary',
+    trace: {getTracer: () => ({startSpan: () => ({end() {}})})}, setRuntimeReadiness: value => readiness.push(value),
+  });
+  const state = active => handlers.get('/test/state')({body: {active}}, reply);
+  const snapshot = () => JSON.parse(JSON.stringify(fixture.state()));
+  fixture.emit(request);
+  assert.deepEqual(snapshot(), {active: false, consumerLag: 0, oldestOutboxAgeMs: 0, unknownOutcomes: 0, sseAttempts: 0, sseDrops: 0});
+  await state(true);
+  now += 99_999;
+  fixture.emit(request);
+  assert.deepEqual(snapshot(), {active: true, consumerLag: 1, oldestOutboxAgeMs: 1, unknownOutcomes: 1, sseAttempts: 0, sseDrops: 0});
+  await state(false);
+  fixture.emit(request);
+  assert.equal(snapshot().sseAttempts, 0, 'inactive baseline must not dilute a drop that has not occurred');
+  await state(true);
+  now += 1;
+  fixture.emit(request);
+  assert.equal(snapshot().sseAttempts, 2);
+  assert.equal(snapshot().sseDrops, 1);
+  now += 100_000;
+  fixture.emit(request);
+  assert.equal(snapshot().sseDrops / snapshot().sseAttempts, 0.5);
+  await state(false);
+  fixture.emit(request);
+  assert.deepEqual(snapshot(), {active: false, consumerLag: 0, oldestOutboxAgeMs: 0, unknownOutcomes: 0, sseAttempts: 1004, sseDrops: 2});
+  assert.ok(snapshot().sseDrops / snapshot().sseAttempts < 0.05);
+  assert.deepEqual(readiness, [false, true, false, true]);
 });
 
 void test('Collector filelog retries transient high-memory refusals within the configured retry window', () => {
@@ -36,525 +115,25 @@ void test('Collector filelog retries transient high-memory refusals within the c
     config: {
       environment: 'test', platform: {health: {intervalMs: 5000, timeoutMs: 1000}},
       telemetry: {
-        namespace: 'coffee-platform', releaseDigest: 'test-release', nginxStatusEndpoint: 'http://edge-nginx:8081/nginx_status',
+        namespace: 'coffee-platform', releaseDigest: 'test-release', alerts: {evaluationIntervalMs: 60000}, nginxStatusEndpoint: 'http://edge-nginx:8081/nginx_status',
         collector: {
           otlpEndpoint: 'http://otel-collector:4318', healthEndpoint: 'http://otel-collector:13133', metricsEndpoint: 'http://otel-collector:8888',
           memoryLimitMiB: 128, memorySpikeMiB: 32, memoryCheckIntervalMs: 1000, batchSize: 128, batchTimeoutMs: 1000,
           queueCapacity: 512, queueConsumers: 2, exportTimeoutMs: 2000,
           retryInitialMs: retry.initialMs, retryMaxMs: retry.maxMs, retryWindowMs: retry.windowMs, maxLogRecordBytes: 65536,
         },
-        openObserve: {endpoint: 'http://openobserve:5080', organization: 'coffee',
-          streams: {logs: 'platform_logs', traces: 'platform_traces', metrics: 'platform_metrics'}},
+        grafana: {endpoint: 'http://grafana:3000'}, loki: {endpoint: 'http://loki:3100'},
+        prometheus: {endpoint: 'http://prometheus:9090'}, tempo: {endpoint: 'http://tempo:3200', otlpEndpoint: 'http://tempo:4318'},
       },
     },
     logFiles: [{service: 'api-public', containerId: 'a'.repeat(64),
       logPath: `/var/lib/docker/containers/${'a'.repeat(64)}/${'a'.repeat(64)}-json.log`}],
-    exporterToken: 'producer-token', openObserveIngestToken: 'ingest-token',
+    exporterToken: 'producer-token',
   });
 
   assert.deepEqual(config.receivers.filelog.retry_on_failure, {
     enabled: true, initial_interval: '1000ms', max_interval: '5000ms', max_elapsed_time: '15000ms',
   });
-});
-
-void test('disk pressure baseline waits for a clear native guard and retains its last diagnostics on failure', async () => {
-  const rows = [
-    {mountPoint: '/', totalBytes: 1024000, usedBytes: 409600, usedPercent: 40},
-    {mountPoint: '/data', totalBytes: 2048000, usedBytes: 512000, usedPercent: 25},
-  ];
-
-  let now = 0;
-  const clockNow = () => now;
-  const clockSleep = async (ms) => { now += ms; };
-  let guardCalls = 0;
-  const baseline = await waitForDiskGuardBaseline({readDiskRows: () => rows,
-    readGuardStatus: () => ++guardCalls === 1 ? 1 : 0, timeoutMs: 50, intervalMs: 1,
-    now: clockNow, sleep: clockSleep});
-  assert.equal(baseline.status, 'PASS');
-  assert.equal(baseline.guardExit, 0);
-  assert.equal(baseline.attempts, 2, 'a transient native guard exit 1 is retried until exact exit 0');
-  assert.deepEqual(baseline.rows, rows);
-
-  now = 0;
-  let timeoutFailure;
-  try {
-    await waitForDiskGuardBaseline({readDiskRows: () => rows, readGuardStatus: () => 1, timeoutMs: 10, intervalMs: 1,
-      now: clockNow, sleep: clockSleep});
-  } catch (error) { timeoutFailure = error; }
-  assert.ok(timeoutFailure, 'a persistent native guard exit 1 must remain fatal within the bounded wait');
-  assert.match(timeoutFailure.message, /disk watermark guard preflight did not complete/u);
-  assert.deepEqual(timeoutFailure.diskPressurePreflight, {
-    status: 'FAIL', rows, guardExit: 1, attempts: timeoutFailure.diskPressurePreflight.attempts, failurePhase: 'disk-guard',
-  });
-  assert.ok(timeoutFailure.diskPressurePreflight.attempts >= 1 && timeoutFailure.diskPressurePreflight.attempts < 100);
-
-  let guardCallsForMalformed = 0;
-  let malformedFailure;
-  try {
-    await waitForDiskGuardBaseline({readDiskRows: () => [{...rows[0], totalBytes: Infinity}, rows[1]],
-      readGuardStatus: () => { guardCallsForMalformed += 1; return 0; }, timeoutMs: 50, intervalMs: 1});
-  } catch (error) { malformedFailure = error; }
-  assert.equal(guardCallsForMalformed, 0, 'malformed mount statistics fail before the guard result can be accepted');
-  assert.deepEqual(malformedFailure?.diskPressurePreflight,
-    {status: 'FAIL', rows: null, guardExit: null, attempts: 1, failurePhase: 'mount-statistics'});
-
-  let guardCallsForNaN = 0;
-  let nanFailure;
-  try {
-    await waitForDiskGuardBaseline({readDiskRows: () => [{...rows[0], usedPercent: Number.NaN}, rows[1]],
-      readGuardStatus: () => { guardCallsForNaN += 1; return 0; }, timeoutMs: 50, intervalMs: 1});
-  } catch (error) { nanFailure = error; }
-  assert.equal(guardCallsForNaN, 0, 'NaN statistics cannot satisfy a clean guard result');
-  assert.equal(nanFailure?.diskPressurePreflight?.status, 'FAIL');
-  assert.equal(nanFailure?.diskPressurePreflight?.failurePhase, 'mount-statistics');
-
-  let invalidExit;
-  try {
-    await waitForDiskGuardBaseline({readDiskRows: () => rows,
-      readGuardStatus: () => { throw Object.assign(new Error('private docker failure'), {status: 2}); }, timeoutMs: 50, intervalMs: 1});
-  } catch (error) { invalidExit = error; }
-  assert.deepEqual(invalidExit?.diskPressurePreflight,
-    {status: 'FAIL', rows, guardExit: 2, attempts: 1, failurePhase: 'disk-guard'});
-  assert.equal(invalidExit?.message.includes('private docker failure'), false);
-});
-
-void test('disk pressure cleanup syncs the owned volume before its single trim and stops on sync failure', async () => {
-  const directory = await mkdtemp(path.join(tmpdir(), 'coffee-disk-trim-'));
-  try {
-    const busyboxPath = path.join(directory, 'busybox');
-    const callLog = path.join(directory, 'calls.log');
-    await writeFile(busyboxPath, '#!/bin/sh\ncase "$1" in\n  sync) printf "sync\\n" >> "$CALL_LOG"; [ "${SYNC_FAIL:-0}" = 0 ] ;;\n  fstrim) printf "fstrim\\n" >> "$CALL_LOG"; printf "/data: 42 bytes trimmed\\n" ;;\n  *) exit 97 ;;\nesac\n');
-    await chmod(busyboxPath, 0o700);
-
-    const source = await readFile(new URL('../../tools/observability/verify.mjs', import.meta.url), 'utf8');
-    const start = source.indexOf('const trimPressureVolume = () => run(');
-    const end = source.indexOf('    const dataTargetKiB', start);
-    assert.ok(start >= 0 && end > start, 'the production trim helper is available for focused execution');
-    const helper = source.slice(start, end);
-    const args = runInNewContext(`${helper}\ntrimPressureVolume();`, {
-      run: value => value,
-      probePath: '/fixture/busybox',
-      storage: {volumeName: 'fixture-volume', maxDiskBytes: 4096},
-      toolchain: {nodeImage: 'node:fixture'},
-    });
-    const shellIndex = args.indexOf('-ceu');
-    assert.ok(shellIndex >= 0);
-    const shellScript = args[shellIndex + 1].replaceAll('/busybox', busyboxPath);
-    const shellArgs = ['-ceu', shellScript, 'g14-pressure-cleanup', '4096'];
-    const environment = {...process.env, CALL_LOG: callLog, SYNC_FAIL: '0'};
-
-    const output = execFileSync('/bin/sh', shellArgs, {encoding: 'utf8', env: environment});
-    assert.match(output, /G14_SYNCFS_COMPLETE/u);
-    assert.match(output, /42 bytes trimmed/u);
-    assert.equal(await readFile(callLog, 'utf8'), 'sync\nfstrim\n');
-
-    await writeFile(callLog, '');
-    assert.throws(() => execFileSync('/bin/sh', shellArgs, {
-      encoding: 'utf8', env: {...environment, SYNC_FAIL: '1'},
-    }));
-    assert.equal(await readFile(callLog, 'utf8'), 'sync\n', 'fstrim must not run when syncfs fails');
-  } finally {
-    await rm(directory, {recursive: true, force: true});
-  }
-});
-
-void test('OpenObserve trace inventory reads canonical operation_name and deduplicates per owner', () => {
-  const traceId = 'a'.repeat(32);
-  assert.deepEqual(traceSpanInventory([
-    {service_name: 'orders-service', operation_name: 'HTTP POST', trace_id: traceId},
-    {service_name: 'orders-service', operation_name: 'HTTP POST', trace_id: traceId},
-    {service_name: 'realtime-gateway', operation_name: 'HTTP POST', trace_id: traceId},
-    {service_name: 'orders-service', name: 'ignored name', trace_id: traceId},
-    {service_name: 'orders-service', span_name: 'ignored span_name', trace_id: traceId},
-    {service_name: '', operation_name: 'empty owner', trace_id: traceId},
-    {service_name: 'orders-service', operation_name: '', trace_id: traceId},
-  ]), {
-    'orders-service': ['HTTP POST'],
-    'realtime-gateway': ['HTTP POST'],
-  });
-});
-
-void test('same-trace search preserves its bounded query and replaces safe diagnostics per attempt', async () => {
-  const traceId = 'a'.repeat(32);
-  const expectedSpanNames = Object.fromEntries(Array.from({length: 5}, (_, serviceIndex) => [
-    `service-${serviceIndex}`, Array.from({length: 5}, (_, spanIndex) => `span-${serviceIndex}-${spanIndex}`),
-  ]));
-  const expectedRecords = Object.entries(expectedSpanNames).flatMap(([service_name, names]) => names.map(operation_name => ({service_name, operation_name})));
-  const canary = 'diagnostic-secret-canary';
-  const requests = [];
-  const observations = [];
-  let queryIndex = 0;
-  const fetchImpl = async (url, init) => {
-    requests.push({url: new URL(url), method: init.method, body: JSON.parse(init.body)});
-    queryIndex += 1;
-    if (queryIndex === 1) return new Response(JSON.stringify({hits: {hits: [{service_name: 'service-0', operation_name: 'span-0-0', secret: canary}]}, total: 31, is_partial: true}));
-    if (queryIndex === 2) return new Response(canary, {status: 503});
-    if (queryIndex === 3) return new Response(JSON.stringify({hits: {hits: expectedRecords.slice(1)}, total: 24, is_partial: false}));
-    return new Response(JSON.stringify({hits: {hits: expectedRecords}, total: 25, is_partial: false}));
-  };
-
-  const result = await waitForSameTraceSpans({
-    baseUrl: 'http://openobserve.test', authorization: 'Basic fixture', organization: 'coffee',
-    stream: 'platform_traces', traceId, expectedSpanNames, fetchImpl, timeoutMs: 1000, intervalMs: 0,
-    onObservation: observation => observations.push(structuredClone(observation)),
-  });
-
-  assert.equal(requests.length, 4);
-  for (const {url, method, body} of requests) {
-    assert.equal(url.pathname, '/api/coffee/_search');
-    assert.equal(url.searchParams.get('type'), 'traces');
-    assert.equal(method, 'POST');
-    assert.deepEqual(body, {
-      query: {
-        sql: `SELECT * FROM "platform_traces" WHERE "trace_id" = '${traceId}'`,
-        start_time: body.query.end_time - 600_000_000, end_time: body.query.end_time, from: 0, size: 100,
-      },
-      search_type: 'ui', timeout: 5,
-    });
-    assert.equal(body.query.sql.includes('ORDER BY'), false);
-  }
-  assert.equal(observations[0].lastAttempt.outcome, 'MISSING_SPANS');
-  assert.equal(observations[0].lastAttempt.rowCount, 1);
-  assert.equal(observations[0].lastAttempt.total, 31);
-  assert.equal(observations[0].lastAttempt.isPartial, true);
-  assert.equal(observations[0].lastAttempt.matchedExpectedSpanCount, 1);
-  assert.equal(observations[0].lastAttempt.missingExpectedSpanNames.length, 24);
-  assert.deepEqual(observations[1].lastAttempt, {
-    outcome: 'QUERY_ERROR', rowCount: null, total: null, isPartial: null,
-    matchedExpectedSpanCount: null, missingExpectedSpanNames: null, errorClass: 'Error', httpStatus: 503,
-  });
-  assert.equal(observations[1].lastSuccessful.total, 31, 'the last successful bounded summary remains available after a later API error');
-  assert.equal(observations[2].lastAttempt.outcome, 'MISSING_SPANS', 'a later query does not inherit spans from an earlier attempt');
-  assert.deepEqual(observations[2].lastAttempt.missingExpectedSpanNames, ['service-0:span-0-0']);
-  assert.equal(observations[3].lastAttempt.outcome, 'COMPLETE');
-  assert.equal(observations[3].lastAttempt.rowCount, 25);
-  assert.deepEqual(observations[3].lastAttempt.missingExpectedSpanNames, []);
-  assert.equal(result.traceRows.length, 25);
-  assert.equal(JSON.stringify(observations).includes(canary), false);
-  assert.equal(JSON.stringify(observations).includes(traceId), false);
-});
-
-void test('native access lookup selects its owner before the response page limit', () => {
-  const correlationId = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
-  assert.equal(nativeAccessLogFilter(correlationId), `"service_name" = 'edge-nginx' AND "body_correlation_id" = '${correlationId}'`);
-  assert.throws(() => nativeAccessLogFilter("' OR 1=1"), /requires a UUID/u);
-});
-
-void test('native readiness reads every fresh owner in one bounded, newest-first search', async () => {
-  const services = OBSERVABILITY_TARGETS.filter(service => service !== 'edge-nginx');
-  const afterUs = 1_700_000_000_000_000;
-  const samplesPerOwner = 60;
-  const records = services.flatMap(service => Array.from({length: samplesPerOwner}, (_, index) => ({
-    service_name: service, value: index === 0 ? 0 : 1, _timestamp: afterUs + index + 1,
-  }))).sort((left, right) => right._timestamp - left._timestamp);
-  assert.equal(services.length, 14);
-  assert.equal(records.length, services.length * samplesPerOwner);
-  assert.ok(records.every((record, index) => index === 0 || records[index - 1]._timestamp >= record._timestamp),
-    'the 840 in-window fixture samples are ordered newest first');
-  const observe = async returnedRecords => {
-    let calls = 0;
-    let query;
-    const samples = await readinessMetricSamples({
-      baseUrl: 'http://openobserve.test', authorization: 'Basic fixture', organization: 'coffee',
-      stream: 'platform_metrics_runtime_ready', services, afterUs,
-      fetchImpl: async (url, init) => {
-        calls += 1;
-        query = JSON.parse(init.body).query;
-        return new Response(JSON.stringify({hits: {hits: returnedRecords}}), {status: 200});
-      },
-    });
-    assert.equal(calls, 1, 'one poll sends one search for the whole owner set');
-    assert.equal(query.sql, `SELECT * FROM "platform_metrics_runtime_ready" WHERE "service_name" IN (${services.map(service => `'${service}'`).join(', ')}) ORDER BY "_timestamp" DESC`);
-    assert.equal(query.size, 1000);
-    assert.equal(query.start_time, afterUs);
-    assert.equal(query.from, 0);
-    return samples;
-  };
-
-  const ready = await observe(records);
-  assert.equal(ready.length, services.length);
-  assert.ok(ready.every(({sample}) => sample?.value === 1 && sample.timestampUs === afterUs + samplesPerOwner),
-    'each owner resolves to its newest value=1 sample after the oldest value=0 sample');
-
-  const missing = services.at(-1);
-  for (const invalidRecords of [
-    records.filter(record => record.service_name !== missing),
-    records.map(record => record.service_name === missing ? {...record, _timestamp: afterUs} : record),
-    records.map(record => record.service_name === missing ? {...record, service_name: 'unexpected-owner'} : record),
-  ]) {
-    const samples = await observe(invalidRecords);
-    assert.equal(samples.length, services.length);
-    assert.equal(samples.every(({sample}) => sample?.value === 1), false,
-      'missing, stale, or unexpected-owner evidence must not satisfy readiness');
-  }
-});
-
-void test('readiness PromQL uses a 30s server deadline and a forwarded 35s transport signal', async t => {
-  const nativeTimeout = AbortSignal.timeout.bind(AbortSignal);
-  const timeoutBudgets = [];
-  t.mock.method(AbortSignal, 'timeout', durationMs => {
-    timeoutBudgets.push(durationMs);
-    return nativeTimeout(5000);
-  });
-  const rule = {queryCondition: {promql: 'sum(up{service_name="api-public"})'}};
-  const requests = [];
-  const fetchImpl = async (url, init) => {
-    requests.push({url, init});
-    return new Response(JSON.stringify({status: 'success', data: {resultType: 'vector', result: [{value: [123, '1']}]}}));
-  };
-  assert.equal(await queryReadinessValue({baseUrl: 'http://openobserve.test', authorization: 'Basic fixture',
-    organization: 'coffee team', rule, fetchImpl}), 1);
-  const [{url, init}] = requests;
-  assert.equal(url.searchParams.get('query'), rule.queryCondition.promql);
-  assert.equal(url.searchParams.get('timeout'), '30s');
-  const serverDeadlineMs = Number(url.searchParams.get('timeout').replace(/s$/u, '')) * 1000;
-  assert.ok(serverDeadlineMs > 0);
-  assert.ok(serverDeadlineMs < timeoutBudgets[0]);
-  assert.ok(timeoutBudgets[0] > 30000);
-  assert.equal(timeoutBudgets[0], 35000);
-  assert.equal(init.signal instanceof AbortSignal, true, 'the HTTP request receives the transport signal');
-
-  let httpFailure;
-  try {
-    await queryReadinessValue({baseUrl: 'http://openobserve.test', authorization: 'Basic fixture', organization: 'coffee', rule,
-      fetchImpl: async () => new Response('private error body', {status: 503}), sensitiveValues: ['private error body']});
-  } catch (error) { httpFailure = error; }
-  assert.equal(httpFailure?.httpStatus, 503);
-  assert.equal(httpFailure?.message.includes('private error body'), false);
-
-  await assert.rejects(queryReadinessValue({baseUrl: 'http://openobserve.test', authorization: 'Basic fixture', organization: 'coffee', rule,
-    fetchImpl: async () => new Response(JSON.stringify({status: 'error', data: {resultType: 'matrix', result: []}}))}),
-  /notReady instant query did not return a successful vector/u);
-});
-
-void test('readiness PromQL aborts through its transport signal', async t => {
-  const nativeTimeout = AbortSignal.timeout.bind(AbortSignal);
-  const timeoutBudgets = [];
-  t.mock.method(AbortSignal, 'timeout', durationMs => {
-    timeoutBudgets.push(durationMs);
-    return nativeTimeout(5);
-  });
-  let receivedSignal;
-  await assert.rejects(queryReadinessValue({baseUrl: 'http://openobserve.test', authorization: 'Basic fixture',
-    organization: 'coffee', rule: {queryCondition: {promql: 'up'}}, fetchImpl: (_url, {signal}) => {
-      receivedSignal = signal;
-      return new Promise((resolve, reject) => {
-        signal.addEventListener('abort', () => reject(signal.reason), {once: true});
-        if (signal.aborted) reject(signal.reason);
-      });
-    }}), error => error?.name === 'TimeoutError');
-  assert.deepEqual(timeoutBudgets, [35000]);
-  assert.equal(receivedSignal?.aborted, true);
-  assert.equal(receivedSignal?.reason?.name, 'TimeoutError');
-});
-
-void test('OpenObserve retention settings wait only for stream-settings 404 readiness', {timeout: 10000}, async t => {
-  t.mock.timers.enable({apis: ['Date'], now: 0});
-  const requests = [];
-  const fetchImpl = async (url, init) => {
-    t.mock.timers.tick(1);
-    requests.push({url, init});
-    return new Response(requests.length === 1 ? 'temporary canary response' : '', {status: requests.length === 1 ? 404 : 200});
-  };
-  await waitForStreamRetentionSettings({baseUrl: 'http://openobserve.test', authorization: 'Basic fixture',
-    organization: 'coffee', stream: 'platform_metrics_runtime_http_requests_total', streamType: 'metrics',
-    retentionDays: 7, fetchImpl, sensitiveValues: ['temporary canary response'], timeoutMs: 100, intervalMs: 1});
-  assert.equal(requests.length, 2, 'a stream-settings 404 is retried until the settings endpoint is ready');
-  for (const {url, init} of requests) {
-    assert.equal(url.pathname, '/api/coffee/streams/platform_metrics_runtime_http_requests_total/settings');
-    assert.equal(url.searchParams.get('type'), 'metrics');
-    assert.equal(init.method, 'PUT');
-    assert.equal(init.headers.Authorization, 'Basic fixture');
-    assert.deepEqual(JSON.parse(init.body), {data_retention: 7});
-  }
-
-  let permanent404Calls = 0;
-  let timeoutFailure;
-  try {
-    await waitForStreamRetentionSettings({baseUrl: 'http://openobserve.test', authorization: 'Basic fixture',
-      organization: 'coffee', stream: 'platform_metrics_missing', streamType: 'metrics', retentionDays: 7,
-      fetchImpl: async () => {permanent404Calls += 1; t.mock.timers.tick(10); return new Response('permanent canary', {status: 404});},
-      sensitiveValues: ['permanent canary'], timeoutMs: 5, intervalMs: 1});
-  } catch (error) { timeoutFailure = error; }
-  assert.ok(timeoutFailure, 'a permanent 404 must fail after the bounded readiness deadline');
-  assert.equal(permanent404Calls, 1);
-  assert.match(timeoutFailure.message, /did not complete/u);
-  assert.equal(timeoutFailure.message.includes('permanent canary'), false);
-
-  for (const status of [401, 500]) {
-    let calls = 0;
-    let failure;
-    try {
-      await waitForStreamRetentionSettings({baseUrl: 'http://openobserve.test', authorization: 'Basic fixture',
-        organization: 'coffee', stream: 'platform_metrics_denied', streamType: 'metrics', retentionDays: 7,
-        fetchImpl: async () => {calls += 1; t.mock.timers.tick(1); return new Response('auth canary', {status});},
-        sensitiveValues: ['auth canary'], timeoutMs: 100, intervalMs: 1});
-    } catch (error) { failure = error; }
-    assert.equal(calls, 1, `HTTP ${status} fails immediately`);
-    assert.equal(failure?.httpStatus, status);
-    assert.equal(failure?.fatal, true);
-    assert.equal(failure?.message.includes('auth canary'), false);
-  }
-
-  let networkCalls = 0;
-  let networkFailure;
-  try {
-    await waitForStreamRetentionSettings({baseUrl: 'http://openobserve.test', authorization: 'Basic fixture',
-      organization: 'coffee', stream: 'platform_metrics_offline', streamType: 'metrics', retentionDays: 7,
-      fetchImpl: async () => {networkCalls += 1; t.mock.timers.tick(1); throw new Error('network unavailable');}, timeoutMs: 100, intervalMs: 1});
-  } catch (error) { networkFailure = error; }
-  assert.equal(networkCalls, 1, 'network failures are fatal rather than retried');
-  assert.equal(networkFailure?.fatal, true);
-  assert.match(networkFailure?.message ?? '', /network unavailable/u);
-});
-
-void test('owner metric search groups all expected owners before the 100-row page limit and waits for every histogram component', async () => {
-  const base = 'platform_metrics_runtime_http_request_duration_ms';
-  const components = ['_count', '_sum', '_bucket'];
-  let inventoryCalls = 0;
-  const componentSearches = new Map();
-  let query;
-  const unrelated = Array.from({length: 101}, (_, index) => ({service_name: `other-${index}`, value: index}));
-  const fetchImpl = async (url, init) => {
-    if (url.pathname === '/api/coffee/streams') {
-      inventoryCalls += 1;
-      return new Response(JSON.stringify(inventoryCalls === 1 ? [] : components.map(component => ({stream_type: 'metrics', name: `${base}${component}`}))), {status: 200});
-    }
-    query = JSON.parse(init.body).query;
-    const stream = query.sql.match(/FROM "([^"]+)"/u)?.[1];
-    const searches = (componentSearches.get(stream) ?? 0) + 1;
-    componentSearches.set(stream, searches);
-    assert.match(query.sql, /WHERE "service_name" IN \('orders-service', 'api-public'\) AND "http_response_status_class" = '4xx' GROUP BY "service_name"$/u);
-    assert.equal(query.size, 100, 'grouped owner evidence uses the existing 100-row search bound');
-    assert.equal(query.start_time, 1);
-    assert.ok(Number.isSafeInteger(query.end_time));
-    assert.equal(query.from, 0);
-    assert.ok(query.sql.includes('AND "http_response_status_class" = \'4xx\''));
-    const allowed = new Set(['orders-service', 'api-public']);
-    const records = [...unrelated, ...[...allowed].map(service_name => ({service_name, http_response_status_class: '4xx'}))];
-    const filtered = records.filter(record => allowed.has(record.service_name) && record.http_response_status_class === '4xx');
-    const hits = [...new Set(filtered.map(record => record.service_name))]
-      .filter(owner => !(stream === `${base}_bucket` && owner === 'api-public' && searches < 3))
-      .map(service_name => ({service_name, sample_count: filtered.filter(record => record.service_name === service_name).length}));
-    return new Response(JSON.stringify({hits: {hits}}), {status: 200});
-  };
-  const matches = await waitForOwnedMetricFamilySamples({
-    baseUrl: 'http://openobserve.test', authorization: 'Basic fixture', organization: 'coffee',
-    metricsPrefix: 'platform_metrics', family: {name: 'runtime_http_request_duration_ms', owners: ['orders-service', 'api-public'], components, attributes: {http_response_status_class: '4xx'}},
-    liveMetricStreams: [], startTimeUs: 1, fetchImpl, timeoutMs: 5000, intervalMs: 1,
-  });
-  assert.equal(inventoryCalls, 4, 'inventory refresh repeats until the final owner component becomes visible');
-  assert.equal(componentSearches.get(`${base}_bucket`), 3, 'one missing owner group must keep the whole family pending');
-  assert.deepEqual(matches, components.map(component => ({stream: `${base}${component}`, sampleCount: 2, services: ['orders-service', 'api-public']})));
-  assert.equal(query.sql, `SELECT "service_name", COUNT(*) AS sample_count FROM "${base}_bucket" WHERE "service_name" IN ('orders-service', 'api-public') AND "http_response_status_class" = '4xx' GROUP BY "service_name"`);
-  assert.equal(query.size, 100);
-
-  const secret = 'query-secret-must-not-escape';
-  const failureFetch = async (url, init) => {
-    if (url.pathname === '/api/coffee/streams') return new Response(JSON.stringify(components.map(component => ({stream_type: 'metrics', name: `${base}${component}`}))));
-    const failingQuery = JSON.parse(init.body).query;
-    const stream = failingQuery.sql.match(/FROM "([^"]+)"/u)?.[1];
-    if (stream === `${base}_bucket`) return new Response(secret, {status: 503});
-    return new Response(JSON.stringify({hits: {hits: ['orders-service', 'api-public'].map(service_name => ({service_name, sample_count: 1}))}}));
-  };
-  let failure;
-  try {
-    await waitForOwnedMetricFamilySamples({
-      baseUrl: 'http://openobserve.test', authorization: 'Basic fixture', organization: 'coffee',
-      metricsPrefix: 'platform_metrics', family: {name: 'runtime_http_request_duration_ms', owners: ['orders-service', 'api-public'], components},
-      liveMetricStreams: components.map(component => `${base}${component}`), startTimeUs: 1,
-      fetchImpl: failureFetch, timeoutMs: 20, intervalMs: 1,
-    });
-  } catch (error) { failure = error; }
-  assert.ok(failure, 'the incomplete owner bucket must remain pending until timeout');
-  const diagnostics = sanitizeRuntimeMatrixFailure(failure).metricFamilyObservation;
-  assert.deepEqual(diagnostics.components.find(component => component.component === '_bucket'), {
-    component: '_bucket', streamPresent: true, presentOwners: [], missingOwners: ['orders-service', 'api-public'],
-    sampleCount: 0, queryFailure: {outcome: 'QUERY_FAILED', httpStatus: 503, errorClass: 'Error'},
-  });
-  assert.equal(JSON.stringify(diagnostics).includes(secret), false);
-  assert.equal(JSON.stringify(sanitizeRuntimeMatrixFailure(failure)).includes(secret), false);
-
-  const timeoutFetch = async (url, init) => {
-    if (url.pathname === '/api/coffee/streams') return new Response(JSON.stringify(components.map(component => ({stream_type: 'metrics', name: `${base}${component}`}))));
-    const stream = JSON.parse(init.body).query.sql.match(/FROM "([^"]+)"/u)?.[1];
-    if (stream === `${base}_bucket`) throw new DOMException(secret, 'TimeoutError');
-    return new Response(JSON.stringify({hits: {hits: ['orders-service', 'api-public'].map(service_name => ({service_name, sample_count: 1}))}}));
-  };
-  let timeoutFailure;
-  try {
-    await waitForOwnedMetricFamilySamples({
-      baseUrl: 'http://openobserve.test', authorization: 'Basic fixture', organization: 'coffee',
-      metricsPrefix: 'platform_metrics', family: {name: 'runtime_http_request_duration_ms', owners: ['orders-service', 'api-public'], components},
-      liveMetricStreams: components.map(component => `${base}${component}`), startTimeUs: 1,
-      fetchImpl: timeoutFetch, timeoutMs: 20, intervalMs: 1,
-    });
-  } catch (error) { timeoutFailure = error; }
-  assert.ok(timeoutFailure, 'query timeout must remain a failed observation');
-  assert.deepEqual(sanitizeRuntimeMatrixFailure(timeoutFailure).metricFamilyObservation.components[2].queryFailure,
-    {outcome: 'QUERY_FAILED', errorClass: 'TimeoutError'});
-  assert.equal(JSON.stringify(sanitizeRuntimeMatrixFailure(timeoutFailure)).includes(secret), false);
-
-  const invalidGroups = [
-    [{service_name: 'unexpected-owner', sample_count: 1}],
-    [{service_name: 'orders-service', sample_count: 1}, {service_name: 'orders-service', sample_count: 1}],
-    [{service_name: 'orders-service', sample_count: 0}],
-    ['orders-service', 'api-public'].map(service_name => ({service_name, sample_count: Number.MAX_SAFE_INTEGER})),
-  ];
-  for (const groups of invalidGroups) {
-    const invalidFetch = async (url, init) => {
-      if (url.pathname === '/api/coffee/streams') return new Response(JSON.stringify(components.map(component => ({stream_type: 'metrics', name: `${base}${component}`}))));
-      const stream = JSON.parse(init.body).query.sql.match(/FROM "([^"]+)"/u)?.[1];
-      return new Response(JSON.stringify({hits: {hits: stream === `${base}_count` ? groups : []}}));
-    };
-    let invalidFailure;
-    try {
-      await waitForOwnedMetricFamilySamples({
-        baseUrl: 'http://openobserve.test', authorization: 'Basic fixture', organization: 'coffee',
-        metricsPrefix: 'platform_metrics', family: {name: 'runtime_http_request_duration_ms', owners: ['orders-service', 'api-public'], components},
-        liveMetricStreams: components.map(component => `${base}${component}`), startTimeUs: 1,
-        fetchImpl: invalidFetch, timeoutMs: 1, intervalMs: 1,
-      });
-    } catch (error) { invalidFailure = error; }
-    assert.ok(invalidFailure, 'invalid grouped owner evidence must not satisfy the family gate');
-    const invalidDiagnostics = sanitizeRuntimeMatrixFailure(invalidFailure).metricFamilyObservation;
-    assert.deepEqual(invalidDiagnostics.components[0], {
-      component: '_count', streamPresent: true, presentOwners: [], missingOwners: ['orders-service', 'api-public'],
-      sampleCount: 0, queryFailure: {outcome: 'QUERY_FAILED', errorClass: 'Error'},
-    });
-  }
-});
-
-void test('convergence backend acknowledgement waits for both gauge phases and recovered owner result', async () => {
-  const expectedMetrics = [
-    {name: 'coffee_aroma_unknown_outcomes_current', attributes: {}, values: [1, 0]},
-    {name: 'coffee_aroma_recovery_results_total', attributes: {result: 'recovered_applied'}, value: 1},
-  ];
-  let polls = 0;
-  const observations = [];
-  const fetchImpl = async (url, init) => {
-    if (url.pathname.endsWith('/streams')) {
-      polls += 1;
-      return new Response(JSON.stringify(expectedMetrics.map(metric => ({stream_type: 'metrics', name: `platform_metrics_${metric.name}`}))));
-    }
-    const query = JSON.parse(init.body).query;
-    assert.ok(query.sql.includes('"service_name" = \'aroma-convergence\''));
-    const current = query.sql.includes('unknown_outcomes_current');
-    const samples = current
-      ? [{value: 1}, ...(polls >= 2 ? [{value: 0}] : [])]
-      : [{value: polls >= 3 ? 1 : 0, attributes_result: 'recovered_applied'}, {value: 1, attributes_result: 'other'}];
-    return new Response(JSON.stringify({hits: {hits: samples.map(sample => ({service_name: 'aroma-convergence', _timestamp: 1700000000000000, ...sample}))}}));
-  };
-  const result = await waitForConvergenceMetricSamples({
-    baseUrl: 'http://openobserve.test', authorization: 'Basic fixture', organization: 'coffee', metricsPrefix: 'platform_metrics',
-    expectedMetrics, startTimeUs: 1, fetchImpl, timeoutMs: 1000, intervalMs: 1,
-    onObservation: value => observations.push(value),
-  });
-  assert.equal(polls, 3);
-  assert.deepEqual(observations[0].coffee_aroma_unknown_outcomes_current.missingValues, [0]);
-  assert.deepEqual(observations[1].coffee_aroma_recovery_results_total.missingValues, [1]);
-  assert.deepEqual(result.coffee_aroma_unknown_outcomes_current.observedValues, [1, 0]);
-  assert.deepEqual(result.coffee_aroma_recovery_results_total.observedValues, [1]);
 });
 
 void test('convergence phase acknowledgement follows backend PASS and rejects failed or stale phases', async () => {
@@ -612,20 +191,20 @@ void test('runtime metric matrix derives all runtime owners and sanitizes probe 
   assert.deepEqual(families.find(({name}) => name === 'runtime_http_request_duration_ms').components, ['_count', '_sum', '_bucket']);
   const httpDuration = families.find(({name}) => name === 'runtime_http_request_duration_ms');
   assert.deepEqual(sanitizeRuntimeMetricMatches(httpDuration, [
-    {stream: 'platform_metrics_runtime_http_request_duration_ms_count', sampleCount: 14, services: [...NODE_RUNTIME_ROLES]},
-    {stream: 'platform_metrics_runtime_http_request_duration_ms_sum', sampleCount: 14, services: [...NODE_RUNTIME_ROLES]},
-    {stream: 'platform_metrics_runtime_http_request_duration_ms_bucket', sampleCount: 42, services: [...NODE_RUNTIME_ROLES], labels: {secret: 'discard'}},
-  ], 'platform_metrics'), [
-    {stream: 'platform_metrics_runtime_http_request_duration_ms_bucket', sampleCount: 42, services: [...NODE_RUNTIME_ROLES].sort()},
-    {stream: 'platform_metrics_runtime_http_request_duration_ms_count', sampleCount: 14, services: [...NODE_RUNTIME_ROLES].sort()},
-    {stream: 'platform_metrics_runtime_http_request_duration_ms_sum', sampleCount: 14, services: [...NODE_RUNTIME_ROLES].sort()},
+    {stream: 'runtime_http_request_duration_ms_milliseconds_count', sampleCount: 14, services: [...NODE_RUNTIME_ROLES]},
+    {stream: 'runtime_http_request_duration_ms_milliseconds_sum', sampleCount: 14, services: [...NODE_RUNTIME_ROLES]},
+    {stream: 'runtime_http_request_duration_ms_milliseconds_bucket', sampleCount: 42, services: [...NODE_RUNTIME_ROLES], labels: {secret: 'discard'}},
+  ]), [
+    {stream: 'runtime_http_request_duration_ms_milliseconds_bucket', sampleCount: 42, services: [...NODE_RUNTIME_ROLES].sort()},
+    {stream: 'runtime_http_request_duration_ms_milliseconds_count', sampleCount: 14, services: [...NODE_RUNTIME_ROLES].sort()},
+    {stream: 'runtime_http_request_duration_ms_milliseconds_sum', sampleCount: 14, services: [...NODE_RUNTIME_ROLES].sort()},
   ]);
-  assert.throws(() => sanitizeRuntimeMetricMatches(httpDuration, [], 'platform_metrics'), /components incomplete/u);
+  assert.throws(() => sanitizeRuntimeMetricMatches(httpDuration, []), /components incomplete/u);
   assert.throws(() => sanitizeRuntimeMetricMatches(httpDuration, [
-    {stream: 'platform_metrics_runtime_http_request_duration_ms_count', sampleCount: 1, services: ['other-runtime']},
-    {stream: 'platform_metrics_runtime_http_request_duration_ms_sum', sampleCount: 1, services: [...NODE_RUNTIME_ROLES]},
-    {stream: 'platform_metrics_runtime_http_request_duration_ms_bucket', sampleCount: 1, services: [...NODE_RUNTIME_ROLES]},
-  ], 'platform_metrics'), /owner evidence invalid/u);
+    {stream: 'runtime_http_request_duration_ms_milliseconds_count', sampleCount: 1, services: ['other-runtime']},
+    {stream: 'runtime_http_request_duration_ms_milliseconds_sum', sampleCount: 1, services: [...NODE_RUNTIME_ROLES]},
+    {stream: 'runtime_http_request_duration_ms_milliseconds_bucket', sampleCount: 1, services: [...NODE_RUNTIME_ROLES]},
+  ]), /owner evidence invalid/u);
 
   const summary = summarizeRuntimeProbeOutput(JSON.stringify({
     node: 'v26.8.1', uid: 1000, runtime: 'orders-service', liveStatus: 200, readyStatus: 200, metricsStatus: 200,
@@ -639,6 +218,29 @@ void test('runtime metric matrix derives all runtime owners and sanitizes probe 
   assert.throws(() => summarizeRuntimeProbeOutput(JSON.stringify({secret: 'must never pass through'}), {
     role: 'orders-service', nodeVersion: '26.8.1',
   }), /runtime metrics probe assertion failed/u);
+});
+
+void test('startup diagnostics bound and redact container state, health output and logs', () => {
+  const secret = 'private-credential-canary';
+  const calls = [];
+  const spawnProcess = (command, args) => {
+    calls.push([command, args]);
+    if (args[0] === 'inspect') return {status: 0, stdout: JSON.stringify({Running: true, ExitCode: 0, OOMKilled: false,
+      Error: `failed ${secret}`, Health: {Status: 'unhealthy', Log: Array.from({length: 4}, (_, index) => ({ExitCode: index, Output: `failed ${secret} Bearer opaque-token password=unknown-password ${'x'.repeat(1100)}`}))},
+      Config: {Env: ['SHOULD_NOT_BE_REPORTED']}})};
+    return {status: 0, stdout: `error ${secret} Bearer opaque-token\n${Array(14).fill(`INFO starting SQLite migration ${secret} Bearer opaque-token ${'x'.repeat(350)}`).join('\n')}\n`, stderr: ''};
+  };
+  const diagnostics = captureContainerDiagnostics({name: 'a'.repeat(64), stage: 'startup', secrets: [secret], spawnProcess});
+  assert.equal(diagnostics.state.Health.status, 'unhealthy');
+  assert.deepEqual(diagnostics.state.Health.log.map(item => item.exitCode), [1, 2, 3]);
+  assert.ok(diagnostics.state.Health.log.every(item => item.output.length <= 900));
+  assert.match(diagnostics.errorOrWarningLines, /error/u);
+  assert.match(diagnostics.startupLines, /SQLite migration/u);
+  assert.ok(Buffer.byteLength(diagnostics.startupLines) <= 2000);
+  for (const value of [secret, 'opaque-token', 'unknown-password', 'SHOULD_NOT_BE_REPORTED']) assert.doesNotMatch(JSON.stringify(diagnostics), new RegExp(value, 'u'));
+  assert.equal(calls.length, 2);
+  const unavailable = captureContainerDiagnostics({name: 'b'.repeat(64), spawnProcess: () => ({status: 1, stdout: '', stderr: ''})});
+  assert.deepEqual(unavailable.state, {unavailable: true});
 });
 
 void test('runtime failure diagnostics retain only allowlisted error codes and local frame coordinates', () => {
@@ -852,7 +454,7 @@ void test('infrastructure stop gate rejects a Docker stop that needed SIGKILL', 
     return 'container';
   };
   const clean = stopContainerGracefully({run, name: 'collector-fixture', graceMs: 30000});
-  const forced = stopContainerGracefully({run, name: 'openobserve-fixture', graceMs: 30000});
+  const forced = stopContainerGracefully({run, name: 'grafana-fixture', graceMs: 30000});
   assert.equal(clean.status, 'PASS');
   assert.equal(clean.exitCode, 0);
   assert.equal(clean.oomKilled, false);
@@ -863,7 +465,7 @@ void test('infrastructure stop gate rejects a Docker stop that needed SIGKILL', 
   assert.ok(forced.elapsedMs <= forced.graceBudgetMs);
   assert.deepEqual(commands.filter(args => args[0] === 'stop'), [
     ['stop', '--time', '30', 'collector-fixture'],
-    ['stop', '--time', '30', 'openobserve-fixture'],
+    ['stop', '--time', '30', 'grafana-fixture'],
   ]);
 });
 
@@ -918,6 +520,69 @@ void test('Collector memory proof accepts only native limiter counters and bound
     return true;
   });
   assert.throws(() => validateCollectorMemorySample({...fresh, currentBytes: 448 * 1024 * 1024}, memoryOptions), /safety guard/u);
+});
+
+void test('Collector memory pressure resumes owned Tempo before counter confirmation and on failure', async () => {
+  const source = await readFile(new URL('../../tools/observability/verify.mjs', import.meta.url), 'utf8');
+  const start = source.indexOf('async function runCollectorMemoryProof(');
+  const end = source.indexOf('\nfunction metricTimestampUs(', start);
+  assert.ok(start >= 0 && end > start);
+  const scenario = async (failure) => {
+    let now = 1_000_000, paused = false, accepted = 1, refused = 0, unpauseAttempts = 0;
+    const events = [], progress = {}, cleanupErrors = [], tempoId = 'a'.repeat(64);
+    class Clock extends Date { static now() { return now; } }
+    const run = args => {
+      if (args[0] === 'inspect') return JSON.stringify({'com.docker.compose.project': 'coffee-observability-run', 'com.docker.compose.service': failure === 'ownership' ? 'loki' : 'tempo'});
+      if (args[0] === 'pause') {events.push('pause'); paused = true; if (failure === 'pause') throw new Error('pause failed');}
+      if (args[0] === 'unpause') {events.push('unpause'); if (failure === 'combined' || (failure === 'unpause' && ++unpauseAttempts === 1)) throw new Error('unpause failed'); paused = false;}
+    };
+    const proof = runInNewContext(`(${source.slice(start, end)})`, {
+      Date: Clock, sleep: async ms => {now += ms;}, MEMORY_MIB_BYTES: 1024 * 1024, MEMORY_SAMPLER_STALE_MS: 100,
+      MEMORY_LIMITER_METRICS: {refused: 'refused', accepted: 'accepted'}, safeCollectorMemorySample: value => value,
+      isCollectorMemoryRefusal,
+      containerGeneration: ({name}) => ({id: name === 'collector' ? name : tempoId, state: {Running: true, Paused: name !== 'collector' && paused, OOMKilled: false, StartedAt: 'start'}}),
+      collectorMemorySelfTelemetry: async ({allowUnmaterializedRefused}) => {
+        if (!allowUnmaterializedRefused) {events.push('confirmation'); assert.equal(paused, false);}
+        return {counters: {accepted, refused}};
+      },
+      sendCollectorMemorySpan: async ({name, paddingBytes}) => {
+        if (name.endsWith('pressure')) {
+          events.push('pressure'); assert.equal(paused, true); assert.equal(paddingBytes, 200 * 1024);
+          if (failure === 'request' || failure === 'combined') throw new Error('pressure failed');
+          if (failure === 'exhausted') {now += 60000; return {httpStatus: 200, wireBytes: 2048};}
+          if (failure === 'invalid') return {httpStatus: 503, otlpCode: 13, refusal: true, wireBytes: 2048};
+          refused = 1; return {httpStatus: 503, otlpCode: 14, refusal: true, wireBytes: 2048};
+        }
+        accepted++; return {httpStatus: 200, wireBytes: 1024};
+      },
+    });
+    const options = {run, collectorName: 'collector', tempoName: tempoId.slice(0, 12), collectorIp: 'collector', prometheusUrl: 'prometheus',
+      config: {platform: {health: {intervalMs: 5000}}, telemetry: {collector: {memoryLimitMiB: 256, memorySpikeMiB: 64,
+        memoryCheckIntervalMs: 1000, retryWindowMs: 15000, containerMemoryMiB: 1024}}},
+      collectorConfig: 'limit = "256MiB" spike_limit = "64MiB" check_interval = "1000ms"', token: 'secret', runId: 'run', progress, cleanupErrors, cleanError: error => error.message,
+      sampler: {peakBytes: 1024, waitForFreshSample: async () => ({currentBytes: 512, maxBytes: 1024})}};
+    if (failure) {
+      const message = {invalid: /unproven memory-refusal/u, request: /pressure failed/u, pause: /pause failed/u,
+        unpause: /unpause failed/u, combined: /pressure failed/u, exhausted: /not reached/u, ownership: /ownership/u}[failure];
+      await assert.rejects(proof(options), message);
+      assert.equal(paused, failure === 'combined');
+      assert.deepEqual(cleanupErrors, failure === 'combined' ? ['Tempo memory restore: unpause failed'] : []);
+      assert.deepEqual(events.filter(event => event === 'pause' || event === 'unpause'), failure === 'ownership' ? [] :
+        failure === 'unpause' ? ['pause', 'unpause', 'unpause'] : ['pause', 'unpause']);
+      if (failure === 'request') {assert.equal(progress.attempted, 1); assert.equal(progress.pendingMaxWireBytes, 512 * 1024);}
+      if (failure === 'exhausted') assert.equal(progress.packetCount, 1);
+    } else {
+      const result = await proof(options);
+      assert.equal(result.refusal.refusedSpansDelta, 1);
+      assert.equal(result.recovery.acceptedSpansDelta, 1);
+      assert.ok(events.indexOf('pause') < events.indexOf('pressure'));
+      assert.ok(events.indexOf('pressure') < events.indexOf('unpause'));
+      assert.ok(events.indexOf('unpause') < events.indexOf('confirmation'));
+      assert.equal(paused, false);
+    }
+    assert.equal(JSON.stringify(progress).includes('secret'), false);
+  };
+  for (const failure of [undefined, 'invalid', 'request', 'pause', 'unpause', 'combined', 'exhausted', 'ownership']) await scenario(failure);
 });
 
 void test('generated Node image probe accepts nameless nested package metadata but keeps package roots strict', () => {
@@ -987,7 +652,7 @@ void test('generated Node image probe accepts nameless nested package metadata b
 
 void test('runtime metric matrix requires a source identity callback before any Docker work', async () => {
   const args = {
-    projectName: 'coffee-observability-final-aaaaaaaa', exporterToken: 'fixture-token',
+    projectName: 'coffee-launch-20261024t120000z-a12bc34', exporterToken: 'fixture-token',
     onRolesReady: async () => {}, onCleanup: async () => {}, verifyMetricFamily: async () => {},
     nodeVersion: '1.2.3', nginxVersion: '1.2.3',
   };
@@ -998,6 +663,15 @@ void test('runtime metric matrix requires a source identity callback before any 
     }), /runtime matrix inputs invalid/u);
   }
   let identityCalls = 0;
+  for (const projectName of ['coffee-legacy-runtime-aaaaaaaa', 'coffee-launch-20261024t120000z-a12bc340',
+    'coffee-launch-20261024T120000Z-a12bc34', 'coffee-launch-local-20261024t120000z-a12bc34', 'coffee-platform']) {
+    await assert.rejects(verifyRuntimeMetricMatrix({
+      ...args, projectName,
+      sourceIdentity: async () => { identityCalls += 1; throw new Error('unexpected source callback'); },
+      runDocker: () => { dockerCalls += 1; throw new Error('unexpected Docker call'); },
+    }), /runtime matrix inputs invalid/u);
+  }
+  assert.equal(identityCalls, 0);
   await assert.rejects(verifyRuntimeMetricMatrix({
     ...args,
     sourceIdentity: async () => { identityCalls += 1; throw new Error('source callback failure'); },
@@ -1030,7 +704,7 @@ void test('observability evidence distinguishes selected live roles from full 14
       aromaConvergenceProof: {owner: 'aroma-convergence'},
     },
   });
-  assert.equal(coverage.verificationScope, 'issue-64-operations-predecessor');
+  assert.equal(coverage.verificationScope, 'operations-component');
   assert.equal(coverage.fullSystemG14.status, 'NOT_RUN');
   assert.equal(coverage.fullSystemG14.owner, '#13');
   assert.equal(coverage.fullSystemG14.requiredNodeRuntimeCount, 14);
@@ -1050,171 +724,420 @@ void test('observability evidence distinguishes selected live roles from full 14
   assert.equal(withMatrix.fullSystemG14.status, 'NOT_RUN', 'functional telemetry coverage does not grant full-system launch acceptance');
 });
 
-void test('native alert definitions use versioned OpenObserve metrics and configured windows', () => {
+void test('Grafana provisions deployment-scoped rules with configured windows and local recovery delivery', () => {
+  const {alerts, contacts} = createGrafanaAlertProvisioning(config, {notificationUrl: 'http://alert-sink:9091/alerts'});
+  const rules = alerts.groups[0].rules;
   const definitions = createAlertDefinitions({config});
-  assert.deepEqual(definitions.map(({key, pendingPeriodSec, threshold}) => [key, pendingPeriodSec, threshold]), [
-    ['notReady', 300, 0], ['consumerLag', 300, 0], ['outboxOldestAge', 300, 0], ['unknownOutcome', 120, 0], ['sseDropRate', 300, 0.05],
-  ]);
-  assert.ok(definitions.every(rule => rule.name.startsWith('g14-v1-') && rule.queryCondition.type === 'promql'));
-  assert.equal(definitions.find(rule => rule.key === 'notReady').streamName, 'platform_metrics_runtime_ready');
-  const identityMatchers = 'deployment_environment="development",service_namespace="coffee-platform",service_version="test-release"';
-  const readinessServices = OBSERVABILITY_TARGETS.filter(service => service !== 'edge-nginx');
-  const readinessOwnerFilter = `^(${readinessServices.join('|')})$`;
-  assert.equal(definitions.find(rule => rule.key === 'notReady').queryCondition.promql,
-    `((min(platform_metrics_runtime_ready{service_name=~"${readinessOwnerFilter}",${identityMatchers}} or platform_metrics_httpcheck_status{service_name="edge-nginx",http_status_class="2xx",${identityMatchers}}) * (scalar(count(count by (service_name) (platform_metrics_runtime_ready{service_name=~"${readinessOwnerFilter}",${identityMatchers}}))) == bool ${readinessServices.length})) and on() (count(platform_metrics_httpcheck_status{service_name="edge-nginx",http_status_class="2xx",${identityMatchers}}) > 0)) or vector(0)`);
-  assert.equal(readinessServices.length, 14);
-  assert.match(definitions.find(rule => rule.key === 'notReady').queryCondition.promql, /count by \(service_name\)/u,
-    'the readiness gate counts distinct expected runtime owners');
-  assert.deepEqual(definitions.find(rule => rule.key === 'notReady').queryCondition.promql_condition, {column: 'value', operator: '<=', value: 0});
-  assert.equal(definitions.find(rule => rule.key === 'consumerLag').streamName, 'platform_metrics_messaging_kafka_consumer_lag');
-  assert.equal(definitions.find(rule => rule.key === 'consumerLag').queryCondition.promql,
-    `max(platform_metrics_messaging_kafka_consumer_lag{${identityMatchers}})`);
-  assert.equal(definitions.find(rule => rule.key === 'outboxOldestAge').streamName, 'platform_metrics_messaging_outbox_oldest_unpublished_age');
-  assert.equal(definitions.find(rule => rule.key === 'outboxOldestAge').queryCondition.promql,
-    `max(platform_metrics_messaging_outbox_oldest_unpublished_age{${identityMatchers}})`);
-  assert.equal(definitions.find(rule => rule.key === 'unknownOutcome').streamName, 'platform_metrics_coffee_aroma_unknown_outcomes_current');
-  assert.equal(definitions.find(rule => rule.key === 'unknownOutcome').queryCondition.promql,
-    `max(platform_metrics_coffee_aroma_unknown_outcomes_current{${identityMatchers}})`);
-  assert.equal(definitions.find(rule => rule.key === 'sseDropRate').streamName, 'platform_metrics_coffee_realtime_invalidation_dropped_total');
-  assert.equal(new Set(definitions.map(rule => rule.streamName)).size, definitions.length);
-  const ssePromql = definitions.find(rule => rule.key === 'sseDropRate').queryCondition.promql;
-  assert.equal(ssePromql,
-    `sum(rate(platform_metrics_coffee_realtime_invalidation_dropped_total{${identityMatchers}}[300s])) / clamp_min(sum(rate(platform_metrics_coffee_realtime_invalidation_attempts_total{${identityMatchers}}[300s])), 1e-12)`);
-  assert.doesNotMatch(ssePromql, /,\s*1\)/u);
-  assert.equal((1 / 100) / (2 / 100), 0.5);
-  assert.equal((1 / 100) / Math.max(2 / 100, 1), 0.01, 'a whole-unit denominator floor would hide the 50% low-rate drop ratio');
-  assert.ok(definitions.every(rule => !JSON.stringify(rule).includes('g14_run_id') && !JSON.stringify(rule).includes('platform_logs')));
-});
-
-void test('native alert selectors require and isolate the complete deployment identity', () => {
-  const definitions = createAlertDefinitions({config});
-  const otherConfig = {
-    ...config,
-    environment: 'staging',
-    telemetry: {...config.telemetry, namespace: 'coffee-platform-staging', releaseDigest: 'sha256:' + 'a'.repeat(64)},
-  };
-  const otherDefinitions = createAlertDefinitions({config: otherConfig});
-  const identityMatchers = 'deployment_environment="development",service_namespace="coffee-platform",service_version="test-release"';
-  const otherIdentityMatchers = `deployment_environment="staging",service_namespace="coffee-platform-staging",service_version=${JSON.stringify(otherConfig.telemetry.releaseDigest)}`;
-  assert.deepEqual(definitions.map(({key}) => key), otherDefinitions.map(({key}) => key));
-  for (let index = 0; index < definitions.length; index++) {
-    assert.notEqual(definitions[index].queryCondition.promql, otherDefinitions[index].queryCondition.promql);
-    assert.ok(definitions[index].queryCondition.promql.includes(identityMatchers), `${definitions[index].key} uses its deployment identity`);
-    assert.ok(otherDefinitions[index].queryCondition.promql.includes(otherIdentityMatchers), `${otherDefinitions[index].key} uses the other deployment identity`);
-  }
-  for (const invalidConfig of [
-    {...config, environment: undefined},
-    {...config, telemetry: {...config.telemetry, namespace: ''}},
-    {...config, telemetry: {...config.telemetry, releaseDigest: null}},
-  ]) assert.throws(() => createAlertDefinitions({config: invalidConfig}), /is required/u);
-});
-
-void test('synthetic readiness scope is isolated and rejects invalid owner filters', () => {
+  assert.deepEqual(rules.map(rule => rule.for), ['300s', '300s', '300s', '120s', '300s', '0s']);
+  assert.ok(rules.every(rule => rule.data[0].datasourceUid === 'prometheus' && rule.data[0].model.expr.includes(
+    'deployment_environment="development",service_namespace="coffee-platform",service_version="test-release"')));
+  assert.match(rules[0].data[0].model.expr, /count by \(service_name\).+== bool 14/u);
+  assert.match(rules[0].data[0].model.expr, /probe_success\{service_name="otel-collector",probe_owner="edge-nginx"/u);
+  assert.match(rules[1].data[0].model.expr, /messaging_kafka_consumer_lag_messages/u);
+  assert.match(rules[2].data[0].model.expr, /messaging_outbox_oldest_unpublished_age_milliseconds/u);
+  assert.equal(rules[4].data[1].model.expression, '$A > 0.05');
+  assert.equal(rules[5].data[1].model.expression, '$A >= 80');
+  assert.match(rules[5].data[0].model.expr, /^100 \* \(1 - node_filesystem_free_bytes\{mountpoint=~"\/telemetry-storage\/\(grafana\|loki\|prometheus\|tempo\)",service_name="otel-collector"/u);
+  assert.match(rules[5].data[0].model.expr, /\/ node_filesystem_size_bytes\{mountpoint=~"\/telemetry-storage\/\(grafana\|loki\|prometheus\|tempo\)",service_name="otel-collector"/u);
+  assert.equal((rules[5].data[0].model.expr.match(/deployment_environment="development"/gu) ?? []).length, 2);
+  assert.doesNotMatch(rules[5].data[0].model.expr, /state=/u);
+  assert.equal(rules[5].noDataState, 'Alerting');
+  assert.equal(contacts.contactPoints[0].receivers[0].settings.url, 'http://alert-sink:9091/alerts');
+  assert.equal(contacts.contactPoints[0].receivers[0].disableResolveMessage, false);
+  assert.equal(contacts.policies[0].receiver, 'g14-local');
+  assert.throws(() => createGrafanaAlertProvisioning({...config, telemetry: {...config.telemetry, releaseDigest: ''}},
+    {notificationUrl: 'http://alert-sink:9091/alerts'}), /service_version/u);
   const synthetic = createAlertDefinitions({config, readinessServices: ['g14-synthetic']});
-  assert.equal(synthetic[0].name, 'g14-v1-service-not-ready-synthetic');
-  const identityMatchers = 'deployment_environment="development",service_namespace="coffee-platform",service_version="test-release"';
-  assert.equal(synthetic[0].queryCondition.promql,
-    `(min(platform_metrics_runtime_ready{service_name=~"^(g14-synthetic)$",${identityMatchers}} or platform_metrics_httpcheck_status{service_name="edge-nginx",http_status_class="2xx",${identityMatchers}}) * (scalar(count(count by (service_name) (platform_metrics_runtime_ready{service_name=~"^(g14-synthetic)$",${identityMatchers}}))) == bool 1)) or vector(0)`);
-  assert.deepEqual(synthetic.slice(1).map(({name}) => name),
-    createAlertDefinitions({config}).slice(1).map(({name}) => name));
+  assert.match(synthetic[0].query, /service_name=~"\^\(g14-synthetic\)\$"/u);
+  assert.doesNotMatch(synthetic[0].query, /and on\(\)/u);
+  assert.deepEqual(synthetic.slice(1).map(rule => rule.name), definitions.slice(1).map(rule => rule.name));
   for (const readinessServices of [[], ['g14-synthetic', 'g14-synthetic'], ['bad|owner']])
     assert.throws(() => createAlertDefinitions({config, readinessServices}), /readinessServices/u);
 });
 
-void test('native alert installation configures only local webhook delivery and recovery', async () => {
-  const requests = [];
-  const fetchImpl = async (url, init) => {
-    requests.push({url: new URL(url).pathname, init, body: init.body ? JSON.parse(init.body) : undefined});
-    return new Response('', {status: 200});
-  };
-  const rules = await installNativeAlerts({config, baseUrl: 'http://127.0.0.1:5080', organization: 'coffee', authorization: 'Basic fixture', fetchImpl});
-  assert.equal(rules.length, 5);
-  assert.equal(requests.length, 7);
-  assert.deepEqual(requests.slice(2).map(({body}) => body.query_condition.promql), rules.map(({queryCondition}) => queryCondition.promql));
-  assert.equal(requests[1].body.url, 'http://127.0.0.1:9091/alerts');
-  for (const request of requests.slice(2)) {
-    assert.equal(request.url, '/api/v2/coffee/alerts');
-    assert.equal(request.body.is_real_time, false);
-    assert.equal(request.body.stream_type, 'metrics');
-    assert.equal(request.body.query_condition.type, 'promql');
-    assert.equal(request.body.enabled, true);
-    assert.equal(request.body.trigger_condition.period, config.telemetry.alerts.evaluationIntervalMs / 60000);
-    assert.equal(request.body.trigger_condition.frequency, config.telemetry.alerts.evaluationIntervalMs / 60000);
-    assert.deepEqual(request.body.destinations, ['g14-local']);
-    assert.equal(request.body.notify_on_recovery, true);
-    assert.deepEqual(request.body.recovery_destinations, ['g14-local']);
+void test('Grafana webhook stores bounded sanitized firing and resolved episodes', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'coffee-alert-sink-'));
+  const outputPath = path.join(dir, 'episodes.jsonl');
+  const server = createAlertSink({outputPath, maxBytes: 1024, maxFiles: 3});
+  try {
+    await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+    const url = `http://127.0.0.1:${server.address().port}/alerts`;
+    const alert = {status: 'firing', fingerprint: '0123456789abcdef', startsAt: '2026-10-29T00:00:00Z',
+      labels: {alertname: 'g14-v1-service-not-ready', secret: 'canary-secret'}, annotations: {payload: 'canary-secret'}};
+    const send = alerts => fetch(url, {method: 'POST', body: JSON.stringify({alerts, secret: 'canary-secret'})});
+    assert.equal((await send([alert])).status, 200);
+    assert.equal((await send([{...alert, status: 'resolved'}])).status, 200);
+    let lines = (await readFile(outputPath, 'utf8')).trim().split('\n').map(JSON.parse);
+    assert.deepEqual(lines.map(value => value.status), ['firing', 'resolved']);
+    assert.equal(lines[0].episodeId, lines[1].episodeId);
+    assert.equal(lines[0].name, 'g14-v1-service-not-ready');
+    assert.doesNotMatch(JSON.stringify(lines), /canary-secret/u);
+    assert.equal((await send([{...alert, labels: {alertname: 'canary-secret'}}])).status, 400);
+    assert.equal((await send([{...alert, fingerprint: 'canary-secret'}])).status, 400);
+    assert.equal((await send(Array.from({length: 33}, () => alert))).status, 400);
+    for (let index = 0; index < 30; index++) assert.equal((await send([alert])).status, 200);
+    const files = await readdir(dir);
+    assert.deepEqual(files.sort(), ['episodes.jsonl', 'episodes.jsonl.1', 'episodes.jsonl.2']);
+    for (const file of files) {
+      assert.ok((await stat(path.join(dir, file))).size <= 1024);
+      assert.doesNotMatch(await readFile(path.join(dir, file), 'utf8'), /canary-secret/u);
+    }
+    lines = (await readFile(outputPath, 'utf8')).trim().split('\n').map(JSON.parse);
+    assert.ok(lines.every(value => value.episodeId === '0123456789abcdef:2026-10-29T00:00:00Z'));
+  } finally {
+    await new Promise(resolve => server.close(resolve));
+    await rm(dir, {recursive: true, force: true});
   }
-  assert.equal(requests.at(-1).body.pending_period_sec, 300);
-  assert.equal(requests.at(-1).body.trigger_condition.threshold, 1);
-  assert.deepEqual(requests.at(-1).body.query_condition.promql_condition, {column: 'value', operator: '>', value: 0.05});
-  assert.match(requests[2].body.query_condition.promql, /== bool 14\)\) and on\(\) \(count\(platform_metrics_httpcheck_status/u,
-    'the production POST keeps the complete Node owner gate and native NGINX presence guard');
 });
 
-void test('native notReady evaluation state is exact, fail-closed, and proves its configured pending interval', () => {
-  const rule = createAlertDefinitions({config}).find(candidate => candidate.key === 'notReady');
-  const alertId = '0'.repeat(27);
-  const trigger = {period: rule.evaluationIntervalMinutes, frequency: rule.evaluationIntervalMinutes, frequency_type: 'minutes'};
-  const condition = {promql: rule.queryCondition.promql, promql_condition: rule.queryCondition.promql_condition};
-  const detail = {id: alertId, name: rule.name, enabled: true, is_real_time: false, stream_type: 'metrics',
-    stream_name: rule.streamName, query_condition: condition, trigger_condition: trigger, pending_period_sec: rule.pendingPeriodSec};
-  const row = (state, sinceUs) => ({alert_id: alertId, name: rule.name, alert_type: 'scheduled', enabled: true,
-    is_real_time: false, stream_type: 'metrics', stream_name: rule.streamName, condition, trigger_condition: trigger,
-    last_outcome: state, last_outcome_at: sinceUs + 1, last_outcome_since: sinceUs});
-  const normal = parseNativeAlertState({listResponse: {list: [row('normal', 1_800_000_000_000_000)]}, detailResponse: detail, rule});
-  assert.deepEqual(normal, {state: 'normal', alertId, outcomeAtUs: 1_800_000_000_000_001, sinceUs: 1_800_000_000_000_000});
-  const pending = parseNativeAlertState({listResponse: {list: [row('pending', 1_800_000_001_000_000)]}, detailResponse: detail, rule, expectedAlertId: alertId});
-  assert.deepEqual(pending, {state: 'pending', alertId, outcomeAtUs: 1_800_000_001_000_001, sinceUs: 1_800_000_001_000_000});
-  assert.equal(parseNativeAlertState({listResponse: {list: [row('pending', 1)]}, detailResponse: detail, rule}).state, 'pending');
-  assert.equal(parseNativeAlertState({listResponse: {list: [{...row('normal', 1), last_outcome_at: 'not-numeric'}]}, detailResponse: detail, rule}).state, 'unknown');
-  for (const state of ['normal', 'pending', 'firing']) {
-    assert.equal(parseNativeAlertState({listResponse: {list: [{...row(state, 100), last_outcome_at: 99}]}, detailResponse: detail, rule}).state, 'unknown');
-    assert.equal(parseNativeAlertState({listResponse: {list: [{...row(state, 100), last_outcome_at: 100}]}, detailResponse: detail, rule}).state, state,
-      'equal since and outcome timestamps are valid for every native state');
+void test('Grafana backend queries require fresh owner samples and exact traces', async () => {
+  const startTimeUs = (Date.now() - 10000) * 1000;
+  const timestamp = Math.floor(Date.now() / 1000);
+  const calls = [];
+  const fetchImpl = async url => {
+    calls.push(url);
+    if (url.pathname === '/api/v1/query_range') {
+      assert.match(url.searchParams.get('query'), /^(?:timestamp\()?runtime_http_request_duration_ms_milliseconds_/u);
+      return new Response(JSON.stringify({status: 'success', data: {resultType: 'matrix', result: [
+        {metric: {service_name: 'orders-service'}, values: [[timestamp, url.searchParams.get('query').startsWith('timestamp(') ? String(timestamp) : '2']]},
+      ]}}));
+    }
+    if (url.pathname === '/api/traces/' + 'a'.repeat(32)) return new Response(JSON.stringify({batches: [
+      {resource: {attributes: [{key: 'service.name', value: {stringValue: 'orders-service'}}]}, scopeSpans: [{spans: [{traceId: 'a'.repeat(32), name: 'order'}]}]},
+    ]}));
+    if (url.pathname === '/loki/api/v1/query_range') return new Response(JSON.stringify({status: 'success', data: {resultType: 'streams', result: [
+      {stream: {service_name: 'orders-service'}, values: [[String(BigInt(timestamp) * 1000000000n), JSON.stringify({g14_run_id: 'a'.repeat(32)}), {service_version: 'one'}]]},
+    ]}}));
+    throw new Error('unexpected query');
+  };
+  const family = {name: 'runtime_http_request_duration_ms', owners: ['orders-service'], components: ['_count', '_sum', '_bucket']};
+  const matches = await waitForOwnedMetricFamilySamples({baseUrl: 'http://prometheus:9090', family, startTimeUs, fetchImpl, timeoutMs: 100, intervalMs: 1});
+  assert.equal(matches.length, 3);
+  assert.deepEqual(sanitizeRuntimeMetricMatches(family, matches).map(match => match.services), Array(3).fill(['orders-service']));
+  const trace = await waitForSameTraceSpans({baseUrl: 'http://tempo:3200', traceId: 'a'.repeat(32), expectedSpanNames: {'orders-service': ['order']}, fetchImpl, timeoutMs: 100});
+  assert.deepEqual(trace.spanInventory, {'orders-service': ['order']});
+  const logs = await queryLokiLogs({baseUrl: 'http://loki:3100', runId: 'a'.repeat(32), startTimeUs, fetchImpl});
+  assert.equal(logs[0].service_version, 'one');
+  assert.equal(logs[0].g14_run_id, 'a'.repeat(32));
+  assert.equal(calls.length, 8);
+  await assert.rejects(queryPrometheusRange({baseUrl: 'http://prometheus:9090', expression: 'x', startTimeUs,
+    fetchImpl: async () => new Response(JSON.stringify({status: 'error'}))}), /invalid range response/u);
+  await assert.rejects(waitForSameTraceSpans({baseUrl: 'http://tempo:3200', traceId: 'a'.repeat(32), expectedSpanNames: {'orders-service': ['missing']}, fetchImpl, timeoutMs: 2, intervalMs: 1}), /did not complete/u);
+});
+
+void test('convergence proof accepts both actual recovery metric values and rejects another owner', async () => {
+  const startTimeUs = (Date.now() - 10000) * 1000;
+  const now = Math.floor(Date.now() / 1000);
+  const expectedMetrics = [{name: 'coffee_aroma_unknown_outcomes_current', values: [1, 0]}];
+  const response = owner => async url => new Response(JSON.stringify({status: 'success', data: {resultType: 'matrix', result: [
+    {metric: {service_name: owner}, values: url.searchParams.get('query').startsWith('timestamp(') ? [[now - 1, String(now - 1)], [now, String(now)]] : [[now - 1, '1'], [now, '0']]},
+  ]}}));
+  const result = await waitForConvergenceMetricSamples({baseUrl: 'http://prometheus:9090', startTimeUs, expectedMetrics, fetchImpl: response('aroma-convergence'), timeoutMs: 100});
+  assert.deepEqual(result.coffee_aroma_unknown_outcomes_current.observedValues, [1, 0]);
+  await assert.rejects(waitForConvergenceMetricSamples({baseUrl: 'http://prometheus:9090', startTimeUs, expectedMetrics, fetchImpl: response('other'), timeoutMs: 2, intervalMs: 1}), /did not complete/u);
+});
+
+void test('Prometheus evaluation time cannot make an old source sample fresh', async () => {
+  const startTimeUs = (Date.now() - 10000) * 1000;
+  const now = Math.floor(Date.now() / 1000);
+  const fetchImpl = async url => new Response(JSON.stringify({status: 'success', data: {resultType: 'matrix', result: [
+    {metric: {service_name: 'orders-service'}, values: [[now, url.searchParams.get('query').startsWith('timestamp(') ? String(now - 60) : '1']]},
+  ]}}));
+  assert.deepEqual(await queryPrometheusRange({baseUrl: 'http://prometheus:9090', expression: 'runtime_ready', startTimeUs, fetchImpl}), []);
+  await assert.rejects(waitForOwnedMetricFamilySamples({baseUrl: 'http://prometheus:9090', startTimeUs, fetchImpl,
+    family: {name: 'runtime_ready', owners: ['orders-service'], components: ['']}, timeoutMs: 2, intervalMs: 1}), /did not complete/u);
+});
+
+void test('alert episode evidence includes bounded rotated files in order', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'coffee-alert-evidence-'));
+  const file = path.join(dir, 'events.jsonl');
+  try {
+    await writeFile(`${file}.1`, JSON.stringify({name: 'rule', status: 'firing', episodeId: 'same'}) + '\n');
+    await writeFile(file, JSON.stringify({name: 'rule', status: 'resolved', episodeId: 'same'}) + '\n');
+    assert.deepEqual((await readSinkEvents(file)).map(({status}) => status), ['firing', 'resolved']);
+  } finally {await rm(dir, {recursive: true, force: true});}
+});
+
+void test('backend query errors omit response body and preserve bounded abort signal', async () => {
+  await assert.rejects(queryPrometheusRange({baseUrl: 'http://prometheus:9090', expression: 'runtime_ready',
+    startTimeUs: (Date.now() - 10000) * 1000, fetchImpl: async (_url, options) => {
+      assert.ok(options.signal instanceof AbortSignal);
+      return new Response('secret canary', {status: 503});
+    }}), error => error.httpStatus === 503 && !error.message.includes('secret'));
+});
+
+void test('Alloy blackbox probe attribution uses the actual probe owner', async () => {
+  const startTimeUs = (Date.now() - 10000) * 1000;
+  const now = Math.floor(Date.now() / 1000);
+  const fetchImpl = async url => new Response(JSON.stringify({status: 'success', data: {resultType: 'matrix', result: [{
+    metric: {service_name: 'otel-collector', probe_owner: 'edge-nginx'},
+    values: [[now, url.searchParams.get('query').startsWith('timestamp(') ? String(now) : '1']],
+  }]}}));
+  const family = {name: 'probe_success', owners: ['edge-nginx'], components: [''], ownerLabel: 'probe_owner',
+    attributes: {service_name: 'otel-collector'}};
+  const result = await waitForOwnedMetricFamilySamples({baseUrl: 'http://prometheus:9090', family, startTimeUs, fetchImpl, timeoutMs: 100});
+  assert.deepEqual(result, [{stream: 'probe_success', sampleCount: 1, services: ['edge-nginx']}]);
+});
+
+void test('retention readback compares compound Go durations and rejects malformed values', () => {
+  assert.equal(durationMilliseconds('72h0m0s'), 3 * 86400000);
+  assert.equal(durationMilliseconds('3d'), 3 * 86400000);
+  assert.equal(durationMilliseconds('1m30s'), 90000);
+  assert.ok(Number.isNaN(durationMilliseconds('72h trailing')));
+  assert.ok(Number.isNaN(durationMilliseconds('')));
+});
+
+void test('polling timeout reports the latest observation and preserves fatal errors', async () => {
+  const source = await readFile(new URL('../../tools/observability/verify.mjs', import.meta.url), 'utf8');
+  const start = source.indexOf('async function waitFor(predicate,');
+  const end = source.indexOf('\nfunction requireRunning(', start);
+  assert.ok(start >= 0 && end > start);
+  const run = async (steps) => {
+    let now = 0, calls = 0;
+    const wait = runInNewContext(`(${source.slice(start, end)})`, {
+      Date: {now: () => now}, sleep: async ms => {now += ms;}, Error,
+    });
+    return wait(async () => {
+      const step = steps[calls++];
+      if (step instanceof Error) throw step;
+      return step;
+    }, {timeoutMs: steps.length, intervalMs: 1, description: 'probe'});
+  };
+  await assert.rejects(run([new Error('stale error'), false, false]),
+    error => error.message === 'probe did not complete');
+  await assert.rejects(run([new Error('stale error'), false, new Error('current error')]),
+    error => error.message === 'probe did not complete: current error');
+  const fatal = Object.assign(new Error('fatal error'), {fatal: true});
+  await assert.rejects(run([new Error('stale error'), fatal, false]), error => error === fatal);
+  assert.equal(await run([new Error('stale error'), false, 'ready']), 'ready');
+});
+
+void test('native pressure evidence precedes identity and relief guards', async () => {
+  const source = await readFile(new URL('../../tools/observability/verify.mjs', import.meta.url), 'utf8');
+  const start = source.indexOf('const fsPressure = filesystem();');
+  const end = source.indexOf('\n            assertGeneration();', start);
+  assert.ok(start >= 0 && end > start);
+  const cases = [
+    {name: 'full with native failure', dev: 1, ino: 2, bavail: 0, native: true},
+    {name: 'relieved with native failure', dev: 1, ino: 2, bavail: 3, native: true},
+    {name: 'full without native failure', dev: 1, ino: 2, bavail: 0, native: false},
+    {name: 'relieved without native failure', dev: 1, ino: 2, bavail: 3, native: false, error: 'filesystem pressure ended before a native storage failure'},
+    {name: 'changed device with native failure', dev: 9, ino: 2, bavail: 3, native: true, error: 'filesystem identity changed during pressure'},
+    {name: 'changed inode with native failure', dev: 1, ino: 9, bavail: 3, native: true, error: 'filesystem identity changed during pressure'},
+    {name: 'changed device without native failure', dev: 9, ino: 2, bavail: 0, native: false, error: 'filesystem identity changed during pressure'},
+    {name: 'changed inode without native failure', dev: 1, ino: 9, bavail: 0, native: false, error: 'filesystem identity changed during pressure'},
+  ];
+  for (const scenario of cases) {
+    const fsPressure = {dev: scenario.dev, ino: scenario.ino, bavail: scenario.bavail};
+    const nativeFailure = scenario.native ? {httpStatus: 500, sqliteDiskFullLog: true} : undefined;
+    const pressureEvidence = {};
+    const execute = runInNewContext(`(() => {${source.slice(start, end)}\n})`, {
+      filesystem: () => fsPressure, fsBefore: {dev: 1, ino: 2}, pressureEvidence, nativeFailure, name: 'grafana', Error,
+    });
+    if (scenario.error) assert.throws(execute, error => error.message === `grafana ${scenario.error}`, scenario.name);
+    else execute();
+    assert.equal(pressureEvidence.filesystemPressure, fsPressure, scenario.name);
+    assert.equal(pressureEvidence.nativeFailure, nativeFailure, scenario.name);
+    assert.equal(Object.hasOwn(pressureEvidence, 'nativeFailure'), scenario.native, scenario.name);
   }
-  assert.equal(parseNativeAlertState({listResponse: {list: []}, detailResponse: detail, rule}).state, 'unknown');
-  assert.throws(() => parseNativeAlertState({listResponse: {list: [row('normal', 1), row('normal', 2)]}, detailResponse: detail, rule}), {fatal: true});
-  assert.throws(() => parseNativeAlertState({listResponse: {list: [row('normal', 1)]}, detailResponse: {...detail, pending_period_sec: 1}, rule}), {fatal: true});
-  assert.equal(nativePendingWindowSatisfied(1_800_000_001_000_000, 1_800_000_300_999_999, 300), false);
-  assert.equal(nativePendingWindowSatisfied(1_800_000_001_000_000, 1_800_000_301_000_000, 300), true);
-  assert.equal(nativePendingWindowSatisfied(1_800_000_001_000_000, Number.NaN, 300), false);
-  assert.equal(nativeFiringProofSatisfied({pendingSinceUs: 1_800_000_001_000_000, firingSinceUs: 1_800_000_301_000_000,
-    pendingPeriodSec: 300, sinkReceivedAtUs: 1_800_000_200_000_000, stoppedAtUs: 1_800_000_250_000_000}), false,
-  'an unseen sink firing received before stop cannot complete the native proof');
-  assert.equal(nativeFiringProofSatisfied({pendingSinceUs: 1_800_000_001_000_000, firingSinceUs: 1_800_000_301_000_000,
-    pendingPeriodSec: 300, sinkReceivedAtUs: 1_800_000_350_000_000, stoppedAtUs: 1_800_000_250_000_000}), true,
-  'a fresh sink receipt is accepted only alongside the full native pending window');
-  assert.equal(nativeNormalEvaluationAdvanced(1_800_000_000_000_001, 1_800_000_060_000_001), true);
-  assert.equal(nativeNormalEvaluationAdvanced(1_800_000_000_000_001, 1_800_000_000_000_001), false);
-  assert.equal(nativeNormalEvaluationAdvanced(1_800_000_000_000_001, Number.NaN), false);
 });
 
-void test('synthetic readiness scope reaches only its separately named readiness rule payload', async () => {
-  const requests = [];
-  const fetchImpl = async (url, init) => {
-    requests.push({url: new URL(url).pathname, body: init.body ? JSON.parse(init.body) : undefined});
-    return new Response('', {status: 200});
-  };
-  const rules = await installNativeAlerts({config, baseUrl: 'http://127.0.0.1:5080', organization: 'coffee', authorization: 'Basic fixture', readinessServices: ['g14-synthetic'], fetchImpl});
-  assert.equal(rules[0].name, 'g14-v1-service-not-ready-synthetic');
-  assert.equal(requests[2].body.name, 'g14-v1-service-not-ready-synthetic');
-  assert.equal(requests[2].body.query_condition.promql.includes('service_name=~"^(g14-synthetic)$"'), true);
-  assert.ok(requests[2].body.query_condition.promql.includes('deployment_environment="development",service_namespace="coffee-platform",service_version="test-release"'));
-  assert.equal(requests[2].body.query_condition.promql.includes('and on()'), false, 'synthetic readiness stays independent of native NGINX');
-  assert.deepEqual(requests.slice(3).map(({body}) => body.name), rules.slice(1).map(({name}) => name));
+void test('Loki retention fixture changes cache TTL on a clone of the original profile', async () => {
+  const source = await readFile(new URL('../../tools/observability/verify.mjs', import.meta.url), 'utf8');
+  const start = source.indexOf('const lokiProfile = structuredClone(originalLokiConfig);');
+  const end = source.indexOf('\n      const readLokiKnobs =', start);
+  assert.ok(start >= 0 && end > start);
+  for (const cache of [undefined, {embedded_cache: {ttl: '24h', enabled: true}, keep: 'value'}]) {
+    const originalLokiConfig = {ingester: {chunk_idle_period: '1h'}, compactor: {compaction_interval: '10m'},
+      ...(cache ? {chunk_store_config: {chunk_cache_config: cache, other: 'preserved'}} : {})};
+    const original = structuredClone(originalLokiConfig);
+    const profile = runInNewContext(`(() => {${source.slice(start, end)}\nreturn lokiProfile;})()`, {
+      originalLokiConfig, structuredClone,
+    });
+    assert.deepEqual(originalLokiConfig, original);
+    assert.equal(profile.chunk_store_config.chunk_cache_config.embedded_cache.ttl, '30s');
+    assert.equal(profile.chunk_store_config.chunk_cache_config.embedded_cache.enabled, true);
+    if (cache) {
+      assert.equal(profile.chunk_store_config.chunk_cache_config.keep, 'value');
+      assert.equal(profile.chunk_store_config.other, 'preserved');
+    }
+  }
 });
 
-void test('a late native alert install posts one selected readiness rule only', async () => {
-  const requests = [];
-  const fetchImpl = async (url, init) => {
-    requests.push({url: new URL(url).pathname, method: init.method, body: JSON.parse(init.body)});
-    return new Response('', {status: 200});
+void test('Tempo retention fixture accelerates cleanup and verifies the effective cadence', async () => {
+  const source = await readFile(new URL('../../tools/observability/verify.mjs', import.meta.url), 'utf8');
+  const start = source.indexOf('const originalTempoConfig = configs.tempo;');
+  const end = source.indexOf('const originalTempoBytes =', start);
+  const readerStart = source.indexOf('const readTempoKnobs = async () =>', end);
+  const readerEnd = source.indexOf('const originalTempoKnobs =', readerStart);
+  const checkStart = source.indexOf('const activeTempo = await readTempoKnobs();', readerEnd);
+  const checkEnd = source.indexOf('const otlpUrl =', checkStart);
+  assert.ok(start >= 0 && end > start && readerStart > end && readerEnd > readerStart && checkEnd > checkStart);
+  const original = {backend_worker: {compaction: {block_retention: '72h'}}, backend_scheduler: {},
+    live_store: {wal: {path: '/var/tempo/live-wal'}, flush_op_timeout: '5m'}, storage: {trace: {}}};
+  const configs = {tempo: structuredClone(original)};
+  const profile = runInNewContext(`(() => {${source.slice(start, end)}return tempoProfile;})()`, {configs, structuredClone});
+  assert.deepEqual(configs.tempo, original);
+  assert.equal(profile.live_store.flush_op_timeout, '30s');
+  assert.equal(profile.live_store.wal.path, original.live_store.wal.path);
+  const readKnobs = runInNewContext(`(() => {${source.slice(readerStart, readerEnd)}return readTempoKnobs;})()`, {
+    api: async () => profile, baseUrls: {}, parseTempoStatusConfigResponse: value => value, durationMilliseconds,
+  });
+  const effective = await readKnobs();
+  assert.equal(effective.cleanup, 30000);
+  const check = value => runInNewContext(`(async () => {${source.slice(checkStart, checkEnd)}})()`, {
+    readTempoKnobs: async () => value, Error,
+  });
+  await check(effective);
+  await assert.rejects(check({...effective, cleanup: 300000}), /fixture retention profile was not effective/u);
+});
+
+void test('restoration preserves proof failure and reports both failures without a false pass', async () => {
+  const source = await readFile(new URL('../../tools/observability/verify.mjs', import.meta.url), 'utf8');
+  const restorations = [
+    {name: 'backup', variable: 'backupRestorationError', first: 'fixtureCompose.volumes = originalVolumes;'},
+    {name: 'Loki retention', variable: 'lokiRestorationError', first: 'await writeLokiConfig(originalLokiConfig);'},
+    {name: 'Prometheus retention', variable: 'prometheusRestorationError', first: 'services.prometheus.command = originalPrometheusCommand;'},
+    {name: 'Tempo retention', variable: 'tempoRestorationError', first: 'await writeTempoConfig(originalTempoConfig);'},
+  ];
+  for (const {name, variable, first} of restorations) {
+    const position = source.indexOf(first);
+    const start = source.lastIndexOf('} finally {', position);
+    const statement = `if (${variable}) throw ${variable};`;
+    const end = source.indexOf(statement, position) + statement.length;
+    assert.ok(position >= 0 && start >= 0 && end > position);
+    for (const [proofFails, restoreFails] of [[false, false], [true, false], [false, true], [true, true]]) {
+      const cleanupErrors = [];
+      const restore = () => { if (restoreFails) throw new Error('restore failure'); };
+      const fixtureCompose = {set volumes(_value) { restore(); }};
+      const context = {
+        Error, cleanupErrors, cleanError: error => error.message,
+        proof: () => { if (proofFails) throw new Error('proof failure'); },
+        fixtureCompose, originalVolumes: {}, backendStopStarted: false,
+        writeLokiConfig: restore, writeTempoConfig: restore, originalLokiConfig: {}, originalTempoConfig: {},
+        recreateBackend() {}, readLokiKnobs: () => ({}), readTempoKnobs: () => ({}),
+        originalLokiKnobs: {}, originalTempoKnobs: {}, originalLokiHash: 'same', originalTempoHash: 'same',
+        createHash: () => ({update: () => ({digest: () => 'same'})}), readFile: async () => '', backendConfigPaths: {},
+        services: {prometheus: {}}, originalPrometheusCommand: [], saveCompose: restore,
+        api: async () => ({data: {}}), baseUrls: {}, loadYaml: () => ({services: {prometheus: {command: []}}}),
+        composeFile: '', profileFlagNames: [], originalFlags: {}, profileHash: () => 'same',
+      };
+      const execute = runInNewContext(`(async () => { let ${variable}; try { await proof(); ${source.slice(start, end)} })`, context);
+      if (proofFails || restoreFails) {
+        await assert.rejects(execute(), error => error.message === (proofFails ? 'proof failure' : 'restore failure'), name);
+      } else await execute();
+      assert.deepEqual(cleanupErrors, restoreFails ? [`${name} restore: restore failure`] : [], name);
+      if (restoreFails) assert.equal(observabilityGateComplete({cleanupErrors}), false, name);
+    }
+  }
+});
+
+void test('G14 cannot pass with a missing or incomplete required phase', () => {
+  const pass = {status: 'PASS'};
+  const evidence = {cleanupErrors: [], phases: Object.fromEntries(['startup', 'signals', 'alerts', 'outage', 'persistence',
+    'backupRestore', 'runtimeMatrix', 'memory', 'retention', 'launchPath', 'diskRecovery'].map(name => [name, 'PASS'])),
+    alertTransitions: 'PASS', launchPathCorrelation: 'PASS', nativeNginxAlert: pass, redactionScan: pass,
+    networkIsolation: {status: 'PASS', launchPathNetworkStatus: 'PASS'},
+    telemetryHealth: {dockerLogRotation: pass, producerLoggingPolicy: pass, collectorLoggingPolicy: pass,
+      launchPathCollectorConfig: 'PASS', launchPathOutageStatus: 'PASS', collectorMemoryProof: pass},
+    collectorQueueMetrics: pass, processCounterRestart: pass, diskPressureStatus: 'PASS',
+    diskPressure: {status: 'PASS', backends: Object.fromEntries(['loki', 'grafana', 'prometheus', 'tempo'].map(name => [name, {status: 'PASS'}]))}, runtimeShutdownStatus: 'PASS'};
+  assert.equal(observabilityGateComplete(evidence), true);
+  for (const name of ['loki', 'grafana', 'prometheus', 'tempo']) {
+    delete evidence.diskPressure.backends[name];
+    assert.equal(observabilityGateComplete(evidence), false, `${name} missing`);
+    evidence.diskPressure.backends[name] = {status: 'FAIL'};
+    assert.equal(observabilityGateComplete(evidence), false, `${name} failed`);
+    evidence.diskPressure.backends[name] = {status: 'PASS'};
+  }
+  evidence.diskPressure.status = 'FAIL';
+  assert.equal(observabilityGateComplete(evidence), false, 'aggregate disk pressure failed');
+  evidence.diskPressure.status = 'PASS';
+  delete evidence.phases.backupRestore;
+  assert.equal(observabilityGateComplete(evidence), false);
+  evidence.phases.backupRestore = 'PASS';
+  delete evidence.phases.retention;
+  assert.equal(observabilityGateComplete(evidence), false);
+  evidence.phases.retention = 'PARTIAL';
+  assert.equal(observabilityGateComplete(evidence), false);
+  evidence.phases.retention = 'PASS';
+  evidence.cleanupErrors.push('cleanup failed');
+  assert.equal(observabilityGateComplete(evidence), false);
+});
+
+void test('Prometheus native WAL failure counter is unambiguous', () => {
+  assert.equal(parsePrometheusWalFailures('# HELP prometheus_tsdb_wal_writes_failed_total test\nprometheus_tsdb_wal_writes_failed_total 2\n'), 2);
+  assert.throws(() => parsePrometheusWalFailures(''), /unavailable or ambiguous/u);
+  assert.throws(() => parsePrometheusWalFailures('prometheus_tsdb_wal_writes_failed_total 1\nprometheus_tsdb_wal_writes_failed_total 2\n'), /unavailable or ambiguous/u);
+});
+
+void test('Grafana initial generation rejects a hidden restart even when healthy', async () => {
+  const {assertGrafanaGeneration} = await import('../../tools/observability/verify.mjs');
+  const initial = {Id: 'a'.repeat(64), RestartCount: 0, State: {StartedAt: 'start', Running: true, OOMKilled: false}};
+  assert.doesNotThrow(() => assertGrafanaGeneration(initial, initial));
+  assert.throws(() => assertGrafanaGeneration(initial, {...initial, RestartCount: 1}), /Grafana crossed/u);
+  assert.throws(() => assertGrafanaGeneration(initial, {...initial, State: {...initial.State, StartedAt: 'restarted'}}), /Grafana crossed/u);
+  assert.throws(() => assertGrafanaGeneration({...initial, RestartCount: 1}, {...initial, RestartCount: 1}), /Grafana crossed/u);
+});
+
+void test('Alloy refusal counter can be absent only before a verified first refusal', async () => {
+  const now = Math.floor(Date.now() / 1000);
+  const state = {StartedAt: new Date((now - 20) * 1000).toISOString(), Running: true, OOMKilled: false};
+  const generation = {id: 'collector-id', state};
+  const run = args => args[0] === 'exec' ? '' : args[2] === '{{.Id}}' ? generation.id : JSON.stringify(state);
+  const fetchImpl = async url => {
+    const expression = url.searchParams.get('query');
+    const absent = expression.includes('refused_spans');
+    const value = expression.startsWith('timestamp(') ? String(now) : '1';
+    return new Response(JSON.stringify({status: 'success', data: {resultType: 'matrix', result: absent ? [] : [
+      {metric: {service_name: 'otel-collector', component_id: 'otelcol.processor.memory_limiter.main'}, values: [[now, value]]},
+    ]}}));
   };
-  const definition = createAlertDefinitions({config}).find(rule => rule.key === 'notReady');
-  await installNativeAlert({baseUrl: 'http://127.0.0.1:5080', organization: 'coffee', authorization: 'Basic fixture', definition, fetchImpl});
-  assert.equal(requests.length, 1);
-  assert.equal(requests[0].url, '/api/v2/coffee/alerts');
-  assert.equal(requests[0].method, 'POST');
-  assert.equal(requests[0].body.name, 'g14-v1-service-not-ready');
-  assert.equal(requests[0].body.query_condition.promql, definition.queryCondition.promql);
+  const options = {baseUrl: 'http://prometheus:9090', config: {platform: {health: {timeoutMs: 1000}},
+    telemetry: {collector: {healthEndpoint: 'http://otel-collector:13133'}}}, run, name: 'collector-id', generation, fetchImpl};
+  const baseline = await collectorMemorySelfTelemetry({...options, allowUnmaterializedRefused: true});
+  assert.equal(baseline.counters.accepted, 1);
+  assert.equal(baseline.counters.refused, 0);
+  assert.equal(baseline.refusedNotMaterialized, true);
+  await assert.rejects(collectorMemorySelfTelemetry(options), /refused counter unavailable/u);
+  await assert.rejects(collectorMemorySelfTelemetry({...options, allowUnmaterializedRefused: true,
+    generation: {id: 'different', state}}), /crossed a process generation/u);
+});
+
+void test('Alloy queue evidence uses matching component and signal', () => {
+  assert.equal(isExporterMetricForSignal({component_id: 'otelcol.exporter.otlphttp.metrics', data_type: 'metrics'}, 'otelcol_exporter_queue_size'), true);
+  assert.equal(isExporterMetricForSignal({component_id: 'otelcol.exporter.otlphttp.metrics', data_type: 'logs'}, 'otelcol_exporter_queue_size'), false);
+  assert.equal(isExporterMetricForSignal({component_id: 'otelcol.exporter.otlphttp.logs'}, 'otelcol_exporter_send_failed_log_records'), true);
+  assert.equal(isExporterMetricForSignal({component_id: 'otelcol.exporter.otlphttp.metrics'}, 'otelcol_exporter_send_failed_log_records'), false);
+  assert.equal(isExporterMetricForSignal({component_id: 'otelcol.exporter.otlphttp.metrics'}, 'otelcol_exporter_queue_size'), false);
+});
+
+void test('Loki native WAL usage is a ratio and requires unambiguous counters', () => {
+  assert.deepEqual(parseLokiWalMetrics('loki_ingester_wal_disk_full_failures_total 3\nloki_ingester_wal_disk_usage_percent 0.81\n'),
+    {failures: 3, usageRatio: 0.81});
+  assert.throws(() => parseLokiWalMetrics('loki_ingester_wal_disk_full_failures_total 3\nloki_ingester_wal_disk_usage_percent 81\n'), /ratio is invalid/u);
+  assert.throws(() => parseLokiWalMetrics('loki_ingester_wal_disk_full_failures_total 3\n'), /unavailable or ambiguous/u);
+});
+
+void test('Grafana hold windows use the episode start rather than delayed webhook arrival', () => {
+  const started = '2026-10-30T10:00:00.000Z';
+  assert.equal(alertEpisodeStartMs(`0123456789abcdef:${started}`), Date.parse(started));
+  assert.ok(Number.isNaN(alertEpisodeStartMs(`invalid:${started}`)));
+});
+
+void test('G14 cannot pass when required evidence cannot be written', async () => {
+  const evidence = {status: 'PASS'};
+  await persistVerificationResult({root: '/fixture', evidence, secrets: [], persist: async () => { throw new Error('disk full'); }});
+  assert.equal(evidence.status, 'FAIL');
+  assert.equal(evidence.failure, 'cannot persist evidence: disk full');
+  assert.equal(evidence.evidenceDirectory, undefined);
+});
+
+void test('Alloy native logfmt retry expiry reports the exact dropped_items field', () => {
+  const line = 'level=error msg="Exporting failed. Dropping data." component_id=otelcol.exporter.otlphttp.logs error="no more retries left: connection refused" dropped_items=128';
+  assert.deepEqual(parseCollectorExpiredRetryDrops(line), {status: 'PASS', expiredRetryDropEvents: 1, droppedItems: 128});
+  assert.deepEqual(parseCollectorExpiredRetryDrops('{"msg":"Exporting failed. Dropping data.","error":"no more retries left","dropped_items":3}'),
+    {status: 'PASS', expiredRetryDropEvents: 1, droppedItems: 3});
+  assert.throws(() => parseCollectorExpiredRetryDrops(line.replace('dropped_items=128', 'other_dropped_items=128')));
+  assert.throws(() => parseCollectorExpiredRetryDrops(line.replace('dropped_items=128', 'dropped_items=128x')));
 });

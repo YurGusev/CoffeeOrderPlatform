@@ -32,8 +32,9 @@ business durability. Техническую authority задаёт
 #4 + #5 + #7 + #8 + #17 + #18 + #119 ─────────┘
 #10 + #16 + #18 + #8 + #63 → #11 convergence
 #8 + #9 + #11 + #63 → #12 Realtime
-#12 + #63 → #64 Operations/observability
-#5..#12 + #16..#18 + #64 → #13 Launch gates → завершает #1
+#12 + #63 → #64 Operations/producer foundation
+#64 + #209 → #210 Grafana observability migration → #13
+#5..#12 + #16..#18 + #64 + #210 → #13 Launch gates → завершает #1
 ```
 
 #119 принимает frontend recovery/deep-link уточнение до #4. Оно использует
@@ -43,9 +44,12 @@ implementation и использует contract fixtures. Ready определя
 inputs, а не только историческим #60;
 #4 остаётся blocked до merge/handoff #119. Остальные сохраняют свои prerequisites.
 Observability не блокирует business implementation; Operations принимает реальные
-instrumentation points после #12 и обеспечивает полный G14 до #13.
-Единственный evidence path — `pnpm test:observability` и
-`evidence/handoffs/issue-64.yaml`; наличие producer/config не заменяет PASS G14.
+instrumentation points после #12. #64 сохраняется как producer foundation; #210
+владеет заменой OpenObserve-специфической реализации и пока проверяется.
+Исторический `evidence/handoffs/issue-64.yaml` неизменен; после приёмки #210
+полный #13 требует также его merged handoff. Component G12/G14 #210 проверяются
+до merge без зависимости от собственного будущего handoff; producer/config не
+заменяют PASS G14.
 [Runbook Operations](../operations/observability.md) описывает границы проверки.
 
 #136 поставляет только ADR, UX-макеты и согласованные нормативные документы.
@@ -148,8 +152,9 @@ collector.
 | #9 | #4, #5, #7, #8, #17, #18, #119, #137, #162 | один `QueryClient`, project-owned fetch/client-v1 runtime validation + React operator flow → #12, #13 |
 | #11 | #10, #16, #18, #8, #63 | этап A: backend grind contract → integration gate #9; этап B: observer/convergence/UnknownOutcome → #12, #13 |
 | #12 | #8, #9, #11, #63, #119, #160, #162 | single-instance SSE invalidation/refetch → #64, #13 |
-| #64 | #4, #61, #62, #63, #12, #162 | Pino/OTel + native applicability, Collector/OpenObserve, alerts/storage/redaction → G14 #13 |
-| #13 | все outputs выше, #119, #162 | verified release evidence → закрытие #1 |
+| #64 | #4, #61, #62, #63, #12, #162 | историческая producer foundation, Pino/OTel, native applicability и redaction → #210, #13 |
+| #210 | #64, [PR #209](https://github.com/YurGusev/CoffeeOrderPlatform/pull/209) как принятая base | миграция observability по ADR-0040; после приёмки handoff → G14 #13 |
+| #13 | все outputs выше, #119, #162, принятый handoff #210 | verified release evidence → закрытие #1 |
 
 Для #9/#11 действует [контракт параллельной разработки](30_AROMA_GRIND_CONTRACT_AND_PARALLEL_DELIVERY.md):
 полный #11 не блокирует старт #9; этап A #11 поставляет общий контракт помола

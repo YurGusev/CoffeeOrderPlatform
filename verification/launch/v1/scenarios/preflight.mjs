@@ -10,7 +10,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 const REPOSITORY = "YurGusev/CoffeeOrderPlatform";
 const REQUIRED_ISSUES = [
   2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 14, 16, 17, 18, 19, 60, 61, 62, 63, 64,
-  119, 162,
+  119, 162, 210,
 ];
 const SUPPLEMENTED_ISSUES = [2, 3, 10, 14, 19, 162];
 const HANDOFF_SUPPLEMENT_PATH =

@@ -14,6 +14,7 @@
   "sourceMapJs": "1.2.2",
   "undici": "8.12.3",
   "postgresql": "17.11",
+  "postgresFixtureImage": "postgres:17.11@sha256:2d2b8998d31037bf721cfdf764d76ba74171b4fab3431b7f72c27c56ddbdf9e3",
   "pg": "8.23.0",
   "libphonenumberJs": "1.13.12",
   "kafka": "4.3.2",
@@ -71,8 +72,45 @@
   "opentelemetryContextAsyncHooks": "2.12.0",
   "opentelemetryExporterTraceOtlpHttp": "0.223.0",
   "opentelemetryExporterMetricsOtlpHttp": "0.223.0",
-  "otelCollectorImage": "otel/opentelemetry-collector-contrib:0.163.2@sha256:7f22d2a6748110ffb6a59bc0df448bccbf501cdb667d610ede4c61d3863d5849",
-  "openObserveImage": "public.ecr.aws/zinclabs/openobserve:v1.1.0@sha256:e4d0022fde1d51c15a7ec845f53d5aa69ecec5ad636f77d57cffd50c98a02ed7",
+  "alloy": "1.21.3",
+  "otelCollectorImage": "grafana/alloy:v1.21.3@sha256:8ab871206bd2d8f89277f53abffee5f452a293980788d52f85fa183a87a505a4",
   "bootstrapProbeSha256": "dbac288c29ba568459550a2da9e7ae0ded6b1fc728ee9fad3044c44e62d6ac14",
-  "browserHelperNodeImage": "node:26.8.1-trixie-slim@sha256:c0753125a3789977aefe869cbebccf70e3cfd7ea84ca48547458f02e4f1d7146"
+  "browserHelperNodeImage": "node:26.8.1-trixie-slim@sha256:c0753125a3789977aefe869cbebccf70e3cfd7ea84ca48547458f02e4f1d7146",
+  "grafanaImage": "grafana/grafana:13.3.0-slim@sha256:a66f098dd9b2e1b5a19287ff176db02d895122488c6e39b3dfcd3fb897039225",
+  "lokiImage": "grafana/loki:3.7.9@sha256:0db216b630ae1f348a1584c67f3cead8b4c1fc839169a39501db664744158e28",
+  "prometheusImage": "prom/prometheus:v3.15.1@sha256:fa3302279710be2f21a8301ec17a8b4f2301fd829bd113839b3b6b02b6f191a2",
+  "tempoImage": "grafana/tempo:main-a0826bc-2302-1@sha256:80ecf3e356e96c0914332ab100099fad780adff977e4a5178168b6eb01ebac14",
+  "tempoVersion": "3.2.0-dev",
+  "grafanaPlugins": {
+    "loki": {
+      "version": "13.2.5",
+      "zipSha256": "982cfb81977352db65404cec671952453454643bd9a6c883041c38be519a74ea",
+      "manifestSha256": "4f380fa2a2b68b97e4f5c079fe375a4dfbe84c63cf262a44d6795179ae5865b9",
+      "binarySha256": "b6b6289006a1d914c51b39f40a72fcdccc597a4b41588d09094b6a3dbcaa932f"
+    },
+    "tempo": {
+      "version": "13.4.1",
+      "zipSha256": "08b0de5ed46b3b60693b41495bc00633ae63c3f2e76faa819c7fa95a4dbbc529",
+      "manifestSha256": "7c6d68297c3c30623c2f123aeef4e5163de98351af3f31557d72c6796516c9c4",
+      "binarySha256": "292f1875dbcc18125701cca2762da7e65300a4ca3ea3c4105f24b7cd57694588"
+    },
+    "prometheus": {
+      "version": "13.2.5",
+      "zipSha256": "d24df3eaff9ae61f00d7e857f508fc306912dcf50d657150d1e472e851799fc4",
+      "manifestSha256": "9585b01c2a98a216e643f2be3de6f62d615c8a00c348ca046d7216b36deda692",
+      "binarySha256": "f1458b7bacfee8ccd1be3e73ff463409c74acefc582e6f89cfac3cb013a1d900"
+    }
+  },
+  "grafanaSigningKeySourceSha256": "010f8c4bc078a6b11be3f7a902c90a559a13e2e6f44c4d5632f01b9e8e6e68a2",
+  "grafanaSigningKeyFingerprint": "F33B25B691074E84636570F37E4D0C6A708866E7",
+  "grafanaTempoModule": {
+    "version": "v1.5.1-0.20260910130453-bcfe9f230c1d",
+    "h1": "h1:BphMCaYqWY+j1fdRPNFPkYE4A4QIev1KlHjRkSVJ8O4=",
+    "revision": "bcfe9f230c1de0f79cfd2110b38062e0f41c81e9",
+    "fixCommits": [
+      "650eb1985a0776789c8564122990f588a742356f",
+      "bb8ca663db34a0980c9758b40d918fda3b4dbec3"
+    ],
+    "replacement": null
+  }
 }

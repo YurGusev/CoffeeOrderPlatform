@@ -23,13 +23,24 @@ import { availableParallelism, totalmem, cpus } from "node:os";
 import { load as yaml, dump } from "js-yaml";
 import Ajv2020 from "ajv/dist/2020.js";
 import { deriveRuntimeKafkaTarget } from "../../../packages/platform-config/dist/index.js";
-import { readBrowserFixtureLineage } from "../../../tools/config-bootstrap/browser-fixture.mjs";
-import {
-  loadVerifiedGateImage,
-  removeVerifiedGateImage,
-} from "../../../tools/verified-infrastructure-image.mjs";
-import { validateLaunchContext } from "../../../verification/launch/v1/report.mjs";
 import { isoNow, FULL, THRESHOLDS } from "./protocol.mjs";
+
+const readBrowserFixtureLineage = async (...args) =>
+  (
+    await import("../../../tools/config-bootstrap/browser-fixture.mjs")
+  ).readBrowserFixtureLineage(...args);
+const validateLaunchContext = async (...args) =>
+  (
+    await import("../../../verification/launch/v1/report.mjs")
+  ).validateLaunchContext(...args);
+const loadVerifiedGateImage = async (...args) =>
+  (
+    await import("../../../tools/verified-infrastructure-image.mjs")
+  ).loadVerifiedGateImage(...args);
+const removeVerifiedGateImage = async (...args) =>
+  (
+    await import("../../../tools/verified-infrastructure-image.mjs")
+  ).removeVerifiedGateImage(...args);
 
 export const ROOT = resolve(import.meta.dirname, "../../..");
 export const LABEL = "coffee.realtime.fixture";
@@ -1355,7 +1366,7 @@ export async function prepare(resultDir, options) {
     };
   } catch (error) {
     try {
-      removeVerifiedGateImage({ target: "kafka", image: kafkaArtifact });
+      await removeVerifiedGateImage({ target: "kafka", image: kafkaArtifact });
     } catch (cleanupError) {
       throw new AggregateError(
         [error, cleanupError],
@@ -1595,7 +1606,7 @@ export async function erasePrivate(resultDir) {
           "realtime Kafka cleanup identity drift",
         );
       assert.equal(typeof manifest.kafkaSupplyChain.imported, "boolean");
-      removeVerifiedGateImage({
+      await removeVerifiedGateImage({
         target: "kafka",
         image: { ...image, imported: manifest.kafkaSupplyChain.imported },
       });

@@ -22,7 +22,7 @@ const RUNTIME_FIELDS = new Set([
   "transportMode",
 ]);
 const CATALOG_DIGEST =
-  "9f65073da602ff012c7920a4c1ff217e165c4a738f808fa2fbaf3a693da606f8";
+  "cb52a0fad25b43bf9a847789169fd4af6cc66fe8131bd7420538fe1557d1b562";
 const INTERACTIONS_DIGEST =
   "3bfe1143f7f31cfae8262eed6f8d8bdb467a35d786ac0d143b8e0b75d806220b";
 
