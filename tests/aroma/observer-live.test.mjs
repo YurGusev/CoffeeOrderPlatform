@@ -18,6 +18,7 @@ import {
   verifyTransportPeer,
 } from "../../packages/platform-security/dist/index.js";
 import { createAromaObserverComposition } from "../../apps/aroma-observer/dist/runtime-composition.js";
+import { createAromaConvergenceComposition } from "../../apps/aroma-convergence/dist/runtime-composition.js";
 import {
   normalizeAromaCartSnapshot,
   isAromaOwnerMessage,
@@ -582,7 +583,8 @@ void test(
 
 // Separate database/domain fixture: prerequisite observations/events above are
 // never treated as real domain history for the store behavioral proofs.
-async function withObserverDomain(run) {
+async function withObserverDomain(run, owner = "aroma-observer") {
+  const role = owner === "aroma-observer" ? "coffee_orders_observer_rw" : "coffee_orders_convergence_rw";
   return withCatalogPostgres(async ({ adminClient, port }) => {
     const passwords = new Map();
     for (const role of ["coffee_orders_migrator", ...ROLES]) {
@@ -620,16 +622,16 @@ async function withObserverDomain(run) {
       }
     };
     const migrator = await connect("coffee_orders_migrator");
-    const observer = await connect("coffee_orders_observer_rw");
+    const observer = await connect(role);
     const databaseAt = (targetPort) =>
       createDatabase({
-        owner: "aroma-observer",
+        owner,
         database: "coffee_platform_orders",
         allowedDatabase: "coffee_platform_orders",
         host: "127.0.0.1",
         port: targetPort,
-        user: "coffee_orders_observer_rw",
-        password: passwords.get("coffee_orders_observer_rw"),
+        user: role,
+        password: passwords.get(role),
         ssl: false,
         pool: POOL,
         shutdownGraceMs: 40_000,
@@ -653,7 +655,7 @@ async function withObserverDomain(run) {
             "SELECT current_user AS name,rolsuper FROM pg_roles WHERE rolname=current_user",
           )
         ).rows[0],
-        { name: "coffee_orders_observer_rw", rolsuper: false },
+        { name: role, rolsuper: false },
       );
       await runtime.resource.start(signal());
       return await run({ runtime, observer, migrator, databaseAt, port });
@@ -665,8 +667,8 @@ async function withObserverDomain(run) {
   });
 }
 
-void test(
-  "observer readiness remains available during a held business request",
+for (const owner of ["aroma-observer", "aroma-convergence"]) void test(
+  `${owner} readiness remains available during a held business request`,
   {
     timeout: 180_000,
     skip:
@@ -750,13 +752,14 @@ void test(
         runtime,
       );
     };
-    const observerTls = await material("aroma-observer"),
+    const runtimeTls = await material(owner),
       internalTls = await material("api-internal");
     const businessArrived = Promise.withResolvers(),
       businessClosed = Promise.withResolvers();
     const readinessClosed = Promise.withResolvers();
     let readinessRequests = 0,
-      holdReadiness = false;
+      holdReadiness = false,
+      businessOpen = false;
     const server = createHttpsServer(
       {
         key: internalTls.keyPem,
@@ -770,11 +773,12 @@ void test(
         verifyTransportPeer(
           request.socket.getPeerCertificate(),
           "development",
-          "aroma-observer",
+          owner,
         );
         if (request.url === "/api/internal-v1/aroma/cart-snapshots:read") {
           assert.equal(request.method, "POST");
-          response.once("close", () => businessClosed.resolve());
+          businessOpen = true;
+          response.once("close", () => { businessOpen = false; businessClosed.resolve(); });
           businessArrived.resolve();
           return;
         }
@@ -814,18 +818,25 @@ void test(
         parseYaml,
       ),
     );
-    config.services["aroma-observer"].outbound = [
+    config.services[owner].outbound = [
       `api-internal:${address.port}`,
     ];
-    const receipt = await withObserverDomain(async ({ runtime }) => {
-      const composition = createAromaObserverComposition();
-      const kafka = { relay: async () => {} };
+    const receipt = await withObserverDomain(async ({ runtime, migrator }) => {
+      if (owner === "aroma-convergence") {
+        await migrator.query("BEGIN");
+        await migrator.query("INSERT INTO orders.cart_desired_revisions VALUES($1,1,'Current',$2,0,transaction_timestamp())", ["aroma-primary", fingerprint]);
+        await migrator.query("INSERT INTO orders.cart_desired_lines VALUES($1,1,$2,NULL,1000,$3,'[]'::jsonb)", ["aroma-primary", "off_00000000000000000000000001", fingerprint]);
+        await migrator.query("INSERT INTO orders.convergence_work(cart_scope_ref,desired_revision,reason,next_attempt_at) VALUES($1,1,'Recovery',transaction_timestamp())", ["aroma-primary"]);
+        await migrator.query("COMMIT");
+      }
+      const composition = owner === "aroma-observer" ? createAromaObserverComposition() : createAromaConvergenceComposition();
+      const kafka = { bind: () => {}, relay: async () => {} };
       const app = await createRuntime({
-        name: "aroma-observer",
+        name: owner,
         host: "127.0.0.1",
         port: 0,
         shutdownGraceMs: 5000,
-        health: config.services["aroma-observer"].health,
+        health: config.services[owner].health,
         readinessChecks: composition.readinessChecks,
         resources: composition.resources,
         configure: (app, signal) =>
@@ -834,10 +845,10 @@ void test(
             secrets: {
               security: {
                 serviceTransportKeys: {
-                  "aroma-observer": JSON.stringify({
-                    keyPem: observerTls.keyPem,
-                    certPem: observerTls.certPem,
-                    caPem: observerTls.caPem,
+                  [owner]: JSON.stringify({
+                    keyPem: runtimeTls.keyPem,
+                    certPem: runtimeTls.certPem,
+                    caPem: runtimeTls.caPem,
                   }),
                 },
               },
@@ -855,7 +866,13 @@ void test(
             ).unref(),
           ),
         ]);
+        assert.equal(businessOpen, true);
+        if (owner === "aroma-convergence") {
+          const attempts = await migrator.query("SELECT state, desired_revision::text AS revision FROM orders.convergence_attempts");
+          assert.deepEqual(attempts.rows, [{ state: "Started", revision: "1" }]);
+        }
         const ready = await app.inject("/health/ready");
+        assert.equal(businessOpen, true);
         assert.equal(ready.statusCode, 200);
         assert.equal(readinessRequests, 1);
         holdReadiness = true;
@@ -872,6 +889,7 @@ void test(
         holdReadiness = false;
         assert.equal((await app.inject("/health/ready")).statusCode, 200);
         assert.equal(readinessRequests, 3);
+        assert.equal(businessOpen, true);
       } finally {
         assert.deepEqual(await app.runtimeController.closeRuntime("SIGTERM"), {
           status: "stopped",
@@ -888,7 +906,7 @@ void test(
         ),
       ]);
       return {};
-    });
+    }, owner);
     assert.equal(receipt.cleanup.containerRemoved, true);
   },
 );

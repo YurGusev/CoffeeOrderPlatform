@@ -22,6 +22,16 @@ function basicAuthorization(email, password) {
   return `Basic ${Buffer.from(`${email}:${password}`).toString('base64')}`;
 }
 
+export function parseTempoStatusConfigResponse(text) {
+  const prefix = 'GET /status/config\n---\n';
+  if (typeof text !== 'string' || !text.startsWith(prefix))
+    throw new Error('Tempo configuration status response header invalid');
+  const config = loadYaml(text.slice(prefix.length));
+  if (config === null || typeof config !== 'object' || Array.isArray(config))
+    throw new Error('Tempo configuration status response must contain a mapping');
+  return config;
+}
+
 function verifyDockerLogRotation({run, nodeImage, logFile, maxFiles, maxSizeMiB, maxRecordBytes}) {
   const baseName = basename(logFile.logPath);
   const suffixes = Array.from({length: maxFiles + 1}, (_, suffix) => suffix);
@@ -126,6 +136,14 @@ function containerGeneration({run, name}) {
     id: run(['inspect', '--format', '{{.Id}}', name]),
     state: JSON.parse(run(['inspect', '--format', '{{json .State}}', name])),
   };
+}
+
+export function assertGrafanaGeneration(initial, current) {
+  if (!initial || !current || !/^[a-f0-9]{64}$/u.test(initial.Id ?? '') ||
+      !initial.State?.StartedAt || initial.RestartCount !== 0 || initial.State.Running !== true || initial.State.OOMKilled !== false ||
+      current.Id !== initial.Id || current.State?.StartedAt !== initial.State.StartedAt || current.RestartCount !== 0 ||
+      current.State.Running !== true || current.State.OOMKilled !== false)
+    throw new Error('Grafana crossed its initial process generation or became unhealthy');
 }
 
 export function stopContainerGracefully({run, name, graceMs}) {
@@ -1247,6 +1265,11 @@ export function observabilityVerificationCoverage(evidence) {
   };
 }
 
+function diskPressureComplete(evidence) {
+  return evidence.diskPressureStatus === 'PASS' && evidence.diskPressure?.status === 'PASS' && ['loki', 'grafana', 'prometheus', 'tempo']
+    .every(name => evidence.diskPressure?.backends?.[name]?.status === 'PASS');
+}
+
 async function persistEvidence({root, evidence, secrets = []}) {
   const dir = join(root, 'evidence/observability', evidence.runId);
   const sanitize = value => secrets.reduce((result, secret) => secret ? result.replaceAll(secret, '[REDACTED]') : result, value);
@@ -1279,7 +1302,7 @@ async function persistEvidence({root, evidence, secrets = []}) {
     evidence.telemetryHealth?.collectorMemoryProof?.status,
     evidence.collectorQueueMetrics?.status,
     evidence.processCounterRestart?.status,
-    evidence.diskPressureStatus, evidence.nativeNginxAlert?.status,
+    diskPressureComplete(evidence) ? 'PASS' : 'NOT_RUN', evidence.nativeNginxAlert?.status,
   ];
   const runtimeHealthStatus = runtimeHealthGates.every(status => status === 'PASS') && outage ? 'PASS' : evidence.status === 'FAIL' ? 'FAIL' : 'NOT_RUN';
   const documents = {
@@ -1296,7 +1319,7 @@ async function persistEvidence({root, evidence, secrets = []}) {
       collectorMemoryDiagnostics: evidence.telemetryHealth?.collectorMemoryDiagnostics ?? {},
       processCounterRestart: evidence.processCounterRestart ?? {},
     }),
-    'retention-result.json': statusArtifact(typeof evidence.retention === 'object' && evidence.retention.ttlRemovedRecord && evidence.diskPressureStatus === 'PASS' ? 'PASS' : 'NOT_RUN', {
+    'retention-result.json': statusArtifact(typeof evidence.retention === 'object' && evidence.retention.ttlRemovedRecord && diskPressureComplete(evidence) ? 'PASS' : 'NOT_RUN', {
       ...(typeof evidence.retention === 'object' ? evidence.retention : {}), diskPressure: evidence.diskPressure ?? {},
     }),
     'runtime-health-matrix.json': statusArtifact(runtimeHealthStatus, {
@@ -1347,7 +1370,7 @@ export function observabilityGateComplete(evidence) {
     evidence.telemetryHealth?.launchPathOutageStatus, evidence.telemetryHealth?.collectorMemoryProof?.status,
     evidence.collectorQueueMetrics?.status, evidence.processCounterRestart?.status, evidence.diskPressureStatus, evidence.runtimeShutdownStatus];
   return Array.isArray(evidence.cleanupErrors) && evidence.cleanupErrors.length === 0 &&
-    phases.every(phase => evidence.phases?.[phase] === 'PASS') && required.every(status => status === 'PASS');
+    phases.every(phase => evidence.phases?.[phase] === 'PASS') && required.every(status => status === 'PASS') && diskPressureComplete(evidence);
 }
 
 export function alertEpisodeStartMs(episodeId) {
@@ -1368,6 +1391,16 @@ export function parseLokiWalMetrics(text) {
   const usageRatio = readMetric('loki_ingester_wal_disk_usage_percent');
   if (usageRatio > 1) throw new Error('Loki native WAL disk usage ratio is invalid');
   return {failures, usageRatio};
+}
+
+export function parsePrometheusWalFailures(text) {
+  const values = text.split('\n').flatMap(line => {
+    const match = /^prometheus_tsdb_wal_writes_failed_total(?:\{[^}]*\})?\s+([0-9.eE+-]+)(?:\s|$)/u.exec(line);
+    return match ? [Number(match[1])] : [];
+  });
+  if (values.length !== 1 || !Number.isSafeInteger(values[0]) || values[0] < 0)
+    throw new Error('Prometheus native WAL failure counter unavailable or ambiguous');
+  return values[0];
 }
 
 export function durationMilliseconds(value) {
@@ -1489,11 +1522,16 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
     compose(['up', '-d', 'grafana', 'loki', 'prometheus', 'tempo', 'alert-sink', 'otel-collector']);
     const containerIds = {};
     const baseUrls = {};
+    let grafanaGeneration;
     for (const name of ['grafana', 'loki', 'prometheus', 'tempo', 'otel-collector']) {
       const id = compose(['ps', '--quiet', name]).trim();
       if (!/^[a-f0-9]{12,64}$/u.test(id)) throw new Error(`${name} container identity unavailable`);
       containerIds[name] = id;
       const info = JSON.parse(run(['inspect', id]))[0];
+      if (name === 'grafana') {
+        assertGrafanaGeneration(info, info);
+        grafanaGeneration = info;
+      }
       const expectedNetworks = (name === 'otel-collector' ? [backendNetwork, producerNetwork] : [backendNetwork]).sort();
       const actualNetworks = Object.keys(info?.NetworkSettings?.Networks ?? {}).sort();
       if (info?.State?.Running !== true || Object.values(info.HostConfig?.PortBindings ?? {}).flat().length !== 0 ||
@@ -1662,6 +1700,7 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
       }
     }
 
+    assertGrafanaGeneration(grafanaGeneration, JSON.parse(run(['inspect', containerIds.grafana]))[0]);
     startPhase('runtimeMatrix');
     const {verifyRuntimeMetricMatrix} = await import('../../tests/observability/runtime-matrix.mjs');
     const matrixProject = validatedLaunch.context.resources.composeProject;
@@ -2144,7 +2183,7 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
         if (!['TimeoutError', 'AbortError'].includes(error?.name)) throw error;
         attemptedResponse = 'TIMEOUT_UNKNOWN_ACK';
       }
-      evidence.diskPressure = {status: 'RUNNING', requestOutcome: attemptedResponse};
+      evidence.diskPressure = {status: 'RUNNING', backends: {}, requestOutcome: attemptedResponse};
       if (!nativeFailure) {
         const after = await waitFor(async () => {
           const metrics = await nativeWalMetrics();
@@ -2173,8 +2212,146 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
       if (generationAfterRecovery.id !== lokiGeneration.id || generationAfterRecovery.state.StartedAt !== lokiGeneration.state.StartedAt ||
           generationAfterRecovery.state.Running !== true || generationAfterRecovery.state.OOMKilled === true)
         throw new Error('Loki native disk recovery crossed a process generation');
-      evidence.diskPressure = {status: 'PASS', store: 'loki', configuredPercent: config.telemetry.diskWatermarkPercent,
+      evidence.diskPressure.backends.loki = {status: 'PASS', store: 'loki', configuredPercent: config.telemetry.diskWatermarkPercent,
         nativeFailure, recoveryMarker: marker, nativeRecovery: true, fileIdentityChecked: true, sameContainerGeneration: true, sameFilesystem: true};
+      const pressureOwners = {grafana: 472, prometheus: 65534, tempo: 10001};
+      for (const name of ['grafana', 'prometheus', 'tempo']) {
+        const pressureEvidence = evidence.diskPressure.backends[name] = {status: 'RUNNING', responses: []};
+        const uid = pressureOwners[name];
+        const pressurePath = `/data/${name}-native-pressure`;
+        const writer = script => run(['run', '--rm', '--network', 'none', '--read-only', '--user', `${uid}:${uid}`, '--cap-drop', 'ALL',
+          '--security-opt', 'no-new-privileges:true', '--memory', '64m', '--pids-limit', '16',
+          '--mount', `type=volume,source=${storage[name].volumeName},target=/data`, '--entrypoint', 'node', toolchain.nodeImage, '-e', script, pressurePath]);
+        const filesystem = () => JSON.parse(writer("const f=require('node:fs'),s=f.statSync('/data'),v=f.statfsSync('/data');process.stdout.write(JSON.stringify({dev:s.dev,ino:s.ino,bavail:v.bavail,bfree:v.bfree,bsize:v.bsize}));"));
+        const processBefore = containerGeneration({run, name: containerIds[name]});
+        const assertGeneration = () => {
+          const current = containerGeneration({run, name: containerIds[name]});
+          if (current.id !== processBefore.id || current.state.StartedAt !== processBefore.state.StartedAt ||
+              current.state.Running !== true || current.state.OOMKilled !== false) throw new Error(`${name} pressure crossed a process generation`);
+        };
+        assertGeneration();
+        const makeMarker = () => ({id: newRunId(), traceId: randomBytes(16).toString('hex'), timeMs: Date.now()});
+        const sendMarker = async (marker, count = 1) => {
+          let endpoint, body;
+          if (name === 'grafana') {
+            endpoint = new URL('/api/folders', baseUrls.grafana);
+            body = {uid: `g14p${marker.id.replaceAll('-', '').slice(0, 20)}`, title: `G14 pressure ${marker.id}`};
+          } else if (name === 'prometheus') {
+            endpoint = new URL('/api/v1/otlp/v1/metrics', baseUrls.prometheus);
+            body = {resourceMetrics: [{resource: {attributes: [{key: 'service.name', value: {stringValue: `g14-disk-${marker.id}`}}]},
+              scopeMetrics: [{scope: {name: 'g14-disk-pressure'}, metrics: Array.from({length: count}, (_, i) => ({name: `g14_disk_pressure_${i}`,
+                gauge: {dataPoints: [{timeUnixNano: String(BigInt(marker.timeMs) * 1000000n), asDouble: 1}]}}))}]}]};
+          } else {
+            endpoint = new URL(`http://${new URL(baseUrls.tempo).hostname}:${new URL(config.telemetry.tempo.otlpEndpoint).port}/v1/traces`);
+            const at = BigInt(marker.timeMs) * 1000000n;
+            body = {resourceSpans: [{resource: {attributes: [{key: 'service.name', value: {stringValue: 'g14-disk-pressure'}}]},
+              scopeSpans: [{scope: {name: 'g14-disk-pressure'}, spans: Array.from({length: count}, (_, i) => ({traceId: marker.traceId,
+                spanId: randomBytes(8).toString('hex'), name: `g14.disk.pressure.${i}`, kind: 1, startTimeUnixNano: String(at), endTimeUnixNano: String(at + 1000n)}))}]}]};
+          }
+          const response = await fetch(endpoint, {method: 'POST', headers: {'content-type': 'application/json', ...(name === 'grafana' ? {authorization} : {})},
+            body: JSON.stringify(body), signal: AbortSignal.timeout(5000)});
+          return {status: response.status, body: await boundedResponseText(response, 4096)};
+        };
+        const verifyMarker = async marker => {
+          if (name === 'grafana') {
+            const uid = `g14p${marker.id.replaceAll('-', '').slice(0, 20)}`;
+            const folder = await api({baseUrl: baseUrls.grafana, authorization, path: `/api/folders/${uid}`});
+            return folder?.uid === uid && folder.title === `G14 pressure ${marker.id}`;
+          }
+          if (name === 'prometheus') {
+            const timeUs = marker.timeMs * 1000;
+            const samples = await queryPrometheusRange({baseUrl: baseUrls.prometheus,
+              expression: `g14_disk_pressure_0{service_name="g14-disk-${marker.id}"}`,
+              startTimeUs: timeUs - 5000000, endTimeUs: Math.max(Date.now() * 1000, timeUs + 5000000)});
+            return samples.some(sample => sample.value === 1 && sample._timestamp === timeUs);
+          }
+          await waitForSameTraceSpans({baseUrl: baseUrls.tempo, traceId: marker.traceId,
+            expectedSpanNames: {'g14-disk-pressure': ['g14.disk.pressure.0']}, timeoutMs: 120000});
+          return true;
+        };
+        const walFailures = async () => {
+          const response = await fetch(new URL('/metrics', baseUrls.prometheus), {signal: AbortSignal.timeout(5000)});
+          if (!response.ok) throw new Error(`Prometheus native metrics HTTP ${response.status}`);
+          return parsePrometheusWalFailures(await boundedResponseText(response, 8 * 1024 * 1024));
+        };
+        const hasDiskLog = (since, pattern) => {
+          const result = spawnSync('docker', ['logs', '--since', since, '--tail', '1000', containerIds[name]], {encoding: 'utf8', timeout: 10000, maxBuffer: 2 * 1024 * 1024});
+          if (result.error || result.status !== 0) throw new Error(`${name} native log unavailable`);
+          return `${result.stdout ?? ''}\n${result.stderr ?? ''}`.split('\n').some(line => pattern.test(line));
+        };
+        let identity;
+        const removePressure = () => {
+          if (!identity) return;
+          writer(`const f=require('node:fs'),p=process.argv[1],e=${JSON.stringify(identity)},s=f.lstatSync(p);if(!s.isFile()||s.isSymbolicLink()||s.dev!==e.dev||s.ino!==e.ino)throw Error('pressure identity changed');f.unlinkSync(p);`);
+          identity = undefined;
+        };
+        try {
+          const before = makeMarker();
+          const baselineResponse = await sendMarker(before);
+          if (![200, 201, 202, 204].includes(baselineResponse.status)) throw new Error(`${name} rejected baseline write`);
+          await waitFor(() => verifyMarker(before), {timeoutMs: 120000, intervalMs: 2000, description: `${name} baseline marker`});
+          const fsBefore = filesystem();
+          const walBefore = name === 'prometheus' ? await walFailures() : undefined;
+          Object.assign(pressureEvidence, {baseline: before, filesystemBefore: fsBefore, ...(name === 'prometheus' ? {walBefore} : {})});
+          identity = JSON.parse(writer("const f=require('node:fs'),fd=f.openSync(process.argv[1],'wx',0o600),s=f.fstatSync(fd);f.closeSync(fd);process.stdout.write(JSON.stringify({dev:s.dev,ino:s.ino}));"));
+          const fill = JSON.parse(writer(`const f=require('node:fs'),fd=f.openSync(process.argv[1],'r+'),s=f.fstatSync(fd),e=${JSON.stringify(identity)};if(s.dev!==e.dev||s.ino!==e.ino)throw Error('pressure identity changed');const b=Buffer.alloc(1048576);let n=0,reason='';try{while(n<${config.telemetry[name].maxDiskBytes}){const k=f.writeSync(fd,b,0,Math.min(b.length,${config.telemetry[name].maxDiskBytes}-n));if(k<=0)throw Error('short write');n+=k}f.fsyncSync(fd)}catch(x){if(x.code!=='ENOSPC')throw x;reason=x.code}finally{f.closeSync(fd)}const v=f.statfsSync('/data');process.stdout.write(JSON.stringify({bytes:n,reason,bavail:v.bavail,bfree:v.bfree,bsize:v.bsize}));`));
+          pressureEvidence.fill = fill;
+          if (fill.reason !== 'ENOSPC' || fill.bavail !== 0) throw new Error(`${name} fixture did not reach ENOSPC`);
+          const pressureAt = new Date().toISOString();
+          pressureEvidence.pressureAt = pressureAt;
+          let nativeFailure, walPressure;
+          const attempts = name === 'grafana' ? 3 : 40;
+          for (let i = 0; i < attempts; i++) {
+            const marker = makeMarker();
+            const counterBefore = name === 'prometheus' ? await walFailures() : undefined;
+            const response = await sendMarker(marker, name === 'grafana' ? 1 : 100);
+            pressureEvidence.responses.push(response);
+            if (name === 'grafana') {
+              if (response.status === 500 && hasDiskLog(pressureAt, /(?:database or disk is full|SQLITE_FULL)/iu))
+                nativeFailure = {httpStatus: 500, sqliteDiskFullLog: true};
+            } else if (name === 'prometheus') {
+              walPressure = await walFailures();
+              if (walPressure > counterBefore) {
+                await sleep(1000);
+                const visible = await verifyMarker(marker);
+                if (!visible) nativeFailure = {counterBefore, counterAfter: walPressure, marker: marker.id, markerVisible: false,
+                  httpStatus: response.status, backendErrno: 'NOT_OBSERVED'};
+              }
+            } else if (hasDiskLog(pressureAt, /(?:\/var\/tempo\/(?:live-wal|wal)\/.*no space left on device|no space left on device.*\/var\/tempo\/(?:live-wal|wal)\/)/iu)) {
+              nativeFailure = {walDiskFullLog: true, httpStatus: response.status};
+            }
+            const fsPressure = filesystem();
+            if (fsPressure.dev !== fsBefore.dev || fsPressure.ino !== fsBefore.ino || fsPressure.bavail !== 0)
+              throw new Error(`${name} filesystem changed or was relieved during pressure`);
+            pressureEvidence.filesystemPressure = fsPressure;
+            assertGeneration();
+            if (nativeFailure) break;
+            await sleep(1000);
+          }
+          if (!nativeFailure) throw new Error(`${name} native storage failure not observed within bounded attempts`);
+          if (name === 'prometheus') walPressure = await walFailures();
+          removePressure();
+          const fsAfter = filesystem();
+          if (fsAfter.dev !== fsBefore.dev || fsAfter.ino !== fsBefore.ino || fsAfter.bavail <= 0) throw new Error(`${name} filesystem identity or relief invalid`);
+          const after = makeMarker();
+          const recoveredResponse = await sendMarker(after);
+          if (![200, 201, 202, 204].includes(recoveredResponse.status)) throw new Error(`${name} rejected recovery write`);
+          await waitFor(() => verifyMarker(after), {timeoutMs: 120000, intervalMs: 2000, description: `${name} recovery marker`});
+          await waitFor(() => verifyMarker(before), {timeoutMs: 120000, intervalMs: 2000, description: `${name} baseline retained`});
+          assertGeneration();
+          const walAfter = name === 'prometheus' ? await walFailures() : undefined;
+          if (name === 'prometheus' && walAfter !== walPressure) throw new Error('Prometheus WAL failure counter did not stabilize after relief');
+          Object.assign(pressureEvidence, {status: 'PASS', nativeFailure, recoveryMarker: after,
+            filesystemAfter: fsAfter, sameContainerGeneration: true, backendErrno: name === 'prometheus' ? 'NOT_OBSERVED' : undefined,
+            ...(name === 'prometheus' ? {walPressure, walAfter} : {})});
+        } catch (error) {
+          Object.assign(pressureEvidence, {status: 'FAIL', failure: cleanError(error)});
+          throw error;
+        } finally {
+          try { removePressure(); } catch (error) { cleanupErrors.push(`${name} pressure cleanup: ${cleanError(error)}`); }
+        }
+      }
+      evidence.diskPressure.status = 'PASS';
       evidence.diskPressureStatus = 'PASS';
       evidence.phases.diskRecovery = 'PASS';
     } catch (error) {
@@ -2244,6 +2421,7 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
     const producerStop = stopContainerGracefully({run, name: producerName, graceMs: config.platform.shutdownGraceMs});
     if (producerStop.status !== 'PASS') throw new Error('synthetic producer graceful stop failed');
     evidence.telemetryHealth.infrastructureGracefulStops = {collector: stoppedCollector, lokiOutage: stoppedLoki};
+    assertGrafanaGeneration(grafanaGeneration, JSON.parse(run(['inspect', containerIds.grafana]))[0]);
     for (const name of ['grafana', 'loki', 'prometheus', 'tempo']) {
       const stopped = stopContainerGracefully({run, name: containerIds[name], graceMs: config.platform.shutdownGraceMs});
       evidence.telemetryHealth.infrastructureGracefulStops[name] = stopped;
@@ -2367,7 +2545,7 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
           api({baseUrl: baseUrls.prometheus, path: '/api/v1/status/flags'}),
         ]);
         const lokiEffective = typeof lokiText === 'string' ? loadYaml(lokiText) : lokiText;
-        const tempoEffective = typeof tempoText === 'string' ? loadYaml(tempoText) : tempoText;
+        const tempoEffective = parseTempoStatusConfigResponse(tempoText);
         return {lokiMs: durationMilliseconds(lokiEffective?.limits_config?.retention_period),
           prometheusMs: durationMilliseconds(flags?.data?.['storage.tsdb.retention.time']),
           tempoMs: durationMilliseconds(tempoEffective?.backend_worker?.compaction?.block_retention)};
@@ -2576,7 +2754,7 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
       const originalTempoHash = createHash('sha256').update(originalTempoBytes).digest('hex');
       const readTempoKnobs = async () => {
         const text = await api({baseUrl: baseUrls.tempo, path: '/status/config'});
-        const actual = typeof text === 'string' ? loadYaml(text) : text;
+        const actual = parseTempoStatusConfigResponse(text);
         return {retention: durationMilliseconds(actual?.backend_worker?.compaction?.block_retention),
           interval: durationMilliseconds(actual?.backend_scheduler?.provider?.retention?.interval),
           maxBlock: durationMilliseconds(actual?.live_store?.max_block_duration),

@@ -2288,6 +2288,11 @@ function telemetryConfig(value: unknown): TelemetryConfig {
         field,
         "недопустимый бюджет telemetry storage",
       );
+    if (name === "grafana" && values["memoryLimitMiB"]! < 512)
+      throw new PlatformConfigError(
+        `${field}.memoryLimitMiB`,
+        "минимум для Grafana — 512 MiB",
+      );
     if (name === "tempo" && values["finishOnShutdownTimeoutMs"] !== 10000)
       throw new PlatformConfigError(
         `${field}.finishOnShutdownTimeoutMs`,

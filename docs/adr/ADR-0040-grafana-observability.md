@@ -13,6 +13,14 @@ correlation/redaction и независимость business readiness от tele
 существующий SOPS/trusted-bootstrap путь. Generated configs/provisioning не
 становятся второй authority.
 
+DNS для OTLP trace и metric exporters выполняет собственный IPv4 resolver:
+системный `dns.lookup` делит пул libuv с другими операциями процесса.
+Воспроизведение с отсутствующим Collector показало readiness deadlines при
+healthy API только после включения telemetry SDK. Resolver не использует
+`/etc/hosts`, поэтому Collector получает штатный DNS alias в IPv4-сети Compose;
+при остановке telemetry его незавершённые запросы отменяются. Это сохраняет
+исходный readiness deadline и не меняет business HTTP clients.
+
 Готовый Alloy 1.21.3 выбран кандидатом Collector после проверки поставленного
 бинарника и image: `go-jose/v4 4.1.6`, Trivy 0 HIGH/0 CRITICAL. Найдены также
 22 MEDIUM, 4 LOW и 3 UNKNOWN: их нельзя описывать как отсутствие CVE. Runtime
@@ -50,6 +58,20 @@ retention, проверку штатных отказов/recovery и alert на
 WAL настроен native threshold 0.8. Для Prometheus/Tempo не заявляется несуществующий
 native HTTP 503 при 80%; это заменяет только OpenObserve-specific disk критерий.
 Нового ingest proxy/circuit breaker нет.
+
+Проверка disk pressure обязана подтвердить native отказ и восстановление
+каждого из четырёх backend на отдельном ограниченном томе. Для Prometheus
+проверяются native WAL failure counter и точный sample: HTTP 200 при полном
+диске не гарантирует успешный Commit. Для Grafana и Tempo нужны соответственно
+SQLite-full и WAL ENOSPC. После освобождения места прежний и новый маркеры
+должны читаться в том же процессе; общий успешный статус без результатов
+всех четырёх backend не принимается.
+
+Grafana получает минимум 512 MiB. Реальный прогон с 256 MiB зафиксировал
+OOM/restart, поэтому проверяется также неизменность исходного процесса до
+плановых restart. Последующий healthy не является доказательством отсутствия
+OOM; 512 MiB остаются проверяемым бюджетом, а не обещанием ёмкости под любой
+нагрузкой.
 
 Тома предоставляют POSIX filesystem с реальным ограничением объёма. Loki
 WAL/chunks/index/compactor, Prometheus TSDB/WAL, Tempo blocks/WAL/live-store/scheduler

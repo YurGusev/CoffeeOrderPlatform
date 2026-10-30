@@ -1,4 +1,6 @@
 import { randomUUID } from "node:crypto";
+import { Resolver } from "node:dns";
+import type { LookupFunction } from "node:net";
 import {
   monitorEventLoopDelay,
   performance,
@@ -578,6 +580,40 @@ export function createTelemetryResource(
   if (exporterToken.length === 0)
     throw new TypeError("telemetry exporter token is required");
   const headers = { authorization: `Bearer ${exporterToken}` };
+  const resolver = new Resolver();
+  let resolverClosed = false;
+  // shortcut: Collector DNS uses IPv4 and bypasses /etc/hosts; upgrade when deployment requires IPv6 or hosts entries.
+  const lookup: LookupFunction = (hostname, options, callback) => {
+    if (resolverClosed) {
+      callback(
+        Object.assign(new Error("telemetry resolver stopped"), {
+          code: "ECANCELLED",
+        }),
+        options.all ? [] : "",
+        0,
+      );
+      return;
+    }
+    resolver.resolve4(hostname, (error, addresses) => {
+      if (error || addresses.length === 0)
+        callback(
+          error ??
+            Object.assign(
+              new Error("collector DNS returned no IPv4 addresses"),
+              { code: "ENODATA" },
+            ),
+          options.all ? [] : "",
+          0,
+        );
+      else if (options.all)
+        callback(
+          null,
+          addresses.map((address) => ({ address, family: 4 })),
+        );
+      else callback(null, addresses[0]!, 4);
+    });
+  };
+  const httpAgentOptions = { keepAlive: true, lookup };
   const resource = resourceFromAttributes({
     "deployment.environment": config.environment,
     "service.namespace": config.namespace,
@@ -588,6 +624,7 @@ export function createTelemetryResource(
     url: `${config.collector.otlpEndpoint.replace(/\/$/u, "")}/v1/traces`,
     headers,
     timeoutMillis: config.producer.exportTimeoutMs,
+    httpAgentOptions,
   });
   const spans: ReadableSpan[] = [];
   let exportInProgress = false;
@@ -803,6 +840,7 @@ export function createTelemetryResource(
     url: `${config.collector.otlpEndpoint.replace(/\/$/u, "")}/v1/metrics`,
     headers,
     timeoutMillis: config.producer.exportTimeoutMs,
+    httpAgentOptions,
   });
   const trackedMetricExporter = new Proxy(metricExporter, {
     get(target, property) {
@@ -1034,6 +1072,8 @@ export function createTelemetryResource(
       } catch {
         /* Exporter shutdown is bounded and best effort. */
       } finally {
+        resolverClosed = true;
+        resolver.cancel();
         eventLoopDelay.disable();
         gcObserver.disconnect();
         context.disable();
@@ -1047,6 +1087,8 @@ export function createTelemetryResource(
       }
     },
     destroy() {
+      resolverClosed = true;
+      resolver.cancel();
       eventLoopDelay.disable();
       gcObserver.disconnect();
       contextManager.disable();

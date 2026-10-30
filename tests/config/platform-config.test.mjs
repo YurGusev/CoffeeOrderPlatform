@@ -538,6 +538,14 @@ void test("telemetry config is strict, immutable, and rejects missing or inconsi
       assert.throws(() => parsePlatformConfig(invalid), PlatformConfigError);
     }
   }
+  assert.equal(parsed.telemetry.grafana.memoryLimitMiB, 512);
+  const undersizedGrafana = structuredClone(document);
+  undersizedGrafana.telemetry.grafana.memoryLimitMiB = 511;
+  assert.throws(() => parsePlatformConfig(undersizedGrafana), PlatformConfigError);
+  assert.equal(
+    platformSchema.$defs.telemetry.properties.grafana.properties.memoryLimitMiB.minimum,
+    512,
+  );
   assert.equal(parsed.telemetry.namespace, "coffee-platform");
   assert.deepEqual(
     [
@@ -800,6 +808,20 @@ void test("telemetry config is strict, immutable, and rejects missing or inconsi
     }).telemetry.releaseDigest,
     /^sha256:/u,
   );
+});
+
+void test("RED: config loader rejects Grafana memory below 512 MiB", async () => {
+  const root = await configRoot();
+  try {
+    const path = join(root, "config/platform.yaml");
+    const document = parseYaml(await readFile(path, "utf8"), { json: true });
+    assert.equal((await loadPlatformConfig(root)).telemetry.grafana.memoryLimitMiB, 512);
+    document.telemetry.grafana.memoryLimitMiB = 511;
+    await writeFile(path, dumpYaml(document), "utf8");
+    await assert.rejects(loadPlatformConfig(root), /CONFIG-SCHEMA/u);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });
 
 void test("RED: config loader rejects invalid Tempo shutdown timeout", async () => {

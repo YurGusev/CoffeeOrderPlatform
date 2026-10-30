@@ -137,7 +137,7 @@ const sample = {
     diskWatermarkPercent: 80,
     externalReportingEnabled: false,
     alerts: {evaluationIntervalMs: 60000, diskUsage: {forMs: 0}, sinkMemoryMiB: 128},
-    grafana: {endpoint: "http://grafana:3000", memoryLimitMiB: 256, maxDiskBytes: 1073741824},
+    grafana: {endpoint: "http://grafana:3000", memoryLimitMiB: 512, maxDiskBytes: 1073741824},
     loki: {endpoint: "http://loki:3100", memoryLimitMiB: 512, maxDiskBytes: 1073741824, retentionDays: 3},
     prometheus: {endpoint: "http://prometheus:9090", memoryLimitMiB: 512, maxDiskBytes: 1073741824, retentionDays: 3, outOfOrderWindowMs: 1800000},
     tempo: {endpoint: "http://tempo:3200", otlpEndpoint: "http://tempo:4318", memoryLimitMiB: 768, maxDiskBytes: 1073741824, retentionDays: 3, finishOnShutdownTimeoutMs: 10000},
@@ -540,6 +540,7 @@ void test("generated Collector and backend configs preserve bounded delivery and
     assert.deepEqual(compose.services[name].networks, ["coffee_observability"]);
     assert.equal(compose.services[name].ports, undefined);
   }
+  assert.equal(compose.services.grafana.mem_limit, "512m");
   assert.equal(compose.services.grafana.environment.GF_PLUGINS_PREINSTALL_DISABLED, "true");
   assert.equal(compose.services.grafana.image, grafanaImage);
   assert.notEqual(compose.services.grafana.image, images.grafanaImage);

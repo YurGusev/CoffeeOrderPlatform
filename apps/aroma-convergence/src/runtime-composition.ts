@@ -88,7 +88,7 @@ export function createAromaConvergenceComposition(): RuntimeComposition {
           targetEnvironment: context.config.environment,
           targetRuntime: "api-internal",
         },
-        connections: 1,
+        connections: 2,
         pipelining: 1,
       });
       const gateway = new AromaConvergenceGatewayClient(http, {

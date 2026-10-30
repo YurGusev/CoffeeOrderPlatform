@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { spawnSync } from "node:child_process";
 import {
   mkdtemp,
   mkdir,
@@ -2852,6 +2853,56 @@ void test("cold product snapshot builds all declared API contract dependencies",
     await rm(dir, { recursive: true, force: true });
   }
 });
+void test("driver setup links without host-only modules", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "realtime-driver-link-"));
+  try {
+    const loader = join(dir, "deny-host.mjs");
+    const output = join(dir, "result.json");
+    await writeFile(
+      loader,
+      `
+const denied = new Set([
+  new URL(${JSON.stringify(new URL("../../../tools/config-bootstrap/browser-fixture.mjs", import.meta.url).href)}).href,
+  new URL(${JSON.stringify(new URL("../../../tools/verified-infrastructure-image.mjs", import.meta.url).href)}).href,
+  new URL(${JSON.stringify(new URL("../../../verification/launch/v1/report.mjs", import.meta.url).href)}).href,
+]);
+export async function resolve(specifier, context, nextResolve) {
+  const result = await nextResolve(specifier, context);
+  if (denied.has(result.url)) throw new Error("host-only module requested");
+  return result;
+}
+`,
+    );
+    const program = `
+const setup = await import(process.argv[1]);
+if (typeof setup.assertFixtureKafkaNamespaceBound !== "function") throw new Error("Kafka guard missing");
+try { setup.assertFixtureKafkaNamespaceBound({services: {}}, "orders-service"); throw new Error("Kafka guard accepted missing service"); }
+catch (error) { if (!String(error.message).includes("configured Kafka runtime exists")) throw error; }
+await setup.json(process.argv[2], {linked: true});
+`;
+    const child = spawnSync(
+      process.execPath,
+      [
+        "--no-warnings",
+        "--loader",
+        loader,
+        "--input-type=module",
+        "-e",
+        program,
+        new URL("./setup.mjs", import.meta.url).href,
+        output,
+      ],
+      { encoding: "utf8", timeout: 20000 },
+    );
+    assert.equal(child.status, 0, child.stderr);
+    assert.deepEqual(JSON.parse(await readFile(output, "utf8")), {
+      linked: true,
+    });
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 void test("product launch uses the runtime-supported configuration locators", () => {
   for (const role of ["edge-gateway", "api-public", "realtime-gateway"])
     assert.deepEqual(productArgs(role), [

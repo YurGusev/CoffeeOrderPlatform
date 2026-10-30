@@ -10,7 +10,7 @@ import {awaitConvergenceMetricBarrier} from './launch-path.mjs';
 import {createAlertDefinitions, createGrafanaAlertProvisioning} from '../../tools/observability/alerts.mjs';
 import {createAlertSink} from '../../tools/observability/alert-sink.mjs';
 import {createCollectorConfig} from '../../tools/observability/generate.mjs';
-import {captureContainerDiagnostics, observabilityVerificationCoverage, parseCollectorMemoryLimiterMetrics, isCollectorMemoryRefusal, sourceIdentity, stopContainerGracefully, validateCollectorMemorySample, queryPrometheusRange, queryLokiLogs, waitForOwnedMetricFamilySamples, waitForSameTraceSpans, waitForConvergenceMetricSamples, readSinkEvents, durationMilliseconds, parseCollectorExpiredRetryDrops, observabilityGateComplete, persistVerificationResult, collectorMemorySelfTelemetry, isExporterMetricForSignal, parseLokiWalMetrics, alertEpisodeStartMs} from '../../tools/observability/verify.mjs';
+import {parseTempoStatusConfigResponse, captureContainerDiagnostics, observabilityVerificationCoverage, parseCollectorMemoryLimiterMetrics, isCollectorMemoryRefusal, sourceIdentity, stopContainerGracefully, validateCollectorMemorySample, queryPrometheusRange, queryLokiLogs, waitForOwnedMetricFamilySamples, waitForSameTraceSpans, waitForConvergenceMetricSamples, readSinkEvents, durationMilliseconds, parseCollectorExpiredRetryDrops, observabilityGateComplete, persistVerificationResult, collectorMemorySelfTelemetry, isExporterMetricForSignal, parseLokiWalMetrics, parsePrometheusWalFailures, alertEpisodeStartMs} from '../../tools/observability/verify.mjs';
 import {nodeImageProbe, runtimeMetricFamilies, sanitizeRuntimeMatrixFailure, sanitizeRuntimeMetricMatches, verifyRuntimeMetricMatrix} from './runtime-matrix.mjs';
 import {NODE_RUNTIME_ROLES, summarizeRuntimeProbeOutput} from './runtime-matrix-probe.mjs';
 
@@ -26,6 +26,14 @@ const config = {environment: 'development', telemetry: {
     sseDropRate: {forMs: 300000, threshold: 0.05}, diskUsage: {forMs: 0},
   },
 }};
+
+void test('Tempo effective config is parsed after its native status request header', () => {
+  const expected = {backend_worker: {finish_on_shutdown_timeout: '10s', compaction: {block_retention: '72h0m0s'}}};
+  assert.deepEqual(parseTempoStatusConfigResponse('GET /status/config\n---\nbackend_worker:\n  finish_on_shutdown_timeout: 10s\n  compaction:\n    block_retention: 72h0m0s\n'), expected);
+  for (const invalid of ['backend_worker: {}', 'GET /other\n---\n{}', 'GET /status/config\n---\nnull',
+    'GET /status/config\n---\n[]', 'GET /status/config\n---\n{}\n---\n{}'])
+    assert.throws(() => parseTempoStatusConfigResponse(invalid));
+});
 
 void test('observability CLI can await its runtime and launch modules without an ESM evaluation cycle', async () => {
   const dir = await mkdtemp(path.join(tmpdir(), 'coffee-observability-import-'));
@@ -927,8 +935,19 @@ void test('G14 cannot pass with a missing or incomplete required phase', () => {
     networkIsolation: {status: 'PASS', launchPathNetworkStatus: 'PASS'},
     telemetryHealth: {dockerLogRotation: pass, producerLoggingPolicy: pass, collectorLoggingPolicy: pass,
       launchPathCollectorConfig: 'PASS', launchPathOutageStatus: 'PASS', collectorMemoryProof: pass},
-    collectorQueueMetrics: pass, processCounterRestart: pass, diskPressureStatus: 'PASS', runtimeShutdownStatus: 'PASS'};
+    collectorQueueMetrics: pass, processCounterRestart: pass, diskPressureStatus: 'PASS',
+    diskPressure: {status: 'PASS', backends: Object.fromEntries(['loki', 'grafana', 'prometheus', 'tempo'].map(name => [name, {status: 'PASS'}]))}, runtimeShutdownStatus: 'PASS'};
   assert.equal(observabilityGateComplete(evidence), true);
+  for (const name of ['loki', 'grafana', 'prometheus', 'tempo']) {
+    delete evidence.diskPressure.backends[name];
+    assert.equal(observabilityGateComplete(evidence), false, `${name} missing`);
+    evidence.diskPressure.backends[name] = {status: 'FAIL'};
+    assert.equal(observabilityGateComplete(evidence), false, `${name} failed`);
+    evidence.diskPressure.backends[name] = {status: 'PASS'};
+  }
+  evidence.diskPressure.status = 'FAIL';
+  assert.equal(observabilityGateComplete(evidence), false, 'aggregate disk pressure failed');
+  evidence.diskPressure.status = 'PASS';
   delete evidence.phases.backupRestore;
   assert.equal(observabilityGateComplete(evidence), false);
   evidence.phases.backupRestore = 'PASS';
@@ -939,6 +958,21 @@ void test('G14 cannot pass with a missing or incomplete required phase', () => {
   evidence.phases.retention = 'PASS';
   evidence.cleanupErrors.push('cleanup failed');
   assert.equal(observabilityGateComplete(evidence), false);
+});
+
+void test('Prometheus native WAL failure counter is unambiguous', () => {
+  assert.equal(parsePrometheusWalFailures('# HELP prometheus_tsdb_wal_writes_failed_total test\nprometheus_tsdb_wal_writes_failed_total 2\n'), 2);
+  assert.throws(() => parsePrometheusWalFailures(''), /unavailable or ambiguous/u);
+  assert.throws(() => parsePrometheusWalFailures('prometheus_tsdb_wal_writes_failed_total 1\nprometheus_tsdb_wal_writes_failed_total 2\n'), /unavailable or ambiguous/u);
+});
+
+void test('Grafana initial generation rejects a hidden restart even when healthy', async () => {
+  const {assertGrafanaGeneration} = await import('../../tools/observability/verify.mjs');
+  const initial = {Id: 'a'.repeat(64), RestartCount: 0, State: {StartedAt: 'start', Running: true, OOMKilled: false}};
+  assert.doesNotThrow(() => assertGrafanaGeneration(initial, initial));
+  assert.throws(() => assertGrafanaGeneration(initial, {...initial, RestartCount: 1}), /Grafana crossed/u);
+  assert.throws(() => assertGrafanaGeneration(initial, {...initial, State: {...initial.State, StartedAt: 'restarted'}}), /Grafana crossed/u);
+  assert.throws(() => assertGrafanaGeneration({...initial, RestartCount: 1}, {...initial, RestartCount: 1}), /Grafana crossed/u);
 });
 
 void test('Alloy refusal counter can be absent only before a verified first refusal', async () => {
