@@ -32,6 +32,8 @@ const EXCLUDED_ROOTS = [
 ];
 const EXCLUDED_FILES = new Set([
   "apps/edge-gateway/src/client-operations.gen.ts",
+  "packages/platform-ui/src/styles/global.css",
+  "packages/platform-ui/src/styles/tokens.css",
 ]);
 
 export function selectFormatPaths(gitPaths, existingPaths = gitPaths) {

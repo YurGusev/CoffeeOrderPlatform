@@ -113,8 +113,11 @@ non-ignored untracked файлы Git с расширениями `js`, `mjs`, `c
 `coverage`. Единственный путь выбора — `scripts/format.mjs`; обычная команда
 только проверяет, а `node scripts/format.mjs --write` записывает baseline.
 Владелец одобрил эту область и однократное форматирование 25 октября 2026;
-исходный inventory и принятие сохранены в evidence первого запуска. Изменения
-только форматирования не освобождают критические модули от G04.
+исходный inventory и принятие сохранены в evidence первого запуска.
+`packages/platform-ui/src/styles/tokens.css` и
+`packages/platform-ui/src/styles/global.css` дополнительно исключены из этой
+проверки. Их SHA-256 зафиксирован в `prototype-font-manifest.json`.
+Изменения только форматирования не освобождают критические модули от G04.
 
 G04 измеряет emitted JavaScript в `dist` для каждого изменённого критического
 source-модуля; `tools/config-bootstrap` измеряется как исполняемый `.mjs`.
