@@ -178,6 +178,7 @@ export async function writeRedactedStream(
   maxLineBytes = 8192,
   outputBudget = null,
   onLimit = () => {},
+  onLine = () => {},
 ) {
   const handle = await import("node:fs").then(({ createWriteStream }) =>
     createWriteStream(path, { flags: "wx", mode: 0o600 }),
@@ -213,6 +214,7 @@ export async function writeRedactedStream(
   };
   const emit = async (value) => {
     if (!value || outputLimitExceeded || outputBudget?.exceeded) return;
+    onLine();
     if (!outputBudget) {
       await writeChunk(handle, value);
       return;
@@ -688,6 +690,7 @@ export async function executeArgv(
   stderrPath,
   contextPath,
   outputBudget = null,
+  options = {},
 ) {
   const startedAt = nowIso();
   const start = Date.now();
@@ -735,6 +738,10 @@ export async function executeArgv(
         signalProcessGroup(child.pid, "SIGKILL");
       }, 500);
   };
+  let resolveFirstStdoutLine = () => {};
+  const firstStdoutLine = new Promise((resolve) => {
+    resolveFirstStdoutLine = resolve;
+  });
   const stdout = writeRedactedStream(
     child.stdout,
     stdoutPath,
@@ -742,6 +749,7 @@ export async function executeArgv(
     8192,
     outputBudget,
     stopForOutputLimit,
+    options.awaitFirstStdoutLine ? resolveFirstStdoutLine : undefined,
   );
   const stderrOutput = new PassThrough();
   child.stderr.pipe(stderrOutput, { end: false });
@@ -772,6 +780,8 @@ export async function executeArgv(
         }
       } catch (error) {
         rssSamples.errors += 1;
+        // Уходящий процесс теряет VmRSS раньше состояния Z и не отменяет уже снятый пик.
+        if (peakRssBytes > 0 && error?.rssErrno === "MISSING") return;
         if (!rssFailure)
           rssFailure = {
             stage: error?.rssStage ?? "scan",
@@ -787,6 +797,24 @@ export async function executeArgv(
     child.once("spawn", resolvePromise);
     child.once("error", resolvePromise);
   });
+  if (options.awaitFirstStdoutLine) {
+    let guard;
+    try {
+      await Promise.race([
+        firstStdoutLine,
+        new Promise((_, reject) => {
+          guard = setTimeout(
+            () => reject(new Error("child stdout was not observed")),
+            30_000,
+          );
+        }),
+      ]);
+    } finally {
+      clearTimeout(guard);
+    }
+    // Короткий timeout иначе снимает группу раньше, чем обход /proc успевает её увидеть.
+    await sample();
+  }
   let killTimer;
   const timer = setTimeout(() => {
     timedOut = true;

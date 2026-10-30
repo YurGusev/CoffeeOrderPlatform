@@ -3027,15 +3027,17 @@ void test("AROMA mutation capability is approval-bound, single-use, phase-ordere
     expiresAtUtc,
     capability,
   });
+  const issuedAt = 1_700_000_000_000;
   assert.throws(
     () =>
       createAromaMutationGrant({
         offerRef,
         maximumQuantity: "2",
         expiresAtUtc: new Date(
-          Date.now() + 2 * 60 * 60 * 1000 + 1,
+          issuedAt + 2 * 60 * 60 * 1000 + 1,
         ).toISOString(),
         capability,
+        now: () => issuedAt,
       }),
     /AROMA_GRANT_INVALID/,
   );
@@ -6273,6 +6275,9 @@ void test("deadline terminates the exact child process group and records peak RS
     100,
     join(directory, "stdout.log"),
     join(directory, "stderr.log"),
+    undefined,
+    null,
+    { awaitFirstStdoutLine: true },
   );
   assert.equal(result.timedOut, true);
   assert.notEqual(result.exitCode, 0);
