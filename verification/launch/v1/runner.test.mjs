@@ -164,6 +164,8 @@ void test("formatter selects only existing active source files from the Git path
     "secrets/platform.secrets.sops.yaml",
     "packages/generated/contracts.ts",
     "packages/platform-ui/provenance/proof.json",
+    "packages/platform-ui/src/styles/global.css",
+    "packages/platform-ui/src/styles/tokens.css",
     ".codex/settings.json",
     ".git/config.json",
     "package.json",
