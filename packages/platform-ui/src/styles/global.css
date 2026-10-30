@@ -14,16 +14,8 @@ body {
   margin: 0;
   color: var(--cos-text-primary);
   background:
-    radial-gradient(
-      circle at 82% 6%,
-      var(--cos-effect-canvas-glow-violet),
-      transparent 32rem
-    ),
-    radial-gradient(
-      circle at 18% 0%,
-      var(--cos-effect-canvas-glow-blue),
-      transparent 28rem
-    ),
+    radial-gradient(circle at 82% 6%, var(--cos-effect-canvas-glow-violet), transparent 32rem),
+    radial-gradient(circle at 18% 0%, var(--cos-effect-canvas-glow-blue), transparent 28rem),
     var(--cos-surface-canvas);
   font-family: var(--cos-font-body);
   font-size: var(--cos-type-body-size);

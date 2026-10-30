@@ -103,25 +103,13 @@
     black
   );
   --cos-action-danger-surface: var(--cos-palette-error-action);
-  --cos-action-danger-surface-hover: color-mix(
-    in srgb,
-    var(--cos-palette-error-action) 82%,
-    black
-  );
+  --cos-action-danger-surface-hover: color-mix(in srgb, var(--cos-palette-error-action) 82%, black);
   --cos-action-info-surface: var(--cos-palette-info-action);
-  --cos-action-info-surface-hover: color-mix(
-    in srgb,
-    var(--cos-palette-info-action) 82%,
-    black
-  );
+  --cos-action-info-surface-hover: color-mix(in srgb, var(--cos-palette-info-action) 82%, black);
   /* Soft action variants are dark semantic surfaces in the Neon Violet
      operator theme. Keep these values in the token layer so CSP-safe finite
      classes preserve the approved visual contract without runtime props. */
-  --cos-action-primary-soft: color-mix(
-    in srgb,
-    var(--cos-palette-neon-violet-9),
-    black 50%
-  );
+  --cos-action-primary-soft: color-mix(in srgb, var(--cos-palette-neon-violet-9), black 50%);
   --cos-action-primary-soft-text: var(--cos-palette-neon-violet-0);
 
   /* Status */
@@ -129,21 +117,9 @@
   --cos-status-warning: var(--cos-palette-warning);
   --cos-status-error: var(--cos-palette-error);
   --cos-status-info: var(--cos-palette-info);
-  --cos-status-success-soft: color-mix(
-    in srgb,
-    var(--cos-status-success),
-    black 50%
-  );
-  --cos-status-warning-soft: color-mix(
-    in srgb,
-    var(--cos-status-warning),
-    black 50%
-  );
-  --cos-status-error-soft: color-mix(
-    in srgb,
-    var(--cos-status-error),
-    black 50%
-  );
+  --cos-status-success-soft: color-mix(in srgb, var(--cos-status-success), black 50%);
+  --cos-status-warning-soft: color-mix(in srgb, var(--cos-status-warning), black 50%);
+  --cos-status-error-soft: color-mix(in srgb, var(--cos-status-error), black 50%);
   --cos-status-info-soft: color-mix(in srgb, var(--cos-status-info), black 50%);
 
   /* Selection and focus */
@@ -215,8 +191,6 @@
   --cos-motion-normal: 180ms;
 
   /* Foundation effects are semantic aliases too, so global.css stays token-only. */
-  --cos-effect-canvas-glow-violet: rgb(
-    var(--cos-palette-violet-strong-rgb) / 0.24
-  );
+  --cos-effect-canvas-glow-violet: rgb(var(--cos-palette-violet-strong-rgb) / 0.24);
   --cos-effect-canvas-glow-blue: rgb(var(--cos-palette-blue-glow-rgb) / 0.14);
 }
