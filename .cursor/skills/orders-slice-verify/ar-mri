@@ -1,0 +1,26 @@
+#!/bin/sh
+# GNU ar reads '+' as an MRI comment. pnpm paths contain '+', so ADDLIB lines
+# are copied to a plus-free directory before the real ar sees them.
+if [ "$1" = "-M" ]; then
+  script=$(mktemp)
+  safe=$(mktemp -d)
+  n=0
+  while IFS= read -r line; do
+    case "$line" in
+      "ADDLIB "*)
+        src=${line#"ADDLIB "}
+        n=$((n + 1))
+        cp "$src" "$safe/$n.a" || exit 1
+        printf 'ADDLIB %s\n' "$safe/$n.a"
+        ;;
+      *)
+        printf '%s\n' "$line"
+        ;;
+    esac
+  done >"$script"
+  /usr/bin/ar -M <"$script"
+  status=$?
+  rm -rf "$script" "$safe"
+  exit "$status"
+fi
+exec /usr/bin/ar "$@"
