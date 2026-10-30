@@ -514,6 +514,69 @@ void test('Collector memory proof accepts only native limiter counters and bound
   assert.throws(() => validateCollectorMemorySample({...fresh, currentBytes: 448 * 1024 * 1024}, memoryOptions), /safety guard/u);
 });
 
+void test('Collector memory pressure resumes owned Tempo before counter confirmation and on failure', async () => {
+  const source = await readFile(new URL('../../tools/observability/verify.mjs', import.meta.url), 'utf8');
+  const start = source.indexOf('async function runCollectorMemoryProof(');
+  const end = source.indexOf('\nfunction metricTimestampUs(', start);
+  assert.ok(start >= 0 && end > start);
+  const scenario = async (failure) => {
+    let now = 1_000_000, paused = false, accepted = 1, refused = 0, unpauseAttempts = 0;
+    const events = [], progress = {}, cleanupErrors = [], tempoId = 'a'.repeat(64);
+    class Clock extends Date { static now() { return now; } }
+    const run = args => {
+      if (args[0] === 'inspect') return JSON.stringify({'com.docker.compose.project': 'coffee-observability-run', 'com.docker.compose.service': failure === 'ownership' ? 'loki' : 'tempo'});
+      if (args[0] === 'pause') {events.push('pause'); paused = true; if (failure === 'pause') throw new Error('pause failed');}
+      if (args[0] === 'unpause') {events.push('unpause'); if (failure === 'combined' || (failure === 'unpause' && ++unpauseAttempts === 1)) throw new Error('unpause failed'); paused = false;}
+    };
+    const proof = runInNewContext(`(${source.slice(start, end)})`, {
+      Date: Clock, sleep: async ms => {now += ms;}, MEMORY_MIB_BYTES: 1024 * 1024, MEMORY_SAMPLER_STALE_MS: 100,
+      MEMORY_LIMITER_METRICS: {refused: 'refused', accepted: 'accepted'}, safeCollectorMemorySample: value => value,
+      isCollectorMemoryRefusal,
+      containerGeneration: ({name}) => ({id: name === 'collector' ? name : tempoId, state: {Running: true, Paused: name !== 'collector' && paused, OOMKilled: false, StartedAt: 'start'}}),
+      collectorMemorySelfTelemetry: async ({allowUnmaterializedRefused}) => {
+        if (!allowUnmaterializedRefused) {events.push('confirmation'); assert.equal(paused, false);}
+        return {counters: {accepted, refused}};
+      },
+      sendCollectorMemorySpan: async ({name, paddingBytes}) => {
+        if (name.endsWith('pressure')) {
+          events.push('pressure'); assert.equal(paused, true); assert.equal(paddingBytes, 200 * 1024);
+          if (failure === 'request' || failure === 'combined') throw new Error('pressure failed');
+          if (failure === 'exhausted') {now += 60000; return {httpStatus: 200, wireBytes: 2048};}
+          if (failure === 'invalid') return {httpStatus: 503, otlpCode: 13, refusal: true, wireBytes: 2048};
+          refused = 1; return {httpStatus: 503, otlpCode: 14, refusal: true, wireBytes: 2048};
+        }
+        accepted++; return {httpStatus: 200, wireBytes: 1024};
+      },
+    });
+    const options = {run, collectorName: 'collector', tempoName: tempoId.slice(0, 12), collectorIp: 'collector', prometheusUrl: 'prometheus',
+      config: {platform: {health: {intervalMs: 5000}}, telemetry: {collector: {memoryLimitMiB: 256, memorySpikeMiB: 64,
+        memoryCheckIntervalMs: 1000, retryWindowMs: 15000, containerMemoryMiB: 1024}}},
+      collectorConfig: 'limit = "256MiB" spike_limit = "64MiB" check_interval = "1000ms"', token: 'secret', runId: 'run', progress, cleanupErrors, cleanError: error => error.message,
+      sampler: {peakBytes: 1024, waitForFreshSample: async () => ({currentBytes: 512, maxBytes: 1024})}};
+    if (failure) {
+      const message = {invalid: /unproven memory-refusal/u, request: /pressure failed/u, pause: /pause failed/u,
+        unpause: /unpause failed/u, combined: /pressure failed/u, exhausted: /not reached/u, ownership: /ownership/u}[failure];
+      await assert.rejects(proof(options), message);
+      assert.equal(paused, failure === 'combined');
+      assert.deepEqual(cleanupErrors, failure === 'combined' ? ['Tempo memory restore: unpause failed'] : []);
+      assert.deepEqual(events.filter(event => event === 'pause' || event === 'unpause'), failure === 'ownership' ? [] :
+        failure === 'unpause' ? ['pause', 'unpause', 'unpause'] : ['pause', 'unpause']);
+      if (failure === 'request') {assert.equal(progress.attempted, 1); assert.equal(progress.pendingMaxWireBytes, 512 * 1024);}
+      if (failure === 'exhausted') assert.equal(progress.packetCount, 1);
+    } else {
+      const result = await proof(options);
+      assert.equal(result.refusal.refusedSpansDelta, 1);
+      assert.equal(result.recovery.acceptedSpansDelta, 1);
+      assert.ok(events.indexOf('pause') < events.indexOf('pressure'));
+      assert.ok(events.indexOf('pressure') < events.indexOf('unpause'));
+      assert.ok(events.indexOf('unpause') < events.indexOf('confirmation'));
+      assert.equal(paused, false);
+    }
+    assert.equal(JSON.stringify(progress).includes('secret'), false);
+  };
+  for (const failure of [undefined, 'invalid', 'request', 'pause', 'unpause', 'combined', 'exhausted', 'ownership']) await scenario(failure);
+});
+
 void test('generated Node image probe accepts nameless nested package metadata but keeps package roots strict', () => {
   const runProbe = (files,links={}) => {
     const directories = new Set(['/app']);

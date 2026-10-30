@@ -35,6 +35,14 @@ HTTP UI, readiness и служебная диагностика Alloy слуша
 
 Очередь Alloy exporter увеличена до 2048 items при двух consumers после воспроизведённых enqueue losses на 512. Для Prometheus задано ограниченное 30-минутное окно приёма out-of-order OTLP samples: Изолированный runtime-прогон показал такие samples при нулевом стандартном окне. [Документация Prometheus](https://prometheus.io/docs/guides/opentelemetry/#enable-out-of-order-ingestion) описывает эту настройку. Причина конкретного HTTP 400 не доказана; компонентное сравнение не заменяет проверки памяти и полного G14.
 
+Tempo получает `telemetry.tempo.finishOnShutdownTimeoutMs: 10000`, который renderer
+передаёт в native `backend_worker.finish_on_shutdown_timeout`. Стандартные 30 секунд
+этого worker превысили внешний `platform.shutdownGraceMs: 30000`: реальная остановка
+заняла 30396 мс с exit 0. С native 10s остановка заняла 11129 мс, тот же trace
+прочитан после restart. [Закреплённый worker](https://github.com/grafana/tempo/blob/a0826bc9eb8397d614dde91fb00b3809835b7e52/modules/backendworker/backendworker.go#L633-L655)
+отменяет контекст незавершённого задания по этому таймеру; полные persistence,
+checkpointed crash, retention и restore остаются обязательными проверками.
+
 ## Хранение и изменение G14
 
 Владелец явно согласовал отдельные ограниченные persistent volumes, три дня

@@ -31,6 +31,23 @@ Collector применяет memory limiter, batch, конечные queues, tim
 
 Alloy UI, readiness и диагностика доступны только на loopback контейнера; producer OTLP ingress аутентифицирован scoped bearer token. Grafana и backend API не публикуют host ports; anonymous Grafana выключен. Внешние usage reports, Grafana update checks и plugin preinstall выключены (`GF_PLUGINS_PREINSTALL_DISABLED=true`); notifications идут в локальный ограниченный sink. Grafana работает как UID 472, Loki и Tempo как 10001, Prometheus как 65534; Alloy использует UID 0 без capabilities для доступа к выбранным log paths. Read-only mounts четырёх telemetry volumes позволяют Alloy измерять filesystem, не открывая host root.
 
+В memory proof сохраняются канонические лимиты и bounded pressure. Собственный
+Tempo временно приостанавливается, чтобы exporter queue действительно удерживала
+данные. После валидного 503/OTLP 14 Tempo возобновляется до проверки счётчика;
+`finally` также восстанавливает его при ошибке. Проверка требует роста refused и
+accepted counters, того же процесса без OOM и recovery trace в Tempo. Прогресс
+нагрузки и результаты остановки сохраняются также при FAIL.
+
+Native `backend_worker.finish_on_shutdown_timeout` берётся из
+`telemetry.tempo.finishOnShutdownTimeoutMs` (10000 мс), оставляя запас внутри
+общего grace 30000 мс. Проверяется реальная остановка и чтение сохранённого trace;
+успешный idle marker не подменяет обязательные persistence/retention/restore.
+
+Readiness `aroma-observer` и его единственный business read используют два
+соединения внутреннего HTTP client. Это позволяет проверке с deadline 1 секунда
+выполняться во время долгого business read. Проба остаётся аутентифицированной;
+недоступный upstream по-прежнему делает readiness неготовой.
+
 ## Образы и G12
 
 Grafana собирается только из готового official slim и трёх подписанных ZIP;
@@ -83,6 +100,11 @@ provider. Проверенный G12 context остаётся у host verifier; 
 launch guards. Отдельный launch-path использует тот же pinned PostgreSQL
 fixture image и ограниченный tmpfs.
 
+Component Orders owners получают canonical `config/database-ownership.json`
+через read-only mount с проверкой hash и role-local доступа. Это не создаёт launch
+identity; G15 context монтируется только при подтверждённой identity. Launch-path
+продолжает использовать собственный PostgreSQL fixture.
+
 Convergence helper удерживает periodic exporter до подтверждения в Prometheus: `unknown_outcomes_current=1` перед recovery, затем `unknown_outcomes_current=0` и `recovered_applied=1` перед остановкой. Каждая фаза подтверждается run-scoped checkpoint в `/results`; локальные значения и `forceFlush` не доказывают доставку. Истечение bounded ожидания завершает proof с FAIL и cleanup.
 
 Частичные component checks readiness/auth/provisioning четырёх backend и Alloy не заменяют формальные G12/G14, полный 15-runtime matrix, persistence, TTL и restore: они пока не подтверждены. #13 отдельно принимает full-system SLO, chaos/failure, capacity и сквозные browser/business/DB/Kafka/SSE критерии. При отказе проверяйте health и loss counters, не повторяйте business effects; при disk pressure освобождайте только собственные telemetry данные и проверяйте восстановление. Не удаляйте `collector_checkpoints` при обычном restart.
@@ -93,3 +115,9 @@ Convergence helper удерживает periodic exporter до подтверж�
 ext4 fixtures и backup-архивы; secret configs остаются в `/dev/shm`. Конечные
 TSDB/WAL volumes являются ограниченными ext4, NTFS не используется напрямую
 как TSDB filesystem. Production provisioning без fixture placement не меняется.
+
+Для компонентного CLI нужен `umask 022`, чтобы non-root backend мог читать
+сгенерированные несекретные configs; секретные файлы получают отдельные строгие
+права trusted bootstrap. Входные `config/platform.yaml`,
+`config/toolchain-versions.json` и `pnpm-lock.yaml` должны иметь mode 0644 для
+проверяемого G12 binding. Журнал запуска хранится отдельно с mode 0600.

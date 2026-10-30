@@ -556,6 +556,20 @@ void test("telemetry config is strict, immutable, and rejects missing or inconsi
     changed.telemetry.prometheus.outOfOrderWindowMs = value;
     assert.throws(() => parsePlatformConfig(changed), PlatformConfigError);
   }
+  assert.equal(parsed.telemetry.tempo.finishOnShutdownTimeoutMs, 10000);
+  for (const value of [0, 9999, 30000, 1.5, undefined]) {
+    const changed = structuredClone(document);
+    changed.telemetry.tempo.finishOnShutdownTimeoutMs = value;
+    assert.throws(() => parsePlatformConfig(changed), PlatformConfigError);
+  }
+  for (const shutdownGraceMs of [10000, 9999]) {
+    const changed = structuredClone(document);
+    changed.platform.shutdownGraceMs = shutdownGraceMs;
+    assert.throws(
+      () => parsePlatformConfig(changed),
+      /timeout Tempo.*platform.shutdownGraceMs/u,
+    );
+  }
   assert.equal(parsed.telemetry.diskWatermarkPercent, 80);
   assert.equal(parsed.telemetry.alerts.evaluationIntervalMs, 60_000);
   assert.equal(parsed.telemetry.alerts.sseDropRate.threshold, 0.05);
@@ -786,6 +800,24 @@ void test("telemetry config is strict, immutable, and rejects missing or inconsi
     }).telemetry.releaseDigest,
     /^sha256:/u,
   );
+});
+
+void test("RED: config loader rejects invalid Tempo shutdown timeout", async () => {
+  const root = await configRoot();
+  try {
+    const path = join(root, "config/platform.yaml");
+    const document = parseYaml(await readFile(path, "utf8"), { json: true });
+    for (const value of [0, 9999, 30000, null]) {
+      document.telemetry.tempo.finishOnShutdownTimeoutMs = value;
+      await writeFile(path, dumpYaml(document), "utf8");
+      await assert.rejects(loadPlatformConfig(root), /CONFIG-SCHEMA/u);
+    }
+    delete document.telemetry.tempo.finishOnShutdownTimeoutMs;
+    await writeFile(path, dumpYaml(document), "utf8");
+    await assert.rejects(loadPlatformConfig(root), /CONFIG-SCHEMA/u);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });
 
 void test("RED: config loader rejects colliding Collector listener ports", async () => {

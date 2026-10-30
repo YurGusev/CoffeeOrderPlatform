@@ -153,7 +153,7 @@ collector.
 | #11 | #10, #16, #18, #8, #63 | этап A: backend grind contract → integration gate #9; этап B: observer/convergence/UnknownOutcome → #12, #13 |
 | #12 | #8, #9, #11, #63, #119, #160, #162 | single-instance SSE invalidation/refetch → #64, #13 |
 | #64 | #4, #61, #62, #63, #12, #162 | историческая producer foundation, Pino/OTel, native applicability и redaction → #210, #13 |
-| #210 | #64, #209 | миграция observability по ADR-0040; после приёмки handoff → G14 #13 |
+| #210 | #64, [PR #209](https://github.com/YurGusev/CoffeeOrderPlatform/pull/209) как принятая base | миграция observability по ADR-0040; после приёмки handoff → G14 #13 |
 | #13 | все outputs выше, #119, #162, принятый handoff #210 | verified release evidence → закрытие #1 |
 
 Для #9/#11 действует [контракт параллельной разработки](30_AROMA_GRIND_CONTRACT_AND_PARALLEL_DELIVERY.md):

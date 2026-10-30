@@ -483,7 +483,7 @@ async function sendCollectorMemorySpan({collectorIp, config, token, runId, name,
     wireBytes, ...(name === 'g14.collector.memory.recovered' ? {traceId} : {})};
 }
 
-async function runCollectorMemoryProof({run, collectorName, collectorIp, prometheusUrl, config, collectorConfig, token, runId, sampler, progress}) {
+async function runCollectorMemoryProof({run, collectorName, tempoName, collectorIp, prometheusUrl, config, collectorConfig, token, runId, sampler, progress, cleanupErrors, cleanError}) {
   progress.stage = 'startup';
   if (config.telemetry.collector.memoryLimitMiB !== 256 || config.telemetry.collector.memorySpikeMiB !== 64 ||
       config.telemetry.collector.memoryCheckIntervalMs !== 1000 || config.telemetry.collector.retryWindowMs !== 15000 ||
@@ -528,40 +528,81 @@ async function runCollectorMemoryProof({run, collectorName, collectorIp, prometh
   let packetCount = 0;
   let wireBytes = 0;
   let refusal;
+  const tempoGeneration = containerGeneration({run, name: tempoName});
+  if (!/^[a-f0-9]{12,64}$/u.test(tempoName) || !/^[a-f0-9]{64}$/u.test(tempoGeneration.id) || !tempoGeneration.id.startsWith(tempoName))
+    throw new Error('memory proof Tempo container identity invalid');
+  tempoName = tempoGeneration.id;
+  const tempoLabels = JSON.parse(run(['inspect', '--format', '{{json .Config.Labels}}', tempoName]));
+  if (tempoGeneration.state.Running !== true || tempoGeneration.state.Paused !== false ||
+      tempoGeneration.state.OOMKilled === true || tempoLabels?.['com.docker.compose.project'] !== `coffee-observability-${runId}` ||
+      tempoLabels?.['com.docker.compose.service'] !== 'tempo') throw new Error('memory proof Tempo ownership or generation invalid');
+  let tempoPaused = false, tempoRestorationError;
+  const resumeTempo = () => {
+    if (!tempoPaused) return;
+    const before = containerGeneration({run, name: tempoName});
+    if (before.id !== tempoGeneration.id || before.state.StartedAt !== tempoGeneration.state.StartedAt || before.state.Running !== true)
+      throw new Error('memory proof Tempo generation changed before resume');
+    if (before.state.Paused === true) run(['unpause', tempoName]);
+    const after = containerGeneration({run, name: tempoName});
+    if (after.id !== tempoGeneration.id || after.state.StartedAt !== tempoGeneration.state.StartedAt ||
+        after.state.Running !== true || after.state.Paused !== false || after.state.OOMKilled === true)
+      throw new Error('memory proof Tempo resume failed');
+    tempoPaused = false;
+  };
   progress.stage = 'pressure';
-  while (Date.now() < deadlineAt && wireBytes + 512 * 1024 <= totalWireCap) {
-    await sampler.waitForFreshSample(1000);
-    await refreshTelemetry(false);
-    const response = await sendCollectorMemorySpan({collectorIp, config, token, runId,
-      name: 'g14.collector.memory.pressure', paddingBytes: 200 * 1024});
-    packetCount += 1;
-    wireBytes += response.wireBytes;
-    progress.packetCount = packetCount;
-    progress.wireBytes = wireBytes;
-    await sampler.waitForFreshSample(1000);
-    if (response.httpStatus === 503) {
-      if (!isCollectorMemoryRefusal(response)) throw new Error('Collector returned an unproven memory-refusal response');
-      let refusedSpansDelta = 0;
-      const confirmationDeadline = Date.now() + Math.max(30000, config.platform.health.intervalMs * 4);
-      while (Date.now() < confirmationDeadline && refusedSpansDelta <= 0) {
-        try {
-          const afterRefusal = await refreshTelemetry(true, true);
-          refusedSpansDelta = afterRefusal.counters.refused - baseline.counters.refused;
-        } catch (error) { if (error.code !== 'COLLECTOR_METRIC_NOT_READY') throw error; }
-        if (refusedSpansDelta <= 0) await sleep(1000);
+  progress.packetCount = 0;
+  progress.wireBytes = 0;
+  try {
+    tempoPaused = true;
+    run(['pause', tempoName]);
+    const paused = containerGeneration({run, name: tempoName});
+    if (paused.id !== tempoGeneration.id || paused.state.StartedAt !== tempoGeneration.state.StartedAt || paused.state.Paused !== true)
+      throw new Error('memory proof Tempo pause failed');
+    while (Date.now() < deadlineAt && wireBytes + 512 * 1024 <= totalWireCap) {
+      await sampler.waitForFreshSample(1000);
+      await refreshTelemetry(false);
+      progress.attempted = packetCount + 1;
+      progress.pendingMaxWireBytes = 512 * 1024;
+      const response = await sendCollectorMemorySpan({collectorIp, config, token, runId,
+        name: 'g14.collector.memory.pressure', paddingBytes: 200 * 1024});
+      delete progress.pendingMaxWireBytes;
+      packetCount += 1;
+      wireBytes += response.wireBytes;
+      progress.packetCount = packetCount;
+      progress.wireBytes = wireBytes;
+      progress.elapsedMs = Date.now() - startedAt;
+      await sampler.waitForFreshSample(1000);
+      if (response.httpStatus === 503) {
+        if (!isCollectorMemoryRefusal(response)) throw new Error('Collector returned an unproven memory-refusal response');
+        progress.refusal = {httpStatus: 503, otlpCode: 14, packetCount, wireBytes};
+        progress.stage = 'refusal-observed';
+        resumeTempo();
+        let refusedSpansDelta = 0;
+        const confirmationDeadline = Date.now() + Math.max(30000, config.platform.health.intervalMs * 4);
+        while (Date.now() < confirmationDeadline && refusedSpansDelta <= 0) {
+          try {
+            const afterRefusal = await refreshTelemetry(true, true);
+            refusedSpansDelta = afterRefusal.counters.refused - baseline.counters.refused;
+          } catch (error) { if (error.code !== 'COLLECTOR_METRIC_NOT_READY') throw error; }
+          if (refusedSpansDelta <= 0) await sleep(1000);
+        }
+        if (refusedSpansDelta <= 0) throw new Error('Alloy refused spans counter did not advance');
+        refusalConfirmed = true;
+        refusal = {httpStatus: 503, otlpCode: 14, refusedSpansDelta, packetCount, wireBytes,
+          observedAt: new Date().toISOString()};
+        progress.refusal = {httpStatus: 503, otlpCode: 14, refusedSpansDelta, packetCount, wireBytes};
+        progress.stage = 'refusal-confirmed';
+        break;
       }
-      if (refusedSpansDelta <= 0) throw new Error('Alloy refused spans counter did not advance');
-      refusalConfirmed = true;
-      refusal = {httpStatus: 503, otlpCode: 14, refusedSpansDelta, packetCount, wireBytes,
-        observedAt: new Date().toISOString()};
-      progress.refusal = {httpStatus: 503, otlpCode: 14, refusedSpansDelta, packetCount, wireBytes};
-      progress.stage = 'refusal-confirmed';
-      break;
+      if (response.httpStatus !== 200) throw new Error('Collector pressure request returned an unexpected status');
+      if (wireBytes > totalWireCap) throw new Error('Collector pressure request exceeded its wire budget');
+      await sleep(25);
     }
-    if (response.httpStatus !== 200) throw new Error('Collector pressure request returned an unexpected status');
-    if (wireBytes > totalWireCap) throw new Error('Collector pressure request exceeded its wire budget');
-    await sleep(25);
+  } finally {
+    try { resumeTempo(); } catch (error) { tempoRestorationError = error; }
+    if (tempoRestorationError) cleanupErrors.push('Tempo memory restore: ' + cleanError(tempoRestorationError));
   }
+  if (tempoRestorationError) throw tempoRestorationError;
   if (!refusal) throw new Error('Collector memory refusal was not reached within the bounded pressure window');
 
   const refusalAt = Date.now();
@@ -1914,14 +1955,15 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
 
     startPhase('memory');
     let memorySampler;
+    const progress = {};
     try {
       const initial = await captureCollectorMemoryStartupBaseline({run, name: containerIds['otel-collector'], config});
+      progress.initial = initial;
       if (initial.status !== 'PASS') throw new Error('Alloy memory baseline failed');
       memorySampler = startCollectorMemorySampler({name: containerIds['otel-collector'], token: randomBytes(16).toString('hex'), config});
-      const progress = {};
-      const memory = await runCollectorMemoryProof({run, collectorName: containerIds['otel-collector'],
+      const memory = await runCollectorMemoryProof({run, collectorName: containerIds['otel-collector'], tempoName: containerIds.tempo,
         collectorIp: new URL(baseUrls['otel-collector']).hostname, prometheusUrl: baseUrls.prometheus, config,
-        collectorConfig: createAlloyConfig({config, logFiles, exporterToken: producerToken}), token: producerToken, runId, sampler: memorySampler, progress});
+        collectorConfig: createAlloyConfig({config, logFiles, exporterToken: producerToken}), token: producerToken, runId, sampler: memorySampler, progress, cleanupErrors, cleanError});
       const samplerStopped = await memorySampler.stopSampler({run});
       if (!samplerStopped || memorySampler.failure) throw new Error('Alloy memory sampler cleanup failed');
       memorySampler = undefined;
@@ -1955,11 +1997,15 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
     } catch (error) {
       evidence.phases.memory = 'FAIL';
       evidence.memoryFailure = cleanError(error);
+      evidence.telemetryHealth ??= {};
+      evidence.telemetryHealth.collectorMemoryDiagnostics = {status: 'FAIL', progress, ...(memorySampler ? {sampler: memorySampler.diagnostics()} : {})};
+      const tempo = containerGeneration({run, name: containerIds.tempo});
+      if (tempo.state.Running !== true || tempo.state.Paused !== false) throw new Error('memory proof left Tempo unavailable');
     } finally {
       if (memorySampler && !await memorySampler.stopSampler({run})) {
         evidence.phases.memory = 'FAIL';
         if (evidence.telemetryHealth?.collectorMemoryProof) evidence.telemetryHealth.collectorMemoryProof.status = 'FAIL';
-        evidence.memoryFailure = 'Alloy memory sampler cleanup failed';
+        evidence.memoryFailure = [evidence.memoryFailure, 'Alloy memory sampler cleanup failed'].filter(Boolean).join('; ');
       }
     }
 
@@ -2200,8 +2246,8 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
     evidence.telemetryHealth.infrastructureGracefulStops = {collector: stoppedCollector, lokiOutage: stoppedLoki};
     for (const name of ['grafana', 'loki', 'prometheus', 'tempo']) {
       const stopped = stopContainerGracefully({run, name: containerIds[name], graceMs: config.platform.shutdownGraceMs});
-      if (stopped.status !== 'PASS') throw new Error(`${name} graceful stop failed`);
       evidence.telemetryHealth.infrastructureGracefulStops[name] = stopped;
+      if (stopped.status !== 'PASS') throw new Error(`${name} graceful stop failed`);
       run(['start', containerIds[name]]);
       await waitHealth(name);
     }

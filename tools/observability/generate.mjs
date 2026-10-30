@@ -581,7 +581,7 @@ export function createBackendConfigs(config) {
       storage: {trace: {backend: 'local', local: {path: '/var/tempo/blocks'}, wal: {path: '/var/tempo/wal'}}},
       live_store: {wal: {path: '/var/tempo/live-wal'}},
       backend_scheduler: {local_work_path: '/var/tempo/scheduler'},
-      backend_worker: {compaction: {block_retention: `${tempo.retentionDays * 24}h`}},
+      backend_worker: {compaction: {block_retention: `${tempo.retentionDays * 24}h`}, finish_on_shutdown_timeout: `${tempo.finishOnShutdownTimeoutMs}ms`},
     },
     datasources: {apiVersion: 1, datasources: [
       {name: 'Loki', uid: 'loki', type: 'loki', access: 'proxy', url: loki.endpoint},

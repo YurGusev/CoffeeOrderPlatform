@@ -140,7 +140,7 @@ const sample = {
     grafana: {endpoint: "http://grafana:3000", memoryLimitMiB: 256, maxDiskBytes: 1073741824},
     loki: {endpoint: "http://loki:3100", memoryLimitMiB: 512, maxDiskBytes: 1073741824, retentionDays: 3},
     prometheus: {endpoint: "http://prometheus:9090", memoryLimitMiB: 512, maxDiskBytes: 1073741824, retentionDays: 3, outOfOrderWindowMs: 1800000},
-    tempo: {endpoint: "http://tempo:3200", otlpEndpoint: "http://tempo:4318", memoryLimitMiB: 768, maxDiskBytes: 1073741824, retentionDays: 3},
+    tempo: {endpoint: "http://tempo:3200", otlpEndpoint: "http://tempo:4318", memoryLimitMiB: 768, maxDiskBytes: 1073741824, retentionDays: 3, finishOnShutdownTimeoutMs: 10000},
 
   },
 };
@@ -525,6 +525,7 @@ void test("generated Collector and backend configs preserve bounded delivery and
   assert.equal(backend.loki.ingester.wal.disk_full_threshold, 0.8);
   assert.equal(backend.loki.limits_config.retention_period, "72h");
   assert.equal(backend.tempo.backend_worker.compaction.block_retention, "72h");
+  assert.equal(backend.tempo.backend_worker.finish_on_shutdown_timeout, "10000ms");
   assert.deepEqual(backend.datasources.datasources.map(source => source.uid), ["loki", "prometheus", "tempo"]);
   const images = Object.fromEntries(["otelCollectorImage", "grafanaImage", "lokiImage", "prometheusImage", "tempoImage", "nodeImage"].map(name => [name, `fixture@sha256:${"a".repeat(64)}`]));
   images.bootstrapProbeSha256 = "a".repeat(64);

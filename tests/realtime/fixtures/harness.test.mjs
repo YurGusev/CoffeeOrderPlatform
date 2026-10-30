@@ -2986,6 +2986,7 @@ void test("product launch scopes fixture mounts and proves role-local read acces
     reportedMounts,
     launchPath = false,
     driverProbeInputs = {},
+    component = false,
   ) => {
     const calls = [],
       execCalls = [],
@@ -2995,6 +2996,11 @@ void test("product launch scopes fixture mounts and proves role-local read acces
       options: { runId: "synthetic-run" },
       network: "synthetic-net",
       LABEL: "synthetic-label",
+      ROOT: "/candidate",
+      hooks: component ? { launchPath: {} } : {},
+      readFile: async () =>
+        driverProbeInputs.sourceBytes ?? driverOwnershipBytes,
+      hash: digest,
       setup: {
         snapshot: "/fixture-snapshot",
         privateDir: "/private",
@@ -3011,6 +3017,9 @@ void test("product launch scopes fixture mounts and proves role-local read acces
           containerBudgets: {},
           configSha256: driverConfigSha256,
           databaseOwnershipSha256: driverOwnershipSha256,
+          supportingSources: {
+            "config/database-ownership.json": driverOwnershipSha256,
+          },
         },
       },
       dir: "/results",
@@ -3041,6 +3050,59 @@ void test("product launch scopes fixture mounts and proves role-local read acces
           ]);
         if (args[0] === "exec") {
           execCalls.push(args);
+          if (component) {
+            const reads = new Map([
+              ["/fixture/platform.yaml", driverPlatformBytes],
+              [`/fixture/${role}.yaml`, Buffer.from("scoped secret")],
+              ...(driverProbeInputs.missingOwnership
+                ? []
+                : [
+                    [
+                      "/fixture/database-ownership.json",
+                      driverProbeInputs.ownershipBytes ?? driverOwnershipBytes,
+                    ],
+                  ]),
+              ...(driverProbeInputs.foreignSecret
+                ? [
+                    [
+                      `/fixture/${role === "orders-service" ? "orders-aroma-preparation" : "orders-service"}.yaml`,
+                      Buffer.from("foreign secret"),
+                    ],
+                  ]
+                : []),
+            ]);
+            let report, failure;
+            await runInNewContext(
+              `(async()=>{${args.at(-1)};await new Promise(setImmediate)})()`,
+              {
+                require: (specifier) => {
+                  if (specifier === "node:fs/promises")
+                    return {
+                      readFile: async (path) => {
+                        if (!reads.has(path))
+                          throw new Error("missing fixture");
+                        return reads.get(path);
+                      },
+                    };
+                  if (specifier === "node:crypto") return { createHash };
+                  throw new Error(`unexpected probe import: ${specifier}`);
+                },
+                console: {
+                  log: (value) => {
+                    report = JSON.parse(value);
+                  },
+                  error: (value) => {
+                    failure = value;
+                  },
+                },
+                process: { exitCode: 0 },
+                setImmediate,
+              },
+            );
+            if (failure) throw new Error(String(failure));
+            assert.ok(report, "component scoped probe executes");
+            return JSON.stringify(report);
+          }
           if (role === "driver" && launchPath) {
             const reads = new Map([
               [
@@ -3136,7 +3198,7 @@ void test("product launch scopes fixture mounts and proves role-local read acces
     );
     return { calls, execCalls, receipts, owned, context };
   };
-  const expected = (role, launchPath = false) => {
+  const expected = (role, launchPath = false, component = false) => {
     if (role === "driver" && launchPath)
       return [
         {
@@ -3189,7 +3251,7 @@ void test("product launch scopes fixture mounts and proves role-local read acces
         Destination: `/fixture/${role}.yaml`,
         RW: false,
       },
-      ...(launchPath
+      ...(launchPath || component
         ? [
             {
               Type: "bind",
@@ -3197,6 +3259,10 @@ void test("product launch scopes fixture mounts and proves role-local read acces
               Destination: "/fixture/database-ownership.json",
               RW: false,
             },
+          ]
+        : []),
+      ...(launchPath
+        ? [
             {
               Type: "bind",
               Source: "/evidence/context.json",
@@ -3273,6 +3339,50 @@ void test("product launch scopes fixture mounts and proves role-local read acces
     assert.equal(
       value.receipts[0].scopedMounts.configSha256,
       driverConfigSha256,
+    );
+  }
+  for (const role of ["orders-service", "orders-aroma-preparation"]) {
+    const value = await invoke(
+      role,
+      expected(role, false, true),
+      false,
+      {},
+      true,
+    );
+    assert.deepEqual(
+      JSON.parse(JSON.stringify(value.receipts[0].scopedMounts.readablePaths)),
+      [
+        "/fixture/platform.yaml",
+        `/fixture/${role}.yaml`,
+        "/fixture/database-ownership.json",
+      ],
+    );
+    assert.equal(
+      value.receipts[0].scopedMounts.ownershipSha256,
+      driverOwnershipSha256,
+    );
+    assert.ok(!value.calls[0].some((arg) => arg.includes("launch-context")));
+    await assert.rejects(
+      invoke(
+        role,
+        expected(role, false, true),
+        false,
+        { sourceBytes: Buffer.from("changed") },
+        true,
+      ),
+      /component ownership source changed/u,
+    );
+    for (const input of [
+      { missingOwnership: true },
+      { ownershipBytes: Buffer.from("changed") },
+      { foreignSecret: true },
+    ])
+      await assert.rejects(
+        invoke(role, expected(role, false, true), false, input, true),
+      );
+    await assert.rejects(
+      invoke(role, expected(role), false, {}, true),
+      /fixture mount scope/u,
     );
   }
   const launchDriver = await invoke("driver", expected("driver", true), true);

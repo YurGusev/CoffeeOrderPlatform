@@ -1,11 +1,23 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { readFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { execFileSync } from "node:child_process";
+import { createServer as createHttpsServer } from "node:https";
+import dns from "node:dns";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { Client } from "pg";
 import { load as parseYaml } from "js-yaml";
 import { openBlackholeProxy } from "../../scripts/db-live-proof.mjs";
 import { withCatalogPostgres } from "../../scripts/catalog-live-harness.mjs";
+import { loadPlatformConfig } from "../../packages/platform-config/dist/index.js";
+import { createRuntime } from "../../packages/platform-runtime/dist/index.js";
+import {
+  parseServiceTransportMaterial,
+  verifyTransportPeer,
+} from "../../packages/platform-security/dist/index.js";
+import { createAromaObserverComposition } from "../../apps/aroma-observer/dist/runtime-composition.js";
 import {
   normalizeAromaCartSnapshot,
   isAromaOwnerMessage,
@@ -652,6 +664,234 @@ async function withObserverDomain(run) {
     }
   });
 }
+
+void test(
+  "observer readiness remains available during a held business request",
+  {
+    timeout: 180_000,
+    skip:
+      process.env.COFFEE_DB_LIVE_PROOF !== "1"
+        ? "disposable PostgreSQL required"
+        : false,
+  },
+  async (t) => {
+    const directory = await mkdtemp(join(tmpdir(), "coffee-observer-wiring-"));
+    t.after(() => rm(directory, { recursive: true, force: true }));
+    const caKey = join(directory, "ca.key"),
+      caCert = join(directory, "ca.crt");
+    const openssl = (...args) =>
+      execFileSync("openssl", args, { stdio: "ignore", timeout: 10_000 });
+    openssl(
+      "req",
+      "-x509",
+      "-newkey",
+      "rsa:2048",
+      "-nodes",
+      "-keyout",
+      caKey,
+      "-out",
+      caCert,
+      "-subj",
+      "/CN=observer-wiring-ca",
+      "-days",
+      "1",
+      "-addext",
+      "basicConstraints=critical,CA:TRUE",
+      "-addext",
+      "keyUsage=critical,keyCertSign,cRLSign",
+    );
+    const caPem = await readFile(caCert, "utf8");
+    const material = async (runtime) => {
+      const key = join(directory, `${runtime}.key`),
+        csr = join(directory, `${runtime}.csr`),
+        cert = join(directory, `${runtime}.crt`);
+      openssl(
+        "req",
+        "-new",
+        "-newkey",
+        "rsa:2048",
+        "-nodes",
+        "-keyout",
+        key,
+        "-out",
+        csr,
+        "-subj",
+        `/CN=${runtime}`,
+        "-addext",
+        `subjectAltName=DNS:${runtime},URI:spiffe://coffee-platform/development/${runtime}`,
+        "-addext",
+        "extendedKeyUsage=serverAuth,clientAuth",
+      );
+      openssl(
+        "x509",
+        "-req",
+        "-in",
+        csr,
+        "-CA",
+        caCert,
+        "-CAkey",
+        caKey,
+        "-CAcreateserial",
+        "-out",
+        cert,
+        "-days",
+        "1",
+        "-sha256",
+        "-copy_extensions",
+        "copyall",
+      );
+      return parseServiceTransportMaterial(
+        JSON.stringify({
+          keyPem: await readFile(key, "utf8"),
+          certPem: await readFile(cert, "utf8"),
+          caPem,
+        }),
+        "development",
+        runtime,
+      );
+    };
+    const observerTls = await material("aroma-observer"),
+      internalTls = await material("api-internal");
+    const businessArrived = Promise.withResolvers(),
+      businessClosed = Promise.withResolvers();
+    const readinessClosed = Promise.withResolvers();
+    let readinessRequests = 0,
+      holdReadiness = false;
+    const server = createHttpsServer(
+      {
+        key: internalTls.keyPem,
+        cert: internalTls.certPem,
+        ca: caPem,
+        requestCert: true,
+        rejectUnauthorized: true,
+        minVersion: "TLSv1.3",
+      },
+      (request, response) => {
+        verifyTransportPeer(
+          request.socket.getPeerCertificate(),
+          "development",
+          "aroma-observer",
+        );
+        if (request.url === "/api/internal-v1/aroma/cart-snapshots:read") {
+          assert.equal(request.method, "POST");
+          response.once("close", () => businessClosed.resolve());
+          businessArrived.resolve();
+          return;
+        }
+        assert.equal(request.method, "GET");
+        assert.equal(request.url, "/health/ready");
+        readinessRequests++;
+        if (holdReadiness) {
+          response.once("close", () => readinessClosed.resolve());
+          return;
+        }
+        response.writeHead(200).end("ready");
+      },
+    );
+    await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+    t.after(async () => {
+      server.closeAllConnections();
+      if (server.listening)
+        await new Promise((resolve) => server.close(resolve));
+    });
+    const address = server.address();
+    assert.ok(address && typeof address === "object");
+    const originalLookup = dns.lookup.bind(dns);
+    t.mock.method(dns, "lookup", (hostname, options, callback) => {
+      if (typeof options === "function") {
+        callback = options;
+        options = undefined;
+      }
+      if (hostname !== "api-internal")
+        return originalLookup(hostname, options, callback);
+      return options?.all
+        ? callback(null, [{ address: "127.0.0.1", family: 4 }])
+        : callback(null, "127.0.0.1", 4);
+    });
+    const config = structuredClone(
+      await loadPlatformConfig(
+        new URL("../../config/platform.yaml", import.meta.url).pathname,
+        parseYaml,
+      ),
+    );
+    config.services["aroma-observer"].outbound = [
+      `api-internal:${address.port}`,
+    ];
+    const receipt = await withObserverDomain(async ({ runtime }) => {
+      const composition = createAromaObserverComposition();
+      const kafka = { relay: async () => {} };
+      const app = await createRuntime({
+        name: "aroma-observer",
+        host: "127.0.0.1",
+        port: 0,
+        shutdownGraceMs: 5000,
+        health: config.services["aroma-observer"].health,
+        readinessChecks: composition.readinessChecks,
+        resources: composition.resources,
+        configure: (app, signal) =>
+          composition.configure(app, signal, runtime, kafka, {
+            config,
+            secrets: {
+              security: {
+                serviceTransportKeys: {
+                  "aroma-observer": JSON.stringify({
+                    keyPem: observerTls.keyPem,
+                    certPem: observerTls.certPem,
+                    caPem: observerTls.caPem,
+                  }),
+                },
+              },
+            },
+          }),
+      });
+      try {
+        await app.runtimeController.start();
+        await Promise.race([
+          businessArrived.promise,
+          new Promise((_, reject) =>
+            setTimeout(
+              () => reject(new Error("business request not received")),
+              10_000,
+            ).unref(),
+          ),
+        ]);
+        const ready = await app.inject("/health/ready");
+        assert.equal(ready.statusCode, 200);
+        assert.equal(readinessRequests, 1);
+        holdReadiness = true;
+        assert.equal((await app.inject("/health/ready")).statusCode, 503);
+        await Promise.race([
+          readinessClosed.promise,
+          new Promise((_, reject) =>
+            setTimeout(
+              () => reject(new Error("readiness request not canceled")),
+              5000,
+            ).unref(),
+          ),
+        ]);
+        holdReadiness = false;
+        assert.equal((await app.inject("/health/ready")).statusCode, 200);
+        assert.equal(readinessRequests, 3);
+      } finally {
+        assert.deepEqual(await app.runtimeController.closeRuntime("SIGTERM"), {
+          status: "stopped",
+          pending: [],
+        });
+      }
+      await Promise.race([
+        businessClosed.promise,
+        new Promise((_, reject) =>
+          setTimeout(
+            () => reject(new Error("business request not canceled")),
+            5000,
+          ).unref(),
+        ),
+      ]);
+      return {};
+    });
+    assert.equal(receipt.cleanup.containerRemoved, true);
+  },
+);
 
 void test(
   "observer durable safe-only store behavioral proofs under real PostgreSQL role",

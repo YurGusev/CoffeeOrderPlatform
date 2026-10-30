@@ -352,6 +352,7 @@ export type TelemetryConfig = Readonly<{
     memoryLimitMiB: number;
     maxDiskBytes: number;
     retentionDays: number;
+    finishOnShutdownTimeoutMs: number;
   }>;
   alerts: Readonly<{
     version: 1;
@@ -2241,7 +2242,9 @@ function telemetryConfig(value: unknown): TelemetryConfig {
       "memoryLimitMiB",
       "maxDiskBytes",
       ...(name === "grafana" ? [] : ["retentionDays"]),
-      ...(name === "tempo" ? ["otlpEndpoint"] : []),
+      ...(name === "tempo"
+        ? ["otlpEndpoint", "finishOnShutdownTimeoutMs"]
+        : []),
       ...(name === "prometheus" ? ["outOfOrderWindowMs"] : []),
     ];
     exactKeys(item, keys, field);
@@ -2272,6 +2275,7 @@ function telemetryConfig(value: unknown): TelemetryConfig {
         "maxDiskBytes",
         ...(name === "grafana" ? [] : ["retentionDays"]),
         ...(name === "prometheus" ? ["outOfOrderWindowMs"] : []),
+        ...(name === "tempo" ? ["finishOnShutdownTimeoutMs"] : []),
       ],
       field,
     );
@@ -2283,6 +2287,11 @@ function telemetryConfig(value: unknown): TelemetryConfig {
       throw new PlatformConfigError(
         field,
         "недопустимый бюджет telemetry storage",
+      );
+    if (name === "tempo" && values["finishOnShutdownTimeoutMs"] !== 10000)
+      throw new PlatformConfigError(
+        `${field}.finishOnShutdownTimeoutMs`,
+        "разрешён только проверенный timeout 10000ms",
       );
     return Object.freeze({
       endpoint: privateEndpoint("endpoint"),
@@ -2555,6 +2564,11 @@ export function parsePlatformConfig(value: unknown): PlatformConfig {
     platform["shutdownGraceMs"],
     "config.platform.shutdownGraceMs",
   );
+  if (telemetry.tempo.finishOnShutdownTimeoutMs >= shutdownGraceMs)
+    throw new PlatformConfigError(
+      "config.telemetry.tempo.finishOnShutdownTimeoutMs",
+      "timeout Tempo должен быть меньше platform.shutdownGraceMs",
+    );
   const services = record(source["services"], "config.services");
   const expected = new Set<string>(RUNTIME_NAMES);
   for (const name of Object.keys(services)) {
