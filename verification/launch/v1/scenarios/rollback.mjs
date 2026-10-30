@@ -510,6 +510,7 @@ export function runManagedRollbackChild({
   env,
   timeoutMs = 1_800_000,
   terminationGraceMs = 30_000,
+  timeoutGate,
 }) {
   return new Promise((resolvePromise, rejectPromise) => {
     const child = spawn(process.execPath, args, {
@@ -525,6 +526,7 @@ export function runManagedRollbackChild({
     let timedOut = false;
     let interruptedBy;
     let killTimer;
+    let timer;
     let closed = false;
     const append = (list, chunk) => {
       outputBytes += chunk.length;
@@ -565,10 +567,23 @@ export function runManagedRollbackChild({
       interruptedBy ??= signal;
       stopChild(signal);
     };
-    const timer = setTimeout(() => {
-      timedOut = true;
-      stopChild("SIGTERM");
-    }, timeoutMs);
+    const armTimeout = () => {
+      timer = setTimeout(() => {
+        timedOut = true;
+        stopChild("SIGTERM");
+      }, timeoutMs);
+    };
+    if (timeoutGate === undefined) armTimeout();
+    else {
+      void Promise.resolve(timeoutGate).then(
+        () => {
+          if (!closed) armTimeout();
+        },
+        () => {
+          if (!closed) stopChild("SIGKILL");
+        },
+      );
+    }
     process.once("SIGINT", signalHandler);
     process.once("SIGTERM", signalHandler);
     child.stdout.on("data", (chunk) => append(stdout, chunk));
