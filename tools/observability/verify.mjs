@@ -81,6 +81,7 @@ async function waitFor(predicate, {timeoutMs, intervalMs = 2000, description}) {
     try {
       const value = await predicate();
       if (value) return value;
+      lastError = undefined;
     } catch (error) {
       if (error.fatal) throw error;
       lastError = error;
@@ -2321,9 +2322,13 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
               nativeFailure = {walDiskFullLog: true, httpStatus: response.status};
             }
             const fsPressure = filesystem();
-            if (fsPressure.dev !== fsBefore.dev || fsPressure.ino !== fsBefore.ino || fsPressure.bavail !== 0)
-              throw new Error(`${name} filesystem changed or was relieved during pressure`);
             pressureEvidence.filesystemPressure = fsPressure;
+            if (nativeFailure) pressureEvidence.nativeFailure = nativeFailure;
+            if (fsPressure.dev !== fsBefore.dev || fsPressure.ino !== fsBefore.ino)
+              throw new Error(`${name} filesystem identity changed during pressure`);
+            // Native rollback can release blocks before the pressure file is removed.
+            if (!nativeFailure && fsPressure.bavail !== 0)
+              throw new Error(`${name} filesystem pressure ended before a native storage failure`);
             assertGeneration();
             if (nativeFailure) break;
             await sleep(1000);
@@ -2576,6 +2581,11 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
       lokiProfile.ingester.flush_check_period = '5s';
       lokiProfile.compactor.compaction_interval = '30s';
       lokiProfile.compactor.retention_delete_delay = '30s';
+      lokiProfile.chunk_store_config ??= {};
+      lokiProfile.chunk_store_config.chunk_cache_config ??= {};
+      lokiProfile.chunk_store_config.chunk_cache_config.embedded_cache ??= {};
+      lokiProfile.chunk_store_config.chunk_cache_config.embedded_cache.enabled = true;
+      lokiProfile.chunk_store_config.chunk_cache_config.embedded_cache.ttl = '30s';
       const readLokiKnobs = async () => {
         const text = await api({baseUrl: baseUrls.loki, path: '/config'});
         const actual = typeof text === 'string' ? loadYaml(text) : text;
@@ -2584,10 +2594,12 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
           flushCheck: durationMilliseconds(actual?.ingester?.flush_check_period),
           compaction: durationMilliseconds(actual?.compactor?.compaction_interval),
           deleteDelay: durationMilliseconds(actual?.compactor?.retention_delete_delay),
+          chunkCacheTtl: durationMilliseconds(actual?.chunk_store_config?.chunk_cache_config?.embedded_cache?.ttl),
+          chunkCacheEnabled: actual?.chunk_store_config?.chunk_cache_config?.embedded_cache?.enabled === true,
           retentionEnabled: actual?.compactor?.retention_enabled};
       };
       const originalLokiKnobs = await readLokiKnobs();
-      if (Object.entries(originalLokiKnobs).some(([key, value]) => key === 'retentionEnabled' ? typeof value !== 'boolean' : !Number.isSafeInteger(value) || value < 0))
+      if (Object.entries(originalLokiKnobs).some(([key, value]) => (key === 'retentionEnabled' || key === 'chunkCacheEnabled') ? typeof value !== 'boolean' : !Number.isSafeInteger(value) || value < 0))
         throw new Error('Loki original retention cadence is unavailable');
       const writeLokiConfig = async value => {
         await rm(backendConfigPaths.loki);
@@ -2600,7 +2612,7 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
         await writeLokiConfig(lokiStagingProfile);
         await recreateBackend('loki');
         const activeLoki = await readLokiKnobs();
-        const expectedLoki = {retention: expectedEffective.lokiMs, chunkIdle: 10000, flushCheck: 5000, compaction: 30000, deleteDelay: 30000, retentionEnabled: false};
+        const expectedLoki = {retention: expectedEffective.lokiMs, chunkIdle: 10000, flushCheck: 5000, compaction: 30000, deleteDelay: 30000, chunkCacheTtl: 30000, chunkCacheEnabled: true, retentionEnabled: false};
         if (Object.keys(expectedLoki).some(key => activeLoki[key] !== expectedLoki[key])) throw new Error('Loki fixture staging profile was not effective');
         const retentionId = newRunId();
         const sampleMs = Date.now() - (config.telemetry.loki.retentionDays + 1) * 24 * 60 * 60 * 1000;
@@ -2633,6 +2645,7 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
         expectedLoki.retentionEnabled = true;
         const retentionLoki = await readLokiKnobs();
         if (Object.keys(expectedLoki).some(key => retentionLoki[key] !== expectedLoki[key])) throw new Error('Loki fixture retention profile was not effective');
+        evidence.retention = {status: 'RUNNING', productionEffective: actualEffective, lokiObservation: {effective: retentionLoki}};
         const absentSince = {value: undefined};
         let retentionSuccessAtSeconds;
         await waitFor(async () => {
@@ -2640,6 +2653,8 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
             const metrics = await api({baseUrl: baseUrls.loki, path: '/metrics'});
             const lastSuccess = typeof metrics === 'string' && /^loki_compactor_apply_retention_last_successful_run_timestamp_seconds\s+([0-9.eE+-]+)\s*$/mu.exec(metrics);
             retentionSuccessAtSeconds = Number(lastSuccess?.[1]);
+            Object.assign(evidence.retention.lokiObservation, {observedAt: new Date().toISOString(),
+              retentionSuccessAtSeconds: Number.isFinite(retentionSuccessAtSeconds) ? retentionSuccessAtSeconds : null});
             if (!Number.isFinite(retentionSuccessAtSeconds) || retentionSuccessAtSeconds * 1000 < retentionActivatedAtMs)
               throw new Error('Loki compactor has not completed a retention run in this profile');
             const old = await oldLogs();
@@ -2652,16 +2667,19 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
             record.body.stringValue = JSON.stringify({g14_run_id: controlId, retention_control: true});
             await api({baseUrl: baseUrls.loki, path: '/otlp/v1/logs', method: 'POST', body: control, expected: [200, 204]});
             const current = await queryLokiLogs({baseUrl: baseUrls.loki, runId: controlId, startTimeUs: (controlMs - 1000) * 1000});
-            if (!current.some(item => hasExactValue(item, controlId) && item._timestamp === controlMs * 1000))
+            const currentControlVisible = current.some(item => hasExactValue(item, controlId) && item._timestamp === controlMs * 1000);
+            const oldMarkerVisible = old.some(record => hasExactValue(record, retentionId));
+            Object.assign(evidence.retention.lokiObservation, {currentControlVisible, oldMarkerVisible});
+            if (!currentControlVisible)
               throw new Error('Loki fresh current-data control is unavailable');
-            if (old.some(record => hasExactValue(record, retentionId))) { absentSince.value = undefined; return false; }
+            if (oldMarkerVisible) { absentSince.value = undefined; return false; }
             absentSince.value ??= Date.now();
             return Date.now() - absentSince.value >= 60 * 1000;
           } catch (error) { absentSince.value = undefined; throw error; }
         }, {timeoutMs: 6 * 60 * 1000, intervalMs: 5000, description: 'Loki native TTL removes exact old marker and retains current control'});
         evidence.retention = {status: 'PARTIAL', loki: {status: 'PASS', retentionDays: config.telemetry.loki.retentionDays,
           fixtureOnly: true, sourceConfigSha256: configSourceSha256, schemaSourceSha256, profileSha256: profileHash(lokiProfile), stagingProfileSha256: profileHash(lokiStagingProfile),
-          profile: {chunkIdle: '10s', flushCheck: '5s', compaction: '30s', deleteDelay: '30s'},
+          profile: {chunkIdle: '10s', flushCheck: '5s', compaction: '30s', deleteDelay: '30s', chunkCacheTtl: '30s', chunkCacheEnabled: true},
           nativeFlushAndCleanRestart: true, markerId: retentionId, sampleTimestampMs: sampleMs, visibleBeforeExpiry: true, absentObservationWindowMs: 60 * 1000,
           currentControlVisible: true, retentionSuccessAtSeconds}, prometheus: 'NOT_RUN', tempo: 'NOT_RUN'};
       } finally {

@@ -887,6 +887,83 @@ void test('retention readback compares compound Go durations and rejects malform
   assert.ok(Number.isNaN(durationMilliseconds('')));
 });
 
+void test('polling timeout reports the latest observation and preserves fatal errors', async () => {
+  const source = await readFile(new URL('../../tools/observability/verify.mjs', import.meta.url), 'utf8');
+  const start = source.indexOf('async function waitFor(predicate,');
+  const end = source.indexOf('\nfunction requireRunning(', start);
+  assert.ok(start >= 0 && end > start);
+  const run = async (steps) => {
+    let now = 0, calls = 0;
+    const wait = runInNewContext(`(${source.slice(start, end)})`, {
+      Date: {now: () => now}, sleep: async ms => {now += ms;}, Error,
+    });
+    return wait(async () => {
+      const step = steps[calls++];
+      if (step instanceof Error) throw step;
+      return step;
+    }, {timeoutMs: steps.length, intervalMs: 1, description: 'probe'});
+  };
+  await assert.rejects(run([new Error('stale error'), false, false]),
+    error => error.message === 'probe did not complete');
+  await assert.rejects(run([new Error('stale error'), false, new Error('current error')]),
+    error => error.message === 'probe did not complete: current error');
+  const fatal = Object.assign(new Error('fatal error'), {fatal: true});
+  await assert.rejects(run([new Error('stale error'), fatal, false]), error => error === fatal);
+  assert.equal(await run([new Error('stale error'), false, 'ready']), 'ready');
+});
+
+void test('native pressure evidence precedes identity and relief guards', async () => {
+  const source = await readFile(new URL('../../tools/observability/verify.mjs', import.meta.url), 'utf8');
+  const start = source.indexOf('const fsPressure = filesystem();');
+  const end = source.indexOf('\n            assertGeneration();', start);
+  assert.ok(start >= 0 && end > start);
+  const cases = [
+    {name: 'full with native failure', dev: 1, ino: 2, bavail: 0, native: true},
+    {name: 'relieved with native failure', dev: 1, ino: 2, bavail: 3, native: true},
+    {name: 'full without native failure', dev: 1, ino: 2, bavail: 0, native: false},
+    {name: 'relieved without native failure', dev: 1, ino: 2, bavail: 3, native: false, error: 'filesystem pressure ended before a native storage failure'},
+    {name: 'changed device with native failure', dev: 9, ino: 2, bavail: 3, native: true, error: 'filesystem identity changed during pressure'},
+    {name: 'changed inode with native failure', dev: 1, ino: 9, bavail: 3, native: true, error: 'filesystem identity changed during pressure'},
+    {name: 'changed device without native failure', dev: 9, ino: 2, bavail: 0, native: false, error: 'filesystem identity changed during pressure'},
+    {name: 'changed inode without native failure', dev: 1, ino: 9, bavail: 0, native: false, error: 'filesystem identity changed during pressure'},
+  ];
+  for (const scenario of cases) {
+    const fsPressure = {dev: scenario.dev, ino: scenario.ino, bavail: scenario.bavail};
+    const nativeFailure = scenario.native ? {httpStatus: 500, sqliteDiskFullLog: true} : undefined;
+    const pressureEvidence = {};
+    const execute = runInNewContext(`(() => {${source.slice(start, end)}\n})`, {
+      filesystem: () => fsPressure, fsBefore: {dev: 1, ino: 2}, pressureEvidence, nativeFailure, name: 'grafana', Error,
+    });
+    if (scenario.error) assert.throws(execute, error => error.message === `grafana ${scenario.error}`, scenario.name);
+    else execute();
+    assert.equal(pressureEvidence.filesystemPressure, fsPressure, scenario.name);
+    assert.equal(pressureEvidence.nativeFailure, nativeFailure, scenario.name);
+    assert.equal(Object.hasOwn(pressureEvidence, 'nativeFailure'), scenario.native, scenario.name);
+  }
+});
+
+void test('Loki retention fixture changes cache TTL on a clone of the original profile', async () => {
+  const source = await readFile(new URL('../../tools/observability/verify.mjs', import.meta.url), 'utf8');
+  const start = source.indexOf('const lokiProfile = structuredClone(originalLokiConfig);');
+  const end = source.indexOf('\n      const readLokiKnobs =', start);
+  assert.ok(start >= 0 && end > start);
+  for (const cache of [undefined, {embedded_cache: {ttl: '24h', enabled: true}, keep: 'value'}]) {
+    const originalLokiConfig = {ingester: {chunk_idle_period: '1h'}, compactor: {compaction_interval: '10m'},
+      ...(cache ? {chunk_store_config: {chunk_cache_config: cache, other: 'preserved'}} : {})};
+    const original = structuredClone(originalLokiConfig);
+    const profile = runInNewContext(`(() => {${source.slice(start, end)}\nreturn lokiProfile;})()`, {
+      originalLokiConfig, structuredClone,
+    });
+    assert.deepEqual(originalLokiConfig, original);
+    assert.equal(profile.chunk_store_config.chunk_cache_config.embedded_cache.ttl, '30s');
+    assert.equal(profile.chunk_store_config.chunk_cache_config.embedded_cache.enabled, true);
+    if (cache) {
+      assert.equal(profile.chunk_store_config.chunk_cache_config.keep, 'value');
+      assert.equal(profile.chunk_store_config.other, 'preserved');
+    }
+  }
+});
+
 void test('restoration preserves proof failure and reports both failures without a false pass', async () => {
   const source = await readFile(new URL('../../tools/observability/verify.mjs', import.meta.url), 'utf8');
   const restorations = [
