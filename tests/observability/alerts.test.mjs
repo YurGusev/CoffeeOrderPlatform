@@ -1,14 +1,16 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {runInNewContext} from 'node:vm';
+import {spawnSync} from 'node:child_process';
 import path from 'node:path';
 import {mkdtemp, readFile, readdir, rm, stat, writeFile} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
+import {fileURLToPath} from 'node:url';
 import {awaitConvergenceMetricBarrier} from './launch-path.mjs';
 import {createAlertDefinitions, createGrafanaAlertProvisioning} from '../../tools/observability/alerts.mjs';
 import {createAlertSink} from '../../tools/observability/alert-sink.mjs';
 import {createCollectorConfig} from '../../tools/observability/generate.mjs';
-import {observabilityVerificationCoverage, parseCollectorMemoryLimiterMetrics, isCollectorMemoryRefusal, sourceIdentity, stopContainerGracefully, validateCollectorMemorySample, queryPrometheusRange, queryLokiLogs, waitForOwnedMetricFamilySamples, waitForSameTraceSpans, waitForConvergenceMetricSamples, readSinkEvents, durationMilliseconds, parseCollectorExpiredRetryDrops, observabilityGateComplete, persistVerificationResult, collectorMemorySelfTelemetry, isExporterMetricForSignal, parseLokiWalMetrics, alertEpisodeStartMs} from '../../tools/observability/verify.mjs';
+import {captureContainerDiagnostics, observabilityVerificationCoverage, parseCollectorMemoryLimiterMetrics, isCollectorMemoryRefusal, sourceIdentity, stopContainerGracefully, validateCollectorMemorySample, queryPrometheusRange, queryLokiLogs, waitForOwnedMetricFamilySamples, waitForSameTraceSpans, waitForConvergenceMetricSamples, readSinkEvents, durationMilliseconds, parseCollectorExpiredRetryDrops, observabilityGateComplete, persistVerificationResult, collectorMemorySelfTelemetry, isExporterMetricForSignal, parseLokiWalMetrics, alertEpisodeStartMs} from '../../tools/observability/verify.mjs';
 import {nodeImageProbe, runtimeMetricFamilies, sanitizeRuntimeMatrixFailure, sanitizeRuntimeMetricMatches, verifyRuntimeMetricMatrix} from './runtime-matrix.mjs';
 import {NODE_RUNTIME_ROLES, summarizeRuntimeProbeOutput} from './runtime-matrix-probe.mjs';
 
@@ -24,6 +26,80 @@ const config = {environment: 'development', telemetry: {
     sseDropRate: {forMs: 300000, threshold: 0.05}, diskUsage: {forMs: 0},
   },
 }};
+
+void test('observability CLI can await its runtime and launch modules without an ESM evaluation cycle', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'coffee-observability-import-'));
+  const loader = path.join(dir, 'loader.mjs');
+  const verify = new URL('../../tools/observability/verify.mjs', import.meta.url);
+  try {
+    await writeFile(loader, `
+export async function load(url, context, nextLoad) {
+  const result = await nextLoad(url, context);
+  if (url === ${JSON.stringify(verify.href)}) {
+    const source = String(result.source);
+    const start = source.indexOf('export async function runObservabilityVerification(');
+    const end = source.indexOf('\\nif (process.argv[1] === fileURLToPath(import.meta.url))', start);
+    if (start < 0 || end < 0) throw new Error('probe cannot locate CLI entry');
+    return {...result, source: source.slice(0, start) + "export async function runObservabilityVerification() { await import('../../tests/observability/runtime-matrix.mjs'); await import('../../tests/observability/launch-path.mjs'); await import('../compose-smoke.mjs'); return {status: 'probe-pass'}; }\\n" + source.slice(end)};
+  }
+  if (process.env.OBSERVABILITY_CYCLE_TEST === '1' && url.endsWith('/tests/observability/runtime-matrix.mjs'))
+    return {...result, source: "import {runObservabilityVerification as cycleProbe} from '../../tools/observability/verify.mjs';\\n" + String(result.source)};
+  return result;
+}
+`);
+    const execute = cycle => spawnSync(process.execPath, ['--no-warnings', '--loader', loader, fileURLToPath(verify)], {
+      encoding: 'utf8', timeout: 20000, env: {...process.env, OBSERVABILITY_CYCLE_TEST: cycle ? '1' : '0'},
+    });
+    const negative = execute(true);
+    assert.equal(negative.status, 13, 'negative control must reproduce the unsettled top-level await');
+    const actual = execute(false);
+    assert.equal(actual.status, 0, actual.stderr);
+    assert.deepEqual(JSON.parse(actual.stdout), {status: 'probe-pass'});
+  } finally {await rm(dir, {recursive: true, force: true});}
+});
+
+void test('synthetic alert fixture starts neutral and dilutes SSE only after a real low-rate drop', async () => {
+  const source = await readFile(new URL('./fixture.mjs', import.meta.url), 'utf8');
+  const start = source.indexOf('let active = ');
+  const end = source.indexOf('\nconst app = await createRuntime(', start);
+  const configureStart = source.indexOf('  configure(server) {', end);
+  const configureEnd = source.indexOf('\n  },\n});', configureStart);
+  assert.ok(start >= 0 && end > start && configureStart > end && configureEnd > configureStart);
+  const handlers = new Map(), readiness = [];
+  const server = {post: (name, handler) => handlers.set(name, handler), get: () => {}};
+  const request = {log: {info() {}}, runtimeSpan: {setAttribute() {}}};
+  const reply = {code() {return this;}, send(value) {return value;}};
+  let now = 1_000_000;
+  const fixture = runInNewContext(`(() => {${source.slice(start, end)}\nconst app = {${source.slice(configureStart, configureEnd)}\n}}; app.configure(server); return {emit, state: () => ({active, consumerLag, oldestOutboxAgeMs, unknownOutcomes, sseAttempts, sseDrops})};})()`, {
+    server, Date: {now: () => now}, config: {telemetry: {alerts: {outboxOldestAge: {threshold: 0}}, loki: {retentionDays: 3}}},
+    logger: {info() {}}, runId: 'fixture', redactionCanary: 'fixture-canary',
+    trace: {getTracer: () => ({startSpan: () => ({end() {}})})}, setRuntimeReadiness: value => readiness.push(value),
+  });
+  const state = active => handlers.get('/test/state')({body: {active}}, reply);
+  const snapshot = () => JSON.parse(JSON.stringify(fixture.state()));
+  fixture.emit(request);
+  assert.deepEqual(snapshot(), {active: false, consumerLag: 0, oldestOutboxAgeMs: 0, unknownOutcomes: 0, sseAttempts: 0, sseDrops: 0});
+  await state(true);
+  now += 99_999;
+  fixture.emit(request);
+  assert.deepEqual(snapshot(), {active: true, consumerLag: 1, oldestOutboxAgeMs: 1, unknownOutcomes: 1, sseAttempts: 0, sseDrops: 0});
+  await state(false);
+  fixture.emit(request);
+  assert.equal(snapshot().sseAttempts, 0, 'inactive baseline must not dilute a drop that has not occurred');
+  await state(true);
+  now += 1;
+  fixture.emit(request);
+  assert.equal(snapshot().sseAttempts, 2);
+  assert.equal(snapshot().sseDrops, 1);
+  now += 100_000;
+  fixture.emit(request);
+  assert.equal(snapshot().sseDrops / snapshot().sseAttempts, 0.5);
+  await state(false);
+  fixture.emit(request);
+  assert.deepEqual(snapshot(), {active: false, consumerLag: 0, oldestOutboxAgeMs: 0, unknownOutcomes: 0, sseAttempts: 1004, sseDrops: 2});
+  assert.ok(snapshot().sseDrops / snapshot().sseAttempts < 0.05);
+  assert.deepEqual(readiness, [false, true, false, true]);
+});
 
 void test('Collector filelog retries transient high-memory refusals within the configured retry window', () => {
   const retry = {initialMs: 1000, maxMs: 5000, windowMs: 15000};
@@ -134,6 +210,29 @@ void test('issue 64 metric matrix derives all runtime owners and sanitizes probe
   assert.throws(() => summarizeRuntimeProbeOutput(JSON.stringify({secret: 'must never pass through'}), {
     role: 'orders-service', nodeVersion: '26.8.1',
   }), /runtime metrics probe assertion failed/u);
+});
+
+void test('startup diagnostics bound and redact container state, health output and logs', () => {
+  const secret = 'private-credential-canary';
+  const calls = [];
+  const spawnProcess = (command, args) => {
+    calls.push([command, args]);
+    if (args[0] === 'inspect') return {status: 0, stdout: JSON.stringify({Running: true, ExitCode: 0, OOMKilled: false,
+      Error: `failed ${secret}`, Health: {Status: 'unhealthy', Log: Array.from({length: 4}, (_, index) => ({ExitCode: index, Output: `failed ${secret} Bearer opaque-token password=unknown-password ${'x'.repeat(1100)}`}))},
+      Config: {Env: ['SHOULD_NOT_BE_REPORTED']}})};
+    return {status: 0, stdout: `error ${secret} Bearer opaque-token\n${Array(14).fill(`INFO starting SQLite migration ${secret} Bearer opaque-token ${'x'.repeat(350)}`).join('\n')}\n`, stderr: ''};
+  };
+  const diagnostics = captureContainerDiagnostics({name: 'a'.repeat(64), stage: 'startup', secrets: [secret], spawnProcess});
+  assert.equal(diagnostics.state.Health.status, 'unhealthy');
+  assert.deepEqual(diagnostics.state.Health.log.map(item => item.exitCode), [1, 2, 3]);
+  assert.ok(diagnostics.state.Health.log.every(item => item.output.length <= 900));
+  assert.match(diagnostics.errorOrWarningLines, /error/u);
+  assert.match(diagnostics.startupLines, /SQLite migration/u);
+  assert.ok(Buffer.byteLength(diagnostics.startupLines) <= 2000);
+  for (const value of [secret, 'opaque-token', 'unknown-password', 'SHOULD_NOT_BE_REPORTED']) assert.doesNotMatch(JSON.stringify(diagnostics), new RegExp(value, 'u'));
+  assert.equal(calls.length, 2);
+  const unavailable = captureContainerDiagnostics({name: 'b'.repeat(64), spawnProcess: () => ({status: 1, stdout: '', stderr: ''})});
+  assert.deepEqual(unavailable.state, {unavailable: true});
 });
 
 void test('issue 64 failure diagnostics retain only allowlisted error codes and local frame coordinates', () => {
@@ -715,6 +814,46 @@ void test('retention readback compares compound Go durations and rejects malform
   assert.equal(durationMilliseconds('1m30s'), 90000);
   assert.ok(Number.isNaN(durationMilliseconds('72h trailing')));
   assert.ok(Number.isNaN(durationMilliseconds('')));
+});
+
+void test('restoration preserves proof failure and reports both failures without a false pass', async () => {
+  const source = await readFile(new URL('../../tools/observability/verify.mjs', import.meta.url), 'utf8');
+  const restorations = [
+    {name: 'backup', variable: 'backupRestorationError', first: 'fixtureCompose.volumes = originalVolumes;'},
+    {name: 'Loki retention', variable: 'lokiRestorationError', first: 'await writeLokiConfig(originalLokiConfig);'},
+    {name: 'Prometheus retention', variable: 'prometheusRestorationError', first: 'services.prometheus.command = originalPrometheusCommand;'},
+    {name: 'Tempo retention', variable: 'tempoRestorationError', first: 'await writeTempoConfig(originalTempoConfig);'},
+  ];
+  for (const {name, variable, first} of restorations) {
+    const position = source.indexOf(first);
+    const start = source.lastIndexOf('} finally {', position);
+    const statement = `if (${variable}) throw ${variable};`;
+    const end = source.indexOf(statement, position) + statement.length;
+    assert.ok(position >= 0 && start >= 0 && end > position);
+    for (const [proofFails, restoreFails] of [[false, false], [true, false], [false, true], [true, true]]) {
+      const cleanupErrors = [];
+      const restore = () => { if (restoreFails) throw new Error('restore failure'); };
+      const fixtureCompose = {set volumes(_value) { restore(); }};
+      const context = {
+        Error, cleanupErrors, cleanError: error => error.message,
+        proof: () => { if (proofFails) throw new Error('proof failure'); },
+        fixtureCompose, originalVolumes: {}, backendStopStarted: false,
+        writeLokiConfig: restore, writeTempoConfig: restore, originalLokiConfig: {}, originalTempoConfig: {},
+        recreateBackend() {}, readLokiKnobs: () => ({}), readTempoKnobs: () => ({}),
+        originalLokiKnobs: {}, originalTempoKnobs: {}, originalLokiHash: 'same', originalTempoHash: 'same',
+        createHash: () => ({update: () => ({digest: () => 'same'})}), readFile: async () => '', backendConfigPaths: {},
+        services: {prometheus: {}}, originalPrometheusCommand: [], saveCompose: restore,
+        api: async () => ({data: {}}), baseUrls: {}, loadYaml: () => ({services: {prometheus: {command: []}}}),
+        composeFile: '', profileFlagNames: [], originalFlags: {}, profileHash: () => 'same',
+      };
+      const execute = runInNewContext(`(async () => { let ${variable}; try { await proof(); ${source.slice(start, end)} })`, context);
+      if (proofFails || restoreFails) {
+        await assert.rejects(execute(), error => error.message === (proofFails ? 'proof failure' : 'restore failure'), name);
+      } else await execute();
+      assert.deepEqual(cleanupErrors, restoreFails ? [`${name} restore: restore failure`] : [], name);
+      if (restoreFails) assert.equal(observabilityGateComplete({cleanupErrors}), false, name);
+    }
+  }
 });
 
 void test('G14 cannot pass with a missing or incomplete required phase', () => {

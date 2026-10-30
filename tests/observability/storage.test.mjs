@@ -13,23 +13,29 @@ const name = 'coffee-observability-00000000-0000-4000-8000-000000000001-loki-dat
 const storageHelperImage = `sha256:${'a'.repeat(64)}`;
 const labels = lifecycle => ({'coffee.owner': 'operations', 'coffee.lifecycle': lifecycle});
 
-function runStorageHelper(args, fileState) {
+function runStorageHelper(args, fileState, find = '/dev/loop18', {sysDevice = '7:23', nodeDevice} = {}) {
   const root = mkdtempSync(join(tmpdir(), 'coffee-storage-helper-'));
   const storage = join(root, 'storage');
   const bin = join(root, 'bin');
   const log = join(root, 'commands.log');
   mkdirSync(storage);
   mkdirSync(bin);
+  mkdirSync(join(root, 'dev'));
+  for (const minor of [18, 23]) {
+    const path = join(root, 'sys/block', `loop${minor}`);
+    mkdirSync(path, {recursive: true});
+    writeFileSync(join(path, 'dev'), `${minor === 23 ? sysDevice : `7:${minor}`}\n`);
+  }
   if (fileState === 'symlink') {
     writeFileSync(join(storage, 'target'), 'fixture');
     symlinkSync(join(storage, 'target'), join(storage, 'telemetry.ext4'));
   }
   const commands = {
     'blkid': 'printf "ext4\\n"',
-    'losetup': 'if [ "$1" = "--find" ]; then printf "/dev/loop18\\n"; fi',
+    'losetup': 'if [ "$1" = "--find" ]; then printf "%s\\n" "$OBS_STORAGE_TEST_FIND"; fi',
     'mkfs.ext4': ':',
-    'mknod': ':',
-    'stat': 'printf "1073741824\\n"',
+    'mknod': ': > "$1"',
+    'stat': 'if [ "$2" = "%t:%T" ]; then if [ -n "$OBS_STORAGE_TEST_NODE_DEVICE" ]; then printf "%s\\n" "$OBS_STORAGE_TEST_NODE_DEVICE"; else printf "7:%x\\n" "${3##*loop}"; fi; else printf "1073741824\\n"; fi',
     'truncate': ':',
   };
   for (const [name, body] of Object.entries(commands)) {
@@ -39,12 +45,12 @@ function runStorageHelper(args, fileState) {
   }
   try {
     const shellArgs = args.slice(args.indexOf('sh') + 1);
-    shellArgs[1] = shellArgs[1].replaceAll('/storage', storage);
+    shellArgs[1] = shellArgs[1].replaceAll('/storage', storage).replaceAll('/dev/loop', `${root}/dev/loop`).replaceAll('/sys/block', `${root}/sys/block`).replaceAll('test -b "$device"', 'test -f "$device"');
     const result = spawnSync('sh', shellArgs, {
       encoding: 'utf8',
-      env: {...process.env, PATH: `${bin}${delimiter}${process.env.PATH}`, OBS_STORAGE_TEST_LOG: log},
+      env: {...process.env, PATH: `${bin}${delimiter}${process.env.PATH}`, OBS_STORAGE_TEST_LOG: log, OBS_STORAGE_TEST_FIND: find.replaceAll('/dev/loop', `${root}/dev/loop`), OBS_STORAGE_TEST_NODE_DEVICE: nodeDevice ?? ''},
     });
-    return {status: result.status, stdout: result.stdout, stderr: result.stderr, commands: existsSync(log) ? readFileSync(log, 'utf8').trim().split('\n').filter(Boolean) : []};
+    return {status: result.status, stdout: result.stdout.replaceAll(`${root}/dev/loop`, '/dev/loop'), stderr: result.stderr, commands: existsSync(log) ? readFileSync(log, 'utf8').trim().split('\n').filter(Boolean) : []};
   } finally { rmSync(root, {recursive: true, force: true}); }
 }
 
@@ -186,6 +192,20 @@ void test('existing storage refuses a missing or symlink backing file while fres
   assert.equal(freshResult.status, 0);
   assert.ok(freshResult.commands.includes('truncate'));
   assert.ok(freshResult.commands.includes('mkfs.ext4'));
+  const lost = runStorageHelper(freshAttach, 'missing', '/dev/loop23 (lost)');
+  assert.equal(lost.status, 0);
+  assert.deepEqual(JSON.parse(lost.stdout), {device: '/dev/loop23', attached: true});
+  for (const invalid of ['/dev/loop23 (lost) extra', '/dev/loop23/other', '/dev/loop23 (lost) (lost)', '/dev/loop999']) {
+    const result = runStorageHelper(freshAttach, 'missing', invalid);
+    assert.notEqual(result.status, 0);
+    assert.equal(result.commands.includes('mknod'), false);
+  }
+  const wrongSys = runStorageHelper(freshAttach, 'missing', '/dev/loop23 (lost)', {sysDevice: '7:24'});
+  assert.notEqual(wrongSys.status, 0);
+  assert.equal(wrongSys.commands.includes('mknod'), false);
+  const wrongNode = runStorageHelper(freshAttach, 'missing', '/dev/loop23 (lost)', {nodeDevice: '7:18'});
+  assert.notEqual(wrongNode.status, 0);
+  assert.equal(wrongNode.commands.filter(command => command === 'losetup').length, 2);
 });
 
 void test('telemetry failure detaches only a verified new loop and leaves a reused loop alone', () => {
@@ -373,4 +393,37 @@ void test('fixture backing placement refuses persistent names, symlinks and reus
     assert.throws(() => provisionStorage({name, maxDiskBytes: 1073741824, storageHelperImage, backingDirectory: dir, run}), /Invalid fixture/u);
     assert.equal(calls.length, 0);
   } finally { rmSync(root, {recursive: true, force: true}); }
+});
+
+void test('failed fixture allocation cleans only an identified file with no loop association', () => {
+  for (const ambiguous of [false, true]) {
+    const root = mkdtempSync(join(tmpdir(), 'coffee-observability-00000000-0000-4000-8000-000000000001-storage-'));
+    const dir = join(root, name);
+    mkdirSync(dir, {mode: 0o700});
+    const volumes = new Map();
+    const calls = [];
+    const run = args => {
+      calls.push(args);
+      if (args[0] === 'volume' && args[1] === 'inspect') {
+        if (!volumes.has(args[2])) throw Object.assign(new Error('no such volume'), {stderr: 'no such volume'});
+        return JSON.stringify([volumes.get(args[2])]);
+      }
+      if (args[0] === 'volume' && args[1] === 'create') {
+        volumes.set(args.at(-1), {Driver: 'local', Labels: labels('fixture'), Options: {type: 'none', o: 'bind', device: dir}});
+      }
+      if (args[0] === 'volume' && args[1] === 'rm') volumes.delete(args[2]);
+      if (args[0] === 'run' && args[args.indexOf('-ceu') + 1]?.includes('losetup --find')) {
+        writeFileSync(join(dir, 'telemetry.ext4'), 'fixture');
+        throw new Error('allocation failed');
+      }
+      if (args[0] === 'run' && ambiguous) throw new Error('loop association cannot be verified');
+      return '';
+    };
+    try {
+      assert.throws(() => provisionStorage({name, maxDiskBytes: 1073741824, storageHelperImage, backingDirectory: dir, run}), ambiguous ? /fixture allocation retained/u : /allocation failed/u);
+      assert.equal(existsSync(dir), ambiguous);
+      assert.equal(volumes.has(`${name}-backing`), ambiguous);
+      assert.equal(calls.some(args => args[0] === 'run' && args[args.indexOf('-ceu') + 1]?.includes('losetup -d')), false);
+    } finally { rmSync(root, {recursive: true, force: true}); }
+  }
 });

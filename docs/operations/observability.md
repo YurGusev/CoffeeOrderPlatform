@@ -1,5 +1,7 @@
 # Наблюдаемость первого запуска
 
+Очередь каждого Alloy exporter ограничена 2048 items при двух consumers. В отдельном сравнении 512 items давали enqueue losses, а 2048 устранили их на проверенной нагрузке. Prometheus принимает OTLP samples с нарушенным порядком в окне до 30 минут (`telemetry.prometheus.outOfOrderWindowMs`): Изолированный runtime-прогон зафиксировал out-of-order samples при стандартном нулевом окне. Ограничение потребления памяти и полное runtime-поведение остаются предметом G14, а не следуют из component test. Настройка окна следует [рекомендации Prometheus для OpenTelemetry](https://prometheus.io/docs/guides/opentelemetry/#enable-out-of-order-ingestion).
+
 Operations сохраняет producer и runtime contract #64. [ADR-0040](../adr/ADR-0040-grafana-observability.md) и #210 заменяют только его OpenObserve-специфическую реализацию: один Alloy Collector, Grafana, Loki, Prometheus и Tempo. Реализация #210 проверяется; наличие конфигурации и частичных component checks не означает принятия #210 или PASS G12/G14. Исторический `evidence/handoffs/issue-64.yaml` не переписывается. После приёмки #210 его новый handoff станет обязательным input полного launch gate #13; собственные component proofs #210 выполняются до merge и не зависят от будущего принятого handoff.
 
 ## Поток и границы

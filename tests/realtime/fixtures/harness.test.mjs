@@ -530,6 +530,9 @@ void test("catalog harness keeps default setup and scopes launch PostgreSQL owne
           "postgres:17.11",
           expectedLabel,
           JSON.stringify([{ HostIp: "127.0.0.1", HostPort: "45432" }]),
+          JSON.stringify({
+            "/var/lib/postgresql/data": "rw,noexec,nosuid,size=536870912",
+          }),
         ];
         if (driftField !== undefined && inspectCount >= 3) {
           const replacement = {
@@ -538,6 +541,7 @@ void test("catalog harness keeps default setup and scopes launch PostgreSQL owne
             imageId: [`sha256:${"d".repeat(64)}`, 2],
             configuredImage: ["postgres:17.10", 3],
             label: ["foreign-run", 4],
+            tmpfs: [JSON.stringify({}), 6],
           }[driftField];
           if (replacement) fields[replacement[1]] = replacement[0];
           else
@@ -551,6 +555,18 @@ void test("catalog harness keeps default setup and scopes launch PostgreSQL owne
         return {
           stdout: `${fields.join("|")}\n`,
         };
+      }
+      if (args[0] === "exec") {
+        assert.deepEqual(args, [
+          "exec",
+          cid,
+          "stat",
+          "-f",
+          "-c",
+          "%T|%S|%b",
+          "/var/lib/postgresql/data",
+        ]);
+        return { stdout: "tmpfs|4096|131072\n" };
       }
       if (args[0] === "ps") return { stdout: removed ? "" : `${cid}\n` };
       if (args[0] === "rm") {
@@ -704,6 +720,7 @@ void test("catalog harness keeps default setup and scopes launch PostgreSQL owne
     "label",
     "hostIp",
     "hostPort",
+    "tmpfs",
   ]) {
     const drifted = await execute({
       skipCatalogInitialization: true,

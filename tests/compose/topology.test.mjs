@@ -1093,6 +1093,7 @@ void test("observability overlay keeps separate backends private and bounds exac
         type: "volume",
         source: "collector_checkpoints",
         target: "/var/lib/alloy",
+        volume: { nocopy: true },
       },
     ],
   );

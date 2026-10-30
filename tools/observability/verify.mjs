@@ -1,14 +1,13 @@
 import {execFileSync, spawn, spawnSync} from 'node:child_process';
 import {createHash, randomBytes} from 'node:crypto';
-import {accessSync, constants as fsConstants, existsSync} from 'node:fs';
-import {lstat, mkdir, mkdtemp, readFile, readdir, rm, rmdir, writeFile} from 'node:fs/promises';
-import {basename, delimiter, dirname, isAbsolute, join, resolve} from 'node:path';
+import {mkdir, mkdtemp, readFile, readdir, rm, rmdir, writeFile} from 'node:fs/promises';
+import {basename, dirname, isAbsolute, join, resolve} from 'node:path';
 import {tmpdir} from 'node:os';
 import {fileURLToPath} from 'node:url';
 import {dump as dumpYaml, load as loadYaml} from 'js-yaml';
 import {loadPlatformConfig} from '../../scripts/config-lib.mjs';
 import {createAlertDefinitions, createGrafanaAlertProvisioning, newRunId} from './alerts.mjs';
-import {discoverContainerLogs, createAlloyConfig, createComposeOverride, createRuntimeLoggingOverride, createBackendConfigs, ensureBackendOwnership, ensureCollectorConfigOwnership, verifyBootstrapProbe, OBSERVABILITY_TARGETS} from './generate.mjs';
+import {discoverContainerLogs, createAlloyConfig, createComposeOverride, createRuntimeLoggingOverride, createBackendConfigs, ensureBackendOwnership, ensureCollectorConfigOwnership, prometheusMetricName, verifyBootstrapProbe, OBSERVABILITY_TARGETS} from './generate.mjs';
 import {ensurePrivateSecretDirectory, writePrivateSecret} from '../config-bootstrap/index.mjs';
 import {loadVerifiedGateImage, removeVerifiedGateImage} from '../verified-infrastructure-image.mjs';
 import {provisionStorage, removeStorage} from './storage.mjs';
@@ -18,44 +17,6 @@ const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const NODE_RUNTIME_TARGETS = OBSERVABILITY_TARGETS.filter(runtime => runtime !== 'edge-nginx');
 const sleep = ms => new Promise(resolveSleep => setTimeout(resolveSleep, ms));
 const docker = args => execFileSync('docker', args, {encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 120000}).trim();
-
-function safeName(value) {
-  return value.toLowerCase().replace(/[^a-z0-9-]/gu, '-').replace(/-+/gu, '-').replace(/^-|-$/gu, '');
-}
-
-function inspectFixtureTools() {
-  const commands = {
-    node: {binary: process.execPath, args: ['--version']},
-    cp: {args: ['--version']},
-    openssl: {args: ['version']},
-    java: {args: ['-version']},
-    keytool: {args: ['-J-version']},
-    pnpm: {args: ['--version']},
-    docker: {args: ['version', '--format', '{{.Client.Version}}']},
-  };
-  const tools = Object.fromEntries(Object.entries(commands).map(([name, command]) => {
-    let binary = command.binary;
-    if (binary === undefined) {
-      binary = (process.env.PATH ?? '').split(delimiter).map(directory => join(directory, name))
-        .find(candidate => existsSync(candidate) && (() => { try { accessSync(candidate, fsConstants.X_OK); return true; } catch { return false; } })());
-    }
-    if (binary === undefined) return [name, {available: false, version: null}];
-    try {
-      const result = spawnSync(binary, command.args, {encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 5000});
-      if (result.error !== undefined || result.status !== 0) {
-        const failure = result.error?.code ?? `exit-${result.status ?? result.signal ?? 'unknown'}`;
-        return [name, {available: false, path: binary, version: null, failure}];
-      }
-      const output = `${result.stdout ?? ''}\n${result.stderr ?? ''}`.trim();
-      const version = output.split('\n').map(line => line.trim()).find(Boolean) ?? null;
-      return [name, {available: version !== null, path: binary, version}];
-    } catch (error) {
-      return [name, {available: false, path: binary, version: null, failure: error.code ?? `exit-${error.status ?? 'unknown'}`}];
-    }
-  }));
-  const missing = Object.entries(tools).filter(([, tool]) => tool.available !== true).map(([name]) => name);
-  return {status: missing.length === 0 ? 'PASS' : 'FAIL', tools, missing};
-}
 
 function basicAuthorization(email, password) {
   return `Basic ${Buffer.from(`${email}:${password}`).toString('base64')}`;
@@ -88,7 +49,7 @@ function assertDockerLoggingPolicy(actual, expected) {
   return {status: 'PASS', driver: actual.Type, options};
 }
 
-async function api({fetchImpl = fetch, baseUrl, path, authorization, method = 'GET', body, expected = [200], sensitiveValues = [], signal = AbortSignal.timeout(5000)}) {
+async function api({fetchImpl = fetch, baseUrl, path, authorization, method = 'GET', body, expected = [200], signal = AbortSignal.timeout(5000)}) {
   const response = await fetchImpl(new URL(path, baseUrl), {
     method,
     headers: {...(authorization === undefined ? {} : {Authorization: authorization}), ...(body === undefined ? {} : {'Content-Type': 'application/json'})},
@@ -131,8 +92,8 @@ function requireRunning({run, name, secrets = []}) {
   }
 }
 
-function captureContainerDiagnostics({name, stage = 'observed', secrets = []}) {
-  const inspect = spawnSync('docker', ['inspect', '--format', '{{json .State}}', name], {
+export function captureContainerDiagnostics({name, stage = 'observed', secrets = [], spawnProcess = spawnSync}) {
+  const inspect = spawnProcess('docker', ['inspect', '--format', '{{json .State}}', name], {
     encoding: 'utf8', timeout: 5000, stdio: ['ignore', 'pipe', 'pipe'],
   });
   let state;
@@ -140,17 +101,24 @@ function captureContainerDiagnostics({name, stage = 'observed', secrets = []}) {
     try {
       const value = JSON.parse(inspect.stdout.trim());
       state = Object.fromEntries(['Running', 'ExitCode', 'OOMKilled', 'Error', 'StartedAt', 'FinishedAt'].map(key => [key, value[key]]));
-      state.Error = secrets.reduce((value, secret) => secret ? value.replaceAll(secret, '[REDACTED]') : value, String(state.Error ?? '').slice(0, 500))
-        .replace(/(authorization|token|password|secret)([=: ]+)\S+/giu, '$1$2[REDACTED]')
-        .replace(/\b(Basic|Bearer)\s+[^\s"']+/giu, '$1 [REDACTED]')
-        .replace(/o2oi_[A-Za-z0-9_-]+/gu, '[REDACTED]');
+      state.Error = redactDiagnosticText(String(state.Error ?? ''), secrets).slice(0, 500);
+      if (value.Health && typeof value.Health === 'object') {
+        state.Health = {
+          status: ['starting', 'healthy', 'unhealthy'].includes(value.Health.Status) ? value.Health.Status : 'unknown',
+          log: (Array.isArray(value.Health.Log) ? value.Health.Log : []).slice(-3).map(entry => ({
+            exitCode: Number.isInteger(entry?.ExitCode) ? entry.ExitCode : null,
+            output: redactDiagnosticText(String(entry?.Output ?? ''), secrets).slice(0, 900),
+          })),
+        };
+      }
     } catch { state = {unavailable: true}; }
   } else state = {unavailable: true};
-  const logResult = spawnSync('docker', ['logs', '--tail', '120', name], {
+  const logResult = spawnProcess('docker', ['logs', '--tail', '120', name], {
     encoding: 'utf8', timeout: 10000, stdio: ['ignore', 'pipe', 'pipe'],
   });
   const logs = sanitizedDiagnostics(`${logResult.stdout ?? ''}\n${logResult.stderr ?? ''}`, secrets);
-  return {name, stage, state, ...(logs ? {errorOrWarningLines: logs} : {})};
+  const startup = sanitizedStartupMilestones(`${logResult.stdout ?? ''}\n${logResult.stderr ?? ''}`, secrets);
+  return {name, stage, state, ...(logs ? {errorOrWarningLines: logs} : {}), ...(startup ? {startupLines: startup} : {})};
 }
 
 function containerGeneration({run, name}) {
@@ -712,11 +680,15 @@ async function fixtureDiagnostics(baseUrl) {
     ...counterValues, counters: counterValues};
 }
 
-function sanitizedDiagnostics(value, secrets) {
+function redactDiagnosticText(value, secrets) {
   return secrets.reduce((result, secret) => secret ? result.replaceAll(secret, '[REDACTED]') : result, value)
     .replace(/(authorization|token|password|secret)([=: ]+)\S+/giu, '$1$2[REDACTED]')
     .replace(/o2oi_[A-Za-z0-9_-]+/gu, '[REDACTED]')
-    .replace(/\b(Basic|Bearer)\s+[^\s"']+/giu, '$1 [REDACTED]')
+    .replace(/\b(Basic|Bearer)\s+[^\s"']+/giu, '$1 [REDACTED]');
+}
+
+function sanitizedDiagnostics(value, secrets) {
+  return redactDiagnosticText(value, secrets)
     .split('\n')
     .filter(line => /\b(error|warn|failed|unauthorized|forbidden|queue is full)\b/iu.test(line))
     .slice(-10)
@@ -725,15 +697,13 @@ function sanitizedDiagnostics(value, secrets) {
 }
 
 function sanitizedStartupMilestones(value, secrets) {
-  return secrets.reduce((result, secret) => secret ? result.replaceAll(secret, '[REDACTED]') : result, value)
-    .replace(/(authorization|token|password|secret)([=: ]+)\S+/giu, '$1$2[REDACTED]')
-    .replace(/\b(Basic|Bearer)\s+[^\s"']+/giu, '$1 [REDACTED]')
-    .replace(/o2oi_[A-Za-z0-9_-]+/gu, '[REDACTED]')
+  const lines = redactDiagnosticText(value, secrets)
     .split('\n')
-    .filter(line => /\b(start(?:ing|ed)?|listen(?:ing)?|server|migrat(?:e|ion)|ready|initiali[sz]e|bind(?:ing)?)\b/iu.test(line))
-    .slice(-8)
+    .filter(line => /\b(start(?:ing|ed)?|listen(?:ing)?|server|sqlite|migrat(?:e|ion)|ready|initiali[sz]e|bind(?:ing)?)\b/iu.test(line))
+    .slice(-12)
     .map(line => line.slice(0, 400))
     .join('\n');
+  return Buffer.from(lines).subarray(-1997).toString('utf8');
 }
 
 export async function readSinkEvents(path) {
@@ -765,21 +735,6 @@ async function fixtureRequest({baseUrl, path = '/synthetic', method = 'POST', bo
   });
   if (!response.ok) throw new Error(`synthetic runtime ${method} ${path} returned HTTP ${response.status}`);
   return response.status === 204 ? undefined : response.json();
-}
-
-function summarizeLogRows(records, {runId, redactionCanary}) {
-  const paths = new Set();
-  let runIdObserved = false;
-  let canaryLeaked = false;
-  const visit = (value, path = '', depth = 0) => {
-    if (value === '[REDACTED]') paths.add(path);
-    if (value === runId) runIdObserved = true;
-    if (value === redactionCanary) canaryLeaked = true;
-    if (depth >= 8 || value === null || typeof value !== 'object') return;
-    for (const [key, child] of Object.entries(value).slice(0, 100)) visit(child, path ? `${path}.${key}` : key, depth + 1);
-  };
-  for (const record of records.slice(0, 10)) visit(record);
-  return {recordCount: records.length, recordKeys: [...new Set(records.flatMap(record => Object.keys(record ?? {})))].slice(0, 80), redactedPaths: [...paths].slice(0, 30), runIdObserved, canaryLeaked};
 }
 
 function inspectProducerRedaction({name, runId, redactionCanary, maxRecordBytes}) {
@@ -890,19 +845,11 @@ export async function queryLokiLogs({baseUrl, runId, startTimeUs, endTimeUs = Da
       let body;
       try { body = JSON.parse(value[1]); } catch { throw new Error('Loki log body is not JSON'); }
       if (body === null || typeof body !== 'object' || Array.isArray(body)) throw new Error('Loki log body is invalid');
-      records.push({...stream.stream, ...(value[2] ?? {}), ...body, _timestamp: timestampUs});
+      records.push({...stream.stream, ...value[2], ...body, _timestamp: timestampUs});
     }
   }
   if (records.length >= 1000) throw new Error('Loki response reached the query limit');
   return records;
-}
-
-export function prometheusMetricName(name) {
-  const normalized = name.replace(/[^a-zA-Z0-9_]/gu, '_');
-  const units = {runtime_http_request_duration_ms: '_milliseconds', messaging_kafka_consumer_lag: '_messages',
-    messaging_outbox_oldest_unpublished_age: '_milliseconds', db_client_connection_checkout_wait: '_milliseconds',
-    messaging_kafka_event_age: '_milliseconds', messaging_inbox_received_age: '_milliseconds'};
-  return normalized + (units[normalized] ?? '');
 }
 
 export async function queryPrometheusRange({baseUrl, expression, startTimeUs, endTimeUs = Date.now() * 1000, fetchImpl = fetch}) {
@@ -1154,10 +1101,6 @@ async function fixtureHealth({baseUrl, path, budgetMs}) {
   const latencyMs = performance.now() - started;
   if (!response.ok || latencyMs >= budgetMs) throw new Error(`fixture health ${path} failed HTTP ${response.status} in ${Math.round(latencyMs)}ms`);
   return Math.round(latencyMs);
-}
-
-async function setFixtureState({baseUrl, runId, active, oldTimestamp = false}) {
-  return fixtureRequest({baseUrl, path: '/test/state', body: {active, oldTimestamp}, runId});
 }
 
 async function sourceDirectoryDigest(root, directory) {
@@ -1425,7 +1368,11 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
   const compose = args => run(['compose', '--project-name', project, '--file', composeFile, ...args]);
   const timeoutForHealth = () => Math.max(60000, config.platform.health.startupGraceMs + 30000);
   const cleanError = error => secrets.reduce((value, secret) => secret ? value.replaceAll(secret, '[REDACTED]') : value, String(error?.message ?? error));
-  const startPhase = name => { activePhase = name; evidence.phases[name] = 'RUNNING'; };
+  const startPhase = name => {
+    activePhase = name;
+    evidence.phases[name] = 'RUNNING';
+    process.stderr.write(`${JSON.stringify({phase: name, startedAtUtc: new Date().toISOString()})}\n`);
+  };
   try {
     config = await loadPlatformConfig(root);
     toolchain = JSON.parse(await readFile(join(root, 'config/toolchain-versions.json'), 'utf8'));
@@ -1534,7 +1481,7 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
         Object.values(sinkInfo?.HostConfig?.PortBindings ?? {}).flat().length !== 0) throw new Error('alert sink isolation invalid');
     evidence.networkIsolation = {status: 'PASS', backendDnsAndIpsBlockedFromProducer: true, hostBindingsAbsent: true};
     const healthPaths = {grafana: '/api/health', loki: '/ready', prometheus: '/-/ready', tempo: '/ready', 'otel-collector': '/-/ready'};
-    const waitHealth = async name => waitFor(async () => {
+    const waitHealth = async (name, timeoutMs = timeoutForHealth()) => waitFor(async () => {
       requireRunning({run, name: containerIds[name], secrets});
       if (name === 'otel-collector') {
         const port = new URL(config.telemetry.collector.healthEndpoint).port;
@@ -1543,8 +1490,8 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
       }
       const response = await fetch(new URL(healthPaths[name], baseUrls[name]), {signal: AbortSignal.timeout(config.platform.health.timeoutMs)});
       return response.ok;
-    }, {timeoutMs: timeoutForHealth(), intervalMs: 1000, description: `${name} private health`});
-    for (const name of Object.keys(healthPaths)) await waitHealth(name);
+    }, {timeoutMs, intervalMs: 1000, description: `${name} private health`});
+    for (const name of Object.keys(healthPaths)) await waitHealth(name, name === 'grafana' ? 180000 : undefined);
     await waitFor(async () => {
       requireRunning({run, name: producerName, secrets});
       return (await fetch(new URL(config.platform.health.readyPath, producerUrl), {signal: AbortSignal.timeout(1000)})).ok;
@@ -1694,7 +1641,7 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
       const address = info?.NetworkSettings?.Networks?.[backendNetwork]?.IPAddress;
       if (!/^(?:\d{1,3}\.){3}\d{1,3}$/u.test(address ?? '')) throw new Error('recreated Alloy backend address unavailable');
       baseUrls['otel-collector'] = `http://${address}:${new URL(config.telemetry.collector.healthEndpoint).port}`;
-      for (const network of [...new Set(networks)]) run(['network', 'connect', '--alias', 'otel-collector', network, containerIds['otel-collector']]);
+      for (const network of new Set(networks)) run(['network', 'connect', '--alias', 'otel-collector', network, containerIds['otel-collector']]);
       await waitHealth('otel-collector');
       collectorReconfigured = selectedLogs !== logFiles;
     };
@@ -2277,6 +2224,7 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
     const backupNames = ['grafana', 'loki', 'prometheus', 'tempo'];
     const originalVolumes = structuredClone(fixtureCompose.volumes);
     let backendStopStarted = false;
+    let backupRestorationError;
     try {
       backupDir = await mkdtemp(join(tmpdir(), `${project}-backup-`));
       const restoreProject = `coffee-observability-${newRunId()}`;
@@ -2338,21 +2286,30 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
         restoredVolumes: Object.fromEntries(backupNames.map(name => [name, restoreStorage[name].volumeName]))};
       evidence.phases.backupRestore = 'PASS';
     } finally {
-      fixtureCompose.volumes = originalVolumes;
-      if (backendStopStarted) {
-        await writeFile(composeFile, dumpYaml(fixtureCompose, {noRefs: true, lineWidth: 120}), {mode: 0o600});
-        compose(['up', '-d', '--no-deps', '--force-recreate', ...backupNames, 'otel-collector']);
-        for (const name of [...backupNames, 'otel-collector']) {
-          containerIds[name] = compose(['ps', '--quiet', name]).trim();
-          const info = JSON.parse(run(['inspect', containerIds[name]]))[0];
-          const ip = info?.NetworkSettings?.Networks?.[backendNetwork]?.IPAddress;
-          if (!/^[a-f0-9]{12,64}$/u.test(containerIds[name]) || !ip) throw new Error(`${name} original container identity unavailable after restore proof`);
-          const endpoint = name === 'otel-collector' ? config.telemetry.collector.healthEndpoint : config.telemetry[name].endpoint;
-          baseUrls[name] = `http://${ip}:${new URL(endpoint).port}`;
-          await waitHealth(name);
+      try {
+        fixtureCompose.volumes = originalVolumes;
+        if (backendStopStarted) {
+          await writeFile(composeFile, dumpYaml(fixtureCompose, {noRefs: true, lineWidth: 120}), {mode: 0o600});
+          compose(['up', '-d', '--no-deps', '--force-recreate', ...backupNames, 'otel-collector']);
+          for (const name of [...backupNames, 'otel-collector']) {
+            containerIds[name] = compose(['ps', '--quiet', name]).trim();
+            const info = JSON.parse(run(['inspect', containerIds[name]]))[0];
+            const ip = info?.NetworkSettings?.Networks?.[backendNetwork]?.IPAddress;
+            if (!/^[a-f0-9]{12,64}$/u.test(containerIds[name]) || !ip) {
+              backupRestorationError ??= new Error(`${name} original container identity unavailable after restore proof`);
+            } else {
+              const endpoint = name === 'otel-collector' ? config.telemetry.collector.healthEndpoint : config.telemetry[name].endpoint;
+              baseUrls[name] = `http://${ip}:${new URL(endpoint).port}`;
+              await waitHealth(name);
+            }
+          }
         }
+      } catch (error) {
+        backupRestorationError ??= error;
       }
+      if (backupRestorationError) cleanupErrors.push('backup restore: ' + cleanError(backupRestorationError));
     }
+    if (backupRestorationError) throw backupRestorationError;
     evidence.runtimeShutdownStatus = 'PASS';
     evidence.runtimeShutdown = {status: 'PASS', producer: producerStop, infrastructure: evidence.telemetryHealth.infrastructureGracefulStops};
     startPhase('retention');
@@ -2414,6 +2371,7 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
       };
       const lokiStagingProfile = structuredClone(lokiProfile);
       lokiStagingProfile.compactor.retention_enabled = false;
+      let lokiRestorationError;
       try {
         await writeLokiConfig(lokiStagingProfile);
         await recreateBackend('loki');
@@ -2483,13 +2441,19 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
           nativeFlushAndCleanRestart: true, markerId: retentionId, sampleTimestampMs: sampleMs, visibleBeforeExpiry: true, absentObservationWindowMs: 60 * 1000,
           currentControlVisible: true, retentionSuccessAtSeconds}, prometheus: 'NOT_RUN', tempo: 'NOT_RUN'};
       } finally {
-        await writeLokiConfig(originalLokiConfig);
-        await recreateBackend('loki');
-        const restoredLokiKnobs = await readLokiKnobs();
-        if (Object.keys(originalLokiKnobs).some(key => restoredLokiKnobs[key] !== originalLokiKnobs[key]) ||
-            createHash('sha256').update(await readFile(backendConfigPaths.loki)).digest('hex') !== originalLokiHash)
-          throw new Error('Loki production retention restoration failed');
+        try {
+          await writeLokiConfig(originalLokiConfig);
+          await recreateBackend('loki');
+          const restoredLokiKnobs = await readLokiKnobs();
+          if (Object.keys(originalLokiKnobs).some(key => restoredLokiKnobs[key] !== originalLokiKnobs[key]) ||
+              createHash('sha256').update(await readFile(backendConfigPaths.loki)).digest('hex') !== originalLokiHash)
+            lokiRestorationError = new Error('Loki production retention restoration failed');
+        } catch (error) {
+          lokiRestorationError ??= error;
+        }
+        if (lokiRestorationError) cleanupErrors.push('Loki retention restore: ' + cleanError(lokiRestorationError));
       }
+      if (lokiRestorationError) throw lokiRestorationError;
       const originalPrometheusCommand = [...services.prometheus.command];
       const originalFlags = (await api({baseUrl: baseUrls.prometheus, path: '/api/v1/status/flags'}))?.data;
       const profileFlagNames = ['storage.tsdb.retention.time', 'storage.tsdb.min-block-duration', 'storage.tsdb.max-block-duration'];
@@ -2499,6 +2463,7 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
       prometheusProfile.push('--storage.tsdb.retention.time=2m', '--storage.tsdb.min-block-duration=1m', '--storage.tsdb.max-block-duration=1m');
       evidence.retention.productionEffective = actualEffective;
       const saveCompose = () => writeFile(composeFile, dumpYaml(fixtureCompose, {noRefs: true, lineWidth: 120}), {mode: 0o600});
+      let prometheusRestorationError;
       try {
         services.prometheus.command = prometheusProfile;
         await saveCompose();
@@ -2537,15 +2502,21 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
           sourceConfigSha256: configSourceSha256, schemaSourceSha256, profileSha256: profileHash(prometheusProfile), markerId: metricId,
           sampleTimestampUs: metricTimeUs, visibleBeforeExpiry: true, liveControlVisible: true};
       } finally {
-        services.prometheus.command = originalPrometheusCommand;
-        await saveCompose();
-        await recreateBackend('prometheus');
-        const restoredFlags = (await api({baseUrl: baseUrls.prometheus, path: '/api/v1/status/flags'}))?.data;
-        const restoredCompose = loadYaml(await readFile(composeFile, 'utf8'));
-        if (profileFlagNames.some(name => durationMilliseconds(restoredFlags?.[name]) !== durationMilliseconds(originalFlags[name])) ||
-            profileHash(restoredCompose?.services?.prometheus?.command) !== profileHash(originalPrometheusCommand))
-          throw new Error('Prometheus production retention restoration failed');
+        try {
+          services.prometheus.command = originalPrometheusCommand;
+          await saveCompose();
+          await recreateBackend('prometheus');
+          const restoredFlags = (await api({baseUrl: baseUrls.prometheus, path: '/api/v1/status/flags'}))?.data;
+          const restoredCompose = loadYaml(await readFile(composeFile, 'utf8'));
+          if (profileFlagNames.some(name => durationMilliseconds(restoredFlags?.[name]) !== durationMilliseconds(originalFlags[name])) ||
+              profileHash(restoredCompose?.services?.prometheus?.command) !== profileHash(originalPrometheusCommand))
+            prometheusRestorationError = new Error('Prometheus production retention restoration failed');
+        } catch (error) {
+          prometheusRestorationError ??= error;
+        }
+        if (prometheusRestorationError) cleanupErrors.push('Prometheus retention restore: ' + cleanError(prometheusRestorationError));
       }
+      if (prometheusRestorationError) throw prometheusRestorationError;
       const originalTempoConfig = configs.tempo;
       const tempoProfile = structuredClone(originalTempoConfig);
       tempoProfile.backend_worker.compaction.block_retention = '2m';
@@ -2575,6 +2546,7 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
         await rm(backendConfigPaths.tempo);
         await writeFile(backendConfigPaths.tempo, dumpYaml(value, {noRefs: true, lineWidth: 120}), {mode: 0o444});
       };
+      let tempoRestorationError;
       try {
         await writeTempoConfig(tempoProfile);
         await recreateBackend('tempo');
@@ -2619,13 +2591,19 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
           profileSha256: profileHash(tempoProfile), traceId: expiredTraceId, visibleBeforeExpiry: true, liveControlVisible: true,
           profile: {retention: '2m', retentionInterval: '30s', completeBlockTimeout: '1m', blocklistPoll: '30s'}};
       } finally {
-        await writeTempoConfig(originalTempoConfig);
-        await recreateBackend('tempo');
-        const restoredTempoKnobs = await readTempoKnobs();
-        if (Object.keys(originalTempoKnobs).some(key => restoredTempoKnobs[key] !== originalTempoKnobs[key]) ||
-            createHash('sha256').update(await readFile(backendConfigPaths.tempo)).digest('hex') !== originalTempoHash)
-          throw new Error('Tempo production retention restoration failed');
+        try {
+          await writeTempoConfig(originalTempoConfig);
+          await recreateBackend('tempo');
+          const restoredTempoKnobs = await readTempoKnobs();
+          if (Object.keys(originalTempoKnobs).some(key => restoredTempoKnobs[key] !== originalTempoKnobs[key]) ||
+              createHash('sha256').update(await readFile(backendConfigPaths.tempo)).digest('hex') !== originalTempoHash)
+            tempoRestorationError = new Error('Tempo production retention restoration failed');
+        } catch (error) {
+          tempoRestorationError ??= error;
+        }
+        if (tempoRestorationError) cleanupErrors.push('Tempo retention restore: ' + cleanError(tempoRestorationError));
       }
+      if (tempoRestorationError) throw tempoRestorationError;
       evidence.retention.restoredEffective = await readEffective();
       if (Object.keys(expectedEffective).some(key => evidence.retention.restoredEffective[key] !== expectedEffective[key]))
         throw new Error('backend production retention did not restore');
@@ -2643,6 +2621,17 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
   } catch (error) {
     evidence.phases[activePhase] = 'FAIL';
     evidence.failure = `${activePhase}: ${cleanError(error)}`;
+    if (activePhase === 'startup' && composeStarted) {
+      evidence.startupDiagnostics = ['grafana', 'loki', 'prometheus', 'tempo', 'otel-collector', 'alert-sink'].map(service => {
+        try {
+          const id = compose(['ps', '--all', '--quiet', service]).trim();
+          if (!/^[a-f0-9]{12,64}$/u.test(id)) return {service, unavailable: true};
+          return {service, ...captureContainerDiagnostics({name: id, stage: 'startup', secrets})};
+        } catch {
+          return {service, unavailable: true};
+        }
+      });
+    }
   } finally {
     if (diskPressureIdentity && storage.grafana && toolchain) {
       try { run(['run', '--rm', '--network', 'none', '--read-only', '--user', '472:472', '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges:true',
@@ -2655,8 +2644,9 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
       const checkpoint = `${project}_collector_checkpoints`;
       try {
         const info = JSON.parse(run(['volume', 'inspect', checkpoint]))[0];
-        if (info?.Labels?.['com.docker.compose.project'] !== project || info?.Labels?.['com.docker.compose.volume'] !== 'collector_checkpoints') throw new Error('checkpoint ownership mismatch');
-        run(['volume', 'rm', checkpoint]);
+        if (info?.Labels?.['com.docker.compose.project'] !== project || info?.Labels?.['com.docker.compose.volume'] !== 'collector_checkpoints')
+          cleanupErrors.push('checkpoint cleanup: checkpoint ownership mismatch');
+        else run(['volume', 'rm', checkpoint]);
       } catch (error) { if (!/no such volume/iu.test(String(error.stderr ?? error.message))) cleanupErrors.push(`checkpoint cleanup: ${cleanError(error)}`); }
     }
     if (producerCreated) { try { run(['rm', '-f', producerName]); } catch (error) { cleanupErrors.push(`producer cleanup: ${cleanError(error)}`); } }

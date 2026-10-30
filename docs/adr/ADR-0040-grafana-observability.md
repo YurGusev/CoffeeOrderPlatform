@@ -33,6 +33,8 @@ HTTP UI, readiness и служебная диагностика Alloy слуша
 внешние usage reports и внешние notifications выключены. Grafana anonymous access
 запрещён; admin password получает только его scoped materialization.
 
+Очередь Alloy exporter увеличена до 2048 items при двух consumers после воспроизведённых enqueue losses на 512. Для Prometheus задано ограниченное 30-минутное окно приёма out-of-order OTLP samples: Изолированный runtime-прогон показал такие samples при нулевом стандартном окне. [Документация Prometheus](https://prometheus.io/docs/guides/opentelemetry/#enable-out-of-order-ingestion) описывает эту настройку. Причина конкретного HTTP 400 не доказана; компонентное сравнение не заменяет проверки памяти и полного G14.
+
 ## Хранение и изменение G14
 
 Владелец явно согласовал отдельные ограниченные persistent volumes, три дня

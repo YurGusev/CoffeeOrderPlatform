@@ -2,8 +2,7 @@ import {execFileSync} from 'node:child_process';
 import {readFile} from 'node:fs/promises';
 import {resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
-import {createRuntimeLoggingOverride, discoverContainerLogs, OBSERVABILITY_TARGETS} from '../../tools/observability/generate.mjs';
-import {prometheusMetricName} from '../../tools/observability/verify.mjs';
+import {createRuntimeLoggingOverride, discoverContainerLogs, OBSERVABILITY_TARGETS, prometheusMetricName} from '../../tools/observability/generate.mjs';
 import {
   buildRuntimeMatrixProbe, COMMON_TEXT_FAMILIES, NODE_RUNTIME_ROLES, OWNER_TEXT_FAMILIES,
   OPTIONAL_OWNER_TEXT_FAMILIES, summarizeRuntimeProbeOutput,

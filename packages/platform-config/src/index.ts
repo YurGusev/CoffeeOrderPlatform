@@ -344,6 +344,7 @@ export type TelemetryConfig = Readonly<{
     memoryLimitMiB: number;
     maxDiskBytes: number;
     retentionDays: number;
+    outOfOrderWindowMs: number;
   }>;
   tempo: Readonly<{
     endpoint: string;
@@ -2241,6 +2242,7 @@ function telemetryConfig(value: unknown): TelemetryConfig {
       "maxDiskBytes",
       ...(name === "grafana" ? [] : ["retentionDays"]),
       ...(name === "tempo" ? ["otlpEndpoint"] : []),
+      ...(name === "prometheus" ? ["outOfOrderWindowMs"] : []),
     ];
     exactKeys(item, keys, field);
     const privateEndpoint = (key: string) => {
@@ -2269,12 +2271,14 @@ function telemetryConfig(value: unknown): TelemetryConfig {
         "memoryLimitMiB",
         "maxDiskBytes",
         ...(name === "grafana" ? [] : ["retentionDays"]),
+        ...(name === "prometheus" ? ["outOfOrderWindowMs"] : []),
       ],
       field,
     );
     if (
       values["maxDiskBytes"]! < 268435456 ||
-      (name !== "grafana" && values["retentionDays"]! < 3)
+      (name !== "grafana" && values["retentionDays"]! < 3) ||
+      (name === "prometheus" && values["outOfOrderWindowMs"]! > 1800000)
     )
       throw new PlatformConfigError(
         field,

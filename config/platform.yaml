@@ -303,7 +303,7 @@ telemetry:
     memoryCheckIntervalMs: 1000
     batchSize: 128
     batchTimeoutMs: 1000
-    queueCapacity: 512
+    queueCapacity: 2048
     queueConsumers: 2
     exportTimeoutMs: 2000
     retryInitialMs: 1000
@@ -325,7 +325,7 @@ telemetry:
   externalReportingEnabled: false
   grafana: { endpoint: http://grafana:3000, memoryLimitMiB: 256, maxDiskBytes: 1073741824 }
   loki: { endpoint: http://loki:3100, memoryLimitMiB: 512, maxDiskBytes: 1073741824, retentionDays: 3 }
-  prometheus: { endpoint: http://prometheus:9090, memoryLimitMiB: 512, maxDiskBytes: 1073741824, retentionDays: 3 }
+  prometheus: { endpoint: http://prometheus:9090, memoryLimitMiB: 512, maxDiskBytes: 1073741824, retentionDays: 3, outOfOrderWindowMs: 1800000 }
   tempo: { endpoint: http://tempo:3200, otlpEndpoint: http://tempo:4318, memoryLimitMiB: 768, maxDiskBytes: 1073741824, retentionDays: 3 }
   alerts:
     version: 1

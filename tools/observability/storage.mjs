@@ -10,7 +10,7 @@ export function provisionStorage({name, maxDiskBytes, storageHelperImage, backin
   if (!/^coffee-[a-z0-9-]+$/u.test(name) || !Number.isSafeInteger(maxDiskBytes) || maxDiskBytes < 268435456 || !/^sha256:[0-9a-f]{64}$/u.test(storageHelperImage)) throw new Error('Invalid bounded telemetry storage specification');
   const backingVolume = `${name}-backing`;
   const lifecycle = /^coffee-observability-[a-f0-9-]{36}-(?:grafana|loki|prometheus|tempo)-data$/u.test(name) ? 'fixture' : 'persistent';
-  let directoryIdentity;
+  let directoryIdentity, parentIdentity;
   if (backingDirectory !== undefined) {
     if (lifecycle !== 'fixture' || !isAbsolute(backingDirectory) || basename(backingDirectory) !== name ||
         !/^coffee-observability-[a-f0-9-]{36}-storage-[A-Za-z0-9]{6}$/u.test(basename(dirname(backingDirectory))) ||
@@ -20,6 +20,7 @@ export function provisionStorage({name, maxDiskBytes, storageHelperImage, backin
     if (![parent, directory].every(item => item.isDirectory() && !item.isSymbolicLink() && item.uid === process.getuid() && (item.mode & 0o777) === 0o700) ||
         readdirSync(backingDirectory).length !== 0) throw new Error('Fixture backing directory must be private and empty');
     directoryIdentity = {dev: directory.dev, ino: directory.ino};
+    parentIdentity = {dev: parent.dev, ino: parent.ino};
   }
   const owned = volume => {
     let info;
@@ -41,7 +42,9 @@ export function provisionStorage({name, maxDiskBytes, storageHelperImage, backin
   }
   run(['volume', 'create', '--label', 'coffee.owner=operations', '--label', `coffee.lifecycle=${lifecycle}`,
     ...(backingDirectory === undefined ? [] : ['--driver', 'local', '--opt', 'type=none', '--opt', 'o=bind', '--opt', `device=${backingDirectory}`]), backingVolume]);
-  const attachment = JSON.parse(run(['run', '--rm', '--privileged', '--network', 'none', '--mount', `type=volume,source=${backingVolume},target=/storage`, storageHelperImage, 'sh', '-ceu', `
+  let device, attached, fileIdentity;
+  try {
+    const attachment = JSON.parse(run(['run', '--rm', '--privileged', '--network', 'none', '--mount', `type=volume,source=${backingVolume},target=/storage`, storageHelperImage, 'sh', '-ceu', `
     if [ -L /storage/telemetry.ext4 ]; then exit 1; fi
     if [ -e /storage/telemetry.ext4 ]; then
       test -f /storage/telemetry.ext4
@@ -54,16 +57,22 @@ export function provisionStorage({name, maxDiskBytes, storageHelperImage, backin
     fi
     existing=$(losetup -j /storage/telemetry.ext4 | cut -d : -f 1)
     if [ -n "$existing" ]; then printf '{"device":"%s","attached":false}' "$existing"; else
-      device=$(losetup --find)
-      test -b "$device" || mknod "$device" b 7 "\${device##*loop}"
+      candidate=$(losetup --find)
+      case "$candidate" in *' (lost)') candidate="\${candidate% (lost)}" ;; esac
+      case "$candidate" in /dev/loop*) minor="\${candidate#/dev/loop}" ;; *) exit 1 ;; esac
+      case "$minor" in ''|*[!0-9]*) exit 1 ;; esac
+      device="/dev/loop$minor"
+      test "$(cat "/sys/block/loop$minor/dev")" = "7:$minor"
+      test ! -L "$device"
+      test -b "$device" || mknod "$device" b 7 "$minor"
+      test -b "$device"
+      test "$(stat -c %t:%T "$device")" = "$(printf '%x:%x' 7 "$minor")"
       losetup "$device" /storage/telemetry.ext4
       printf '{"device":"%s","attached":true}' "$device"
     fi
   `, 'storage', String(maxDiskBytes), String(Boolean(previous))]));
-  const {device, attached} = attachment;
-  const validDevice = typeof device === 'string' && /^\/dev\/loop[0-9]+$/u.test(device);
-  let fileIdentity;
-  try {
+    ({device, attached} = attachment);
+    const validDevice = typeof device === 'string' && /^\/dev\/loop[0-9]+$/u.test(device);
     if (!validDevice) throw new Error('Cannot provision bounded telemetry loop device');
     if (typeof attached !== 'boolean') throw new Error('Cannot verify telemetry loop attachment');
     if (backingDirectory !== undefined && attached !== true) throw new Error('Fixture backing loop is not newly attached');
@@ -78,7 +87,7 @@ export function provisionStorage({name, maxDiskBytes, storageHelperImage, backin
     return {volumeName: name, backingVolume, device, maxDiskBytes,
       ...(backingDirectory === undefined ? {} : {backingDirectory, directoryIdentity, fileIdentity})};
   } catch (error) {
-    if (attached === true && validDevice) {
+    if (attached === true && typeof device === 'string' && /^\/dev\/loop[0-9]+$/u.test(device)) {
       try {
         run(['run', '--rm', '--privileged', '--network', 'none', '--mount', `type=volume,source=${backingVolume},target=/storage`, storageHelperImage, 'sh', '-ceu', 'losetup -j /storage/telemetry.ext4 | cut -d : -f 1 | grep -Fx "$1"; losetup -d "$1"', 'storage', device]);
         if (backingDirectory !== undefined && fileIdentity) {
@@ -96,6 +105,29 @@ export function provisionStorage({name, maxDiskBytes, storageHelperImage, backin
         }
       } catch (cleanupError) {
         throw new AggregateError([error, cleanupError], 'Telemetry storage provisioning and loop cleanup failed');
+      }
+    } else if (backingDirectory !== undefined && attached === undefined) {
+      try {
+        const info = owned(backingVolume);
+        const options = info?.Options ?? {};
+        const parent = lstatSync(dirname(backingDirectory));
+        const dir = lstatSync(backingDirectory);
+        const file = lstatSync(`${backingDirectory}/telemetry.ext4`);
+        if (info?.Driver !== 'local' || Object.keys(options).length !== 3 || options.type !== 'none' || options.o !== 'bind' || options.device !== backingDirectory ||
+            owned(name) || run(['ps', '--all', '--filter', `volume=${backingVolume}`, '--format', '{{.ID}}']).trim() ||
+            realpathSync(backingDirectory) !== backingDirectory || parent.dev !== parentIdentity.dev || parent.ino !== parentIdentity.ino ||
+            ![parent, dir].every(item => item.isDirectory() && !item.isSymbolicLink() && item.uid === process.getuid() && (item.mode & 0o777) === 0o700) ||
+            dir.dev !== directoryIdentity.dev || dir.ino !== directoryIdentity.ino || readdirSync(backingDirectory).join('\n') !== 'telemetry.ext4' ||
+            !file.isFile() || file.isSymbolicLink() || file.nlink !== 1) throw new Error('Fixture allocation identity is uncertain');
+        run(['run', '--rm', '--privileged', '--network', 'none', '--read-only', '--mount', `type=volume,source=${backingVolume},target=/storage,readonly`, storageHelperImage, 'sh', '-ceu',
+          'test "$(stat -c %d:%i /storage/telemetry.ext4)" = "$1"; associations=$(losetup -j /storage/telemetry.ext4); test -z "$associations"', 'storage', `${file.dev}:${file.ino}`]);
+        const current = lstatSync(`${backingDirectory}/telemetry.ext4`);
+        if (current.dev !== file.dev || current.ino !== file.ino || !current.isFile() || current.nlink !== 1) throw new Error('Fixture allocation identity changed during cleanup');
+        run(['volume', 'rm', backingVolume]);
+        unlinkSync(`${backingDirectory}/telemetry.ext4`);
+        rmdirSync(backingDirectory);
+      } catch (cleanupError) {
+        throw new AggregateError([error, cleanupError], 'Telemetry storage provisioning failed; fixture allocation retained');
       }
     }
     throw error;

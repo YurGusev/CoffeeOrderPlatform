@@ -114,7 +114,7 @@ const sample = {
       memoryCheckIntervalMs: 1000,
       batchSize: 128,
       batchTimeoutMs: 1000,
-      queueCapacity: 512,
+      queueCapacity: 2048,
       queueConsumers: 2,
       exportTimeoutMs: 2000,
       retryInitialMs: 1000,
@@ -137,7 +137,7 @@ const sample = {
     alerts: {evaluationIntervalMs: 60000, diskUsage: {forMs: 0}, sinkMemoryMiB: 128},
     grafana: {endpoint: "http://grafana:3000", memoryLimitMiB: 256, maxDiskBytes: 1073741824},
     loki: {endpoint: "http://loki:3100", memoryLimitMiB: 512, maxDiskBytes: 1073741824, retentionDays: 3},
-    prometheus: {endpoint: "http://prometheus:9090", memoryLimitMiB: 512, maxDiskBytes: 1073741824, retentionDays: 3},
+    prometheus: {endpoint: "http://prometheus:9090", memoryLimitMiB: 512, maxDiskBytes: 1073741824, retentionDays: 3, outOfOrderWindowMs: 1800000},
     tempo: {endpoint: "http://tempo:3200", otlpEndpoint: "http://tempo:4318", memoryLimitMiB: 768, maxDiskBytes: 1073741824, retentionDays: 3},
 
   },
@@ -471,7 +471,7 @@ void test("Collector config accepts only exact selected log files and bounds exp
   assert.equal(config.processors.memory_limiter.spike_limit_mib, 32);
   assert.equal(
     config.exporters["otlp_http/logs"].sending_queue.queue_size,
-    512,
+    2048,
   );
   assert.equal(
     config.exporters["otlp_http/logs"].retry_on_failure.max_elapsed_time,
@@ -505,7 +505,7 @@ void test("generated Collector and backend configs preserve bounded delivery and
   assert.equal(collector.exporters["otlp_http/metrics"].endpoint, "http://prometheus:9090/api/v1/otlp");
   assert.equal(collector.exporters["otlp_http/traces"].endpoint, "http://tempo:4318");
   assert.equal(collector.receivers.filelog.storage, "file_storage");
-  for (const signal of ["logs", "metrics", "traces"]) assert.equal(collector.exporters[`otlp_http/${signal}`].sending_queue.queue_size, 512);
+  for (const signal of ["logs", "metrics", "traces"]) assert.equal(collector.exporters[`otlp_http/${signal}`].sending_queue.queue_size, 2048);
   const alloy = createAlloyConfig({config: sample, logFiles: logs, exporterToken: "producer-token"});
   assert.match(alloy, /auth = otelcol.auth.bearer.producer.handler/u);
   assert.match(alloy, /endpoint = "0.0.0.0:4318"/u);
@@ -517,6 +517,7 @@ void test("generated Collector and backend configs preserve bounded delivery and
   assert.match(alloy, /probe_owner = "edge-nginx"/u);
   assert.match(alloy, /otelcol.receiver.nginx "edge"/u);
   const backend = createBackendConfigs(sample);
+  assert.equal(backend.prometheus.storage.tsdb.out_of_order_time_window, "1800000ms");
   assert.equal(backend.loki.analytics.reporting_enabled, false);
   assert.equal(backend.tempo.usage_report.reporting_enabled, false);
   assert.equal(backend.loki.ingester.wal.disk_full_threshold, 0.8);
@@ -545,6 +546,7 @@ void test("generated Collector and backend configs preserve bounded delivery and
   assert.deepEqual(compose.services["otel-collector"].expose, ["4318"]);
   assert.equal(compose.services["otel-collector"].healthcheck.test.at(-1), "http://127.0.0.1:13133/-/ready");
   assert.ok(compose.services["otel-collector"].command.includes("--server.http.listen-addr=127.0.0.1:13133"));
+  assert.deepEqual(compose.services["otel-collector"].volumes.find(volume => volume.target === "/var/lib/alloy"), {type: "volume", source: "collector_checkpoints", target: "/var/lib/alloy", volume: {nocopy: true}});
   assert.equal(compose.services["otel-collector"].volumes.filter(volume => volume.target.startsWith("/telemetry-storage/") && volume.read_only).length, 4);
   assert.deepEqual(compose.services["alert-sink"].tmpfs, ["/run/alerts:rw,noexec,nosuid,nodev,uid=1000,gid=1000,size=32m"]);
   assert.equal(compose.services["alert-sink"].image, alertSinkImage);

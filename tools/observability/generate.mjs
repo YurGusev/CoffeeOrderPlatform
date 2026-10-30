@@ -22,6 +22,14 @@ const TELEMETRY_NETWORKS = [
 ];
 const LOGGED_SERVICES = [...OBSERVABILITY_TARGETS, 'kafka'];
 
+export function prometheusMetricName(name) {
+  const normalized = name.replace(/[^a-zA-Z0-9_]/gu, '_');
+  const units = {runtime_http_request_duration_ms: '_milliseconds', messaging_kafka_consumer_lag: '_messages',
+    messaging_outbox_oldest_unpublished_age: '_milliseconds', db_client_connection_checkout_wait: '_milliseconds',
+    messaging_kafka_event_age: '_milliseconds', messaging_inbox_received_age: '_milliseconds'};
+  return normalized + (units[normalized] ?? '');
+}
+
 function requireValue(value, name) {
   if (value === undefined || value === null || value === '') throw new Error(`${name} is required`);
   return value;
@@ -199,7 +207,7 @@ export function createCollectorConfig({config, logFiles, exporterToken} = {}) {
       exporters: [`otlp_http/${signal}`],
     };
   }
-  for (const service of [...(includeNginxMetrics ? ['nginx'] : [])]) {
+  for (const service of (includeNginxMetrics ? ['nginx'] : [])) {
     pipelines[`metrics/${service}`] = {
       receivers: ['nginx'],
       processors: ['memory_limiter', `transform/${service}_resource`, 'transform/metric_names', 'batch'],
@@ -563,6 +571,7 @@ export function createBackendConfigs(config) {
     prometheus: {
       global: {scrape_interval: `${config.platform.health.intervalMs}ms`, scrape_timeout: `${config.platform.health.timeoutMs}ms`},
       otlp: {promote_resource_attributes: ['service.name', 'service.namespace', 'service.version', 'deployment.environment']},
+      storage: {tsdb: {out_of_order_time_window: `${prometheus.outOfOrderWindowMs}ms`}},
       scrape_configs: [],
     },
     tempo: {
@@ -628,7 +637,7 @@ export function createComposeOverride({config, imageRefs, grafanaImage, alertSin
       ...Object.fromEntries(LOGGED_SERVICES.map((service) => [service, {logging}])),
       'otel-collector': {
         image: imageRefs.otelCollectorImage, command: ['run', '--storage.path=/var/lib/alloy', `--server.http.listen-addr=127.0.0.1:${endpointPort(config.telemetry.collector.healthEndpoint, 'telemetry.collector.healthEndpoint')}`, '--server.http.enable-pprof=false', '--server.http.disable-support-bundle=true', '--disable-reporting', '--stability.level=experimental', '/etc/alloy/config.alloy'], restart: 'unless-stopped', stop_grace_period: `${config.platform.shutdownGraceMs}ms`, init: true, read_only: true, user: '0:0', security_opt: ['no-new-privileges:true'], cap_drop: ['ALL'], cpus: 1, mem_limit: `${config.telemetry.collector.containerMemoryMiB}m`, pids_limit: 128, tmpfs: ['/tmp:rw,noexec,nosuid,nodev,size=8m'],
-        volumes: [{type: 'bind', source: collectorConfigPath, target: '/etc/alloy/config.alloy', read_only: true}, probeMount, {type: 'volume', source: 'collector_checkpoints', target: '/var/lib/alloy'}, ...['grafana', 'loki', 'prometheus', 'tempo'].map(name => ({type: 'volume', source: `${name}_data`, target: `/telemetry-storage/${name}`, read_only: true})), ...logVolumes],
+        volumes: [{type: 'bind', source: collectorConfigPath, target: '/etc/alloy/config.alloy', read_only: true}, probeMount, {type: 'volume', source: 'collector_checkpoints', target: '/var/lib/alloy', volume: {nocopy: true}}, ...['grafana', 'loki', 'prometheus', 'tempo'].map(name => ({type: 'volume', source: `${name}_data`, target: `/telemetry-storage/${name}`, read_only: true})), ...logVolumes],
         expose: [String(endpointPort(config.telemetry.collector.otlpEndpoint, 'telemetry.collector.otlpEndpoint'))], networks: TELEMETRY_NETWORKS,
         depends_on: Object.fromEntries(['loki', 'prometheus', 'tempo'].map((name) => [name, {condition: 'service_healthy'}])),
         healthcheck: healthcheck(`http://127.0.0.1:${endpointPort(config.telemetry.collector.healthEndpoint, 'telemetry.collector.healthEndpoint')}/-/ready`), logging,

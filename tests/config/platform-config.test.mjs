@@ -549,6 +549,13 @@ void test("telemetry config is strict, immutable, and rejects missing or inconsi
   );
   for (const name of ["loki", "prometheus", "tempo"])
     assert.equal(parsed.telemetry[name].retentionDays, 3);
+  assert.equal(parsed.telemetry.collector.queueCapacity, 2048);
+  assert.equal(parsed.telemetry.prometheus.outOfOrderWindowMs, 1800000);
+  for (const value of [0, 1800001, undefined]) {
+    const changed = structuredClone(document);
+    changed.telemetry.prometheus.outOfOrderWindowMs = value;
+    assert.throws(() => parsePlatformConfig(changed), PlatformConfigError);
+  }
   assert.equal(parsed.telemetry.diskWatermarkPercent, 80);
   assert.equal(parsed.telemetry.alerts.evaluationIntervalMs, 60_000);
   assert.equal(parsed.telemetry.alerts.sseDropRate.threshold, 0.05);
