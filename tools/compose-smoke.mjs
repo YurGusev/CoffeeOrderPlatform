@@ -30,22 +30,22 @@ import {
 import { defineStatement } from "../packages/platform-database/dist/owner.js";
 import {
   ensureNginxSecretOwnership,
-  readG08MigrationCredential,
-  readG08PreparedPostgresIdentity,
+  readMigrationCredential,
+  readPreparedPostgresIdentity,
 } from "./config-bootstrap/index.mjs";
 import {
-  materializeG15BrowserFixture,
-  readG15FixtureLineage,
+  materializeBrowserFixture,
+  readBrowserFixtureLineage,
 } from "./config-bootstrap/browser-fixture.mjs";
 import {
-  buildG15RealtimeAuthCloseInvocation,
-  proveG15Browser,
-  validateG15BrowserRuntimeArtifact,
-} from "./g15-browser-proof.mjs";
+  buildRealtimeAuthCloseInvocation,
+  proveBrowser,
+  validateBrowserRuntimeArtifact,
+} from "./browser-proof.mjs";
 import {
-  createG15OwnerEvidence,
-  validateG15BrowserProof,
-} from "./g15-owner-evidence.mjs";
+  createBrowserOwnerEvidence,
+  validateBrowserProof,
+} from "./browser-owner-evidence.mjs";
 import {
   applyMigrations,
   migrationChecksum,
@@ -64,8 +64,8 @@ import {
   validateServerProbe,
 } from "../scripts/db-bootstrap.mjs";
 import {
-  cleanupG08Databases,
-  createG08Database,
+  cleanupMigrationDatabases,
+  createMigrationDatabase,
 } from "../verification/launch/v1/scenarios/migrations.mjs";
 import {
   createDeliveryTables,
@@ -122,7 +122,7 @@ const SECRETS_TMPFS_ROOT = "/dev/shm";
 const EXTERNAL_POSTGRES_NETWORK = "coffee_postgres_data";
 const COMMIT_SHA = /^[0-9a-f]{40}$/u;
 const DATABASE_PROOF_RUNTIME = "customer-service";
-const G15_FAILURE_ERROR_NAMES = new Set([
+const BROWSER_FAILURE_ERROR_NAMES = new Set([
   "Error",
   "AssertionError",
   "AggregateError",
@@ -205,7 +205,7 @@ export function attachRollbackBootstrapSubstage(receipt, substage) {
   return Object.freeze({ ...receipt, bootstrapSubstage: substage });
 }
 
-export function createG15BrowserChildFailureDiagnostic({
+export function createBrowserChildFailureDiagnostic({
   runId,
   candidateSha,
   error,
@@ -220,7 +220,7 @@ export function createG15BrowserChildFailureDiagnostic({
   let errorName = "Error";
   let message = "G15_CHILD_FAILED";
   try {
-    if (G15_FAILURE_ERROR_NAMES.has(error?.name)) errorName = error.name;
+    if (BROWSER_FAILURE_ERROR_NAMES.has(error?.name)) errorName = error.name;
     if (typeof error?.message === "string") message = error.message;
   } catch {
     // The child diagnostic is deliberately closed even for hostile error objects.
@@ -237,12 +237,12 @@ export function createG15BrowserChildFailureDiagnostic({
   const sourceLocation = rollbackComposeSourceLocation(error);
   if (sourceLocation) diagnostic.sourceLocation = sourceLocation;
   const operationFailure =
-    projectG15RuntimeStackDiagnostic(operationDiagnostic);
+    projectBrowserRuntimeStackDiagnostic(operationDiagnostic);
   if (operationFailure) diagnostic.operationDiagnostic = operationFailure;
   return Object.freeze(diagnostic);
 }
 
-function projectG15RuntimeStackDiagnostic(value) {
+function projectBrowserRuntimeStackDiagnostic(value) {
   if (
     value?.operation !== "runtime-stack-up" ||
     ![
@@ -1685,7 +1685,7 @@ async function writeStubSecret(
       (ref === `security.serviceTransportKeys.${runtime}`
         ? transportMaterial
         : ref === "aroma.email"
-          ? "issue10-safe-read@example.invalid"
+          ? "aroma-safe-read@example.invalid"
           : ref === "aroma.password"
             ? "compose-aroma-fixture-password"
             : ref === "edge.tlsPrivateKey" && publicTlsMaterial !== undefined
@@ -2114,23 +2114,23 @@ export async function readExternalRecoveryProofCredentials(
     resources !== undefined &&
     resources !== null &&
     Object.hasOwn(resources, "g08PreparationContextPath");
-  const hasG15ParentMetadata =
+  const hasBrowserParentMetadata =
     resources !== undefined &&
     resources !== null &&
     ["g15ParentCandidateSha", "g15ParentCheckoutRoot", "g15ParentRunId"].some(
       (key) => Object.hasOwn(resources, key),
     );
-  const g15PreparationContextPath = hasPreparationContextPath
+  const browserPreparationContextPath = hasPreparationContextPath
     ? resources.g08PreparationContextPath
     : undefined;
   if (
     (hasPreparationContextPath &&
-      (typeof g15PreparationContextPath !== "string" ||
-        g15PreparationContextPath.length === 0)) ||
-    (hasG15ParentMetadata && !hasPreparationContextPath)
+      (typeof browserPreparationContextPath !== "string" ||
+        browserPreparationContextPath.length === 0)) ||
+    (hasBrowserParentMetadata && !hasPreparationContextPath)
   )
     throw new Error("G15 G08 parent preparation reference is missing");
-  const hasAllG15ParentMetadata =
+  const hasAllBrowserParentMetadata =
     resources !== undefined &&
     resources !== null &&
     ["g15ParentCandidateSha", "g15ParentCheckoutRoot", "g15ParentRunId"].every(
@@ -2138,21 +2138,21 @@ export async function readExternalRecoveryProofCredentials(
     );
   if (
     launchMetadata.expectedLineage === "G13" &&
-    (hasPreparationContextPath || hasG15ParentMetadata)
+    (hasPreparationContextPath || hasBrowserParentMetadata)
   )
     throw new Error(
       "external recovery lineage metadata cannot downgrade to G13",
     );
   if (
     launchMetadata.expectedLineage === "G15" &&
-    (!hasPreparationContextPath || !hasAllG15ParentMetadata)
+    (!hasPreparationContextPath || !hasAllBrowserParentMetadata)
   )
     throw new Error("G15 G08 parent preparation reference is missing");
   const configRoot = ROOT;
   const preparationSource = hasPreparationContextPath
-    ? { preparationContextPath: g15PreparationContextPath }
+    ? { preparationContextPath: browserPreparationContextPath }
     : {};
-  const postgres = await readG08PreparedPostgresIdentity({
+  const postgres = await readPreparedPostgresIdentity({
     root: configRoot,
     contextPath,
     ...preparationSource,
@@ -2193,7 +2193,7 @@ export async function readExternalRecoveryProofCredentials(
     projected.ownership.databases.map((database) => [database.name, database]),
   );
   const adminOwner = projected.ownership.databases[0].owner;
-  const admin = await readG08MigrationCredential({
+  const admin = await readMigrationCredential({
     root: configRoot,
     contextPath,
     owner: adminOwner,
@@ -2208,7 +2208,7 @@ export async function readExternalRecoveryProofCredentials(
       ownerDatabase,
       "external recovery database owner is not canonical",
     );
-    const migrator = await readG08MigrationCredential({
+    const migrator = await readMigrationCredential({
       root: configRoot,
       contextPath,
       owner: ownerDatabase.owner,
@@ -2234,7 +2234,7 @@ export async function readExternalRecoveryProofCredentials(
       (candidate) => candidate.runtime === claim.runtime,
     );
     assert.equal(role?.role, claim.role);
-    const runtimeCredential = await readG08MigrationCredential({
+    const runtimeCredential = await readMigrationCredential({
       root: configRoot,
       contextPath,
       owner: ownerDatabase.owner,
@@ -2252,7 +2252,7 @@ export async function readExternalRecoveryProofCredentials(
     ownership: projected.ownership,
     launchIdentity,
     postgres,
-    g08PreparationContextPath: g15PreparationContextPath,
+    g08PreparationContextPath: browserPreparationContextPath,
     admin,
     rolePasswords,
     databaseCredentialsByRuntime,
@@ -3795,7 +3795,7 @@ export async function applyExternalRecoveryMigrations(
     );
     assert.ok(owner && owner.migratorRole === database.migratorRole);
     const ownedDatabase = { ...database, owner: owner.owner };
-    await createG08Database(
+    await createMigrationDatabase(
       ownedDatabase,
       resources,
       async () => {
@@ -3872,7 +3872,7 @@ export async function applyExternalRecoveryMigrations(
       ownership,
       runtimeClaim.runtime,
     );
-    const selectedMigrator = await readG08MigrationCredential(
+    const selectedMigrator = await readMigrationCredential(
       externalRecoveryMigrationCredentialRequest(
         credentials,
         contextPath,
@@ -3936,7 +3936,7 @@ export async function applyExternalRecoveryMigrations(
 async function cleanupExternalRecoveryDatabases(credentials, resources) {
   const admin = await externalAdminClient(credentials, credentials.postgres);
   try {
-    return await cleanupG08Databases(resources, async (database) => {
+    return await cleanupMigrationDatabases(resources, async (database) => {
       const probe = (await admin.query(SERVER_IDENTITY_SQL)).rows[0];
       validateServerProbe(probe, {
         expectedServerIdentity: credentials.postgres.systemIdentifier,
@@ -5607,19 +5607,19 @@ async function prepareKafkaNativeFixture(
     platformConfig.kafka.topics.ordersLifecycle.partitions;
   const mappingPartitions =
     platformConfig.kafka.topics.catalogMapping.partitions;
-  const malformed = `issue63-malformed-${runId}`;
+  const malformed = `delivery-proof-malformed-${runId}`;
   const malformedEnvelope = {
     envelopeVersion: "1",
     messageId: malformed,
-    messageType: "Issue63.LiveEvent",
+    messageType: "DeliveryProof.LiveEvent",
     occurredAt: new Date().toISOString(),
     producer: "orders-service",
     correlationId: `correlation-${malformed}`,
     causationId: null,
     traceparent: `00-${randomUUID().replaceAll("-", "")}-${randomUUID().replaceAll("-", "").slice(0, 16)}-01`,
     aggregate: {
-      type: "Issue63.Proof",
-      ref: `issue63-malformed-${runId}`,
+      type: "DeliveryProof.Aggregate",
+      ref: `delivery-proof-malformed-${runId}`,
       version: "1",
     },
     payload: { value: "malformed-header", sequence: 1 },
@@ -5713,12 +5713,12 @@ const databaseOptions = {
 };
 let database = databaseModule.createDatabase(databaseOptions);
 await database.resource.start(AbortSignal.timeout(delivery.shutdownTimeoutMs));
-const inboxOptions = {schema: 'orders', table: 'issue63_live_inbox_messages', quarantineTable: 'issue63_live_inbox_quarantine'};
-const outboxOptions = {schema: 'orders', table: 'issue63_live_outbox_messages'};
+const inboxOptions = {schema: 'orders', table: 'delivery_live_inbox_messages', quarantineTable: 'delivery_live_inbox_quarantine'};
+const outboxOptions = {schema: 'orders', table: 'delivery_live_outbox_messages'};
 let inbox = inboxModule.createSqlInboxStore(database, inboxOptions);
 let outbox = outboxModule.createSqlOutboxStore(database, outboxOptions);
-let ownerWrite = ownerModule.defineStatement(database, 'INSERT INTO orders.issue63_live_owner_effects (message_id, aggregate_ref, effect_value, applied_at) VALUES ($1, $2, $3, $4::timestamptz)');
-const countRows = ownerModule.defineStatement(database, 'SELECT (SELECT count(*)::int FROM orders.issue63_live_owner_effects WHERE aggregate_ref = $1) AS owner_count, (SELECT count(*)::int FROM orders.issue63_live_inbox_messages WHERE message_id = ANY($2::text[])) AS inbox_count, (SELECT count(*)::int FROM orders.issue63_live_outbox_messages WHERE message_id = ANY($2::text[])) AS outbox_count, (SELECT count(*)::int FROM orders.issue63_live_inbox_quarantine WHERE reason = $3 AND envelope = $4::jsonb) AS malformed_count, (SELECT count(*)::int FROM orders.issue63_live_inbox_quarantine WHERE reason = $5 AND message_id = $6) AS conflict_count');
+let ownerWrite = ownerModule.defineStatement(database, 'INSERT INTO orders.delivery_live_owner_effects (message_id, aggregate_ref, effect_value, applied_at) VALUES ($1, $2, $3, $4::timestamptz)');
+const countRows = ownerModule.defineStatement(database, 'SELECT (SELECT count(*)::int FROM orders.delivery_live_owner_effects WHERE aggregate_ref = $1) AS owner_count, (SELECT count(*)::int FROM orders.delivery_live_inbox_messages WHERE message_id = ANY($2::text[])) AS inbox_count, (SELECT count(*)::int FROM orders.delivery_live_outbox_messages WHERE message_id = ANY($2::text[])) AS outbox_count, (SELECT count(*)::int FROM orders.delivery_live_inbox_quarantine WHERE reason = $3 AND envelope = $4::jsonb) AS malformed_count, (SELECT count(*)::int FROM orders.delivery_live_inbox_quarantine WHERE reason = $5 AND message_id = $6) AS conflict_count');
 const waitFor = async (predicate, timeoutMs = 15000) => {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
@@ -5733,10 +5733,10 @@ const traceparent = (id) => {
   return '00-' + trace.slice(0, 32) + '-' + trace.slice(0, 16) + '-01';
 };
 const envelope = (id, aggregateRef, sequence, payload) => ({
-  envelopeVersion: '1', messageId: id, messageType: 'Issue63.LiveEvent',
+  envelopeVersion: '1', messageId: id, messageType: 'DeliveryProof.LiveEvent',
   occurredAt: new Date().toISOString(), producer: 'orders-service',
   correlationId: 'correlation-' + id, causationId: null, traceparent: traceparent(id),
-  aggregate: {type: 'Issue63.Proof', ref: aggregateRef, version: String(sequence)},
+  aggregate: {type: 'DeliveryProof.Aggregate', ref: aggregateRef, version: String(sequence)},
   payload: {...payload, sequence},
 });
 const calls = new Map();
@@ -5774,7 +5774,7 @@ const binding = {
 };
 const credentials = {username: kafkaCredential.username, password: kafkaCredential.password, caPem: kafkaCredential.caPem};
 const nativeOptions = {
-  brokers: config.kafka.brokers, clientId: 'issue63-native-' + runId, protocol: config.kafka.clientProtocol,
+  brokers: config.kafka.brokers, clientId: 'delivery-proof-native-' + runId, protocol: config.kafka.clientProtocol,
   username: credentials.username, password: credentials.password, sslCaPem: credentials.caPem,
   maxPending: delivery.queueCapacity, maxMessageBytes: delivery.maxMessageBytes,
   sendTimeoutMs: delivery.sendTimeoutMs, receiveTimeoutMs: delivery.receiveTimeoutMs,
@@ -5792,8 +5792,8 @@ await consumerA.resource.start(AbortSignal.timeout(delivery.shutdownTimeoutMs));
 await consumerB.resource.start(AbortSignal.timeout(delivery.shutdownTimeoutMs));
 await waitFor(() => consumerA.metrics().assigned > 0 && consumerB.metrics().assigned > 0);
 const rebalanceBaseline = [consumerA.metrics().recoveryTotal, consumerB.metrics().recoveryTotal];
-const orderedAggregate = 'issue63-order-' + runId;
-const orderedKey = 'issue63-key-' + runId;
+const orderedAggregate = 'delivery-proof-order-' + runId;
+const orderedKey = 'delivery-proof-key-' + runId;
 const ordered = [];
 for (const sequence of [1, 2, 3]) {
   const id = runId + '-ordered-' + sequence;
@@ -5837,9 +5837,9 @@ const signalHandler = () => {
   );
 };
 process.once('SIGTERM', signalHandler);
-const signalAggregate = 'issue63-sigterm-' + runId;
+const signalAggregate = 'delivery-proof-sigterm-' + runId;
 const signalEvent = envelope(signalEventId, signalAggregate, 1, {value: 'sigterm'});
-const signalAck = await producerRuntime.send(lifecycleTopic, 'issue63-sigterm-key-' + runId, signalEvent);
+const signalAck = await producerRuntime.send(lifecycleTopic, 'delivery-proof-sigterm-key-' + runId, signalEvent);
 if (signalAck.kind !== 'ack') throw new Error('SIGTERM fixture event was not acknowledged');
 await waitFor(() => signalGateEntered);
 process.kill(process.pid, "SIGTERM");
@@ -5897,8 +5897,8 @@ const commitWithPoll = async (native, record) => {
   }
 };
 const mapId = runId + '-db-unknown';
-const mapEvent = envelope(mapId, 'issue63-db-unknown-' + runId, 1, {value: 'db-unknown'});
-const mapAck = await mapProducer.send(mappingTopic, 'issue63-map-' + runId, mapEvent);
+const mapEvent = envelope(mapId, 'delivery-proof-db-unknown-' + runId, 1, {value: 'db-unknown'});
+const mapAck = await mapProducer.send(mappingTopic, 'delivery-proof-map-' + runId, mapEvent);
 if (mapAck.kind !== 'ack') throw new Error('mapping fixture was not acknowledged');
 const firstNative = await openNative('orders-catalog-mapping-v2');
 const firstRecords = [];
@@ -5933,7 +5933,7 @@ for (let batch = 0; batch < 5; batch++) {
   const result = await outboxModule.relayOutboxBatch(outbox, database, async (claim, signal) => {
     const sender = claim.message.topic === mappingTopic ? mapProducer : producerRuntime;
     return sender.send(claim.message.topic, claim.message.partitionKey, claim.message.envelope, signal);
-  }, {nowMs: Date.now(), leaseOwner: 'issue63-seed-relay', policy: delivery});
+  }, {nowMs: Date.now(), leaseOwner: 'delivery-proof-seed-relay', policy: delivery});
   if (result.unknown || result.failed) throw new Error('seed Outbox relay did not finalize known acknowledgements');
   if (result.claimed === 0) break;
   if (batch === 4) throw new Error('seed Outbox relay exceeded its bound');
@@ -5941,7 +5941,7 @@ for (let batch = 0; batch < 5; batch++) {
 await mapProducer.resource.stop(AbortSignal.timeout(delivery.shutdownTimeoutMs));
 
 const crashId = runId + '-outbox-crash';
-const crashEvent = envelope(crashId, 'issue63-outbox-crash-' + runId, 1, {value: 'outbox-crash'});
+const crashEvent = envelope(crashId, 'delivery-proof-outbox-crash-' + runId, 1, {value: 'outbox-crash'});
 await withTransaction(database, {mode: 'background'}, (transaction) => outbox.enqueue(transaction, {
   messageId: crashId, messageType: crashEvent.messageType, topic: lifecycleTopic,
   aggregateRef: crashEvent.aggregate.ref, aggregateSequence: 1, ownerVersion: crashEvent.aggregate.version, partitionKey: orderedKey,
@@ -5959,16 +5959,16 @@ try {
     brokerAckMessageId = claim.message.messageId;
     database.resource.destroy();
     return {kind: 'ack'};
-  }, {nowMs: Date.now(), leaseOwner: 'issue63-crash-' + runId, policy: delivery, signal: AbortSignal.timeout(delivery.shutdownTimeoutMs)});
+  }, {nowMs: Date.now(), leaseOwner: 'delivery-proof-crash-' + runId, policy: delivery, signal: AbortSignal.timeout(delivery.shutdownTimeoutMs)});
 } catch {}
 if (!brokerAckedBeforeFinalize) throw new Error('broker ack-before-finalize fixture did not reach the ack');
 database = databaseModule.createDatabase(databaseOptions);
 await database.resource.start(AbortSignal.timeout(delivery.shutdownTimeoutMs));
 outbox = outboxModule.createSqlOutboxStore(database, outboxOptions);
-const expireLease = ownerModule.defineStatement(database, "UPDATE orders.issue63_live_outbox_messages SET lease_until = clock_timestamp() - interval '1 millisecond' WHERE message_id = $1");
+const expireLease = ownerModule.defineStatement(database, "UPDATE orders.delivery_live_outbox_messages SET lease_until = clock_timestamp() - interval '1 millisecond' WHERE message_id = $1");
 await withTransaction(database, {mode: 'background'}, (transaction) => expireLease(transaction, [crashId]));
 const recovered = await producerRuntime.relay(outbox, database, AbortSignal.timeout(delivery.shutdownTimeoutMs));
-const stateRow = ownerModule.defineStatement(database, 'SELECT state FROM orders.issue63_live_outbox_messages WHERE message_id = $1');
+const stateRow = ownerModule.defineStatement(database, 'SELECT state FROM orders.delivery_live_outbox_messages WHERE message_id = $1');
 const crashState = await withTransaction(database, {mode: 'background'}, (transaction) => stateRow(transaction, [crashId]));
 if (recovered.published !== 1 || crashState.rows[0]?.state !== 'Published' || brokerAckMessageId !== crashEvent.messageId) throw new Error('Outbox ack-before-finalize recovery failed');
 await producerRuntime.resource.stop(AbortSignal.timeout(delivery.shutdownTimeoutMs));
@@ -6028,10 +6028,10 @@ const databaseOptions = {
 };
 const database = databaseModule.createDatabase(databaseOptions);
 await database.resource.start(AbortSignal.timeout(delivery.shutdownTimeoutMs));
-const inbox = inboxModule.createSqlInboxStore(database, {schema: 'orders', table: 'issue63_live_inbox_messages', quarantineTable: 'issue63_live_inbox_quarantine'});
-const outbox = outboxModule.createSqlOutboxStore(database, {schema: 'orders', table: 'issue63_live_outbox_messages'});
-const ownerWrite = ownerModule.defineStatement(database, 'INSERT INTO orders.issue63_live_owner_effects (message_id, aggregate_ref, effect_value, applied_at) VALUES ($1, $2, $3, $4::timestamptz)');
-const ownerCount = ownerModule.defineStatement(database, 'SELECT count(*)::int AS count FROM orders.issue63_live_owner_effects WHERE message_id = $1');
+const inbox = inboxModule.createSqlInboxStore(database, {schema: 'orders', table: 'delivery_live_inbox_messages', quarantineTable: 'delivery_live_inbox_quarantine'});
+const outbox = outboxModule.createSqlOutboxStore(database, {schema: 'orders', table: 'delivery_live_outbox_messages'});
+const ownerWrite = ownerModule.defineStatement(database, 'INSERT INTO orders.delivery_live_owner_effects (message_id, aggregate_ref, effect_value, applied_at) VALUES ($1, $2, $3, $4::timestamptz)');
+const ownerCount = ownerModule.defineStatement(database, 'SELECT count(*)::int AS count FROM orders.delivery_live_owner_effects WHERE message_id = $1');
 const binding = {
   processing: 'durable', database, inbox,
   decode: (value) => value,
@@ -6054,7 +6054,7 @@ const openConsumer = async () => {
   let rejectAssignment;
   const assignment = new Promise((resolve, reject) => { resolveAssignment = resolve; rejectAssignment = reject; });
   target = await nativeModule.createNativeConsumer({
-    brokers: config.kafka.brokers, clientId: 'issue63-blackhole-' + runId, protocol: config.kafka.clientProtocol,
+    brokers: config.kafka.brokers, clientId: 'delivery-proof-blackhole-' + runId, protocol: config.kafka.clientProtocol,
     username: credentials.username, password: credentials.password, sslCaPem: credentials.caPem,
     maxPending: delivery.queueCapacity, maxMessageBytes: delivery.maxMessageBytes,
     sendTimeoutMs: delivery.sendTimeoutMs, receiveTimeoutMs: delivery.receiveTimeoutMs,
@@ -6199,14 +6199,14 @@ async function runKafkaBlackholeProof(
   const envelope = {
     envelopeVersion: "1",
     messageId,
-    messageType: "Issue63.LiveEvent",
+    messageType: "DeliveryProof.LiveEvent",
     occurredAt: new Date().toISOString(),
     producer: "orders-service",
     correlationId: `${runId}-broker-blackhole-correlation`,
     causationId: null,
     traceparent: `00-${trace}-${trace.slice(0, 16)}-01`,
     aggregate: {
-      type: "Issue63.Proof",
+      type: "DeliveryProof.Aggregate",
       ref: `${runId}-broker-blackhole-aggregate`,
       version: "1",
     },
@@ -6526,7 +6526,7 @@ function runtimeHealthStatus(
 function readRealtimeAuthCloseCount(projectName, containerId) {
   try {
     assertOwnedRuntimeContainer(projectName, "realtime-gateway", containerId);
-    const invocation = buildG15RealtimeAuthCloseInvocation(containerId);
+    const invocation = buildRealtimeAuthCloseInvocation(containerId);
     const output = runDocker(invocation.args, { timeout: 5000 }).trim();
     if (!/^(?:0|[1-9][0-9]*)$/u.test(output))
       throw new Error("metric value is invalid");
@@ -6560,7 +6560,7 @@ function assertOwnedRuntimeContainer(projectName, runtime, containerId) {
   }
 }
 
-async function restartG15CustomerService(
+async function restartBrowserFixtureCustomerService(
   projectName,
   secretsDir,
   containerId,
@@ -6755,7 +6755,7 @@ function listDockerNames(args) {
   return runDocker(args).trim().split("\n").filter(Boolean).sort();
 }
 
-function inspectG18CleanupInventory(
+function inspectRollbackCleanupInventory(
   projectName,
   databaseProofContainer,
   databaseProofNetwork,
@@ -7914,7 +7914,7 @@ async function prepareAromaCartProviderFixture(
       "-days",
       "1",
       "-subj",
-      "/CN=issue10-aroma-provider-fixture",
+      "/CN=aroma-provider-fixture",
     ],
     { stdio: "ignore" },
   );
@@ -8730,7 +8730,7 @@ export async function runComposeSmoke({
   let browserFixture;
   let browserFixtureRoot;
   let browserContext;
-  let g15OwnerEvidence;
+  let browserOwnerEvidence;
   let browserProof;
   let browserCallbackAttempted = false;
   let receipt;
@@ -8968,12 +8968,12 @@ export async function runComposeSmoke({
       recoveryProofCredentials,
     });
     if (browser) {
-      const lineage = await readG15FixtureLineage({
+      const lineage = await readBrowserFixtureLineage({
         root: ROOT,
         contextPath: launchContextPath,
         baseCandidateSha: browser.baseCandidateSha,
       });
-      browserFixture = await materializeG15BrowserFixture({
+      browserFixture = await materializeBrowserFixture({
         root: ROOT,
         contextPath: launchContextPath,
         lineageArtifactLoc: lineage.receiptPath,
@@ -9215,7 +9215,7 @@ export async function runComposeSmoke({
               replaceDatabase(recoveryAdminUrl, database),
             );
           };
-          g15OwnerEvidence = createG15OwnerEvidence({
+          browserOwnerEvidence = createBrowserOwnerEvidence({
             connect: ownerConnections,
             roleMap: recoveryProofCredentials.roleMap,
             actorRef: "actor:g15-browser-fixture",
@@ -9282,7 +9282,7 @@ export async function runComposeSmoke({
             replaceDatabase(recoveryAdminUrl, database),
           );
         };
-        g15OwnerEvidence = createG15OwnerEvidence({
+        browserOwnerEvidence = createBrowserOwnerEvidence({
           connect: ownerConnections,
           roleMap: recoveryProofCredentials.roleMap,
           actorRef: "actor:g15-browser-fixture",
@@ -9837,14 +9837,14 @@ export async function runComposeSmoke({
                 rows.get("realtime-gateway")?.ID,
               ),
             restartCustomerService: () =>
-              restartG15CustomerService(
+              restartBrowserFixtureCustomerService(
                 projectName,
                 secretsDir,
                 rows.get("customer-service")?.ID,
                 composeFile,
               ),
             nginxContainerId: rows.get("edge-nginx")?.ID,
-            ownerEvidence: g15OwnerEvidence,
+            ownerEvidence: browserOwnerEvidence,
             browserFixture: {
               profile: browserFixture.profile,
               runId: browserFixture.runId,
@@ -9873,7 +9873,7 @@ export async function runComposeSmoke({
       if (browser) {
         throwIfRollbackTerminationRequested();
         browserCallbackAttempted = true;
-        browserProof = validateG15BrowserProof(
+        browserProof = validateBrowserProof(
           await browser.onReady(browserContext),
           {
             runId: launchIdentity.context.runId,
@@ -10351,7 +10351,7 @@ export async function runComposeSmoke({
       let retainedResources = { containers: [], volumes: [], networks: [] };
       let inventoryVerified = true;
       try {
-        retainedResources = inspectG18CleanupInventory(
+        retainedResources = inspectRollbackCleanupInventory(
           projectName,
           databaseProofContainer,
           databaseProofNetwork,
@@ -10391,7 +10391,7 @@ export async function runComposeSmoke({
       const failures = [];
       let verified = true;
       try {
-        inventory = inspectG18CleanupInventory(
+        inventory = inspectRollbackCleanupInventory(
           projectName,
           databaseProofContainer,
           databaseProofNetwork,
@@ -10557,7 +10557,7 @@ if (
   resolve(process.argv[1]) === fileURLToPath(import.meta.url)
 ) {
   const browserProof = process.argv.slice(2).includes("--browser-proof");
-  async function writeG15BrowserRuntimeArtifact({
+  async function writeBrowserRuntimeArtifact({
     receipt,
     browserEvidence,
     baseCandidateSha,
@@ -10568,14 +10568,14 @@ if (
     if (launch.candidateRoot !== ROOT || resolve(process.cwd()) !== ROOT)
       throw new Error("G15_CANDIDATE_IDENTITY_INVALID");
     const { context, evidenceDir } = launch;
-    const lineageWithPath = await readG15FixtureLineage({
+    const lineageWithPath = await readBrowserFixtureLineage({
       root: ROOT,
       contextPath,
       baseCandidateSha,
     });
     const lineage = { ...lineageWithPath };
     delete lineage.receiptPath;
-    const artifact = validateG15BrowserRuntimeArtifact(
+    const artifact = validateBrowserRuntimeArtifact(
       {
         schemaVersion: 1,
         gateId: "G15_BROWSER",
@@ -10640,14 +10640,14 @@ if (
           baseCandidateSha,
           onCleanup: async () => {},
           onReady: async (runtimeContext) => {
-            const proof = await proveG15Browser(runtimeContext);
+            const proof = await proveBrowser(runtimeContext);
             browserEvidence = proof.evidence;
             return proof.callbackProof;
           },
         },
       });
       throwIfRollbackTerminationRequested();
-      await writeG15BrowserRuntimeArtifact({
+      await writeBrowserRuntimeArtifact({
         receipt,
         browserEvidence,
         baseCandidateSha,
@@ -10664,7 +10664,7 @@ if (
         );
         console.log(
           JSON.stringify(
-            createG15BrowserChildFailureDiagnostic({
+            createBrowserChildFailureDiagnostic({
               runId: launch.context.runId,
               candidateSha: launch.context.candidateSha,
               error,

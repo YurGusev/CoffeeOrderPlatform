@@ -65,7 +65,7 @@ function normalizedDiagnostics(result) {
 }
 
 async function authorityRoot() {
-  const root = await mkdtemp(join(tmpdir(), "coffee-issue2-"));
+  const root = await mkdtemp(join(tmpdir(), "coffee-authority-"));
   await cp(join(REPO_ROOT, "config"), join(root, "config"), {
     recursive: true,
   });
@@ -76,7 +76,7 @@ async function authorityRoot() {
 }
 
 async function toolchainRoot() {
-  const root = await mkdtemp(join(tmpdir(), "coffee-issue3-toolchain-"));
+  const root = await mkdtemp(join(tmpdir(), "coffee-toolchain-"));
   for (const file of [
     "package.json",
     ".node-version",

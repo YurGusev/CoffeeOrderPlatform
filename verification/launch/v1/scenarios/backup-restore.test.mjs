@@ -23,41 +23,41 @@ import { dirname, join, resolve } from "node:path";
 import { PassThrough } from "node:stream";
 import {
   buildBackupRestorePlan,
-  cleanupG17OwnedRestoreDatabases,
-  createG17OwnedRestoreDatabase,
-  g17SchemaComparisonMode,
-  g17TableAclSnapshotSql,
-  g17OrdersAclInvariantSql,
-  g17RoutineAclSnapshotSql,
+  cleanupOwnedRestoreDatabases,
+  createOwnedRestoreDatabase,
+  resolveBackupSchemaComparisonMode,
+  restoreTableAclSnapshotSql,
+  restoreOrdersAclInvariantSql,
+  restoreRoutineAclSnapshotSql,
   quoteIdentifier,
-  renderG17RestoreFunctionAclSql,
-  renderG17RestoreTableAclSql,
+  renderRestoreFunctionAclSql,
+  renderRestoreTableAclSql,
   restoreDatabaseName,
   runStreamPair,
   runStreamRestore,
-  safeG17FailureDiagnostics,
+  safeBackupFailureDiagnostics,
   schemaSnapshotArguments,
   summarizeSchemaDumpDifference,
-  verifyG17RoutineAclSnapshots,
-  verifyG17TableAclSnapshots,
-  verifyG17OrdersAclInvariants,
+  verifyRestoreRoutineAclSnapshots,
+  verifyRestoreTableAclSnapshots,
+  verifyRestoreOrdersAclInvariants,
 } from "./backup-restore.mjs";
 import { CANONICAL_DATABASE_OWNERS } from "../../../../packages/platform-config/src/launch-database-target.ts";
 import { load as parseYaml } from "js-yaml";
 import {
-  isG17SocketHost,
-  readG17BackupCredential,
-  selectG17RuntimeCredentialClaim,
-  validateG17BackupTarget,
-  validateG17ServerIdentity,
-  validateG17SocketDirectory,
-  validateG17SocketDirectoryMetadata,
+  isBackupSocketHost,
+  readBackupCredential,
+  selectBackupRuntimeCredentialClaim,
+  validateBackupTarget,
+  validateBackupServerIdentity,
+  validateBackupSocketDirectory,
+  validateBackupSocketDirectoryMetadata,
 } from "../../../../tools/config-bootstrap/index.mjs";
 import {
-  openG17AdminClient,
+  openRecoveryAdminClient,
   optionsFor,
-  queryG17InboxByMessageIds,
-  verifyG17UnknownOutcomeTrace,
+  queryRecoveryInboxByMessageIds,
+  verifyRecoveryUnknownOutcomeTrace,
 } from "./backup-restore-recovery.mjs";
 
 const context = {
@@ -151,7 +151,7 @@ void test("G17 failure diagnostics expose only closed database codes and SQLSTAT
     previousCode: "DB_CONNECTION_LOST",
     metadata: { correlationId: "private-id", password: "never" },
   });
-  const diagnostic = safeG17FailureDiagnostics(error);
+  const diagnostic = safeBackupFailureDiagnostics(error);
   assert.deepEqual(diagnostic, {
     errorName: "DatabaseTransactionError",
     closedDatabaseErrorCode: "DB_QUERY_FAILED",
@@ -164,7 +164,7 @@ void test("G17 failure diagnostics expose only closed database codes and SQLSTAT
     /private_table|private-id|password/u,
   );
   assert.deepEqual(
-    safeG17FailureDiagnostics(
+    safeBackupFailureDiagnostics(
       Object.assign(new Error(canary), {
         code: "42703",
         detail: canary,
@@ -179,7 +179,7 @@ void test("G17 failure diagnostics expose only closed database codes and SQLSTAT
     },
   );
   assert.equal(
-    safeG17FailureDiagnostics(
+    safeBackupFailureDiagnostics(
       new Error(canary, {
         cause: { code: "42501", detail: canary },
       }),
@@ -187,11 +187,11 @@ void test("G17 failure diagnostics expose only closed database codes and SQLSTAT
     "42501",
   );
   assert.equal(
-    safeG17FailureDiagnostics({ sqlState: "23505", code: "42501" }).sqlState,
+    safeBackupFailureDiagnostics({ sqlState: "23505", code: "42501" }).sqlState,
     "23505",
   );
   for (const code of [12345, "DROP!", "425010", canary]) {
-    assert.equal(safeG17FailureDiagnostics({ code }).sqlState, null);
+    assert.equal(safeBackupFailureDiagnostics({ code }).sqlState, null);
   }
 
   const unknown = Object.assign(new Error(canary), {
@@ -201,7 +201,7 @@ void test("G17 failure diagnostics expose only closed database codes and SQLSTAT
     previousCode: "RAW_PREVIOUS_CODE",
     metadata: { sql: canary },
   });
-  assert.deepEqual(safeG17FailureDiagnostics(unknown), {
+  assert.deepEqual(safeBackupFailureDiagnostics(unknown), {
     errorName: "Error",
     closedDatabaseErrorCode: null,
     sqlState: null,
@@ -309,13 +309,13 @@ void test("G17 permits only the exact independently verified owner-directed arra
     `${sha.slice(0, -1)}${sha.endsWith("0") ? "1" : "0"}`;
   for (const pair of approved) {
     assert.equal(
-      g17SchemaComparisonMode(pair.owner, pair.source, pair.restored),
+      resolveBackupSchemaComparisonMode(pair.owner, pair.source, pair.restored),
       "verified-pg17-array-coercion-v1",
     );
     assert.notEqual(changedSha(pair.source), pair.source);
     assert.notEqual(changedSha(pair.restored), pair.restored);
     assert.equal(
-      g17SchemaComparisonMode(
+      resolveBackupSchemaComparisonMode(
         pair.owner,
         changedSha(pair.source),
         pair.restored,
@@ -323,7 +323,7 @@ void test("G17 permits only the exact independently verified owner-directed arra
       null,
     );
     assert.equal(
-      g17SchemaComparisonMode(
+      resolveBackupSchemaComparisonMode(
         pair.owner,
         pair.source,
         changedSha(pair.restored),
@@ -339,38 +339,67 @@ void test("G17 permits only the exact independently verified owner-directed arra
     ]) {
       if (owner !== pair.owner)
         assert.equal(
-          g17SchemaComparisonMode(owner, pair.source, pair.restored),
+          resolveBackupSchemaComparisonMode(owner, pair.source, pair.restored),
           null,
         );
     }
   }
   const [customer, catalog] = approved;
   assert.equal(
-    g17SchemaComparisonMode("orders", customer.source, customer.restored),
+    resolveBackupSchemaComparisonMode(
+      "orders",
+      customer.source,
+      customer.restored,
+    ),
     null,
   );
   assert.equal(
-    g17SchemaComparisonMode("catalog", customer.source, customer.restored),
+    resolveBackupSchemaComparisonMode(
+      "catalog",
+      customer.source,
+      customer.restored,
+    ),
     null,
   );
   assert.equal(
-    g17SchemaComparisonMode("customer", catalog.source, catalog.restored),
+    resolveBackupSchemaComparisonMode(
+      "customer",
+      catalog.source,
+      catalog.restored,
+    ),
     null,
   );
   assert.equal(
-    g17SchemaComparisonMode("customer", customer.source, catalog.restored),
+    resolveBackupSchemaComparisonMode(
+      "customer",
+      customer.source,
+      catalog.restored,
+    ),
     null,
   );
   assert.equal(
-    g17SchemaComparisonMode("catalog", catalog.source, customer.restored),
+    resolveBackupSchemaComparisonMode(
+      "catalog",
+      catalog.source,
+      customer.restored,
+    ),
     null,
   );
   assert.equal(
-    g17SchemaComparisonMode("customer", customer.source, customer.source),
+    resolveBackupSchemaComparisonMode(
+      "customer",
+      customer.source,
+      customer.source,
+    ),
     "raw-sha256-equality-v1",
   );
   assert.throws(
-    () => g17SchemaComparisonMode("customer", "not-a-sha", customer.restored),
+    () =>
+      resolveBackupSchemaComparisonMode(
+        "customer",
+        "not-a-sha",
+        customer.restored,
+      ),
     /G17_SCHEMA_COMPARISON_INPUT_INVALID/u,
   );
 });
@@ -431,7 +460,7 @@ void test("G17 inbox lookup binds an array as one PostgreSQL text[] parameter", 
       return { rows: [] };
     },
   };
-  await queryG17InboxByMessageIds(client, ids);
+  await queryRecoveryInboxByMessageIds(client, ids);
   assert.match(call.text, /message_id = ANY\(\$1::text\[\]\)/u);
   assert.deepEqual(call.values, [ids]);
 });
@@ -458,7 +487,7 @@ void test("G17 admin client applies query/lock bounds and abort closes a blocked
   }
   const controller = new AbortController();
   let mockClient;
-  const client = await openG17AdminClient({
+  const client = await openRecoveryAdminClient({
     host: "127.0.0.1",
     port: 5432,
     database: "coffee_verify_run_orders",
@@ -563,7 +592,7 @@ void test("G17 outbox fixture isolates lifecycle claims while retaining producti
   assert.match(recoverySource, /async function seedDraftOutboxAggregate\(/u);
   assert.match(
     recoverySource,
-    /g17Ref\("ord", `\$\{runId\}:outbox-aggregate`\)/u,
+    /recoveryFixtureRef\("ord", `\$\{runId\}:outbox-aggregate`\)/u,
   );
   assert.match(
     recoverySource,
@@ -605,7 +634,7 @@ void test("G17 runtime credential selection is closed over canonical owner claim
     await readFile("config/database-ownership.json", "utf8"),
   );
   assert.deepEqual(
-    selectG17RuntimeCredentialClaim({
+    selectBackupRuntimeCredentialClaim({
       owner: "orders",
       runtime: "orders-aroma-preparation",
       roleMap: map,
@@ -617,7 +646,7 @@ void test("G17 runtime credential selection is closed over canonical owner claim
     },
   );
   assert.deepEqual(
-    selectG17RuntimeCredentialClaim({
+    selectBackupRuntimeCredentialClaim({
       owner: "orders",
       runtime: "aroma-convergence",
       roleMap: map,
@@ -629,7 +658,7 @@ void test("G17 runtime credential selection is closed over canonical owner claim
     },
   );
   assert.deepEqual(
-    selectG17RuntimeCredentialClaim({
+    selectBackupRuntimeCredentialClaim({
       owner: "integration",
       runtime: "aroma-gateway",
       roleMap: map,
@@ -639,7 +668,7 @@ void test("G17 runtime credential selection is closed over canonical owner claim
   );
   assert.throws(
     () =>
-      selectG17RuntimeCredentialClaim({
+      selectBackupRuntimeCredentialClaim({
         owner: "integration",
         runtime: "aroma-convergence",
         roleMap: map,
@@ -649,7 +678,7 @@ void test("G17 runtime credential selection is closed over canonical owner claim
   );
   assert.throws(
     () =>
-      selectG17RuntimeCredentialClaim({
+      selectBackupRuntimeCredentialClaim({
         owner: "orders",
         runtime: "arbitrary-runtime",
         roleMap: map,
@@ -673,7 +702,7 @@ void test("G17 restores canonical function ACLs and fails on source/restore drif
     recipients,
   );
   const orders = plan.owners.find(({ owner }) => owner === "orders");
-  const sql = renderG17RestoreFunctionAclSql(orders);
+  const sql = renderRestoreFunctionAclSql(orders);
   assert.match(
     sql,
     /REVOKE EXECUTE ON ALL FUNCTIONS IN SCHEMA "orders" FROM PUBLIC/u,
@@ -687,7 +716,7 @@ void test("G17 restores canonical function ACLs and fails on source/restore drif
     /GRANT EXECUTE ON FUNCTION "orders"\.read_card_projection\(text,integer\) TO "coffee_orders_service_rw"/u,
   );
   assert.match(
-    g17RoutineAclSnapshotSql("orders"),
+    restoreRoutineAclSnapshotSql("orders"),
     /aclexplode\(COALESCE\(p\.proacl,acldefault\('f',p\.proowner\)\)\)/u,
   );
   const source = JSON.stringify([
@@ -713,15 +742,15 @@ void test("G17 restores canonical function ACLs and fails on source/restore drif
     ],
   ]);
   assert.deepEqual(
-    verifyG17RoutineAclSnapshots(source, source),
+    verifyRestoreRoutineAclSnapshots(source, source),
     JSON.parse(source),
   );
   assert.throws(
-    () => verifyG17RoutineAclSnapshots(source, "[]"),
+    () => verifyRestoreRoutineAclSnapshots(source, "[]"),
     /G17_ROUTINE_ACL_MISMATCH/u,
   );
   assert.throws(
-    () => verifyG17RoutineAclSnapshots("not-json", "[]"),
+    () => verifyRestoreRoutineAclSnapshots("not-json", "[]"),
     /G17_ROUTINE_ACL_QUERY_INVALID/u,
   );
 });
@@ -841,12 +870,12 @@ void test("G17 restores and compares closed source table/column ACLs", () => {
       false,
     ],
   ]);
-  const sql = renderG17RestoreTableAclSql(orders, source);
+  const sql = renderRestoreTableAclSql(orders, source);
   assert.match(
-    g17TableAclSnapshotSql("orders"),
+    restoreTableAclSnapshotSql("orders"),
     /aclexplode\(COALESCE\(a\.attacl,acldefault\('c',r\.relowner\)\)\)/u,
   );
-  assert.match(g17TableAclSnapshotSql("orders"), /__EMPTY_ACL__/u);
+  assert.match(restoreTableAclSnapshotSql("orders"), /__EMPTY_ACL__/u);
   assert.match(
     sql,
     /REVOKE ALL PRIVILEGES ON TABLE "orders"\."orders" FROM PUBLIC,/u,
@@ -869,7 +898,7 @@ void test("G17 restores and compares closed source table/column ACLs", () => {
     /GRANT SELECT ON TABLE "orders"\."cart_desired_order_facts" TO "coffee_orders_convergence_rw"/u,
   );
   assert.deepEqual(
-    verifyG17TableAclSnapshots(source, source, orders),
+    verifyRestoreTableAclSnapshots(source, source, orders),
     JSON.parse(source),
   );
 
@@ -909,20 +938,20 @@ void test("G17 restores and compares closed source table/column ACLs", () => {
     ),
   );
   assert.throws(
-    () => verifyG17TableAclSnapshots(source, broadUpdate, orders),
+    () => verifyRestoreTableAclSnapshots(source, broadUpdate, orders),
     /G17_TABLE_ACL_MISMATCH/u,
   );
   assert.throws(
-    () => verifyG17TableAclSnapshots(source, projectionBypass, orders),
+    () => verifyRestoreTableAclSnapshots(source, projectionBypass, orders),
     /G17_TABLE_ACL_MISMATCH/u,
   );
   assert.throws(
-    () => verifyG17TableAclSnapshots(source, missingRecoveryGrant, orders),
+    () => verifyRestoreTableAclSnapshots(source, missingRecoveryGrant, orders),
     /G17_TABLE_ACL_MISMATCH/u,
   );
   assert.throws(
     () =>
-      renderG17RestoreTableAclSql(
+      renderRestoreTableAclSql(
         orders,
         JSON.stringify([
           ...JSON.parse(source),
@@ -942,7 +971,7 @@ void test("G17 restores and compares closed source table/column ACLs", () => {
   );
   assert.throws(
     () =>
-      renderG17RestoreTableAclSql(
+      renderRestoreTableAclSql(
         orders,
         JSON.stringify([
           ...JSON.parse(source),
@@ -962,7 +991,7 @@ void test("G17 restores and compares closed source table/column ACLs", () => {
   );
   assert.throws(
     () =>
-      renderG17RestoreTableAclSql(
+      renderRestoreTableAclSql(
         orders,
         JSON.stringify([
           ...JSON.parse(source),
@@ -982,7 +1011,7 @@ void test("G17 restores and compares closed source table/column ACLs", () => {
   );
   assert.throws(
     () =>
-      renderG17RestoreTableAclSql(
+      renderRestoreTableAclSql(
         orders,
         JSON.stringify([
           ...JSON.parse(source),
@@ -1002,7 +1031,7 @@ void test("G17 restores and compares closed source table/column ACLs", () => {
   );
   assert.throws(
     () =>
-      renderG17RestoreTableAclSql(
+      renderRestoreTableAclSql(
         orders,
         JSON.stringify([
           ...JSON.parse(source),
@@ -1021,7 +1050,7 @@ void test("G17 restores and compares closed source table/column ACLs", () => {
     /G17_TABLE_ACL_UNSUPPORTED/u,
   );
   assert.throws(
-    () => renderG17RestoreTableAclSql(orders, "[]"),
+    () => renderRestoreTableAclSql(orders, "[]"),
     /G17_TABLE_ACL_QUERY_INVALID/u,
   );
 });
@@ -1039,7 +1068,7 @@ void test("G17 checks restored Orders ACL behavior, including projection guard a
     realRoleMap,
     recipients,
   ).owners.find(({ owner }) => owner === "orders");
-  const sql = g17OrdersAclInvariantSql(orders);
+  const sql = restoreOrdersAclInvariantSql(orders);
   assert.match(
     sql,
     /has_table_privilege\('coffee_orders_service_rw','orders\.orders','UPDATE'\)/u,
@@ -1074,16 +1103,19 @@ void test("G17 checks restored Orders ACL behavior, including projection guard a
     true,
     false,
   ];
-  assert.deepEqual(verifyG17OrdersAclInvariants(JSON.stringify(valid)), valid);
+  assert.deepEqual(
+    verifyRestoreOrdersAclInvariants(JSON.stringify(valid)),
+    valid,
+  );
   assert.throws(
     () =>
-      verifyG17OrdersAclInvariants(
+      verifyRestoreOrdersAclInvariants(
         JSON.stringify([...valid.slice(0, 3), true, ...valid.slice(4)]),
       ),
     /G17_TABLE_ACL_INVARIANT_FAILED/u,
   );
   assert.throws(
-    () => verifyG17OrdersAclInvariants("not-json"),
+    () => verifyRestoreOrdersAclInvariants("not-json"),
     /G17_TABLE_ACL_PROBE_INVALID/u,
   );
 });
@@ -1098,7 +1130,7 @@ void test("G17 CREATE unknown outcome never claims or drops a colliding database
   const created = [];
   const createAttempts = [];
   await assert.rejects(
-    createG17OwnedRestoreDatabase({
+    createOwnedRestoreDatabase({
       ownerPlan: {
         owner: "customer",
         restoreDatabase: foreign.database,
@@ -1120,7 +1152,7 @@ void test("G17 CREATE unknown outcome never claims or drops a colliding database
     /G17_RESTORE_CREATE_OUTCOME_UNKNOWN/,
   );
   let dropCalls = 0;
-  const cleanup = await cleanupG17OwnedRestoreDatabases({
+  const cleanup = await cleanupOwnedRestoreDatabases({
     created,
     createAttempts,
     verifyServer: async () => assert.fail("unknown CREATE is not owned"),
@@ -1144,7 +1176,7 @@ void test("G17 restore ownership is registered only after marker provenance is r
   const created = [];
   const createAttempts = [];
   let actual = null;
-  const record = await createG17OwnedRestoreDatabase({
+  const record = await createOwnedRestoreDatabase({
     ownerPlan: {
       owner: "customer",
       restoreDatabase: database,
@@ -1192,7 +1224,7 @@ void test("G17 cleanup retains a database whose OID, owner, or marker changed", 
   ]) {
     let dropCalls = 0;
     let serverChecks = 0;
-    const cleanup = await cleanupG17OwnedRestoreDatabases({
+    const cleanup = await cleanupOwnedRestoreDatabases({
       created,
       createAttempts: [
         { database: expected.database, owner: "customer", state: "OWNED" },
@@ -1220,7 +1252,7 @@ void test("G17 cleanup drops only a same-server, same-OID owner and marker", asy
   };
   let exists = true;
   let dropCalls = 0;
-  const cleanup = await cleanupG17OwnedRestoreDatabases({
+  const cleanup = await cleanupOwnedRestoreDatabases({
     created: [expected],
     createAttempts: [
       { database: expected.database, owner: "customer", state: "OWNED" },
@@ -1515,7 +1547,7 @@ void test("G17 uses only the repository's public age recipient policy", async ()
 
 void test("G17 trusted bootstrap rejects an unbound source/restore target before secret access", async () => {
   await assert.rejects(
-    readG17BackupCredential({
+    readBackupCredential({
       runId: context.runId,
       candidateSha: context.candidateSha,
       owner: "customer",
@@ -1532,7 +1564,7 @@ void test("G17 trusted bootstrap rejects an unbound source/restore target before
 
 void test("G17 trusted bootstrap requires the exact readonly launch context before secret access", async () => {
   await assert.rejects(
-    readG17BackupCredential({
+    readBackupCredential({
       runId: context.runId,
       candidateSha: context.candidateSha,
       owner: "customer",
@@ -1573,19 +1605,19 @@ void test("G17 credential reads reject missing, symlinked, and writable contexts
     await symlink(contextFile, contextLink);
 
     await assert.rejects(
-      readG17BackupCredential({
+      readBackupCredential({
         ...base,
         contextPath: join(directory, "missing.json"),
       }),
       /CONFIG-G17-PATH/,
     );
     await assert.rejects(
-      readG17BackupCredential({ ...base, contextPath: contextLink }),
+      readBackupCredential({ ...base, contextPath: contextLink }),
       /CONFIG-G17-PATH/,
     );
     await chmod(contextFile, 0o600);
     await assert.rejects(
-      readG17BackupCredential({ ...base, contextPath: contextFile }),
+      readBackupCredential({ ...base, contextPath: contextFile }),
       /CONFIG-G17-CONTEXT/,
     );
   } finally {
@@ -1705,11 +1737,14 @@ void test("G17 validates a real source/candidate context, exact config bytes, pr
       "context.json",
     );
     evidenceDir = dirname(contextPath);
-    const g00Path = join(
+    const preflightIdentityPath = join(
       evidenceDir,
       "gates/G00_PREFLIGHT/artifacts/postgres-server-identity.json",
     );
-    await mkdir(dirname(g00Path), { recursive: true, mode: 0o700 });
+    await mkdir(dirname(preflightIdentityPath), {
+      recursive: true,
+      mode: 0o700,
+    });
     await mkdir(socketHost, { mode: 0o700 });
 
     const launchContext = {
@@ -1734,10 +1769,12 @@ void test("G17 validates a real source/candidate context, exact config bytes, pr
       mode: 0o400,
     });
     await chmod(contextPath, 0o400);
-    await writeFile(g00Path, `${JSON.stringify(identity)}\n`, { mode: 0o400 });
-    await chmod(g00Path, 0o400);
+    await writeFile(preflightIdentityPath, `${JSON.stringify(identity)}\n`, {
+      mode: 0o400,
+    });
+    await chmod(preflightIdentityPath, 0o400);
 
-    const validated = await validateG17BackupTarget({
+    const validated = await validateBackupTarget({
       root: candidateRoot,
       contextPath,
       runId,
@@ -1792,7 +1829,7 @@ void test("G17 validates a real source/candidate context, exact config bytes, pr
         "utf8",
       ),
     );
-    const runtimeClaim = selectG17RuntimeCredentialClaim({
+    const runtimeClaim = selectBackupRuntimeCredentialClaim({
       owner: "integration",
       runtime: "aroma-gateway",
       roleMap: candidateRoleMap,
@@ -1840,7 +1877,7 @@ void test("G17 validates a real source/candidate context, exact config bytes, pr
     const candidateConfigPath = join(candidateRoot, "config/platform.yaml");
     await chmod(candidateConfigPath, 0o664);
     await assert.rejects(
-      readG17BackupCredential(credentialOptions),
+      readBackupCredential(credentialOptions),
       (error) => error.ruleId === "CONFIG-G17-CONFIG",
     );
     assert.equal(
@@ -1848,13 +1885,13 @@ void test("G17 validates a real source/candidate context, exact config bytes, pr
       false,
     );
     await chmod(candidateConfigPath, 0o644);
-    assert.deepEqual(await readG17BackupCredential(credentialOptions), {
+    assert.deepEqual(await readBackupCredential(credentialOptions), {
       username: "postgres",
       password: adminPassword,
     });
     assert.equal((await readdir(candidateRoot)).includes("sops-invoked"), true);
     assert.deepEqual(
-      await readG17BackupCredential({
+      await readBackupCredential({
         ...credentialOptions,
         runtime: "aroma-gateway",
       }),
@@ -1864,7 +1901,7 @@ void test("G17 validates a real source/candidate context, exact config bytes, pr
     await rm(sopsInvocationPath, { force: true });
     await rm(candidateConfigPath);
     await assert.rejects(
-      readG17BackupCredential(credentialOptions),
+      readBackupCredential(credentialOptions),
       (error) => error.ruleId === "CONFIG-G17-CONFIG",
     );
     assert.equal(
@@ -1882,7 +1919,7 @@ void test("G17 validates a real source/candidate context, exact config bytes, pr
     );
     await chmod(contextPath, 0o400);
     await assert.rejects(
-      validateG17BackupTarget({
+      validateBackupTarget({
         root: candidateRoot,
         contextPath,
         runId,
@@ -1896,14 +1933,14 @@ void test("G17 validates a real source/candidate context, exact config bytes, pr
     await writeFile(contextPath, `${JSON.stringify(launchContext)}\n`);
     await chmod(contextPath, 0o400);
 
-    await chmod(g00Path, 0o600);
+    await chmod(preflightIdentityPath, 0o600);
     await writeFile(
-      g00Path,
+      preflightIdentityPath,
       `${JSON.stringify({ ...identity, systemIdentifier: "1" })}\n`,
     );
-    await chmod(g00Path, 0o400);
+    await chmod(preflightIdentityPath, 0o400);
     await assert.rejects(
-      validateG17BackupTarget({
+      validateBackupTarget({
         root: candidateRoot,
         contextPath,
         runId,
@@ -1914,11 +1951,11 @@ void test("G17 validates a real source/candidate context, exact config bytes, pr
       }),
       /CONFIG-G17-SERVER-IDENTITY/u,
     );
-    await chmod(g00Path, 0o600);
-    await writeFile(g00Path, "{ malformed G00 identity\n");
-    await chmod(g00Path, 0o400);
+    await chmod(preflightIdentityPath, 0o600);
+    await writeFile(preflightIdentityPath, "{ malformed G00 identity\n");
+    await chmod(preflightIdentityPath, 0o400);
     await assert.rejects(
-      validateG17BackupTarget({
+      validateBackupTarget({
         root: candidateRoot,
         contextPath,
         runId,
@@ -1931,7 +1968,7 @@ void test("G17 validates a real source/candidate context, exact config bytes, pr
     );
     await rm(sopsInvocationPath, { force: true });
     await assert.rejects(
-      readG17BackupCredential(credentialOptions),
+      readBackupCredential(credentialOptions),
       (error) => error.ruleId === "CONFIG-G17-SERVER-IDENTITY",
     );
     assert.equal(
@@ -1939,53 +1976,66 @@ void test("G17 validates a real source/candidate context, exact config bytes, pr
       false,
       "malformed G00 identity must fail before invoking SOPS",
     );
-    await chmod(g00Path, 0o600);
-    await writeFile(g00Path, `${JSON.stringify(identity)}\n`);
-    await chmod(g00Path, 0o400);
+    await chmod(preflightIdentityPath, 0o600);
+    await writeFile(preflightIdentityPath, `${JSON.stringify(identity)}\n`);
+    await chmod(preflightIdentityPath, 0o400);
 
     await rm(sopsInvocationPath, { force: true });
-    const g00Bytes = await readFile(g00Path);
-    const g00Mode = (await stat(g00Path)).mode & 0o777;
+    const preflightIdentityBytes = await readFile(preflightIdentityPath);
+    const preflightIdentityMode =
+      (await stat(preflightIdentityPath)).mode & 0o777;
     const originalReadFile = fsPromises.readFile.bind(fsPromises);
-    let g00DeletionTriggered = false;
-    const g00ReadRaceMock = t.mock.method(
+    let preflightIdentityDeletionTriggered = false;
+    const preflightIdentityReadRaceMock = t.mock.method(
       fsPromises,
       "readFile",
       async (...args) => {
-        if (g00DeletionTriggered || resolve(String(args[0])) !== g00Path)
+        if (
+          preflightIdentityDeletionTriggered ||
+          resolve(String(args[0])) !== preflightIdentityPath
+        )
           return originalReadFile(...args);
         const bytes = await originalReadFile(...args);
-        g00DeletionTriggered = true;
-        await rm(g00Path);
+        preflightIdentityDeletionTriggered = true;
+        await rm(preflightIdentityPath);
         return bytes;
       },
     );
     syncBuiltinESMExports();
     try {
       await assert.rejects(
-        readG17BackupCredential(credentialOptions),
+        readBackupCredential(credentialOptions),
         (error) => error.ruleId === "CONFIG-G17-SERVER-IDENTITY",
       );
-      assert.equal(g00DeletionTriggered, true);
-      assert.equal(await fsPromises.lstat(g00Path).catch(() => null), null);
+      assert.equal(preflightIdentityDeletionTriggered, true);
+      assert.equal(
+        await fsPromises.lstat(preflightIdentityPath).catch(() => null),
+        null,
+      );
       assert.equal(
         (await readdir(candidateRoot)).includes("sops-invoked"),
         false,
         "removed G00 identity must fail before invoking SOPS",
       );
     } finally {
-      g00ReadRaceMock.mock.restore();
+      preflightIdentityReadRaceMock.mock.restore();
       syncBuiltinESMExports();
-      if (g00DeletionTriggered) {
-        await writeFile(g00Path, g00Bytes);
-        await chmod(g00Path, g00Mode);
-        assert.deepEqual(await readFile(g00Path), g00Bytes);
-        assert.equal((await stat(g00Path)).mode & 0o777, g00Mode);
+      if (preflightIdentityDeletionTriggered) {
+        await writeFile(preflightIdentityPath, preflightIdentityBytes);
+        await chmod(preflightIdentityPath, preflightIdentityMode);
+        assert.deepEqual(
+          await readFile(preflightIdentityPath),
+          preflightIdentityBytes,
+        );
+        assert.equal(
+          (await stat(preflightIdentityPath)).mode & 0o777,
+          preflightIdentityMode,
+        );
       }
     }
 
     await assert.rejects(
-      validateG17BackupTarget({
+      validateBackupTarget({
         root: candidateRoot,
         contextPath,
         runId: `${runStamp}-0000000`,
@@ -2009,31 +2059,31 @@ void test("G17 Unix socket endpoint is restricted to private canonical directori
   const missing = `/dev/shm/coffee-g17-${randomBytes(8).toString("hex")}`;
   await assert.rejects(stat(missing), { code: "ENOENT" });
   await assert.rejects(
-    validateG17SocketDirectory(missing),
+    validateBackupSocketDirectory(missing),
     /CONFIG-G17-SOCKET-PATH/,
   );
   await mkdir(host, { mode: 0o700 });
   await mkdir(target, { mode: 0o700 });
   try {
-    assert.equal(isG17SocketHost(host), true);
-    assert.equal(await validateG17SocketDirectory(host), host);
+    assert.equal(isBackupSocketHost(host), true);
+    assert.equal(await validateBackupSocketDirectory(host), host);
     assert.equal(
-      validateG17SocketDirectoryMetadata({
+      validateBackupSocketDirectoryMetadata({
         isDirectory: () => true,
         uid: process.getuid() + 1,
         mode: 0o40700,
       }),
       false,
     );
-    assert.equal(isG17SocketHost("/tmp/coffee-g17-aaaaaaaaaaaaaaaa"), false);
+    assert.equal(isBackupSocketHost("/tmp/coffee-g17-aaaaaaaaaaaaaaaa"), false);
     await symlink(target, link);
     await assert.rejects(
-      validateG17SocketDirectory(link),
+      validateBackupSocketDirectory(link),
       /CONFIG-G17-SOCKET-PATH/,
     );
     await chmod(host, 0o755);
     await assert.rejects(
-      validateG17SocketDirectory(host),
+      validateBackupSocketDirectory(host),
       /CONFIG-G17-SOCKET-OWNER/,
     );
   } finally {
@@ -2045,7 +2095,7 @@ void test("G17 Unix socket endpoint is restricted to private canonical directori
 
 void test("G17 recovery proof requires GET first and forbids replay of the old operation", () => {
   assert.deepEqual(
-    verifyG17UnknownOutcomeTrace(
+    verifyRecoveryUnknownOutcomeTrace(
       [{ kind: "GET" }, { kind: "MUTATION", operationRef: "op_new" }],
       "op_old",
     ),
@@ -2053,7 +2103,7 @@ void test("G17 recovery proof requires GET first and forbids replay of the old o
   );
   assert.throws(
     () =>
-      verifyG17UnknownOutcomeTrace(
+      verifyRecoveryUnknownOutcomeTrace(
         [{ kind: "MUTATION", operationRef: "op_old" }, { kind: "GET" }],
         "op_old",
       ),
@@ -2061,7 +2111,7 @@ void test("G17 recovery proof requires GET first and forbids replay of the old o
   );
   assert.throws(
     () =>
-      verifyG17UnknownOutcomeTrace(
+      verifyRecoveryUnknownOutcomeTrace(
         [{ kind: "GET" }, { kind: "MUTATION", operationRef: "op_old" }],
         "op_old",
       ),
@@ -2084,7 +2134,7 @@ void test("G17 target identity is closed and bound to this run, candidate, and Y
     verification: { databaseIsolation: { enabled: true } },
     postgres: { host: identity.host, port: identity.port },
   };
-  assert.deepEqual(validateG17ServerIdentity(identity, context, config), {
+  assert.deepEqual(validateBackupServerIdentity(identity, context, config), {
     host: identity.host,
     port: identity.port,
     systemIdentifier: identity.systemIdentifier,
@@ -2095,7 +2145,7 @@ void test("G17 target identity is closed and bound to this run, candidate, and Y
     postgres: { ...config.postgres, host: socketHost },
   };
   assert.deepEqual(
-    validateG17ServerIdentity(
+    validateBackupServerIdentity(
       { ...identity, host: socketHost },
       context,
       socketConfig,
@@ -2108,7 +2158,7 @@ void test("G17 target identity is closed and bound to this run, candidate, and Y
   );
   assert.throws(
     () =>
-      validateG17ServerIdentity(
+      validateBackupServerIdentity(
         identity,
         { ...context, runId: "20261024T123000Z-0000000" },
         config,
@@ -2123,7 +2173,7 @@ void test("G17 target identity is closed and bound to this run, candidate, and Y
   ]) {
     assert.throws(
       () =>
-        validateG17ServerIdentity(
+        validateBackupServerIdentity(
           { ...identity, [key]: value },
           context,
           config,
@@ -2133,7 +2183,7 @@ void test("G17 target identity is closed and bound to this run, candidate, and Y
   }
   assert.throws(
     () =>
-      validateG17ServerIdentity(
+      validateBackupServerIdentity(
         { ...identity, unexpected: true },
         context,
         config,
@@ -2142,7 +2192,7 @@ void test("G17 target identity is closed and bound to this run, candidate, and Y
   );
   assert.throws(
     () =>
-      validateG17ServerIdentity(identity, context, {
+      validateBackupServerIdentity(identity, context, {
         ...config,
         environment: "production",
       }),
@@ -2150,7 +2200,7 @@ void test("G17 target identity is closed and bound to this run, candidate, and Y
   );
   assert.throws(
     () =>
-      validateG17ServerIdentity(identity, context, {
+      validateBackupServerIdentity(identity, context, {
         ...config,
         verification: { databaseIsolation: { enabled: false } },
       }),

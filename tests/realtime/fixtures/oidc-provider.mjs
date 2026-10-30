@@ -6,7 +6,7 @@ import { resolve, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { nowMs } from "./protocol.mjs";
 
-const G15_PERMISSIONS = Object.freeze([
+const BROWSER_FIXTURE_PERMISSIONS = Object.freeze([
   "customer:create",
   "customer:read",
   "catalog:read",
@@ -16,10 +16,10 @@ const G15_PERMISSIONS = Object.freeze([
   "orders:confirm:any",
   "orders:read:any",
 ]);
-const G15_ACCOUNTS = Object.freeze({
+const BROWSER_FIXTURE_ACCOUNTS = Object.freeze({
   operator: Object.freeze({
     actorRef: "actor:g15-browser-fixture",
-    permissions: G15_PERMISSIONS,
+    permissions: BROWSER_FIXTURE_PERMISSIONS,
   }),
   restricted: Object.freeze({
     actorRef: "actor:g15-browser-restricted",
@@ -27,14 +27,15 @@ const G15_ACCOUNTS = Object.freeze({
   }),
 });
 
-export function selectG15FixtureAccount(req) {
+export function selectBrowserFixtureAccount(req) {
   const cookie = req.headers.cookie;
-  if (cookie === undefined || cookie === "") return G15_ACCOUNTS.operator;
+  if (cookie === undefined || cookie === "")
+    return BROWSER_FIXTURE_ACCOUNTS.operator;
   if (typeof cookie !== "string" || cookie.length > 256)
     throw new Error("invalid fixture account cookie");
   const match = /^g15_fixture_account=(operator|restricted)$/u.exec(cookie);
   if (!match) throw new Error("invalid fixture account cookie");
-  return G15_ACCOUNTS[match[1]];
+  return BROWSER_FIXTURE_ACCOUNTS[match[1]];
 }
 
 export function createOidcProviderServer({
@@ -166,7 +167,7 @@ export function createOidcProviderServer({
   return server;
 }
 
-async function runG15Fixture() {
+async function runBrowserFixture() {
   const [mode, root, fixtureDir, ...extra] = process.argv.slice(2);
   assert.equal(mode, "--serve-g15");
   assert.ok(root && fixtureDir && extra.length === 0);
@@ -178,7 +179,7 @@ async function runG15Fixture() {
   const profile = config.browserOidc;
   assert.deepEqual(profile, {
     issuer: "https://idp.fixture.invalid",
-    clientId: "issue12-fixture",
+    clientId: "realtime-browser-fixture",
     authorizationUrl: "https://idp.fixture.invalid/authorize",
     tokenUrl: "https://idp.fixture.invalid/token",
     jwksUrl: "https://idp.fixture.invalid/keys",
@@ -213,7 +214,7 @@ async function runG15Fixture() {
     profile,
     signingKey,
     jwk,
-    selectAccount: selectG15FixtureAccount,
+    selectAccount: selectBrowserFixtureAccount,
   });
   server.listen(443, "0.0.0.0");
   return server;
@@ -229,7 +230,7 @@ if (
     server?.closeAllConnections();
   };
   for (const signal of ["SIGTERM", "SIGINT"]) process.once(signal, shutdown);
-  runG15Fixture()
+  runBrowserFixture()
     .then((started) => {
       server = started;
       server.on("error", () => {

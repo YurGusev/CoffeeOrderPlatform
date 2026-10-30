@@ -517,6 +517,16 @@ async function checkManifest(root) {
     "config/toolchain-versions.json.kafkaImage",
   );
   exact(
+    manifest.postgresImage,
+    "postgres:17.11-alpine@sha256:18cfe3ef5e6815560c98237d6216d1e5119702fb0f3894c8785dd58b8bbe5d73",
+    "config/toolchain-versions.json.postgresImage",
+  );
+  exact(
+    manifest.nodeBookwormSlimImage,
+    "node:26.8.1-bookworm-slim@sha256:27f5e13512830beb5d9a574108daa6701a0a0b91528aeaf1ee84ecdcddaeeaae",
+    "config/toolchain-versions.json.nodeBookwormSlimImage",
+  );
+  exact(
     manifest.nginxImage,
     "nginx:1.31.6-trixie@sha256:908dc23e643a1447dbfb2e189ed268bfde6a51a5bf9a34d3dd3440a24f58ccf7",
     "config/toolchain-versions.json.nginxImage",
@@ -542,6 +552,21 @@ async function checkManifest(root) {
     fail("TOOLCHAIN-IMAGE", "nodeImage must use an exact digest");
   if (!/^apache\/kafka:4\.3\.2@sha256:[0-9a-f]{64}$/.test(manifest.kafkaImage))
     fail("TOOLCHAIN-IMAGE", "kafkaImage must use an exact digest");
+  if (
+    !/^postgres:17\.11-alpine@sha256:[0-9a-f]{64}$/.test(
+      manifest.postgresImage ?? "",
+    )
+  )
+    fail("TOOLCHAIN-IMAGE", "postgresImage must use an exact digest");
+  if (
+    !/^node:26\.8\.1-bookworm-slim@sha256:[0-9a-f]{64}$/.test(
+      manifest.nodeBookwormSlimImage ?? "",
+    )
+  )
+    fail(
+      "TOOLCHAIN-IMAGE",
+      "nodeBookwormSlimImage must use an exact digest",
+    );
 }
 
 function checkTsConfigDocument(document, pathLabel) {

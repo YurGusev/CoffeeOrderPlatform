@@ -39,9 +39,9 @@ import {
 } from "./scenarios/rollback.mjs";
 import { validateRoleMap } from "../../../scripts/db-bootstrap.mjs";
 import {
-  validateG15BrowserChildContext,
-  validateG15BrowserFailureReceipt,
-  validateG15BrowserParentRuntime,
+  validateBrowserChildContext,
+  validateBrowserFailureReceipt,
+  validateBrowserParentRuntime,
 } from "./scenarios/browser.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
@@ -51,9 +51,9 @@ const MATRIX_SCHEMA_PATH = join(BASE, "schemas/matrix.schema.json");
 const RESULT_SCHEMA_PATH = join(BASE, "schemas/run-result.schema.json");
 const TOTAL_TIMEOUT_MS = 120 * 60 * 1000;
 const REPORT_FINALIZATION_RESERVE_MS = 120 * 1000;
-const G19_COMMAND_RESERVE_MS = EXPECTED_GATES.at(-1)[2] * 1000;
-const G19_TOTAL_RESERVE_MS =
-  G19_COMMAND_RESERVE_MS + REPORT_FINALIZATION_RESERVE_MS;
+const REPORT_COMMAND_RESERVE_MS = EXPECTED_GATES.at(-1)[2] * 1000;
+const REPORT_TOTAL_RESERVE_MS =
+  REPORT_COMMAND_RESERVE_MS + REPORT_FINALIZATION_RESERVE_MS;
 const CONTROL_COMMAND_TIMEOUT_MS = 10_000;
 const MAX_CONTROL_OUTPUT_BYTES = 64 * 1024;
 const MAX_RUN_LOG_BYTES = 128 * 1024 * 1024;
@@ -72,7 +72,7 @@ export function gateBudgetMs(gateId, totalRemainingMs) {
   if (!Number.isFinite(totalRemainingMs)) return 0;
   if (gateId === "G19_REPORT")
     return Math.max(0, totalRemainingMs - REPORT_FINALIZATION_RESERVE_MS);
-  return Math.max(0, totalRemainingMs - G19_TOTAL_RESERVE_MS);
+  return Math.max(0, totalRemainingMs - REPORT_TOTAL_RESERVE_MS);
 }
 
 export async function loadJsonSchema(path) {
@@ -178,6 +178,7 @@ export async function writeRedactedStream(
   maxLineBytes = 8192,
   outputBudget = null,
   onLimit = () => {},
+  onLine = () => {},
 ) {
   const handle = await import("node:fs").then(({ createWriteStream }) =>
     createWriteStream(path, { flags: "wx", mode: 0o600 }),
@@ -213,6 +214,7 @@ export async function writeRedactedStream(
   };
   const emit = async (value) => {
     if (!value || outputLimitExceeded || outputBudget?.exceeded) return;
+    onLine();
     if (!outputBudget) {
       await writeChunk(handle, value);
       return;
@@ -688,6 +690,7 @@ export async function executeArgv(
   stderrPath,
   contextPath,
   outputBudget = null,
+  options = {},
 ) {
   const startedAt = nowIso();
   const start = Date.now();
@@ -735,6 +738,10 @@ export async function executeArgv(
         signalProcessGroup(child.pid, "SIGKILL");
       }, 500);
   };
+  let resolveFirstStdoutLine = () => {};
+  const firstStdoutLine = new Promise((resolve) => {
+    resolveFirstStdoutLine = resolve;
+  });
   const stdout = writeRedactedStream(
     child.stdout,
     stdoutPath,
@@ -742,6 +749,7 @@ export async function executeArgv(
     8192,
     outputBudget,
     stopForOutputLimit,
+    options.awaitFirstStdoutLine ? resolveFirstStdoutLine : undefined,
   );
   const stderrOutput = new PassThrough();
   child.stderr.pipe(stderrOutput, { end: false });
@@ -772,6 +780,8 @@ export async function executeArgv(
         }
       } catch (error) {
         rssSamples.errors += 1;
+        // Уходящий процесс теряет VmRSS раньше состояния Z и не отменяет уже снятый пик.
+        if (peakRssBytes > 0 && error?.rssErrno === "MISSING") return;
         if (!rssFailure)
           rssFailure = {
             stage: error?.rssStage ?? "scan",
@@ -787,6 +797,24 @@ export async function executeArgv(
     child.once("spawn", resolvePromise);
     child.once("error", resolvePromise);
   });
+  if (options.awaitFirstStdoutLine) {
+    let guard;
+    try {
+      await Promise.race([
+        firstStdoutLine,
+        new Promise((_, reject) => {
+          guard = setTimeout(
+            () => reject(new Error("child stdout was not observed")),
+            30_000,
+          );
+        }),
+      ]);
+    } finally {
+      clearTimeout(guard);
+    }
+    // Короткий timeout иначе снимает группу раньше, чем обход /proc успевает её увидеть.
+    await sample();
+  }
   let killTimer;
   const timer = setTimeout(() => {
     timedOut = true;
@@ -934,7 +962,7 @@ async function updateGateArtifact(evidenceDir, gate) {
   await atomicJson(path, gate);
 }
 
-export async function captureG13KafkaNamespaceArtifact({
+export async function captureKafkaNamespaceArtifact({
   evidenceDir,
   gateDir,
   context,
@@ -1400,7 +1428,7 @@ export async function verifyGateArtifacts(gate, record, evidenceDir) {
         const childContext = JSON.parse(
           await readFile(childContextPath, "utf8"),
         );
-        validateG15BrowserChildContext(
+        validateBrowserChildContext(
           childContext,
           launch.context,
           launch.candidateRoot,
@@ -1416,7 +1444,7 @@ export async function verifyGateArtifacts(gate, record, evidenceDir) {
         )
           return failure;
         const receipt = JSON.parse(await readFile(failurePath, "utf8"));
-        validateG15BrowserFailureReceipt(receipt, {
+        validateBrowserFailureReceipt(receipt, {
           parentContext: launch.context,
           childContext,
         });
@@ -1455,7 +1483,7 @@ export async function verifyGateArtifacts(gate, record, evidenceDir) {
         .filter((line) => line.trim())
         .at(-1);
       const stdoutReceipt = finalLine ? JSON.parse(finalLine) : null;
-      await validateG15BrowserParentRuntime({
+      await validateBrowserParentRuntime({
         evidenceDir,
         parentContext: launch.context,
         stdoutReceipt,
@@ -1505,12 +1533,12 @@ export async function verifyGateArtifacts(gate, record, evidenceDir) {
       return "G00 preflight result is FAIL or does not identify this run/candidate";
     additions.push(await hashFile(path));
   }
-  const g13CommandSucceeded =
+  const composeCommandSucceeded =
     record.runs.length === 1 &&
     record.runs.every(
       (run) => run.exitCode === 0 && !run.timedOut && !run.outputLimitExceeded,
     );
-  if (gate.id === "G13_COMPOSE" && g13CommandSucceeded) {
+  if (gate.id === "G13_COMPOSE" && composeCommandSucceeded) {
     const preflightPath = join(
       evidenceDir,
       "gates/G00_PREFLIGHT/artifacts/preflight.json",
@@ -1539,7 +1567,7 @@ export async function verifyGateArtifacts(gate, record, evidenceDir) {
       return "G13 has no context-bound committed Kafka namespace plan";
     try {
       additions.push(
-        await captureG13KafkaNamespaceArtifact({
+        await captureKafkaNamespaceArtifact({
           evidenceDir,
           gateDir,
           context,
@@ -2045,7 +2073,7 @@ export async function executeRun(options = {}) {
       exceeded: false,
     };
     const totalDeadline = runEpochMs + TOTAL_TIMEOUT_MS;
-    const workloadDeadline = totalDeadline - G19_TOTAL_RESERVE_MS;
+    const workloadDeadline = totalDeadline - REPORT_TOTAL_RESERVE_MS;
     for (let index = 0; index < matrix.gates.length; index += 1) {
       const gate = matrix.gates[index];
       const record = result.gates[index];

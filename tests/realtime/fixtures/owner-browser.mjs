@@ -68,7 +68,7 @@ export async function proveOwnerBrowser(
   assert.equal(typeof finish, "function");
   await mkdir(scratchRoot(), { recursive: true });
   const dir = join(
-    await mkdtemp(join(scratchRoot(), "issue12-owner-browser-")),
+    await mkdtemp(join(scratchRoot(), "realtime-owner-browser-")),
     "transport",
   );
   const options = parse([
@@ -129,7 +129,7 @@ export async function proveOwnerBrowser(
         const transformed = source
           .replace(
             compositionAnchor,
-            `${compositionAnchor}\n    let issue12PrivateEofTriggered = false;`,
+            `${compositionAnchor}\n    let privateEofTriggered = false;`,
           )
           .replace(
             headerAnchor,
@@ -137,24 +137,24 @@ export async function proveOwnerBrowser(
                 reply.raw.writeHead(200, { "Content-Type": "text/event-stream; charset=utf-8", "Cache-Control": "no-cache, no-transform", "Connection": "close", "X-Accel-Buffering": "no", "X-Correlation-ID": correlationId });
                 const streamSocket = reply.raw.socket;
                 reply.raw.once("finish", () => streamSocket?.end());
-                let issue12InvalidationWrites = 0;
-                const issue12OriginalWrite = reply.raw.write.bind(reply.raw);
+                let invalidationWrites = 0;
+                const originalWrite = reply.raw.write.bind(reply.raw);
                 reply.raw.write = function(chunk, ...args) {
                     const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk, typeof args[0] === "string" ? args[0] : "utf8");
-                    if (bytes.includes(Buffer.from("event: resource-invalidated.v1\\n"))) issue12InvalidationWrites++;
-                    if (issue12PrivateEofTriggered || issue12InvalidationWrites !== 2) return issue12OriginalWrite(chunk, ...args);
+                    if (bytes.includes(Buffer.from("event: resource-invalidated.v1\\n"))) invalidationWrites++;
+                    if (privateEofTriggered || invalidationWrites !== 2) return originalWrite(chunk, ...args);
                     const text = bytes.toString("utf8");
-                    if (!text.endsWith("\\n\\n")) throw new Error("ISSUE12_PRIVATE_EOF_FRAME_NOT_COMPLETE");
-                    issue12PrivateEofTriggered = true;
+                    if (!text.endsWith("\\n\\n")) throw new Error("PRIVATE_EOF_FRAME_NOT_COMPLETE");
+                    privateEofTriggered = true;
                     const truncated = Buffer.from(text.slice(0, -1));
                     const callback = typeof args.at(-1) === "function" ? args.at(-1) : undefined;
-                    if (callback === undefined) throw new Error("ISSUE12_PRIVATE_EOF_WRITE_CALLBACK_REQUIRED");
+                    if (callback === undefined) throw new Error("PRIVATE_EOF_WRITE_CALLBACK_REQUIRED");
                     let callbackDone = false, drainRequired = false, drainObserved = false, endCalled = false, writeReturnedKnown = false, writeReturned;
                     const finishTruncatedWrite = () => {
                         if (!writeReturnedKnown || !callbackDone || (drainRequired && !drainObserved) || endCalled) return;
                         reply.raw.end();
                         endCalled = true;
-                        process.stdout.write("ISSUE12_PRIVATE_EOF_PROBE " + JSON.stringify({ triggered: true, invalidationOrdinal: 2, removedBytes: 1, callbackDone, writeReturned, drainRequired, drainObserved, endCalled, socketDestroyCalled: false }) + "\\n");
+                        process.stdout.write("PRIVATE_EOF_PROBE " + JSON.stringify({ triggered: true, invalidationOrdinal: 2, removedBytes: 1, callbackDone, writeReturned, drainRequired, drainObserved, endCalled, socketDestroyCalled: false }) + "\\n");
                     };
                     const writeArgs = args.slice();
                     if (callback !== undefined) writeArgs[writeArgs.length - 1] = (...callbackArgs) => {
@@ -162,7 +162,7 @@ export async function proveOwnerBrowser(
                         callback(...callbackArgs);
                         finishTruncatedWrite();
                     };
-                    const writable = issue12OriginalWrite(truncated, ...writeArgs);
+                    const writable = originalWrite(truncated, ...writeArgs);
                     writeReturned=writable;writeReturnedKnown=true;
                     drainRequired = !writable;
                     if (!writable) reply.raw.once("drain", () => { drainObserved = true; finishTruncatedWrite(); });
@@ -229,7 +229,7 @@ export async function proveOwnerBrowser(
         .IPAM.Config[0].Gateway;
       let privateDir;
 
-      const nginxImage = `coffee-issue12-owner-browser:${options.runId}`;
+      const nginxImage = `coffee-realtime-owner-browser:${options.runId}`;
       let app,
         client,
         attached = false,
@@ -286,7 +286,7 @@ export async function proveOwnerBrowser(
       };
       registerOwner({ stop });
       privateDir = await mkdtemp(
-        join(scratchRoot(), "issue12-owner-publisher-private-"),
+        join(scratchRoot(), "realtime-owner-publisher-private-"),
       );
       const connectionPath = join(privateDir, "database.json");
       const build = await run(
@@ -954,18 +954,14 @@ export async function proveOwnerBrowser(
               );
               const matches = logs
                 .split("\n")
-                .filter((line) =>
-                  line.startsWith("ISSUE12_PRIVATE_EOF_PROBE "),
-                );
+                .filter((line) => line.startsWith("PRIVATE_EOF_PROBE "));
               if (matches.length === 0) return false;
               assert.equal(
                 matches.length,
                 1,
                 "one-shot incomplete B frame fault must trigger exactly once",
               );
-              return JSON.parse(
-                matches[0].slice("ISSUE12_PRIVATE_EOF_PROBE ".length),
-              );
+              return JSON.parse(matches[0].slice("PRIVATE_EOF_PROBE ".length));
             },
             {
               timeout: 10000,

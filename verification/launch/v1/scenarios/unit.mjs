@@ -320,7 +320,7 @@ export function parseTapSummaryDiagnostic(text) {
   return { summary, code: null };
 }
 
-export async function writeG04EvidenceArtifacts(context, artifacts) {
+export async function writeUnitEvidenceArtifacts(context, artifacts) {
   if (
     !context ||
     !RUN_ID.test(context.runId ?? "") ||
@@ -495,7 +495,7 @@ export async function runUnitCoverage(argv = process.argv.slice(2)) {
         if (error?.code !== "ENOENT") throw error;
       }
     }
-    await writeG04EvidenceArtifacts(context, rawOutputs);
+    await writeUnitEvidenceArtifacts(context, rawOutputs);
     const tapDiagnostic = parseTapSummaryDiagnostic(
       (rawOutputs["unit.tap"] ?? Buffer.alloc(0)).toString("utf8"),
     );
@@ -531,7 +531,7 @@ export async function runUnitCoverage(argv = process.argv.slice(2)) {
       },
       tap: tapDiagnostic,
     };
-    await writeG04EvidenceArtifacts(context, {
+    await writeUnitEvidenceArtifacts(context, {
       "unit-diagnostics.json": `${JSON.stringify(diagnostic, null, 2)}\n`,
     });
     await inspectLaunchCheckout(candidateRoot, context.candidateSha);

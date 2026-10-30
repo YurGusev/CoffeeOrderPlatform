@@ -764,7 +764,7 @@ void test("operator-1 CLI requires a frozen manifest and never admits old full50
     );
     assert.ok(
       relative(defaultScratch, defaultOptions.resultDir).startsWith(
-        "issue12-realtime-",
+        "realtime-soak-",
       ),
       "unset TMPDIR uses the declared Hermes scratch root",
     );
@@ -774,7 +774,7 @@ void test("operator-1 CLI requires a frozen manifest and never admits old full50
       /declared Hermes scratch/u,
       "a prefix-sharing sibling is outside scratch",
     );
-    portableTmpdir = await mkdtemp(join(tmpdir(), "issue12-operator-cli-"));
+    portableTmpdir = await mkdtemp(join(tmpdir(), "realtime-operator-cli-"));
     process.env.TMPDIR = ROOT;
     assert.throws(
       () => parse(["--smoke", "--result-dir", join(ROOT, "README.md")]),
@@ -899,7 +899,7 @@ void test("prepared operator-1 keeps ordinary budgets, 100 subjects, one shard a
     const expected = structuredClone(document);
     expected.browserOidc = {
       issuer: "https://idp.fixture.invalid",
-      clientId: "issue12-fixture",
+      clientId: "realtime-browser-fixture",
       authorizationUrl: "https://idp.fixture.invalid/authorize",
       tokenUrl: "https://idp.fixture.invalid/token",
       jwksUrl: "https://idp.fixture.invalid/keys",
@@ -2833,7 +2833,7 @@ void test("realtime upstream TLS peer state is shared and bounded without changi
   assert.match(text, /proxy_cache off;/u);
 });
 void test("cold product snapshot builds all declared API contract dependencies", async () => {
-  const dir = await mkdtemp(join(tmpdir(), "issue12-cold-build-"));
+  const dir = await mkdtemp(join(tmpdir(), "realtime-cold-build-"));
   try {
     const { target } = await sourceSnapshot(dir);
     await run(
@@ -2919,7 +2919,7 @@ void test("G15 realtime launch path binds child identity to verified parent line
         assert.equal(path, contextPath);
         return active;
       },
-      readG15FixtureLineage: async (input) => {
+      readBrowserFixtureLineage: async (input) => {
         assert.deepEqual(JSON.parse(JSON.stringify(input)), {
           root: "/source",
           contextPath,
@@ -3368,7 +3368,7 @@ void test("command evidence remains bounded with an explicit capture limit", asy
 });
 
 void test("cross-process control JSON publishes a complete replacement rather than truncating the readable inode", async () => {
-  const dir = await mkdtemp(join(tmpdir(), "issue12-control-json-"));
+  const dir = await mkdtemp(join(tmpdir(), "realtime-control-json-"));
   try {
     const path = join(dir, "control.json");
     await json(path, { id: "previous", ok: false });
@@ -3810,7 +3810,7 @@ void test("owner browser response body rejection is captured immediately without
 });
 
 void test("SSE reconnect retains only its own browser-like TLS session and still sends a fresh HTTP request", async () => {
-  const dir = await mkdtemp(join(tmpdir(), "issue12-tls-session-"));
+  const dir = await mkdtemp(join(tmpdir(), "realtime-tls-session-"));
   try {
     await run("openssl", [
       "req",

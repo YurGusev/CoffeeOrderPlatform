@@ -13,7 +13,7 @@ import { withCatalogPostgres } from "../../scripts/catalog-live-harness.mjs";
 
 const root = resolve(import.meta.dirname, "../..");
 const childFile = resolve(root, "tests/catalog-pipeline/publisher-child.mjs");
-const messageId = "msg_issue18_publisher_restart_0001";
+const messageId = "msg_catalog_publisher_restart_0001";
 const password = "publisher-proof-pass";
 const pool = {
   max: 3,
@@ -230,7 +230,7 @@ void test(
           partitionKey: "catalog-publisher-proof",
           schemaVersion: "1",
           occurredAt,
-          correlationId: "corr_issue18_publisher_restart",
+          correlationId: "corr_catalog_publisher_restart",
           traceparent,
           payload,
           envelope: {
@@ -238,8 +238,8 @@ void test(
             messageId,
             messageType: "CatalogPublisherRestartProof.v1",
             occurredAt,
-            producer: "issue18-publisher-proof",
-            correlationId: "corr_issue18_publisher_restart",
+            producer: "catalog-publisher-proof",
+            correlationId: "corr_catalog_publisher_restart",
             causationId: null,
             traceparent,
             aggregate: {

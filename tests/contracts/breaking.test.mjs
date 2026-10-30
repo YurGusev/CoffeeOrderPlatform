@@ -315,7 +315,7 @@ void test("breaking guard rejects endpoint/schema/status/operation rename and sc
   }
 });
 
-void test("issue-8 Confirm response expansion guard rejects an unapproved ref replacement", async () => {
+void test("Confirm response expansion guard rejects an unapproved ref replacement", async () => {
   const result = await realClientRed((document) => {
     document.paths[
       "/api/client-v1/orders/{orderRef}/commands/confirm"

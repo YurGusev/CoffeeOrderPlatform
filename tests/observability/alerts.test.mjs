@@ -160,7 +160,7 @@ void test('convergence phase acknowledgement follows backend PASS and rejects fa
   } finally {await rm(dir, {recursive: true, force: true});}
 });
 
-void test('issue 64 metric matrix derives all runtime owners and sanitizes probe receipts', () => {
+void test('runtime metric matrix derives all runtime owners and sanitizes probe receipts', () => {
   const databaseOwners = new Set([
     'customer-service', 'catalog-service', 'catalog-supplier-sync', 'catalog-activation-worker', 'pricing-service',
     'orders-service', 'orders-aroma-preparation', 'aroma-observer', 'aroma-convergence', 'aroma-gateway',
@@ -235,7 +235,7 @@ void test('startup diagnostics bound and redact container state, health output a
   assert.deepEqual(unavailable.state, {unavailable: true});
 });
 
-void test('issue 64 failure diagnostics retain only allowlisted error codes and local frame coordinates', () => {
+void test('runtime failure diagnostics retain only allowlisted error codes and local frame coordinates', () => {
   const secret = 'canary-secret-must-not-escape';
   const cause = new Error(`${secret} in message`);
   cause.name = 'AssertionError';
@@ -446,7 +446,7 @@ void test('infrastructure stop gate rejects a Docker stop that needed SIGKILL', 
     return 'container';
   };
   const clean = stopContainerGracefully({run, name: 'collector-fixture', graceMs: 30000});
-  const forced = stopContainerGracefully({run, name: 'openobserve-fixture', graceMs: 30000});
+  const forced = stopContainerGracefully({run, name: 'grafana-fixture', graceMs: 30000});
   assert.equal(clean.status, 'PASS');
   assert.equal(clean.exitCode, 0);
   assert.equal(clean.oomKilled, false);
@@ -457,7 +457,7 @@ void test('infrastructure stop gate rejects a Docker stop that needed SIGKILL', 
   assert.ok(forced.elapsedMs <= forced.graceBudgetMs);
   assert.deepEqual(commands.filter(args => args[0] === 'stop'), [
     ['stop', '--time', '30', 'collector-fixture'],
-    ['stop', '--time', '30', 'openobserve-fixture'],
+    ['stop', '--time', '30', 'grafana-fixture'],
   ]);
 });
 
@@ -622,7 +622,7 @@ void test('verification provenance hashes the non-ignored source tree and compil
   assert.match(identity.identityHash, /^[a-f0-9]{64}$/u);
 });
 
-void test('issue 64 evidence distinguishes selected live roles from full 14-runtime G14 coverage', () => {
+void test('observability evidence distinguishes selected live roles from full 14-runtime G14 coverage', () => {
   const coverage = observabilityVerificationCoverage({
     launchPathProof: {roles: [
       {role: 'edge-nginx'}, {role: 'edge-gateway'}, {role: 'api-public'}, {role: 'api-internal'}, {role: 'orders-service'},

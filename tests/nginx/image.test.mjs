@@ -25,16 +25,16 @@ const profileConfig = resolve(
   root,
   `apps/edge-nginx/generated/.image-fixture-${process.pid}.conf`,
 );
-const image = "coffee-edge-nginx:issue161-test";
-const backendImage = "coffee-edge-fixture:issue161-test";
+const image = "coffee-edge-nginx:image-test";
+const backendImage = "coffee-edge-fixture:image-test";
 const registry = JSON.parse(
   await readFile(join(root, "config/toolchain-versions.json"), "utf8"),
 );
-const network = `edge161-${process.pid}`;
+const network = `edge-image-${process.pid}`;
 const extraIds = [];
 const extraNetworks = [];
 const hostPort = 18443 + (process.pid % 7000);
-const scratch = await mkdtemp(join(tmpdir(), "edge161-"));
+const scratch = await mkdtemp(join(tmpdir(), "edge-image-"));
 const certDir = join(scratch, "certs");
 const requestsFile = join(certDir, "requests.jsonl");
 await mkdir(certDir, { mode: 0o755 });
@@ -552,7 +552,7 @@ try {
       await probeFailure(hostPort + 1, requestsFile);
       await probeFailure(hostPort + 2, requestsFile);
       await probeFailure(hostPort + 3, requestsFile);
-      const expiredNetwork = `edge161-expired-${process.pid}`;
+      const expiredNetwork = `edge-image-expired-${process.pid}`;
       extraNetworks.push(expiredNetwork);
       docker("network", "create", expiredNetwork);
       const expiredDir = join(scratch, "expired-backend");
@@ -611,7 +611,7 @@ try {
       variant(hostPort + 4, { net: expiredNetwork });
       await waitForVariant(hostPort + 4, "expired upstream certificate");
       await probeFailure(hostPort + 4, expiredLog);
-      const wrongNetwork = `edge161-wrong-runtime-${process.pid}`;
+      const wrongNetwork = `edge-image-wrong-runtime-${process.pid}`;
       extraNetworks.push(wrongNetwork);
       docker("network", "create", wrongNetwork);
       const wrongDir = join(scratch, "wrong-runtime-backend");
@@ -795,7 +795,7 @@ try {
     assert.equal(unauth.status, 401);
     assert.equal(JSON.parse(unauth.body).code, "AUTHENTICATION_REQUIRED");
     assertTypedProblem(unauth, "AUTHENTICATION_REQUIRED");
-    const leakCanary = "issue162-raw-query-and-cookie-canary";
+    const leakCanary = "cutover-raw-query-and-cookie-canary";
     const guardedCanary = await request(
       `/api/client-v1/orders/drafts?raw=${leakCanary}`,
       {

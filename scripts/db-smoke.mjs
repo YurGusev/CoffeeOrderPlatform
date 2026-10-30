@@ -341,9 +341,9 @@ async function main(argv) {
   });
   const { loadPlatformConfig } = await import("./config-lib.mjs");
   const config = await loadPlatformConfig(REPO_ROOT);
-  const { runG09DatabaseBoundaryStage } =
+  const { runDatabaseBoundaryStage } =
     await import("../verification/launch/v1/scenarios/migrations.mjs");
-  await runG09DatabaseBoundaryStage({
+  await runDatabaseBoundaryStage({
     root: REPO_ROOT,
     contextPath,
     verifyBoundaries: async ({
@@ -365,11 +365,11 @@ async function main(argv) {
         port: config.postgres.port,
         readRuntimeCredential: async ({ owner, runtime: runtimeName }) => {
           if (!runtimeCredentials.has(runtimeName)) {
-            const { readG08MigrationCredential } =
+            const { readMigrationCredential } =
               await import("../tools/config-bootstrap/index.mjs");
             runtimeCredentials.set(
               runtimeName,
-              await readG08MigrationCredential({
+              await readMigrationCredential({
                 root: REPO_ROOT,
                 contextPath,
                 owner,

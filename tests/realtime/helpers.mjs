@@ -18,7 +18,7 @@ import { EventEmitter } from "node:events";
 // Synthetic test-only key material remains in memory. OpenSSL receives it on
 // stdin; only public certificates/CSRs/extensions are scoped to scratch.
 export async function realtimeFixture(t, overrides = {}) {
-  const directory = await mkdtemp(join(tmpdir(), "issue12-synthetic-tls-"));
+  const directory = await mkdtemp(join(tmpdir(), "realtime-synthetic-tls-"));
   t.after(() => rm(directory, { recursive: true, force: true }));
   const key = () =>
     generateKeyPairSync("rsa", { modulusLength: 2048 }).privateKey.export({
@@ -49,7 +49,7 @@ export async function realtimeFixture(t, overrides = {}) {
       "-key",
       "-",
       "-subj",
-      "/CN=issue12-synthetic-ca",
+      "/CN=realtime-synthetic-ca",
       "-days",
       "1",
       "-addext",

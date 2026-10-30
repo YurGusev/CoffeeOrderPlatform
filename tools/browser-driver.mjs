@@ -533,7 +533,7 @@ async function recoverCreate(runDocker, name, expected, cidfile) {
 }
 
 /** Start a remote Chromium instance with its network namespace bound to edge-nginx. */
-export async function startG15Browser(
+export async function startBrowser(
   runtimeContext,
   {
     runDocker = docker,

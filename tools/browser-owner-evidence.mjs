@@ -209,21 +209,21 @@ const OPERATION = Object.freeze({
   }),
 });
 
-class G15OwnerEvidenceError extends Error {
+class BrowserOwnerEvidenceError extends Error {
   constructor(code) {
     super(code);
-    this.name = "G15OwnerEvidenceError";
+    this.name = "BrowserOwnerEvidenceError";
   }
 }
 
 function fail(code) {
-  throw new G15OwnerEvidenceError(code);
+  throw new BrowserOwnerEvidenceError(code);
 }
 
 function safeOperationError(error, fallback) {
-  return error instanceof G15OwnerEvidenceError
+  return error instanceof BrowserOwnerEvidenceError
     ? error
-    : new G15OwnerEvidenceError(fallback);
+    : new BrowserOwnerEvidenceError(fallback);
 }
 
 function exactKeys(value, keys, code) {
@@ -330,7 +330,7 @@ async function withClient(connect, database, operation) {
   try {
     await client.end();
   } catch {
-    closeError = new G15OwnerEvidenceError("G15_OWNER_DB_CLOSE_FAILED");
+    closeError = new BrowserOwnerEvidenceError("G15_OWNER_DB_CLOSE_FAILED");
   }
   if (primary && closeError) fail("G15_OWNER_DB_CLOSE_FAILED");
   if (primary) throw primary;
@@ -405,7 +405,12 @@ function validateLookupAcl(rows, role) {
  * Create a capability bound to the five run-scoped recovery databases.
  * The caller retains the URL/credentials and receives no SQL-bearing handle.
  */
-export function createG15OwnerEvidence({ connect, roleMap, actorRef, runId }) {
+export function createBrowserOwnerEvidence({
+  connect,
+  roleMap,
+  actorRef,
+  runId,
+}) {
   assert.equal(typeof connect, "function");
   assert.equal(actorRef, ACTOR_REF);
   assert.match(runId ?? "", /^[0-9]{8}T[0-9]{6}Z-[0-9a-f]{7}$/u);
@@ -623,7 +628,7 @@ export function createG15OwnerEvidence({ connect, roleMap, actorRef, runId }) {
               "G15 owner SELECT ACL did not return to its original state",
             );
           } catch {
-            restoreFailure = new G15OwnerEvidenceError(
+            restoreFailure = new BrowserOwnerEvidenceError(
               "G15_OWNER_LOOKUP_RESTORE_FAILED",
             );
           }
@@ -650,7 +655,7 @@ export function createG15OwnerEvidence({ connect, roleMap, actorRef, runId }) {
   });
 }
 
-export function validateG15BrowserProof(proof, { runId, candidateSha }) {
+export function validateBrowserProof(proof, { runId, candidateSha }) {
   exactKeys(
     proof,
     [

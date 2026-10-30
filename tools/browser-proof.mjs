@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { createHash, randomUUID } from "node:crypto";
 import { createRequire } from "node:module";
 import { isDeepStrictEqual } from "node:util";
-import { startG15Browser } from "./g15-browser-driver.mjs";
+import { startBrowser } from "./browser-driver.mjs";
 
 const requireWebDependency = createRequire(
   new URL("../apps/web/package.json", import.meta.url),
@@ -21,7 +21,7 @@ const REF = Object.freeze({
   order: /^ord_[0-9A-HJKMNP-TV-Z]{26}$/u,
   item: /^itm_[0-9A-HJKMNP-TV-Z]{26}$/u,
 });
-export const G15_BROWSER_REQUIRED_CHECKS = Object.freeze([
+export const BROWSER_REQUIRED_CHECKS = Object.freeze([
   "oidcLogin",
   "servedAssets",
   "customerLostResponseReplay",
@@ -397,7 +397,7 @@ function expectedPath(operation, refs = {}) {
   return null;
 }
 
-export function matchesG15Mutation({ url, method }, operation, refs = {}) {
+export function matchesBrowserMutation({ url, method }, operation, refs = {}) {
   try {
     const parsed = new URL(url);
     const path = expectedPath(operation, refs);
@@ -420,7 +420,7 @@ export function matchesG15Mutation({ url, method }, operation, refs = {}) {
   }
 }
 
-export function validateG15BrowserEvidence(evidence, { runId, candidateSha }) {
+export function validateBrowserEvidence(evidence, { runId, candidateSha }) {
   const requiredKeys = [
     "schemaVersion",
     "runId",
@@ -454,7 +454,7 @@ export function validateG15BrowserEvidence(evidence, { runId, candidateSha }) {
     typeof evidence.checks !== "object" ||
     Array.isArray(evidence.checks) ||
     Object.keys(evidence.checks).sort().join("\0") !==
-      [...G15_BROWSER_REQUIRED_CHECKS].sort().join("\0") ||
+      [...BROWSER_REQUIRED_CHECKS].sort().join("\0") ||
     Object.values(evidence.checks).some((check) => check?.passed !== true)
   )
     fail("G15_BROWSER_EVIDENCE_INCOMPLETE");
@@ -523,7 +523,7 @@ export function validateG15BrowserEvidence(evidence, { runId, candidateSha }) {
   return evidence;
 }
 
-export function validateG15BrowserRuntimeArtifact(
+export function validateBrowserRuntimeArtifact(
   artifact,
   { runId, candidateSha, baseConfigSha256, lineage },
 ) {
@@ -561,7 +561,7 @@ export function validateG15BrowserRuntimeArtifact(
   delete expectedLineage.receiptPath;
   if (!isDeepStrictEqual(artifact.lineage, expectedLineage))
     fail("G15_BROWSER_ARTIFACT_LINEAGE_INVALID");
-  validateG15BrowserEvidence(artifact.browserEvidence, {
+  validateBrowserEvidence(artifact.browserEvidence, {
     runId,
     candidateSha,
   });
@@ -614,7 +614,7 @@ function pageRequestPath(request) {
   }
 }
 
-export function hasG15OrderRealtimeRefetch(
+export function hasOrderRealtimeRefetch(
   invalidations,
   reads,
   orderRef,
@@ -659,7 +659,7 @@ export function hasG15OrderRealtimeRefetch(
   });
 }
 
-export function hasG15OrderRefetchAfterReady(
+export function hasOrderRefetchAfterReady(
   reads,
   readySequence,
   orderRef,
@@ -696,7 +696,7 @@ export function hasG15OrderRefetchAfterReady(
   });
 }
 
-export function hasG15ReadForRequest(
+export function hasReadForRequest(
   reads,
   requestId,
   orderRef,
@@ -719,7 +719,7 @@ export function hasG15ReadForRequest(
   );
 }
 
-export function parseG15RealtimeAuthCloseMetric(text) {
+export function parseRealtimeAuthCloseMetric(text) {
   if (typeof text !== "string" || Buffer.byteLength(text, "utf8") > 65536)
     return null;
   const samples = text
@@ -732,7 +732,7 @@ export function parseG15RealtimeAuthCloseMetric(text) {
   return safeCount(value) ? value : null;
 }
 
-export function expectedG15CompletedResponse(operation, method, status) {
+export function expectedBrowserCompletedResponse(operation, method, status) {
   const expectedStatus =
     method === "POST" &&
     ["customer.create", "orders.draft.create", "pricing.quote.create"].includes(
@@ -745,7 +745,7 @@ export function expectedG15CompletedResponse(operation, method, status) {
   return expectedStatus !== null && status === expectedStatus;
 }
 
-export function buildG15RealtimeAuthCloseInvocation(containerId) {
+export function buildRealtimeAuthCloseInvocation(containerId) {
   if (!/^[0-9a-f]{64}$/u.test(containerId ?? ""))
     fail("G15_REALTIME_AUTH_CONTAINER_INVALID");
   const script = `import {createRequire} from "node:module";
@@ -795,7 +795,7 @@ try {
   });
 }
 
-export function createG15BrowserNetworkMonitor(cdp, page) {
+export function createBrowserNetworkMonitor(cdp, page) {
   const monitor = {
     eventSourceReady: 0,
     invalidations: 0,
@@ -1290,7 +1290,7 @@ async function armCompletedResponseLoss({
     stage: "Response",
     async onTarget(event) {
       if (
-        !expectedG15CompletedResponse(
+        !expectedBrowserCompletedResponse(
           operation,
           method,
           event.responseStatusCode,
@@ -1541,7 +1541,7 @@ async function replaySnapshotIsStable(
 }
 
 function installResourceMonitor(cdp, page) {
-  return createG15BrowserNetworkMonitor(cdp, page);
+  return createBrowserNetworkMonitor(cdp, page);
 }
 
 async function accessibilityPass(page) {
@@ -1562,7 +1562,7 @@ async function accessibilityPass(page) {
 async function waitOrderRealtime(monitor, before) {
   await waitFor(
     () =>
-      hasG15OrderRealtimeRefetch(
+      hasOrderRealtimeRefetch(
         monitor.invalidationRecords,
         monitor.reads,
         before.orderRef,
@@ -1651,7 +1651,7 @@ export async function proveNaturalSseReauthentication({
   assert.equal(reconnected.lastEventId, reconnected.latestEventIdAtRequest);
   const refetched = await waitForAsync(
     () =>
-      hasG15OrderRefetchAfterReady(
+      hasOrderRefetchAfterReady(
         monitor.reads,
         reconnected.readySequence,
         orderRef,
@@ -1801,7 +1801,7 @@ async function logoutAndRestrictedLogin(page, browserContext, idpHost) {
   };
 }
 
-export async function proveG15Browser(runtimeContext) {
+export async function proveBrowser(runtimeContext) {
   if (
     !runtimeContext ||
     typeof runtimeContext.projectName !== "string" ||
@@ -1839,7 +1839,7 @@ export async function proveG15Browser(runtimeContext) {
     evidence.checks[name] = Object.freeze({ passed: true, ...details });
   };
   try {
-    driver = await startG15Browser(runtimeContext);
+    driver = await startBrowser(runtimeContext);
     browserContext = await driver.browser.newContext({
       viewport: { width: 1280, height: 900 },
     });
@@ -2363,7 +2363,7 @@ export async function proveG15Browser(runtimeContext) {
     if (staleGetOutcome === "RELEASED") {
       await waitFor(
         () =>
-          hasG15ReadForRequest(
+          hasReadForRequest(
             monitor.reads,
             heldGetResult.networkId,
             orderRef,
@@ -2795,7 +2795,7 @@ export async function proveG15Browser(runtimeContext) {
     evidence.browser.cleanup = await driver.close();
     driverClosed = true;
     assert.equal(evidence.browser.cleanup, "EXACT_OWNED_CONTAINER_REMOVED");
-    const validated = validateG15BrowserEvidence(evidence, {
+    const validated = validateBrowserEvidence(evidence, {
       runId: runtimeContext.runId,
       candidateSha: runtimeContext.candidateSha,
     });

@@ -130,7 +130,7 @@ export async function runLaunchPath({telemetry,onNetwork,onNetworkCleanup,onRole
       const fixture=JSON.parse(await readFile(`${setup.privateDir}/fixture.json`,'utf8'));
       const key=fixture.launchPath.ordersServiceSigningPrivateKey;
       assert.ok(key);
-      const nginxImage=`coffee-observability-edge:${options.runId}`;
+      const nginxImage=`coffee-observability-launch-path:${options.runId}`;
       let imageBuildAttempted=false,databaseAttached=false;
       const stop=async()=>{
         const failures=[];
@@ -293,7 +293,7 @@ export async function runLaunchPath({telemetry,onNetwork,onNetworkCleanup,onRole
         })));
         const roleNames=['kafka','orders-service','orders-aroma-preparation','api-internal','api-public','realtime-gateway','edge-gateway','edge-nginx'];
         const roles=[];
-        for(const role of roleNames){const name=`${options.runId}-${role}`;const s=JSON.parse(await docker('inspect',name))[0];assert.equal(s.State.Running,true,`${role} runtime remains alive at baseline checkpoint`);assert.equal(s.Config.Labels['coffee.issue12.realtime-soak'],options.runId);roles.push({role,containerId:s.Id,imageId:s.Image,logPath:s.LogPath});}
+        for(const role of roleNames){const name=`${options.runId}-${role}`;const s=JSON.parse(await docker('inspect',name))[0];assert.equal(s.State.Running,true,`${role} runtime remains alive at baseline checkpoint`);assert.equal(s.Config.Labels['coffee.realtime.fixture'],options.runId);roles.push({role,containerId:s.Id,imageId:s.Image,logPath:s.LogPath});}
         const baselineReceipt={verified:true,correlationId:commandCorrelation,traceId:traceIdValue,sourceEvents:sent.length,sourceBrokerAckCount:sent.length,sourceInboxCommitted:sent.every(receipt=>receipt.state==='Processed'),sourceMessageSha256:sent.map(receipt=>receipt.messageIdSha256),projectionPresent:true,realtimeOutboxPersisted:true,sseReady:true,nodeReadiness,ownerRefetch:{status:baselineOwner.status,requestAndResponseCorrelationMatched:true,requestAndResponseTraceparentMatched:true,traceparentSha256:shortHash(traceparent)},durationsMs:{sourceKafkaAndInbox:sourceDurationMs,ownerProjectionRead:projectionDurationMs,browserSseAndOwnerRefetch:Math.round(performance.now()-browserStartedAt)},roles:roles.map(({role,containerId,imageId})=>({role,containerId,imageId,running:true}))};
         phase='baseline-observed-during-collector-outage';
         await observeBaseline(baselineReceipt,{

@@ -58,7 +58,7 @@ function withSourceStatus(execFile, sourceStatus) {
 async function fixture({
   legacyIssue = null,
   missingBase = false,
-  repeatIssue12Cursor = false,
+  repeatAcceptedIssueCursor = false,
   missingScriptName = null,
   emptyConsumersIssue = null,
   missingConsumersIssue = null,
@@ -125,28 +125,31 @@ async function fixture({
   await writeFile(join(root, "base.txt"), "accepted base\n");
   await mkdir(join(root, "evidence/handoffs"), { recursive: true });
   await mkdir(join(root, "evidence/outputs"), { recursive: true });
-  const issue2Output = "output for issue 2\n";
-  await writeFile(join(root, "evidence/outputs/issue-2.txt"), issue2Output);
-  const historicalIssue12Input = "historical issue 12 accepted artifact\n";
+  const foundationOutput = "output for issue 2\n";
+  await writeFile(join(root, "evidence/outputs/issue-2.txt"), foundationOutput);
+  const historicalAcceptedInput = "historical issue 12 accepted artifact\n";
   await writeFile(
     join(root, "evidence/outputs/issue-12-first.txt"),
-    historicalIssue12Input,
+    historicalAcceptedInput,
   );
-  const supplementalIssue49Input = "supplemental issue 49 accepted artifact\n";
+  const supplementalAcceptedInput = "supplemental issue 49 accepted artifact\n";
   await writeFile(
     join(root, "evidence/outputs/issue-49.txt"),
-    supplementalIssue49Input,
+    supplementalAcceptedInput,
   );
-  const issue2Handoff = [
+  const foundationHandoff = [
     "issue: 2",
     "inputs: []",
     "outputs:",
     "  - artifact: evidence/outputs/issue-2.txt",
-    `    sha256: ${sha256(issue2Output)}`,
+    `    sha256: ${sha256(foundationOutput)}`,
     "    consumers: [13]",
     "",
   ].join("\n");
-  await writeFile(join(root, "evidence/handoffs/issue-2.yaml"), issue2Handoff);
+  await writeFile(
+    join(root, "evidence/handoffs/issue-2.yaml"),
+    foundationHandoff,
+  );
   git(
     root,
     "add",
@@ -163,7 +166,7 @@ async function fixture({
   );
   git(root, "commit", "--quiet", "-m", "base");
   const baseCommit = git(root, "rev-parse", "HEAD");
-  const firstIssue12 = baseCommit;
+  const firstAcceptedMergeCommit = baseCommit;
   for (const issue of requiredIssues) {
     if (issue === 2) continue;
     const artifact = `evidence/outputs/issue-${issue}.txt`;
@@ -187,15 +190,15 @@ async function fixture({
                   "  - issue: 2",
                   `    acceptedMergeCommit: ${baseCommit}`,
                   "    artifact: evidence/handoffs/issue-2.yaml",
-                  `    sha256: ${sha256(issue2Handoff)}`,
+                  `    sha256: ${sha256(foundationHandoff)}`,
                 ]
               : issue === 5
                 ? [
                     "inputs:",
                     "  - issue: 12",
-                    `    acceptedMergeCommit: ${firstIssue12}`,
+                    `    acceptedMergeCommit: ${firstAcceptedMergeCommit}`,
                     "    artifact: evidence/outputs/issue-12-first.txt",
-                    `    sha256: ${sha256(historicalIssue12Input)}`,
+                    `    sha256: ${sha256(historicalAcceptedInput)}`,
                   ]
                 : issue === 6
                   ? [
@@ -203,7 +206,7 @@ async function fixture({
                       "  - issue: 49",
                       `    acceptedMergeCommit: ${baseCommit}`,
                       "    artifact: evidence/outputs/issue-49.txt",
-                      `    sha256: ${sha256(supplementalIssue49Input)}`,
+                      `    sha256: ${sha256(supplementalAcceptedInput)}`,
                     ]
                   : ["inputs: []"]),
             "outputs:",
@@ -275,7 +278,7 @@ async function fixture({
                 {
                   number: 999,
                   merged: true,
-                  mergeCommit: { oid: firstIssue12 },
+                  mergeCommit: { oid: firstAcceptedMergeCommit },
                   baseRefName: "develop",
                   url: "https://github.com/YurGusev/CoffeeOrderPlatform/pull/999",
                 },
@@ -310,8 +313,8 @@ async function fixture({
                     },
                   ];
       if (number === 12 && !after)
-        pageInfo = { hasNextPage: true, endCursor: "issue-12-cursor" };
-      if (number === 12 && after && repeatIssue12Cursor)
+        pageInfo = { hasNextPage: true, endCursor: "accepted-issue-cursor" };
+      if (number === 12 && after && repeatAcceptedIssueCursor)
         pageInfo = { hasNextPage: true, endCursor: after };
       return {
         code: 0,
@@ -1318,7 +1321,7 @@ void test("G00 cleans up a timed-out version probe and fails on cleanup errors",
 });
 
 void test("G00 rejects a repeated GitHub pagination cursor", async (t) => {
-  const data = await fixture({ repeatIssue12Cursor: true });
+  const data = await fixture({ repeatAcceptedIssueCursor: true });
   t.after(() => rm(data.root, { recursive: true, force: true }));
   const result = await runPreflight(data.context, {
     cwd: data.root,

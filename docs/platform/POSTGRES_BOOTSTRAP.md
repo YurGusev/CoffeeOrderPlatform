@@ -52,3 +52,20 @@ PostgreSQL `42501 permission denied`.
 Статические проверки не заявляют, что GRANT применены на сервере. Для этого
 нужен отдельный запуск smoke на заранее созданном изолированном verification
 target и с сохранённым результатом проверки.
+
+## Проверка подготовленных ролей перед миграциями
+
+В `test:migrations:clean` trusted bootstrap сверяет утверждённый
+`system_identifier`, точный набор и атрибуты 15 canonical ролей. Затем он
+подключается каждой ролью к maintenance database `postgres` и подтверждает
+password authentication текущими SOPS credentials. Проверки PostgreSQL,
+контекста запуска, конфигурации и encrypted bundle повторяются перед возвратом
+результата. Роли, БД и SOPS при этом не изменяются.
+
+После успешной проверки G08 сохраняет run-bound proof со стадией
+`roles-verified`, `createdCount: 0` и `transaction: "read-only"`. Он подтверждает
+текущее состояние, а не прошлое создание ролей. Исторический `roles-created`
+с `createdCount: 15` и `transaction: "committed"` сохраняет прежние проверки.
+Оба вида proof связываются с ciphertext SHA-256; `roles-verified` дополнительно
+требует точного совпадения run, candidate и configuration текущего запуска.
+Ошибка аттестации не создаёт proof и не разрешает запуск миграций.

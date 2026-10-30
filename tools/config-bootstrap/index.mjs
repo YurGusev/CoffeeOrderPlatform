@@ -64,8 +64,8 @@ const AROMA_SANDBOX_RUNTIMES = Object.freeze([
 ]);
 const AROMA_SANDBOX_RUN_ID = /^[0-9]{8}T[0-9]{6}Z-[0-9a-f]{7}$/;
 const AROMA_SANDBOX_IDENTIFIER = /^[a-z][a-z0-9_]{0,62}$/;
-const G17_SOCKET_HOST = /^\/dev\/shm\/coffee-g17-[a-f0-9]{16,64}$/;
-const G17_SERVER_IDENTITY_KEYS = [
+const BACKUP_SOCKET_HOST = /^\/dev\/shm\/coffee-g17-[a-f0-9]{16,64}$/;
+const BACKUP_SERVER_IDENTITY_KEYS = [
   "candidateSha",
   "host",
   "port",
@@ -74,12 +74,12 @@ const G17_SERVER_IDENTITY_KEYS = [
   "systemIdentifier",
   "version",
 ];
-const G17_RUNTIME_OWNERS = Object.freeze({
+const BACKUP_RUNTIME_OWNERS = Object.freeze({
   "orders-aroma-preparation": "orders",
   "aroma-convergence": "orders",
   "aroma-gateway": "integration",
 });
-const G08_ADMIN_SOURCE = Object.freeze({
+const MIGRATION_ADMIN_SOURCE = Object.freeze({
   name: "coffee_postgres",
   containerId:
     "267958ce276e65d96c4a5d2cfc4541de35f9785de3dd15c04c34798cf7b1c85f",
@@ -87,9 +87,9 @@ const G08_ADMIN_SOURCE = Object.freeze({
     "sha256:1bea307dfb3ee30541a7acf7de14b58bcd6948da98e5d31a04c627c4d35ec64b",
   network: "coffee_network",
 });
-const G08_ADMIN_SOURCE_INSPECT_FORMAT =
+const MIGRATION_ADMIN_SOURCE_INSPECT_FORMAT =
   "{{.Id}}{{println}}{{.Image}}{{println}}{{.State.Running}}{{println}}{{json .NetworkSettings.Networks}}";
-const G08_ENCRYPTION_RULE_IDS = new Set([
+const MIGRATION_ENCRYPTION_RULE_IDS = new Set([
   "CONFIG-SCHEMA",
   "CONFIG-PLAINTEXT-SECRET",
   "CONFIG-SOPS-MAC",
@@ -98,9 +98,9 @@ const G08_ENCRYPTION_RULE_IDS = new Set([
   "CONFIG-G08-SOPS-OUTPUT",
 ]);
 
-function g08SafeEncryptionRuleId(error) {
+function safeMigrationEncryptionRuleId(error) {
   return error?.name === "ConfigError" &&
-    G08_ENCRYPTION_RULE_IDS.has(error.ruleId)
+    MIGRATION_ENCRYPTION_RULE_IDS.has(error.ruleId)
     ? error.ruleId
     : undefined;
 }
@@ -109,13 +109,13 @@ function fail(rule, message) {
   throw new ConfigError(rule, message);
 }
 
-function failG08WithFacts(rule, message, facts) {
+function failMigrationWithFacts(rule, message, facts) {
   const error = new ConfigError(rule, message);
   error.facts = facts;
   throw error;
 }
 
-function g08DatabaseFailureFacts(error, stage) {
+function migrationDatabaseFailureFacts(error, stage) {
   const sqlStateCategories = new Map([
     ["28P01", "authentication"],
     ["28000", "authentication"],
@@ -143,9 +143,9 @@ function g08DatabaseFailureFacts(error, stage) {
   };
 }
 
-function g08QueryFailure(error, stage) {
+function migrationQueryFailure(error, stage) {
   const failure = new Error("G08 PostgreSQL query failed");
-  failure.g08Facts = g08DatabaseFailureFacts(error, stage);
+  failure.migrationFacts = migrationDatabaseFailureFacts(error, stage);
   return failure;
 }
 
@@ -561,7 +561,7 @@ export async function provisionDevelopmentGrafanaAdmin({
   if (config.environment !== "development")
     fail("CONFIG-GRAFANA-PROVISION", "Grafana admin provisioning is restricted to development");
   const secretPath = join(root, "secrets/platform.secrets.sops.yaml");
-  await assertG08NoSymlinkPath(secretPath);
+  await assertPreparationNoSymlinkPath(secretPath);
   const encrypted = await loadEncryptedSecrets(root);
   await ensurePrivateSecretDirectory(outputDir);
   if ((await statfs(outputDir)).type !== 0x01021994)
@@ -726,7 +726,7 @@ function aromaSandboxDatabaseNames(runId) {
   );
 }
 
-async function g16PostgresVersion(root) {
+async function sandboxPostgresVersion(root) {
   const toolchain = JSON.parse(
     await readFile(join(root, "config/toolchain-versions.json"), "utf8"),
   );
@@ -739,13 +739,13 @@ async function g16PostgresVersion(root) {
   return toolchain.postgresql;
 }
 
-function quoteG16Identifier(value) {
+function quoteSandboxIdentifier(value) {
   if (typeof value !== "string" || !AROMA_SANDBOX_IDENTIFIER.test(value))
     fail("CONFIG-G16-IDENTIFIER", "G16 database identifier is invalid");
   return `"${value}"`;
 }
 
-async function readG16Secrets(root, env, config) {
+async function readSandboxSecrets(root, env, config) {
   assertLocatorEnv(env, true);
   const secretPath = join(root, "secrets/platform.secrets.sops.yaml");
   const encrypted = await loadEncryptedSecrets(root);
@@ -756,7 +756,7 @@ async function readG16Secrets(root, env, config) {
   return decrypted.environments[config.environment];
 }
 
-async function readG08SecretBundle(root, env) {
+async function readMigrationSecretBundle(root, env) {
   const secretPath = join(root, "secrets/platform.secrets.sops.yaml");
   const encrypted = await loadEncryptedSecrets(root);
   let decrypted;
@@ -779,7 +779,7 @@ async function readG08SecretBundle(root, env) {
   return { encrypted, decrypted };
 }
 
-function g16BootstrapEnv(env) {
+function sandboxBootstrapEnv(env) {
   return {
     ...(typeof env.PATH === "string" ? { PATH: env.PATH } : {}),
     ...(typeof env.HOME === "string" ? { HOME: env.HOME } : {}),
@@ -792,7 +792,7 @@ function g16BootstrapEnv(env) {
   };
 }
 
-async function assertG08NoSymlinkPath(path) {
+async function assertPreparationNoSymlinkPath(path) {
   const absolute = resolve(path);
   let current = "/";
   for (const part of absolute.slice(1).split("/")) {
@@ -805,8 +805,8 @@ async function assertG08NoSymlinkPath(path) {
     fail("CONFIG-G08-CONTEXT", "G08 context path is not canonical");
 }
 
-async function validateG08Target({ root, contextPath, env }) {
-  const contextEnv = g16BootstrapEnv(env);
+async function validateMigrationTarget({ root, contextPath, env }) {
+  const contextEnv = sandboxBootstrapEnv(env);
   assertLocatorEnv(contextEnv, true);
   if (
     typeof contextPath !== "string" ||
@@ -814,7 +814,7 @@ async function validateG08Target({ root, contextPath, env }) {
     resolve(contextPath) !== contextPath
   )
     fail("CONFIG-G08-CONTEXT", "G08 launch context locator is required");
-  await assertG08NoSymlinkPath(contextPath);
+  await assertPreparationNoSymlinkPath(contextPath);
   const contextInfo = await lstat(contextPath);
   if (
     !contextInfo.isFile() ||
@@ -869,7 +869,7 @@ async function validateG08Target({ root, contextPath, env }) {
     config.environment === "production" ||
     config.postgres.host !== "coffee_postgres" ||
     config.postgres.port !== 5432 ||
-    (await g16PostgresVersion(root)) !== "17.11"
+    (await sandboxPostgresVersion(root)) !== "17.11"
   )
     fail(
       "CONFIG-G08-TARGET",
@@ -920,7 +920,7 @@ async function validateG08Target({ root, contextPath, env }) {
 
   let secretBundle;
   try {
-    secretBundle = await readG08SecretBundle(root, contextEnv);
+    secretBundle = await readMigrationSecretBundle(root, contextEnv);
   } catch {
     fail("CONFIG-G08-ADMIN-SECRET", "trusted G08 admin secret is unavailable");
   }
@@ -948,9 +948,9 @@ async function validateG08Target({ root, contextPath, env }) {
   };
 }
 
-async function captureG08BundleSnapshot(root) {
+async function captureMigrationBundleSnapshot(root) {
   const path = join(root, "secrets/platform.secrets.sops.yaml");
-  await assertG08NoSymlinkPath(path);
+  await assertPreparationNoSymlinkPath(path);
   const info = await lstat(path).catch(() => null);
   if (
     !info?.isFile() ||
@@ -985,7 +985,7 @@ async function captureG08BundleSnapshot(root) {
   };
 }
 
-async function assertG08BundleSnapshot(snapshot) {
+async function assertMigrationBundleSnapshot(snapshot) {
   let info;
   let bytes;
   try {
@@ -1014,7 +1014,7 @@ async function assertG08BundleSnapshot(snapshot) {
     fail("CONFIG-G08-BUNDLE_CHANGED", "G08 encrypted bundle changed");
 }
 
-function encryptG08SecretBundle(root, env, snapshot, secretDocument) {
+function encryptMigrationSecretBundle(root, env, snapshot, secretDocument) {
   let encryptedText;
   try {
     encryptedText = execFileSync(
@@ -1044,7 +1044,7 @@ function encryptG08SecretBundle(root, env, snapshot, secretDocument) {
   return Buffer.from(encryptedText, "utf8");
 }
 
-function assertG08NoPlaintextCiphertext(ciphertext, value, path = []) {
+function assertEncryptedBundleHasNoPlaintext(ciphertext, value, path = []) {
   if (typeof value === "string") {
     if (
       path.at(-1) !== "username" &&
@@ -1057,7 +1057,7 @@ function assertG08NoPlaintextCiphertext(ciphertext, value, path = []) {
   }
   if (Array.isArray(value)) {
     value.forEach((entry, index) =>
-      assertG08NoPlaintextCiphertext(ciphertext, entry, [
+      assertEncryptedBundleHasNoPlaintext(ciphertext, entry, [
         ...path,
         String(index),
       ]),
@@ -1066,10 +1066,10 @@ function assertG08NoPlaintextCiphertext(ciphertext, value, path = []) {
   }
   if (value && typeof value === "object")
     for (const [key, entry] of Object.entries(value))
-      assertG08NoPlaintextCiphertext(ciphertext, entry, [...path, key]);
+      assertEncryptedBundleHasNoPlaintext(ciphertext, entry, [...path, key]);
 }
 
-async function validateG08EncryptedDocument(
+async function validateMigrationEncryptedDocument(
   root,
   contents,
   label,
@@ -1084,13 +1084,13 @@ async function validateG08EncryptedDocument(
     validationStage = "plaintext-document-validation";
     assertPlainSecretDocument(encrypted, expectedPlaintext);
     validationStage = "plaintext-leak-check";
-    assertG08NoPlaintextCiphertext(
+    assertEncryptedBundleHasNoPlaintext(
       contents.toString("utf8"),
       expectedPlaintext,
     );
   } catch (error) {
-    const ruleId = g08SafeEncryptionRuleId(error);
-    failG08WithFacts(
+    const ruleId = safeMigrationEncryptionRuleId(error);
+    failMigrationWithFacts(
       "CONFIG-G08-SOPS-OUTPUT",
       "trusted G08 encrypted bundle failed validation",
       {
@@ -1102,13 +1102,13 @@ async function validateG08EncryptedDocument(
   return encrypted;
 }
 
-async function validateG08EncryptedTemporary(
+async function validateMigrationEncryptedTemporary(
   root,
   env,
   temporary,
   expectedPlaintext,
 ) {
-  const encrypted = await validateG08EncryptedDocument(
+  const encrypted = await validateMigrationEncryptedDocument(
     root,
     await readFile(temporary),
     temporary,
@@ -1136,8 +1136,8 @@ async function validateG08EncryptedTemporary(
     if (!isDeepStrictEqual(decrypted, expectedPlaintext))
       throw new Error("G08 SOPS round-trip changed secrets");
   } catch (error) {
-    const ruleId = g08SafeEncryptionRuleId(error);
-    failG08WithFacts(
+    const ruleId = safeMigrationEncryptionRuleId(error);
+    failMigrationWithFacts(
       "CONFIG-G08-SOPS-OUTPUT",
       "trusted G08 encrypted temporary bundle failed validation",
       {
@@ -1158,12 +1158,12 @@ async function validateG08EncryptedTemporary(
   }
 }
 
-async function writeG08EncryptedBundle(
+async function writeMigrationEncryptedBundle(
   snapshot,
   contents,
   { root, env, expectedPlaintext },
 ) {
-  await validateG08EncryptedDocument(
+  await validateMigrationEncryptedDocument(
     root,
     contents,
     snapshot.path,
@@ -1189,13 +1189,13 @@ async function writeG08EncryptedBundle(
     const temporaryInfo = await handle.stat();
     await handle.close();
     handle = undefined;
-    await validateG08EncryptedTemporary(
+    await validateMigrationEncryptedTemporary(
       root,
       env,
       temporary,
       expectedPlaintext,
     );
-    await assertG08BundleSnapshot(snapshot);
+    await assertMigrationBundleSnapshot(snapshot);
     await rename(temporary, snapshot.path);
     const directory = await open(dirname(snapshot.path), constants.O_RDONLY);
     try {
@@ -1242,14 +1242,14 @@ async function writeG08EncryptedBundle(
   }
 }
 
-async function readG08SavedSecretBundle(root, env, expectedSnapshot) {
-  await assertG08BundleSnapshot(expectedSnapshot);
-  const bundle = await readG08SecretBundle(root, env);
-  await assertG08BundleSnapshot(expectedSnapshot);
+async function readSavedMigrationSecretBundle(root, env, expectedSnapshot) {
+  await assertMigrationBundleSnapshot(expectedSnapshot);
+  const bundle = await readMigrationSecretBundle(root, env);
+  await assertMigrationBundleSnapshot(expectedSnapshot);
   return bundle;
 }
 
-function g08RolePasswords({ ownership, roleMap, secrets }) {
+function migratorRolePasswords({ ownership, roleMap, secrets }) {
   const passwords = new Map();
   for (const database of roleMap.databases) {
     const owner = ownership.databases.find(
@@ -1287,7 +1287,7 @@ function g08RolePasswords({ ownership, roleMap, secrets }) {
   return passwords;
 }
 
-function g08ExactKeys(value, keys) {
+function migrationExactKeys(value, keys) {
   return (
     value &&
     typeof value === "object" &&
@@ -1300,7 +1300,7 @@ function g08ExactKeys(value, keys) {
 }
 
 /** Permit only the approved isolation and unit-coverage additions after G08. */
-export function validateG08PreparationConfigTransition(
+export function validateMigrationPreparationConfigTransition(
   preparationConfigBytes,
   currentConfigBytes,
   preparationConfigSha256,
@@ -1417,7 +1417,11 @@ export function validateG08PreparationConfigTransition(
 }
 
 /** Validate the shared G08 receipt shape against a run and the saved secret bundle. */
-export function validateG08PreparationArtifact(value, context, secretsSha256) {
+export function validateMigrationPreparationArtifact(
+  value,
+  context,
+  secretsSha256,
+) {
   const wrapperKeys = [
     "schemaVersion",
     "runId",
@@ -1449,35 +1453,41 @@ export function validateG08PreparationArtifact(value, context, secretsSha256) {
   const bundleKeys = ["beforeSha256", "resultingSha256"];
   const prep = value?.preparation;
   if (
-    !g08ExactKeys(value, wrapperKeys) ||
+    !migrationExactKeys(value, wrapperKeys) ||
     value.schemaVersion !== 1 ||
     value.runId !== context.runId ||
     value.candidateSha !== context.candidateSha ||
     value.baseConfigSha256 !== context.baseConfigSha256 ||
-    !g08ExactKeys(prep, prepKeys) ||
+    !migrationExactKeys(prep, prepKeys) ||
     prep.schemaVersion !== 1 ||
-    prep.stage !== "roles-created" ||
+    !["roles-created", "roles-verified"].includes(prep.stage) ||
     !/^[0-9]{8}T[0-9]{6}Z-[0-9a-f]{7}$/u.test(prep.runId ?? "") ||
     !/^[0-9a-f]{40}$/u.test(prep.candidateSha ?? "") ||
     !prep.runId.endsWith(`-${prep.candidateSha.slice(0, 7)}`) ||
     !/^[0-9a-f]{64}$/u.test(prep.baseConfigSha256 ?? "") ||
     prep.configSha256 !== prep.baseConfigSha256 ||
-    !g08ExactKeys(prep.postgres, postgresKeys) ||
+    !migrationExactKeys(prep.postgres, postgresKeys) ||
     prep.postgres.host !== "coffee_postgres" ||
     prep.postgres.port !== 5432 ||
     prep.postgres.version !== "17.11" ||
     prep.postgres.database !== "postgres" ||
     !/^[0-9]{1,20}$/u.test(prep.postgres.systemIdentifier ?? "") ||
     typeof prep.postgres.user !== "string" ||
-    !g08ExactKeys(prep.bundle, bundleKeys) ||
+    !migrationExactKeys(prep.bundle, bundleKeys) ||
     !/^[0-9a-f]{64}$/u.test(prep.bundle.beforeSha256 ?? "") ||
     prep.bundle.resultingSha256 !== secretsSha256 ||
     !Array.isArray(prep.roleNames) ||
     prep.roleNames.length !== 15 ||
     prep.roleNames.some((role) => typeof role !== "string") ||
     new Set(prep.roleNames).size !== 15 ||
-    prep.createdCount !== 15 ||
-    prep.transaction !== "committed"
+    (prep.stage === "roles-created"
+      ? prep.createdCount !== 15 || prep.transaction !== "committed"
+      : prep.createdCount !== 0 ||
+        prep.transaction !== "read-only" ||
+        prep.runId !== context.runId ||
+        prep.candidateSha !== context.candidateSha ||
+        prep.baseConfigSha256 !== context.baseConfigSha256 ||
+        prep.bundle.beforeSha256 !== secretsSha256)
   )
     fail(
       "CONFIG-G08-PREPARATION",
@@ -1486,7 +1496,7 @@ export function validateG08PreparationArtifact(value, context, secretsSha256) {
   return prep;
 }
 
-function g08CreateRoleSql(role, password) {
+function migrationCreateRoleSql(role, password) {
   if (
     typeof role !== "string" ||
     !/^coffee_[a-z_]+_(?:migrator|rw|ro)$/u.test(role) ||
@@ -1501,12 +1511,16 @@ function g08CreateRoleSql(role, password) {
   return `CREATE ROLE "${role}" WITH LOGIN PASSWORD E'${escapedPassword}' NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS CONNECTION LIMIT 20`;
 }
 
-async function readG08ServerState(client, target, expectedSystemIdentifier) {
+async function readMigrationServerState(
+  client,
+  target,
+  expectedSystemIdentifier,
+) {
   let identityResult;
   try {
     identityResult = await client.query(SERVER_IDENTITY_SQL);
   } catch (error) {
-    throw g08QueryFailure(error, "identity");
+    throw migrationQueryFailure(error, "identity");
   }
   const probe = identityResult.rows?.[0];
   if (
@@ -1529,7 +1543,7 @@ async function readG08ServerState(client, target, expectedSystemIdentifier) {
       [target.roles],
     );
   } catch (error) {
-    throw g08QueryFailure(error, "role-inventory");
+    throw migrationQueryFailure(error, "role-inventory");
   }
   const rows = inventory.rows ?? [];
   const rowByName = new Map();
@@ -1573,7 +1587,7 @@ async function readG08ServerState(client, target, expectedSystemIdentifier) {
   };
 }
 
-async function openG08AdminClient(
+async function openMigrationAdminClient(
   target,
   adminPassword = target.adminPassword,
 ) {
@@ -1591,27 +1605,33 @@ async function openG08AdminClient(
   });
 }
 
-async function probeG08TargetState(
+async function probeMigrationTargetState(
   target,
   expectedSystemIdentifier,
   adminPassword = target.adminPassword,
 ) {
-  const client = await openG08AdminClient(target, adminPassword);
+  const client = await openMigrationAdminClient(target, adminPassword);
   let state;
   let failureFacts;
   let stage = "connect";
   try {
     await client.connect();
     stage = "identity";
-    state = await readG08ServerState(client, target, expectedSystemIdentifier);
+    state = await readMigrationServerState(
+      client,
+      target,
+      expectedSystemIdentifier,
+    );
   } catch (error) {
-    failureFacts = error?.g08Facts ?? g08DatabaseFailureFacts(error, stage);
+    failureFacts =
+      error?.migrationFacts ?? migrationDatabaseFailureFacts(error, stage);
   }
   await client.end().catch((error) => {
-    if (!failureFacts) failureFacts = g08DatabaseFailureFacts(error, "close");
+    if (!failureFacts)
+      failureFacts = migrationDatabaseFailureFacts(error, "close");
   });
   if (failureFacts)
-    failG08WithFacts(
+    failMigrationWithFacts(
       "CONFIG-G08-PROBE",
       "G08 canonical target probe failed",
       failureFacts,
@@ -1619,7 +1639,7 @@ async function probeG08TargetState(
   return state;
 }
 
-function inspectG08AdminSource(env, stage) {
+function inspectMigrationAdminSource(env, stage) {
   let output;
   try {
     output = execFileSync(
@@ -1627,11 +1647,11 @@ function inspectG08AdminSource(env, stage) {
       [
         "inspect",
         "--format",
-        G08_ADMIN_SOURCE_INSPECT_FORMAT,
-        G08_ADMIN_SOURCE.name,
+        MIGRATION_ADMIN_SOURCE_INSPECT_FORMAT,
+        MIGRATION_ADMIN_SOURCE.name,
       ],
       {
-        env: g16BootstrapEnv(env),
+        env: sandboxBootstrapEnv(env),
         encoding: "utf8",
         timeout: 5_000,
         maxBuffer: 64 * 1024,
@@ -1639,7 +1659,7 @@ function inspectG08AdminSource(env, stage) {
       },
     );
   } catch {
-    failG08WithFacts(
+    failMigrationWithFacts(
       "CONFIG-G08-ADMIN-SOURCE",
       "approved PostgreSQL credential source could not be inspected",
       { stage },
@@ -1651,13 +1671,13 @@ function inspectG08AdminSource(env, stage) {
     if (lines.length !== 4) throw new Error("invalid docker inspect output");
     networks = JSON.parse(lines[3]);
   } catch {
-    failG08WithFacts(
+    failMigrationWithFacts(
       "CONFIG-G08-ADMIN-SOURCE",
       "approved PostgreSQL credential source identity is invalid",
       { stage },
     );
   }
-  const networkId = networks?.[G08_ADMIN_SOURCE.network]?.NetworkID;
+  const networkId = networks?.[MIGRATION_ADMIN_SOURCE.network]?.NetworkID;
   const source = {
     containerId: lines[0],
     imageId: lines[1],
@@ -1665,13 +1685,13 @@ function inspectG08AdminSource(env, stage) {
     networkId,
   };
   if (
-    source.containerId !== G08_ADMIN_SOURCE.containerId ||
-    source.imageId !== G08_ADMIN_SOURCE.imageId ||
+    source.containerId !== MIGRATION_ADMIN_SOURCE.containerId ||
+    source.imageId !== MIGRATION_ADMIN_SOURCE.imageId ||
     !source.running ||
     typeof source.networkId !== "string" ||
     !/^[0-9a-f]{64}$/u.test(source.networkId)
   )
-    failG08WithFacts(
+    failMigrationWithFacts(
       "CONFIG-G08-ADMIN-SOURCE",
       "approved PostgreSQL credential source identity changed",
       {
@@ -1679,14 +1699,14 @@ function inspectG08AdminSource(env, stage) {
         containerId: source.containerId,
         imageId: source.imageId,
         running: source.running,
-        networkName: G08_ADMIN_SOURCE.network,
+        networkName: MIGRATION_ADMIN_SOURCE.network,
       },
     );
   return source;
 }
 
-function readG08AdminPasswordFromSource(env) {
-  const before = inspectG08AdminSource(env, "container-before-extract");
+function readMigrationAdminPasswordFromSource(env) {
+  const before = inspectMigrationAdminSource(env, "container-before-extract");
   let passwordBytes;
   try {
     passwordBytes = execFileSync(
@@ -1699,29 +1719,29 @@ function readG08AdminPasswordFromSource(env) {
         'printf %s "$POSTGRES_PASSWORD"',
       ],
       {
-        env: g16BootstrapEnv(env),
+        env: sandboxBootstrapEnv(env),
         timeout: 5_000,
         maxBuffer: 4_096,
         stdio: ["ignore", "pipe", "pipe"],
       },
     );
   } catch {
-    failG08WithFacts(
+    failMigrationWithFacts(
       "CONFIG-G08-ADMIN-SOURCE",
       "approved PostgreSQL credential is unavailable",
       { stage: "credential-extract" },
     );
   }
-  const after = inspectG08AdminSource(env, "container-after-extract");
+  const after = inspectMigrationAdminSource(env, "container-after-extract");
   if (!isDeepStrictEqual(before, after))
-    failG08WithFacts(
+    failMigrationWithFacts(
       "CONFIG-G08-ADMIN-SOURCE_CHANGED",
       "PostgreSQL credential source changed during extraction",
       {
         stage: "container-after-extract",
         containerId: after.containerId,
         imageId: after.imageId,
-        networkName: G08_ADMIN_SOURCE.network,
+        networkName: MIGRATION_ADMIN_SOURCE.network,
       },
     );
   const password = passwordBytes.toString("utf8");
@@ -1729,7 +1749,7 @@ function readG08AdminPasswordFromSource(env) {
     password.length === 0 ||
     !Buffer.from(password, "utf8").equals(passwordBytes)
   )
-    failG08WithFacts(
+    failMigrationWithFacts(
       "CONFIG-G08-ADMIN-SOURCE",
       "approved PostgreSQL credential is invalid",
       { stage: "credential-validate" },
@@ -1737,7 +1757,7 @@ function readG08AdminPasswordFromSource(env) {
   return password;
 }
 
-function isG08AdminAuthenticationFailure(error) {
+function isMigrationAdminAuthenticationFailure(error) {
   return (
     error instanceof ConfigError &&
     error.ruleId === "CONFIG-G08-PROBE" &&
@@ -1747,14 +1767,14 @@ function isG08AdminAuthenticationFailure(error) {
   );
 }
 
-function assertG08AdminIdentityAndRoles(state, expectedSystemIdentifier) {
+function assertMigrationAdminIdentityAndRoles(state, expectedSystemIdentifier) {
   if (
     state.postgres.systemIdentifier !== expectedSystemIdentifier ||
     state.postgres.version !== "17.11" ||
     state.postgres.user !== "coffeeuser" ||
     state.postgres.database !== "postgres"
   )
-    failG08WithFacts(
+    failMigrationWithFacts(
       "CONFIG-G08-IDENTITY",
       "G08 target differs from approved identity",
       {
@@ -1764,7 +1784,7 @@ function assertG08AdminIdentityAndRoles(state, expectedSystemIdentifier) {
       },
     );
   if (!state.roleInventory.allAbsent)
-    failG08WithFacts(
+    failMigrationWithFacts(
       "CONFIG-G08-ROLE-PRESENT",
       "G08 admin credential synchronization requires all canonical roles absent",
       {
@@ -1776,19 +1796,19 @@ function assertG08AdminIdentityAndRoles(state, expectedSystemIdentifier) {
 }
 
 /** Read-only G08 probe; it never creates roles or databases. */
-export async function probeG08CanonicalTarget({
+export async function probeCanonicalMigrationTarget({
   root = REPO_ROOT,
   contextPath = process.env.COFFEE_LAUNCH_CONTEXT_FILE,
   env = process.env,
 } = {}) {
   let target;
   try {
-    target = await validateG08Target({ root, contextPath, env });
+    target = await validateMigrationTarget({ root, contextPath, env });
   } catch (error) {
     if (error instanceof ConfigError) throw error;
     fail("CONFIG-G08-TARGET", "G08 canonical target validation failed");
   }
-  const state = await probeG08TargetState(target);
+  const state = await probeMigrationTargetState(target);
   return {
     schemaVersion: 1,
     stage: "readonly-probe",
@@ -1800,29 +1820,145 @@ export async function probeG08CanonicalTarget({
   };
 }
 
+/** Verify the current canonical roles and credentials without modifying PostgreSQL or SOPS. */
+export async function attestCanonicalMigrationPreparation({
+  root = REPO_ROOT,
+  contextPath = process.env.COFFEE_LAUNCH_CONTEXT_FILE,
+  env = process.env,
+  expectedSystemIdentifier,
+} = {}) {
+  if (
+    typeof expectedSystemIdentifier !== "string" ||
+    !/^[0-9]{1,20}$/u.test(expectedSystemIdentifier)
+  )
+    fail("CONFIG-G08-IDENTITY", "approved G08 system identifier is required");
+  const snapshot = await captureMigrationBundleSnapshot(root);
+  const target = await validateMigrationTarget({ root, contextPath, env });
+  const contextBytes = await readFile(contextPath);
+  if (
+    !isDeepStrictEqual(
+      JSON.parse(contextBytes.toString("utf8")),
+      target.context,
+    )
+  )
+    fail(
+      "CONFIG-G08-CONTEXT",
+      "G08 launch context changed during verification",
+    );
+  await assertMigrationBundleSnapshot(snapshot);
+  const passwords = migratorRolePasswords(target);
+  const before = await probeMigrationTargetState(
+    target,
+    expectedSystemIdentifier,
+  );
+  assertPreparedMigrationRoleInventory(before, target.roles);
+  const { Client } = await import("pg").catch(() =>
+    fail("CONFIG-G08-PG-DEPENDENCY", "pg dependency is unavailable"),
+  );
+  for (const [role, password] of passwords) {
+    const client = new Client({
+      host: target.config.postgres.host,
+      port: target.config.postgres.port,
+      database: "postgres",
+      user: role,
+      password,
+      ssl: false,
+      connectionTimeoutMillis: 3_000,
+      query_timeout: 3_000,
+    });
+    let md5Auth = false;
+    let saslAuth = false;
+    let saslFinal = false;
+    client.connection.on("authenticationSASL", () => {
+      saslAuth = true;
+    });
+    client.connection.on("authenticationMD5Password", () => {
+      md5Auth = true;
+    });
+    client.connection.on("authenticationSASLFinal", () => {
+      saslFinal = true;
+    });
+    let valid = false;
+    try {
+      await client.connect();
+      const result = await client.query(
+        "SELECT current_user, current_database()",
+      );
+      valid =
+        (md5Auth || (saslAuth && saslFinal)) &&
+        result.rows?.length === 1 &&
+        result.rows[0].current_user === role &&
+        result.rows[0].current_database === "postgres";
+    } catch {
+      valid = false;
+    } finally {
+      await client.end().catch(() => {
+        valid = false;
+      });
+    }
+    if (!valid)
+      fail("CONFIG-G08-ROLE-AUTH", "G08 role password authentication failed");
+  }
+  const after = await probeMigrationTargetState(
+    target,
+    expectedSystemIdentifier,
+  );
+  assertPreparedMigrationRoleInventory(after, target.roles);
+  await assertMigrationBundleSnapshot(snapshot);
+  const current = await validateMigrationTarget({ root, contextPath, env });
+  await assertMigrationBundleSnapshot(snapshot);
+  if (
+    !isDeepStrictEqual(before, after) ||
+    !isDeepStrictEqual(target.context, current.context) ||
+    !contextBytes.equals(await readFile(contextPath)) ||
+    target.contextInfo.dev !== current.contextInfo.dev ||
+    target.contextInfo.ino !== current.contextInfo.ino ||
+    !isDeepStrictEqual(target.roleMap, current.roleMap) ||
+    !isDeepStrictEqual(target.ownership, current.ownership) ||
+    !isDeepStrictEqual(target.secrets, current.secrets)
+  )
+    fail(
+      "CONFIG-G08-IDENTITY_CHANGED",
+      "G08 target or context changed during verification",
+    );
+  return {
+    schemaVersion: 1,
+    stage: "roles-verified",
+    runId: target.context.runId,
+    candidateSha: target.context.candidateSha,
+    baseConfigSha256: target.context.baseConfigSha256,
+    configSha256: target.configSha256,
+    postgres: before.postgres,
+    bundle: { beforeSha256: snapshot.sha256, resultingSha256: snapshot.sha256 },
+    roleNames: target.roles,
+    createdCount: 0,
+    transaction: "read-only",
+  };
+}
+
 /** Return the prepared PostgreSQL identity only after a fresh G08-bound probe. */
-export async function readG08PreparedPostgresIdentity({
+export async function readPreparedPostgresIdentity({
   root = REPO_ROOT,
   contextPath = process.env.COFFEE_LAUNCH_CONTEXT_FILE,
   preparationContextPath,
   env = process.env,
 } = {}) {
-  const bundleSnapshot = await captureG08BundleSnapshot(root);
-  const target = await validateG08Target({ root, contextPath, env });
-  await assertG08BundleSnapshot(bundleSnapshot);
-  const preparationSource = await readG08PreparationSource(
+  const bundleSnapshot = await captureMigrationBundleSnapshot(root);
+  const target = await validateMigrationTarget({ root, contextPath, env });
+  await assertMigrationBundleSnapshot(bundleSnapshot);
+  const preparationSource = await readMigrationPreparationSource(
     target,
     root,
     preparationContextPath,
   );
   const { preparation, snapshot: preparationSnapshot } =
-    await readG08PreparationSnapshot(
+    await readMigrationPreparationSnapshot(
       target,
       root,
       bundleSnapshot,
       preparationSource,
     );
-  const state = await probeG08TargetState(
+  const state = await probeMigrationTargetState(
     target,
     preparation.postgres.systemIdentifier,
   );
@@ -1838,15 +1974,15 @@ export async function readG08PreparedPostgresIdentity({
       "CONFIG-G08-IDENTITY",
       "G08 live target differs from preparation receipt",
     );
-  assertG08PreparedRoleInventory(state, target.roles);
-  await assertG08BundleSnapshot(bundleSnapshot);
-  await assertG08PreparationSnapshot(preparationSnapshot);
-  await assertG08PreparationSource(target, root, preparationSource);
+  assertPreparedMigrationRoleInventory(state, target.roles);
+  await assertMigrationBundleSnapshot(bundleSnapshot);
+  await assertMigrationPreparationSnapshot(preparationSnapshot);
+  await assertMigrationPreparationSource(target, root, preparationSource);
   return Object.freeze({ ...state.postgres });
 }
 
 /** Verify the existing admin credential, syncing only its SOPS field on exact 28P01. */
-export async function synchronizeG08AdminCredential({
+export async function synchronizeMigrationAdminCredential({
   root = REPO_ROOT,
   contextPath = process.env.COFFEE_LAUNCH_CONTEXT_FILE,
   env = process.env,
@@ -1858,17 +1994,21 @@ export async function synchronizeG08AdminCredential({
   )
     fail("CONFIG-G08-IDENTITY", "approved G08 system identifier is required");
 
-  const contextEnv = g16BootstrapEnv(env);
+  const contextEnv = sandboxBootstrapEnv(env);
   assertLocatorEnv(contextEnv, true);
-  const bundleSnapshot = await captureG08BundleSnapshot(root);
+  const bundleSnapshot = await captureMigrationBundleSnapshot(root);
   let target;
   try {
-    target = await validateG08Target({ root, contextPath, env: contextEnv });
+    target = await validateMigrationTarget({
+      root,
+      contextPath,
+      env: contextEnv,
+    });
   } catch (error) {
     if (error instanceof ConfigError) throw error;
     fail("CONFIG-G08-TARGET", "G08 canonical target validation failed");
   }
-  await assertG08BundleSnapshot(bundleSnapshot);
+  await assertMigrationBundleSnapshot(bundleSnapshot);
   if (
     target.config.environment !== "development" ||
     target.config.postgres.bootstrapUsername !== "coffeeuser"
@@ -1880,16 +2020,16 @@ export async function synchronizeG08AdminCredential({
 
   let state;
   try {
-    state = await probeG08TargetState(target, expectedSystemIdentifier);
+    state = await probeMigrationTargetState(target, expectedSystemIdentifier);
   } catch (error) {
-    if (!isG08AdminAuthenticationFailure(error)) throw error;
-    const sourcePassword = readG08AdminPasswordFromSource(contextEnv);
-    state = await probeG08TargetState(
+    if (!isMigrationAdminAuthenticationFailure(error)) throw error;
+    const sourcePassword = readMigrationAdminPasswordFromSource(contextEnv);
+    state = await probeMigrationTargetState(
       target,
       expectedSystemIdentifier,
       sourcePassword,
     );
-    assertG08AdminIdentityAndRoles(state, expectedSystemIdentifier);
+    assertMigrationAdminIdentityAndRoles(state, expectedSystemIdentifier);
 
     const proposedDocument = structuredClone(target.secretDocument);
     setSecretAt(
@@ -1897,13 +2037,13 @@ export async function synchronizeG08AdminCredential({
       "bootstrap.postgresAdminPassword",
       sourcePassword,
     );
-    const encrypted = encryptG08SecretBundle(
+    const encrypted = encryptMigrationSecretBundle(
       root,
       contextEnv,
       bundleSnapshot,
       proposedDocument,
     );
-    const resultingSnapshot = await writeG08EncryptedBundle(
+    const resultingSnapshot = await writeMigrationEncryptedBundle(
       bundleSnapshot,
       encrypted,
       { root, env: contextEnv, expectedPlaintext: proposedDocument },
@@ -1916,13 +2056,13 @@ export async function synchronizeG08AdminCredential({
       size: resultingSnapshot.size,
       sha256: resultingSnapshot.sha256,
     };
-    const savedBundle = await readG08SavedSecretBundle(
+    const savedBundle = await readSavedMigrationSecretBundle(
       root,
       contextEnv,
       savedSnapshot,
     );
     if (!isDeepStrictEqual(savedBundle.decrypted, proposedDocument))
-      failG08WithFacts(
+      failMigrationWithFacts(
         "CONFIG-G08-SOPS-ROUNDTRIP",
         "G08 admin credential write changed another secret field",
         {
@@ -1940,9 +2080,9 @@ export async function synchronizeG08AdminCredential({
       systemIdentifier: expectedSystemIdentifier,
       credentialSource: "approved-container",
       source: {
-        containerId: G08_ADMIN_SOURCE.containerId,
-        imageId: G08_ADMIN_SOURCE.imageId,
-        networkName: G08_ADMIN_SOURCE.network,
+        containerId: MIGRATION_ADMIN_SOURCE.containerId,
+        imageId: MIGRATION_ADMIN_SOURCE.imageId,
+        networkName: MIGRATION_ADMIN_SOURCE.network,
       },
       bundle: {
         beforeSha256: bundleSnapshot.sha256,
@@ -1951,7 +2091,7 @@ export async function synchronizeG08AdminCredential({
     };
   }
 
-  assertG08AdminIdentityAndRoles(state, expectedSystemIdentifier);
+  assertMigrationAdminIdentityAndRoles(state, expectedSystemIdentifier);
   return {
     schemaVersion: 1,
     stage: "admin-credential-verified",
@@ -1966,7 +2106,7 @@ export async function synchronizeG08AdminCredential({
 }
 
 /** Conditionally prepare the canonical migrator LOGIN roles from trusted SOPS data. */
-export async function prepareG08CanonicalMigratorRoles({
+export async function prepareCanonicalMigratorRoles({
   root = REPO_ROOT,
   contextPath = process.env.COFFEE_LAUNCH_CONTEXT_FILE,
   env = process.env,
@@ -1978,24 +2118,28 @@ export async function prepareG08CanonicalMigratorRoles({
   )
     fail("CONFIG-G08-IDENTITY", "approved G08 system identifier is required");
 
-  const contextEnv = g16BootstrapEnv(env);
+  const contextEnv = sandboxBootstrapEnv(env);
   assertLocatorEnv(contextEnv, true);
-  const bundleSnapshot = await captureG08BundleSnapshot(root);
+  const bundleSnapshot = await captureMigrationBundleSnapshot(root);
   let target;
   try {
-    target = await validateG08Target({ root, contextPath, env: contextEnv });
+    target = await validateMigrationTarget({
+      root,
+      contextPath,
+      env: contextEnv,
+    });
   } catch (error) {
     if (error instanceof ConfigError) throw error;
     fail("CONFIG-G08-TARGET", "G08 canonical target validation failed");
   }
-  await assertG08BundleSnapshot(bundleSnapshot);
+  await assertMigrationBundleSnapshot(bundleSnapshot);
 
-  const initialState = await probeG08TargetState(target);
+  const initialState = await probeMigrationTargetState(target);
   if (
     initialState.postgres.systemIdentifier !== expectedSystemIdentifier ||
     initialState.postgres.version !== "17.11"
   )
-    failG08WithFacts(
+    failMigrationWithFacts(
       "CONFIG-G08-IDENTITY",
       "G08 target differs from approved identity",
       {
@@ -2006,7 +2150,7 @@ export async function prepareG08CanonicalMigratorRoles({
       },
     );
   if (!initialState.roleInventory.allAbsent)
-    failG08WithFacts(
+    failMigrationWithFacts(
       "CONFIG-G08-ROLE-PRESENT",
       "G08 preparation requires all canonical roles to be absent",
       {
@@ -2019,7 +2163,7 @@ export async function prepareG08CanonicalMigratorRoles({
 
   for (const environment of Object.values(target.secretDocument.environments))
     if (environment?.bootstrap?.migrators !== undefined)
-      failG08WithFacts(
+      failMigrationWithFacts(
         "CONFIG-G08-MIGRATOR-BLOCK_PRESENT",
         "G08 migrator credentials already exist; refusing regeneration",
         {
@@ -2030,7 +2174,7 @@ export async function prepareG08CanonicalMigratorRoles({
         },
       );
 
-  await assertG08BundleSnapshot(bundleSnapshot);
+  await assertMigrationBundleSnapshot(bundleSnapshot);
   const secretDocument = structuredClone(target.secretDocument);
   const selectedEnvironment =
     secretDocument.environments[target.config.environment];
@@ -2059,7 +2203,7 @@ export async function prepareG08CanonicalMigratorRoles({
     ownerNames.map((owner) => [owner, randomBytes(32).toString("base64url")]),
   );
   selectedEnvironment.bootstrap.migrators = generatedMigrators;
-  const proposedPasswords = g08RolePasswords({
+  const proposedPasswords = migratorRolePasswords({
     ownership: target.ownership,
     roleMap: target.roleMap,
     secrets: selectedEnvironment,
@@ -2078,13 +2222,13 @@ export async function prepareG08CanonicalMigratorRoles({
       "G08 role credentials must be distinct from admin",
     );
 
-  const encryptedContents = encryptG08SecretBundle(
+  const encryptedContents = encryptMigrationSecretBundle(
     root,
     contextEnv,
     bundleSnapshot,
     secretDocument,
   );
-  const resultBundleSnapshot = await writeG08EncryptedBundle(
+  const resultBundleSnapshot = await writeMigrationEncryptedBundle(
     bundleSnapshot,
     encryptedContents,
     { root, env: contextEnv, expectedPlaintext: secretDocument },
@@ -2097,7 +2241,7 @@ export async function prepareG08CanonicalMigratorRoles({
     size: resultBundleSnapshot.size,
     sha256: resultBundleSnapshot.sha256,
   };
-  const savedBundle = await readG08SavedSecretBundle(root, contextEnv, {
+  const savedBundle = await readSavedMigrationSecretBundle(root, contextEnv, {
     ...savedBundleSnapshot,
   });
   const savedWithoutMigrators = structuredClone(savedBundle.decrypted);
@@ -2130,7 +2274,7 @@ export async function prepareG08CanonicalMigratorRoles({
     savedEnvironment,
     "bootstrap.postgresAdminPassword",
   );
-  const rolePasswords = g08RolePasswords({
+  const rolePasswords = migratorRolePasswords({
     ownership: target.ownership,
     roleMap: target.roleMap,
     secrets: savedEnvironment,
@@ -2145,7 +2289,7 @@ export async function prepareG08CanonicalMigratorRoles({
     fail("CONFIG-G08-ROLE-SECRET", "G08 saved role credentials are invalid");
 
   target.adminPassword = savedAdminPassword;
-  const client = await openG08AdminClient(target);
+  const client = await openMigrationAdminClient(target);
   let transactionOpen = false;
   let commitAttempted = false;
   let committed = false;
@@ -2157,7 +2301,7 @@ export async function prepareG08CanonicalMigratorRoles({
     transactionOpen = true;
     let transactionState;
     try {
-      transactionState = await readG08ServerState(client, target);
+      transactionState = await readMigrationServerState(client, target);
     } catch {
       failureCode = "CONFIG-G08-TRANSACTION-PROBE";
       failureFacts = {
@@ -2194,9 +2338,9 @@ export async function prepareG08CanonicalMigratorRoles({
       };
       throw new Error("G08 role inventory changed before role creation");
     }
-    await assertG08BundleSnapshot(savedBundleSnapshot);
+    await assertMigrationBundleSnapshot(savedBundleSnapshot);
     for (const [role, password] of rolePasswords)
-      await client.query(g08CreateRoleSql(role, password));
+      await client.query(migrationCreateRoleSql(role, password));
     commitAttempted = true;
     await client.query("COMMIT");
     transactionOpen = false;
@@ -2259,18 +2403,18 @@ export async function prepareG08CanonicalMigratorRoles({
   });
   if (failureCode) {
     if (failureCode === "CONFIG-G08-COMMIT-UNKNOWN")
-      failG08WithFacts(
+      failMigrationWithFacts(
         failureCode,
         "G08 COMMIT outcome is unknown; no automatic repair or retry was attempted",
         failureFacts,
       );
     if (failureCode === "CONFIG-G08-ROLLBACK-UNKNOWN")
-      failG08WithFacts(
+      failMigrationWithFacts(
         failureCode,
         "G08 rollback outcome is unknown; no automatic repair was attempted",
         failureFacts,
       );
-    failG08WithFacts(
+    failMigrationWithFacts(
       failureCode,
       "G08 canonical role preparation failed",
       failureFacts,
@@ -2279,7 +2423,7 @@ export async function prepareG08CanonicalMigratorRoles({
   if (!committed)
     fail("CONFIG-G08-ROLE-CREATE", "G08 canonical role preparation failed");
   if (closeFailed)
-    failG08WithFacts(
+    failMigrationWithFacts(
       "CONFIG-G08-COMMIT-CLOSE",
       "G08 roles committed but the database connection did not close cleanly",
       {
@@ -2308,7 +2452,11 @@ export async function prepareG08CanonicalMigratorRoles({
   };
 }
 
-async function readG08PreparationSource(target, root, preparationContextPath) {
+async function readMigrationPreparationSource(
+  target,
+  root,
+  preparationContextPath,
+) {
   const rawResources = target.context.resources;
   if (
     rawResources !== undefined &&
@@ -2348,7 +2496,7 @@ async function readG08PreparationSource(target, root, preparationContextPath) {
     "kafkaPrefix",
   ];
   if (
-    !g08ExactKeys(resources, parentKeys) ||
+    !migrationExactKeys(resources, parentKeys) ||
     typeof preparationContextPath !== "string" ||
     !preparationContextPath.startsWith("/") ||
     resolve(preparationContextPath) !== preparationContextPath ||
@@ -2366,7 +2514,7 @@ async function readG08PreparationSource(target, root, preparationContextPath) {
       "G15 parent preparation reference is invalid",
     );
 
-  await assertG08NoSymlinkPath(preparationContextPath);
+  await assertPreparationNoSymlinkPath(preparationContextPath);
   const contextInfo = await lstat(preparationContextPath).catch(() => null);
   if (
     !contextInfo?.isFile() ||
@@ -2402,7 +2550,7 @@ async function readG08PreparationSource(target, root, preparationContextPath) {
       sourceContext.sourceRepoRoot,
       "verification/launch/v1/report.mjs",
     );
-    await assertG08NoSymlinkPath(reportPath);
+    await assertPreparationNoSymlinkPath(reportPath);
     const { validateLaunchContext } = await import(
       pathToFileURL(reportPath).href
     );
@@ -2452,8 +2600,8 @@ async function readG08PreparationSource(target, root, preparationContextPath) {
 
   let lineage;
   try {
-    const { readG15FixtureLineage } = await import("./browser-fixture.mjs");
-    lineage = await readG15FixtureLineage({
+    const { readBrowserFixtureLineage } = await import("./browser-fixture.mjs");
+    lineage = await readBrowserFixtureLineage({
       root: target.context.sourceRepoRoot,
       contextPath: target.contextPath,
       baseCandidateSha: sourceContext.candidateSha,
@@ -2511,9 +2659,9 @@ async function readG08PreparationSource(target, root, preparationContextPath) {
   };
 }
 
-async function assertG08PreparationSource(target, root, source) {
+async function assertMigrationPreparationSource(target, root, source) {
   if (!source.g15) return;
-  const current = await readG08PreparationSource(
+  const current = await readMigrationPreparationSource(
     target,
     root,
     source.contextPath,
@@ -2529,7 +2677,7 @@ async function assertG08PreparationSource(target, root, source) {
     fail("CONFIG-G08-PREPARATION_CHANGED", "G15 preparation source changed");
 }
 
-async function readG08PreparationSnapshot(
+async function readMigrationPreparationSnapshot(
   target,
   root,
   bundleSnapshot,
@@ -2543,7 +2691,7 @@ async function readG08PreparationSnapshot(
     source.evidenceDir,
     "gates/G08_MIGRATIONS/artifacts/canonical-preparation.json",
   );
-  await assertG08NoSymlinkPath(path);
+  await assertPreparationNoSymlinkPath(path);
   let info;
   let bytes;
   try {
@@ -2587,7 +2735,7 @@ async function readG08PreparationSnapshot(
   );
   let prep;
   try {
-    prep = validateG08PreparationArtifact(
+    prep = validateMigrationPreparationArtifact(
       wrapper,
       source.context,
       bundleSnapshot.sha256,
@@ -2651,7 +2799,7 @@ async function readG08PreparationSnapshot(
       "CONFIG-G08-PREPARATION-CONFIG",
       "G08 current config changed during preparation validation",
     );
-  validateG08PreparationConfigTransition(
+  validateMigrationPreparationConfigTransition(
     preparationConfigBytes,
     currentConfigBytes,
     prep.configSha256,
@@ -2669,8 +2817,8 @@ async function readG08PreparationSnapshot(
   };
 }
 
-async function assertG08PreparationSnapshot(snapshot) {
-  await assertG08NoSymlinkPath(snapshot.path);
+async function assertMigrationPreparationSnapshot(snapshot) {
+  await assertPreparationNoSymlinkPath(snapshot.path);
   const info = await lstat(snapshot.path).catch(() => null);
   const bytes = await readFile(snapshot.path).catch(() => null);
   if (
@@ -2688,7 +2836,7 @@ async function assertG08PreparationSnapshot(snapshot) {
     fail("CONFIG-G08-PREPARATION_CHANGED", "G08 preparation receipt changed");
 }
 
-function assertG08PreparedRoleInventory(state, roles) {
+function assertPreparedMigrationRoleInventory(state, roles) {
   const expected = [...roles].sort((left, right) => left.localeCompare(right));
   const existing = state.roleInventory.existing;
   if (
@@ -2710,7 +2858,7 @@ function assertG08PreparedRoleInventory(state, roles) {
         role.connectionLimit !== 20,
     )
   )
-    failG08WithFacts(
+    failMigrationWithFacts(
       "CONFIG-G08-ROLE-INVENTORY",
       "G08 canonical prepared roles do not match the approved role contract",
       {
@@ -2721,7 +2869,7 @@ function assertG08PreparedRoleInventory(state, roles) {
 }
 
 /** Return one G08 credential only after binding it to the current committed preparation. */
-export async function readG08MigrationCredential({
+export async function readMigrationCredential({
   root = REPO_ROOT,
   contextPath = process.env.COFFEE_LAUNCH_CONTEXT_FILE,
   preparationContextPath,
@@ -2743,9 +2891,9 @@ export async function readG08MigrationCredential({
         !/^[0-9]{1,20}$/u.test(expectedSystemIdentifier)))
   )
     fail("CONFIG-G08-CREDENTIAL-REQUEST", "G08 credential request is invalid");
-  const bundleSnapshot = await captureG08BundleSnapshot(root);
-  const target = await validateG08Target({ root, contextPath, env });
-  await assertG08BundleSnapshot(bundleSnapshot);
+  const bundleSnapshot = await captureMigrationBundleSnapshot(root);
+  const target = await validateMigrationTarget({ root, contextPath, env });
+  await assertMigrationBundleSnapshot(bundleSnapshot);
   if (
     target.config.environment !== "development" ||
     target.config.verification?.databaseIsolation?.enabled !== true
@@ -2773,13 +2921,13 @@ export async function readG08MigrationCredential({
       "G08 credential owner is not canonical",
     );
 
-  const preparationSource = await readG08PreparationSource(
+  const preparationSource = await readMigrationPreparationSource(
     target,
     root,
     preparationContextPath,
   );
   const { preparation, snapshot: preparationSnapshot } =
-    await readG08PreparationSnapshot(
+    await readMigrationPreparationSnapshot(
       target,
       root,
       bundleSnapshot,
@@ -2818,7 +2966,7 @@ export async function readG08MigrationCredential({
       "G08 prepared migrator credentials are invalid",
     );
 
-  const state = await probeG08TargetState(target, boundSystemIdentifier);
+  const state = await probeMigrationTargetState(target, boundSystemIdentifier);
   if (
     state.postgres.host !== target.config.postgres.host ||
     state.postgres.port !== target.config.postgres.port ||
@@ -2831,10 +2979,10 @@ export async function readG08MigrationCredential({
       "CONFIG-G08-IDENTITY",
       "G08 live target differs from preparation receipt",
     );
-  assertG08PreparedRoleInventory(state, target.roles);
-  await assertG08BundleSnapshot(bundleSnapshot);
-  await assertG08PreparationSnapshot(preparationSnapshot);
-  await assertG08PreparationSource(target, root, preparationSource);
+  assertPreparedMigrationRoleInventory(state, target.roles);
+  await assertMigrationBundleSnapshot(bundleSnapshot);
+  await assertMigrationPreparationSnapshot(preparationSnapshot);
+  await assertMigrationPreparationSource(target, root, preparationSource);
 
   if (kind === "admin")
     return {
@@ -2895,9 +3043,9 @@ export async function materializeAromaSandboxSecrets({
   );
   if (config.environment === "production")
     fail("CONFIG-G16-ENVIRONMENT", "G16 sandbox is forbidden in production");
-  await g16PostgresVersion(root);
-  const secretEnv = g16BootstrapEnv(env);
-  const secrets = await readG16Secrets(root, secretEnv, config);
+  await sandboxPostgresVersion(root);
+  const secretEnv = sandboxBootstrapEnv(env);
+  const secrets = await readSandboxSecrets(root, secretEnv, config);
   const adminPassword = secretValueAt(
     secrets,
     "bootstrap.postgresAdminPassword",
@@ -2943,15 +3091,15 @@ export async function provisionAromaSandboxDatabases({
       "CONFIG-G16-SECRET-PATH",
       "G16 secrets must be materialized in the private tmpfs directory",
     );
-  const secretEnv = g16BootstrapEnv(env);
+  const secretEnv = sandboxBootstrapEnv(env);
   const config = await loadPlatformConfig(
     root,
     join(root, "config/platform.yaml"),
   );
   if (config.environment === "production")
     fail("CONFIG-G16-ENVIRONMENT", "G16 sandbox is forbidden in production");
-  const postgresVersion = await g16PostgresVersion(root);
-  const secrets = await readG16Secrets(root, secretEnv, config);
+  const postgresVersion = await sandboxPostgresVersion(root);
+  const secrets = await readSandboxSecrets(root, secretEnv, config);
   const adminPassword = secretValueAt(
     secrets,
     "bootstrap.postgresAdminPassword",
@@ -3073,7 +3221,7 @@ export async function provisionAromaSandboxDatabases({
       ).owner;
       const name = databaseNames[owner];
       const databaseRoles = { ...database, name };
-      const migratorRole = quoteG16Identifier(database.migratorRole);
+      const migratorRole = quoteSandboxIdentifier(database.migratorRole);
       await adminClient.query(
         `CREATE ROLE ${migratorRole} NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS`,
       );
@@ -3089,7 +3237,7 @@ export async function provisionAromaSandboxDatabases({
         );
       }
       await adminClient.query(
-        `CREATE DATABASE ${quoteG16Identifier(name)} OWNER ${migratorRole} TEMPLATE template0`,
+        `CREATE DATABASE ${quoteSandboxIdentifier(name)} OWNER ${migratorRole} TEMPLATE template0`,
       );
       createdDatabases.push({ owner, name, databaseRoles });
     }
@@ -3138,7 +3286,7 @@ export async function provisionAromaSandboxDatabases({
     for (const { name } of createdDatabases.reverse()) {
       try {
         await adminClient.query(
-          `DROP DATABASE IF EXISTS ${quoteG16Identifier(name)}`,
+          `DROP DATABASE IF EXISTS ${quoteSandboxIdentifier(name)}`,
         );
       } catch {
         /* preserve setup failure */
@@ -3194,8 +3342,12 @@ export async function openAromaSandboxMigrator({
   );
   if (config.environment === "production")
     fail("CONFIG-G16-ENVIRONMENT", "G16 sandbox is forbidden in production");
-  const postgresVersion = await g16PostgresVersion(root);
-  const secrets = await readG16Secrets(root, g16BootstrapEnv(env), config);
+  const postgresVersion = await sandboxPostgresVersion(root);
+  const secrets = await readSandboxSecrets(
+    root,
+    sandboxBootstrapEnv(env),
+    config,
+  );
   const adminPassword = secretValueAt(
     secrets,
     "bootstrap.postgresAdminPassword",
@@ -3229,10 +3381,10 @@ export async function openAromaSandboxMigrator({
     )
       fail("CONFIG-G16-MIGRATOR_TARGET_MISMATCH");
     await client.query(
-      `SET ROLE ${quoteG16Identifier(roleDatabase.migratorRole)}`,
+      `SET ROLE ${quoteSandboxIdentifier(roleDatabase.migratorRole)}`,
     );
     await client.query(
-      `SET search_path = ${quoteG16Identifier(roleDatabase.schema)}, pg_catalog`,
+      `SET search_path = ${quoteSandboxIdentifier(roleDatabase.schema)}, pg_catalog`,
     );
     const identity = (await client.query("SELECT current_user, session_user"))
       .rows[0];
@@ -3296,8 +3448,12 @@ export async function finalizeAromaSandboxDatabase({
   );
   if (config.environment === "production")
     fail("CONFIG-G16-ENVIRONMENT", "G16 sandbox is forbidden in production");
-  const postgresVersion = await g16PostgresVersion(root);
-  const secrets = await readG16Secrets(root, g16BootstrapEnv(env), config);
+  const postgresVersion = await sandboxPostgresVersion(root);
+  const secrets = await readSandboxSecrets(
+    root,
+    sandboxBootstrapEnv(env),
+    config,
+  );
   const adminPassword = secretValueAt(
     secrets,
     "bootstrap.postgresAdminPassword",
@@ -3343,15 +3499,15 @@ export async function finalizeAromaSandboxDatabase({
   }
 }
 
-export function selectG17RuntimeCredentialClaim({
+export function selectBackupRuntimeCredentialClaim({
   owner,
   runtime,
   roleMap,
   ownership,
 } = {}) {
   if (
-    !Object.hasOwn(G17_RUNTIME_OWNERS, runtime) ||
-    G17_RUNTIME_OWNERS[runtime] !== owner
+    !Object.hasOwn(BACKUP_RUNTIME_OWNERS, runtime) ||
+    BACKUP_RUNTIME_OWNERS[runtime] !== owner
   )
     fail(
       "CONFIG-G17-RUNTIME",
@@ -3393,7 +3549,7 @@ export function selectG17RuntimeCredentialClaim({
 }
 
 /** Read one G17 bootstrap credential in-process after binding it to an exact launch target. */
-export async function readG17BackupCredential({
+export async function readBackupCredential({
   root = REPO_ROOT,
   runId,
   candidateSha,
@@ -3446,7 +3602,7 @@ export async function readG17BackupCredential({
   ) {
     fail("CONFIG-G17-TARGET", "G17 PostgreSQL target identity is invalid");
   }
-  const { config } = await validateG17BackupTarget({
+  const { config } = await validateBackupTarget({
     root,
     contextPath,
     runId,
@@ -3455,8 +3611,8 @@ export async function readG17BackupCredential({
     port,
     expectedSystemIdentifier,
   });
-  const secretEnv = g16BootstrapEnv(env);
-  await g16PostgresVersion(root);
+  const secretEnv = sandboxBootstrapEnv(env);
+  await sandboxPostgresVersion(root);
   let runtimeClaim;
   if (runtime !== undefined) {
     const ownership = JSON.parse(
@@ -3465,14 +3621,14 @@ export async function readG17BackupCredential({
     const roleMap = JSON.parse(
       await readFile(join(root, "config/database-role-map.json"), "utf8"),
     );
-    runtimeClaim = selectG17RuntimeCredentialClaim({
+    runtimeClaim = selectBackupRuntimeCredentialClaim({
       owner,
       runtime,
       roleMap,
       ownership,
     });
   }
-  const secrets = await readG16Secrets(root, secretEnv, config);
+  const secrets = await readSandboxSecrets(root, secretEnv, config);
   const scopedCredential = runtimeClaim
     ? secretValueAt(secrets, runtimeClaim.secretRef)
     : null;
@@ -3484,11 +3640,11 @@ export async function readG17BackupCredential({
   return { username: runtimeClaim?.username ?? "postgres", password };
 }
 
-export function isG17SocketHost(host) {
-  return typeof host === "string" && G17_SOCKET_HOST.test(host);
+export function isBackupSocketHost(host) {
+  return typeof host === "string" && BACKUP_SOCKET_HOST.test(host);
 }
 
-export function validateG17ServerIdentity(
+export function validateBackupServerIdentity(
   value,
   context,
   config,
@@ -3499,7 +3655,7 @@ export function validateG17ServerIdentity(
     typeof value !== "object" ||
     Array.isArray(value) ||
     Object.keys(value).sort().join(",") !==
-      [...G17_SERVER_IDENTITY_KEYS].sort().join(",") ||
+      [...BACKUP_SERVER_IDENTITY_KEYS].sort().join(",") ||
     value.schemaVersion !== 1 ||
     value.runId !== context?.runId ||
     value.candidateSha !== context?.candidateSha ||
@@ -3508,7 +3664,7 @@ export function validateG17ServerIdentity(
     value.version !== "17.11" ||
     config.environment === "production" ||
     config.verification?.databaseIsolation?.enabled !== true ||
-    (value.host !== "coffee_postgres" && !isG17SocketHost(value.host)) ||
+    (value.host !== "coffee_postgres" && !isBackupSocketHost(value.host)) ||
     !/^[0-9]+$/u.test(value.systemIdentifier ?? "") ||
     (expectedSystemIdentifier !== undefined &&
       value.systemIdentifier !== expectedSystemIdentifier)
@@ -3524,7 +3680,7 @@ export function validateG17ServerIdentity(
   };
 }
 
-export function validateG17SocketDirectoryMetadata(
+export function validateBackupSocketDirectoryMetadata(
   metadata,
   expectedUid = process.getuid(),
 ) {
@@ -3536,8 +3692,8 @@ export function validateG17SocketDirectoryMetadata(
   );
 }
 
-export async function validateG17SocketDirectory(host) {
-  if (!isG17SocketHost(host))
+export async function validateBackupSocketDirectory(host) {
+  if (!isBackupSocketHost(host))
     fail("CONFIG-G17-SOCKET-PATH", "G17 Unix socket path is invalid");
   let current = "/";
   for (const part of host.slice(1).split("/")) {
@@ -3556,7 +3712,7 @@ export async function validateG17SocketDirectory(host) {
   }
   const info = await lstat(host);
   if (
-    !validateG17SocketDirectoryMetadata(info, process.getuid()) ||
+    !validateBackupSocketDirectoryMetadata(info, process.getuid()) ||
     (await realpath(host)) !== host
   )
     fail(
@@ -3583,7 +3739,7 @@ async function assertNoSymlinkPath(path) {
 }
 
 /** Bind G17 bootstrap to the validated run, exact YAML bytes, and G00 server identity. */
-export async function validateG17BackupTarget({
+export async function validateBackupTarget({
   root = REPO_ROOT,
   contextPath = process.env.COFFEE_LAUNCH_CONTEXT_FILE,
   runId,
@@ -3687,7 +3843,8 @@ export async function validateG17BackupTarget({
       "CONFIG-G17-CONFIG",
       "G17 target differs from the isolated non-production config",
     );
-  if (isG17SocketHost(targetHost)) await validateG17SocketDirectory(targetHost);
+  if (isBackupSocketHost(targetHost))
+    await validateBackupSocketDirectory(targetHost);
   else if (targetHost !== "coffee_postgres")
     fail(
       "CONFIG-G17-TARGET",
@@ -3730,7 +3887,7 @@ export async function validateG17BackupTarget({
       "CONFIG-G17-SERVER-IDENTITY",
       "G00 server identity changed during validation",
     );
-  const target = validateG17ServerIdentity(
+  const target = validateBackupServerIdentity(
     identity,
     context,
     {
