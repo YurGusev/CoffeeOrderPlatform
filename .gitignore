@@ -11,4 +11,5 @@ __pycache__/
 evidence/observability/
 evidence/grokverify/
 evidence/web-verify/
+evidence/catalog-slice-verify/
 /evidence/launch/
