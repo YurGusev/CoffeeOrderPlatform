@@ -38,15 +38,21 @@ node .cursor/skills/orders-slice-verify/run.mjs
 
 Нужны Node 26.8.1, pnpm, Docker, `openssl`, `keytool`, `python3`, `make` и
 `g++`. Перед контейнерами скрипт запускает инкрементальный
-`tsc -b apps/orders-service`. Процесс `orders-service` в сети Compose
-запускает тот же бинарник Node, которым запущен скрипт, через
-`/lib64/ld-linux-x86-64.so.2` и `/lib/x86_64-linux-gnu` хоста. Так нативный
-модуль `@confluentinc/kafka-javascript`, собранный этим Node, загружается
-рядом с Postgres и Kafka. Образ `node:26.8.1-bookworm-slim` остаётся у
-фикстуры `api-internal`. Если модуль ещё не загружается, скрипт один раз
-собирает уже объявленную зависимость на хосте. На время сборки `PATH`
-начинается с каталога навыка: `ar-mri` прячет `+` в путях pnpm от `ar -M`.
-Новую зависимость он не добавляет.
+`tsc -b apps/orders-service`. Процесс `orders-service` запускает тот же
+бинарник Node, которым запущен скрипт, через динамический линкер хоста.
+Образы Postgres, Node и Kafka читаются из `config/toolchain-versions.json`
+(`postgresImage`, `nodeBookwormSlimImage`, `kafkaImage`).
+
+У `@confluentinc/kafka-javascript` 1.10.0 нет готового бинарника для Node ABI
+147. Если модуль не загружается, скрипт один раз собирает уже объявленную
+зависимость, а `ar-mri` убирает `+` из путей pnpm: иначе `ar -M` обрывает сборку.
+
+Контейнеры фикстуры и `orders-service` идут от uid и gid запускающего
+пользователя. Postgres стартует от root образа и читает файл пароля.
+Брокер остаётся пользователем своего образа: root-процесс этого образа
+меняет владельца только его файлов секретов. Хостовый `chown` не нужен.
+Фикстуре монтируется отдельный каталог с `ca.crt`, `api-internal.crt` и
+`api-internal.key`.
 
 Порт сервиса выбирается из 18510–18580 на `127.0.0.1`. Postgres и Kafka
 наружу не публикуются. Проект Compose называется
@@ -60,7 +66,8 @@ tmpfs `/dev/shm`.
 Повторный запуск создаёт новый run-id и новую пустую базу. Код выхода `0`
 значит, что все обязательные сценарии прошли. Код `1` значит сбой. Контейнеры,
 сеть и tmpfs этого run-id удаляются в конце, в том числе после ошибки.
-Каталог evidence остаётся.
+Каталог evidence остаётся. Имена контейнеров, топики и добавление сценария
+описаны в [reference.md](reference.md).
 
 ## Doctor
 
@@ -127,22 +134,6 @@ node .cursor/skills/orders-slice-verify/run.mjs --down <run-id>
 
 Evidence остаётся на месте.
 
-## Helpers
-
-Исполняемый файл `.cursor/skills/orders-slice-verify/run.mjs`.
-Фикстура внутреннего API лежит рядом в `internal-fixture.mjs` и запускается
-только контейнером этого прогона.
-
-```bash
-node .cursor/skills/orders-slice-verify/run.mjs
-node .cursor/skills/orders-slice-verify/run.mjs --down <run-id>
-```
-
-| Код | Значение |
-|---|---|
-| 0 | обязательные сценарии прошли, срез удалён, evidence на месте |
-| 1 | старт, doctor, сценарий или аргументы не прошли; свой срез удалён, если успел подняться |
-
 ## Карта сценариев
 
 | Сценарий | Статус |
@@ -161,9 +152,9 @@ node .cursor/skills/orders-slice-verify/run.mjs --down <run-id>
 | `GET /metrics` | не покрыто |
 | Разбор inbox | не покрыто |
 
-Идентификаторы лежат в `run.mjs` и в файлах `features/`. Когда маршрут в коде
-изменился, карту правит следующий прогон `maintain-verification-skill`. Этот
-рычаг сам карту не переписывает.
+Идентификаторы сценариев лежат в `run.mjs`. Когда маршрут в коде изменился,
+карту в этом файле правит следующий прогон `maintain-verification-skill`.
+Этот рычаг сам карту не переписывает.
 
 ## Чего этот срез не делает
 

@@ -6,13 +6,11 @@ import { randomBytes, randomUUID, generateKeyPairSync, sign } from "node:crypto"
 import { existsSync } from "node:fs";
 import {
   chmod,
-  chown,
   lstat,
   mkdir,
   readFile,
   readdir,
   rm,
-  stat,
   statfs,
   symlink,
   writeFile,
@@ -23,15 +21,10 @@ import { request as httpsRequest } from "node:https";
 import { fileURLToPath } from "node:url";
 
 const ROOT = dirname(dirname(dirname(dirname(fileURLToPath(import.meta.url)))));
-const POSTGRES_IMAGE =
-  "postgres:17.11-alpine@sha256:18cfe3ef5e6815560c98237d6216d1e5119702fb0f3894c8785dd58b8bbe5d73";
-const NODE_IMAGE =
-  "node:26.8.1-bookworm-slim@sha256:27f5e13512830beb5d9a574108daa6701a0a0b91528aeaf1ee84ecdcddaeeaae";
 const RUN_ID_PATTERN = /^[0-9]{8}t[0-9]{6}z-[0-9a-f]{6}$/u;
+const IMAGE_PIN = /^[^\s@]+@sha256:[0-9a-f]{64}$/u;
 const SECRET_ROOT = "/dev/shm";
 const TMPFS_MAGIC = 0x01021994;
-const RUNTIME_UID = 1000;
-const RUNTIME_GID = 1000;
 const LABEL = "orders";
 const FIXTURE = {
   customerRef: "cus_01ARZ3NDEKTSV4RRFFQ69G5FAV",
@@ -124,6 +117,9 @@ function delay(ms) {
 function assert(condition, message) {
   if (!condition) throw new Error(message);
 }
+
+assert(typeof process.getuid === "function", "host uid is unavailable");
+const HOST_USER = `${process.getuid()}:${process.getgid()}`;
 
 function assertSafe(value, pattern, label) {
   assert(pattern.test(value), `${label} is not safe to interpolate`);
@@ -258,9 +254,48 @@ function secretDirectory(project) {
   return directory;
 }
 
-async function ownRuntime(path, mode) {
-  await chmod(path, mode);
-  await chown(path, RUNTIME_UID, RUNTIME_GID);
+function exactImage(toolchain, key) {
+  const value = toolchain[key];
+  assert(typeof value === "string" && IMAGE_PIN.test(value), `${key} is not an exact image pin`);
+  return value;
+}
+
+async function stageFixture(source, target) {
+  await mkdir(target, { recursive: true, mode: 0o700 });
+  for (const name of ["ca.crt", "api-internal.crt", "api-internal.key"]) {
+    await writeFile(join(target, name), await readFile(join(source, name)));
+    await chmod(join(target, name), 0o400);
+  }
+  await chmod(target, 0o700);
+}
+
+async function alignKafkaSecrets(directory, image) {
+  const listed = (
+    await run("docker", ["run", "--rm", "--entrypoint", "sh", image, "-c", "id -u; id -g"])
+  ).stdout.trim().split("\n");
+  const uid = listed[0];
+  const gid = listed[1];
+  assert(/^\d+$/u.test(uid ?? "") && /^\d+$/u.test(gid ?? ""), "kafka image user is missing");
+  const names = await readdir(directory);
+  assert(names.length > 0, "kafka secrets are missing");
+  await chmod(directory, 0o755);
+  for (const name of names) await chmod(join(directory, name), 0o400);
+  await run("docker", [
+    "run",
+    "--rm",
+    "--network",
+    "none",
+    "--user",
+    "0:0",
+    "--mount",
+    `type=bind,source=${directory},target=/secrets`,
+    "--entrypoint",
+    "chown",
+    image,
+    `${uid}:${gid}`,
+    ...names.map((name) => `/secrets/${name}`),
+  ]);
+  return { uid, gid, user: `${uid}:${gid}` };
 }
 
 function openssl(args) {
@@ -439,8 +474,6 @@ async function kafkaMaterial(dir) {
     { mode: 0o600 },
   );
   const caPem = await readFile(join(dir, "kafka.crt"), "utf8");
-  for (const name of await readdir(dir)) await ownRuntime(join(dir, name), 0o400);
-  await ownRuntime(dir, 0o700);
   return { username: "orders", password: users.orders, caPem };
 }
 
@@ -469,8 +502,13 @@ async function loadConfig() {
   );
   assert(config?.kafka?.brokers?.join(",") === "kafka:9092", "kafka broker is not kafka:9092");
   assert(config?.kafka?.clientProtocol === "SASL_SSL", "kafka protocol is not SASL_SSL");
-  assert(typeof toolchain.kafkaImage === "string", "kafka image pin is missing");
-  return { environment, database, kafkaImage: toolchain.kafkaImage };
+  return {
+    environment,
+    database,
+    postgresImage: exactImage(toolchain, "postgresImage"),
+    nodeImage: exactImage(toolchain, "nodeBookwormSlimImage"),
+    kafkaImage: exactImage(toolchain, "kafkaImage"),
+  };
 }
 
 async function migrationSql() {
@@ -667,7 +705,7 @@ function composeFile(input) {
   return `name: ${input.project}
 services:
   postgres:
-    image: ${POSTGRES_IMAGE}
+    image: ${input.postgresImage}
     pull_policy: missing
     container_name: ${input.project}-postgres
     init: true
@@ -702,7 +740,7 @@ services:
     container_name: ${input.project}-kafka
     init: true
     restart: "no"
-    user: "1000:1000"
+    user: ${q(input.kafkaUser)}
     mem_limit: 1536m
     environment:
 ${kafkaEnvironment}
@@ -712,19 +750,19 @@ ${kafkaEnvironment}
         target: /etc/kafka/secrets
         read_only: true
     tmpfs:
-      - /var/lib/kafka/data:rw,uid=1000,gid=1000,mode=0700,size=536870912
+      - /var/lib/kafka/data:rw,uid=${input.kafkaUid},gid=${input.kafkaGid},mode=0700,size=536870912
     networks:
       default:
         aliases: [kafka]
     labels:
       ${labels}
   internal:
-    image: ${NODE_IMAGE}
+    image: ${input.nodeImage}
     pull_policy: missing
     container_name: ${input.project}-internal
     init: true
     restart: "no"
-    user: "1000:1000"
+    user: ${q(HOST_USER)}
     working_dir: ${q(ROOT)}
     command: ["node", ".cursor/skills/orders-slice-verify/internal-fixture.mjs"]
     mem_limit: 256m
@@ -744,22 +782,22 @@ ${kafkaEnvironment}
         target: ${q(ROOT)}
         read_only: true
       - type: bind
-        source: ${q(input.certDir)}
+        source: ${q(input.fixtureDir)}
         target: /run/fixture
         read_only: true
     tmpfs:
-      - /tmp:rw,nosuid,size=32m
+      - /tmp:rw,nosuid,mode=1777,size=32m
     networks:
       default:
         aliases: [api-internal]
     labels:
       ${labels}
   orders:
-    image: ${NODE_IMAGE}
+    image: ${input.nodeImage}
     pull_policy: missing
     container_name: ${input.project}-orders
     restart: "no"
-    user: "1000:1000"
+    user: ${q(HOST_USER)}
     working_dir: ${q(ROOT)}
     entrypoint: [${q(input.host.linker)}]
     command: ["--library-path", ${q(input.host.libDir)}, "/host-node/bin/node", "apps/orders-service/dist/main.js"]
@@ -792,7 +830,7 @@ ${kafkaEnvironment}
         target: /host-node
         read_only: true
     tmpfs:
-      - /tmp:rw,nosuid,size=64m
+      - /tmp:rw,nosuid,mode=1777,size=64m
     ports: ["127.0.0.1:${input.port}:4104"]
     networks: [default]
     labels:
@@ -833,7 +871,7 @@ async function main() {
   const keep = args[0] === "--keep";
   await run("docker", ["ps", "-q"]);
   await ensureDependencies();
-  const { environment, database, kafkaImage } = await loadConfig();
+  const { environment, database, postgresImage, nodeImage, kafkaImage } = await loadConfig();
   const migrations = await migrationSql();
   const runId = newRunId();
   const project = projectName(runId);
@@ -880,12 +918,14 @@ async function main() {
     const secretsFile = join(directory, "orders-service.yaml");
     const composePath = join(directory, "compose.yaml");
     const certDir = join(directory, "certs");
+    const fixtureDir = join(directory, "fixture");
     const kafkaDir = join(directory, "kafka");
     await writeFile(passwordFile, `${password}\n`, { mode: 0o600 });
-    await ownRuntime(passwordFile, 0o400);
+    await chmod(passwordFile, 0o400);
     const transport = await createTransport(certDir, environment);
-    for (const name of await readdir(certDir)) await ownRuntime(join(certDir, name), 0o400);
-    await ownRuntime(certDir, 0o700);
+    for (const name of await readdir(certDir)) await chmod(join(certDir, name), 0o400);
+    await chmod(certDir, 0o700);
+    await stageFixture(certDir, fixtureDir);
     const kafka = await kafkaMaterial(kafkaDir);
     const delegation = keyPair();
     remember(delegation.privatePem);
@@ -924,7 +964,11 @@ async function main() {
       },
     };
     await writeFile(secretsFile, `${JSON.stringify(document)}\n`, { mode: 0o600 });
-    await ownRuntime(secretsFile, 0o400);
+    await chmod(secretsFile, 0o400);
+    await ensureImage(postgresImage);
+    await ensureImage(nodeImage);
+    await ensureImage(kafkaImage);
+    const kafkaUser = await alignKafkaSecrets(kafkaDir, kafkaImage);
     const peerSan = `spiffe://coffee-platform/${environment}/orders-service`;
     await writeFile(
       composePath,
@@ -933,10 +977,15 @@ async function main() {
         runId,
         port,
         database,
+        postgresImage,
+        nodeImage,
         kafkaImage,
+        kafkaUser: kafkaUser.user,
+        kafkaUid: kafkaUser.uid,
+        kafkaGid: kafkaUser.gid,
         passwordFile,
         secretsFile,
-        certDir,
+        fixtureDir,
         kafkaDir,
         peerSan,
         host: hostNodeLaunch(),
@@ -983,7 +1032,7 @@ async function main() {
         {
           slice: "orders-service",
           boundary: `orders-service -> PostgreSQL ${database} + Kafka SASL_SSL + fixture api-internal`,
-          images: { postgres: POSTGRES_IMAGE, node: NODE_IMAGE, kafka: kafkaImage },
+          images: { postgres: postgresImage, node: nodeImage, kafka: kafkaImage },
           hostPort: port,
           containerPort: 4104,
           databasePublished: false,
@@ -1181,9 +1230,6 @@ async function main() {
       }
       throw new Error(`orders-service did not become ready (${last})`);
     }
-    await ensureImage(POSTGRES_IMAGE);
-    await ensureImage(NODE_IMAGE);
-    await ensureImage(kafkaImage);
     process.stderr.write(`orders-slice-verify: up ${project} on 127.0.0.1:${port}\n`);
     await run("docker", ["compose", "-p", project, "-f", composePath, "up", "-d", "postgres", "kafka", "internal"]);
     await waitHealthy(`${project}-postgres`);
