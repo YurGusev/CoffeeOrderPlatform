@@ -16,6 +16,9 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import test from "node:test";
 import {
+  adjudicateGrafanaFindings,
+  buildOpenVex,
+  validateOpenVex,
   assertSbomPackageInventory,
   git,
   hasHiddenIndexFlags,
@@ -27,12 +30,13 @@ import {
   trivyScanCommand,
   validateDatabaseMetadata,
   verifyBuildxMetadata,
+  verifyGrafanaImageFiles,
   verifyOciAttestation,
   verifySlsaStatement,
   verifyKafkaBaseMaterialStatement,
 } from "../../tools/security-scan.mjs";
 import { RUNTIME_NAMES } from "../../packages/platform-config/src/index.ts";
-import { loadVerifiedGateImage } from "../../tools/verified-infrastructure-image.mjs";
+import { loadVerifiedGateImage, readVerifiedRuntimeImages } from "../../tools/verified-infrastructure-image.mjs";
 
 const candidateSha = "a".repeat(40);
 const imageDigest = `sha256:${"b".repeat(64)}`;
@@ -884,6 +888,83 @@ void test("G12 compares only Trivy package components and binds image SBOMs", ()
   );
 });
 
+void test("G12 Grafana effective binary proof rejects later links, files and whiteouts in protected paths", async (t) => {
+  const temp = await mkdtemp(join(tmpdir(), "g12-grafana-layers-"));
+  t.after(async () => rm(temp, {recursive: true, force: true}));
+  const layout = join(temp, "layout");
+  const root = join(temp, "root");
+  await mkdir(layout);
+  const plugins = {};
+  for (const name of ["loki", "tempo", "prometheus"]) {
+    const directory = join(root, "opt/grafana/plugins", name);
+    await mkdir(directory, {recursive: true});
+    const bytes = Buffer.from(`${name}-test-binary`);
+    await writeFile(join(directory, `gpx_grafana-${name}-datasource_linux_amd64`), bytes);
+    plugins[name] = {binarySha256: createHash("sha256").update(bytes).digest("hex")};
+  }
+  await writeFile(join(layout, "config.json"), JSON.stringify({config:{Env:["GF_PATHS_PLUGINS=/opt/grafana/plugins"]}}));
+  execFileSync("tar", ["-cf", join(layout, "base.tar"), "-C", root, "."]);
+  const image = {imageLayoutPath: layout, dockerArchiveManifest: {Config:"config.json", Layers:["base.tar", "later.tar"]}};
+  const run = async (command, args, options = {}) => {
+    const output = execFileSync(command, args, {encoding:null});
+    return options.capture ? output.toString("utf8").trim() : output;
+  };
+  const makeLayer = (kind) => execFileSync("python3", ["-c", `import sys,tarfile,io
+with tarfile.open(sys.argv[1], "w") as a:
+ i=tarfile.TarInfo("opt/grafana/plugins/.wh.tempo" if sys.argv[2] == "whiteout" else "opt/grafana/plugins/tempo/gpx_grafana-tempo-datasource_linux_amd64" if sys.argv[2] == "binary-hardlink" else "./opt//grafana/plugins/tempo" if sys.argv[2] == "normalized-symlink" else "opt/grafana/plugins/tempo")
+ if sys.argv[2] == "directory": i.type=tarfile.DIRTYPE
+ elif sys.argv[2] in ("symlink", "normalized-symlink"): i.type=tarfile.SYMTYPE; i.linkname="/tmp"
+ elif sys.argv[2] in ("hardlink", "binary-hardlink"): i.type=tarfile.LNKTYPE; i.linkname="elsewhere"
+ else: i.size=0
+ a.addfile(i)`, join(layout, "later.tar"), kind]);
+  makeLayer("directory");
+  const proof = await verifyGrafanaImageFiles({image, toolchain:{grafanaPlugins:plugins}, temporary:temp, run});
+  assert.equal(proof.tempo.sha256, plugins.tempo.binarySha256);
+  for (const kind of ["symlink", "normalized-symlink", "hardlink", "binary-hardlink", "file", "whiteout"]) {
+    makeLayer(kind);
+    await assert.rejects(verifyGrafanaImageFiles({image, toolchain:{grafanaPlugins:plugins}, temporary:temp, run}), /GRAFANA_IMAGE_(?:ANCESTOR|BINARY|WHITEOUT)_INVALID/u, kind);
+  }
+});
+
+void test("G12 VEX resolves only the two approved findings in the exact Grafana artifact", async () => {
+  const toolchain = JSON.parse(await readFile(new URL("../../config/toolchain-versions.json", import.meta.url)));
+  const tempo = toolchain.grafanaPlugins.tempo;
+  const image = {service:"grafana", imageId:imageDigest, manifestDigest:`sha256:${"c".repeat(64)}`, platformManifestDigest:`sha256:${"d".repeat(64)}`,
+    buildInputBinding:{vendorPlugins:{signingKeyFingerprint:toolchain.grafanaSigningKeyFingerprint, signingKeySourceSha256:toolchain.grafanaSigningKeySourceSha256,
+      plugins:{tempo}, effectiveFiles:{tempo:{path:"/opt/grafana/plugins/tempo/gpx_grafana-tempo-datasource_linux_amd64", sha256:tempo.binarySha256, layerDigest:`sha256:${"e".repeat(64)}`}}}}};
+  const ids = ["CVE-2026-21728", "CVE-2026-28377"];
+  const row = {Target:image.buildInputBinding.vendorPlugins.effectiveFiles.tempo.path.slice(1), Vulnerabilities: ids.map((id,i) => ({VulnerabilityID:id, Severity:"HIGH", PkgName:"github.com/grafana/tempo", InstalledVersion:toolchain.grafanaTempoModule.version, PkgIdentifier:{PURL:`pkg:golang/github.com/grafana/tempo@${toolchain.grafanaTempoModule.version}`}, Fingerprint:`sha256:${String(i+1).repeat(64)}`}))};
+  const report = {Metadata:{ImageID:image.imageId}, Results:[row]};
+  const input = {report, image, toolchain, approvedFixed:ids};
+  const vexInput = {decisions: adjudicateGrafanaFindings(input), runId: "fixture-run", candidateSha, platformManifestDigest: image.platformManifestDigest, timestamp: "2026-10-30T00:00:00.000Z"};
+  const vex = buildOpenVex(vexInput);
+  assert.equal(vex["@context"], "https://openvex.dev/ns/v0.2.0");
+  assert.equal(vex.statements.length, 2);
+  assert.equal(vex.statements[0].products[0]["@id"], `pkg:oci/grafana@${image.platformManifestDigest}`);
+  assert.equal(vex.statements[0].status, "fixed");
+  assert.match(vex.statements[0].status_notes, /Machine-code reproducibility was not proven/u);
+  assert.equal(validateOpenVex(vex, vexInput), true);
+  for (const kind of ["cve", "product", "status"]) {
+    const changed = structuredClone(vex);
+    if (kind === "cve") changed.statements[0].vulnerability.name = "CVE-2026-116587";
+    if (kind === "product") changed.statements[0].products[0]["@id"] = `pkg:oci/grafana@sha256:${"a".repeat(64)}`;
+    if (kind === "status") changed.statements[0].status = "not_affected";
+    assert.equal(validateOpenVex(changed, vexInput), false, kind);
+  }
+  const before=JSON.stringify(report); assert.equal(adjudicateGrafanaFindings(input).length,2); assert.equal(JSON.stringify(report),before); assert.deepEqual(inspectFindings(report),{high:2,critical:0});
+  const wrongImage=structuredClone(input); wrongImage.image.imageId=`sha256:${"a".repeat(64)}`; assert.deepEqual(adjudicateGrafanaFindings(wrongImage),[]);
+  const wrongService=structuredClone(input); wrongService.image.service="kafka"; assert.deepEqual(adjudicateGrafanaFindings(wrongService),[]);
+  const wrongHash=structuredClone(input); wrongHash.image.buildInputBinding.vendorPlugins.effectiveFiles.tempo.sha256="0".repeat(64); assert.deepEqual(adjudicateGrafanaFindings(wrongHash),[]);
+  const wrongZip=structuredClone(input); wrongZip.toolchain.grafanaPlugins.tempo.zipSha256="0".repeat(64); assert.deepEqual(adjudicateGrafanaFindings(wrongZip),[]);
+  const wrongModule=structuredClone(input); wrongModule.toolchain.grafanaTempoModule.h1="h1:wrong"; assert.deepEqual(adjudicateGrafanaFindings(wrongModule),[]);
+  const duplicateFingerprint=structuredClone(input); duplicateFingerprint.report.Results[0].Vulnerabilities[1].Fingerprint=duplicateFingerprint.report.Results[0].Vulnerabilities[0].Fingerprint; assert.equal(adjudicateGrafanaFindings(duplicateFingerprint).length,1);
+  const wrongPackage=structuredClone(input); wrongPackage.report.Results[0].Vulnerabilities[0].PkgName="other"; assert.equal(adjudicateGrafanaFindings(wrongPackage).length,1);
+  const wrongVersion=structuredClone(input); wrongVersion.report.Results[0].Vulnerabilities[0].InstalledVersion="v1.0.0"; assert.equal(adjudicateGrafanaFindings(wrongVersion).length,1);
+  const wrongCve=structuredClone(input); wrongCve.report.Results[0].Vulnerabilities[0].VulnerabilityID="CVE-2026-116587"; assert.equal(adjudicateGrafanaFindings(wrongCve).length,1);
+  const unapproved=structuredClone(input); unapproved.approvedFixed=[]; assert.deepEqual(adjudicateGrafanaFindings(unapproved),[]);
+  const extra=structuredClone(input); extra.report.Results.push({Target:"other", Vulnerabilities:[{Severity:"HIGH"}]}); assert.equal(inspectFindings(extra.report).high-adjudicateGrafanaFindings(extra).length,1);
+});
+
 void test("G12 requires fresh, internally ordered vulnerability database metadata", () => {
   const now = Date.parse("2026-10-24T12:00:00Z");
   const fresh = {
@@ -1067,7 +1148,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
       "utf8",
     ),
   );
-  for (const name of ["grafana", "loki", "prometheus", "tempo"])
+  for (const name of ["loki", "prometheus", "tempo"])
     toolchainFixture[`${name}Image`] =
       `registry.example/${name}:1@sha256:${createHash("sha256").update(name).digest("hex")}`;
   const kafkaPlatformDigest = `sha256:${"d".repeat(64)}`;
@@ -1091,6 +1172,23 @@ void test("G12 builds product images, records pinned upstream identity, and fail
       .replace(kafkaPlatformDigest, `sha256:${"e".repeat(64)}`),
   );
   toolchainFixture.nodeImage = `node:26.8.1-alpine@sha256:${createHash("sha256").update(nodeBaseIndexBytes).digest("hex")}`;
+  const fakeSha = (bytes) => createHash("sha256").update(bytes).digest("hex");
+  const grafanaBaseIndexBytes = Buffer.from(kafkaBaseIndexBytes.toString().replace(kafkaPlatformDigest, `sha256:${"f".repeat(64)}`));
+  toolchainFixture.grafanaImage = `grafana/grafana:13.3.0-slim@sha256:${fakeSha(grafanaBaseIndexBytes)}`;
+  const keyFixture = Buffer.from("const publicKeyText = `synthetic-key`\n");
+  toolchainFixture.grafanaSigningKeySourceSha256 = fakeSha(keyFixture);
+  const pluginFixtures = {};
+  for (const name of ["loki", "tempo", "prometheus"]) {
+    const binName = `gpx_grafana-${name}-datasource_linux_amd64`;
+    const binary = Buffer.from(`synthetic ${name} binary\n`);
+    const plugin = Buffer.from(JSON.stringify({id: name}));
+    const signed = Buffer.from(`synthetic signed ${name}\n`);
+    const archive = Buffer.from(`synthetic zip ${name}\n`);
+    const pin = {version: "1.2.3", zipSha256: fakeSha(archive), manifestSha256: fakeSha(signed), binarySha256: fakeSha(binary)};
+    toolchainFixture.grafanaPlugins[name] = pin;
+    pluginFixtures[name] = {binName, binary, plugin, signed, archive, manifest: {plugin:name, version:pin.version, signatureType:"grafana", signedByOrg:"grafana", files:{[binName]:fakeSha(binary), "plugin.json":fakeSha(plugin)}}};
+  }
+
   toolchainFixture.kafkaImage = `apache/kafka:4.3.2@sha256:${createHash(
     "sha256",
   )
@@ -1195,7 +1293,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
     JSON.stringify({
       architecture: "amd64",
       os: "linux",
-      config: {},
+      config: {Env: ["GF_PATHS_PLUGINS=/opt/grafana/plugins"]},
       rootfs: { type: "layers", diff_ids: [ociLayerDiffId] },
       history: [{ created_by: "synthetic G12 OCI fixture" }],
     }),
@@ -1220,11 +1318,19 @@ void test("G12 builds product images, records pinned upstream identity, and fail
       sizeBytes: nodeBaseIndexBytes.length,
     },
   };
+  const grafanaBaseMaterial = {sourceRef: toolchain.grafanaImage, platformManifestDigest: `sha256:${"f".repeat(64)}`, indexArtifact: {path:"artifacts/grafana-base-index.json", sha256: sha(grafanaBaseIndexBytes), sizeBytes: grafanaBaseIndexBytes.length}};
+  const grafanaLayerRoot = join(temp, "grafana-layer-root");
+  for (const [name, fixture] of Object.entries(pluginFixtures)) {
+    const dir = join(grafanaLayerRoot, "opt/grafana/plugins", name);
+    await mkdir(dir, {recursive:true});
+    await writeFile(join(dir, fixture.binName), fixture.binary);
+  }
+  const grafanaLayerBytes = execFileSync("tar", ["-cf", "-", "-C", grafanaLayerRoot, "."], {encoding:null});
+  const grafanaLayerDigest = `sha256:${sha(grafanaLayerBytes)}`;
   const scannerReference =
     "ghcr.io/aquasecurity/trivy@sha256:790fd66d1697395d8693d1acaa1ea702406a20f109b6fc7bac8db623eca6c06c";
   const pinnedRefs = new Set([
     toolchain.otelCollectorImage,
-    toolchain.grafanaImage,
     toolchain.lokiImage,
     toolchain.prometheusImage,
     toolchain.tempoImage,
@@ -1385,6 +1491,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
   let highFinding = false;
   let criticalFinding = false;
   let tamperOci = false;
+  let tamperGrafanaReport = false;
   const now = Date.parse("2026-10-24T12:00:00Z");
   const imageIdsByRef = new Map();
   const scannedImageIds = new Map();
@@ -1438,6 +1545,34 @@ void test("G12 builds product images, records pinned upstream identity, and fail
     let launchedContainer;
     let keepContainer = false;
     try {
+      if (command === "curl") {
+        const output = args[args.indexOf("--output") + 1];
+        const name = ["loki", "tempo", "prometheus"].find((key) => args.at(-1).includes(`grafana-${key}-datasource/releases/`));
+        await writeFile(output, name ? pluginFixtures[name].archive : keyFixture);
+        return;
+      }
+      if (command === "zipinfo" || command === "unzip") {
+        const archive = args.find((arg) => arg.endsWith(".zip"));
+        const name = ["loki", "tempo", "prometheus"].find((key) => archive?.endsWith(`/${key}.zip`));
+        assert.ok(name);
+        const fixture = pluginFixtures[name];
+        const names = [`${name}/`, `${name}/${fixture.binName}`, `${name}/plugin.json`, `${name}/MANIFEST.txt`];
+        if (command === "zipinfo") return names.map((entry) => `${entry.endsWith("/") ? "drwxr-xr-x" : "-rw-r--r--"} 3.0 unx 1 bx 1 stor 26-Oct-30 00:00 ${entry}`).join("\n");
+        if (args[0] === "-Z1") return names.join("\n");
+        const root = args[args.indexOf("-d") + 1];
+        await mkdir(join(root, name));
+        await writeFile(join(root, name, fixture.binName), fixture.binary, {mode: 0o755});
+        await writeFile(join(root, name, "plugin.json"), fixture.plugin);
+        await writeFile(join(root, name, "MANIFEST.txt"), fixture.signed);
+        return;
+      }
+      if (command === "gpg") {
+        if (args.includes("--import")) return;
+        const signed = args.at(-1); const name = signed.split("/").at(-2);
+        await writeFile(args[args.indexOf("--status-file") + 1], `[GNUPG:] VALIDSIG ${toolchain.grafanaSigningKeyFingerprint} fixture\n`);
+        await writeFile(args[args.indexOf("--output") + 1], JSON.stringify(pluginFixtures[name].manifest));
+        return;
+      }
       if (
         command === "docker" &&
         args[0] === "run" &&
@@ -1578,7 +1713,11 @@ void test("G12 builds product images, records pinned upstream identity, and fail
             0o777,
           0o755,
         );
-        if (service === "edge-nginx") {
+        if (service === "grafana") {
+          assert.ok(args.includes(`GRAFANA_IMAGE=${toolchain.grafanaImage}`));
+          assert.ok(args.some((arg) => arg.startsWith("grafana-plugins=")));
+          assert.equal(args[args.indexOf("--target") + 1], "grafana");
+        } else if (service === "edge-nginx") {
           assert.deepEqual(
             args.slice(args.indexOf("--file"), args.indexOf("--file") + 2),
             ["--file", "apps/edge-nginx/Dockerfile"],
@@ -1634,6 +1773,8 @@ void test("G12 builds product images, records pinned upstream identity, and fail
           .find((value) => value.startsWith("type=oci,tar=false,dest="))
           .slice("type=oci,tar=false,dest=".length);
         lastProductLayoutPath = ociLayout;
+        const buildLayerBytes = service === "grafana" ? grafanaLayerBytes : ociLayerBytes;
+        const buildLayerDigest = service === "grafana" ? grafanaLayerDigest : ociLayerDigest;
         const imageManifestBytes = Buffer.from(
           JSON.stringify({
             schemaVersion: 2,
@@ -1641,8 +1782,8 @@ void test("G12 builds product images, records pinned upstream identity, and fail
             layers: [
               {
                 mediaType: "application/vnd.oci.image.layer.v1.tar",
-                digest: ociLayerDigest,
-                size: ociLayerBytes.length,
+                digest: buildLayerDigest,
+                size: buildLayerBytes.length,
               },
             ],
           }),
@@ -1694,7 +1835,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
                           },
                         },
                       ]
-                    : [],
+                    : service === "grafana" ? [{uri:`pkg:docker/grafana/grafana@13.3.0-slim?digest=sha256:${grafanaBaseMaterial.indexArtifact.sha256}&platform=linux%2Famd64`, digest:{sha256:grafanaBaseMaterial.indexArtifact.sha256}}] : [],
             },
             runDetails: {
               metadata: {
@@ -1783,8 +1924,8 @@ void test("G12 builds product images, records pinned upstream identity, and fail
           ociConfigBytes,
         );
         await writeFile(
-          join(ociLayout, "blobs/sha256", ociLayerDigest.slice(7)),
-          ociLayerBytes,
+          join(ociLayout, "blobs/sha256", buildLayerDigest.slice(7)),
+          buildLayerBytes,
         );
         await writeFile(
           join(ociLayout, "blobs/sha256", attestationDigest.slice(7)),
@@ -1801,6 +1942,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
           indexBytes: nestedIndexBytes,
           manifestDigest: imageManifestDigest,
           manifestBytes: imageManifestBytes,
+          layerDigest: buildLayerDigest,
         });
         productBuilds += 1;
         builtTags.add(tag);
@@ -1808,9 +1950,9 @@ void test("G12 builds product images, records pinned upstream identity, and fail
         assert.ok(service);
         return;
       }
-      if (command === "tar") {
+      if (command === "tar" || command === "python3") {
         const output = execFileSync(command, args, { encoding: null });
-        return output;
+        return capture ? output.toString("utf8").trim() : output;
       }
       assert.equal(command, "docker");
       assert.ok(
@@ -1855,6 +1997,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
       ) {
         if (args[4] === toolchain.kafkaImage)
           return kafkaBaseIndexBytes.toString("utf8");
+        if (args[4] === toolchain.grafanaImage) return grafanaBaseIndexBytes.toString("utf8");
         assert.equal(args[4], toolchain.nodeImage);
         return nodeBaseIndexBytes.toString("utf8");
       }
@@ -2136,7 +2279,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
         } else {
           analysisRuns += 1;
           const service = report.slice(0, report.indexOf("."));
-          if (["kafka", "storage-helper"].includes(service)) {
+          if (["kafka", "storage-helper", "grafana"].includes(service)) {
             const expectedOci = productOciExpectations.get(service);
             assert.ok(expectedOci, `${service} OCI fixture exists before scan`);
             const imageMount = args
@@ -2160,7 +2303,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
               {
                 Config: `blobs/sha256/${configDigest.slice(7)}`,
                 RepoTags: [expectedOci.tag],
-                Layers: [`blobs/sha256/${ociLayerDigest.slice(7)}`],
+                Layers: [`blobs/sha256/${expectedOci.layerDigest.slice(7)}`],
               },
             ]);
             assert.equal(
@@ -2226,6 +2369,13 @@ void test("G12 builds product images, records pinned upstream identity, and fail
           if (report.endsWith(".vulnerabilities.json")) {
             await chmod(reportPath, 0o644);
             trivyVulnerabilityModes.push((await stat(reportPath)).mode & 0o777);
+          }
+          if (tamperGrafanaReport && report === "tempo.vulnerabilities.json") {
+            const path = join(outputRoot, "grafana.vulnerabilities.json");
+            const raw = JSON.parse(await readFile(path));
+            raw.Results.push({Target:"late-change", Vulnerabilities:[{Severity:"HIGH"}]});
+            await writeFile(path, JSON.stringify(raw));
+            tamperGrafanaReport = false;
           }
           if (
             tamperDbDuringVulnerabilityScan &&
@@ -2452,7 +2602,6 @@ void test("G12 builds product images, records pinned upstream identity, and fail
   }
   for (const service of [
     "otel-collector",
-    "grafana",
     "loki",
     "prometheus",
     "tempo",
@@ -2473,21 +2622,21 @@ void test("G12 builds product images, records pinned upstream identity, and fail
   }
   assert.equal(lastProductLayoutPath, undefined);
   await assert.rejects(lstat(lastUpstreamTarPath), { code: "ENOENT" });
-  assert.equal(imageExports, 5);
-  assert.equal(productBuilds, 17);
+  assert.equal(imageExports, 4);
+  assert.equal(productBuilds, 18);
   assert.deepEqual(
     [...builtServices].sort((a, b) => a.localeCompare(b, "en")),
-    [...RUNTIME_NAMES, "storage-helper", "edge-nginx", "kafka"].sort((a, b) =>
+    [...RUNTIME_NAMES, "grafana", "storage-helper", "edge-nginx", "kafka"].sort((a, b) =>
       a.localeCompare(b, "en"),
     ),
   );
-  assert.equal(upstreamPulls, 6);
-  assert.equal(imageRemovals, 6);
+  assert.equal(upstreamPulls, 5);
+  assert.equal(imageRemovals, 5);
   assert.equal(
     imageRmTargets.every((target) => /^sha256:[0-9a-f]{64}$/u.test(target)),
     true,
   );
-  assert.equal(result.imageCleanup.length, 6);
+  assert.equal(result.imageCleanup.length, 5);
   assert.ok(
     result.imageCleanup.every(
       (image) =>
@@ -2517,6 +2666,84 @@ void test("G12 builds product images, records pinned upstream identity, and fail
     "path",
     "receiptSha256",
   ]);
+  const runtimeImages = await readVerifiedRuntimeImages({contextFile:contextPath, validateContext:validateSyntheticContext});
+  assert.deepEqual(runtimeImages.map((entry) => entry.service), [...RUNTIME_NAMES, "edge-nginx"]);
+  assert.ok(runtimeImages.every((entry) => /^sha256:[0-9a-f]{64}$/u.test(entry.imageId)));
+  const resultForRuntime = await readFile(join(outputDir, "result.json"));
+  for (const kind of ["missing", "duplicate", "invalid-id"]) {
+    const forged = JSON.parse(resultForRuntime);
+    const images = forged.provenance.images;
+    const i = images.findIndex((entry) => entry.service === RUNTIME_NAMES[0]);
+    if (kind === "missing") images.splice(i, 1);
+    if (kind === "duplicate") images.push(structuredClone(images[i]));
+    if (kind === "invalid-id") images[i].imageId = "sha256:invalid";
+    await writeFile(join(outputDir, "result.json"), JSON.stringify(forged));
+    await assert.rejects(readVerifiedRuntimeImages({contextFile:contextPath, validateContext:validateSyntheticContext}), /G12_(?:RUNTIME_IMAGE_PROVENANCE|GRAFANA_ADJUDICATION)_INVALID/u, kind);
+  }
+  await writeFile(join(outputDir, "result.json"), resultForRuntime);
+  const grafanaArchivePath = join(outputDir, "artifacts/grafana.oci.tar");
+  const grafanaArchiveBytes = await readFile(grafanaArchivePath);
+  await writeFile(grafanaArchivePath, "broken-grafana-archive");
+  assert.deepEqual(await readVerifiedRuntimeImages({contextFile:contextPath, validateContext:validateSyntheticContext}), runtimeImages);
+  await writeFile(grafanaArchivePath, grafanaArchiveBytes);
+  const grafanaReceipt = JSON.parse(await readFile(join(outputDir, "artifacts/grafana-receipt.json")));
+  const verifiedGrafana = await loadVerifiedGateImage({target:"grafana", contextFile:contextPath, validateContext:validateSyntheticContext, loadImage:false});
+  assert.equal(verifiedGrafana.imageId, grafanaReceipt.imageId);
+  assert.equal(grafanaReceipt.baseImage, toolchain.grafanaImage);
+  assert.equal(grafanaReceipt.buildInputBinding.vendorPlugins.effectiveFiles.tempo.sha256, toolchain.grafanaPlugins.tempo.binarySha256);
+  const rawPath = join(outputDir, "artifacts/grafana.vulnerabilities.json");
+  const rawBytes = await readFile(rawPath);
+  await writeFile(rawPath, Buffer.from("{}"));
+  await assert.rejects(loadVerifiedGateImage({target:"grafana", contextFile:contextPath, validateContext:validateSyntheticContext, loadImage:false}), /G12_GRAFANA_ADJUDICATION_INVALID/u);
+  await writeFile(rawPath, rawBytes);
+  const grafanaResultPath = join(outputDir, "result.json");
+  const decisionPath = join(outputDir, "artifacts/grafana-adjudication.json");
+  const originalResult = await readFile(grafanaResultPath);
+  const originalDecision = await readFile(decisionPath);
+  for (const severity of ["HIGH", "CRITICAL"]) {
+    const forgedRaw = JSON.parse(rawBytes);
+    forgedRaw.Results.push({Target: "unexpected", Vulnerabilities: [{VulnerabilityID: "CVE-2099-1111", Severity: severity}]});
+    const forgedBytes = Buffer.from(JSON.stringify(forgedRaw));
+    const forgedDecision = JSON.parse(originalDecision);
+    forgedDecision.rawReportSha256 = sha(forgedBytes);
+    const decisionBytes = Buffer.from(JSON.stringify(forgedDecision));
+    const forgedResult = JSON.parse(originalResult);
+    forgedResult.adjudication.sha256 = sha(decisionBytes);
+    forgedResult.reports.find((entry) => entry.path === "grafana.vulnerabilities.json").sha256 = sha(forgedBytes);
+    await writeFile(rawPath, forgedBytes);
+    await writeFile(decisionPath, decisionBytes);
+    await writeFile(grafanaResultPath, JSON.stringify(forgedResult));
+    await assert.rejects(loadVerifiedGateImage({target:"grafana", contextFile:contextPath, validateContext:validateSyntheticContext, loadImage:false}), /G12_GRAFANA_ADJUDICATION_INVALID/u);
+    for (const target of ["kafka", "storage-helper"]) await assert.rejects(loadVerifiedGateImage({target, contextFile:contextPath, validateContext:validateSyntheticContext, loadImage:false}), /G12_GRAFANA_ADJUDICATION_INVALID/u);
+    // Matching per-report findings must still agree with the aggregate evaluation.
+    forgedResult.reports.find((entry) => entry.path === "grafana.vulnerabilities.json").findings[severity.toLowerCase()] = 1;
+    await writeFile(grafanaResultPath, JSON.stringify(forgedResult));
+    await assert.rejects(loadVerifiedGateImage({target:"grafana", contextFile:contextPath, validateContext:validateSyntheticContext, loadImage:false}), /G12_GRAFANA_ADJUDICATION_INVALID/u);
+  }
+  await writeFile(rawPath, rawBytes);
+  await writeFile(decisionPath, originalDecision);
+  const mismatchedReportHash = JSON.parse(originalResult);
+  mismatchedReportHash.reports.find((entry) => entry.path === "grafana.vulnerabilities.json").sha256 = "0".repeat(64);
+  await writeFile(grafanaResultPath, JSON.stringify(mismatchedReportHash));
+  await assert.rejects(loadVerifiedGateImage({target:"grafana", contextFile:contextPath, validateContext:validateSyntheticContext, loadImage:false}), /G12_GRAFANA_ADJUDICATION_INVALID/u);
+  const otherPath = join(outputDir, "artifacts/kafka.vulnerabilities.json");
+  const otherBytes = await readFile(otherPath);
+  const forgedOther = JSON.parse(otherBytes);
+  forgedOther.Results.push({Target: "unexpected", Vulnerabilities: [{Severity: "HIGH"}]});
+  const forgedOtherBytes = Buffer.from(JSON.stringify(forgedOther));
+  const forgedOtherResult = JSON.parse(originalResult);
+  const otherEntry = forgedOtherResult.reports.find((entry) => entry.path === "kafka.vulnerabilities.json");
+  otherEntry.sha256 = sha(forgedOtherBytes);
+  otherEntry.findings.high = 1;
+  await writeFile(otherPath, forgedOtherBytes);
+  await writeFile(grafanaResultPath, JSON.stringify(forgedOtherResult));
+  await assert.rejects(loadVerifiedGateImage({target:"grafana", contextFile:contextPath, validateContext:validateSyntheticContext, loadImage:false}), /G12_GRAFANA_ADJUDICATION_INVALID/u);
+  await writeFile(otherPath, otherBytes);
+  const duplicateReport = JSON.parse(originalResult);
+  duplicateReport.reports[0] = structuredClone(duplicateReport.reports[1]);
+  await writeFile(grafanaResultPath, JSON.stringify(duplicateReport));
+  await assert.rejects(loadVerifiedGateImage({target:"grafana", contextFile:contextPath, validateContext:validateSyntheticContext, loadImage:false}), /G12_GRAFANA_ADJUDICATION_INVALID/u);
+  await writeFile(grafanaResultPath, originalResult);
   const storageReceiptPath = join(
     outputDir,
     "artifacts/storage-helper-receipt.json",
@@ -2695,7 +2922,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
   const checksumInventory = JSON.parse(
     await readFile(join(outputDir, "artifacts/checksums.json"), "utf8"),
   );
-  assert.equal(checksumInventory.length, 52);
+  assert.equal(checksumInventory.length, 59);
   assert.ok(
     checksumInventory.some(
       (entry) =>
@@ -2720,7 +2947,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
     savedResult.provenance.images
       .filter((image) => image.identityStatus)
       .map((image) => [image.service, image.identityStatus]),
-    ["otel-collector", "grafana", "loki", "prometheus", "tempo"].map((name) => [
+    ["otel-collector", "loki", "prometheus", "tempo"].map((name) => [
       name,
       "PINNED_DIGEST_VERIFIED",
     ]),
@@ -2731,7 +2958,6 @@ void test("G12 builds product images, records pinned upstream identity, and fail
       .map((image) => image.sourceReference),
     [
       toolchain.otelCollectorImage,
-      toolchain.grafanaImage,
       toolchain.lokiImage,
       toolchain.prometheusImage,
       toolchain.tempoImage,
@@ -2843,12 +3069,12 @@ void test("G12 builds product images, records pinned upstream identity, and fail
   });
   assert.equal(failedPullResult.code, "COMMAND_FAILED");
   assert.deepEqual(failedPullResult.cleanupFailures, []);
-  assert.equal(failedPullResult.reports.length, 36);
+  assert.equal(failedPullResult.reports.length, 38);
   assert.equal(failedPullResult.provenance.status, "PARTIAL");
   assert.equal(
     failedPullResult.provenance.images.filter((image) => !image.identityStatus)
       .length,
-    17,
+    18,
   );
   assert.equal(imageRmTargets.length, removalsBeforePullFailure + 1);
   assert.deepEqual(
@@ -3113,6 +3339,18 @@ void test("G12 builds product images, records pinned upstream identity, and fail
 
   highFinding = false;
   criticalFinding = false;
+  tamperGrafanaReport = true;
+  const changedGrafanaResult = await runSecurityScan({
+    contextFile: contextPath,
+    outputDir: join(gateArtifactsDir, "supply-chain-changed-grafana"),
+    run: fakeRun,
+    clock: () => fakeNow,
+    statfsFn: async () => ({ bavail: 30 * 1024 ** 3, bsize: 1 }),
+    validateContext: validateSyntheticContext,
+    lockPath: join(temp, "scanner-changed-grafana.lock"),
+  });
+  assert.equal(changedGrafanaResult.status, "FAIL");
+  assert.equal(changedGrafanaResult.code, "GRAFANA_SCAN_REPORT_CHANGED");
   tamperOci = true;
   const tamperedResult = await runSecurityScan({
     contextFile: contextPath,

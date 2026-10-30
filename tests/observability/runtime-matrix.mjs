@@ -10,7 +10,7 @@ import {
 } from './runtime-matrix-probe.mjs';
 
 const ROOT = resolve(fileURLToPath(new URL('../..', import.meta.url)));
-const RUN_PROJECT = /^coffee-issue64-final-[a-f0-9]{8}$/u;
+const RUN_PROJECT = /^coffee-launch-[0-9]{8}t[0-9]{6}z-[a-f0-9]{7}$/u;
 const IMAGE_ID = /^sha256:[a-f0-9]{64}$/u;
 const CONTAINER_ID = /^[a-f0-9]{64}$/u;
 const TOOLING_NAMES = new Set([
@@ -548,7 +548,7 @@ async function forbiddenRuntimePackages() {
 function summarizeComposeReceipt(receipt, projectName) {
   const expectedHealth = ['/health/live', '/health/ready', '/metrics'];
   const postgresStorage = receipt?.recoveryProof?.postgresStorage;
-  if (receipt?.project !== projectName || receipt.runtimes !== 14 || receipt.nativeIngress !== 'edge-nginx' ||
+  if (receipt?.proofKind !== 'observability-fixture' || receipt?.project !== projectName || receipt.runtimes !== 14 || receipt.nativeIngress !== 'edge-nginx' ||
       receipt.kafka !== true || receipt.ephemeralKafkaBroker !== true || receipt.credentialSource !== 'local-fixture' ||
       receipt.telemetry !== true || receipt.dbIntegrationProof !== true || receipt.gracefulShutdown !== true ||
       receipt.recoveryProof === null || typeof receipt.recoveryProof !== 'object' ||
@@ -582,7 +582,7 @@ export async function verifyRuntimeMetricMatrix({
       typeof onRolesReady !== 'function' || typeof onCleanup !== 'function' || typeof verifyMetricFamily !== 'function' ||
       typeof sourceIdentity !== 'function' ||
       !/^\d+\.\d+\.\d+$/u.test(nodeVersion ?? '') || !/^\d+\.\d+\.\d+$/u.test(nginxVersion ?? '')) fail('runtime matrix inputs invalid');
-  const projectSuffix = projectName.slice(-8);
+  const projectSuffix = projectName.slice('coffee-launch-'.length);
   const [source, forbiddenPackages] = await Promise.all([sourceEvidence(sourceIdentity), forbiddenRuntimePackages()]);
   const toolchain = parseJson(await readFile(resolve(ROOT, 'config/toolchain-versions.json'), 'utf8'), 'runtime matrix BOM invalid');
   if (toolchain.node !== nodeVersion || toolchain.nginxVersion !== nginxVersion) fail('runtime matrix BOM version mismatch');
@@ -671,7 +671,7 @@ export async function verifyRuntimeMetricMatrix({
     const {runComposeSmoke} = await import('../../tools/compose-smoke.mjs');
     if (typeof runComposeSmoke !== 'function') fail('runtime matrix Compose runner unavailable');
     smoke = await runComposeSmoke({
-      args: ['--recovery-proof', '--project-name', projectName],
+      args: ['--recovery-proof', '--observability-fixture', '--project-name', projectName],
       observability: {exporterToken, onReady, onCleanup: cleanup},
     });
   } catch (cause) {

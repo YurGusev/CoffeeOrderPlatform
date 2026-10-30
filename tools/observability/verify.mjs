@@ -1,8 +1,9 @@
 import {execFileSync, spawn, spawnSync} from 'node:child_process';
 import {createHash, randomBytes} from 'node:crypto';
 import {accessSync, constants as fsConstants, existsSync} from 'node:fs';
-import {lstat, mkdir, mkdtemp, readFile, readdir, rm, writeFile} from 'node:fs/promises';
+import {lstat, mkdir, mkdtemp, readFile, readdir, rm, rmdir, writeFile} from 'node:fs/promises';
 import {basename, delimiter, dirname, isAbsolute, join, resolve} from 'node:path';
+import {tmpdir} from 'node:os';
 import {fileURLToPath} from 'node:url';
 import {dump as dumpYaml, load as loadYaml} from 'js-yaml';
 import {loadPlatformConfig} from '../../scripts/config-lib.mjs';
@@ -11,6 +12,7 @@ import {discoverContainerLogs, createAlloyConfig, createComposeOverride, createR
 import {ensurePrivateSecretDirectory, writePrivateSecret} from '../config-bootstrap/index.mjs';
 import {loadVerifiedGateImage, removeVerifiedGateImage} from '../verified-infrastructure-image.mjs';
 import {provisionStorage, removeStorage} from './storage.mjs';
+import {validateLaunchContext} from '../../verification/launch/v1/report.mjs';
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const NODE_RUNTIME_TARGETS = OBSERVABILITY_TARGETS.filter(runtime => runtime !== 'edge-nginx');
@@ -1411,13 +1413,14 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
   const collectorConfigPath = join(workDir, 'collector.alloy');
   const storage = {};
   const restoreStorage = {};
-  let backupDir;
+  let backupDir, storageRoot;
+  const storageDirectories = [];
   const cleanupErrors = [];
   const secrets = [];
   const evidence = {runId, status: 'FAIL', startedAt: new Date().toISOString(), provenanceStart,
     alerts: [], signals: [], limitations: [], phases: {startup: 'NOT_RUN', signals: 'NOT_RUN', alerts: 'NOT_RUN',
       outage: 'NOT_RUN', persistence: 'NOT_RUN', backupRestore: 'NOT_RUN', runtimeMatrix: 'NOT_RUN', memory: 'NOT_RUN', retention: 'NOT_RUN', launchPath: 'NOT_RUN', diskRecovery: 'NOT_RUN'}};
-  let config, toolchain, storageHelper, activePhase = 'startup', producerCreated = false, producerNetworkCreated = false, composeStarted = false;
+  let config, toolchain, storageHelper, verifiedGrafana, activePhase = 'startup', producerCreated = false, producerNetworkCreated = false, composeStarted = false;
   let diskPressureIdentity;
   const compose = args => run(['compose', '--project-name', project, '--file', composeFile, ...args]);
   const timeoutForHealth = () => Math.max(60000, config.platform.health.startupGraceMs + 30000);
@@ -1432,6 +1435,10 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
     evidence.bootstrapProbe = probe;
     storageHelper = await loadVerifiedGateImage({target: 'storage-helper', contextFile: process.env.COFFEE_LAUNCH_CONTEXT_FILE});
     evidence.storageHelper = {imageId: storageHelper.imageId, receiptSha256: storageHelper.receiptSha256, candidateSha: storageHelper.candidateSha};
+    verifiedGrafana = await loadVerifiedGateImage({target: 'grafana', contextFile: process.env.COFFEE_LAUNCH_CONTEXT_FILE});
+    evidence.grafanaImage = {imageId: verifiedGrafana.imageId, receiptSha256: verifiedGrafana.receiptSha256, candidateSha: verifiedGrafana.candidateSha, runId: verifiedGrafana.runId};
+    const validatedLaunch = await validateLaunchContext(process.env.COFFEE_LAUNCH_CONTEXT_FILE);
+    if (validatedLaunch.candidateRoot !== resolve(root)) throw new Error('G14 launch context candidate root differs from verifier root');
     const producerToken = randomBytes(32).toString('base64url');
     const adminPassword = randomBytes(32).toString('base64url');
     const redactionCanary = `g14-secret-${randomBytes(24).toString('hex')}`;
@@ -1443,8 +1450,14 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
     fixtureConfig.telemetry.environment = fixtureConfig.environment;
     const fixturePath = join(workDir, 'fixture.json');
     await writePrivateSecret(fixturePath, `${JSON.stringify({config: fixtureConfig, runId, exporterToken: producerToken, redactionCanary})}\n`);
-    for (const name of ['grafana', 'loki', 'prometheus', 'tempo'])
-      storage[name] = provisionStorage({name: `${project}-${name}-data`, maxDiskBytes: config.telemetry[name].maxDiskBytes, storageHelperImage: storageHelper.imageId, run});
+    storageRoot = await mkdtemp(join(tmpdir(), `${project}-storage-`));
+    for (const name of ['grafana', 'loki', 'prometheus', 'tempo']) {
+      const volumeName = `${project}-${name}-data`;
+      const backingDirectory = join(storageRoot, volumeName);
+      await mkdir(backingDirectory, {mode: 0o700});
+      storageDirectories.push(backingDirectory);
+      storage[name] = provisionStorage({name: volumeName, maxDiskBytes: config.telemetry[name].maxDiskBytes, storageHelperImage: storageHelper.imageId, backingDirectory, run});
+    }
     const storageVolumes = Object.fromEntries(Object.entries(storage).map(([name, value]) => [name, value.volumeName]));
     ensureBackendOwnership({storageVolumes, grafanaAdminSecretPath: secretPath, nodeImage: toolchain.nodeImage, runDocker: run});
     run(['network', 'create', '--driver', 'bridge', '--internal', '--opt', 'com.docker.network.bridge.enable_ip_masquerade=false',
@@ -1475,7 +1488,7 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
       await writeFile(path, dumpYaml(value, {noRefs: true, lineWidth: 120}), {mode: 0o444});
       backendConfigPaths[name] = path;
     }
-    const generated = createComposeOverride({config, imageRefs: toolchain, alertSinkImage: storageHelper.imageId, logFiles, collectorConfigPath, probePath,
+    const generated = createComposeOverride({config, imageRefs: toolchain, grafanaImage: verifiedGrafana.imageId, alertSinkImage: storageHelper.imageId, logFiles, collectorConfigPath, probePath,
       storageVolumes, backendConfigPaths, grafanaAdminSecretPath: secretPath, alertEvidenceDir: alertDir, observabilityNetworkName: backendNetwork});
     const services = Object.fromEntries(['grafana', 'loki', 'prometheus', 'tempo', 'otel-collector', 'alert-sink']
       .map(name => [name, generated.services[name]]));
@@ -1663,14 +1676,14 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
 
     startPhase('runtimeMatrix');
     const {verifyRuntimeMetricMatrix} = await import('../../tests/observability/runtime-matrix.mjs');
-    const matrixProject = `coffee-issue64-final-${randomBytes(4).toString('hex')}`;
+    const matrixProject = validatedLaunch.context.resources.composeProject;
     let collectorReconfigured = false;
     const configureCollector = async (selectedLogs, networks = []) => {
       if (selectedLogs !== logFiles) collectorReconfigured = true;
       const text = createAlloyConfig({config, logFiles: selectedLogs, exporterToken: producerToken});
       await writePrivateSecret(collectorConfigPath, text);
       ensureCollectorConfigOwnership({collectorConfigPath, nodeImage: toolchain.nodeImage, runDocker: run});
-      const override = createComposeOverride({config, imageRefs: toolchain, alertSinkImage: storageHelper.imageId, logFiles: selectedLogs, collectorConfigPath, probePath,
+      const override = createComposeOverride({config, imageRefs: toolchain, grafanaImage: verifiedGrafana.imageId, alertSinkImage: storageHelper.imageId, logFiles: selectedLogs, collectorConfigPath, probePath,
         storageVolumes, backendConfigPaths, grafanaAdminSecretPath: secretPath, alertEvidenceDir: alertDir, observabilityNetworkName: backendNetwork});
       services['otel-collector'].volumes = override.services['otel-collector'].volumes;
       await writeFile(composeFile, dumpYaml(fixtureCompose, {noRefs: true, lineWidth: 120}), {mode: 0o600});
@@ -2265,10 +2278,15 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
     const originalVolumes = structuredClone(fixtureCompose.volumes);
     let backendStopStarted = false;
     try {
-      backupDir = await mkdtemp('/tmp/coffee-g14-backup-');
+      backupDir = await mkdtemp(join(tmpdir(), `${project}-backup-`));
       const restoreProject = `coffee-g14-${newRunId()}`;
-      for (const name of backupNames)
-        restoreStorage[name] = provisionStorage({name: `${restoreProject}-${name}-data`, maxDiskBytes: config.telemetry[name].maxDiskBytes, storageHelperImage: storageHelper.imageId, run});
+      for (const name of backupNames) {
+        const volumeName = `${restoreProject}-${name}-data`;
+        const backingDirectory = join(storageRoot, volumeName);
+        await mkdir(backingDirectory, {mode: 0o700});
+        storageDirectories.push(backingDirectory);
+        restoreStorage[name] = provisionStorage({name: volumeName, maxDiskBytes: config.telemetry[name].maxDiskBytes, storageHelperImage: storageHelper.imageId, backingDirectory, run});
+      }
       backendStopStarted = true;
       for (const name of ['otel-collector', ...backupNames]) {
         const stopped = stopContainerGracefully({run, name: containerIds[name], graceMs: config.platform.shutdownGraceMs});
@@ -2645,6 +2663,13 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
     if (producerNetworkCreated) { try { run(['network', 'rm', producerNetwork]); } catch (error) { cleanupErrors.push(`network cleanup: ${cleanError(error)}`); } }
     for (const item of [...Object.values(restoreStorage), ...Object.values(storage)].reverse()) {
       try { removeStorage({storage: item, storageHelperImage: storageHelper.imageId, run}); } catch (error) { cleanupErrors.push(`storage cleanup: ${cleanError(error)}`); }
+    }
+    for (const directory of storageDirectories) {
+      try { await rmdir(directory); } catch (error) { if (error.code !== 'ENOENT') cleanupErrors.push(`storage directory cleanup: ${cleanError(error)}`); }
+    }
+    if (storageRoot) { try { await rmdir(storageRoot); } catch (error) { cleanupErrors.push(`storage root cleanup: ${cleanError(error)}`); } }
+    if (verifiedGrafana) {
+      try { removeVerifiedGateImage({target: 'grafana', image: verifiedGrafana}); } catch (error) { cleanupErrors.push(`Grafana image cleanup: ${cleanError(error)}`); }
     }
     if (storageHelper) {
       try { removeVerifiedGateImage({target: 'storage-helper', image: storageHelper}); } catch (error) { cleanupErrors.push(`verified image cleanup: ${cleanError(error)}`); }

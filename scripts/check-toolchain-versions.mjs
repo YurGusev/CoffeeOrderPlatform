@@ -484,6 +484,23 @@ async function checkManifest(root) {
     )
       fail("TELEMETRY-BOM", `${key}: required immutable image ref`);
   }
+  if (!/^grafana\/tempo:main-a0826bc-2302-1@sha256:[0-9a-f]{64}$/.test(manifest.tempoImage ?? "") || manifest.tempoVersion !== "3.2.0-dev")
+    fail("TELEMETRY-BOM", "tempoImage: expected approved dev release");
+  for (const name of ["loki", "tempo", "prometheus"]) {
+    const pin = manifest.grafanaPlugins?.[name];
+    if (!/^\d+\.\d+\.\d+$/.test(pin?.version ?? "") ||
+        ["zipSha256", "manifestSha256", "binarySha256"].some((key) => !/^[0-9a-f]{64}$/.test(pin?.[key] ?? "")))
+      fail("TELEMETRY-BOM", `grafanaPlugins.${name}: exact release and hashes required`);
+  }
+  if (!/^[0-9a-f]{64}$/.test(manifest.grafanaSigningKeySourceSha256 ?? "") ||
+      !/^[A-F0-9]{40}$/.test(manifest.grafanaSigningKeyFingerprint ?? "") ||
+      !manifest.grafanaTempoModule?.version || !manifest.grafanaTempoModule?.h1 ||
+      manifest.grafanaTempoModule?.replacement !== null ||
+      !/^[0-9a-f]{40}$/.test(manifest.grafanaTempoModule?.revision ?? "") ||
+      !Array.isArray(manifest.grafanaTempoModule?.fixCommits) ||
+      manifest.grafanaTempoModule.fixCommits.length !== 2 ||
+      manifest.grafanaTempoModule.fixCommits.some((hash) => !/^[0-9a-f]{40}$/.test(hash)))
+    fail("TELEMETRY-BOM", "Grafana signature and Tempo module evidence required");
   const foundation = await readJson(
     join(root, "platform/runtime-foundation-decision.json"),
   );
@@ -519,6 +536,8 @@ async function checkManifest(root) {
     "a16f1329e13e7273c4103f75d863ca625b75109e",
     "nginx official image source revision",
   );
+  if (!/^postgres:17\.11@sha256:[0-9a-f]{64}$/.test(manifest.postgresFixtureImage ?? ""))
+    fail("TOOLCHAIN-IMAGE", "postgresFixtureImage must use an exact digest");
   if (!/^node:26\.8\.1-alpine@sha256:[0-9a-f]{64}$/.test(manifest.nodeImage))
     fail("TOOLCHAIN-IMAGE", "nodeImage must use an exact digest");
   if (!/^apache\/kafka:4\.3\.2@sha256:[0-9a-f]{64}$/.test(manifest.kafkaImage))

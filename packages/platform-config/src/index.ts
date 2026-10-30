@@ -328,15 +328,35 @@ export type TelemetryConfig = Readonly<{
   logging: Readonly<{ maxSizeMiB: number; maxFiles: number }>;
   diskWatermarkPercent: number;
   externalReportingEnabled: false;
-  grafana: Readonly<{ endpoint: string; memoryLimitMiB: number; maxDiskBytes: number }>;
-  loki: Readonly<{ endpoint: string; memoryLimitMiB: number; maxDiskBytes: number; retentionDays: number }>;
-  prometheus: Readonly<{ endpoint: string; memoryLimitMiB: number; maxDiskBytes: number; retentionDays: number }>;
-  tempo: Readonly<{ endpoint: string; otlpEndpoint: string; memoryLimitMiB: number; maxDiskBytes: number; retentionDays: number }>;
+  grafana: Readonly<{
+    endpoint: string;
+    memoryLimitMiB: number;
+    maxDiskBytes: number;
+  }>;
+  loki: Readonly<{
+    endpoint: string;
+    memoryLimitMiB: number;
+    maxDiskBytes: number;
+    retentionDays: number;
+  }>;
+  prometheus: Readonly<{
+    endpoint: string;
+    memoryLimitMiB: number;
+    maxDiskBytes: number;
+    retentionDays: number;
+  }>;
+  tempo: Readonly<{
+    endpoint: string;
+    otlpEndpoint: string;
+    memoryLimitMiB: number;
+    maxDiskBytes: number;
+    retentionDays: number;
+  }>;
   alerts: Readonly<{
     version: 1;
     evaluationIntervalMs: number;
     notificationEndpoint: "http://alert-sink:9091/alerts";
-    diskUsage: Readonly<{forMs: 0}>;
+    diskUsage: Readonly<{ forMs: 0 }>;
     sinkMemoryMiB: number;
     notReady: Readonly<{ forMs: number; threshold: number }>;
     consumerLag: Readonly<{ forMs: number; threshold: number }>;
@@ -373,6 +393,7 @@ export type SecurityScanVerificationConfig = Readonly<{
   parallel: 1;
   minimumFreeDiskGiB: 20;
   maximumDatabaseAgeHours: 24;
+  approvedFixed: readonly ("CVE-2026-21728" | "CVE-2026-28377")[];
   egressRepositories: readonly [
     "ghcr.io/aquasecurity/trivy-db",
     "ghcr.io/aquasecurity/trivy-java-db",
@@ -614,6 +635,7 @@ export function parseSecurityScanVerification(
       "parallel",
       "minimumFreeDiskGiB",
       "maximumDatabaseAgeHours",
+      "approvedFixed",
       "egressRepositories",
     ],
     path,
@@ -637,6 +659,20 @@ export function parseSecurityScanVerification(
         `ожидалось нормативное значение ${expected}`,
       );
   }
+  const approvedFixed = stringArray(
+    source["approvedFixed"],
+    `${path}.approvedFixed`,
+  );
+  const approvedCves = ["CVE-2026-21728", "CVE-2026-28377"] as const;
+  if (
+    approvedFixed.length !== 0 &&
+    (approvedFixed.length !== 2 ||
+      approvedCves.some((cve) => !approvedFixed.includes(cve)))
+  )
+    throw new PlatformConfigError(
+      `${path}.approvedFixed`,
+      "разрешены только два согласованных already-fixed Tempo findings или пустой набор",
+    );
   const egressRepositories = stringArray(
     source["egressRepositories"],
     `${path}.egressRepositories`,
@@ -663,6 +699,9 @@ export function parseSecurityScanVerification(
     parallel: 1,
     minimumFreeDiskGiB: 20,
     maximumDatabaseAgeHours: 24,
+    approvedFixed: Object.freeze([
+      ...approvedFixed,
+    ]) as SecurityScanVerificationConfig["approvedFixed"],
     egressRepositories: Object.freeze([
       ...expectedRepositories,
     ]) as unknown as SecurityScanVerificationConfig["egressRepositories"],
@@ -2184,24 +2223,70 @@ function telemetryConfig(value: unknown): TelemetryConfig {
     ["maxSizeMiB", "maxFiles"],
     `${path}.logging`,
   );
-  if (source["externalReportingEnabled"] !== false) throw new PlatformConfigError(`${path}.externalReportingEnabled`, "внешняя телеметрия запрещена");
-  const diskWatermarkPercent = integerValue(source["diskWatermarkPercent"], `${path}.diskWatermarkPercent`);
+  if (source["externalReportingEnabled"] !== false)
+    throw new PlatformConfigError(
+      `${path}.externalReportingEnabled`,
+      "внешняя телеметрия запрещена",
+    );
+  const diskWatermarkPercent = integerValue(
+    source["diskWatermarkPercent"],
+    `${path}.diskWatermarkPercent`,
+  );
   const backend = (name: "grafana" | "loki" | "prometheus" | "tempo") => {
     const field = `${path}.${name}`;
     const item = record(source[name], field);
-    const keys = ["endpoint", "memoryLimitMiB", "maxDiskBytes", ...(name === "grafana" ? [] : ["retentionDays"]), ...(name === "tempo" ? ["otlpEndpoint"] : [])];
+    const keys = [
+      "endpoint",
+      "memoryLimitMiB",
+      "maxDiskBytes",
+      ...(name === "grafana" ? [] : ["retentionDays"]),
+      ...(name === "tempo" ? ["otlpEndpoint"] : []),
+    ];
     exactKeys(item, keys, field);
     const privateEndpoint = (key: string) => {
       const result = endpoint(item[key], `${field}.${key}`);
       const parsed = new URL(result);
-      if (parsed.hostname !== name || !parsed.port || Number(parsed.port) < 1 || parsed.pathname !== "/" || parsed.search || result.includes("?") || result.includes("#") || result.includes("@") || result.endsWith("/"))
-        throw new PlatformConfigError(`${field}.${key}`, "ожидался приватный HTTP origin с явным портом");
+      if (
+        parsed.hostname !== name ||
+        !parsed.port ||
+        Number(parsed.port) < 1 ||
+        parsed.pathname !== "/" ||
+        parsed.search ||
+        result.includes("?") ||
+        result.includes("#") ||
+        result.includes("@") ||
+        result.endsWith("/")
+      )
+        throw new PlatformConfigError(
+          `${field}.${key}`,
+          "ожидался приватный HTTP origin с явным портом",
+        );
       return result;
     };
-    const values = positive(item, ["memoryLimitMiB", "maxDiskBytes", ...(name === "grafana" ? [] : ["retentionDays"])], field);
-    if (values["maxDiskBytes"]! < 268435456 || (name !== "grafana" && values["retentionDays"]! < 3))
-      throw new PlatformConfigError(field, "недопустимый бюджет telemetry storage");
-    return Object.freeze({endpoint: privateEndpoint("endpoint"), ...values, ...(name === "tempo" ? {otlpEndpoint: privateEndpoint("otlpEndpoint")} : {})});
+    const values = positive(
+      item,
+      [
+        "memoryLimitMiB",
+        "maxDiskBytes",
+        ...(name === "grafana" ? [] : ["retentionDays"]),
+      ],
+      field,
+    );
+    if (
+      values["maxDiskBytes"]! < 268435456 ||
+      (name !== "grafana" && values["retentionDays"]! < 3)
+    )
+      throw new PlatformConfigError(
+        field,
+        "недопустимый бюджет telemetry storage",
+      );
+    return Object.freeze({
+      endpoint: privateEndpoint("endpoint"),
+      ...values,
+      ...(name === "tempo"
+        ? { otlpEndpoint: privateEndpoint("otlpEndpoint") }
+        : {}),
+    });
   };
   const grafana = backend("grafana") as TelemetryConfig["grafana"];
   const loki = backend("loki") as TelemetryConfig["loki"];
@@ -2249,9 +2334,16 @@ function telemetryConfig(value: unknown): TelemetryConfig {
     throw new PlatformConfigError(path, "telemetry budgets are inconsistent");
   const diskUsage = record(alerts["diskUsage"], `${path}.alerts.diskUsage`);
   exactKeys(diskUsage, ["forMs"], `${path}.alerts.diskUsage`);
-  if (diskUsage["forMs"] !== 0) throw new PlatformConfigError(`${path}.alerts.diskUsage.forMs`, "ожидалось немедленное предупреждение");
+  if (diskUsage["forMs"] !== 0)
+    throw new PlatformConfigError(
+      `${path}.alerts.diskUsage.forMs`,
+      "ожидалось немедленное предупреждение",
+    );
   if (alerts["notificationEndpoint"] !== "http://alert-sink:9091/alerts")
-    throw new PlatformConfigError(`${path}.alerts.notificationEndpoint`, "ожидался приватный alert sink");
+    throw new PlatformConfigError(
+      `${path}.alerts.notificationEndpoint`,
+      "ожидался приватный alert sink",
+    );
   if (alerts["version"] !== 1)
     throw new PlatformConfigError(
       `${path}.alerts.version`,
@@ -2284,8 +2376,11 @@ function telemetryConfig(value: unknown): TelemetryConfig {
       version: 1,
       evaluationIntervalMs: 60_000,
       notificationEndpoint: "http://alert-sink:9091/alerts",
-      diskUsage: Object.freeze({forMs: 0}),
-      sinkMemoryMiB: positiveIntegerValue(alerts["sinkMemoryMiB"], `${path}.alerts.sinkMemoryMiB`),
+      diskUsage: Object.freeze({ forMs: 0 }),
+      sinkMemoryMiB: positiveIntegerValue(
+        alerts["sinkMemoryMiB"],
+        `${path}.alerts.sinkMemoryMiB`,
+      ),
       notReady: alert("notReady"),
       consumerLag: alert("consumerLag"),
       outboxOldestAge: alert("outboxOldestAge"),

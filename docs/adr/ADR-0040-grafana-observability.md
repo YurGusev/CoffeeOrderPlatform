@@ -73,28 +73,38 @@ production IdP. Для Grafana возможно использование то�
 проверкой подписи ID token и явным role mapping. Новый IdP и изменение producer
 authentication этим решением не вводятся; scoped bearer token сохраняется.
 
-## Текущий допуск и непринимаемые пока кандидаты
+## Согласованная поставка и security admission
 
-Свежая диагностика выявила блокеры: Tempo 3.1.1 содержит `go-jose 4.1.4`
-(HIGH CVE-2026-116587), а Grafana 13.3.0 — 39 HIGH в bundled plugins.
-Эти pins ещё не допущены; успешный component startup их не исправляет.
+30.10.2026 владелец явно согласовал готовый официальный Tempo `3.2.0-dev`
+из commit `a0826bc` и Grafana Slim 13.3.0 с готовыми подписанными Loki 13.2.5,
+Prometheus 13.2.5 и Tempo 13.4.1 plugins. Tempo 3.1.1 с `go-jose 4.1.4` и
+полный Grafana 13.3.0 с 39 HIGH в bundled plugins исключены из выбранной поставки.
+Vendor Rust/Go не компилируется: target Grafana копирует проверенное содержимое
+трёх ZIP в `/opt/grafana/plugins`, вне persistent `/var/lib/grafana`.
+Финальный image ID приходит из G12 receipt, официальный slim pin является base.
 
-Отдельно проверены готовый официальный Tempo `3.2.0-dev` из commit `a0826bc`
-(`go-jose 4.1.6`, scan 0 HIGH/CRITICAL, 1 UNKNOWN) и частный COPY-only прототип
-Grafana Slim 13.3.0 с подписанными готовыми Loki 13.2.5, Prometheus 13.2.5 и
-Tempo 13.4.1 plugins. Vendor-код не компилировался. Прототип получил 2 HIGH
-и 10 UNKNOWN; оба HIGH указывают на Tempo pseudo-version `bcfe9f230c1d`.
-В exact upstream commit подтверждены оба соответствующих исправления, но
-строгий image scan остаётся отрицательным и исключения не применялись.
-Путь plugins вынесен за пределы Grafana data volume в следующем частном
-прототипе; его файлы побайтно совпали, отдельный новый image scan не запускался.
-Это исследовательские артефакты без G12 BuildKit attestation.
+Разрешение ограничено CVE-2026-21728 и CVE-2026-28377 для exact Tempo plugin
+binary `292f1875dbcc18125701cca2762da7e65300a4ca3ea3c4105f24b7cd57694588`.
+Независимая проверка связала подписанный binary с module checksum
+`h1:BphMCaYqWY+j1fdRPNFPkYE4A4QIev1KlHjRkSVJ8O4=`, отсутствием replacement
+и exact commit `bcfe9f230c1de0f79cfd2110b38062e0f41c81e9`. Его исходники содержат
+оба fixes: `650eb1985a0776789c8564122990f588a742356f` и
+`bb8ca663db34a0980c9758b40d918fda3b4dbec3`. Это artifact-specific already-fixed
+классификация; воспроизводимая компиляция vendor binary не заявляется.
 
-Использование dev-версии Tempo и учёт исправленной pseudo-version требуют
-отдельного решения владельца и независимой проверки. Они пока не заменяют
-production pins и не разрешают VEX для неисправленной `go-jose 4.1.5`.
-Формальные G12/G14, полная runtime matrix, persistence/TTL/restore и новый
-accepted handoff #210 остаются неподтверждёнными; merge до них запрещён.
+Единственная policy — `verification.securityScan.approvedFixed`: пустой набор
+или ровно два согласованных CVE. BOM хранит exact ZIP/manifest/binary hashes,
+ключ подписи и module identity. Изменение BOM не расширяет закрытый approved
+набор. G12 сохраняет raw HIGH, отдельно фиксирует resolvedFixed и unresolvedHigh,
+проверяет физические файлы финального OCI и связывает решение с exact candidate,
+run, manifest/platform и image ID. Любой иной HIGH, CRITICAL или несовпадение
+identity блокирует допуск. VEX для неисправленной `go-jose 4.1.5` запрещён.
+MEDIUM/LOW/UNKNOWN остаются в отчётах; «0 CVE» не утверждается.
+
+Диагностические prototypes подтвердили три сигнала, подписи plugins, запрос
+метрики через Grafana и stop/recreate Grafana на том же fixture volume. Они
+не имеют G12 BuildKit attestation. Полные G12/G14, runtime matrix,
+persistence/TTL/restore и accepted handoff #210 ещё должны пройти до merge.
 
 ## Источники
 

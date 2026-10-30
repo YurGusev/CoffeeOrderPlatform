@@ -11,6 +11,7 @@ verification:
     parallel: 1
     minimumFreeDiskGiB: 20
     maximumDatabaseAgeHours: 24
+    approvedFixed: [CVE-2026-21728, CVE-2026-28377]
     egressRepositories:
       - ghcr.io/aquasecurity/trivy-db
       - ghcr.io/aquasecurity/trivy-java-db

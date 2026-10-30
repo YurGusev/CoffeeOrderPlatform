@@ -29,6 +29,22 @@ Collector применяет memory limiter, batch, конечные queues, tim
 
 Alloy UI, readiness и диагностика доступны только на loopback контейнера; producer OTLP ingress аутентифицирован scoped bearer token. Grafana и backend API не публикуют host ports; anonymous Grafana выключен. Внешние usage reports, Grafana update checks и plugin preinstall выключены (`GF_PLUGINS_PREINSTALL_DISABLED=true`); notifications идут в локальный ограниченный sink. Grafana работает как UID 472, Loki и Tempo как 10001, Prometheus как 65534; Alloy использует UID 0 без capabilities для доступа к выбранным log paths. Read-only mounts четырёх telemetry volumes позволяют Alloy измерять filesystem, не открывая host root.
 
+## Образы и G12
+
+Grafana собирается только из готового official slim и трёх подписанных ZIP;
+Go/Rust не компилируются. Её финальный image ID и ID storage-helper берутся из
+проверенных G12 receipts. Slim ref в BOM является base. Plugins находятся в
+`/opt/grafana/plugins`, данные — в `/var/lib/grafana`; обновление image не должно
+использовать старые binaries из data volume. Tempo использует согласованный
+готовый dev image по immutable digest; его стабильность проверяется G14.
+
+Policy `verification.securityScan.approvedFixed` разрешает только два указанных
+в ADR-0040 already-fixed Tempo findings для exact artifact identity. Raw scan и
+UNKNOWN сохраняются. Изменение package/version/hash, иной HIGH/CRITICAL или
+несогласованные evidence завершаются FAIL. Перед запуском G13/G14 фактические
+ID всех 14 Node images и nginx сравниваются с проверенными G12 IDs; rebuild
+сам по себе не доказывает равенство. Непрохождение проверки останавливает startup.
+
 ## Хранение и подготовка
 
 Четыре отдельных bounded ext4 volume принадлежат Grafana, Loki, Prometheus и Tempo; Loki/Prometheus/Tempo настроены на retention 3 дня. Только storage init helper получает привилегии. NTFS не используется непосредственно как TSDB filesystem. После reboot provisioner может восстановить loop attachment к сохранённому backing file только при отсутствии ссылок контейнеров; чужие volumes он не переиспользует. Не удаляйте persistent volumes или business storage при cleanup. Recovery и restore требуют отдельной проверки, сохранённый файл сам по себе не является restore PASS.
@@ -57,6 +73,21 @@ Loki WAL использует native `disk_full_threshold: 0.8`; отдельн�
 
 Runtime metric matrix охватывает 14 Node runtime и native nginx до штатного cleanup: self-mTLS live/ready/text metrics и ожидаемые 4xx, OTLP HTTP/error и producer metrics, 10 DB-waiting, lag двух durable Kafka consumers с committed offsets и пять scoped Outbox-age series. Cold `realtime-gateway` до consume/commit имеет неизвестный lag (`-1`), отмеченный `ACTIVITY_DEPENDENT / NOT_ASSERTED_WITHOUT_ACTIVITY`; launch-фаза проверяет его после реальной активности. Событийные и транзакционные samples требуют активности шести owner roles и SQL-backed convergence helper, который не заменяет постоянный runtime. Сканируются 15 final images по фактическим IDs.
 
+G14 выбирает `--observability-fixture` через programmatic hooks: отдельный
+PostgreSQL с PGDATA в tmpfs 512 MiB, временный Kafka и локальный simulated
+provider. Проверенный G12 context остаётся у host verifier; fixture runtime
+его не получает. Этот режим не читает G08 credentials и не подтверждает
+изоляцию существующей business БД. Обычный recovery-proof сохраняет свои
+launch guards. Отдельный launch-path использует тот же pinned PostgreSQL
+fixture image и ограниченный tmpfs.
+
 Convergence helper удерживает periodic exporter до подтверждения в Prometheus: `unknown_outcomes_current=1` перед recovery, затем `unknown_outcomes_current=0` и `recovered_applied=1` перед остановкой. Каждая фаза подтверждается run-scoped checkpoint в `/results`; локальные значения и `forceFlush` не доказывают доставку. Истечение bounded ожидания завершает proof с FAIL и cleanup.
 
 Частичные component checks readiness/auth/provisioning четырёх backend и Alloy не заменяют формальные G12/G14, полный 15-runtime matrix, persistence, TTL и restore: они пока не подтверждены. #13 отдельно принимает full-system SLO, chaos/failure, capacity и сквозные browser/business/DB/Kafka/SSE критерии. При отказе проверяйте health и loss counters, не повторяйте business effects; при disk pressure освобождайте только собственные telemetry данные и проверяйте восстановление. Не удаляйте `collector_checkpoints` при обычном restart.
+
+Для изолированного G12/G14 можно задать системный `TMPDIR` на отдельном доступном
+хранилище; это operational locator временных файлов. G12 сохраняет требование
+20 GiB свободного места. G14 размещает там backing-файлы восьми disposable
+ext4 fixtures и backup-архивы; secret configs остаются в `/dev/shm`. Конечные
+TSDB/WAL volumes являются ограниченными ext4, NTFS не используется напрямую
+как TSDB filesystem. Production provisioning без fixture placement не меняется.

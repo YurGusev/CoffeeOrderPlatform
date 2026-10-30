@@ -1,13 +1,26 @@
 import {execFileSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
+import {lstatSync, realpathSync, readdirSync, rmdirSync, unlinkSync} from 'node:fs';
+import {basename, dirname, isAbsolute} from 'node:path';
 import {loadPlatformConfig} from '../../scripts/config-lib.mjs';
 import {loadVerifiedGateImage} from '../verified-infrastructure-image.mjs';
 
 // Operations создаёт отдельную файловую систему: telemetry не может заполнить business disk.
-export function provisionStorage({name, maxDiskBytes, storageHelperImage, run = args => execFileSync('docker', args, {encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe']}).trim()}) {
+export function provisionStorage({name, maxDiskBytes, storageHelperImage, backingDirectory, run = args => execFileSync('docker', args, {encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe']}).trim()}) {
   if (!/^coffee-[a-z0-9-]+$/u.test(name) || !Number.isSafeInteger(maxDiskBytes) || maxDiskBytes < 268435456 || !/^sha256:[0-9a-f]{64}$/u.test(storageHelperImage)) throw new Error('Invalid bounded telemetry storage specification');
   const backingVolume = `${name}-backing`;
   const lifecycle = /^coffee-g14-[a-f0-9-]{36}-(?:grafana|loki|prometheus|tempo)-data$/u.test(name) ? 'fixture' : 'persistent';
+  let directoryIdentity;
+  if (backingDirectory !== undefined) {
+    if (lifecycle !== 'fixture' || !isAbsolute(backingDirectory) || basename(backingDirectory) !== name ||
+        !/^coffee-g14-[a-f0-9-]{36}-storage-[A-Za-z0-9]{6}$/u.test(basename(dirname(backingDirectory))) ||
+        realpathSync(backingDirectory) !== backingDirectory) throw new Error('Invalid fixture backing directory');
+    const parent = lstatSync(dirname(backingDirectory));
+    const directory = lstatSync(backingDirectory);
+    if (![parent, directory].every(item => item.isDirectory() && !item.isSymbolicLink() && item.uid === process.getuid() && (item.mode & 0o777) === 0o700) ||
+        readdirSync(backingDirectory).length !== 0) throw new Error('Fixture backing directory must be private and empty');
+    directoryIdentity = {dev: directory.dev, ino: directory.ino};
+  }
   const owned = volume => {
     let info;
     try { info = JSON.parse(run(['volume', 'inspect', volume]))[0]; }
@@ -18,6 +31,7 @@ export function provisionStorage({name, maxDiskBytes, storageHelperImage, run = 
   const backing = owned(backingVolume);
   if (backing && (backing.Driver !== 'local' || (backing.Options && Object.keys(backing.Options).length > 0))) throw new Error('Existing telemetry backing volume has different storage options');
   const previous = owned(name);
+  if (backingDirectory !== undefined && (backing || previous)) throw new Error('Refusing to reuse a fixture backing directory or volume');
   if (previous && !backing) throw new Error('Existing telemetry volume is missing its backing volume');
   if (previous) {
     const options = previous.Options ?? {};
@@ -25,7 +39,8 @@ export function provisionStorage({name, maxDiskBytes, storageHelperImage, run = 
       throw new Error('Existing telemetry volume has different storage backing');
     if (run(['ps', '--all', '--filter', `volume=${name}`, '--format', '{{.ID}}']).trim()) throw new Error('Cannot rebind an active telemetry volume');
   }
-  run(['volume', 'create', '--label', 'coffee.owner=operations', '--label', `coffee.lifecycle=${lifecycle}`, backingVolume]);
+  run(['volume', 'create', '--label', 'coffee.owner=operations', '--label', `coffee.lifecycle=${lifecycle}`,
+    ...(backingDirectory === undefined ? [] : ['--driver', 'local', '--opt', 'type=none', '--opt', 'o=bind', '--opt', `device=${backingDirectory}`]), backingVolume]);
   const attachment = JSON.parse(run(['run', '--rm', '--privileged', '--network', 'none', '--mount', `type=volume,source=${backingVolume},target=/storage`, storageHelperImage, 'sh', '-ceu', `
     if [ -L /storage/telemetry.ext4 ]; then exit 1; fi
     if [ -e /storage/telemetry.ext4 ]; then
@@ -47,17 +62,38 @@ export function provisionStorage({name, maxDiskBytes, storageHelperImage, run = 
   `, 'storage', String(maxDiskBytes), String(Boolean(previous))]));
   const {device, attached} = attachment;
   const validDevice = typeof device === 'string' && /^\/dev\/loop[0-9]+$/u.test(device);
+  let fileIdentity;
   try {
     if (!validDevice) throw new Error('Cannot provision bounded telemetry loop device');
     if (typeof attached !== 'boolean') throw new Error('Cannot verify telemetry loop attachment');
+    if (backingDirectory !== undefined && attached !== true) throw new Error('Fixture backing loop is not newly attached');
+    if (backingDirectory !== undefined) {
+      const file = lstatSync(`${backingDirectory}/telemetry.ext4`);
+      if (!file.isFile() || file.isSymbolicLink() || file.nlink !== 1) throw new Error('Fixture backing file identity invalid');
+      fileIdentity = {dev: file.dev, ino: file.ino};
+    }
     if (previous && previous.Options.device !== device) run(['volume', 'rm', name]);
     const volumeLabels = previous?.Labels ?? {'coffee.owner': 'operations', 'coffee.lifecycle': lifecycle};
     run(['volume', 'create', '--driver', 'local', '--opt', 'type=ext4', '--opt', `device=${device}`, '--opt', 'o=nodev,nosuid,noexec', ...Object.entries(volumeLabels).flatMap(([key, value]) => ['--label', `${key}=${value}`]), name]);
-    return {volumeName: name, backingVolume, device, maxDiskBytes};
+    return {volumeName: name, backingVolume, device, maxDiskBytes,
+      ...(backingDirectory === undefined ? {} : {backingDirectory, directoryIdentity, fileIdentity})};
   } catch (error) {
     if (attached === true && validDevice) {
       try {
         run(['run', '--rm', '--privileged', '--network', 'none', '--mount', `type=volume,source=${backingVolume},target=/storage`, storageHelperImage, 'sh', '-ceu', 'losetup -j /storage/telemetry.ext4 | cut -d : -f 1 | grep -Fx "$1"; losetup -d "$1"', 'storage', device]);
+        if (backingDirectory !== undefined && fileIdentity) {
+          const info = owned(backingVolume);
+          const options = info?.Options ?? {};
+          const dir = lstatSync(backingDirectory);
+          const file = lstatSync(`${backingDirectory}/telemetry.ext4`);
+          if (info?.Driver !== 'local' || Object.keys(options).length !== 3 || options.type !== 'none' || options.o !== 'bind' || options.device !== backingDirectory ||
+              realpathSync(backingDirectory) !== backingDirectory || dir.dev !== directoryIdentity.dev || dir.ino !== directoryIdentity.ino ||
+              !file.isFile() || file.isSymbolicLink() || file.nlink !== 1 || file.dev !== fileIdentity.dev || file.ino !== fileIdentity.ino)
+            throw new Error('Fixture backing identity changed during failure cleanup');
+          run(['volume', 'rm', backingVolume]);
+          unlinkSync(`${backingDirectory}/telemetry.ext4`);
+          rmdirSync(backingDirectory);
+        }
       } catch (cleanupError) {
         throw new AggregateError([error, cleanupError], 'Telemetry storage provisioning and loop cleanup failed');
       }
@@ -69,14 +105,37 @@ export function provisionStorage({name, maxDiskBytes, storageHelperImage, run = 
 export function removeStorage({storage, storageHelperImage, run = args => execFileSync('docker', args, {encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe']})}) {
   if (!/^sha256:[0-9a-f]{64}$/u.test(storageHelperImage)) throw new Error('Invalid verified telemetry storage helper image');
   if (!/^coffee-g14-[a-f0-9-]{36}-(?:grafana|loki|prometheus|tempo)-data$/u.test(storage.volumeName) || storage.backingVolume !== `${storage.volumeName}-backing` || !/^\/dev\/loop[0-9]+$/u.test(storage.device)) throw new Error('Cleanup is restricted to disposable G14 storage');
+  if (storage.backingDirectory !== undefined) {
+    const path = storage.backingDirectory;
+    if (!isAbsolute(path) || basename(path) !== storage.volumeName || realpathSync(path) !== path ||
+        !/^coffee-g14-[a-f0-9-]{36}-storage-[A-Za-z0-9]{6}$/u.test(basename(dirname(path)))) throw new Error('Invalid fixture backing directory');
+    const parent = lstatSync(dirname(path));
+    const dir = lstatSync(path);
+    const file = lstatSync(`${path}/telemetry.ext4`);
+    if (![parent, dir].every(item => item.isDirectory() && !item.isSymbolicLink() && item.uid === process.getuid() && (item.mode & 0o777) === 0o700) ||
+        dir.dev !== storage.directoryIdentity?.dev || dir.ino !== storage.directoryIdentity?.ino ||
+        !file.isFile() || file.isSymbolicLink() || file.nlink !== 1 || file.dev !== storage.fileIdentity?.dev || file.ino !== storage.fileIdentity?.ino)
+      throw new Error('Fixture backing path identity changed');
+  }
   for (const volume of [storage.volumeName, storage.backingVolume]) {
     const info = JSON.parse(run(['volume', 'inspect', volume]))[0];
     if (info?.Labels?.['coffee.owner'] !== 'operations' || info.Labels['coffee.lifecycle'] !== 'fixture') throw new Error('Refusing to remove unrelated telemetry volume');
+    if (storage.backingDirectory !== undefined) {
+      const options = info.Options ?? {};
+      const expected = volume === storage.backingVolume ? {type: 'none', o: 'bind', device: storage.backingDirectory}
+        : {type: 'ext4', o: 'nodev,nosuid,noexec', device: storage.device};
+      if (info.Driver !== 'local' || Object.keys(options).length !== 3 || Object.keys(expected).some(key => options[key] !== expected[key]))
+        throw new Error('Fixture volume storage options changed');
+    }
   }
   run(['volume', 'rm', storage.volumeName]);
   // Сопоставление backing file проверяется до detach; чужой loop device не трогаем.
   run(['run', '--rm', '--privileged', '--network', 'none', '--mount', `type=volume,source=${storage.backingVolume},target=/storage`, storageHelperImage, 'sh', '-ceu', 'losetup -j /storage/telemetry.ext4 | cut -d : -f 1 | grep -Fx "$1"; losetup -d "$1"', 'storage', storage.device]);
   run(['volume', 'rm', storage.backingVolume]);
+  if (storage.backingDirectory !== undefined) {
+    unlinkSync(`${storage.backingDirectory}/telemetry.ext4`);
+    rmdirSync(storage.backingDirectory);
+  }
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {

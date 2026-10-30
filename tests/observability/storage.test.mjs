@@ -1,12 +1,13 @@
 import assert from 'node:assert/strict';
 import {spawnSync} from 'node:child_process';
 import {createHash} from 'node:crypto';
-import {chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync} from 'node:fs';
+import {chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, symlinkSync, writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {delimiter, join} from 'node:path';
 import test from 'node:test';
 import {provisionStorage, removeStorage} from '../../tools/observability/storage.mjs';
 import {loadVerifiedGateImage} from '../../tools/verified-infrastructure-image.mjs';
+import {RUNTIME_NAMES} from '../../packages/platform-config/src/index.ts';
 
 const name = 'coffee-g14-00000000-0000-4000-8000-000000000001-loki-data';
 const storageHelperImage = `sha256:${'a'.repeat(64)}`;
@@ -242,8 +243,11 @@ void test('G12 binds storage helper to the Node base, receipt, index and image',
     const platformDigest = `sha256:${'d'.repeat(64)}`;
     const index = Buffer.from(JSON.stringify({schemaVersion: 2, mediaType: 'application/vnd.oci.image.index.v1+json', manifests: [{mediaType: 'application/vnd.oci.image.manifest.v1+json', digest: platformDigest, size: 1, platform: {os: 'linux', architecture: 'amd64'}}]}));
     const baseImage = `node:fixture@sha256:${hash(index)}`;
-    const platform = Buffer.from('platform');
-    const toolchain = Buffer.from(JSON.stringify({nodeImage: baseImage}));
+    const platform = Buffer.from(JSON.stringify({verification: {securityScan: {enabled: true, cpu: 2, memoryMiB: 2048, parallel: 1, minimumFreeDiskGiB: 20, maximumDatabaseAgeHours: 24, approvedFixed: [], egressRepositories: ['ghcr.io/aquasecurity/trivy-db', 'ghcr.io/aquasecurity/trivy-java-db']}}}));
+    const grafanaImage = `grafana:fixture@sha256:${hash(index)}`;
+    const pins = Object.fromEntries(['loki', 'tempo', 'prometheus'].map(name => [name, {version: '1.0.0', zipSha256: hash(`${name}-zip`), manifestSha256: hash(`${name}-manifest`), binarySha256: hash(`${name}-binary`)}]));
+    const toolchainData = {nodeImage: baseImage, grafanaImage, grafanaPlugins: pins, grafanaSigningKeySourceSha256: hash('key'), grafanaSigningKeyFingerprint: 'A'.repeat(40), grafanaTempoModule: {version: 'fixture', h1: 'fixture', revision: 'a'.repeat(40), fixCommits: ['b'.repeat(40), 'c'.repeat(40)], replacement: null}};
+    const toolchain = Buffer.from(JSON.stringify(toolchainData));
     const lockfile = Buffer.from('lock');
     const context = {runId, candidateSha, baseConfigSha256: hash(platform)};
     const environment = {runId, candidateSha, candidatePath: candidateRoot, dirty: false, configSha256: hash(platform), treeSha, toolchainVersionsSha256: hash(toolchain), lockfileSha256: hash(lockfile)};
@@ -257,6 +261,38 @@ void test('G12 binds storage helper to the Node base, receipt, index and image',
     const receiptBytes = Buffer.from(JSON.stringify(receipt));
     const image = {path: 'artifacts/storage-helper-receipt.json', receiptSha256: hash(receiptBytes), imageId: receipt.imageId, importTag: receipt.importTag, manifestDigest, ociArtifactPath: receipt.ociArtifact.path, ociArtifactSha256: hash(artifact)};
     const result = {gate: 'G12_SUPPLY_CHAIN', status: 'PASS', code: 'G12_SCAN_CLEAN', runId, candidateSha, storageHelper: image, provenance: {status: 'PASS', sourceRevision: candidateSha, treeSha, configSha256: hash(platform), toolchainVersionsSha256: hash(toolchain), lockfileSha256: hash(lockfile), images: [{service: 'storage-helper', imageId: receipt.imageId, manifestDigest, platformManifestDigest: platformDigest, provenanceStatus: 'PASS', metadataSha256: receipt.provenanceSha256, attestationSha256: receipt.attestationSha256, baseMaterial}]}};
+    const grafanaId = `sha256:${hash('grafana-image')}`;
+    const grafanaBase = {sourceRef: grafanaImage, platformManifestDigest: platformDigest, indexArtifact: {path: 'artifacts/grafana-base-index.json', sha256: hash(index), sizeBytes: index.length}};
+    const vendorPlugins = {treeSha256: hash('plugins'), treeBytes: 1, signingKeySourceSha256: toolchainData.grafanaSigningKeySourceSha256, signingKeyFingerprint: toolchainData.grafanaSigningKeyFingerprint, plugins: pins, effectiveFiles: Object.fromEntries(Object.keys(pins).map(name => [name, {path: `/opt/grafana/plugins/${name}/gpx_grafana-${name}-datasource_linux_amd64`, sha256: pins[name].binarySha256, sizeBytes: 1, layerDigest: platformDigest}]))};
+    const grafanaReceipt = {...receipt, target: 'grafana', importTag: `coffee-g12-${hash(runId).slice(0, 12)}-grafana:latest`, baseImage: grafanaImage, imageId: grafanaId, baseMaterial: grafanaBase, buildInputBinding: {...receipt.buildInputBinding, sourceKind: 'git-archive-plus-verified-plugins', invocation: {...receipt.buildInputBinding.invocation, target: 'grafana'}, vendorPlugins}, ociArtifact: {...receipt.ociArtifact, path: 'artifacts/grafana.oci.tar'}};
+    const grafanaReceiptBytes = Buffer.from(JSON.stringify(grafanaReceipt));
+    result.grafana = {path: 'artifacts/grafana-receipt.json', receiptSha256: hash(grafanaReceiptBytes), imageId: grafanaId, importTag: grafanaReceipt.importTag, manifestDigest, ociArtifactPath: grafanaReceipt.ociArtifact.path, ociArtifactSha256: grafanaReceipt.ociArtifact.sha256};
+    result.provenance.images.push({service: 'grafana', imageId: grafanaId, manifestDigest, platformManifestDigest: platformDigest, provenanceStatus: 'PASS', metadataSha256: grafanaReceipt.provenanceSha256, attestationSha256: grafanaReceipt.attestationSha256, baseMaterial: grafanaBase});
+    const services = [...RUNTIME_NAMES, 'grafana', 'storage-helper', 'edge-nginx', 'kafka', 'otel-collector', 'loki', 'prometheus', 'tempo', 'lockfile'];
+    result.reports = [];
+    for (const service of services) {
+      const existing = result.provenance.images.find(entry => entry.service === service);
+      const imageId = existing?.imageId ?? `sha256:${hash(service)}`;
+      if (!existing && service !== 'lockfile') {
+        const upstream = ['otel-collector', 'loki', 'prometheus', 'tempo'].includes(service);
+        result.provenance.images.push(upstream
+          ? {service, imageId, manifestDigest, sourceReference: `${service}:fixture@${manifestDigest}`, identityStatus: 'PINNED_DIGEST_VERIFIED'}
+          : {service, imageId, manifestDigest, platformManifestDigest: platformDigest, provenanceStatus: 'PASS', metadataSha256: hash(`${service}-metadata`), attestationSha256: hash(`${service}-attestation`)});
+      }
+      for (const suffix of ['sbom.cdx.json', 'vulnerabilities.json']) {
+        const name = `${service}.${suffix}`;
+        const contents = Buffer.from(JSON.stringify(suffix === 'vulnerabilities.json' ? {Results: [], Metadata: service === 'lockfile' ? {} : {ImageID: imageId}} : {bomFormat: 'CycloneDX', specVersion: '1.6', version: 1, components: []}));
+        writeFileSync(join(artifacts, name), contents, {mode: 0o600});
+        result.reports.push({path: name, sha256: hash(contents), findings: {high: 0, critical: 0}});
+      }
+    }
+    result.findings = {high: 0, critical: 0};
+    result.evaluation = {rawHigh: 0, resolvedFixed: 0, unresolvedHigh: 0, critical: 0};
+    const decision = {schemaVersion: 1, gate: 'G12_SUPPLY_CHAIN', runId, candidateSha, treeSha, configSha256: hash(platform), toolchainVersionsSha256: hash(toolchain), lockfileSha256: hash(lockfile), imageId: grafanaId, manifestDigest, platformManifestDigest: platformDigest, rawReportSha256: result.reports.find(entry => entry.path === 'grafana.vulnerabilities.json').sha256, approvedFixed: [], vendorPlugins, module: toolchainData.grafanaTempoModule, decisions: [], evaluatedAt: '2026-10-30T00:00:00.000Z', openVex: null};
+    const decisionBytes = Buffer.from(JSON.stringify(decision));
+    result.adjudication = {path: 'artifacts/grafana-adjudication.json', sha256: hash(decisionBytes)};
+    writeFileSync(join(artifacts, 'grafana-receipt.json'), grafanaReceiptBytes, {mode: 0o600});
+    writeFileSync(join(artifacts, 'grafana-adjudication.json'), decisionBytes, {mode: 0o600});
     for (const [path, data] of [[join(artifacts, '../result.json'), JSON.stringify(result)], [join(artifacts, 'storage-helper-receipt.json'), receiptBytes], [join(artifacts, 'storage-helper.oci.tar'), artifact], [join(artifacts, 'storage-helper-base-index.json'), index]]) writeFileSync(path, data, {mode: 0o600});
     const options = {target: 'storage-helper', contextFile: join(root, 'context'), loadImage: false, validateContext: async () => ({context, candidateRoot, evidenceDir})};
     const validated = await loadVerifiedGateImage(options);
@@ -264,5 +300,74 @@ void test('G12 binds storage helper to the Node base, receipt, index and image',
     assert.ok(Object.isFrozen(validated));
     writeFileSync(join(artifacts, 'storage-helper-base-index.json'), '{}');
     await assert.rejects(loadVerifiedGateImage(options), /G12_KAFKA_BASE_MATERIAL_INVALID/u);
+  } finally { rmSync(root, {recursive: true, force: true}); }
+});
+
+void test('fixture backing placement binds an owned empty directory and cleans its exact file', () => {
+  const root = mkdtempSync(join(tmpdir(), 'coffee-g14-00000000-0000-4000-8000-000000000001-storage-'));
+  const dir = join(root, name);
+  mkdirSync(dir, {mode: 0o700});
+  const calls = [];
+  const volumes = new Map();
+  const run = args => {
+    calls.push(args);
+    if (args[0] === 'volume' && args[1] === 'inspect') {
+      if (!volumes.has(args[2])) throw Object.assign(new Error('no such volume'), {stderr: 'no such volume'});
+      return JSON.stringify([volumes.get(args[2])]);
+    }
+    if (args[0] === 'volume' && args[1] === 'create') {
+      const options = args.flatMap((arg, i) => arg === '--opt' ? [args[i + 1]] : []);
+      volumes.set(args.at(-1), {Driver: 'local', Labels: labels('fixture'), Options: Object.fromEntries(options.map(option => {
+        const split = option.indexOf('=');
+        return [option.slice(0, split), option.slice(split + 1)];
+      }))});
+      return '';
+    }
+    if (args[0] === 'volume' && args[1] === 'rm') { volumes.delete(args[2]); return ''; }
+    if (args[0] === 'run' && args[args.indexOf('-ceu') + 1]?.includes('losetup --find')) {
+      writeFileSync(join(dir, 'telemetry.ext4'), 'fixture');
+      return JSON.stringify({device: '/dev/loop18', attached: true});
+    }
+    return '';
+  };
+  try {
+    const storage = provisionStorage({name, maxDiskBytes: 1073741824, storageHelperImage, backingDirectory: dir, run});
+    assert.deepEqual(volumes.get(`${name}-backing`).Options, {type: 'none', o: 'bind', device: dir});
+    assert.throws(() => provisionStorage({name, maxDiskBytes: 1073741824, storageHelperImage, backingDirectory: dir, run}), /private and empty/u);
+    const info = volumes.get(`${name}-backing`);
+    info.Options.device = join(root, 'unrelated');
+    const before = calls.length;
+    assert.throws(() => removeStorage({storage, storageHelperImage, run}), /storage options changed/u);
+    assert.ok(calls.slice(before).every(args => args[0] === 'volume' && args[1] === 'inspect'));
+    assert.ok(existsSync(join(dir, 'telemetry.ext4')));
+    info.Options.device = dir;
+    renameSync(join(dir, 'telemetry.ext4'), join(dir, 'retained'));
+    symlinkSync(join(dir, 'retained'), join(dir, 'telemetry.ext4'));
+    assert.throws(() => removeStorage({storage, storageHelperImage, run}), /backing path identity changed/u);
+    assert.ok(existsSync(join(dir, 'retained')));
+    rmSync(join(dir, 'telemetry.ext4'));
+    renameSync(join(dir, 'retained'), join(dir, 'telemetry.ext4'));
+    removeStorage({storage, storageHelperImage, run});
+    assert.equal(existsSync(dir), false);
+    assert.ok(existsSync(root));
+    assert.equal(volumes.size, 0);
+  } finally { rmSync(root, {recursive: true, force: true}); }
+});
+
+void test('fixture backing placement refuses persistent names, symlinks and reused directories', () => {
+  const root = mkdtempSync(join(tmpdir(), 'coffee-g14-00000000-0000-4000-8000-000000000001-storage-'));
+  const dir = join(root, name);
+  mkdirSync(dir, {mode: 0o700});
+  const calls = [];
+  const run = args => { calls.push(args); return ''; };
+  try {
+    assert.throws(() => provisionStorage({name: 'coffee-production-loki-data', maxDiskBytes: 1073741824, storageHelperImage, backingDirectory: dir, run}), /Invalid fixture/u);
+    writeFileSync(join(dir, 'unrelated'), 'preserve');
+    assert.throws(() => provisionStorage({name, maxDiskBytes: 1073741824, storageHelperImage, backingDirectory: dir, run}), /private and empty/u);
+    rmSync(join(dir, 'unrelated'));
+    rmSync(dir, {recursive: true});
+    symlinkSync(root, dir);
+    assert.throws(() => provisionStorage({name, maxDiskBytes: 1073741824, storageHelperImage, backingDirectory: dir, run}), /Invalid fixture/u);
+    assert.equal(calls.length, 0);
   } finally { rmSync(root, {recursive: true, force: true}); }
 });

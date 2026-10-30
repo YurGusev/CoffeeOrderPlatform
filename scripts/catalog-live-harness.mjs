@@ -4,6 +4,7 @@ import { runLiveProof } from "./db-live-proof.mjs";
 import { promisify } from "node:util";
 import { randomBytes } from "node:crypto";
 import { readFile } from "node:fs/promises";
+import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { Client } from "pg";
 import { createDatabase } from "../packages/platform-database/dist/index.js";
@@ -15,7 +16,8 @@ import { validateLaunchDatabaseIdentity } from "../packages/platform-config/dist
 
 const exec = promisify(execFile);
 const root = resolve(import.meta.dirname, "..");
-const image = "postgres:17.11";
+const image = JSON.parse(readFileSync(resolve(root, "config/toolchain-versions.json"), "utf8")).postgresFixtureImage;
+assert.match(image ?? "", /^postgres:17\.11@sha256:[0-9a-f]{64}$/u, "disposable PostgreSQL image must be pinned");
 const databaseName = "coffee_platform_catalog";
 const password = `catalog-${randomBytes(12).toString("hex")}`;
 const pool = Object.freeze({
@@ -262,6 +264,8 @@ export async function withCatalogPostgres(
       `POSTGRES_PASSWORD=${password}`,
       "--env",
       `POSTGRES_DB=${targetDatabase}`,
+      "--tmpfs",
+      "/var/lib/postgresql/data:rw,noexec,nosuid,size=536870912",
       "--publish",
       "127.0.0.1::5432",
       image,
@@ -272,7 +276,7 @@ export async function withCatalogPostgres(
       containerId = reportedId;
     });
     inspectContainer = async () => {
-      const format = `{{.Id}}|{{.Name}}|{{.Image}}|{{.Config.Image}}|{{index .Config.Labels "${runLabelKey}"}}|{{json (index .NetworkSettings.Ports "5432/tcp")}}`;
+      const format = `{{.Id}}|{{.Name}}|{{.Image}}|{{.Config.Image}}|{{index .Config.Labels "${runLabelKey}"}}|{{json (index .NetworkSettings.Ports "5432/tcp")}}|{{json .HostConfig.Tmpfs}}`;
       const { stdout } = await docker(
         "inspect",
         "--format",
@@ -280,7 +284,7 @@ export async function withCatalogPostgres(
         containerId,
       );
       const fields = stdout.trim().split("|");
-      assert.equal(fields.length, 6, "selected container identity fields");
+      assert.equal(fields.length, 7, "selected container identity fields");
       const bindings = JSON.parse(fields[5]);
       assert.ok(Array.isArray(bindings));
       assert.equal(bindings.length, 1, "one published PostgreSQL port");
@@ -292,6 +296,7 @@ export async function withCatalogPostgres(
         runLabel: fields[4],
         hostIp: bindings[0]?.HostIp,
         hostPort: bindings[0]?.HostPort,
+        tmpfs: JSON.parse(fields[6]),
       };
     };
     assertOwnedContainer = (actual, expected) => {
@@ -306,6 +311,7 @@ export async function withCatalogPostgres(
         "PostgreSQL must bind loopback only",
       );
       assert.match(actual.hostPort, /^[1-9][0-9]*$/u);
+      assert.equal(actual.tmpfs?.["/var/lib/postgresql/data"], "rw,noexec,nosuid,size=536870912", "disposable PostgreSQL must use bounded tmpfs");
       if (expected) assert.deepEqual(actual, expected);
     };
     containerIdentity = await inspectContainer();
@@ -313,6 +319,10 @@ export async function withCatalogPostgres(
     const port = Number(containerIdentity.hostPort);
     await waitForPostgres(port, targetDatabase);
     assertOwnedContainer(await inspectContainer(), containerIdentity);
+    const filesystem = (await docker("exec", containerId, "stat", "-f", "-c", "%T|%S|%b", "/var/lib/postgresql/data")).stdout.trim().split("|");
+    assert.equal(filesystem.length, 3, "disposable PostgreSQL filesystem fields");
+    assert.equal(filesystem[0], "tmpfs", "disposable PostgreSQL filesystem type");
+    assert.equal(Number(filesystem[1]) * Number(filesystem[2]), 536870912, "disposable PostgreSQL tmpfs capacity");
     adminClient = new Client({
       host: "127.0.0.1",
       port,

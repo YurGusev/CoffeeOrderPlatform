@@ -482,7 +482,7 @@ void test('generated Node image probe accepts nameless nested package metadata b
 
 void test('issue 64 metric matrix requires a source identity callback before any Docker work', async () => {
   const args = {
-    projectName: 'coffee-issue64-final-aaaaaaaa', exporterToken: 'fixture-token',
+    projectName: 'coffee-launch-20261024t120000z-a12bc34', exporterToken: 'fixture-token',
     onRolesReady: async () => {}, onCleanup: async () => {}, verifyMetricFamily: async () => {},
     nodeVersion: '1.2.3', nginxVersion: '1.2.3',
   };
@@ -493,6 +493,15 @@ void test('issue 64 metric matrix requires a source identity callback before any
     }), /runtime matrix inputs invalid/u);
   }
   let identityCalls = 0;
+  for (const projectName of ['coffee-issue64-final-aaaaaaaa', 'coffee-launch-20261024t120000z-a12bc340',
+    'coffee-launch-20261024T120000Z-a12bc34', 'coffee-launch-local-20261024t120000z-a12bc34', 'coffee-platform']) {
+    await assert.rejects(verifyRuntimeMetricMatrix({
+      ...args, projectName,
+      sourceIdentity: async () => { identityCalls += 1; throw new Error('unexpected source callback'); },
+      runDocker: () => { dockerCalls += 1; throw new Error('unexpected Docker call'); },
+    }), /runtime matrix inputs invalid/u);
+  }
+  assert.equal(identityCalls, 0);
   await assert.rejects(verifyRuntimeMetricMatrix({
     ...args,
     sourceIdentity: async () => { identityCalls += 1; throw new Error('source callback failure'); },

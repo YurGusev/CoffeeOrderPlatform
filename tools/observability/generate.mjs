@@ -84,7 +84,7 @@ function hasExactDockerLogPath({containerId, logPath}) {
     dirname(logPath).endsWith(`/${containerId}`) && logPath.endsWith(`/${containerId}-json.log`);
 }
 
-export async function createObservabilityProvenance({root = REPO_ROOT, config, imageRefs, alertSinkImage, logFiles, storageVolumes, collectorConfigSha256} = {}) {
+export async function createObservabilityProvenance({root = REPO_ROOT, config, imageRefs, grafanaImage, alertSinkImage, logFiles, storageVolumes, collectorConfigSha256} = {}) {
   const sources = {
     platformConfig: 'config/platform.yaml',
     platformSchema: 'config/platform.schema.json',
@@ -101,7 +101,8 @@ export async function createObservabilityProvenance({root = REPO_ROOT, config, i
     schemaVersion: 1,
     generatedAt: new Date().toISOString(),
     sourceSha256,
-    images: {otelCollector: imageRefs.otelCollectorImage, grafana: imageRefs.grafanaImage, loki: imageRefs.lokiImage, prometheus: imageRefs.prometheusImage, tempo: imageRefs.tempoImage, nodeHelper: imageRefs.nodeImage},
+    images: {otelCollector: imageRefs.otelCollectorImage, grafanaBase: imageRefs.grafanaImage, loki: imageRefs.lokiImage, prometheus: imageRefs.prometheusImage, tempo: imageRefs.tempoImage, nodeHelper: imageRefs.nodeImage},
+    grafanaImage: {imageId: grafanaImage.imageId, receiptSha256: grafanaImage.receiptSha256, candidateSha: grafanaImage.candidateSha, runId: grafanaImage.runId},
     alertSinkImage: {imageId: alertSinkImage.imageId, receiptSha256: alertSinkImage.receiptSha256, candidateSha: alertSinkImage.candidateSha, runId: alertSinkImage.runId},
     bootstrapProbeSha256: imageRefs.bootstrapProbeSha256,
     storageVolumes,
@@ -581,7 +582,8 @@ export function createBackendConfigs(config) {
   };
 }
 
-export function createComposeOverride({config, imageRefs, alertSinkImage, logFiles, collectorConfigPath, probePath = '/usr/bin/busybox', storageVolumes, backendConfigPaths, grafanaAdminSecretPath, alertSinkPath = join(REPO_ROOT, 'tools/observability/alert-sink.mjs'), alertEvidenceDir, observabilityNetworkName = 'coffee_observability'} = {}) {
+export function createComposeOverride({config, imageRefs, grafanaImage, alertSinkImage, logFiles, collectorConfigPath, probePath = '/usr/bin/busybox', storageVolumes, backendConfigPaths, grafanaAdminSecretPath, alertSinkPath = join(REPO_ROOT, 'tools/observability/alert-sink.mjs'), alertEvidenceDir, observabilityNetworkName = 'coffee_observability'} = {}) {
+  if (typeof grafanaImage !== 'string' || !/^sha256:[a-f0-9]{64}$/u.test(grafanaImage)) throw new Error('verified grafanaImage ID is required');
   if (typeof alertSinkImage !== 'string' || !/^sha256:[a-f0-9]{64}$/u.test(alertSinkImage)) throw new Error('verified alertSinkImage ID is required');
   if (typeof observabilityNetworkName !== 'string' || !/^[a-z0-9][a-z0-9_.-]{0,127}$/u.test(observabilityNetworkName)) throw new Error('invalid observability network name');
   if (alertEvidenceDir !== undefined) {
@@ -603,7 +605,7 @@ export function createComposeOverride({config, imageRefs, alertSinkImage, logFil
     start_period: `${config.platform.health.startupGraceMs}ms`, retries: config.platform.health.failureThreshold,
   });
   const common = (name, uid, target, healthPath) => ({
-    image: imageRefs[`${name}Image`], restart: 'unless-stopped', stop_grace_period: `${config.platform.shutdownGraceMs}ms`,
+    image: name === 'grafana' ? grafanaImage : imageRefs[`${name}Image`], restart: 'unless-stopped', stop_grace_period: `${config.platform.shutdownGraceMs}ms`,
     init: true, read_only: true, user: uid, security_opt: ['no-new-privileges:true'], cap_drop: ['ALL'],
     cpus: 1, mem_limit: `${config.telemetry[name].memoryLimitMiB}m`, pids_limit: 128,
     tmpfs: ['/tmp:rw,noexec,nosuid,nodev,size=8m'],
@@ -677,6 +679,7 @@ export async function generate({root = REPO_ROOT, projectName, outputDir = '/dev
   const imageRefs = JSON.parse(await readFile(join(root, 'config/toolchain-versions.json'), 'utf8'));
   await verifyBootstrapProbe({probePath, expectedSha256: imageRefs.bootstrapProbeSha256});
   const alertSinkImage = await loadVerifiedGateImage({target: 'storage-helper'});
+  const grafanaImage = await loadVerifiedGateImage({target: 'grafana'});
   const logFiles = await discoverContainerLogs({projectName, runDocker});
   for (const [path, label] of [[secretsPath, 'collector'], [grafanaAdminSecretPath, 'grafana admin']]) {
     const info = await lstat(path);
@@ -700,9 +703,9 @@ export async function generate({root = REPO_ROOT, projectName, outputDir = '/dev
     await chmod(path, 0o444);
     backendConfigPaths[name] = path;
   }
-  const composeYaml = dumpYaml(createComposeOverride({config, imageRefs, alertSinkImage: alertSinkImage.imageId, logFiles, collectorConfigPath, probePath, storageVolumes, backendConfigPaths, grafanaAdminSecretPath, alertSinkPath: join(root, 'tools/observability/alert-sink.mjs'), alertEvidenceDir, observabilityNetworkName}), {noRefs: true, lineWidth: 120});
+  const composeYaml = dumpYaml(createComposeOverride({config, imageRefs, grafanaImage: grafanaImage.imageId, alertSinkImage: alertSinkImage.imageId, logFiles, collectorConfigPath, probePath, storageVolumes, backendConfigPaths, grafanaAdminSecretPath, alertSinkPath: join(root, 'tools/observability/alert-sink.mjs'), alertEvidenceDir, observabilityNetworkName}), {noRefs: true, lineWidth: 120});
   await writePrivateSecret(composeOverridePath, composeYaml);
-  const provenance = await createObservabilityProvenance({root, config, imageRefs, alertSinkImage, logFiles, storageVolumes, collectorConfigSha256: createHash('sha256').update(collectorYaml).digest('hex')});
+  const provenance = await createObservabilityProvenance({root, config, imageRefs, grafanaImage, alertSinkImage, logFiles, storageVolumes, collectorConfigSha256: createHash('sha256').update(collectorYaml).digest('hex')});
   await writePrivateSecret(provenancePath, `${JSON.stringify(provenance, null, 2)}\n`);
   const collectorConfigOwnership = ensureCollectorConfigOwnership({collectorConfigPath, nodeImage: imageRefs.nodeImage, runDocker});
   const backendOwnership = ensureBackendOwnership({storageVolumes, grafanaAdminSecretPath, nodeImage: imageRefs.nodeImage, runDocker});

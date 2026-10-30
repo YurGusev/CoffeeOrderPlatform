@@ -18,6 +18,7 @@
     "sourceMapJs",
     "undici",
     "postgresql",
+    "postgresFixtureImage",
     "libphonenumberJs",
     "kafka",
     "confluentKafkaJavaScript",
@@ -53,6 +54,11 @@
     "lokiImage",
     "prometheusImage",
     "tempoImage",
+    "tempoVersion",
+    "grafanaPlugins",
+    "grafanaSigningKeySourceSha256",
+    "grafanaSigningKeyFingerprint",
+    "grafanaTempoModule",
     "bootstrapProbeSha256",
     "browserHelperNodeImage"
   ],
@@ -72,6 +78,10 @@
     "sourceMapJs": { "const": "1.2.2" },
     "undici": { "const": "8.12.3" },
     "postgresql": { "const": "17.11" },
+    "postgresFixtureImage": {
+      "type": "string",
+      "pattern": "^postgres:17\\.11@sha256:[0-9a-f]{64}$"
+    },
     "pg": { "type": "string" },
     "libphonenumberJs": { "const": "1.13.12" },
     "pgCopyStreams": { "const": "7.0.0" },
@@ -178,7 +188,148 @@
     },
     "tempoImage": {
       "type": "string",
-      "pattern": "^[a-z0-9./-]+:[a-zA-Z0-9.-]+@sha256:[0-9a-f]{64}$"
+      "pattern": "^grafana/tempo:main-a0826bc-2302-1@sha256:[0-9a-f]{64}$"
+    },
+    "tempoVersion": {
+      "const": "3.2.0-dev"
+    },
+    "grafanaPlugins": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "loki",
+        "tempo",
+        "prometheus"
+      ],
+      "properties": {
+        "loki": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "version",
+            "zipSha256",
+            "manifestSha256",
+            "binarySha256"
+          ],
+          "properties": {
+            "version": {
+              "type": "string",
+              "pattern": "^\\d+\\.\\d+\\.\\d+$"
+            },
+            "zipSha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "manifestSha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "binarySha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          }
+        },
+        "tempo": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "version",
+            "zipSha256",
+            "manifestSha256",
+            "binarySha256"
+          ],
+          "properties": {
+            "version": {
+              "type": "string",
+              "pattern": "^\\d+\\.\\d+\\.\\d+$"
+            },
+            "zipSha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "manifestSha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "binarySha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          }
+        },
+        "prometheus": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "version",
+            "zipSha256",
+            "manifestSha256",
+            "binarySha256"
+          ],
+          "properties": {
+            "version": {
+              "type": "string",
+              "pattern": "^\\d+\\.\\d+\\.\\d+$"
+            },
+            "zipSha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "manifestSha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "binarySha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          }
+        }
+      }
+    },
+    "grafanaSigningKeySourceSha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "grafanaSigningKeyFingerprint": {
+      "type": "string",
+      "pattern": "^[A-F0-9]{40}$"
+    },
+    "grafanaTempoModule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "version",
+        "h1",
+        "revision",
+        "fixCommits",
+        "replacement"
+      ],
+      "properties": {
+        "replacement": {"type": "null"},
+        "version": {
+          "type": "string"
+        },
+        "h1": {
+          "type": "string",
+          "pattern": "^h1:[A-Za-z0-9+/]{43}=$"
+        },
+        "revision": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "fixCommits": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{40}$"
+          }
+        }
+      }
     },
     "bootstrapProbeSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
     "browserHelperNodeImage": {

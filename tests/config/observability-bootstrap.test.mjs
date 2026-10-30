@@ -289,9 +289,12 @@ void test("observability provenance includes all pinned images, bounded storage 
   imageRefs.bootstrapProbeSha256 = "b".repeat(64);
   const storageVolumes = Object.fromEntries(["grafana", "loki", "prometheus", "tempo"].map(name => [name, `coffee-test-${name}-data`]));
   const alertSinkImage = {imageId: `sha256:${"d".repeat(64)}`, receiptSha256: "e".repeat(64), candidateSha: "f".repeat(40), runId: "fixture"};
-  const provenance = await createObservabilityProvenance({root: REPO_ROOT, config: sample, imageRefs, alertSinkImage, logFiles: logs, storageVolumes, collectorConfigSha256: "c".repeat(64)});
+  const grafanaImage = {imageId: `sha256:${"1".repeat(64)}`, receiptSha256: "2".repeat(64), candidateSha: "3".repeat(40), runId: "fixture"};
+  const provenance = await createObservabilityProvenance({root: REPO_ROOT, config: sample, imageRefs, grafanaImage, alertSinkImage, logFiles: logs, storageVolumes, collectorConfigSha256: "c".repeat(64)});
   assert.deepEqual(provenance.storageVolumes, storageVolumes);
-  assert.deepEqual(Object.keys(provenance.images), ["otelCollector", "grafana", "loki", "prometheus", "tempo", "nodeHelper"]);
+  assert.deepEqual(Object.keys(provenance.images), ["otelCollector", "grafanaBase", "loki", "prometheus", "tempo", "nodeHelper"]);
+  assert.equal(provenance.images.grafanaBase, imageRefs.grafanaImage);
+  assert.deepEqual(provenance.grafanaImage, grafanaImage);
   assert.deepEqual(provenance.alertSinkImage, alertSinkImage);
   assert.equal(provenance.limits.loki.maxDiskBytes, 1073741824);
   assert.doesNotMatch(JSON.stringify(provenance), /producer-token|admin-secret/u);
@@ -526,13 +529,18 @@ void test("generated Collector and backend configs preserve bounded delivery and
   const storageVolumes = Object.fromEntries(names.map(name => [name, `coffee-test-${name}-data`]));
   const backendConfigPaths = Object.fromEntries([...names, "datasources", "alerts", "contacts"].map(name => [name, `/tmp/${name}.yaml`]));
   const alertSinkImage = `sha256:${"b".repeat(64)}`;
-  const compose = createComposeOverride({config: sample, imageRefs: images, alertSinkImage, logFiles: logs, collectorConfigPath: "/tmp/collector.yaml", storageVolumes, backendConfigPaths, grafanaAdminSecretPath: "/tmp/admin-secret"});
+  const grafanaImage = `sha256:${"c".repeat(64)}`;
+  const compose = createComposeOverride({config: sample, imageRefs: images, grafanaImage, alertSinkImage, logFiles: logs, collectorConfigPath: "/tmp/collector.yaml", storageVolumes, backendConfigPaths, grafanaAdminSecretPath: "/tmp/admin-secret"});
   for (const name of names) {
     assert.equal(compose.volumes[`${name}_data`].name, storageVolumes[name]);
     assert.deepEqual(compose.services[name].networks, ["coffee_observability"]);
     assert.equal(compose.services[name].ports, undefined);
   }
   assert.equal(compose.services.grafana.environment.GF_PLUGINS_PREINSTALL_DISABLED, "true");
+  assert.equal(compose.services.grafana.image, grafanaImage);
+  assert.notEqual(compose.services.grafana.image, images.grafanaImage);
+  assert.ok(compose.services.grafana.volumes.some(volume => volume.target === "/var/lib/grafana"));
+  assert.ok(compose.services.grafana.volumes.every(volume => !"/opt/grafana/plugins".startsWith(`${volume.target}/`) && volume.target !== "/opt/grafana/plugins"));
   assert.match(compose.services.prometheus.command.join(" "), /--web.enable-otlp-receiver/u);
   assert.deepEqual(compose.services["otel-collector"].expose, ["4318"]);
   assert.equal(compose.services["otel-collector"].healthcheck.test.at(-1), "http://127.0.0.1:13133/-/ready");
@@ -543,7 +551,8 @@ void test("generated Collector and backend configs preserve bounded delivery and
   assert.notEqual(compose.services["alert-sink"].image, images.nodeImage);
   const evidenceDir = await mkdtemp("/dev/shm/coffee-alert-evidence-");
   const link = `${evidenceDir}-link`;
-  const args = {config: sample, imageRefs: images, alertSinkImage, logFiles: logs, collectorConfigPath: "/tmp/collector.yaml", storageVolumes, backendConfigPaths, grafanaAdminSecretPath: "/tmp/admin-secret"};
+  const args = {config: sample, imageRefs: images, grafanaImage, alertSinkImage, logFiles: logs, collectorConfigPath: "/tmp/collector.yaml", storageVolumes, backendConfigPaths, grafanaAdminSecretPath: "/tmp/admin-secret"};
+  for (const invalid of [undefined, images.grafanaImage, "sha256:bad"]) assert.throws(() => createComposeOverride({...args, grafanaImage: invalid}), /verified grafanaImage ID is required/u);
   for (const invalid of [undefined, images.nodeImage, "sha256:bad"]) assert.throws(() => createComposeOverride({...args, alertSinkImage: invalid}), /verified alertSinkImage ID is required/u);
   try {
     if (process.getuid() !== 1000) {

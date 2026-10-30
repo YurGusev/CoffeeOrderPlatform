@@ -365,6 +365,7 @@ void test("G12 scanner policy is strict verification-only configuration", async 
     parallel: 1,
     minimumFreeDiskGiB: 20,
     maximumDatabaseAgeHours: 24,
+    approvedFixed: ["CVE-2026-21728", "CVE-2026-28377"],
     egressRepositories: [
       "ghcr.io/aquasecurity/trivy-db",
       "ghcr.io/aquasecurity/trivy-java-db",
@@ -373,6 +374,19 @@ void test("G12 scanner policy is strict verification-only configuration", async 
   assert.deepEqual(
     parseSecurityScanVerification(document.verification.securityScan),
     expected,
+  );
+  const strict = parseSecurityScanVerification({
+    ...expected,
+    approvedFixed: [],
+  });
+  assert.deepEqual(strict.approvedFixed, []);
+  assert.ok(Object.isFrozen(strict.approvedFixed));
+  assert.deepEqual(
+    parseSecurityScanVerification({
+      ...expected,
+      approvedFixed: [...expected.approvedFixed].reverse(),
+    }).approvedFixed,
+    [...expected.approvedFixed].reverse(),
   );
   const parsed = parsePlatformConfig(document);
   assert.equal(Object.hasOwn(parsed, "verification"), false);
@@ -390,6 +404,13 @@ void test("G12 scanner policy is strict verification-only configuration", async 
       ],
     },
     { ...expected, ignoreUnfixed: true },
+    { ...expected, approvedFixed: ["CVE-2026-116587"] },
+    { ...expected, approvedFixed: ["CVE-2026-21728"] },
+    { ...expected, approvedFixed: ["CVE-2026-21728", "CVE-2026-21728"] },
+    {
+      ...expected,
+      approvedFixed: [...expected.approvedFixed, "CVE-2026-116587"],
+    },
   ])
     assert.throws(
       () => parseSecurityScanVerification(changed),
@@ -431,9 +452,7 @@ void test("telemetry config is strict, immutable, and rejects missing or inconsi
     parsePlatformConfig(collectorRootPath).telemetry.collector.otlpEndpoint,
     "http://otel-collector:4318/",
   );
-  for (const [first, second] of [
-    ["otlpEndpoint", "healthEndpoint"],
-  ]) {
+  for (const [first, second] of [["otlpEndpoint", "healthEndpoint"]]) {
     const collidingCollectorPorts = structuredClone(document);
     collidingCollectorPorts.telemetry.collector[first] =
       collidingCollectorPorts.telemetry.collector[second];
@@ -445,8 +464,7 @@ void test("telemetry config is strict, immutable, and rejects missing or inconsi
   }
   const minimumTelemetryDiskBytes = 256 * 1024 * 1024;
   const minimumDiskConfig = structuredClone(document);
-  minimumDiskConfig.telemetry.loki.maxDiskBytes =
-    minimumTelemetryDiskBytes;
+  minimumDiskConfig.telemetry.loki.maxDiskBytes = minimumTelemetryDiskBytes;
   assert.equal(
     parsePlatformConfig(minimumDiskConfig).telemetry.loki.maxDiskBytes,
     minimumTelemetryDiskBytes,
@@ -462,8 +480,8 @@ void test("telemetry config is strict, immutable, and rejects missing or inconsi
     await readFile(join(REPO_ROOT, "config/platform.schema.json"), "utf8"),
   );
   assert.equal(
-    platformSchema.$defs.telemetry.properties.loki.properties
-      .maxDiskBytes.minimum,
+    platformSchema.$defs.telemetry.properties.loki.properties.maxDiskBytes
+      .minimum,
     minimumTelemetryDiskBytes,
   );
   const collectorEndpointPattern = new RegExp(
@@ -498,10 +516,22 @@ void test("telemetry config is strict, immutable, and rejects missing or inconsi
   ])
     assert.equal(collectorEndpointPattern.test(endpoint), false, endpoint);
   for (const name of ["grafana", "loki", "prometheus", "tempo"]) {
-    const pattern = new RegExp(platformSchema.$defs.telemetry.properties[name].properties.endpoint.pattern, "u");
+    const pattern = new RegExp(
+      platformSchema.$defs.telemetry.properties[name].properties.endpoint
+        .pattern,
+      "u",
+    );
     const expected = document.telemetry[name].endpoint;
     assert.equal(pattern.test(expected), true);
-    for (const endpoint of [`http://${name}.internal:3100`, `http://${name}:0`, `http://${name}:80`, `http://${name}:65536`, `http://${name}:3100/path`, `http://${name}:3100?x`, `http://user@${name}:3100`]) {
+    for (const endpoint of [
+      `http://${name}.internal:3100`,
+      `http://${name}:0`,
+      `http://${name}:80`,
+      `http://${name}:65536`,
+      `http://${name}:3100/path`,
+      `http://${name}:3100?x`,
+      `http://user@${name}:3100`,
+    ]) {
       assert.equal(pattern.test(endpoint), false, endpoint);
       const invalid = structuredClone(document);
       invalid.telemetry[name].endpoint = endpoint;
@@ -517,7 +547,8 @@ void test("telemetry config is strict, immutable, and rejects missing or inconsi
     ],
     [256, 64, 1024],
   );
-  for (const name of ["loki", "prometheus", "tempo"]) assert.equal(parsed.telemetry[name].retentionDays, 3);
+  for (const name of ["loki", "prometheus", "tempo"])
+    assert.equal(parsed.telemetry[name].retentionDays, 3);
   assert.equal(parsed.telemetry.diskWatermarkPercent, 80);
   assert.equal(parsed.telemetry.alerts.evaluationIntervalMs, 60_000);
   assert.equal(parsed.telemetry.alerts.sseDropRate.threshold, 0.05);
@@ -703,11 +734,27 @@ void test("telemetry config is strict, immutable, and rejects missing or inconsi
         },
       },
     },
-    ...["loki", "prometheus", "tempo"].map(name => ({
-      ...document, telemetry: {...document.telemetry, [name]: {...document.telemetry[name], retentionDays: 1}},
+    ...["loki", "prometheus", "tempo"].map((name) => ({
+      ...document,
+      telemetry: {
+        ...document.telemetry,
+        [name]: { ...document.telemetry[name], retentionDays: 1 },
+      },
     })),
-    {...document, telemetry: {...document.telemetry, diskWatermarkPercent: 100}},
-    {...document, telemetry: {...document.telemetry, alerts: {...document.telemetry.alerts, notificationEndpoint: "http://external:9091/alerts"}}},
+    {
+      ...document,
+      telemetry: { ...document.telemetry, diskWatermarkPercent: 100 },
+    },
+    {
+      ...document,
+      telemetry: {
+        ...document.telemetry,
+        alerts: {
+          ...document.telemetry.alerts,
+          notificationEndpoint: "http://external:9091/alerts",
+        },
+      },
+    },
     {
       ...document,
       telemetry: {
@@ -759,8 +806,7 @@ void test("RED: config loader and parser reject Loki hosts outside its private s
   try {
     const path = join(root, "config/platform.yaml");
     const document = parseYaml(await readFile(path, "utf8"), { json: true });
-    document.telemetry.loki.endpoint =
-      "http://loki.internal:3100";
+    document.telemetry.loki.endpoint = "http://loki.internal:3100";
     await writeFile(path, dumpYaml(document), "utf8");
     assert.throws(() => parsePlatformConfig(document), PlatformConfigError);
     await assert.rejects(loadPlatformConfig(root), /CONFIG-SCHEMA/u);

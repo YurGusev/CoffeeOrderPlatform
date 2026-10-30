@@ -13,7 +13,7 @@ import {
   stat,
   writeFile,
 } from "node:fs/promises";
-import { createWriteStream } from "node:fs";
+import { createWriteStream, readFileSync } from "node:fs";
 import { Buffer } from "node:buffer";
 import { execFileSync, spawn } from "node:child_process";
 import { request as httpsRequest } from "node:https";
@@ -74,6 +74,7 @@ import { createRuntimeLoggingOverride } from "./observability/generate.mjs";
 import { validateLaunchContext } from "../verification/launch/v1/report.mjs";
 import {
   loadVerifiedGateImage,
+  readVerifiedRuntimeImages,
   removeVerifiedGateImage,
 } from "./verified-infrastructure-image.mjs";
 import {
@@ -1251,7 +1252,7 @@ const COMPOSE_NETWORKS = [
   "coffee_provider_egress",
 ];
 const DATABASE_PROOF_IMAGE =
-  "postgres:17.11-alpine@sha256:18cfe3ef5e6815560c98237d6216d1e5119702fb0f3894c8785dd58b8bbe5d73";
+  JSON.parse(readFileSync(join(ROOT, "config/toolchain-versions.json"), "utf8")).postgresFixtureImage;
 const CUSTOMER_TEST_IMAGE =
   "node:26.8.1-trixie-slim@sha256:c0753125a3789977aefe869cbebccf70e3cfd7ea84ca48547458f02e4f1d7146";
 const RUNTIMES = [
@@ -1350,6 +1351,7 @@ function parseArguments(argv) {
     databaseProof: false,
     customerProof: false,
     recoveryProof: false,
+    observabilityFixture: false,
     browserProof: false,
     mutationDisableRollback: false,
     disabledRoot: undefined,
@@ -1369,6 +1371,7 @@ function parseArguments(argv) {
     else if (argument === "--database-proof") options.databaseProof = true;
     else if (argument === "--customer-proof") options.customerProof = true;
     else if (argument === "--recovery-proof") options.recoveryProof = true;
+    else if (argument === "--observability-fixture") options.observabilityFixture = true;
     else if (argument === "--browser-proof") options.browserProof = true;
     else if (argument === "--mutation-disable-rollback")
       options.mutationDisableRollback = true;
@@ -1429,6 +1432,8 @@ function parseArguments(argv) {
     throw new Error(
       "--database-proof, --customer-proof, --recovery-proof, --aroma-binding-proof and --aroma-cart-proof are mutually exclusive",
     );
+  if (options.observabilityFixture && !options.recoveryProof)
+    throw new Error("--observability-fixture requires programmatic observability hooks and isolated --recovery-proof");
   if (options.recoveryProof && options.stubSecrets)
     throw new Error(
       "--recovery-proof requires generated fixture credentials, not --stub-secrets",
@@ -1635,6 +1640,19 @@ export function removeBuiltRuntimeImages(images, options) {
     } catch {
       console.warn(`compose-smoke: image cleanup failed, preserved ${image}`);
     }
+  }
+}
+
+export function assertVerifiedRuntimeImages({ projectName, verifiedImages, noBuild = false }) {
+  const images = new Map(verifiedImages.map(({ service, imageId }) => [service, imageId]));
+  for (const service of [...RUNTIMES, "edge-nginx"]) {
+    const expected = images.get(service);
+    assert.match(expected ?? "", /^sha256:[a-f0-9]{64}$/u, `G12 image ID missing for ${service}`);
+    const reference = service === "edge-nginx" && noBuild
+      ? "coffee-platform-edge-nginx:local"
+      : `${projectName}-${service}:latest`;
+    const actual = runDocker(["image", "inspect", "--format", "{{.Id}}", reference]).trim();
+    assert.equal(actual, expected, `${service} image differs from the scanned G12 artifact`);
   }
 }
 
@@ -2965,7 +2983,7 @@ const APPROVED_EXTERNAL_POSTGRES = Object.freeze({
 
 export function isExternalRecoveryProof(options) {
   return (
-    options.recoveryProof === true && options.mutationDisableRollback !== true
+    options.recoveryProof === true && options.mutationDisableRollback !== true && options.observabilityFixture !== true
   );
 }
 
@@ -3127,6 +3145,8 @@ function startDatabaseProofContainer(
     initialDatabase = "coffee_platform_customer",
     publishHost = false,
     ephemeralPgData = false,
+    fixtureRunId,
+    onFixtureCreated,
   } = {},
 ) {
   const container = `${projectName}-postgres-proof`;
@@ -3135,6 +3155,7 @@ function startDatabaseProofContainer(
     "--detach",
     "--name",
     container,
+    ...(fixtureRunId ? ["--label", `coffee.g14.fixture=${fixtureRunId}`] : []),
     "--network",
     ...(publishHost
       ? ["bridge"]
@@ -3165,7 +3186,11 @@ function startDatabaseProofContainer(
     ...(publishHost ? ["--publish", "127.0.0.1::5432"] : []),
     DATABASE_PROOF_IMAGE,
   ];
-  runDocker(args);
+  const createdId = runDocker(args).trim();
+  if (fixtureRunId) {
+    assert.match(createdId, /^[a-f0-9]{64}$/u, "fixture PostgreSQL ID unavailable");
+    onFixtureCreated(createdId);
+  }
   if (publishHost) {
     runDocker([
       "network",
@@ -3178,7 +3203,23 @@ function startDatabaseProofContainer(
       container,
     ]);
   }
-  return container;
+  return fixtureRunId ? createdId : container;
+}
+
+export function assertObservabilityPostgresIdentity({id, projectName, networkName, fixtureRunId, allowIncompleteNetwork = false, run = runDocker}) {
+  assert.match(id ?? "", /^[a-f0-9]{64}$/u);
+  const info = JSON.parse(run(["inspect", id]))[0];
+  assert.equal(info?.Id, id, "fixture PostgreSQL ID changed");
+  assert.equal(info?.Name, `/${projectName}-postgres-proof`, "fixture PostgreSQL name changed");
+  assert.equal(info?.Config?.Labels?.["coffee.g14.fixture"], fixtureRunId, "fixture PostgreSQL owner changed");
+  assert.equal(info?.Config?.Image, DATABASE_PROOF_IMAGE, "fixture PostgreSQL image changed");
+  const networks = Object.keys(info?.NetworkSettings?.Networks ?? {}).sort();
+  const expectedNetworks = ["bridge", networkName].sort();
+  assert.ok(JSON.stringify(networks) === JSON.stringify(expectedNetworks) ||
+    (allowIncompleteNetwork && JSON.stringify(networks) === JSON.stringify(["bridge"])), "fixture PostgreSQL network mismatch");
+  const bindings = info?.NetworkSettings?.Ports?.["5432/tcp"];
+  assert.ok(Array.isArray(bindings) && bindings.length === 1 && bindings[0].HostIp === "127.0.0.1" && /^[1-9][0-9]*$/u.test(bindings[0].HostPort),
+    "fixture PostgreSQL must publish exactly one loopback port");
 }
 
 function assertEphemeralDatabaseProofStorage(container) {
@@ -8435,6 +8476,11 @@ export async function runComposeSmoke({
 } = {}) {
   rollbackComposeDiagnostic = undefined;
   const options = parseArguments(args);
+  if (options.observabilityFixture) {
+    assert.ok(observability !== undefined && options.recoveryProof && !options.stubSecrets && !options.noBuild && !options.keep &&
+      !options.browserProof && !options.mutationDisableRollback && !options.provisionNetwork,
+      "--observability-fixture requires programmatic observability hooks and isolated --recovery-proof");
+  }
   const externalRecovery = isExternalRecoveryProof(options);
   if (observability !== undefined) {
     assert.ok(
@@ -8546,48 +8592,54 @@ export async function runComposeSmoke({
         const databaseOwnership = JSON.parse(
           await readFile(join(ROOT, "config/database-ownership.json"), "utf8"),
         );
-        const targetConfig = {
-          environment: config.environment,
-          databaseIsolation: config.verification?.databaseIsolation,
-          services: config.services,
-        };
-        const claims = databaseOwnership.runtimeClaims.filter(
-          ({ database }) => database !== null,
-        );
-        const targets = claims.map(({ runtime }) =>
-          deriveRuntimeDatabaseTarget({
-            config: targetConfig,
-            runtime,
-            ownership: databaseOwnership,
-            launchIdentity: {
-              schemaVersion: 1,
-              runId: context.runId,
-              candidateSha: context.candidateSha,
-              baseConfigSha256: context.baseConfigSha256,
-            },
-          }),
-        );
-        assert.equal(
-          claims.length,
-          10,
-          "canonical database runtime claim count changed",
-        );
-        assert.equal(
-          new Set(targets.map(({ owner }) => owner)).size,
-          5,
-          "canonical database owner count changed",
-        );
-        assert.equal(
-          new Set(targets.map(({ database }) => database)).size,
-          5,
-          "derived database targets are ambiguous",
-        );
-        assert.ok(
-          targets.every(
-            ({ database, allowedDatabase }) => database === allowedDatabase,
-          ),
-          "derived database target is not run-scoped",
-        );
+        if (options.observabilityFixture) {
+          assert.equal(config.environment, "development", "G14 fixture requires the development environment");
+          assert.equal(config.verification?.databaseIsolation?.enabled, false, "G14 fixture requires canonical database isolation disabled");
+          assert.equal(config.verification?.kafkaNamespaceIsolation, false, "G14 fixture requires canonical Kafka namespace isolation disabled");
+        } else {
+          const targetConfig = {
+            environment: config.environment,
+            databaseIsolation: config.verification?.databaseIsolation,
+            services: config.services,
+          };
+          const claims = databaseOwnership.runtimeClaims.filter(
+            ({ database }) => database !== null,
+          );
+          const targets = claims.map(({ runtime }) =>
+            deriveRuntimeDatabaseTarget({
+              config: targetConfig,
+              runtime,
+              ownership: databaseOwnership,
+              launchIdentity: {
+                schemaVersion: 1,
+                runId: context.runId,
+                candidateSha: context.candidateSha,
+                baseConfigSha256: context.baseConfigSha256,
+              },
+            }),
+          );
+          assert.equal(
+            claims.length,
+            10,
+            "canonical database runtime claim count changed",
+          );
+          assert.equal(
+            new Set(targets.map(({ owner }) => owner)).size,
+            5,
+            "canonical database owner count changed",
+          );
+          assert.equal(
+            new Set(targets.map(({ database }) => database)).size,
+            5,
+            "derived database targets are ambiguous",
+          );
+          assert.ok(
+            targets.every(
+              ({ database, allowedDatabase }) => database === allowedDatabase,
+            ),
+            "derived database target is not run-scoped",
+          );
+        }
       },
     );
   }
@@ -8596,6 +8648,8 @@ export async function runComposeSmoke({
       launchIdentity,
       "G15 browser hooks require a validated launch context",
     );
+  if (options.observabilityFixture)
+    assert.ok(launchIdentity, "G14 fixture requires a validated G12 launch context");
   const projectName =
     options.projectName ??
     launchIdentity?.context.resources.composeProject ??
@@ -8646,6 +8700,7 @@ export async function runComposeSmoke({
   let composeAttempted = false;
   const builtImages = [];
   let databaseProofContainer;
+  const fixturePostgresRunId = options.observabilityFixture ? randomUUID() : undefined;
   let databaseProofStorage;
   let recoveryDatabaseProof;
   let recoveryProofCredentials;
@@ -8770,7 +8825,7 @@ export async function runComposeSmoke({
       options.aromaBindingProof ||
       options.aromaCartProof;
     const proofLaunchIdentity =
-      launchIdentity && isolatedDatabaseProof
+      launchIdentity && isolatedDatabaseProof && !options.observabilityFixture
         ? launchConfigIdentity(launchIdentity)
         : undefined;
     const proofLaunchMetadata =
@@ -8867,7 +8922,7 @@ export async function runComposeSmoke({
       aromaBindingProof: options.aromaBindingProof,
       aromaCartProof: options.aromaCartProof,
       recoveryProof: options.recoveryProof,
-      launchContextPath,
+      launchContextPath: options.observabilityFixture ? undefined : launchContextPath,
       kafkaImage: verifiedKafka?.imageId,
       edgeNginxImage: options.noBuild
         ? undefined
@@ -9021,8 +9076,10 @@ export async function runComposeSmoke({
             options.aromaBindingProof ||
             options.aromaCartProof,
           ephemeralPgData: observability !== undefined,
+          ...(options.observabilityFixture ? {fixtureRunId: fixturePostgresRunId, onFixtureCreated: id => { databaseProofContainer = id; }} : {}),
         },
       );
+      if (options.observabilityFixture) assertObservabilityPostgresIdentity({id: databaseProofContainer, projectName, networkName: databaseProofNetwork, fixtureRunId: fixturePostgresRunId});
       if (observability !== undefined) {
         databaseProofStorage = assertEphemeralDatabaseProofStorage(
           databaseProofContainer,
@@ -9243,6 +9300,10 @@ export async function runComposeSmoke({
         builtImages,
         ROOT,
       );
+    if (!(options.databaseProof || options.customerProof || options.aromaBindingProof || options.aromaCartProof || browser || options.mutationDisableRollback)) {
+      const verifiedImages = await readVerifiedRuntimeImages({contextFile: launchContextPath});
+      assertVerifiedRuntimeImages({projectName, verifiedImages, noBuild: options.noBuild});
+    }
     throwIfRollbackTerminationRequested();
     if (options.customerProof)
       await writeCustomerProofFixtures(
@@ -9984,6 +10045,7 @@ export async function runComposeSmoke({
       assertStopped(projectName, secretsDir, composeFile);
     }
     receipt = {
+      ...(options.observabilityFixture ? { proofKind: "observability-fixture" } : {}),
       project: projectName,
       runtimes:
         options.aromaBindingProof || options.aromaCartProof
@@ -10155,7 +10217,7 @@ export async function runComposeSmoke({
         } catch (error) {
           if (options.mutationDisableRollback)
             cleanupFailures.push("compose-down");
-          else if (browserFixture || externalRecovery)
+          else if (browserFixture || externalRecovery || options.observabilityFixture)
             cleanupHookError ??= error;
         }
       } else if (!composeAttempted && !options.keep) composeDownComplete = true;
@@ -10212,18 +10274,21 @@ export async function runComposeSmoke({
       }
       if (databaseProofContainer && !options.keep) {
         try {
+          if (options.observabilityFixture) assertObservabilityPostgresIdentity({id: databaseProofContainer, projectName, networkName: databaseProofNetwork, fixtureRunId: fixturePostgresRunId, allowIncompleteNetwork: true});
           runDocker(["rm", "--force", "--volumes", databaseProofContainer]);
-        } catch {
+        } catch (error) {
           if (options.mutationDisableRollback)
             cleanupFailures.push("postgres-container-remove");
+          if (options.observabilityFixture) cleanupHookError ??= error;
         }
       }
       if (databaseProofNetwork && !options.keep) {
         try {
           runDocker(["network", "rm", databaseProofNetwork]);
-        } catch {
+        } catch (error) {
           if (options.mutationDisableRollback)
             cleanupFailures.push("postgres-network-remove");
+          if (options.observabilityFixture) cleanupHookError ??= error;
         }
       }
       if (provisionedNetwork && !options.keep) {
