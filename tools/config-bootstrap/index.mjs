@@ -1396,7 +1396,7 @@ export function validateMigrationPreparationArtifact(
     value.baseConfigSha256 !== context.baseConfigSha256 ||
     !migrationExactKeys(prep, prepKeys) ||
     prep.schemaVersion !== 1 ||
-    prep.stage !== "roles-created" ||
+    !["roles-created", "roles-verified"].includes(prep.stage) ||
     !/^[0-9]{8}T[0-9]{6}Z-[0-9a-f]{7}$/u.test(prep.runId ?? "") ||
     !/^[0-9a-f]{40}$/u.test(prep.candidateSha ?? "") ||
     !prep.runId.endsWith(`-${prep.candidateSha.slice(0, 7)}`) ||
@@ -1416,8 +1416,14 @@ export function validateMigrationPreparationArtifact(
     prep.roleNames.length !== 15 ||
     prep.roleNames.some((role) => typeof role !== "string") ||
     new Set(prep.roleNames).size !== 15 ||
-    prep.createdCount !== 15 ||
-    prep.transaction !== "committed"
+    (prep.stage === "roles-created"
+      ? prep.createdCount !== 15 || prep.transaction !== "committed"
+      : prep.createdCount !== 0 ||
+        prep.transaction !== "read-only" ||
+        prep.runId !== context.runId ||
+        prep.candidateSha !== context.candidateSha ||
+        prep.baseConfigSha256 !== context.baseConfigSha256 ||
+        prep.bundle.beforeSha256 !== secretsSha256)
   )
     fail(
       "CONFIG-G08-PREPARATION",
@@ -1747,6 +1753,122 @@ export async function probeCanonicalMigrationTarget({
     baseConfigSha256: target.context.baseConfigSha256,
     configSha256: target.configSha256,
     ...state,
+  };
+}
+
+/** Verify the current canonical roles and credentials without modifying PostgreSQL or SOPS. */
+export async function attestCanonicalMigrationPreparation({
+  root = REPO_ROOT,
+  contextPath = process.env.COFFEE_LAUNCH_CONTEXT_FILE,
+  env = process.env,
+  expectedSystemIdentifier,
+} = {}) {
+  if (
+    typeof expectedSystemIdentifier !== "string" ||
+    !/^[0-9]{1,20}$/u.test(expectedSystemIdentifier)
+  )
+    fail("CONFIG-G08-IDENTITY", "approved G08 system identifier is required");
+  const snapshot = await captureMigrationBundleSnapshot(root);
+  const target = await validateMigrationTarget({ root, contextPath, env });
+  const contextBytes = await readFile(contextPath);
+  if (
+    !isDeepStrictEqual(
+      JSON.parse(contextBytes.toString("utf8")),
+      target.context,
+    )
+  )
+    fail(
+      "CONFIG-G08-CONTEXT",
+      "G08 launch context changed during verification",
+    );
+  await assertMigrationBundleSnapshot(snapshot);
+  const passwords = migratorRolePasswords(target);
+  const before = await probeMigrationTargetState(
+    target,
+    expectedSystemIdentifier,
+  );
+  assertPreparedMigrationRoleInventory(before, target.roles);
+  const { Client } = await import("pg").catch(() =>
+    fail("CONFIG-G08-PG-DEPENDENCY", "pg dependency is unavailable"),
+  );
+  for (const [role, password] of passwords) {
+    const client = new Client({
+      host: target.config.postgres.host,
+      port: target.config.postgres.port,
+      database: "postgres",
+      user: role,
+      password,
+      ssl: false,
+      connectionTimeoutMillis: 3_000,
+      query_timeout: 3_000,
+    });
+    let md5Auth = false;
+    let saslAuth = false;
+    let saslFinal = false;
+    client.connection.on("authenticationSASL", () => {
+      saslAuth = true;
+    });
+    client.connection.on("authenticationMD5Password", () => {
+      md5Auth = true;
+    });
+    client.connection.on("authenticationSASLFinal", () => {
+      saslFinal = true;
+    });
+    let valid = false;
+    try {
+      await client.connect();
+      const result = await client.query(
+        "SELECT current_user, current_database()",
+      );
+      valid =
+        (md5Auth || (saslAuth && saslFinal)) &&
+        result.rows?.length === 1 &&
+        result.rows[0].current_user === role &&
+        result.rows[0].current_database === "postgres";
+    } catch {
+      valid = false;
+    } finally {
+      await client.end().catch(() => {
+        valid = false;
+      });
+    }
+    if (!valid)
+      fail("CONFIG-G08-ROLE-AUTH", "G08 role password authentication failed");
+  }
+  const after = await probeMigrationTargetState(
+    target,
+    expectedSystemIdentifier,
+  );
+  assertPreparedMigrationRoleInventory(after, target.roles);
+  await assertMigrationBundleSnapshot(snapshot);
+  const current = await validateMigrationTarget({ root, contextPath, env });
+  await assertMigrationBundleSnapshot(snapshot);
+  if (
+    !isDeepStrictEqual(before, after) ||
+    !isDeepStrictEqual(target.context, current.context) ||
+    !contextBytes.equals(await readFile(contextPath)) ||
+    target.contextInfo.dev !== current.contextInfo.dev ||
+    target.contextInfo.ino !== current.contextInfo.ino ||
+    !isDeepStrictEqual(target.roleMap, current.roleMap) ||
+    !isDeepStrictEqual(target.ownership, current.ownership) ||
+    !isDeepStrictEqual(target.secrets, current.secrets)
+  )
+    fail(
+      "CONFIG-G08-IDENTITY_CHANGED",
+      "G08 target or context changed during verification",
+    );
+  return {
+    schemaVersion: 1,
+    stage: "roles-verified",
+    runId: target.context.runId,
+    candidateSha: target.context.candidateSha,
+    baseConfigSha256: target.context.baseConfigSha256,
+    configSha256: target.configSha256,
+    postgres: before.postgres,
+    bundle: { beforeSha256: snapshot.sha256, resultingSha256: snapshot.sha256 },
+    roleNames: target.roles,
+    createdCount: 0,
+    transaction: "read-only",
   };
 }
 

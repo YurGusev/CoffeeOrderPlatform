@@ -195,6 +195,14 @@ bootstrap читает `config/platform.yaml` из commit подготовки, 
 `kafkaNamespaceIsolation` из `false` в `true`; остальные байты должны совпадать.
 Proof не является G00 attestation.
 
+Если canonical роли уже подготовлены, clean oracle получает свежую read-only
+аттестацию их атрибутов и password authentication по текущему SOPS bundle.
+Она не создаёт роли и не изменяет ciphertext. Стадия `roles-verified` содержит
+`createdCount: 0`, `transaction: "read-only"`, одинаковые before/resulting
+bundle SHA-256 и точные run/candidate/config текущего запуска. Повторные проверки
+identity и входных данных предшествуют возврату proof. Историческая стадия
+`roles-created` с подтверждённым commit сохраняет прежнюю семантику и проверки.
+
 Clean oracle применяет полный упорядоченный набор миграций к пяти пустым
 run-derived БД. Forward oracle использует те же пять имён после clean cleanup:
 применяет принятый исторический prefix, загружает существующие owner fixtures,

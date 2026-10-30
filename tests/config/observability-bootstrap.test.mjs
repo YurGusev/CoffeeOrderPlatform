@@ -49,6 +49,7 @@ import {
 } from "../../tools/observability/generate.mjs";
 import {
   checkBootstrap,
+  attestCanonicalMigrationPreparation,
   ensureNginxSecretOwnership,
   finalizeAromaSandboxDatabase,
   loadRuntimeConfig,
@@ -77,6 +78,7 @@ import {
   validateBrowserFixtureLineage,
 } from "../../tools/config-bootstrap/browser-fixture.mjs";
 import { verifyBrowserChildBundle } from "../../verification/launch/v1/scenarios/browser.mjs";
+import { runMigrationStage } from "../../verification/launch/v1/scenarios/migrations.mjs";
 import { validateLaunchContext } from "../../verification/launch/v1/report.mjs";
 import { assertScopedSecrets } from "../../packages/platform-runtime/dist/index.js";
 import { initializeOpenObserve } from "../../tools/observability/bootstrap.mjs";
@@ -3527,6 +3529,261 @@ void test("G08 credential reader rejects malformed requests before accessing sec
       readMigrationCredential({ ...valid, ...request }),
       /CONFIG-G08-CREDENTIAL-REQUEST/u,
     );
+  }
+});
+
+void test("G08 current attestation requires password authentication and unchanged canonical inputs", async (t) => {
+  const launch = await createMigrationLaunchFixture({
+    migratorBlock: true,
+    alignedRunId: true,
+  });
+  const { fixture, contextPath, evidenceDir } = launch;
+  const { roleNames, artifactPath } =
+    await writeMigrationPreparationArtifact(launch);
+  const args = {
+    root: fixture.root,
+    contextPath,
+    env: fixture.env,
+    expectedSystemIdentifier: "7613370342949990434",
+  };
+  const configPath = join(fixture.root, "config/platform.yaml");
+  const bundlePath = join(fixture.root, "secrets/platform.secrets.sops.yaml");
+  const closed = [];
+  let mode = "valid";
+  let roleConnections = 0;
+  try {
+    await installFakeMigrationSops(fixture);
+    t.mock.method(Client.prototype, "connect", async function () {
+      if (this.user !== "coffeeuser") {
+        roleConnections += 1;
+        if (mode === "wrong-password" && roleConnections === 4)
+          throw new Error("private error");
+        if (roleConnections === 1 && mode === "config")
+          await writeFile(configPath, "changed");
+        if (roleConnections === 1 && mode === "bundle")
+          await writeFile(bundlePath, "changed");
+        if (roleConnections === 1 && mode === "context") {
+          await chmod(contextPath, 0o600);
+          await writeFile(contextPath, "changed");
+          await chmod(contextPath, 0o400);
+        }
+        if (mode !== "trust") {
+          this.connection.emit(
+            mode === "md5" ? "authenticationMD5Password" : "authenticationSASL",
+            {},
+          );
+          if (mode !== "md5" && mode !== "sasl-incomplete")
+            this.connection.emit("authenticationSASLFinal", {});
+        }
+      }
+    });
+    t.mock.method(Client.prototype, "end", async function () {
+      closed.push(this.user);
+    });
+    t.mock.method(Client.prototype, "query", async function (sql) {
+      if (sql.includes("pg_control_system()"))
+        return {
+          rows: [
+            {
+              current_database: "postgres",
+              current_user: "coffeeuser",
+              server_version: "17.11 (fixture)",
+              server_version_num: "170011",
+              is_superuser: true,
+              system_identifier: "7613370342949990434",
+            },
+          ],
+        };
+      if (sql.startsWith("SELECT rolname,"))
+        return {
+          rows: [...roleNames, ...(mode === "extra-role" ? ["foreign"] : [])]
+            .filter((_, index) => mode !== "missing-role" || index !== 0)
+            .map((rolname, index) => ({
+              rolname,
+              rolcanlogin: true,
+              rolsuper: mode === "attributes" && index === 0,
+              rolcreatedb: false,
+              rolcreaterole: false,
+              rolinherit: false,
+              rolreplication: false,
+              rolbypassrls: false,
+              rolconnlimit: 20,
+            })),
+        };
+      assert.equal(sql, "SELECT current_user, current_database()");
+      return {
+        rows: [
+          {
+            current_user: mode === "wrong-user" ? "foreign" : this.user,
+            current_database: "postgres",
+          },
+        ],
+      };
+    });
+    const context = JSON.parse(await readFile(contextPath, "utf8"));
+    const approvedPath = join(
+      evidenceDir,
+      "gates/G08_MIGRATIONS/artifacts/approved-target.json",
+    );
+    await writeFile(
+      approvedPath,
+      JSON.stringify({
+        schemaVersion: 1,
+        runId: context.runId,
+        candidateSha: context.candidateSha,
+        baseConfigSha256: context.baseConfigSha256,
+        systemIdentifier: args.expectedSystemIdentifier,
+      }),
+      { mode: 0o400 },
+    );
+    await rm(artifactPath);
+    mode = "trust";
+    const previousPath = process.env.PATH;
+    try {
+      process.env.PATH = fixture.env.PATH;
+      await assert.rejects(
+        runMigrationStage("clean", { root: fixture.root, contextPath }),
+        {
+          ruleId: "CONFIG-G08-ROLE-AUTH",
+        },
+      );
+      assert.equal(roleConnections, 1);
+      await assert.rejects(lstat(artifactPath), { code: "ENOENT" });
+      mode = "valid";
+      roleConnections = 0;
+      await assert.rejects(
+        runMigrationStage("clean", { root: fixture.root, contextPath }),
+        { code: "ENOENT" },
+      );
+      assert.equal(roleConnections, 15);
+      const generated = JSON.parse(await readFile(artifactPath, "utf8"));
+      assert.equal(generated.preparation.stage, "roles-verified");
+      assert.deepEqual(
+        validateMigrationPreparationArtifact(
+          generated,
+          context,
+          generated.preparation.bundle.resultingSha256,
+        ),
+        generated.preparation,
+      );
+      await rm(artifactPath);
+    } finally {
+      if (previousPath === undefined) delete process.env.PATH;
+      else process.env.PATH = previousPath;
+    }
+    mode = "valid";
+    roleConnections = 0;
+    closed.length = 0;
+    const preparation = await attestCanonicalMigrationPreparation(args);
+    assert.equal(preparation.stage, "roles-verified");
+    assert.equal(preparation.createdCount, 0);
+    assert.equal(roleConnections, 15);
+    assert.equal(closed.length, 17);
+    const wrapper = {
+      schemaVersion: 1,
+      runId: context.runId,
+      candidateSha: context.candidateSha,
+      baseConfigSha256: context.baseConfigSha256,
+      preparation,
+    };
+    assert.deepEqual(
+      validateMigrationPreparationArtifact(
+        wrapper,
+        context,
+        preparation.bundle.resultingSha256,
+      ),
+      preparation,
+    );
+    for (const mutation of [
+      { createdCount: 15 },
+      { transaction: "committed" },
+      { runId: `20261025T000000Z-${context.candidateSha.slice(0, 7)}` },
+      {
+        runId: "20261025T000000Z-abcdef0",
+        candidateSha: `abcdef0${"a".repeat(33)}`,
+      },
+      { baseConfigSha256: "a".repeat(64), configSha256: "a".repeat(64) },
+      { bundle: { ...preparation.bundle, beforeSha256: "a".repeat(64) } },
+    ])
+      assert.throws(
+        () =>
+          validateMigrationPreparationArtifact(
+            { ...wrapper, preparation: { ...preparation, ...mutation } },
+            context,
+            preparation.bundle.resultingSha256,
+          ),
+        /CONFIG-G08-PREPARATION/u,
+      );
+    await assert.rejects(
+      attestCanonicalMigrationPreparation({
+        ...args,
+        expectedSystemIdentifier: undefined,
+      }),
+      { ruleId: "CONFIG-G08-IDENTITY" },
+    );
+    await assert.rejects(
+      attestCanonicalMigrationPreparation({
+        ...args,
+        expectedSystemIdentifier: "999",
+      }),
+      { ruleId: "CONFIG-G08-PROBE" },
+    );
+    mode = "md5";
+    await attestCanonicalMigrationPreparation(args);
+    for (mode of [
+      "trust",
+      "sasl-incomplete",
+      "wrong-password",
+      "wrong-user",
+      "attributes",
+      "missing-role",
+      "extra-role",
+    ]) {
+      roleConnections = 0;
+      const start = closed.length;
+      await assert.rejects(attestCanonicalMigrationPreparation(args), {
+        ruleId:
+          mode === "extra-role"
+            ? "CONFIG-G08-PROBE"
+            : ["attributes", "missing-role"].includes(mode)
+              ? "CONFIG-G08-ROLE-INVENTORY"
+              : "CONFIG-G08-ROLE-AUTH",
+      });
+      assert.equal(closed.length - start, roleConnections + 1);
+    }
+    for (const [change, path, ruleId] of [
+      ["config", configPath, "CONFIG-G08-CONFIG"],
+      ["bundle", bundlePath, "CONFIG-G08-BUNDLE_CHANGED"],
+      ["context", contextPath, "CONFIG-G08-CONTEXT"],
+    ]) {
+      mode = change;
+      roleConnections = 0;
+      const bytes = await readFile(path);
+      try {
+        await assert.rejects(attestCanonicalMigrationPreparation(args), {
+          ruleId,
+        });
+      } finally {
+        if (change === "context") await chmod(path, 0o600);
+        await writeFile(path, bytes);
+        if (change === "context") await chmod(path, 0o400);
+      }
+    }
+    mode = "valid";
+    const plain = JSON.parse(await readFile(fixture.plainPath, "utf8"));
+    delete plain.environments.development.bootstrap.migrators.customer;
+    await writeFile(fixture.plainPath, JSON.stringify(plain));
+    await assert.rejects(attestCanonicalMigrationPreparation(args), {
+      ruleId: "CONFIG-G08-ADMIN-SECRET",
+    });
+    assert.equal(
+      (await readdir(fixture.bin)).includes("g08-encrypt-invoked"),
+      false,
+    );
+  } finally {
+    await rm(evidenceDir, { recursive: true, force: true });
+    await rm(fixture.root, { recursive: true, force: true });
+    await rm(fixture.bin, { recursive: true, force: true });
   }
 });
 
@@ -7701,15 +7958,16 @@ function syntheticEncryptedSecrets() {
 async function createMigrationLaunchFixture({
   migratorBlock = false,
   databaseIsolation = false,
+  alignedRunId = false,
 } = {}) {
   const fixture = await createSecretMaterializationFixture();
-  const runId = `${new Date().toISOString().replace(/[-:]/gu, "").slice(0, 15)}Z-${Math.floor(
+  let runId = `${new Date().toISOString().replace(/[-:]/gu, "").slice(0, 15)}Z-${Math.floor(
     Math.random() * 0x10000000,
   )
     .toString(16)
     .padStart(7, "0")}`;
-  const evidenceDir = join(REPO_ROOT, "evidence/launch", runId);
-  const contextPath = join(evidenceDir, "context.json");
+  let evidenceDir = join(REPO_ROOT, "evidence/launch", runId);
+  let contextPath = join(evidenceDir, "context.json");
   const adminPassword = "fixture-g08-admin-canary";
   try {
     const plain = JSON.parse(await readFile(fixture.plainPath, "utf8"));
@@ -7792,6 +8050,11 @@ async function createMigrationLaunchFixture({
       cwd: fixture.root,
       encoding: "utf8",
     }).trim();
+    if (alignedRunId) {
+      runId = runId.replace(/-[0-9a-f]{7}$/u, `-${candidateSha.slice(0, 7)}`);
+      evidenceDir = join(REPO_ROOT, "evidence/launch", runId);
+      contextPath = join(evidenceDir, "context.json");
+    }
     const baseConfigSha256 = createHash("sha256")
       .update(await readFile(join(fixture.root, "config/platform.yaml")))
       .digest("hex");
