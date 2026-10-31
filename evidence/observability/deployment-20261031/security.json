@@ -1,0 +1,144 @@
+{
+  "candidateSha": "0b7a95b2d7ef210ce2547087aa51d472eae770f6",
+  "scope": "normal zero-owner component; not formal launch admission",
+  "scopeDetail": "actual normal zero-owner containers; configuration/security metadata, not full workload/security proof",
+  "services": [
+    {
+      "service": "grafana",
+      "user": "472:472",
+      "readOnlyRootfs": true,
+      "privileged": false,
+      "capDrop": ["ALL"],
+      "securityOpt": ["no-new-privileges:true"],
+      "memoryBytes": 536870912,
+      "nanoCpus": 1000000000,
+      "pidsLimit": 128,
+      "hostPortBindings": {},
+      "networks": ["coffee_observability"],
+      "health": "healthy",
+      "running": true,
+      "oomKilled": false,
+      "restartCount": 0,
+      "dockerSocketMounted": false,
+      "restartPolicy": {
+        "Name": "on-failure",
+        "MaximumRetryCount": 0
+      }
+    },
+    {
+      "service": "loki",
+      "user": "10001:10001",
+      "readOnlyRootfs": true,
+      "privileged": false,
+      "capDrop": ["ALL"],
+      "securityOpt": ["no-new-privileges:true"],
+      "memoryBytes": 536870912,
+      "nanoCpus": 1000000000,
+      "pidsLimit": 128,
+      "hostPortBindings": {},
+      "networks": ["coffee_observability"],
+      "health": "healthy",
+      "running": true,
+      "oomKilled": false,
+      "restartCount": 0,
+      "dockerSocketMounted": false,
+      "restartPolicy": {
+        "Name": "on-failure",
+        "MaximumRetryCount": 0
+      }
+    },
+    {
+      "service": "prometheus",
+      "user": "65534:65534",
+      "readOnlyRootfs": true,
+      "privileged": false,
+      "capDrop": ["ALL"],
+      "securityOpt": ["no-new-privileges:true"],
+      "memoryBytes": 536870912,
+      "nanoCpus": 1000000000,
+      "pidsLimit": 128,
+      "hostPortBindings": {},
+      "networks": ["coffee_observability"],
+      "health": "healthy",
+      "running": true,
+      "oomKilled": false,
+      "restartCount": 0,
+      "dockerSocketMounted": false,
+      "restartPolicy": {
+        "Name": "on-failure",
+        "MaximumRetryCount": 0
+      }
+    },
+    {
+      "service": "tempo",
+      "user": "10001:10001",
+      "readOnlyRootfs": true,
+      "privileged": false,
+      "capDrop": ["ALL"],
+      "securityOpt": ["no-new-privileges:true"],
+      "memoryBytes": 805306368,
+      "nanoCpus": 1000000000,
+      "pidsLimit": 128,
+      "hostPortBindings": {},
+      "networks": ["coffee_observability"],
+      "health": "healthy",
+      "running": true,
+      "oomKilled": false,
+      "restartCount": 0,
+      "dockerSocketMounted": false,
+      "restartPolicy": {
+        "Name": "on-failure",
+        "MaximumRetryCount": 0
+      }
+    },
+    {
+      "service": "alert-sink",
+      "user": "1000:1000",
+      "readOnlyRootfs": true,
+      "privileged": false,
+      "capDrop": ["ALL"],
+      "securityOpt": ["no-new-privileges:true"],
+      "memoryBytes": 134217728,
+      "nanoCpus": 100000000,
+      "pidsLimit": 32,
+      "hostPortBindings": {},
+      "networks": ["coffee_observability"],
+      "health": null,
+      "running": true,
+      "oomKilled": false,
+      "restartCount": 0,
+      "dockerSocketMounted": false,
+      "restartPolicy": {
+        "Name": "on-failure",
+        "MaximumRetryCount": 0
+      }
+    },
+    {
+      "service": "otel-collector",
+      "user": "0:0",
+      "readOnlyRootfs": true,
+      "privileged": false,
+      "capDrop": ["ALL"],
+      "securityOpt": ["no-new-privileges:true"],
+      "memoryBytes": 1073741824,
+      "nanoCpus": 1000000000,
+      "pidsLimit": 128,
+      "hostPortBindings": {},
+      "networks": ["coffee_observability"],
+      "health": "healthy",
+      "running": true,
+      "oomKilled": false,
+      "restartCount": 0,
+      "dockerSocketMounted": false,
+      "restartPolicy": {
+        "Name": "on-failure",
+        "MaximumRetryCount": 0
+      }
+    }
+  ],
+  "network": {
+    "internal": true
+  },
+  "rawReceiptSha256": "71346b8384ec8ad6faadbf412b3258788aa3c30703f8e18883cf5bc25f8d8838",
+  "capturedAtUtc": "2026-10-31T04:07:29.246534+00:00"
+}

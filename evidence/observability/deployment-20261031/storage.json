@@ -1,0 +1,18 @@
+{
+  "candidateSha": "0b7a95b2d7ef210ce2547087aa51d472eae770f6",
+  "scope": "normal zero-owner component; not formal launch admission",
+  "controlledLoss": "loss_simulated",
+  "detachedStoreCount": 4,
+  "removedDerivedFileCount": 3,
+  "rawLossReceiptSha256": "44f01c69496e1ff1321abd45cd54a6f838a2dfd886f8a11b44072ecf1b403a0a",
+  "recovery": {
+    "status": "PASS",
+    "allSixContainerIdsChanged": true,
+    "backingIdentitiesUnchanged": true,
+    "backingStoreCount": 4,
+    "oldDataObserved": true,
+    "rawReceiptSha256": "047dcdedb6e916de40669d387f2d342eaf2b7532bce3810d9fc3ebf8726e8b92"
+  },
+  "serverReboot": "NOT_RUN",
+  "restorationFromBackup": "NOT_RUN"
+}
