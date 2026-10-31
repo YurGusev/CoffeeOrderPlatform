@@ -636,6 +636,121 @@ void test("smoke removes only project-scoped images built by this run", async (t
   }
 });
 
+void test("run-owned runtime image reuse rejects collisions and cleans only verified references", async () => {
+  const {
+    inspectLaunchRuntimeImages,
+    launchRuntimeImageMode,
+    ownedLaunchRuntimeImageMode,
+    cleanupLaunchRuntimeImages,
+  } = await import("../../tools/compose-smoke.mjs");
+  const catalog = JSON.parse(
+    await readFile(join(REPO_ROOT, "config/service-catalog.json"), "utf8"),
+  );
+  const images = catalog.runtimes.map(({ name }, index) => ({
+    service: name,
+    imageId: `sha256:${(index + 1).toString(16).padStart(64, "0")}`,
+  }));
+  const project = "coffee-launch-image-test";
+  const refs = new Map();
+  const foreign = `sha256:${"f".repeat(64)}`;
+  refs.set("foreign:latest", foreign);
+  const listedIds = new Map();
+  const run = (args) => {
+    if (args[1] === "ls")
+      return [...refs]
+        .map(([ref, id]) => {
+          const split = ref.lastIndexOf(":");
+          const listedId = `sha256:${createHash("sha256").update(id).digest("hex")}`;
+          listedIds.set(listedId, id);
+          return JSON.stringify({
+            Repository: ref.slice(0, split),
+            Tag: ref.slice(split + 1),
+            ID: listedId,
+          });
+        })
+        .join("\n");
+    if (args[1] === "inspect")
+      return `${args
+        .slice(4)
+        .map((reference) => refs.get(reference) ?? listedIds.get(reference))
+        .join("\n")}\n`;
+    if (args[1] === "rm") {
+      for (const reference of args.slice(3)) refs.delete(reference);
+      return "";
+    }
+    throw new Error(`unexpected Docker operation ${args.join(" ")}`);
+  };
+  const inspect = () => inspectLaunchRuntimeImages(project, images, run);
+  assert.throws(
+    () =>
+      inspectLaunchRuntimeImages(project, images, (args) => {
+        if (args[1] === "inspect")
+          throw new Error("image inventory unavailable");
+        return run(args);
+      }),
+    /image inventory unavailable/,
+  );
+  assert.equal(launchRuntimeImageMode(inspect(), true), "build");
+  assert.equal(ownedLaunchRuntimeImageMode(inspect(), "baseline"), "build");
+  assert.throws(() => ownedLaunchRuntimeImageMode(inspect(), "ready"));
+  refs.set("preexisting:latest", images[0].imageId);
+  assert.equal(launchRuntimeImageMode(inspect(), true), "disabled");
+  assert.throws(
+    () => ownedLaunchRuntimeImageMode(inspect(), "baseline"),
+    /appeared after ownership baseline/,
+  );
+  refs.delete("preexisting:latest");
+  refs.set("<none>:<none>", images[0].imageId);
+  assert.equal(launchRuntimeImageMode(inspect(), true), "disabled");
+  assert.throws(
+    () => cleanupLaunchRuntimeImages(project, images, run),
+    /unowned dangling image/,
+  );
+  refs.delete("<none>:<none>");
+  refs.set(`${project}-${images[0].service}:latest`, images[0].imageId);
+  assert.throws(
+    () => launchRuntimeImageMode(inspect(), true),
+    /already exists/,
+  );
+  assert.throws(() => launchRuntimeImageMode(inspect()), /incomplete/);
+  for (const { service, imageId } of images)
+    refs.set(`${project}-${service}:latest`, imageId);
+  assert.equal(launchRuntimeImageMode(inspect()), "reuse");
+  assert.equal(ownedLaunchRuntimeImageMode(inspect(), "ready"), "reuse");
+  assert.throws(() => ownedLaunchRuntimeImageMode(inspect(), "baseline"));
+  refs.set(`${project}-${images[0].service}:latest`, foreign);
+  assert.throws(() => launchRuntimeImageMode(inspect()), /unexpected ID/);
+  assert.throws(
+    () => cleanupLaunchRuntimeImages(project, images, run),
+    /ownership is unknown/,
+  );
+  assert.equal(refs.size, 16);
+  refs.set(`${project}-${images[0].service}:latest`, images[0].imageId);
+  assert.throws(
+    () =>
+      cleanupLaunchRuntimeImages(project, images, (args) => {
+        if (args[1] === "inspect" && args[4]?.startsWith(project))
+          return `${[foreign, ...args.slice(5).map((reference) => refs.get(reference))].join("\n")}\n`;
+        return run(args);
+      }),
+    /changed before cleanup/,
+  );
+  assert.equal(refs.size, 16);
+  assert.throws(
+    () =>
+      cleanupLaunchRuntimeImages(project, images, (args) => {
+        if (args[1] === "rm") throw new Error("cleanup rejected");
+        return run(args);
+      }),
+    /cleanup rejected/,
+  );
+  cleanupLaunchRuntimeImages(project, images, run);
+  assert.deepEqual([...refs], [["foreign:latest", foreign]]);
+  assert.throws(() =>
+    inspectLaunchRuntimeImages(project, images.slice(1), run),
+  );
+});
+
 void test("smoke accepts only runtime image IDs verified by G12 before startup", async (t) => {
   const { assertVerifiedRuntimeImages } =
     await import("../../tools/compose-smoke.mjs");
@@ -689,12 +804,13 @@ void test("smoke accepts only runtime image IDs verified by G12 before startup",
       join(REPO_ROOT, "tools/compose-smoke.mjs"),
       "utf8",
     );
-    const binding = source.indexOf(
-      "const verifiedImages = await readVerifiedRuntimeImages(",
-    );
     const build = source.indexOf(
       "buildRuntimeImages(",
       source.indexOf('markRollbackStage("build")'),
+    );
+    const binding = source.indexOf(
+      "const verifiedImages = await readVerifiedRuntimeImages(",
+      build,
     );
     assert.ok(build >= 0 && binding > build);
     assert.ok(

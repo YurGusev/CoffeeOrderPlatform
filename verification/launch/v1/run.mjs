@@ -46,6 +46,11 @@ import {
 } from "./scenarios/browser.mjs";
 import { admitRealtimeCapacity } from "../../../tools/realtime-capacity.mjs";
 import { readVerifiedRuntimeImages } from "../../../tools/verified-infrastructure-image.mjs";
+import {
+  cleanupLaunchRuntimeImages,
+  inspectLaunchRuntimeImages,
+  launchRuntimeImageMode,
+} from "../../../tools/compose-smoke.mjs";
 import { validateDependencyReadiness } from "../../../tests/observability/runtime-matrix.mjs";
 import { loadPlatformConfig } from "../../../scripts/config-lib.mjs";
 import {
@@ -704,6 +709,9 @@ export async function executeArgv(
   const startedAt = nowIso();
   const start = Date.now();
   const childEnv = { ...process.env };
+  delete childEnv.COFFEE_LAUNCH_IMAGE_OWNERSHIP;
+  if (options.imageOwnershipPath)
+    childEnv.COFFEE_LAUNCH_IMAGE_OWNERSHIP = options.imageOwnershipPath;
   childEnv.pnpm_config_verify_deps_before_run = "false";
   if (
     contextPath &&
@@ -1878,6 +1886,23 @@ function formatPnpmVersion(output) {
   return match?.[0] ?? "unknown";
 }
 
+export function finishRuntimeImageOwnership(
+  ownership,
+  ownerGate,
+  cleanup = cleanupLaunchRuntimeImages,
+) {
+  try {
+    cleanup(ownership.projectName, ownership.images);
+    ownership.phase = "cleaned";
+    return true;
+  } catch (error) {
+    ownership.phase = "cleanup-failed";
+    ownerGate.status = "FAIL";
+    ownerGate.reason = `Runtime image cleanup failed: ${redactText(error.message)}`;
+    return false;
+  }
+}
+
 export async function runGate(
   gate,
   record,
@@ -1889,6 +1914,7 @@ export async function runGate(
   outputBudget,
   g08ExpectedSystemIdentifier,
   realtimeQualificationPath,
+  imageOwnershipPath,
 ) {
   if (outputBudget.exceeded && gate.id !== "G19_REPORT") {
     record.reason =
@@ -2066,6 +2092,7 @@ export async function runGate(
         stderrPath,
         contextPath,
         outputBudget,
+        { imageOwnershipPath },
       );
     } catch (error) {
       run = {
@@ -2191,6 +2218,10 @@ export async function executeRun(options = {}) {
   if (resolved !== candidateSha)
     throw new Error("candidate SHA не является разрешимым commit object");
   const checkout = await makeCandidateCheckout(candidateSha);
+  let imageOwnership;
+  let imageOwnershipPath;
+  let imageCleanupVerified = false;
+  let imageCleanupReported = false;
   try {
     const startedAt = nowIso();
     const runId = `${startedAt.replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z")}-${candidateSha.slice(0, 7)}`;
@@ -2338,7 +2369,70 @@ export async function executeRun(options = {}) {
     for (let index = 0; index < matrix.gates.length; index += 1) {
       const gate = matrix.gates[index];
       const record = result.gates[index];
+      if (
+        gate.id === "G10_INTEGRATION" &&
+        !outputBudget.exceeded &&
+        Date.now() < workloadDeadline &&
+        dependencyStatus(gate, result.gates).length === 0
+      ) {
+        try {
+          const images = await readVerifiedRuntimeImages({
+            contextFile: contextPath,
+          });
+          const projectName = `coffee-launch-${runId.toLowerCase()}`;
+          const mode = launchRuntimeImageMode(
+            inspectLaunchRuntimeImages(projectName, images),
+            true,
+          );
+          imageOwnership = {
+            runId,
+            candidateSha,
+            projectName,
+            images,
+            phase: mode === "build" ? "baseline" : "disabled",
+          };
+          const path = join(
+            evidenceDir,
+            "gates/G10_INTEGRATION/artifacts/runtime-image-ownership.json",
+          );
+          await atomicJson(path, imageOwnership);
+          await chmod(path, 0o400);
+          if (mode === "build") imageOwnershipPath = path;
+          else record.artifacts.push(await hashFile(path));
+        } catch (error) {
+          record.status = "FAIL";
+          record.reason = `Runtime image ownership preflight failed: ${redactText(error.message)}`;
+          record.endedAt = nowIso();
+          await writeFile(
+            join(evidenceDir, "gates", gate.id, "stdout.log"),
+            "",
+            { mode: 0o600 },
+          );
+          await writeFile(
+            join(evidenceDir, "gates", gate.id, "stderr.log"),
+            `${record.reason}\n`,
+            { mode: 0o600 },
+          );
+          await updateGateArtifact(evidenceDir, record);
+          await save();
+          continue;
+        }
+      }
       if (gate.id === "G19_REPORT") {
+        if (imageOwnershipPath) {
+          const ownerGate = result.gates.find(
+            (item) => item.id === "G10_INTEGRATION",
+          );
+          imageCleanupVerified = finishRuntimeImageOwnership(
+            imageOwnership,
+            ownerGate,
+          );
+          imageCleanupReported = !imageCleanupVerified;
+          await atomicJson(imageOwnershipPath, imageOwnership);
+          await chmod(imageOwnershipPath, 0o400);
+          ownerGate.artifacts.push(await hashFile(imageOwnershipPath));
+          await updateGateArtifact(evidenceDir, ownerGate);
+        }
         await writeDefects(evidenceDir, ROOT, result);
         await atomicJson(
           join(evidenceDir, "gates", gate.id, "result.json"),
@@ -2373,7 +2467,39 @@ export async function executeRun(options = {}) {
         outputBudget,
         options.g08ExpectedSystemIdentifier,
         options.realtimeQualificationPath,
+        [
+          "G10_INTEGRATION",
+          "G11_RECOVERY",
+          "G13_COMPOSE",
+          "G14_OBSERVABILITY",
+        ].includes(gate.id)
+          ? imageOwnershipPath
+          : undefined,
       );
+      if (
+        gate.id === "G10_INTEGRATION" &&
+        imageOwnershipPath &&
+        record.status === "PASS"
+      ) {
+        try {
+          if (
+            launchRuntimeImageMode(
+              inspectLaunchRuntimeImages(
+                imageOwnership.projectName,
+                imageOwnership.images,
+              ),
+            ) !== "reuse"
+          )
+            throw new Error("all 15 verified runtime images must be retained");
+          imageOwnership.phase = "ready";
+          await atomicJson(imageOwnershipPath, imageOwnership);
+          await chmod(imageOwnershipPath, 0o400);
+        } catch (error) {
+          record.status = "FAIL";
+          record.reason = `Runtime image retention failed: ${redactText(error.message)}`;
+          await updateGateArtifact(evidenceDir, record);
+        }
+      }
       await saveCommandsNdjson(evidenceDir, result.gates);
       await save();
     }
@@ -2406,7 +2532,21 @@ export async function executeRun(options = {}) {
       candidatePath: checkout.candidate,
     };
   } finally {
-    await rm(checkout.parent, { recursive: true, force: true });
+    try {
+      if (imageOwnershipPath && !imageCleanupVerified) {
+        cleanupLaunchRuntimeImages(
+          imageOwnership.projectName,
+          imageOwnership.images,
+        );
+        imageOwnership.phase = imageCleanupReported
+          ? "cleanup-failed"
+          : "cleaned";
+        await atomicJson(imageOwnershipPath, imageOwnership);
+        await chmod(imageOwnershipPath, 0o400);
+      }
+    } finally {
+      await rm(checkout.parent, { recursive: true, force: true });
+    }
   }
 }
 

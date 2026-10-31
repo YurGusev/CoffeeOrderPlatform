@@ -30,6 +30,7 @@ import test from "node:test";
 import {
   captureKafkaNamespaceArtifact,
   executeArgv,
+  finishRuntimeImageOwnership,
   gateBudgetMs,
   loadMatrix,
   normalizeCandidateInputModes,
@@ -40,6 +41,7 @@ import {
   verifyGateArtifacts,
   writeRedactedStream,
 } from "./run.mjs";
+
 import {
   EXPECTED_GATES,
   finalizeReport,
@@ -144,6 +146,81 @@ import {
   writeUnitEvidenceArtifacts,
 } from "./scenarios/unit.mjs";
 import { selectFormatPaths } from "../../../scripts/format.mjs";
+
+void test("image cleanup completes before ownership can pass; unknown cleanup fails the gate", () => {
+  const ownership = {
+    projectName: "coffee-launch-test",
+    images: [],
+    phase: "ready",
+  };
+  const gate = { status: "PASS" };
+  assert.equal(
+    finishRuntimeImageOwnership(ownership, gate, () => {
+      assert.equal(ownership.phase, "ready");
+      throw new Error("cannot inspect image");
+    }),
+    false,
+  );
+  assert.equal(ownership.phase, "cleanup-failed");
+  assert.equal(gate.status, "FAIL");
+  assert.match(gate.reason, /cannot inspect image/);
+  ownership.phase = "ready";
+  gate.status = "PASS";
+  assert.equal(
+    finishRuntimeImageOwnership(ownership, gate, () => {
+      assert.equal(ownership.phase, "ready");
+    }),
+    true,
+  );
+  assert.equal(ownership.phase, "cleaned");
+});
+
+void test("G19 runs image cleanup before writing the final decision", async () => {
+  const source = await readFile(new URL("./run.mjs", import.meta.url), "utf8");
+  const gates = source.indexOf(
+    "for (let index = 0; index < matrix.gates.length",
+  );
+  const report = source.indexOf('if (gate.id === "G19_REPORT")', gates);
+  const cleanup = source.indexOf(
+    "imageCleanupVerified = finishRuntimeImageOwnership(",
+    report,
+  );
+  const defects = source.indexOf(
+    "await writeDefects(evidenceDir, ROOT, result)",
+    report,
+  );
+  assert.ok(
+    gates >= 0 && report > gates && cleanup > report && defects > cleanup,
+  );
+});
+
+void test("runner passes image ownership only when explicitly selected", async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), "launch-image-env-"));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const marker = join(directory, "ownership.json");
+  for (const [name, options, expected] of [
+    ["normal", {}, ""],
+    ["owned", { imageOwnershipPath: marker }, marker],
+  ]) {
+    const stdout = join(directory, `${name}.out`);
+    const result = await executeArgv(
+      [
+        process.execPath,
+        "-e",
+        "process.stdout.write(process.env.COFFEE_LAUNCH_IMAGE_OWNERSHIP || '')",
+      ],
+      directory,
+      5000,
+      stdout,
+      join(directory, `${name}.err`),
+      undefined,
+      null,
+      options,
+    );
+    assert.equal(result.exitCode, 0);
+    assert.equal(await readFile(stdout, "utf8"), expected);
+  }
+});
 
 const rollbackGit = (cwd, ...args) =>
   execFileSync("git", args, {

@@ -1656,6 +1656,147 @@ export function removeBuiltRuntimeImages(images, options) {
   }
 }
 
+// Inspect named references and dangling image IDs together; a failed inventory
+// is never treated as an empty cache.
+const runImageControl = (args) => runDocker(args, { timeout: 10_000 });
+
+export function inspectLaunchRuntimeImages(
+  projectName,
+  verifiedImages,
+  run = runImageControl,
+) {
+  const expected = new Map(
+    verifiedImages.map(({ service, imageId }) => [
+      `${projectName}-${service}:latest`,
+      imageId,
+    ]),
+  );
+  assert.equal(expected.size, RUNTIMES.length + 1);
+  assert.deepEqual(
+    new Set(verifiedImages.map(({ service }) => service)),
+    new Set([...RUNTIMES, "edge-nginx"]),
+  );
+  for (const id of expected.values())
+    assert.match(id, /^sha256:[a-f0-9]{64}$/u);
+  const rows = run([
+    "image",
+    "ls",
+    "--all",
+    "--no-trunc",
+    "--format",
+    "{{json .}}",
+  ])
+    .split("\n")
+    .filter(Boolean)
+    .map((line) => JSON.parse(line));
+  for (const row of rows) {
+    assert.match(row.ID ?? "", /^sha256:[a-f0-9]{64}$/u);
+    assert.equal(typeof row.Repository, "string");
+    assert.equal(typeof row.Tag, "string");
+  }
+  const listedIds = [...new Set(rows.map((row) => row.ID))];
+  const inspectedIds = listedIds.length
+    ? run(["image", "inspect", "--format", "{{.Id}}", ...listedIds])
+        .trim()
+        .split("\n")
+    : [];
+  assert.equal(
+    inspectedIds.length,
+    listedIds.length,
+    "image inventory inspection is incomplete",
+  );
+  for (const id of inspectedIds) assert.match(id, /^sha256:[a-f0-9]{64}$/u);
+  const identities = new Map(
+    listedIds.map((id, index) => [id, inspectedIds[index]]),
+  );
+  const refs = new Map();
+  let resident = false;
+  let dangling = false;
+  for (const row of rows) {
+    const reference = `${row.Repository}:${row.Tag}`;
+    const imageId = identities.get(row.ID);
+    if ([...expected.values()].includes(imageId)) {
+      resident = true;
+      if (row.Repository === "<none>" && row.Tag === "<none>") dangling = true;
+    }
+    if (expected.has(reference)) {
+      assert.ok(!refs.has(reference), "duplicate run-owned image reference");
+      refs.set(reference, imageId);
+    }
+  }
+  return { expected, refs, resident, dangling };
+}
+
+export function launchRuntimeImageMode(inventory, initial = false) {
+  if (initial) {
+    assert.equal(inventory.refs.size, 0, "run image reference already exists");
+    return inventory.resident ? "disabled" : "build";
+  }
+  for (const [reference, id] of inventory.refs)
+    assert.equal(
+      id,
+      inventory.expected.get(reference),
+      "run image reference has an unexpected ID",
+    );
+  if (inventory.refs.size === 0) return "build";
+  assert.equal(
+    inventory.refs.size,
+    inventory.expected.size,
+    "run image references are incomplete",
+  );
+  return "reuse";
+}
+
+export function ownedLaunchRuntimeImageMode(inventory, phase) {
+  assert.ok(["baseline", "ready"].includes(phase));
+  const mode = launchRuntimeImageMode(inventory);
+  assert.equal(mode, phase === "baseline" ? "build" : "reuse");
+  if (phase === "baseline")
+    assert.equal(
+      inventory.resident,
+      false,
+      "verified image appeared after ownership baseline",
+    );
+  return mode;
+}
+
+export function cleanupLaunchRuntimeImages(
+  projectName,
+  verifiedImages,
+  run = runImageControl,
+) {
+  const inventory = inspectLaunchRuntimeImages(
+    projectName,
+    verifiedImages,
+    run,
+  );
+  for (const [reference, id] of inventory.refs)
+    assert.equal(
+      id,
+      inventory.expected.get(reference),
+      "run image cleanup ownership is unknown",
+    );
+  if (inventory.refs.size) {
+    const references = [...inventory.refs.keys()];
+    const ids = run(["image", "inspect", "--format", "{{.Id}}", ...references])
+      .trim()
+      .split("\n");
+    assert.deepEqual(
+      ids,
+      references.map((reference) => inventory.refs.get(reference)),
+      "run image changed before cleanup",
+    );
+    run(["image", "rm", "--no-prune", ...references]);
+  }
+  const after = inspectLaunchRuntimeImages(projectName, verifiedImages, run);
+  assert.equal(after.refs.size, 0, "run image cleanup is incomplete");
+  assert.equal(
+    after.dangling,
+    false,
+    "run image cleanup left an unowned dangling image",
+  );
+}
+
 export function assertVerifiedRuntimeImages({
   projectName,
   verifiedImages,
@@ -9439,6 +9580,7 @@ export async function runComposeSmoke({
   const composeFiles = [];
   let composeAttempted = false;
   const builtImages = [];
+  let parentOwnedRuntimeImages = false;
   let databaseProofContainer;
   const fixturePostgresRunId = options.observabilityFixture
     ? randomUUID()
@@ -10093,9 +10235,41 @@ export async function runComposeSmoke({
     const imageIdentity = g14Browser
       ? await validateLaunchContext(imageContextPath)
       : launchIdentity;
+    let imageMode = "build";
+    const ownershipPath = process.env.COFFEE_LAUNCH_IMAGE_OWNERSHIP;
+    if (ownershipPath && bindRuntimeImages && !options.noBuild && !g14Browser) {
+      assert.ok(imageIdentity, "run-owned images require launch identity");
+      const expectedPath = join(
+        imageIdentity.evidenceDir,
+        "gates/G10_INTEGRATION/artifacts/runtime-image-ownership.json",
+      );
+      assert.equal(ownershipPath, expectedPath);
+      assert.equal(await realpath(ownershipPath), ownershipPath);
+      const info = await lstat(ownershipPath);
+      assert.ok(
+        info.isFile() &&
+          !info.isSymbolicLink() &&
+          info.uid === process.getuid() &&
+          (info.mode & 0o777) === 0o400 &&
+          info.size > 0 &&
+          info.size <= 16384,
+      );
+      const ownership = JSON.parse(await readFile(ownershipPath, "utf8"));
+      const verifiedImages = await readVerifiedRuntimeImages({
+        contextFile: imageContextPath,
+      });
+      assert.equal(ownership.runId, imageIdentity.context.runId);
+      assert.equal(ownership.candidateSha, imageIdentity.context.candidateSha);
+      assert.equal(ownership.projectName, projectName);
+      assert.deepEqual(ownership.images, verifiedImages);
+      const inventory = inspectLaunchRuntimeImages(projectName, verifiedImages);
+      imageMode = ownedLaunchRuntimeImageMode(inventory, ownership.phase);
+      parentOwnedRuntimeImages = true;
+    }
     if (!options.noBuild) {
       let temporary;
       let snapshot;
+      const imageStart = Date.now();
       try {
         if (imageIdentity && bindRuntimeImages) {
           temporary = await mkdtemp(join(tmpdir(), "coffee-runtime-build-"));
@@ -10107,22 +10281,30 @@ export async function runComposeSmoke({
           await verifyBuildInputSnapshot(snapshot);
         }
         try {
-          buildRuntimeImages(
-            projectName,
-            options.databaseProof || options.customerProof
-              ? [DATABASE_PROOF_RUNTIME]
-              : options.aromaBindingProof || options.aromaCartProof
-                ? ["api-internal", "aroma-gateway"]
-                : RUNTIMES,
-            builtImages,
-            snapshot?.contextPath ?? ROOT,
-          );
+          if (imageMode === "build")
+            buildRuntimeImages(
+              projectName,
+              options.databaseProof || options.customerProof
+                ? [DATABASE_PROOF_RUNTIME]
+                : options.aromaBindingProof || options.aromaCartProof
+                  ? ["api-internal", "aroma-gateway"]
+                  : RUNTIMES,
+              builtImages,
+              snapshot?.contextPath ?? ROOT,
+            );
         } finally {
           if (snapshot) await verifyBuildInputSnapshot(snapshot);
         }
       } finally {
         if (temporary) await rm(temporary, { recursive: true, force: true });
       }
+      if (parentOwnedRuntimeImages)
+        console.log(
+          JSON.stringify({
+            runtimeImages: imageMode,
+            durationMs: Date.now() - imageStart,
+          }),
+        );
     }
     if (bindRuntimeImages) {
       const verifiedImages = await readVerifiedRuntimeImages({
@@ -11323,7 +11505,8 @@ export async function runComposeSmoke({
           cleanupHookError ??= error;
         }
       }
-      removeBuiltRuntimeImages(builtImages, options);
+      if (!parentOwnedRuntimeImages)
+        removeBuiltRuntimeImages(builtImages, options);
       if (composeFile !== COMPOSE_FILE && !options.keep)
         await rm(composeFile, { force: true });
       if (!options.keep && secretsDir)
