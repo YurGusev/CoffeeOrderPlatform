@@ -17,17 +17,23 @@
 
 - `проверяется живым навыком customer-slice-verify` значит, что
   `node tools/grokverify-customer.mjs` вызывает эту операцию.
+- `проверяется живым навыком catalog-slice-verify` значит, что
+  `node .cursor/skills/catalog-slice-verify/run.mjs` вызывает эту операцию.
 - `только unit/integration тесты` значит, что живого навыка нет, а тест в
   указанном пути есть.
 - `не покрыто` значит, что вызова этой операции в `tests/` не найдено.
 
 | | Живой навык | Только тесты | Не покрыто |
 |---|---:|---:|---:|
-| Операции | 3 | 118 | 12 |
+| Операции | 8 | 113 | 12 |
 | События | 0 | 16 | 0 |
 
-Три живые операции принадлежат `customer-service`: `POST /api/client-v1/customers`,
-`GET /api/client-v1/customers` и `GET /health/ready`. Двенадцать непокрытых
+Восемь живых операций принадлежат двум сервисам. У `customer-service` это
+`POST /api/client-v1/customers`, `GET /api/client-v1/customers` и
+`GET /health/ready`. У `catalog-service` это
+`GET /api/client-v1/catalog/products`,
+`GET /api/internal-v1/catalog/products/:productRef/variants/:variantRef/pricing-input`,
+`GET /health/live`, `GET /health/ready` и `GET /metrics`. Двенадцать непокрытых
 операций принадлежат `edge-nginx`. Событие без теста не найдено.
 
 Файлы `*-live.test.mjs`, которым нужен `COFFEE_DB_LIVE_PROOF=1`, обычный
@@ -59,14 +65,15 @@
 
 ## Живые навыки срезов
 
-Сейчас живой навык бэкенда один: [customer-slice-verify](../customer-slice-verify/SKILL.md).
-Следующие срезы предполагаются отдельными PR. Каждый такой PR обновляет строки
-своего сервиса в этой карте.
+Живые навыки бэкенда: [customer-slice-verify](../customer-slice-verify/SKILL.md)
+и [catalog-slice-verify](../catalog-slice-verify/SKILL.md). Следующие срезы
+предполагаются отдельными PR. Каждый такой PR обновляет строки своего сервиса
+в этой карте.
 
 | Будущий срез | Файлы карты |
 |---|---|
 | orders | `features/orders-service.md`, `features/orders-aroma-preparation.md` |
-| catalog | `features/catalog-service.md`, `features/catalog-supplier-sync.md`, `features/catalog-activation-worker.md` |
+| catalog | `features/catalog-service.md` проверяется `catalog-slice-verify`; `features/catalog-supplier-sync.md` и `features/catalog-activation-worker.md` остаются следующему срезу |
 | pricing | `features/pricing-service.md` |
 | aroma-gateway | `features/aroma-gateway.md` |
 | edge-gateway | `features/edge-gateway.md`; nginx, если срез его поднимает, `features/edge-nginx.md` |
