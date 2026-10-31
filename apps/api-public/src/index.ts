@@ -1,4 +1,5 @@
 import { createPrivateKey, createPublicKey, randomUUID } from "node:crypto";
+import { isSpanContextValid, trace } from "@opentelemetry/api";
 import {
   customerContractSchemas,
   customerErrorPolicy,
@@ -821,12 +822,25 @@ async function forwardOrder(
   try {
     if (adapters.orders === undefined)
       throw new Error("orders client is not configured");
+    const span =
+      requestContext.traceparent === undefined
+        ? trace.getActiveSpan()?.spanContext()
+        : undefined;
+    const traceparent =
+      requestContext.traceparent ??
+      (span !== undefined && isSpanContextValid(span)
+        ? `00-${span.traceId}-${span.spanId}-${span.traceFlags.toString(16).padStart(2, "0")}`
+        : undefined);
+    const forwardingContext =
+      traceparent === undefined
+        ? requestContext
+        : { ...requestContext, traceparent };
     const result = await adapters.orders.forward(
       operationId,
       method,
       path,
       body,
-      { actor: claims, context: requestContext, ...extra },
+      { actor: claims, context: forwardingContext, ...extra },
     );
     return sendOrdersForward(request, reply, result, operationId);
   } catch {
