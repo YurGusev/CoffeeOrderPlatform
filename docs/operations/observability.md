@@ -61,6 +61,15 @@ Go/Rust не компилируются. Её финальный image ID и ID 
 использовать старые binaries из data volume. Tempo использует согласованный
 готовый dev image по immutable digest; его стабильность проверяется G14.
 
+В одном launch run после G12 полная recovery-сборка G10 может сохранить 15
+собственных image references для G11, G13 и G14. Повторное использование
+допускается только для полного набора с точными G12 image ID и проверенной
+идентичностью исходников, конфигурации и BOM. Если до G10 уже присутствует
+один из этих image ID, ускорение отключается; коллизия собственных имён и
+неизвестное состояние завершают проверку с FAIL. Runner удаляет только
+подтверждённые собственные references до решения G19; неподтверждённая очистка
+означает FAIL.
+
 Policy `verification.securityScan.approvedFixed` разрешает только два указанных
 в ADR-0040 already-fixed Tempo findings для exact artifact identity. Raw scan и
 UNKNOWN сохраняются. Изменение package/version/hash, иной HIGH/CRITICAL или

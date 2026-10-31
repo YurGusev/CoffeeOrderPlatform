@@ -7107,8 +7107,8 @@ export async function proveOwnedNetworkDependency({
         const reattached = after.NetworkSettings?.Networks?.[networkName];
         assert.equal(reattached?.NetworkID, endpoint.NetworkID);
         assert.deepEqual(
-          [...reattached.Aliases].sort(),
-          [...endpoint.Aliases].sort(),
+          [...reattached.Aliases].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0)),
+          [...endpoint.Aliases].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0)),
         );
         assert.match(reattached.IPAddress ?? "", /^(?:\d{1,3}\.){3}\d{1,3}$/u);
         const remainingNetworks = { ...after.NetworkSettings.Networks };
