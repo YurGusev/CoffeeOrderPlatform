@@ -1284,6 +1284,81 @@ async function forbiddenRuntimePackages() {
   return [...new Set([...TOOLING_NAMES, ...ROOT_TOOLING_PACKAGES])].sort();
 }
 
+export function validateDependencyReadiness(receipt, config) {
+  const internalApiOwners = new Set([
+    "orders-service",
+    "aroma-observer",
+    "aroma-convergence",
+  ]);
+  const required = new Set();
+  const notApplicable = new Set();
+  for (const runtime of NODE_RUNTIME_ROLES) {
+    const service = config?.services?.[runtime];
+    if (
+      !service ||
+      !(service.database === null || typeof service.database === "string") ||
+      !Array.isArray(service.kafka?.producers) ||
+      !Array.isArray(service.kafka?.consumers)
+    )
+      fail("dependency readiness configuration invalid");
+    const dependencies = [
+      ...(service.database === null ? [] : ["database"]),
+      ...(service.kafka.producers.length || service.kafka.consumers.length
+        ? ["kafka"]
+        : []),
+      ...(internalApiOwners.has(runtime) ? ["internal-api"] : []),
+    ];
+    if (dependencies.length === 0) notApplicable.add(runtime);
+    for (const dependency of dependencies)
+      required.add(`${runtime}:${dependency}`);
+  }
+  if (
+    notApplicable.size !== 3 ||
+    ["edge-gateway", "api-public", "api-internal"].some(
+      (runtime) => !notApplicable.has(runtime),
+    )
+  )
+    fail("dependency readiness applicability changed");
+  if (
+    receipt?.status !== "PASS" ||
+    receipt.localChecks !== "NOT_PROVEN" ||
+    !Array.isArray(receipt.checks) ||
+    !Array.isArray(receipt.notApplicable) ||
+    Object.keys(receipt).sort().join(",") !==
+      "checks,localChecks,notApplicable,status" ||
+    receipt.checks.length !== required.size ||
+    receipt.notApplicable.length !== notApplicable.size
+  )
+    fail("dependency readiness evidence incomplete");
+  for (const check of receipt.checks) {
+    const key = `${check?.runtime}:${check?.dependency}`;
+    if (
+      !required.delete(key) ||
+      check.before !== 200 ||
+      check.during !== 503 ||
+      check.after !== 200 ||
+      check.liveDuring !== 200 ||
+      check.restored !== true ||
+      (check.dependency === "kafka" &&
+      check.runtime !== "orders-aroma-preparation"
+        ? check.addressChanged !== null
+        : typeof check.addressChanged !== "boolean") ||
+      Object.keys(check).sort().join(",") !==
+        "addressChanged,after,before,dependency,during,liveDuring,restored,runtime"
+    )
+      fail("dependency readiness evidence invalid");
+  }
+  for (const item of receipt.notApplicable) {
+    if (
+      !notApplicable.delete(item?.runtime) ||
+      item.reason !== "no-registered-readiness-dependency" ||
+      Object.keys(item).sort().join(",") !== "reason,runtime"
+    )
+      fail("dependency readiness applicability invalid");
+  }
+  return receipt;
+}
+
 export function summarizeComposeReceipt(receipt, projectName, external) {
   const expectedHealth = ["/health/live", "/health/ready", "/metrics"];
   const postgresStorage = receipt?.recoveryProof?.postgresStorage;
@@ -1361,6 +1436,9 @@ export function summarizeComposeReceipt(receipt, projectName, external) {
     gracefulShutdown: true,
     healthEndpoints: expectedHealth,
     recoveryProofPresent: true,
+    ...(receipt.dependencyReadiness === undefined
+      ? {}
+      : { dependencyReadiness: receipt.dependencyReadiness }),
     ...(external
       ? {
           postgres: {
@@ -1624,6 +1702,8 @@ export async function verifyRuntimeMetricMatrix({
   if (!readyCalled || !cleanupCalled)
     fail("runtime matrix Compose hooks incomplete");
   const composeReceipt = summarizeComposeReceipt(smoke, projectName, external);
+  if (external)
+    validateDependencyReadiness(composeReceipt.dependencyReadiness, config);
   assertProjectCleanup(runDocker, projectName);
   if (
     Object.values(capturedNetworks).some((name) =>

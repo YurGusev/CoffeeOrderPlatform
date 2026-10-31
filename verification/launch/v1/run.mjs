@@ -45,6 +45,10 @@ import {
   validateBrowserParentRuntime,
 } from "./scenarios/browser.mjs";
 import { admitRealtimeCapacity } from "../../../tools/realtime-capacity.mjs";
+import { readVerifiedRuntimeImages } from "../../../tools/verified-infrastructure-image.mjs";
+import { validateDependencyReadiness } from "../../../tests/observability/runtime-matrix.mjs";
+import { loadPlatformConfig } from "../../../scripts/config-lib.mjs";
+import { observabilityVerificationCoverage } from "../../../tools/observability/verify.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 const BASE = join(ROOT, "verification/launch/v1");
@@ -1018,7 +1022,12 @@ export async function captureKafkaNamespaceArtifact({
   return await hashFile(path);
 }
 
-export async function verifyGateArtifacts(gate, record, evidenceDir) {
+export async function verifyGateArtifacts(
+  gate,
+  record,
+  evidenceDir,
+  realtimeQualification,
+) {
   const gateDir = join(evidenceDir, "gates", gate.id);
   const context = JSON.parse(
     await readFile(join(evidenceDir, "context.json"), "utf8"),
@@ -1431,16 +1440,11 @@ export async function verifyGateArtifacts(gate, record, evidenceDir) {
         evidenceDir,
         parentContext: context,
       });
-      const traceNotProven = child.receipt.proof.traceStatus === "NOT_PROVEN";
       for (const path of child.files) {
         await assertNoSymlinkPath(evidenceDir, path);
         record.artifacts.push(await hashFile(path));
       }
-      if (
-        record.runs[0]?.timedOut ||
-        (!traceNotProven && record.runs[0]?.exitCode !== 0)
-      )
-        return failure;
+      if (record.runs[0]?.timedOut) return failure;
       const names = [
         "alert-transitions.json",
         "correlation-proof.json",
@@ -1468,6 +1472,7 @@ export async function verifyGateArtifacts(gate, record, evidenceDir) {
       }
       const result = documents["result.json"];
       const correlation = documents["correlation-proof.json"];
+      const traceNotProven = correlation.launchPath?.traceStatus !== "PASS";
       if (
         result.status !== (traceNotProven ? "FAIL" : "PASS") ||
         !/^[0-9a-f-]{36}$/u.test(result.runId ?? "") ||
@@ -1504,6 +1509,73 @@ export async function verifyGateArtifacts(gate, record, evidenceDir) {
         record.artifacts.push(...additions);
         return "G14 W3C trace is not proven";
       }
+      const qualificationPath = join(
+        gateDir,
+        "artifacts/realtime-capacity.json",
+      );
+      await assertNoSymlinkPath(evidenceDir, qualificationPath);
+      const qualificationInfo = await lstat(qualificationPath);
+      if (
+        record.runs[0]?.exitCode !== 0 ||
+        !qualificationInfo.isFile() ||
+        qualificationInfo.isSymbolicLink() ||
+        qualificationInfo.uid !== process.getuid() ||
+        (qualificationInfo.mode & 0o777) !== 0o600 ||
+        qualificationInfo.size > 65536 ||
+        !realtimeQualification ||
+        !isDeepStrictEqual(
+          JSON.parse(await readFile(qualificationPath, "utf8")),
+          realtimeQualification,
+        )
+      )
+        return failure;
+      const active = await validateLaunchContext(
+        join(evidenceDir, "context.json"),
+      );
+      const expectedImages = await readVerifiedRuntimeImages({
+        contextFile: join(evidenceDir, "context.json"),
+      });
+      const expectedAdmission = {
+        runId: realtimeQualification.receipt.runId,
+        candidateSha: realtimeQualification.receipt.candidateSha,
+        baseConfigSha256: realtimeQualification.receipt.baseConfigSha256,
+        receiptSha256: realtimeQualification.receiptSha256,
+        admittedAt: realtimeQualification.admittedAt,
+      };
+      const expectedConfig = await loadPlatformConfig(active.candidateRoot);
+      validateDependencyReadiness(
+        result.runtimeMetricMatrix?.composeReceipt?.dependencyReadiness,
+        expectedConfig,
+      );
+      const computedCoverage = observabilityVerificationCoverage(result, {
+        config: expectedConfig,
+        sourceHashStable: result.provenance?.sourceHashStable === true,
+        backendArtifactsComplete: names.every(
+          (name) => documents[name].status === "PASS",
+        ),
+      });
+      if (
+        !isDeepStrictEqual(result.qualificationAdmission, expectedAdmission) ||
+        !isDeepStrictEqual(result.verifiedRuntimeImages, expectedImages) ||
+        !isDeepStrictEqual(result.launchPathProof, correlation.launchPath) ||
+        !isDeepStrictEqual(
+          result.fullSystemG14,
+          documents["runtime-health-matrix.json"].fullSystemG14,
+        ) ||
+        !isDeepStrictEqual(
+          result.fullSystemG14,
+          computedCoverage.fullSystemG14,
+        ) ||
+        !/^[a-f0-9]{64}$/u.test(result.provenance?.start?.identityHash ?? "") ||
+        result.provenance?.start?.identityHash !==
+          result.provenance?.end?.identityHash ||
+        correlation.launchPath?.telemetrySubproof?.status !== "OBSERVED" ||
+        correlation.launchPath?.telemetrySubproof?.ordinaryApiMeasurement
+          ?.status !== "MEASURED" ||
+        correlation.launchPath?.telemetrySubproof?.carrier !==
+          child.receipt.proof.ownerTraceparent
+      )
+        return failure;
       if (result.fullSystemG14?.status !== "PASS") {
         record.artifacts.push(...additions);
         return "G14 full-system SLO, chaos and capacity proof is not complete";
@@ -1861,6 +1933,7 @@ export async function runGate(
   record.startedAt = nowIso();
   record.reason = "";
   const started = Date.now();
+  let realtimeQualification;
   if (gate.id === "G14_OBSERVABILITY") {
     try {
       if (!realtimeQualificationPath)
@@ -1869,6 +1942,7 @@ export async function runGate(
         receiptPath: realtimeQualificationPath,
         contextFile: contextPath,
       });
+      realtimeQualification = { ...admitted, admittedAt: nowIso() };
       const path = join(
         evidenceDir,
         "gates",
@@ -1876,10 +1950,14 @@ export async function runGate(
         "artifacts",
         "realtime-capacity.json",
       );
-      await writeFile(path, `${JSON.stringify(admitted, null, 2)}\n`, {
-        flag: "wx",
-        mode: 0o600,
-      });
+      await writeFile(
+        path,
+        `${JSON.stringify(realtimeQualification, null, 2)}\n`,
+        {
+          flag: "wx",
+          mode: 0o600,
+        },
+      );
       record.artifacts.push(await hashFile(path));
       if (Date.now() - started >= gate.timeout * 1000)
         throw new Error("qualification admission exhausted the G14 budget");
@@ -2028,7 +2106,12 @@ export async function runGate(
       join(logBase, "stderr.log"),
     );
   }
-  const artifactError = await verifyGateArtifacts(gate, record, evidenceDir);
+  const artifactError = await verifyGateArtifacts(
+    gate,
+    record,
+    evidenceDir,
+    realtimeQualification,
+  );
   if (artifactError) {
     record.status = "FAIL";
     record.reason = record.reason
@@ -2037,6 +2120,15 @@ export async function runGate(
   }
   record.durationMs = Date.now() - started;
   record.endedAt = nowIso();
+  if (
+    gate.id === "G14_OBSERVABILITY" &&
+    record.durationMs > gate.timeout * 1000
+  ) {
+    record.status = "FAIL";
+    record.reason = record.reason
+      ? `${record.reason}; Превышен timeout G14`
+      : "Превышен timeout G14";
+  }
   if (record.status !== "FAIL") record.status = "PASS";
   await updateGateArtifact(evidenceDir, record);
 }

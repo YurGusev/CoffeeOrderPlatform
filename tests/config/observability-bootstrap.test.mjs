@@ -7846,6 +7846,7 @@ void test("browser correlation executes the child lifecycle and preserves early 
     join(root, "tools/realtime-capacity.mjs"),
   );
   for (const file of [
+    "tests/observability/runtime-matrix.mjs",
     "verification/launch/v1/scenarios/rollback.mjs",
     "tools/config-bootstrap/index.mjs",
   ]) {
@@ -7923,6 +7924,7 @@ void test("browser correlation executes the child lifecycle and preserves early 
     "config/toolchain-versions.json",
     "verification/launch/v1/scenarios/browser.mjs",
     "tools/observability/verify.mjs",
+    "tests/observability/runtime-matrix.mjs",
     "tools/browser-proof.mjs",
     "tests/realtime/fixtures/setup.mjs",
     "tools/realtime-capacity.mjs",
@@ -7948,6 +7950,8 @@ void test("browser correlation executes the child lifecycle and preserves early 
     root,
     sourceRoot,
   ]);
+  await chmod(join(sourceRoot, "evidence"), 0o700);
+  await chmod(join(sourceRoot, "evidence/launch"), 0o700);
   execFileSync("git", [
     "-C",
     sourceRoot,
@@ -9295,6 +9299,45 @@ void test("browser correlation admission verifies the sealed child bundle and sc
     /lineage or cleanup is invalid/u,
   );
   await writeFile(backendPath, backendBytes);
+  const correlationPath = join(observations, "correlation-proof.json");
+  const resultPath = join(observations, "result.json");
+  const correlation = JSON.parse(await readFile(correlationPath, "utf8"));
+  correlation.status = "PASS";
+  correlation.launchPath.traceStatus = "PASS";
+  correlation.launchPath.traceId = receipt.proof.traceId;
+  const observedResult = JSON.parse(await readFile(resultPath, "utf8"));
+  observedResult.status = "PASS";
+  await writeFile(correlationPath, JSON.stringify(correlation));
+  await writeFile(resultPath, JSON.stringify(observedResult));
+  const capacity = {
+    receipt: { runId: "i12-aaaaaaaaaaaaaaaa" },
+    receiptSha256: "a".repeat(64),
+  };
+  await writeFile(
+    join(directory, "realtime-capacity.json"),
+    JSON.stringify(capacity),
+    { mode: 0o600 },
+  );
+  const observedRecord = {
+    ...record,
+    runs: [{ ...record.runs[0], exitCode: 0 }],
+    artifacts: [],
+  };
+  for (const qualification of [
+    undefined,
+    { ...capacity, receiptSha256: "b".repeat(64) },
+  ]) {
+    assert.match(
+      await verifyGateArtifacts(
+        { id: "G14_OBSERVABILITY", command: "pnpm test:observability" },
+        observedRecord,
+        parentContext.evidenceDir,
+        qualification,
+      ),
+      /lineage or cleanup is invalid/u,
+      "a parent-observed trace cannot bypass the in-memory consumed qualification",
+    );
+  }
   receipt.cleanup.databases.removed[0] = "coffeeorderdb";
   await writeFile(receiptPath, JSON.stringify(receipt));
   await assert.rejects(

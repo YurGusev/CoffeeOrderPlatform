@@ -47,6 +47,254 @@ const OBSERVABILITY_CONFIG = {
   },
 };
 
+void test("dependency readiness evidence covers every configured owner and rejects incomplete transitions", async () => {
+  const { load } = await import("js-yaml");
+  const { validateDependencyReadiness } =
+    await import("../observability/runtime-matrix.mjs");
+  const config = load(
+    await readFile(join(REPO_ROOT, "config/platform.yaml"), "utf8"),
+  );
+  const owners = {
+    database: [
+      "customer-service",
+      "catalog-service",
+      "catalog-supplier-sync",
+      "catalog-activation-worker",
+      "pricing-service",
+      "orders-service",
+      "orders-aroma-preparation",
+      "aroma-observer",
+      "aroma-convergence",
+      "aroma-gateway",
+    ],
+    kafka: [
+      "catalog-activation-worker",
+      "orders-service",
+      "orders-aroma-preparation",
+      "aroma-observer",
+      "aroma-convergence",
+      "realtime-gateway",
+    ],
+    "internal-api": ["orders-service", "aroma-observer", "aroma-convergence"],
+  };
+  const checks = Object.entries(owners).flatMap(([dependency, runtimes]) =>
+    runtimes.map((runtime) => ({
+      runtime,
+      dependency,
+      before: 200,
+      during: 503,
+      after: 200,
+      liveDuring: 200,
+      restored: true,
+      addressChanged:
+        dependency === "kafka" && runtime !== "orders-aroma-preparation"
+          ? null
+          : false,
+    })),
+  );
+  const receipt = {
+    status: "PASS",
+    checks,
+    notApplicable: ["edge-gateway", "api-public", "api-internal"].map(
+      (runtime) => ({ runtime, reason: "no-registered-readiness-dependency" }),
+    ),
+    localChecks: "NOT_PROVEN",
+  };
+  assert.equal(validateDependencyReadiness(receipt, config), receipt);
+  for (const invalid of [
+    { ...receipt, checks: checks.slice(1) },
+    { ...receipt, checks: [...checks.slice(1), checks[1]] },
+    { ...receipt, checks: [{ ...checks[0], during: 0 }, ...checks.slice(1)] },
+    {
+      ...receipt,
+      checks: [{ ...checks[0], liveDuring: 503 }, ...checks.slice(1)],
+    },
+    {
+      ...receipt,
+      checks: [{ ...checks[0], restored: false }, ...checks.slice(1)],
+    },
+    {
+      ...receipt,
+      checks: [{ ...checks[0], addressChanged: null }, ...checks.slice(1)],
+    },
+    {
+      ...receipt,
+      checks: [{ ...checks[0], extra: "secret" }, ...checks.slice(1)],
+    },
+    { ...receipt, notApplicable: receipt.notApplicable.slice(1) },
+    { ...receipt, localChecks: "PASS" },
+  ])
+    assert.throws(
+      () => validateDependencyReadiness(invalid, config),
+      /dependency readiness/u,
+    );
+});
+
+void test("owned database endpoint fault restores aliases and refuses foreign identity", async (t) => {
+  const { proveOwnedNetworkDependency } =
+    await import("../../tools/compose-smoke.mjs");
+  const projectName = "coffee-launch-20261024t120000z-a12bc34";
+  const containerId = "a".repeat(64);
+  const postgresId =
+    "267958ce276e65d96c4a5d2cfc4541de35f9785de3dd15c04c34798cf7b1c85f";
+  const networkId =
+    "f1e587a5c52948bcf232cdc3e644859a7ed24db7dc4fd84be65f36a397cedf6a";
+  const postgresImage =
+    "sha256:1bea307dfb3ee30541a7acf7de14b58bcd6948da98e5d31a04c627c4d35ec64b";
+  const networkName = "coffee_postgres_data";
+  let connected = true;
+  let reconnected = false;
+  let foreign = false;
+  let logFailure = false;
+  let changePostgresRoute = false;
+  let routeChanged = false;
+  const calls = [];
+  const postgres = {
+    Id: postgresId,
+    Image: postgresImage,
+    Name: "/coffee_postgres",
+    NetworkSettings: {
+      Networks: {
+        [networkName]: { NetworkID: networkId, Aliases: ["coffee_postgres"] },
+      },
+    },
+  };
+  const row = () => ({
+    Id: containerId,
+    Image: `sha256:${"b".repeat(64)}`,
+    Config: {
+      Labels: {
+        "com.docker.compose.project": foreign ? "foreign" : projectName,
+        "com.docker.compose.service": "customer-service",
+      },
+    },
+    State: { Running: true, StartedAt: "2026-10-31T00:00:00Z" },
+    NetworkSettings: {
+      Networks: {
+        public: { NetworkID: "c".repeat(64) },
+        ...(connected
+          ? {
+              [networkName]: {
+                NetworkID: networkId,
+                IPAddress: reconnected ? "172.20.0.5" : "172.20.0.4",
+                Aliases: ["customer-service"],
+              },
+            }
+          : {}),
+      },
+    },
+  });
+  t.mock.method(childProcess, "execFileSync", (command, args) => {
+    assert.equal(command, "docker");
+    calls.push(args);
+    if (args[0] === "inspect" && args[1] === containerId)
+      return JSON.stringify([row()]);
+    if (args[0] === "inspect" && args[1] === postgresId)
+      return JSON.stringify([postgres]);
+    if (args[0] === "inspect" && args[1] === networkId)
+      return JSON.stringify([
+        {
+          Id: networkId,
+          Containers: {
+            [postgresId]: { Name: "coffee_postgres" },
+            ...(connected
+              ? { [containerId]: { Name: "customer-service" } }
+              : {}),
+          },
+        },
+      ]);
+    if (args[0] === "exec" && args[1] === postgresId)
+      return routeChanged
+        ? "eth1:0200007F:0003:00000000\n"
+        : "eth0:0100007F:0003:00000000\n";
+    if (args[0] === "exec" && args[1] === containerId)
+      return "0100007F:0003:00000000:00000000\n";
+    if (args[0] === "exec" && args[2] === containerId)
+      return args.at(-1) === "/health/live" || connected ? "200\n" : "503\n";
+    if (args[0] === "logs")
+      return logFailure
+        ? ""
+        : '{"event":"runtime.readiness.failed","dependency":"database"}\n';
+    if (args[0] === "network" && args[1] === "disconnect") {
+      connected = false;
+      if (changePostgresRoute) routeChanged = true;
+      return "";
+    }
+    if (args[0] === "network" && args[1] === "connect") {
+      connected = true;
+      reconnected = true;
+      return "";
+    }
+    throw new Error("unexpected Docker call");
+  });
+  syncBuiltinESMExports();
+  try {
+    const input = {
+      projectName,
+      runtime: "customer-service",
+      containerId,
+      networkName,
+      dependency: "database",
+      checkName: "database",
+    };
+    const evidence = await proveOwnedNetworkDependency(input);
+    assert.deepEqual(evidence, {
+      runtime: "customer-service",
+      dependency: "database",
+      before: 200,
+      during: 503,
+      after: 200,
+      liveDuring: 200,
+      restored: true,
+      addressChanged: true,
+    });
+    assert.deepEqual(
+      calls.find((args) => args[0] === "network" && args[1] === "connect"),
+      [
+        "network",
+        "connect",
+        "--alias",
+        "customer-service",
+        networkId,
+        containerId,
+      ],
+    );
+    logFailure = true;
+    await assert.rejects(
+      proveOwnedNetworkDependency(input),
+      /expected dependency failure was not observed/u,
+    );
+    assert.equal(
+      connected,
+      true,
+      "failed proof must reconnect the owned endpoint",
+    );
+    logFailure = false;
+    changePostgresRoute = true;
+    await assert.rejects(
+      proveOwnedNetworkDependency(input),
+      /shared PostgreSQL endpoint or route changed/u,
+    );
+    assert.equal(connected, true);
+    routeChanged = false;
+    const previousMutations = calls.filter(
+      (args) => args[0] === "network",
+    ).length;
+    foreign = true;
+    await assert.rejects(
+      proveOwnedNetworkDependency(input),
+      /G15_RUNTIME_OWNERSHIP_INVALID/u,
+    );
+    assert.equal(
+      calls.filter((args) => args[0] === "network").length,
+      previousMutations,
+    );
+  } finally {
+    t.mock.reset();
+    syncBuiltinESMExports();
+  }
+});
+
 void test("programmatic observability hooks require a bounded recovery-proof run", async () => {
   const {
     runComposeSmoke,
@@ -478,7 +726,7 @@ void test("smoke accepts only runtime image IDs verified by G12 before startup",
       runInNewContext(predicate, { options: {}, browser: undefined }),
       true,
     );
-    assert.ok(source.includes("if (launchIdentity && bindRuntimeImages)"));
+    assert.ok(source.includes("if (imageIdentity && bindRuntimeImages)"));
     assert.ok(binding < source.indexOf("composeAttempted = true;", binding));
   } finally {
     t.mock.restoreAll();
@@ -1505,6 +1753,8 @@ void test("recovery proof preserves the body error when orders-aroma-preparation
         recoveryProofCredentials: {},
         platformConfig: {},
         recoveryPlatformConfig: {},
+        observability: undefined,
+        dependencyReadiness: undefined,
         databaseProofService: () => ({ database: "synthetic-db" }),
         nativeFoundation: undefined,
         prepareKafkaNativeFixture: async () => {

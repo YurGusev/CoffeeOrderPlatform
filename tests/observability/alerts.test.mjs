@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { runInNewContext } from "node:vm";
 import { spawnSync } from "node:child_process";
+import { syncBuiltinESMExports } from "node:module";
+import os from "node:os";
 import { createHash } from "node:crypto";
 import { load as parseYaml } from "js-yaml";
 import path from "node:path";
@@ -22,7 +24,11 @@ import {
   createGrafanaAlertProvisioning,
 } from "../../tools/observability/alerts.mjs";
 import { createAlertSink } from "../../tools/observability/alert-sink.mjs";
-import { createCollectorConfig } from "../../tools/observability/generate.mjs";
+import {
+  createCollectorConfig,
+  OBSERVABILITY_TARGETS,
+  prometheusMetricName,
+} from "../../tools/observability/generate.mjs";
 import {
   parseTempoStatusConfigResponse,
   captureContainerDiagnostics,
@@ -43,6 +49,7 @@ import {
   durationMilliseconds,
   parseCollectorExpiredRetryDrops,
   observabilityGateComplete,
+  readG14Qualification,
   persistVerificationResult,
   collectorMemorySelfTelemetry,
   isExporterMetricForSignal,
@@ -2010,7 +2017,10 @@ void test("observability evidence distinguishes selected live roles from full 14
     },
     metricApplicability: {
       "messaging.kafka.consumer.lag": [],
-      aromaConvergenceProof: { owner: "aroma-convergence" },
+      aromaConvergenceProof: {
+        "unknown-current": { status: "PASS" },
+        "recovered-terminal": { status: "PASS" },
+      },
     },
   });
   assert.equal(coverage.verificationScope, "operations-component");
@@ -2413,16 +2423,25 @@ void test("G14 queries actual child telemetry before cleanup and fails closed on
   const traceId = "a".repeat(32);
   const cid = "8f53d687-fd3b-47be-b32b-2081d08bc55a";
   const nativeNginxContainerId = "b".repeat(64);
+  const ordersContainerId = "d".repeat(64);
+  const ordersLogPath = `/var/lib/docker/containers/${ordersContainerId}/${ordersContainerId}-json.log`;
   const nativeLogPath = `/var/lib/docker/containers/${nativeNginxContainerId}/${nativeNginxContainerId}-json.log`;
   const proof = {
     correlationId: cid,
     traceId,
+    ownerTraceparent: `00-${traceId}-${"c".repeat(16)}-01`,
+    realtimeTraceparent: `00-${traceId}-${"c".repeat(16)}-01`,
     runId: "20261030T120000Z-abcdef0",
     candidateSha: "abcdef0" + "0".repeat(33),
     configSha256: "c".repeat(64),
   };
   const required = {
-    "orders-service": ["Outbox.relay", "Kafka.produce"],
+    "orders-service": [
+      "Outbox.relay",
+      "Kafka.produce",
+      "HTTP POST",
+      "db.transaction",
+    ],
     "orders-aroma-preparation": [
       "Kafka.consume",
       "Inbox.consumeOnce",
@@ -2444,6 +2463,12 @@ void test("G14 queries actual child telemetry before cleanup and fails closed on
       privateField,
       privateLocation,
       privateLogField,
+      splitTrace = false,
+      wrongLink = false,
+      detachedRequest = false,
+      requestLink = false,
+      wrongRequestLink = false,
+      wrongAnchor = false,
       missingCompletion = false,
       foreignContainer = false,
       extraRows = [],
@@ -2473,7 +2498,12 @@ void test("G14 queries actual child telemetry before cleanup and fails closed on
                       ...(privateLog ? { password: "canary-secret" } : {}),
                       ...(privateLogField
                         ? { [privateLogField]: "private-marker" }
-                        : {}),
+                        : {
+                            traceId: detachedRequest ? "e".repeat(32) : traceId,
+                            spanId: wrongAnchor
+                              ? "f".repeat(16)
+                              : "c".repeat(16),
+                          }),
                       ...(role === "edge-nginx"
                         ? {
                             method,
@@ -2498,7 +2528,7 @@ void test("G14 queries actual child telemetry before cleanup and fails closed on
                               : nativeLogPath,
                           },
                         ]
-                      : []),
+                      : [{ log_file_path: ordersLogPath }]),
                   ])
                   .concat(role === "edge-nginx" ? extraRows : []),
               })),
@@ -2507,11 +2537,29 @@ void test("G14 queries actual child telemetry before cleanup and fails closed on
         );
       }
       events.push("tempo");
+      if (url.pathname === "/api/search")
+        return new Response(
+          JSON.stringify({
+            traces: splitTrace ? [{ traceID: "d".repeat(32) }] : [],
+          }),
+        );
+      const requestedTrace = url.pathname.split("/").at(-1);
+      const linked = requestedTrace === "d".repeat(32);
+      const requestTrace = requestedTrace === "e".repeat(32);
+      const selected = requestTrace
+        ? { "orders-service": ["HTTP POST", "db.transaction"] }
+        : linked
+          ? { "realtime-gateway": ["Kafka.consume"] }
+          : Object.fromEntries(
+              Object.entries(required).filter(
+                ([role]) => !splitTrace || role !== "realtime-gateway",
+              ),
+            );
       return new Response(
         JSON.stringify({
           resourceSpans: empty
             ? []
-            : Object.entries(required).map(([role, names]) => ({
+            : Object.entries(selected).map(([role, names]) => ({
                 resource: {
                   attributes: [
                     { key: "service.name", value: { stringValue: role } },
@@ -2520,8 +2568,31 @@ void test("G14 queries actual child telemetry before cleanup and fails closed on
                 scopeSpans: [
                   {
                     spans: names.map((name) => ({
-                      traceId: wrongTrace ? "b".repeat(32) : traceId,
+                      traceId: wrongTrace ? "b".repeat(32) : requestedTrace,
+                      spanId: "c".repeat(16),
                       name,
+                      ...(linked
+                        ? {
+                            links: [
+                              {
+                                traceId,
+                                spanId: (wrongLink ? "f" : "c").repeat(16),
+                              },
+                            ],
+                          }
+                        : {}),
+                      ...(requestTrace && requestLink
+                        ? {
+                            links: [
+                              {
+                                traceId,
+                                spanId: (wrongRequestLink ? "f" : "c").repeat(
+                                  16,
+                                ),
+                              },
+                            ],
+                          }
+                        : {}),
                       ...(privateSpan
                         ? {
                             attributes: [
@@ -2604,6 +2675,9 @@ void test("G14 queries actual child telemetry before cleanup and fails closed on
       lokiUrl: "http://loki:3100",
       tempoUrl: "http://tempo:3200",
       nativeNginxContainerId,
+      nativeNginxImageId: `sha256:${"e".repeat(64)}`,
+      ordersContainerId,
+      ordersImageId: `sha256:${"f".repeat(64)}`,
       fetchImpl,
       timeoutMs: 30,
       intervalMs: 1,
@@ -2637,6 +2711,37 @@ void test("G14 queries actual child telemetry before cleanup and fails closed on
     /nonempty role spans/u,
   );
   assert.equal(result.status, "OBSERVED");
+  const multiTrace = await collect(
+    responses({ splitTrace: true, detachedRequest: true, requestLink: true }),
+  );
+  assert.equal(multiTrace.status, "OBSERVED");
+  assert.deepEqual(multiTrace.durableTraceIds, [traceId, "d".repeat(32)]);
+  assert.deepEqual(multiTrace.requestTraceIds, ["e".repeat(32)]);
+  assert.equal(
+    (await collect(responses({ detachedRequest: true }))).status,
+    "NOT_PROVEN",
+  );
+  assert.equal(
+    (
+      await collect(
+        responses({
+          detachedRequest: true,
+          requestLink: true,
+          wrongRequestLink: true,
+        }),
+      )
+    ).status,
+    "NOT_PROVEN",
+  );
+  assert.equal(
+    (await collect(responses({ splitTrace: true, wrongLink: true }))).status,
+    "NOT_PROVEN",
+  );
+  assert.equal(
+    (await collect(responses({ detachedRequest: true, wrongAnchor: true })))
+      .status,
+    "NOT_PROVEN",
+  );
   assert.ok(
     events.indexOf("loki") < events.indexOf("proof-ack") &&
       events.indexOf("tempo") < events.indexOf("proof-ack") &&
@@ -3439,6 +3544,432 @@ void test("G14 cannot pass with a missing or incomplete required phase", () => {
   evidence.phases.retention = "PASS";
   evidence.cleanupErrors.push("cleanup failed");
   assert.equal(observabilityGateComplete(evidence), false);
+});
+
+void test("G14 reads only the admitted qualification and its owned one-use claim", async (t) => {
+  const root = await mkdtemp(path.join(tmpdir(), "g14-admission-"));
+  const originalUser = os.userInfo();
+  const mockedUser = t.mock.method(os, "userInfo", () => ({
+    ...originalUser,
+    homedir: root,
+  }));
+  syncBuiltinESMExports();
+  t.after(async () => {
+    mockedUser.mock.restore();
+    syncBuiltinESMExports();
+    await rm(root, { recursive: true, force: true });
+  });
+  const runId = `i12-${"a".repeat(16)}`;
+  const context = {
+    candidateSha: "b".repeat(40),
+    baseConfigSha256: "c".repeat(64),
+  };
+  const policy = {
+    verification: {
+      realtimeQualification: { maximumAgeSeconds: 7200, budgetSeconds: 2700 },
+    },
+  };
+  const receiptSha256 = "d".repeat(64);
+  const claimPath = path.join(
+    root,
+    ".local/state/coffee-platform/realtime-claims",
+    `${runId}.json`,
+  );
+  const admissionPath = path.join(
+    root,
+    "gates/G14_OBSERVABILITY/artifacts/realtime-capacity.json",
+  );
+  await mkdir(path.dirname(claimPath), { recursive: true });
+  await mkdir(path.dirname(admissionPath), { recursive: true });
+  const admission = {
+    receipt: {
+      status: "PASS",
+      runId,
+      ...context,
+      endedAt: new Date(Date.now() - 1000).toISOString(),
+      elapsedMs: 1800000,
+    },
+    receiptSha256,
+    claimPath,
+    admittedAt: new Date().toISOString(),
+  };
+  await writeFile(claimPath, JSON.stringify({ runId, receiptSha256 }), {
+    mode: 0o400,
+  });
+  await writeFile(admissionPath, JSON.stringify(admission), { mode: 0o600 });
+  assert.deepEqual(await readG14Qualification(root, context, policy), {
+    runId,
+    ...context,
+    receiptSha256,
+    admittedAt: admission.admittedAt,
+  });
+  for (const mutate of [
+    (entry) => {
+      entry.receipt.candidateSha = "e".repeat(40);
+    },
+    (entry) => {
+      entry.receipt.baseConfigSha256 = "e".repeat(64);
+    },
+    (entry) => {
+      entry.receipt.endedAt = new Date(Date.now() - 7201000).toISOString();
+    },
+    (entry) => {
+      entry.receipt.elapsedMs = 2700001;
+    },
+    (entry) => {
+      entry.receiptSha256 = "e".repeat(64);
+    },
+    (entry) => {
+      entry.claimPath = path.join(root, "different.json");
+    },
+  ]) {
+    const invalid = structuredClone(admission);
+    mutate(invalid);
+    await writeFile(admissionPath, JSON.stringify(invalid));
+    await assert.rejects(readG14Qualification(root, context, policy));
+  }
+});
+
+void test("full G14 coverage requires bound readiness, images, browser traces and admission", async () => {
+  const platform = parseYaml(
+    await readFile(
+      new URL("../../config/platform.yaml", import.meta.url),
+      "utf8",
+    ),
+  );
+  const pairs = {
+    database: [
+      "customer-service",
+      "catalog-service",
+      "catalog-supplier-sync",
+      "catalog-activation-worker",
+      "pricing-service",
+      "orders-service",
+      "orders-aroma-preparation",
+      "aroma-observer",
+      "aroma-convergence",
+      "aroma-gateway",
+    ],
+    kafka: [
+      "catalog-activation-worker",
+      "orders-service",
+      "orders-aroma-preparation",
+      "aroma-observer",
+      "aroma-convergence",
+      "realtime-gateway",
+    ],
+    "internal-api": ["orders-service", "aroma-observer", "aroma-convergence"],
+  };
+  const readiness = {
+    status: "PASS",
+    localChecks: "NOT_PROVEN",
+    checks: Object.entries(pairs).flatMap(([dependency, runtimes]) =>
+      runtimes.map((runtime) => ({
+        runtime,
+        dependency,
+        before: 200,
+        during: 503,
+        after: 200,
+        liveDuring: 200,
+        restored: true,
+        addressChanged:
+          dependency === "kafka" && runtime !== "orders-aroma-preparation"
+            ? null
+            : false,
+      })),
+    ),
+    notApplicable: ["edge-gateway", "api-public", "api-internal"].map(
+      (runtime) => ({ runtime, reason: "no-registered-readiness-dependency" }),
+    ),
+  };
+  const id = `sha256:${"1".repeat(64)}`;
+  const traceId = "2".repeat(32);
+  const carrier = `00-${traceId}-${"3".repeat(16)}-01`;
+  const pass = { status: "PASS" };
+  const proof = {
+    status: "PASS",
+    browserCleanup: "EXACT_OWNED_CONTAINER_REMOVED",
+    runId: "child-run",
+    candidateSha: "8".repeat(40),
+    configSha256: "9".repeat(64),
+    correlationId: "cid",
+    traceId,
+    ownerTraceparent: carrier,
+    realtimeTraceparent: carrier,
+  };
+  const telemetry = {
+    status: "OBSERVED",
+    runId: proof.runId,
+    candidateSha: proof.candidateSha,
+    configSha256: proof.configSha256,
+    correlationId: "cid",
+    traceId,
+    carrier,
+    ordinaryApiMeasurement: {
+      status: "MEASURED",
+      sampleCount: 2,
+      successCount: 2,
+      min: 0.1,
+      p50: 0.1,
+      p95: 0.2,
+      max: 0.2,
+      windowStartUtc: "2026-10-30T00:00:00.000Z",
+      windowEndUtc: "2026-10-30T00:00:01.000Z",
+    },
+    nativeSource: {
+      role: "edge-nginx",
+      containerId: "4".repeat(64),
+      imageId: id,
+    },
+    ownerSource: {
+      role: "orders-service",
+      containerId: "5".repeat(64),
+      imageId: id,
+    },
+    durableTraceIds: [traceId],
+    durableLinks: [],
+    requestTraceIds: [traceId],
+    requestBindings: [
+      {
+        traceId,
+        spanId: "7".repeat(16),
+        role: "orders-service",
+      },
+    ],
+    spans: {
+      "orders-service": ["Outbox.relay", "Kafka.produce"],
+      "orders-aroma-preparation": [
+        "Kafka.consume",
+        "Inbox.consumeOnce",
+        "Outbox.relay",
+        "Kafka.produce",
+      ],
+      "realtime-gateway": ["Kafka.consume"],
+    },
+  };
+  const evidence = {
+    status: "PASS",
+    cleanupErrors: [],
+    phases: Object.fromEntries(
+      [
+        "startup",
+        "signals",
+        "alerts",
+        "outage",
+        "persistence",
+        "backupRestore",
+        "runtimeMatrix",
+        "memory",
+        "retention",
+        "launchPath",
+        "diskRecovery",
+      ].map((phase) => [phase, "PASS"]),
+    ),
+    alertTransitions: "PASS",
+    launchPathCorrelation: "PASS",
+    nativeNginxAlert: pass,
+    redactionScan: pass,
+    networkIsolation: { status: "PASS", launchPathNetworkStatus: "PASS" },
+    telemetryHealth: {
+      dockerLogRotation: pass,
+      producerLoggingPolicy: pass,
+      collectorLoggingPolicy: pass,
+      launchPathCollectorConfig: "PASS",
+      launchPathOutageStatus: "PASS",
+      collectorMemoryProof: pass,
+    },
+    collectorQueueMetrics: pass,
+    processCounterRestart: pass,
+    diskPressureStatus: "PASS",
+    runtimeShutdownStatus: "PASS",
+    diskPressure: {
+      status: "PASS",
+      backends: Object.fromEntries(
+        ["loki", "grafana", "prometheus", "tempo"].map((name) => [name, pass]),
+      ),
+    },
+    provenanceStart: {
+      baseSha: "a".repeat(40),
+      configSha256: "b".repeat(64),
+      bomSha256: "c".repeat(64),
+      identityHash: "d".repeat(64),
+      sourceFiles: pass,
+    },
+    qualificationAdmission: {
+      runId: `i12-${"1".repeat(16)}`,
+      candidateSha: "a".repeat(40),
+      baseConfigSha256: "b".repeat(64),
+      receiptSha256: "c".repeat(64),
+      admittedAt: new Date().toISOString(),
+    },
+    verifiedRuntimeImages: OBSERVABILITY_TARGETS.map((service) => ({
+      service,
+      imageId: id,
+    })),
+    metricApplicability: {
+      aromaConvergenceProof: {
+        "unknown-current": pass,
+        "recovered-terminal": pass,
+      },
+    },
+    runtimeMetricMatrix: {
+      status: "PASS",
+      source: {
+        baseSha: "a".repeat(40),
+        configSha256: "b".repeat(64),
+        bomSha256: "c".repeat(64),
+        identityHash: "d".repeat(64),
+      },
+      configuration: {
+        platformConfigSha256: "b".repeat(64),
+        bomSha256: "c".repeat(64),
+      },
+      cleanupVerified: true,
+      runtimeMetrics: {
+        roles: NODE_RUNTIME_ROLES.map((role) => ({ role, status: "PASS" })),
+        otlpFamilies: runtimeMetricFamilies(platform).map((family) => ({
+          ...family,
+          status: "PASS",
+          matches: family.components.map((component) => ({
+            stream: `${prometheusMetricName(family.name)}${component}`,
+            sampleCount: 1,
+            services: family.owners,
+          })),
+        })),
+      },
+      images: OBSERVABILITY_TARGETS.map((role) => ({
+        role,
+        imageId: id,
+        status: "PASS",
+      })),
+      composeReceipt: {
+        postgres: { externalPostgres: true },
+        externalCleanup: { verified: true },
+        dependencyReadiness: readiness,
+      },
+    },
+    browserCorrelationChild: {
+      checkoutRemoved: true,
+      evidenceRemoved: true,
+      cleanup: { verified: true },
+      proof,
+    },
+    launchPathProof: {
+      browserRefetchMatched: true,
+      ownerCausation: true,
+      traceStatus: "PASS",
+      telemetrySubproof: telemetry,
+    },
+  };
+  const options = {
+    config: platform,
+    sourceHashStable: true,
+    backendArtifactsComplete: true,
+  };
+  assert.equal(
+    observabilityVerificationCoverage(evidence, options).fullSystemG14.status,
+    "PASS",
+  );
+  for (const change of [
+    (value) => {
+      delete value.qualificationAdmission;
+    },
+    (value) => {
+      value.qualificationAdmission.candidateSha = "f".repeat(40);
+    },
+    (value) => {
+      value.runtimeMetricMatrix.runtimeMetrics.roles.pop();
+    },
+    ...["baseSha", "configSha256", "bomSha256", "identityHash"].flatMap(
+      (key) => [
+        (value) => {
+          delete value.runtimeMetricMatrix.source[key];
+        },
+        (value) => {
+          value.runtimeMetricMatrix.source[key] = "f".repeat(
+            key === "baseSha" ? 40 : 64,
+          );
+        },
+      ],
+    ),
+    ...["platformConfigSha256", "bomSha256"].flatMap((key) => [
+      (value) => {
+        delete value.runtimeMetricMatrix.configuration[key];
+      },
+      (value) => {
+        value.runtimeMetricMatrix.configuration[key] = "f".repeat(64);
+      },
+    ]),
+    ...["runId", "candidateSha", "configSha256"].flatMap((key) => [
+      (value) => {
+        delete value.launchPathProof.telemetrySubproof[key];
+      },
+      (value) => {
+        value.launchPathProof.telemetrySubproof[key] = "foreign";
+      },
+    ]),
+    (value) => {
+      value.launchPathProof.telemetrySubproof.requestTraceIds = [
+        "f".repeat(32),
+      ];
+      value.launchPathProof.telemetrySubproof.requestBindings[0].traceId =
+        "f".repeat(32);
+    },
+    (value) => {
+      value.runtimeMetricMatrix.runtimeMetrics.otlpFamilies.pop();
+    },
+    (value) => {
+      value.metricApplicability.aromaConvergenceProof[
+        "unknown-current"
+      ].status = "FAIL";
+    },
+    (value) => {
+      value.runtimeMetricMatrix.images[0].imageId = `sha256:${"f".repeat(64)}`;
+    },
+    (value) => {
+      value.runtimeMetricMatrix.composeReceipt.dependencyReadiness.checks.pop();
+    },
+    (value) => {
+      value.runtimeMetricMatrix.composeReceipt.externalCleanup.verified = false;
+    },
+    (value) => {
+      value.launchPathProof.telemetrySubproof.correlationId = "foreign";
+    },
+    (value) => {
+      value.launchPathProof.telemetrySubproof.ordinaryApiMeasurement.status =
+        "NOT_PROVEN";
+    },
+    (value) => {
+      value.launchPathProof.telemetrySubproof.nativeSource.imageId = `sha256:${"f".repeat(64)}`;
+    },
+    (value) => {
+      value.browserCorrelationChild.proof.realtimeTraceparent = "foreign";
+    },
+    (value) => {
+      value.cleanupErrors.push("unverified");
+    },
+  ]) {
+    const altered = structuredClone(evidence);
+    change(altered);
+    assert.equal(
+      observabilityVerificationCoverage(altered, options).fullSystemG14.status,
+      "NOT_RUN",
+    );
+  }
+  assert.equal(
+    observabilityVerificationCoverage(evidence, {
+      ...options,
+      sourceHashStable: false,
+    }).fullSystemG14.status,
+    "NOT_RUN",
+  );
+  assert.equal(
+    observabilityVerificationCoverage(evidence, {
+      ...options,
+      backendArtifactsComplete: false,
+    }).fullSystemG14.status,
+    "NOT_RUN",
+  );
 });
 
 void test("Prometheus native WAL failure counter is unambiguous", () => {

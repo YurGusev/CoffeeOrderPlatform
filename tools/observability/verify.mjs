@@ -3,14 +3,16 @@ import { createHash, randomBytes } from "node:crypto";
 import {
   mkdir,
   mkdtemp,
+  lstat,
   readFile,
+  realpath,
   readdir,
   rm,
   rmdir,
   writeFile,
 } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, resolve } from "node:path";
-import { tmpdir } from "node:os";
+import { tmpdir, userInfo } from "node:os";
 import { isDeepStrictEqual } from "node:util";
 import { fileURLToPath } from "node:url";
 import { dump as dumpYaml, load as loadYaml } from "js-yaml";
@@ -43,6 +45,11 @@ import {
 } from "../verified-infrastructure-image.mjs";
 import { provisionStorage, removeStorage } from "./storage.mjs";
 import { validateLaunchContext } from "../../verification/launch/v1/report.mjs";
+import {
+  validateDependencyReadiness,
+  runtimeMetricFamilies,
+  sanitizeRuntimeMetricMatches,
+} from "../../tests/observability/runtime-matrix.mjs";
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const NODE_RUNTIME_TARGETS = OBSERVABILITY_TARGETS.filter(
@@ -1960,12 +1967,238 @@ const G14_DURABLE_SPANS = {
   "realtime-gateway": ["Kafka.consume"],
 };
 
+async function waitForG14CausalTraces({
+  proof,
+  anchors,
+  baseUrl,
+  startTimeUs,
+  fetchImpl,
+  timeoutMs,
+  intervalMs,
+  inspectSpan,
+}) {
+  const decodeId = (value, length) => {
+    if (typeof value !== "string") return "";
+    if (new RegExp(`^[a-f0-9]{${length}}$`, "u").test(value)) return value;
+    const decoded = Buffer.from(value, "base64").toString("hex");
+    return decoded.length === length ? decoded : "";
+  };
+  return waitFor(
+    async () => {
+      const readTrace = async (traceId) => {
+        const result = await api({
+          baseUrl,
+          path: `/api/traces/${traceId}`,
+          fetchImpl,
+          expected: [200, 404],
+        });
+        const groups =
+          result?.batches ??
+          result?.resourceSpans ??
+          result?.trace?.resourceSpans ??
+          [];
+        if (!Array.isArray(groups) || result?.metrics?.failedBlocks > 0)
+          throw new Error("G14 trace response incomplete");
+        const spans = [];
+        for (const group of groups) {
+          const role = group.resource?.attributes?.find(
+            ({ key }) => key === "service.name",
+          )?.value?.stringValue;
+          for (const scope of group.scopeSpans ??
+            group.instrumentationLibrarySpans ??
+            [])
+            for (const span of scope.spans ?? []) {
+              if (decodeId(span.traceId, 32) !== traceId)
+                throw new Error("G14 trace identity mismatch");
+              spans.push({ role, span, resource: group.resource });
+            }
+        }
+        return spans;
+      };
+      const root = await readTrace(proof.traceId);
+      if (!root.length) return false;
+      const rootIds = new Set([
+        proof.ownerTraceparent.slice(36, 52),
+        ...root.map(({ span }) => decodeId(span.spanId, 16)).filter(Boolean),
+      ]);
+      const durable = [...root];
+      const hasDurable = () =>
+        Object.entries(G14_DURABLE_SPANS).every(([role, names]) =>
+          names.every((name) =>
+            durable.some(
+              (item) => item.role === role && item.span.name === name,
+            ),
+          ),
+        );
+      const traceIds = new Set([proof.traceId]);
+      const durableLinks = [];
+      if (!hasDurable()) {
+        const query = new URLSearchParams({
+          q: `{ link:traceID = "${proof.traceId}" }`,
+          start: String(Math.floor(startTimeUs / 1e6)),
+          end: String(Math.ceil(Date.now() / 1000)),
+          limit: "50",
+        });
+        const result = await api({
+          baseUrl,
+          path: `/api/search?${query}`,
+          fetchImpl,
+        });
+        if (
+          !Array.isArray(result?.traces) ||
+          result.traces.length >= 50 ||
+          result?.metrics?.failedBlocks > 0
+        )
+          throw new Error("G14 linked trace search incomplete");
+        for (const candidate of result.traces) {
+          const traceId = candidate.traceID ?? candidate.traceId;
+          if (!/^[a-f0-9]{32}$/u.test(traceId ?? "") || traceIds.has(traceId))
+            continue;
+          const spans = await readTrace(traceId);
+          const linked = spans
+            .flatMap(({ span }) => span.links ?? [])
+            .find(
+              (link) =>
+                decodeId(link.traceId, 32) === proof.traceId &&
+                rootIds.has(decodeId(link.spanId, 16)),
+            );
+          if (linked) {
+            durable.push(...spans);
+            traceIds.add(traceId);
+            durableLinks.push({
+              traceId,
+              linkedTraceId: proof.traceId,
+              linkedSpanId: decodeId(linked.spanId, 16),
+            });
+          }
+        }
+      }
+      if (!hasDurable()) return false;
+      const durableSpanKeys = new Set([
+        `${proof.traceId}:${proof.ownerTraceparent.slice(36, 52)}`,
+        ...durable
+          .map(
+            ({ span }) =>
+              `${decodeId(span.traceId, 32)}:${decodeId(span.spanId, 16)}`,
+          )
+          .filter((key) => /^[a-f0-9]{32}:[a-f0-9]{16}$/u.test(key)),
+      ]);
+      const requestTraces = new Set();
+      const requestBindings = [];
+      for (const anchor of anchors) {
+        const spans =
+          anchor.traceId === proof.traceId
+            ? root
+            : await readTrace(anchor.traceId);
+        if (
+          !spans.some(
+            ({ role, span }) =>
+              role === "orders-service" &&
+              decodeId(span.spanId, 16) === anchor.spanId,
+          )
+        )
+          continue;
+        if (
+          !["HTTP POST", "db.transaction"].every((name) =>
+            spans.some(
+              (item) =>
+                item.role === "orders-service" && item.span.name === name,
+            ),
+          )
+        )
+          continue;
+        let connection = null;
+        if (!traceIds.has(anchor.traceId)) {
+          const requestSpanKeys = new Set(
+            spans
+              .map(
+                ({ span }) =>
+                  `${decodeId(span.traceId, 32)}:${decodeId(span.spanId, 16)}`,
+              )
+              .filter((key) => /^[a-f0-9]{32}:[a-f0-9]{16}$/u.test(key)),
+          );
+          for (const { span } of spans) {
+            const match = (span.links ?? []).find((link) =>
+              durableSpanKeys.has(
+                `${decodeId(link.traceId, 32)}:${decodeId(link.spanId, 16)}`,
+              ),
+            );
+            if (match) {
+              connection = {
+                sourceTraceId: anchor.traceId,
+                sourceSpanId: decodeId(span.spanId, 16),
+                targetTraceId: decodeId(match.traceId, 32),
+                targetSpanId: decodeId(match.spanId, 16),
+              };
+              break;
+            }
+          }
+          if (!connection)
+            for (const { span } of durable) {
+              const match = (span.links ?? []).find((link) =>
+                requestSpanKeys.has(
+                  `${decodeId(link.traceId, 32)}:${decodeId(link.spanId, 16)}`,
+                ),
+              );
+              if (match) {
+                connection = {
+                  sourceTraceId: decodeId(span.traceId, 32),
+                  sourceSpanId: decodeId(span.spanId, 16),
+                  targetTraceId: decodeId(match.traceId, 32),
+                  targetSpanId: decodeId(match.spanId, 16),
+                };
+                break;
+              }
+            }
+          if (!connection || !/^[a-f0-9]{16}$/u.test(connection.sourceSpanId))
+            continue;
+        }
+        for (const { span, resource } of spans) inspectSpan(span, resource);
+        requestTraces.add(anchor.traceId);
+        requestBindings.push({
+          traceId: anchor.traceId,
+          spanId: anchor.spanId,
+          role: "orders-service",
+          connection,
+        });
+      }
+      if (!requestTraces.size) return false;
+      for (const { span, resource } of durable) inspectSpan(span, resource);
+      return {
+        durableTraceIds: [...traceIds].sort((left, right) =>
+          left < right ? -1 : left > right ? 1 : 0,
+        ),
+        durableLinks,
+        requestTraceIds: [...requestTraces].sort((left, right) =>
+          left < right ? -1 : left > right ? 1 : 0,
+        ),
+        requestBindings,
+        spanCount: durable.length,
+        spans: Object.fromEntries(
+          Object.entries(G14_DURABLE_SPANS).map(([role, names]) => [
+            role,
+            names,
+          ]),
+        ),
+      };
+    },
+    {
+      timeoutMs,
+      intervalMs,
+      description: "G14 carrier-linked and CID-log-bound traces",
+    },
+  );
+}
+
 export async function collectG14BrowserTelemetry({
   proof,
   startTimeUs,
   lokiUrl,
   tempoUrl,
   nativeNginxContainerId,
+  nativeNginxImageId,
+  ordersContainerId,
+  ordersImageId,
   secrets = [],
   fetchImpl = fetch,
   timeoutMs = 55000,
@@ -1979,10 +2212,18 @@ export async function collectG14BrowserTelemetry({
     intervalMs <= 0 ||
     !Number.isFinite(startTimeUs) ||
     !/^[a-f0-9]{64}$/u.test(nativeNginxContainerId ?? "") ||
+    !/^sha256:[a-f0-9]{64}$/u.test(nativeNginxImageId ?? "") ||
+    !/^[a-f0-9]{64}$/u.test(ordersContainerId ?? "") ||
+    !/^sha256:[a-f0-9]{64}$/u.test(ordersImageId ?? "") ||
     !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(
       proof?.correlationId ?? "",
     ) ||
     !/^[0-9a-f]{32}$/u.test(proof?.traceId ?? "") ||
+    !/^(?!ff)[0-9a-f]{2}-(?!0{32})[0-9a-f]{32}-(?!0{16})[0-9a-f]{16}-[0-9a-f]{2}$/u.test(
+      proof?.ownerTraceparent ?? "",
+    ) ||
+    proof.realtimeTraceparent !== proof.ownerTraceparent ||
+    proof.traceId !== proof.ownerTraceparent.slice(3, 35) ||
     !/^[0-9]{8}T[0-9]{6}Z-[0-9a-f]{7}$/u.test(proof?.runId ?? "") ||
     !/^[0-9a-f]{40}$/u.test(proof?.candidateSha ?? "") ||
     !/^[0-9a-f]{64}$/u.test(proof?.configSha256 ?? "")
@@ -2009,7 +2250,9 @@ export async function collectG14BrowserTelemetry({
   };
   const requiredLogs = ["edge-nginx", "orders-service"];
   const nativeLogPath = `/var/lib/docker/containers/${nativeNginxContainerId}/${nativeNginxContainerId}-json.log`;
+  const ordersLogPath = `/var/lib/docker/containers/${ordersContainerId}/${ordersContainerId}-json.log`;
   const deadline = AbortSignal.timeout(Math.ceil(timeoutMs));
+  const deadlineAt = Date.now() + timeoutMs;
   const boundedFetch = (url, options) =>
     fetchImpl(url, {
       ...options,
@@ -2041,6 +2284,34 @@ export async function collectG14BrowserTelemetry({
         ]),
       );
       if (!requiredLogs.every((role) => counts[role] > 0)) return false;
+      const orderRows = matched.filter(
+        (row) => row.service_name === "orders-service",
+      );
+      if (orderRows.some((row) => row.log_file_path !== ordersLogPath)) {
+        const error = new Error("G14_OWNER_LOG_IDENTITY_INVALID");
+        error.fatal = true;
+        throw error;
+      }
+      const traceAnchors = [
+        ...new Map(
+          orderRows
+            .filter(
+              (row) =>
+                /^[a-f0-9]{32}$/u.test(row.traceId ?? "") &&
+                /^[a-f0-9]{16}$/u.test(row.spanId ?? ""),
+            )
+            .map(({ traceId, spanId }) => [
+              `${traceId}:${spanId}`,
+              { traceId, spanId },
+            ]),
+        ).values(),
+      ];
+      if (traceAnchors.length > 50) {
+        const error = new Error("G14_OWNER_TRACE_ANCHORS_EXCEED_LIMIT");
+        error.fatal = true;
+        throw error;
+      }
+      if (!traceAnchors.length) return false;
       const requests = new Map();
       let excluded = 0;
       let duplicates = 0;
@@ -2115,6 +2386,7 @@ export async function collectG14BrowserTelemetry({
         statusCounts[status] = (statusCounts[status] ?? 0) + 1;
       return {
         counts,
+        traceAnchors,
         measurement: {
           status: "MEASURED",
           scope:
@@ -2144,23 +2416,26 @@ export async function collectG14BrowserTelemetry({
     },
     { timeoutMs, intervalMs, description: "G14 browser CID logs" },
   );
-  const tracePromise = waitForSameTraceSpans({
-    baseUrl: tempoUrl,
-    traceId: proof.traceId,
-    expectedSpanNames: G14_DURABLE_SPANS,
-    fetchImpl: boundedFetch,
-    timeoutMs,
-    intervalMs,
-    inspectSpan: (span, resource) => {
-      if (
-        containsSensitiveField(span) ||
-        containsSensitiveField(resource) ||
-        sensitive(span) ||
-        sensitive(resource)
-      )
-        rejectPrivacy();
-    },
-  });
+  const tracePromise = logsPromise.then(({ traceAnchors }) =>
+    waitForG14CausalTraces({
+      baseUrl: tempoUrl,
+      proof,
+      anchors: traceAnchors,
+      startTimeUs,
+      fetchImpl: boundedFetch,
+      timeoutMs: Math.max(1, deadlineAt - Date.now()),
+      intervalMs,
+      inspectSpan: (span, resource) => {
+        if (
+          containsSensitiveField(span) ||
+          containsSensitiveField(resource) ||
+          sensitive(span) ||
+          sensitive(resource)
+        )
+          rejectPrivacy();
+      },
+    }),
+  );
   const [logs, trace] = await Promise.allSettled([logsPromise, tracePromise]);
   if (logs.status !== "fulfilled" || trace.status !== "fulfilled") {
     const errors = [logs, trace].filter(
@@ -2172,14 +2447,7 @@ export async function collectG14BrowserTelemetry({
         : "MISSING_OR_QUERY_FAILED",
     );
   }
-  if (trace.value.traceRows.length === 0)
-    return failure("MISSING_OR_QUERY_FAILED");
-  const spans = Object.fromEntries(
-    Object.entries(G14_DURABLE_SPANS).map(([role, names]) => [
-      role,
-      names.filter((name) => trace.value.spanInventory[role]?.includes(name)),
-    ]),
-  );
+  if (trace.value.spanCount === 0) return failure("MISSING_OR_QUERY_FAILED");
   return {
     status: "OBSERVED",
     runId: proof.runId,
@@ -2187,10 +2455,25 @@ export async function collectG14BrowserTelemetry({
     configSha256: proof.configSha256,
     correlationId: proof.correlationId,
     traceId: proof.traceId,
+    carrier: proof.ownerTraceparent,
+    nativeSource: {
+      role: "edge-nginx",
+      containerId: nativeNginxContainerId,
+      imageId: nativeNginxImageId,
+    },
+    ownerSource: {
+      role: "orders-service",
+      containerId: ordersContainerId,
+      imageId: ordersImageId,
+    },
     logCounts: logs.value.counts,
     ordinaryApiMeasurement: logs.value.measurement,
-    spans,
-    spanCount: trace.value.traceRows.length,
+    spans: trace.value.spans,
+    durableTraceIds: trace.value.durableTraceIds,
+    durableLinks: trace.value.durableLinks,
+    requestTraceIds: trace.value.requestTraceIds,
+    requestBindings: trace.value.requestBindings,
+    spanCount: trace.value.spanCount,
   };
 }
 
@@ -3008,7 +3291,81 @@ export async function sourceIdentity(root = REPO_ROOT) {
   };
 }
 
-export function observabilityVerificationCoverage(evidence) {
+export async function readG14Qualification(evidenceDir, context, config) {
+  const path = join(
+    evidenceDir,
+    "gates/G14_OBSERVABILITY/artifacts/realtime-capacity.json",
+  );
+  const info = await lstat(path);
+  if (
+    !info.isFile() ||
+    info.isSymbolicLink() ||
+    info.uid !== process.getuid() ||
+    (info.mode & 0o777) !== 0o600 ||
+    info.size > 65536 ||
+    (await realpath(path)) !== path
+  )
+    throw new Error("G14 qualification admission file invalid");
+  const admission = JSON.parse(await readFile(path, "utf8"));
+  const receipt = admission.receipt;
+  const admittedAt = Date.parse(admission.admittedAt);
+  const endedAt = Date.parse(receipt?.endedAt);
+  if (
+    receipt?.status !== "PASS" ||
+    !/^i12-[a-f0-9]{16}$/u.test(receipt.runId ?? "") ||
+    receipt.candidateSha !== context.candidateSha ||
+    receipt.baseConfigSha256 !== context.baseConfigSha256 ||
+    !/^[a-f0-9]{64}$/u.test(admission.receiptSha256 ?? "") ||
+    !Number.isFinite(admittedAt) ||
+    !Number.isFinite(endedAt) ||
+    admittedAt < endedAt ||
+    admittedAt > Date.now() ||
+    admittedAt - endedAt >
+      config.verification.realtimeQualification.maximumAgeSeconds * 1000 ||
+    !Number.isFinite(receipt.elapsedMs) ||
+    receipt.elapsedMs < 0 ||
+    receipt.elapsedMs >
+      config.verification.realtimeQualification.budgetSeconds * 1000
+  )
+    throw new Error("G14 qualification admission mismatch");
+  const claimPath = join(
+    resolve(userInfo().homedir),
+    ".local/state/coffee-platform/realtime-claims",
+    `${receipt.runId}.json`,
+  );
+  if (admission.claimPath !== claimPath)
+    throw new Error("G14 qualification claim path mismatch");
+  const claimInfo = await lstat(claimPath);
+  if (
+    !claimInfo.isFile() ||
+    claimInfo.isSymbolicLink() ||
+    claimInfo.uid !== process.getuid() ||
+    (claimInfo.mode & 0o777) !== 0o400 ||
+    claimInfo.size > 4096 ||
+    (await realpath(claimPath)) !== claimPath
+  )
+    throw new Error("G14 qualification claim invalid");
+  const claim = JSON.parse(await readFile(claimPath, "utf8"));
+  if (
+    !isDeepStrictEqual(claim, {
+      runId: receipt.runId,
+      receiptSha256: admission.receiptSha256,
+    })
+  )
+    throw new Error("G14 qualification claim mismatch");
+  return {
+    runId: receipt.runId,
+    candidateSha: receipt.candidateSha,
+    baseConfigSha256: receipt.baseConfigSha256,
+    receiptSha256: admission.receiptSha256,
+    admittedAt: admission.admittedAt,
+  };
+}
+
+export function observabilityVerificationCoverage(
+  evidence,
+  { config, sourceHashStable = false, backendArtifactsComplete = false } = {},
+) {
   const launchRoles = [
     ...new Set(
       (evidence.launchPathProof?.roles ?? [])
@@ -3027,14 +3384,214 @@ export function observabilityVerificationCoverage(evidence) {
           .map(({ role }) => role)
           .filter((role) => NODE_RUNTIME_TARGETS.includes(role))
       : [];
+  const matrix = evidence.runtimeMetricMatrix;
+  const expectedImages = evidence.verifiedRuntimeImages;
+  const parentSource = evidence.provenanceStart;
+  const matrixSource = matrix?.source;
+  const matrixBound =
+    /^[a-f0-9]{40}$/u.test(parentSource?.baseSha ?? "") &&
+    /^[a-f0-9]{64}$/u.test(parentSource?.configSha256 ?? "") &&
+    /^[a-f0-9]{64}$/u.test(parentSource?.identityHash ?? "") &&
+    /^[a-f0-9]{64}$/u.test(parentSource?.bomSha256 ?? "") &&
+    matrixSource?.identityHash === parentSource.identityHash &&
+    matrixSource.baseSha === parentSource.baseSha &&
+    matrixSource.configSha256 === parentSource.configSha256 &&
+    matrixSource.bomSha256 === parentSource.bomSha256 &&
+    matrix?.configuration?.platformConfigSha256 === parentSource.configSha256 &&
+    matrix.configuration.bomSha256 === parentSource.bomSha256;
+  const roles = matrix?.runtimeMetrics?.roles;
+  const images = matrix?.images;
+  let readiness = false;
+  let metricFamilies = false;
+  try {
+    readiness = !!validateDependencyReadiness(
+      matrix?.composeReceipt?.dependencyReadiness,
+      config,
+    );
+  } catch {
+    /* incomplete evidence remains NOT_RUN */
+  }
+  try {
+    const families = runtimeMetricFamilies(config);
+    const actual = matrix?.runtimeMetrics?.otlpFamilies;
+    metricFamilies =
+      Array.isArray(actual) &&
+      actual.length === families.length &&
+      families.every((family) => {
+        const matches = actual.filter((item) => item.name === family.name);
+        if (
+          matches.length !== 1 ||
+          matches[0].status !== "PASS" ||
+          !isDeepStrictEqual(matches[0].owners, family.owners) ||
+          !isDeepStrictEqual(matches[0].components, family.components) ||
+          !isDeepStrictEqual(matches[0].attributes, family.attributes)
+        )
+          return false;
+        sanitizeRuntimeMetricMatches(family, matches[0].matches);
+        return true;
+      });
+  } catch {
+    /* incomplete metric evidence remains NOT_RUN */
+  }
+  const expectedRoleSet = new Set(NODE_RUNTIME_TARGETS);
+  const exactRoles =
+    Array.isArray(roles) &&
+    roles.length === expectedRoleSet.size &&
+    roles.every(
+      (item) => item.status === "PASS" && expectedRoleSet.delete(item.role),
+    ) &&
+    expectedRoleSet.size === 0;
+  const expectedImageMap = new Map(
+    (Array.isArray(expectedImages) ? expectedImages : []).map(
+      ({ service, imageId }) => [service, imageId],
+    ),
+  );
+  const exactImages =
+    Array.isArray(expectedImages) &&
+    expectedImages.length === OBSERVABILITY_TARGETS.length &&
+    expectedImageMap.size === OBSERVABILITY_TARGETS.length &&
+    Array.isArray(images) &&
+    images.length === OBSERVABILITY_TARGETS.length &&
+    images.every(
+      (item) =>
+        item.status === "PASS" &&
+        expectedImageMap.get(item.role) === item.imageId &&
+        expectedImageMap.delete(item.role),
+    ) &&
+    expectedImageMap.size === 0;
+  const browser = evidence.launchPathProof;
+  const telemetry = browser?.telemetrySubproof;
+  const child = evidence.browserCorrelationChild?.proof;
+  const nginx = expectedImages?.find(({ service }) => service === "edge-nginx");
+  const orders = expectedImages?.find(
+    ({ service }) => service === "orders-service",
+  );
+  const measurement = telemetry?.ordinaryApiMeasurement;
+  const measured =
+    measurement?.status === "MEASURED" &&
+    Number.isSafeInteger(measurement.sampleCount) &&
+    measurement.sampleCount >= 2 &&
+    Number.isSafeInteger(measurement.successCount) &&
+    measurement.successCount >= 2 &&
+    measurement.successCount <= measurement.sampleCount &&
+    [measurement.min, measurement.p50, measurement.p95, measurement.max].every(
+      (value) => Number.isFinite(value) && value >= 0,
+    ) &&
+    measurement.min <= measurement.p50 &&
+    measurement.p50 <= measurement.p95 &&
+    measurement.p95 <= measurement.max &&
+    Number.isFinite(Date.parse(measurement.windowStartUtc)) &&
+    Number.isFinite(Date.parse(measurement.windowEndUtc)) &&
+    Date.parse(measurement.windowStartUtc) <=
+      Date.parse(measurement.windowEndUtc);
+  const trace =
+    evidence.browserCorrelationChild?.checkoutRemoved === true &&
+    evidence.browserCorrelationChild?.evidenceRemoved === true &&
+    evidence.browserCorrelationChild?.cleanup?.verified === true &&
+    child?.status === "PASS" &&
+    child.browserCleanup === "EXACT_OWNED_CONTAINER_REMOVED" &&
+    browser?.browserRefetchMatched === true &&
+    browser.ownerCausation === true &&
+    browser.traceStatus === "PASS" &&
+    telemetry?.status === "OBSERVED" &&
+    telemetry.runId === child?.runId &&
+    typeof child?.runId === "string" &&
+    telemetry.candidateSha === child?.candidateSha &&
+    /^[a-f0-9]{40}$/u.test(child?.candidateSha ?? "") &&
+    telemetry.configSha256 === child?.configSha256 &&
+    /^[a-f0-9]{64}$/u.test(child?.configSha256 ?? "") &&
+    telemetry.correlationId === child?.correlationId &&
+    telemetry.traceId === child?.traceId &&
+    telemetry.carrier === child?.ownerTraceparent &&
+    child?.ownerTraceparent === child?.realtimeTraceparent &&
+    measured &&
+    telemetry.nativeSource?.role === "edge-nginx" &&
+    telemetry.nativeSource.imageId === nginx?.imageId &&
+    /^[a-f0-9]{64}$/u.test(telemetry.nativeSource.containerId ?? "") &&
+    telemetry.ownerSource?.role === "orders-service" &&
+    telemetry.ownerSource.imageId === orders?.imageId &&
+    /^[a-f0-9]{64}$/u.test(telemetry.ownerSource.containerId ?? "") &&
+    Array.isArray(telemetry.durableTraceIds) &&
+    telemetry.durableTraceIds.includes(child?.traceId) &&
+    new Set(telemetry.durableTraceIds).size ===
+      telemetry.durableTraceIds.length &&
+    telemetry.durableTraceIds.every((id) => /^[a-f0-9]{32}$/u.test(id)) &&
+    Array.isArray(telemetry.durableLinks) &&
+    telemetry.durableLinks.length === telemetry.durableTraceIds.length - 1 &&
+    telemetry.durableLinks.every(
+      (link) =>
+        link.linkedTraceId === child.traceId &&
+        link.traceId !== child.traceId &&
+        telemetry.durableTraceIds.includes(link.traceId) &&
+        /^[a-f0-9]{16}$/u.test(link.linkedSpanId ?? ""),
+    ) &&
+    new Set(telemetry.durableLinks.map((link) => link.traceId)).size ===
+      telemetry.durableLinks.length &&
+    Array.isArray(telemetry.requestTraceIds) &&
+    telemetry.requestTraceIds.length > 0 &&
+    telemetry.requestTraceIds.every((id) => /^[a-f0-9]{32}$/u.test(id)) &&
+    Array.isArray(telemetry.requestBindings) &&
+    telemetry.requestTraceIds.every((id) =>
+      telemetry.requestBindings.some(
+        (binding) =>
+          binding.traceId === id &&
+          binding.role === "orders-service" &&
+          /^[a-f0-9]{16}$/u.test(binding.spanId ?? "") &&
+          (telemetry.durableTraceIds.includes(id) ||
+            (binding.connection &&
+              /^[a-f0-9]{16}$/u.test(binding.connection.sourceSpanId ?? "") &&
+              /^[a-f0-9]{16}$/u.test(binding.connection.targetSpanId ?? "") &&
+              ((binding.connection.sourceTraceId === id &&
+                telemetry.durableTraceIds.includes(
+                  binding.connection.targetTraceId,
+                )) ||
+                (binding.connection.targetTraceId === id &&
+                  telemetry.durableTraceIds.includes(
+                    binding.connection.sourceTraceId,
+                  ))))),
+      ),
+    ) &&
+    Object.entries(G14_DURABLE_SPANS).every(([role, names]) =>
+      names.every((name) => telemetry.spans?.[role]?.includes(name)),
+    );
+  const qualification = evidence.qualificationAdmission;
+  const admitted =
+    /^i12-[a-f0-9]{16}$/u.test(qualification?.runId ?? "") &&
+    /^[a-f0-9]{64}$/u.test(qualification?.receiptSha256 ?? "") &&
+    Number.isFinite(Date.parse(qualification?.admittedAt)) &&
+    qualification.candidateSha === evidence.provenanceStart?.baseSha &&
+    qualification.baseConfigSha256 === evidence.provenanceStart?.configSha256;
+  const fullSystem =
+    evidence.status === "PASS" &&
+    sourceHashStable &&
+    backendArtifactsComplete &&
+    evidence.provenanceStart?.sourceFiles?.status === "PASS" &&
+    observabilityGateComplete(evidence) &&
+    admitted &&
+    matrix?.status === "PASS" &&
+    matrix.cleanupVerified === true &&
+    matrix.composeReceipt?.postgres?.externalPostgres === true &&
+    matrix.composeReceipt?.externalCleanup?.verified === true &&
+    exactRoles &&
+    matrixBound &&
+    exactImages &&
+    metricFamilies &&
+    ["unknown-current", "recovered-terminal"].every(
+      (phase) => convergenceProof?.[phase]?.status === "PASS",
+    ) &&
+    readiness &&
+    trace;
   return {
-    verificationScope: "operations-component",
-    statusAppliesTo: "mandatory Operations backend and instrumentation gates",
+    verificationScope: fullSystem ? "launch" : "operations-component",
+    statusAppliesTo: fullSystem
+      ? "G14 launch verification"
+      : "mandatory Operations backend and instrumentation gates",
     fullSystemG14: {
-      status: "NOT_RUN",
+      status: fullSystem ? "PASS" : "NOT_RUN",
       owner: "#13",
-      reason:
-        "Issue #64 verifies functional telemetry; full-system SLO, chaos, capacity and business launch acceptance remain owned by #13.",
+      reason: fullSystem
+        ? "Verified launch evidence and separately admitted realtime qualification."
+        : "Issue #64 verifies functional telemetry; full-system SLO, chaos, capacity and business launch acceptance remain owned by #13.",
       requiredNodeRuntimeCount: NODE_RUNTIME_TARGETS.length,
       launchPathNodeRuntimes: launchNodeRuntimes,
       metricMatrixNodeRuntimes: matrixNodeRuntimes,
@@ -3043,7 +3600,11 @@ export function observabilityVerificationCoverage(evidence) {
       convergenceMetricProof: {
         ownerRuntime: "aroma-convergence",
         processKind: "driver-container SQL-backed proof helper",
-        status: convergenceProof === undefined ? "NOT_RUN" : "PASS",
+        status: ["unknown-current", "recovered-terminal"].every(
+          (phase) => convergenceProof?.[phase]?.status === "PASS",
+        )
+          ? "PASS"
+          : "NOT_RUN",
       },
       observedOwnerMetricFamilies: Object.keys(metricApplicability)
         .filter((name) => name !== "aromaConvergenceProof")
@@ -3072,6 +3633,7 @@ async function persistEvidence({
   evidence,
   secrets = [],
   launchEvidenceDir,
+  config,
 }) {
   const dir = join(root, "evidence/observability", evidence.runId);
   const sanitize = (value) =>
@@ -3110,7 +3672,6 @@ async function persistEvidence({
   const alertState = evidence.alertTransitions ?? "NOT_RUN";
   const redaction = evidence.redactionScan;
   const outage = evidence.outageRestart;
-  const verificationCoverage = observabilityVerificationCoverage(evidence);
   const runtimeHealthGates = [
     evidence.runtimeMetricMatrix?.status,
     evidence.runtimeMetricMatrix?.loggingPolicy?.status,
@@ -3136,6 +3697,30 @@ async function persistEvidence({
       : evidence.status === "FAIL"
         ? "FAIL"
         : "NOT_RUN";
+  const backendArtifactsComplete =
+    alertState === "PASS" &&
+    redaction?.status === "PASS" &&
+    evidence.launchPathCorrelation === "PASS" &&
+    runtimeHealthStatus === "PASS" &&
+    outage?.queueDrops > 0 &&
+    outage.producerExportFailureObserved === true &&
+    outage.collectorExpiredRetryDrop?.status === "PASS" &&
+    typeof evidence.retention === "object" &&
+    evidence.retention.ttlRemovedRecord &&
+    diskPressureComplete(evidence);
+  const verificationCoverage = observabilityVerificationCoverage(evidence, {
+    config,
+    sourceHashStable,
+    backendArtifactsComplete,
+  });
+  if (
+    evidence.status === "PASS" &&
+    verificationCoverage.fullSystemG14.status !== "PASS"
+  ) {
+    evidence.status = "FAIL";
+    evidence.failure =
+      "G14 full-system evidence or qualification admission incomplete";
+  }
   const documents = {
     "alert-transitions.json": statusArtifact(alertState, {
       alerts: evidence.alerts,
@@ -3267,6 +3852,7 @@ export async function persistVerificationResult({
   evidence,
   secrets,
   launchEvidenceDir,
+  config,
   persist = persistEvidence,
   cleanError = (error) => String(error?.message ?? error),
 }) {
@@ -3276,6 +3862,7 @@ export async function persistVerificationResult({
       evidence,
       secrets,
       launchEvidenceDir,
+      config,
     });
     evidence.evidenceDirectory = persisted.directory;
     evidence.resultSha256 = persisted.resultSha256;
@@ -3434,6 +4021,7 @@ export async function runObservabilityVerification({
     storageHelper,
     verifiedGrafana,
     launchEvidenceDir,
+    formalContext,
     activePhase = "startup",
     producerCreated = false,
     producerNetworkCreated = false,
@@ -3467,6 +4055,7 @@ export async function runObservabilityVerification({
       );
     if (config.verification.databaseIsolation.enabled)
       launchEvidenceDir = validatedLaunch.evidenceDir;
+    formalContext = validatedLaunch.context;
     toolchain = JSON.parse(
       await readFile(join(root, "config/toolchain-versions.json"), "utf8"),
     );
@@ -5174,6 +5763,7 @@ export async function runObservabilityVerification({
           const verifiedImages = await readVerifiedRuntimeImages({
             contextFile: process.env.COFFEE_LAUNCH_CONTEXT_FILE,
           });
+          evidence.verifiedRuntimeImages = verifiedImages;
           const expectedProject = identity.context.resources.composeProject;
           if (
             expectedProject !==
@@ -5184,6 +5774,7 @@ export async function runObservabilityVerification({
           let observedProof;
           let browserTelemetryStartedAtUs;
           let browserNginxContainerId;
+          let browserOrdersContainerId;
           let childEnded = false;
           let collectorNeedsRestore = false;
           let collectorTasks = Promise.resolve();
@@ -5267,6 +5858,9 @@ try {
                   browserNginxContainerId = childLogs.find(
                     ({ service }) => service === "edge-nginx",
                   )?.containerId;
+                  browserOrdersContainerId = childLogs.find(
+                    ({ service }) => service === "orders-service",
+                  )?.containerId;
                   await changeCollector(childLogs, networks);
                   browserTelemetryStartedAtUs = Date.now() * 1000;
                   stage = "browser-proof";
@@ -5282,6 +5876,13 @@ try {
                     proof: observedProof,
                     startTimeUs: browserTelemetryStartedAtUs,
                     nativeNginxContainerId: browserNginxContainerId,
+                    nativeNginxImageId: verifiedImages.find(
+                      ({ service }) => service === "edge-nginx",
+                    )?.imageId,
+                    ordersContainerId: browserOrdersContainerId,
+                    ordersImageId: verifiedImages.find(
+                      ({ service }) => service === "orders-service",
+                    )?.imageId,
                     lokiUrl: baseUrls.loki,
                     tempoUrl: baseUrls.tempo,
                     secrets,
@@ -5359,17 +5960,27 @@ try {
         },
       });
       evidence.browserCorrelationChild = child.browserChild;
+      const traceObserved =
+        browserTelemetry?.status === "OBSERVED" &&
+        browserTelemetry.ordinaryApiMeasurement?.status === "MEASURED" &&
+        browserTelemetry.correlationId ===
+          child.browserChild.proof.correlationId &&
+        browserTelemetry.traceId === child.browserChild.proof.traceId &&
+        browserTelemetry.carrier === child.browserChild.proof.ownerTraceparent;
       evidence.launchPathProof = {
         correlationId: child.browserChild.proof.correlationId,
+        traceId: child.browserChild.proof.traceId,
         browserRefetchMatched: true,
         ownerCausation: true,
         telemetrySubproof: browserTelemetry,
-        traceStatus: "NOT_PROVEN",
+        traceStatus: traceObserved ? "PASS" : "NOT_PROVEN",
       };
-      evidence.limitations.push(
-        "G14 browser correlation is observed; a shared W3C trace remains NOT_PROVEN.",
-      );
-      evidence.phases.launchPath = "NOT_RUN";
+      evidence.launchPathCorrelation = traceObserved ? "PASS" : "NOT_PROVEN";
+      if (!traceObserved)
+        evidence.limitations.push(
+          "G14 parent W3C and CID-bound trace evidence is NOT_PROVEN.",
+        );
+      evidence.phases.launchPath = traceObserved ? "PASS" : "NOT_RUN";
     } catch (error) {
       evidence.phases.launchPath = "FAIL";
       evidence.launchPathFailure = cleanError(error);
@@ -7995,6 +8606,17 @@ try {
       cleanupErrors.push(`temporary cleanup: ${cleanError(error)}`);
     }
     evidence.cleanupErrors = cleanupErrors;
+    if (launchEvidenceDir && formalContext && config) {
+      try {
+        evidence.qualificationAdmission = await readG14Qualification(
+          launchEvidenceDir,
+          formalContext,
+          config,
+        );
+      } catch {
+        evidence.qualificationAdmission = undefined;
+      }
+    }
     if (observabilityGateComplete(evidence)) {
       evidence.status = "PASS";
       delete evidence.failure;
@@ -8005,6 +8627,7 @@ try {
       evidence,
       secrets,
       launchEvidenceDir,
+      config,
       cleanError,
     });
   }

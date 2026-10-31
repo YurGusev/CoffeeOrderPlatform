@@ -6387,6 +6387,7 @@ async function runKafkaBlackholeProof(
   ordersDatabase,
   composeFile,
   physicalTargets,
+  onPaused,
 ) {
   const messageId = `${runId}-broker-blackhole`;
   const trace = randomUUID().replaceAll("-", "").padEnd(32, "0").slice(0, 32);
@@ -6431,6 +6432,9 @@ async function runKafkaBlackholeProof(
   );
   assert.ok(kafka, "Kafka is absent before paused-broker proof");
   assert.ok(orders, "orders-service is absent before paused-broker proof");
+  const kafkaBefore = onPaused
+    ? ownedDependencySnapshot(projectName, "kafka", kafka.ID)
+    : undefined;
   const outputLines = [];
   const waiters = [];
   let outputBuffer = "";
@@ -6481,6 +6485,9 @@ async function runKafkaBlackholeProof(
   );
   let paused = false;
   let finished = false;
+  let proofError;
+  let restoreError;
+  let evidence;
   const waitForKafkaApi = async (timeoutMs = 30_000) => {
     const deadline = Date.now() + timeoutMs;
     let lastError;
@@ -6521,6 +6528,9 @@ async function runKafkaBlackholeProof(
     const readyLine = await waitForLine("BLACKHOLE_READY:", 15000);
     const port = Number(readyLine.slice("BLACKHOLE_READY:".length));
     assert.ok(Number.isSafeInteger(port) && port > 0 && port < 65536);
+    if (kafkaBefore)
+      assertDependencyIdentity(projectName, "kafka", kafkaBefore);
+    const pausedAt = new Date().toISOString();
     runDocker(["pause", kafka.ID]);
     paused = true;
     runDocker([
@@ -6536,10 +6546,13 @@ async function runKafkaBlackholeProof(
       "BLACKHOLE_UNKNOWN:OFFSET_COMMIT_OUTCOME_UNKNOWN",
       "paused-broker commit did not become a bounded unknown outcome",
     );
+    if (onPaused) await onPaused(pausedAt);
     runDocker(["unpause", kafka.ID]);
     paused = false;
     await waitForDockerHealthy(kafka.ID);
     await waitForKafkaApi();
+    if (kafkaBefore)
+      assertDependencyIdentity(projectName, "kafka", kafkaBefore);
     runDocker([
       "exec",
       orders.ID,
@@ -6552,7 +6565,7 @@ async function runKafkaBlackholeProof(
       .reverse()
       .find((line) => line.startsWith("{"));
     assert.ok(finalLine, "paused-broker proof did not return evidence JSON");
-    const evidence = JSON.parse(finalLine);
+    evidence = JSON.parse(finalLine);
     assert.equal(evidence.kind, "paused-broker");
     assert.equal(evidence.commitOutcome, "OFFSET_COMMIT_OUTCOME_UNKNOWN");
     assert.ok(
@@ -6598,15 +6611,16 @@ async function runKafkaBlackholeProof(
         "paused-broker group offset did not advance after recovery",
       );
     }
-    return evidence;
+  } catch (error) {
+    proofError = error;
   } finally {
     if (paused) {
       try {
         runDocker(["unpause", kafka.ID]);
         await waitForDockerHealthy(kafka.ID);
         await waitForKafkaApi();
-      } catch {
-        /* preserve the original proof failure */
+      } catch (error) {
+        restoreError = error;
       }
     }
     if (!finished) {
@@ -6614,6 +6628,17 @@ async function runKafkaBlackholeProof(
       await child.done.catch(() => undefined);
     }
   }
+  if (proofError && restoreError)
+    throw new AggregateError(
+      [proofError, restoreError],
+      "paused-broker proof and restoration failed",
+    );
+  if (restoreError)
+    throw new Error("paused-broker restoration failed", {
+      cause: restoreError,
+    });
+  if (proofError) throw proofError;
+  return evidence;
 }
 
 async function assertReadiness(
@@ -6715,6 +6740,298 @@ function runtimeHealthStatus(
     { composeFile },
   ).trim();
   return Number(output.split("\n").at(-1));
+}
+
+// The ordinary healthcheck's 900 ms client deadline is shorter than a
+// dependency's 1000 ms readiness deadline, so a blackhole needs a longer probe.
+const DEPENDENCY_HEALTH_SOURCE = `import {createRequire} from 'node:module';
+import {readFile} from 'node:fs/promises';
+import {request} from 'node:https';
+const require=createRequire(createRequire('/app/package.json').resolve('@coffee-platform/runtime'));
+const {load}=require('js-yaml');
+const {parseServiceTransportMaterial,verifyTransportPeer}=require('@coffee-platform/security');
+try {
+  const runtime=process.env.RUNTIME_NAME,port=Number(process.env.PORT),path=process.argv[2];
+  if(!/^[a-z0-9-]+$/u.test(runtime??'')||!Number.isSafeInteger(port)||port<1||!['/health/live','/health/ready'].includes(path))throw Error();
+  const document=load(await readFile(process.env.COFFEE_RUNTIME_SECRETS_FILE,'utf8'),{json:true});
+  const config=load(await readFile(process.env.COFFEE_CONFIG_FILE,'utf8'),{json:true});
+  const environment=document.environment;
+  const material=parseServiceTransportMaterial(document.secrets.security.serviceTransportKeys[runtime],environment,runtime);
+  const timeout=config.platform.health.timeoutMs+config.platform.health.intervalMs;
+  const status=await new Promise((resolve,reject)=>{
+    const client=request({host:'127.0.0.1',port,path,method:'GET',ca:material.caPem,cert:material.certPem,key:material.keyPem,minVersion:'TLSv1.3',rejectUnauthorized:true,timeout,
+      checkServerIdentity:(_host,certificate)=>{try{verifyTransportPeer(certificate,environment,runtime);return undefined;}catch{return Error('peer identity invalid');}}},response=>{response.resume();response.once('end',()=>resolve(response.statusCode));});
+    client.once('timeout',()=>client.destroy(Error('request timed out')));client.once('error',reject);client.end();
+  });
+  if(!Number.isInteger(status))throw Error();
+  console.log(status);
+} catch { console.error('dependency health probe failed');process.exitCode=1; }`;
+
+function dependencyHealthStatus(containerId, path) {
+  const output = runDocker(
+    ["exec", "-i", containerId, "node", "--input-type=module", "-", path],
+    { input: DEPENDENCY_HEALTH_SOURCE, timeout: 10_000 },
+  ).trim();
+  assert.match(output, /^(?:200|503)$/u, "dependency health status invalid");
+  return Number(output);
+}
+
+async function waitForDependencyHealth(containerId, path, expected) {
+  const deadline = Date.now() + 10_000;
+  while (Date.now() < deadline) {
+    try {
+      if (dependencyHealthStatus(containerId, path) === expected)
+        return expected;
+    } catch {
+      // A timeout or transport error is not an HTTP readiness response.
+    }
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  throw new Error(`dependency health did not reach HTTP ${expected}`);
+}
+
+function dependencyFailureLogged(containerId, dependency, since) {
+  const output = runDocker(
+    ["logs", "--since", since, "--tail", "200", containerId],
+    { timeout: 10_000 },
+  );
+  return output.split("\n").some((line) => {
+    try {
+      const entry = JSON.parse(line);
+      return (
+        entry.event === "runtime.readiness.failed" &&
+        entry.dependency === dependency
+      );
+    } catch {
+      return false;
+    }
+  });
+}
+
+function ownedDependencySnapshot(projectName, runtime, containerId) {
+  const row = assertOwnedRuntimeContainer(projectName, runtime, containerId);
+  assert.match(row.Image ?? "", /^sha256:[a-f0-9]{64}$/u);
+  assert.equal(typeof row.State.StartedAt, "string");
+  return row;
+}
+
+function assertDependencyIdentity(projectName, runtime, before) {
+  const after = ownedDependencySnapshot(projectName, runtime, before.Id);
+  assert.equal(
+    after.Image,
+    before.Image,
+    "dependency fault changed image identity",
+  );
+  assert.equal(
+    after.State.StartedAt,
+    before.State.StartedAt,
+    "dependency fault restarted runtime",
+  );
+  return after;
+}
+
+function sharedPostgresSnapshot() {
+  const row = inspectDockerObject([APPROVED_EXTERNAL_POSTGRES.containerId]);
+  assert.equal(row.Id, APPROVED_EXTERNAL_POSTGRES.containerId);
+  assert.equal(row.Image, APPROVED_EXTERNAL_POSTGRES.imageId);
+  assert.equal(row.Name, "/coffee_postgres");
+  assert.equal(
+    row.NetworkSettings?.Networks?.[EXTERNAL_POSTGRES_NETWORK]?.NetworkID,
+    APPROVED_EXTERNAL_POSTGRES.dataNetworkId,
+  );
+  return {
+    networks: row.NetworkSettings.Networks,
+    route: externalPostgresRoute(row.Id),
+  };
+}
+
+function ownedDefaultRoute(containerId) {
+  return runDocker(
+    [
+      "exec",
+      containerId,
+      "sh",
+      "-c",
+      `awk '$2 == "00000000" {print $3 ":" $4 ":" $7 ":" $8}' /proc/net/route | sort`,
+    ],
+    { timeout: 10_000 },
+  ).trim();
+}
+
+export async function proveOwnedNetworkDependency({
+  projectName,
+  runtime,
+  containerId,
+  networkName,
+  dependency,
+  checkName,
+}) {
+  const before = ownedDependencySnapshot(projectName, runtime, containerId);
+  const endpoint = before.NetworkSettings?.Networks?.[networkName];
+  assert.match(endpoint?.NetworkID ?? "", /^[a-f0-9]{64}$/u);
+  assert.match(endpoint.IPAddress ?? "", /^(?:\d{1,3}\.){3}\d{1,3}$/u);
+  assert.ok(Array.isArray(endpoint.Aliases) && endpoint.Aliases.length > 0);
+  assert.ok(
+    endpoint.Aliases.every((alias) => /^[a-z0-9][a-z0-9_.-]*$/u.test(alias)),
+  );
+  if (networkName === EXTERNAL_POSTGRES_NETWORK)
+    assert.equal(endpoint.NetworkID, APPROVED_EXTERNAL_POSTGRES.dataNetworkId);
+  else
+    assert.ok(
+      networkName === `${projectName}_coffee_internal_api` ||
+        (networkName === `${projectName}_coffee_kafka_event` &&
+          runtime === "orders-aroma-preparation" &&
+          dependency === "kafka"),
+    );
+  const network = inspectDockerObject([endpoint.NetworkID]);
+  assert.equal(network.Id, endpoint.NetworkID);
+  assert.ok(network.Containers?.[containerId]);
+  const otherEndpoints = { ...network.Containers };
+  delete otherEndpoints[containerId];
+  const postgres = sharedPostgresSnapshot();
+  const otherNetworks = { ...before.NetworkSettings.Networks };
+  delete otherNetworks[networkName];
+  const route = ownedDefaultRoute(containerId);
+  const beforeStatus = await waitForDependencyHealth(
+    containerId,
+    "/health/ready",
+    200,
+  );
+  const since = new Date().toISOString();
+  let bodyError;
+  let during;
+  let liveDuring;
+  let attempted = false;
+  let restored;
+  let restoreError;
+  try {
+    const current = assertDependencyIdentity(projectName, runtime, before);
+    assert.deepEqual(
+      current.NetworkSettings.Networks,
+      before.NetworkSettings.Networks,
+    );
+    assert.equal(
+      ownedDefaultRoute(containerId),
+      route,
+      "runtime default route changed before fault",
+    );
+    assert.deepEqual(
+      inspectDockerObject([endpoint.NetworkID]).Containers,
+      network.Containers,
+    );
+    assert.deepEqual(sharedPostgresSnapshot(), postgres);
+    attempted = true;
+    runDocker(["network", "disconnect", endpoint.NetworkID, containerId], {
+      timeout: 10_000,
+    });
+    const disconnected = assertDependencyIdentity(projectName, runtime, before);
+    assert.equal(
+      disconnected.NetworkSettings?.Networks?.[networkName],
+      undefined,
+    );
+    during = await waitForDependencyHealth(containerId, "/health/ready", 503);
+    liveDuring = await waitForDependencyHealth(
+      containerId,
+      "/health/live",
+      200,
+    );
+    assert.ok(
+      dependencyFailureLogged(containerId, checkName, since),
+      "expected dependency failure was not observed",
+    );
+  } catch (error) {
+    bodyError = error;
+  } finally {
+    if (attempted) {
+      try {
+        const current = inspectDockerObject([containerId]);
+        const labels = current.Config?.Labels ?? {};
+        assert.equal(current.Id, containerId);
+        assert.equal(current.Image, before.Image);
+        assert.equal(labels["com.docker.compose.project"], projectName);
+        assert.equal(labels["com.docker.compose.service"], runtime);
+        if (!current.NetworkSettings?.Networks?.[networkName]) {
+          runDocker(
+            [
+              "network",
+              "connect",
+              ...endpoint.Aliases.flatMap((alias) => ["--alias", alias]),
+              endpoint.NetworkID,
+              containerId,
+            ],
+            { timeout: 10_000 },
+          );
+        }
+        const after = assertDependencyIdentity(projectName, runtime, before);
+        const reattached = after.NetworkSettings?.Networks?.[networkName];
+        assert.equal(reattached?.NetworkID, endpoint.NetworkID);
+        assert.deepEqual(
+          [...reattached.Aliases].sort(),
+          [...endpoint.Aliases].sort(),
+        );
+        assert.match(reattached.IPAddress ?? "", /^(?:\d{1,3}\.){3}\d{1,3}$/u);
+        const remainingNetworks = { ...after.NetworkSettings.Networks };
+        delete remainingNetworks[networkName];
+        assert.deepEqual(
+          remainingNetworks,
+          otherNetworks,
+          "unrelated runtime endpoint changed",
+        );
+        assert.equal(
+          ownedDefaultRoute(containerId),
+          route,
+          "runtime default route changed after fault",
+        );
+        const currentNetwork = inspectDockerObject([endpoint.NetworkID]);
+        const currentOthers = { ...currentNetwork.Containers };
+        delete currentOthers[containerId];
+        assert.deepEqual(
+          currentOthers,
+          otherEndpoints,
+          "another network endpoint changed",
+        );
+        const afterStatus = await waitForDependencyHealth(
+          containerId,
+          "/health/ready",
+          200,
+        );
+        restored = {
+          runtime,
+          dependency,
+          before: beforeStatus,
+          during,
+          after: afterStatus,
+          liveDuring,
+          restored: true,
+          addressChanged: reattached.IPAddress !== endpoint.IPAddress,
+        };
+      } catch (error) {
+        restoreError = error;
+      }
+      try {
+        assert.deepEqual(
+          sharedPostgresSnapshot(),
+          postgres,
+          "shared PostgreSQL endpoint or route changed",
+        );
+      } catch (error) {
+        restoreError = restoreError
+          ? new AggregateError(
+              [restoreError, error],
+              "dependency and PostgreSQL restoration checks failed",
+            )
+          : error;
+      }
+    }
+  }
+  if (bodyError && restoreError)
+    throw new AggregateError(
+      [bodyError, restoreError],
+      "dependency fault and restoration failed",
+    );
+  if (restoreError) throw restoreError;
+  if (bodyError) throw bodyError;
+  return restored;
 }
 
 function readRealtimeAuthCloseCount(projectName, containerId) {
@@ -9904,6 +10221,7 @@ export async function runComposeSmoke({
     let kafkaRetention;
     let kafkaNamespaceInventory;
     let nativeFoundation;
+    let dependencyReadiness;
     if (options.aromaBindingProof) {
       assert.ok(
         aromaBindingSnapshot && aromaBindingFixture && recoveryDatabaseProof,
@@ -10512,32 +10830,108 @@ export async function runComposeSmoke({
               "SIGTERM fixture left pending work",
             );
           }
-          nativeFoundation = {
-            ...normalEvidence,
-            ordersOutbox: await assertOrdersOutboxBrokerRecovery(
-              projectName,
-              secretsDir,
-              composeFile,
-              recoveryDatabaseProof.port,
-              recoveryDatabaseProof.host ?? "127.0.0.1",
-              recoveryProofCredentials,
+          const ordersOutbox = await assertOrdersOutboxBrokerRecovery(
+            projectName,
+            secretsDir,
+            composeFile,
+            recoveryDatabaseProof.port,
+            recoveryDatabaseProof.host ?? "127.0.0.1",
+            recoveryProofCredentials,
+            recoveryPlatformConfig,
+            fixture.kafkaTargets.orders,
+          );
+          const kafkaChecks = [];
+          if (observability && externalRecovery) {
+            for (const runtime of RUNTIMES.filter((name) => {
+              const kafka = recoveryPlatformConfig.services[name].kafka;
+              return (
+                name !== "orders-aroma-preparation" &&
+                (kafka.producers.length > 0 || kafka.consumers.length > 0)
+              );
+            })) {
+              const id = rows.get(runtime)?.ID;
+              const before = ownedDependencySnapshot(projectName, runtime, id);
+              const status = await waitForDependencyHealth(
+                id,
+                "/health/ready",
+                200,
+              );
+              kafkaChecks.push({ runtime, before, status });
+            }
+          }
+          const blackhole = await runKafkaBlackholeProof(
+            projectName,
+            secretsDir,
+            projectName,
+            fixture.mappingTopic,
+            databaseProofService(
               recoveryPlatformConfig,
-              fixture.kafkaTargets.orders,
-            ),
-            blackhole: await runKafkaBlackholeProof(
-              projectName,
-              secretsDir,
-              projectName,
-              fixture.mappingTopic,
-              databaseProofService(
-                recoveryPlatformConfig,
-                recoveryProofCredentials.ownership,
-                "orders-service",
-              ).database,
-              composeFile,
-              fixture.kafkaTargets.preparation,
-            ),
-          };
+              recoveryProofCredentials.ownership,
+              "orders-service",
+            ).database,
+            composeFile,
+            fixture.kafkaTargets.preparation,
+            kafkaChecks.length === 0
+              ? undefined
+              : async (kafkaSince) => {
+                  for (const entry of kafkaChecks) {
+                    assertDependencyIdentity(
+                      projectName,
+                      entry.runtime,
+                      entry.before,
+                    );
+                    entry.during = await waitForDependencyHealth(
+                      entry.before.Id,
+                      "/health/ready",
+                      503,
+                    );
+                    entry.liveDuring = await waitForDependencyHealth(
+                      entry.before.Id,
+                      "/health/live",
+                      200,
+                    );
+                    assert.ok(
+                      dependencyFailureLogged(
+                        entry.before.Id,
+                        "kafka",
+                        kafkaSince,
+                      ),
+                      "Kafka readiness failure was not observed",
+                    );
+                  }
+                },
+          );
+          if (kafkaChecks.length > 0) {
+            const checks = [];
+            for (const entry of kafkaChecks) {
+              assertDependencyIdentity(
+                projectName,
+                entry.runtime,
+                entry.before,
+              );
+              checks.push({
+                runtime: entry.runtime,
+                dependency: "kafka",
+                before: entry.status,
+                during: entry.during,
+                after: await waitForDependencyHealth(
+                  entry.before.Id,
+                  "/health/ready",
+                  200,
+                ),
+                liveDuring: entry.liveDuring,
+                restored: true,
+                addressChanged: null,
+              });
+            }
+            dependencyReadiness = {
+              status: "NOT_RUN",
+              checks,
+              notApplicable: [],
+              localChecks: "NOT_PROVEN",
+            };
+          }
+          nativeFoundation = { ...normalEvidence, ordersOutbox, blackhole };
         } catch (error) {
           recoveryBodyFailed = true;
           recoveryBodyError = error;
@@ -10574,6 +10968,57 @@ export async function runComposeSmoke({
           throw restoreError;
         }
         if (recoveryBodyFailed) throw recoveryBodyError;
+        if (dependencyReadiness) {
+          const preparation = rows.get("orders-aroma-preparation")?.ID;
+          dependencyReadiness.checks.push(
+            await proveOwnedNetworkDependency({
+              projectName,
+              runtime: "orders-aroma-preparation",
+              containerId: preparation,
+              networkName: `${projectName}_coffee_kafka_event`,
+              dependency: "kafka",
+              checkName: "kafka",
+            }),
+          );
+          for (const runtime of RUNTIMES) {
+            const service = recoveryPlatformConfig.services[runtime];
+            if (service.database !== null)
+              dependencyReadiness.checks.push(
+                await proveOwnedNetworkDependency({
+                  projectName,
+                  runtime,
+                  containerId: rows.get(runtime)?.ID,
+                  networkName: EXTERNAL_POSTGRES_NETWORK,
+                  dependency: "database",
+                  checkName: "database",
+                }),
+              );
+          }
+          for (const [runtime, checkName] of [
+            ["orders-service", "orders-internal-api"],
+            ["aroma-observer", "aroma-observation-internal-api"],
+            ["aroma-convergence", "aroma-convergence-internal-api"],
+          ])
+            dependencyReadiness.checks.push(
+              await proveOwnedNetworkDependency({
+                projectName,
+                runtime,
+                containerId: rows.get(runtime)?.ID,
+                networkName: `${projectName}_coffee_internal_api`,
+                dependency: "internal-api",
+                checkName,
+              }),
+            );
+          dependencyReadiness.notApplicable = [
+            "edge-gateway",
+            "api-public",
+            "api-internal",
+          ].map((runtime) => ({
+            runtime,
+            reason: "no-registered-readiness-dependency",
+          }));
+          dependencyReadiness.status = "PASS";
+        }
       }
     }
     if (!options.keep) {
@@ -10633,6 +11078,7 @@ export async function runComposeSmoke({
             ? undefined
             : kafkaRetention,
       kafkaNamespaceInventory,
+      ...(dependencyReadiness ? { dependencyReadiness } : {}),
       recoveryProof:
         options.recoveryProof && !browserHook
           ? {
