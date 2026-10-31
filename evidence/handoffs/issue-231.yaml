@@ -1,7 +1,11 @@
 issue: 231
 baseCommit: f412aaa4657a435d2bb6f6d3c45ee162dbf8ec9a
 status: verified
-inputs: []
+inputs:
+  - issue: 238
+    acceptedMergeCommit: 3b3d67aed1d7e38a6576a3b525ff4ec7687abe45
+    artifact: evidence/handoffs/issue-238.yaml
+    sha256: 511b3615e759f2fe8e0b9711c3dc521e1340b4ba4003940a96612127ce7e20f2
 outputs:
   - artifact: .cursor/skills/orders-slice-verify/internal-fixture.mjs
     sha256: 5ce5a69cc02fd308b114c2eebd81009ce49773bdac5603dae8e49fc6e21b9e82
@@ -221,6 +225,15 @@ verification:
       raw log не записан, вывод сохранён в текущей сессии.
   - command: node --input-type=module -
     result: "PASS; inline сверка31 output hashes с handoff после интеграции develop: все неизменны."
+  - command: gh run view 41181988184 --repo YurGusev/CoffeeOrderPlatform --log-failed
+    result: >-
+      FAIL сохранён: unchanged UI foundation dialog Escape timeout30s; связь с formatter не
+      установлена. Accepted fix238/PR239 включён отдельно через develop. Raw log SHA-256
+      08d15017bc3de84a785072d69f029a6dcbcd66e2c7ed0c0cea607f39452b360d
+  - command: git merge --no-ff origin/develop
+    result: >-
+      PASS; принятый develop3b3d67a включён. Все31 output hashes после интеграции остались прежними,
+      diff только31allowlist+handoff. Новый final CI обязателен.
 limitations:
   - >-
     Независимое review и root-проверка подтвердили только форматирование; final CI и полный G03 ещё
