@@ -478,7 +478,7 @@ void test("smoke accepts only runtime image IDs verified by G12 before startup",
       runInNewContext(predicate, { options: {}, browser: undefined }),
       true,
     );
-    assert.ok(source.includes("if (launchIdentity && bindRuntimeImages)"));
+    assert.ok(source.includes("if (imageIdentity && bindRuntimeImages)"));
     assert.ok(binding < source.indexOf("composeAttempted = true;", binding));
   } finally {
     t.mock.restoreAll();
