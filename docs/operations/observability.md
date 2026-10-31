@@ -70,7 +70,7 @@ ID всех 14 Node images и nginx сравниваются с проверен
 
 ## Хранение и подготовка
 
-Четыре отдельных bounded ext4 volume принадлежат Grafana, Loki, Prometheus и Tempo; Loki/Prometheus/Tempo настроены на retention 3 дня. Только storage init helper получает привилегии. NTFS не используется непосредственно как TSDB filesystem. После reboot provisioner может восстановить loop attachment к сохранённому backing file только при отсутствии ссылок контейнеров; чужие volumes он не переиспользует. Не удаляйте persistent volumes или business storage при cleanup. Recovery и restore требуют отдельной проверки, сохранённый файл сам по себе не является restore PASS.
+Четыре отдельных bounded ext4 volume принадлежат Grafana, Loki, Prometheus и Tempo; Loki/Prometheus/Tempo настроены на retention 3 дня. Только storage init helper получает привилегии. NTFS не используется непосредственно как TSDB filesystem. После reboot provisioner может восстановить loop attachment к сохранённому backing file только при отсутствии ссылок контейнеров; чужие volumes он не переиспользует. Не удаляйте persistent volumes или business storage при cleanup. При rebind provisioner может удалить и создать заново только Docker-запись собственного data-volume; backing volume и файл с данными сохраняются. Recovery и restore требуют отдельной проверки, сохранённый файл сам по себе не является restore PASS.
 
 При наличии разрешения на локальную подготовку предусмотрены следующие CLI. Имена относятся только к собственным telemetry volumes; helper сверяет owner и lifecycle. Bootstrap использует SOPS через trusted materialization, не выдавая общий secrets-файл runtime. Development leaf `telemetry.grafanaAdmin` создан через trusted bootstrap; staging и production не изменены. Для нового development окружения предусмотрена явная идемпотентная команда `pnpm observability:bootstrap --provision-development-grafana-admin`: существующий ключ не ротируется, другое окружение отвергается. Обычная materialization не создаёт секреты автоматически. Storage и generator требуют законный G12 context (`COFFEE_LAUNCH_CONTEXT_FILE`); постоянный alert-sink использует его просканированный hardened storage-helper image по frozen ID.
 
@@ -79,12 +79,59 @@ pnpm observability:storage --store grafana --name coffee-observability-grafana-d
 pnpm observability:storage --store loki --name coffee-observability-loki-data
 pnpm observability:storage --store prometheus --name coffee-observability-prometheus-data
 pnpm observability:storage --store tempo --name coffee-observability-tempo-data
-pnpm observability:bootstrap
+env -u COFFEE_LAUNCH_CONTEXT_FILE pnpm observability:bootstrap
 pnpm observability:generate --logging-only --output-dir /dev/shm/coffee-platform-observability
 pnpm observability:generate --project-name coffee-platform --grafana-volume coffee-observability-grafana-data --loki-volume coffee-observability-loki-data --prometheus-volume coffee-observability-prometheus-data --tempo-volume coffee-observability-tempo-data
 ```
 
-Logging override применяется до создания или recreation выбранных runtime; затем generator обнаруживает фактические IDs и LogPath. Он проверяет BOM probe, materialized secrets и владельцев томов, создаёт configs/provisioning и `provenance.json` в tmpfs и выводит путь override. Без соответствующих контейнеров и secret этот шаг не является готовым deployment. Для проверки Collector используется `node tools/observability/health.mjs --collector-container <container>` из среды, где доступны backend endpoints; Collector probe выполняется внутри контейнера.
+Logging override применяется до создания или recreation выбранных runtime; затем generator обнаруживает фактические IDs и LogPath. Он проверяет BOM probe, materialized secrets и владельцев томов, создаёт configs/provisioning и `provenance.json` в tmpfs и выводит путь override. Отсутствующие и остановленные роли пропускаются; дубликат или неверный Docker identity/LogPath прекращает генерацию. При пустом списке Collector принимает authenticated OTLP metrics/traces, но filelog, nginx receiver и logs pipeline отсутствуют. Данных логов приложения до обнаружения его контейнеров нет. При пустом наборе Collector подключается только к private `coffee_observability`; после обнаружения приложений он подключается к требуемым producer-сетям. Перед использованием generator сверяет Compose project/network labels и `internal` у существующих сетей и отказывается от чужих. Формальная runtime matrix по-прежнему требует все 15 ролей. Для проверки Collector используется `node tools/observability/health.mjs --collector-container <container>` из среды, где доступны backend endpoints; Collector probe выполняется внутри контейнера.
+
+### Постоянный запуск на сервере
+
+Используйте постоянный checkout принятого commit с установленными frozen dependencies и сохранённым локальным G12 context/evidence для этого же checkout и SHA. `COFFEE_LAUNCH_CONTEXT_FILE` указывает на его абсолютный `evidence/launch/<run-id>/context.json`; этот locator не является config или секретом. Перед запуском все pinned образы Collector/Loki/Prometheus/Tempo и два проверенных G12 image ID Grafana и storage-helper должны уже присутствовать локально. Lifecycle и generator не загружают эти образы из G12 evidence, а helper containers запускаются с `--pull=never`. Проверенный storage-helper выполняет также операции ownership; его фактический image ID фиксируется в provenance. Путь `/usr/bin/busybox` сверяется с SHA-256 в BOM. На сервере `node` должен совпадать с точной версией в toolchain; age key должен быть доступен trusted bootstrap. G12 component evidence не становится формальным launch admission.
+
+```sh
+export COFFEE_LAUNCH_CONTEXT_FILE=/полный/путь/к/evidence/launch/ID/context.json
+node tools/observability/service.mjs start
+node tools/observability/service.mjs stop
+```
+
+`start` сверяет G12, BOM probe, конфигурацию, свободное место root и identity собственных контейнеров/volumes; до остановки он также материализует только Collector/Grafana secrets в tmpfs. Затем останавливает и удаляет только свои контейнеры, восстанавливает четыре loop attachment, генерирует config и поднимает указанные telemetry services. Kafka, PostgreSQL и owner runtime им не запускаются. `stop` удаляет только те же контейнеры. Данные четырёх backend и checkpoint volume сохраняются. Secret materialization выполняется trusted config-bootstrap; дополнительный encrypted inventory и файлы паролей не создаются.
+
+Для восстановления после перезагрузки можно установить user unit ниже, заменив пути на абсолютные пути постоянного checkout и его G12 context. На этом сервере user linger включён. Unit выполняет только подготовку и запуск; Docker использует `on-failure` для перезапуска backend при ненулевом выходе. Контейнеры не стартуют автоматически до восстановления tmpfs/loop устройств; при обычном выходе с кодом 0 автоматический restart не обещается. Docker предупреждает о конфликте двух менеджеров перезапуска: oneshot unit не мониторит отдельно работающие контейнеры. Реальная перезагрузка сервера и её длительность требуют отдельного доказательства.
+
+```ini
+[Unit]
+Description=Coffee observability
+StartLimitIntervalSec=300
+StartLimitBurst=6
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+Restart=on-failure
+RestartSec=10
+WorkingDirectory=/полный/путь/к/постоянному/checkout
+Environment=PATH=/home/yurgusev/.local/usr/bin:/home/yurgusev/.local/bin:/usr/bin:/bin
+Environment=COFFEE_LAUNCH_CONTEXT_FILE=/полный/путь/к/evidence/launch/ID/context.json
+ExecStart=/home/yurgusev/.local/usr/bin/node /полный/путь/к/checkout/tools/observability/service.mjs start
+ExecStop=/home/yurgusev/.local/usr/bin/node /полный/путь/к/checkout/tools/observability/service.mjs stop
+TimeoutStartSec=180
+TimeoutStopSec=120
+
+[Install]
+WantedBy=default.target
+```
+
+После сохранения файла как `~/.config/systemd/user/coffee-observability.service` выполните `systemctl --user daemon-reload` и `systemctl --user enable --now coffee-observability.service`. Не перезапускайте Docker daemon и чужие сервисы ради этой установки. Alert sink хранит события в ограниченном tmpfs: при пересоздании sink эти записи теряются, но данные четырёх backend остаются в persistent volumes.
+
+После создания или recreation owner приложений повторно запустите проверенный lifecycle:
+
+```sh
+node tools/observability/service.mjs start
+```
+
+Команда заново обнаруживает точные container IDs и LogPath и привязывает к ним filelog. Она кратковременно перезапускает все шесть telemetry services, сохраняя данные четырёх backend и checkpoint volume. До повторного запуска данные новых экземпляров не поступают; автоматическое обнаружение не заявляется.
 
 Loki WAL использует native `disk_full_threshold: 0.8`; отдельный disk alert срабатывает по фактическому filesystem utilization при 80%. Prometheus retention size ограничен 80% configured объёма. Для Prometheus и Tempo не заявляется универсальный native HTTP 503 при 80%. Alert не является ingestion guard. Tempo local backend предназначен upstream для evaluation/development; этот однохостовый вариант не обещает HA или object storage.
 

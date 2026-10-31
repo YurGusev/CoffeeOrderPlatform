@@ -39,6 +39,7 @@ import {
   loadServiceCatalog,
 } from "../../scripts/config-lib.mjs";
 import {
+  assertTelemetryNetworks,
   createCollectorConfig,
   createAlloyConfig,
   createObservabilityProvenance,
@@ -49,6 +50,7 @@ import {
   generateRuntimeLoggingOverride,
   createBackendConfigs,
   verifyBootstrapProbe,
+  writeBackendConfigs,
 } from "../../tools/observability/generate.mjs";
 import {
   checkBootstrap,
@@ -221,6 +223,31 @@ void test("infrastructure scopes separate Collector and Grafana credentials", as
   }
 });
 
+void test("backend configs replace readonly files on a second generation", async () => {
+  const dir = await mkdtemp("/dev/shm/coffee-observability-config-");
+  try {
+    const first = await writeBackendConfigs(dir, {
+      loki: { retention: "old" },
+      alerts: { version: 1 },
+    });
+    assert.equal((await stat(first.loki)).mode & 0o777, 0o444);
+    const second = await writeBackendConfigs(dir, {
+      loki: { retention: "new" },
+      alerts: { version: 2 },
+    });
+    assert.deepEqual(first, second);
+    assert.deepEqual(parseYaml(await readFile(second.loki, "utf8")), {
+      retention: "new",
+    });
+    assert.deepEqual(parseYaml(await readFile(second.alerts, "utf8")), {
+      version: 2,
+    });
+    assert.equal((await stat(second.loki)).mode & 0o777, 0o444);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 void test("bootstrap probe is an executable matching the BOM SHA-256", async () => {
   const toolchain = JSON.parse(
     await readFile(`${REPO_ROOT}/config/toolchain-versions.json`, "utf8"),
@@ -290,6 +317,14 @@ void test("Collector config ownership is changed only by pinned Node with CAP_CH
     gid: 0,
     mode: "0400",
     verified: true,
+  });
+  ensureCollectorConfigOwnership({
+    collectorConfigPath: "/dev/shm/config",
+    nodeImage: "sha256:" + "a".repeat(64),
+    runDocker: (args) => {
+      assert.ok(args.includes("sha256:" + "a".repeat(64)));
+      return '{"uid":0,"gid":0,"mode":"0400"}';
+    },
   });
   assert.equal(calls[0].timeout, 10000);
   assert.ok(
@@ -411,6 +446,18 @@ void test("observability provenance includes all pinned images, bounded storage 
     "nodeHelper",
   ]);
   assert.equal(provenance.images.grafanaBase, imageRefs.grafanaImage);
+  const admitted = await createObservabilityProvenance({
+    root: REPO_ROOT,
+    config: sample,
+    imageRefs,
+    grafanaImage,
+    alertSinkImage,
+    logFiles: logs,
+    storageVolumes,
+    collectorConfigSha256: "c".repeat(64),
+    nodeHelperImage: alertSinkImage.imageId,
+  });
+  assert.equal(admitted.images.nodeHelper, alertSinkImage.imageId);
   assert.deepEqual(provenance.grafanaImage, grafanaImage);
   assert.deepEqual(provenance.alertSinkImage, alertSinkImage);
   assert.equal(provenance.limits.loki.maxDiskBytes, 1073741824);
@@ -609,6 +656,41 @@ void test("Collector config accepts only exact selected log files and bounds exp
   assert.equal(minimalConfig.receivers.nginx, undefined);
   assert.equal(minimalConfig.processors["transform/nginx_resource"], undefined);
   assert.equal(minimalConfig.service.pipelines["metrics/nginx"], undefined);
+  const emptyConfig = createCollectorConfig({
+    config: sample,
+    logFiles: [],
+    exporterToken: "producer-token",
+  });
+  assert.equal(emptyConfig.receivers.filelog, undefined);
+  assert.equal(emptyConfig.receivers.nginx, undefined);
+  assert.equal(emptyConfig.service.pipelines.logs, undefined);
+  assert.equal(emptyConfig.extensions.file_storage, undefined);
+  assert.equal(
+    emptyConfig.receivers.otlp.protocols.http.auth.authenticator,
+    "bearertokenauth/server",
+  );
+  assert.deepEqual(Object.keys(emptyConfig.service.pipelines).sort(), [
+    "metrics",
+    "traces",
+  ]);
+  const emptyAlloy = createAlloyConfig({
+    config: sample,
+    logFiles: [],
+    exporterToken: "producer-token",
+  });
+  assert.doesNotMatch(
+    emptyAlloy,
+    /otelcol\.receiver\.filelog|otelcol\.storage\.file|otelcol\.processor\.transform "logs"|otelcol\.exporter\.otlphttp "logs"|otelcol\.receiver\.nginx/u,
+  );
+  assert.match(emptyAlloy, /auth = otelcol\.auth\.bearer\.producer\.handler/u);
+  assert.match(
+    emptyAlloy,
+    /metrics = \[otelcol\.processor\.memory_limiter\.main\.input\]/u,
+  );
+  assert.match(
+    emptyAlloy,
+    /traces = \[otelcol\.processor\.memory_limiter\.main\.input\]/u,
+  );
   assert.deepEqual(
     config.processors["transform/metric_names"].metric_statements[0],
     {
@@ -821,6 +903,16 @@ void test("generated Collector and backend configs preserve bounded delivery and
     backendConfigPaths,
     grafanaAdminSecretPath: "/tmp/admin-secret",
   };
+  const withoutRuntimes = createComposeOverride({ ...args, logFiles: [] });
+  assert.deepEqual(withoutRuntimes.services["otel-collector"].networks, [
+    "coffee_observability",
+  ]);
+  assert.equal(
+    withoutRuntimes.services["otel-collector"].volumes.some((volume) =>
+      volume.target.startsWith("/var/lib/docker/containers/"),
+    ),
+    false,
+  );
   for (const invalid of [undefined, images.grafanaImage, "sha256:bad"])
     assert.throws(
       () => createComposeOverride({ ...args, grafanaImage: invalid }),
@@ -881,6 +973,53 @@ void test("generated Collector and backend configs preserve bounded delivery and
   }
 });
 
+void test("normal discovery uses only owned telemetry networks", () => {
+  const inspected = [];
+  let foreign = false;
+  const runDocker = (args) => {
+    const name = args[2];
+    inspected.push(name);
+    if (name === "coffee_observability")
+      throw Object.assign(new Error("missing"), {
+        stderr: "No such network: coffee_observability",
+      });
+    return JSON.stringify([
+      {
+        Name: name,
+        Driver: "bridge",
+        Internal: true,
+        Labels: {
+          "com.docker.compose.project": foreign ? "foreign" : "coffee-platform",
+          "com.docker.compose.network": name,
+        },
+      },
+    ]);
+  };
+  assertTelemetryNetworks({
+    projectName: "coffee-platform",
+    logFiles: [],
+    runDocker,
+  });
+  assert.deepEqual(inspected, ["coffee_observability"]);
+  inspected.length = 0;
+  assertTelemetryNetworks({
+    projectName: "coffee-platform",
+    logFiles: [logs[0]],
+    runDocker,
+  });
+  assert.equal(inspected.length, 5);
+  foreign = true;
+  assert.throws(
+    () =>
+      assertTelemetryNetworks({
+        projectName: "coffee-platform",
+        logFiles: [logs[0]],
+        runDocker,
+      }),
+    /network does not belong/u,
+  );
+});
+
 void test("log discovery selects exactly one running container by project and runtime labels", async () => {
   const id = "b".repeat(64);
   const calls = [];
@@ -916,6 +1055,43 @@ void test("log discovery selects exactly one running container by project and ru
   assert.ok(calls[0].includes("label=com.docker.compose.project=coffee-proof"));
   assert.ok(calls[0].includes("label=com.docker.compose.service=edge-gateway"));
   assert.ok(calls[0].includes("--no-trunc"));
+  assert.deepEqual(
+    await discoverContainerLogs({
+      projectName: "coffee-proof",
+      runtimes: ["edge-nginx"],
+      allowMissing: true,
+      runDocker: () => "",
+    }),
+    [],
+  );
+  await assert.rejects(
+    discoverContainerLogs({
+      projectName: "coffee-proof",
+      runtimes: ["edge-nginx"],
+      runDocker: () => "",
+    }),
+    /exactly one running container/u,
+  );
+  const partial = await discoverContainerLogs({
+    projectName: "coffee-proof",
+    runtimes: ["edge-nginx", "edge-gateway"],
+    allowMissing: true,
+    runDocker: (args) =>
+      args[0] === "ps" &&
+      args.includes("label=com.docker.compose.service=edge-nginx")
+        ? ""
+        : runDocker(args),
+  });
+  assert.deepEqual(partial, found);
+  await assert.rejects(
+    discoverContainerLogs({
+      projectName: "coffee-proof",
+      runtimes: ["edge-gateway"],
+      allowMissing: true,
+      runDocker: () => `${id}\n${id}\n`,
+    }),
+    /exactly one running container/u,
+  );
   await assert.rejects(
     discoverContainerLogs({
       projectName: "coffee-proof",

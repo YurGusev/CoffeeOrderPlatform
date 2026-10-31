@@ -6,6 +6,7 @@ import {tmpdir} from 'node:os';
 import {delimiter, join} from 'node:path';
 import test from 'node:test';
 import {provisionStorage, removeStorage} from '../../tools/observability/storage.mjs';
+import {inspectOwnedTelemetry, runService} from '../../tools/observability/service.mjs';
 import {loadVerifiedGateImage} from '../../tools/verified-infrastructure-image.mjs';
 import {RUNTIME_NAMES} from '../../packages/platform-config/src/index.ts';
 
@@ -425,5 +426,129 @@ void test('failed fixture allocation cleans only an identified file with no loop
       assert.equal(volumes.has(`${name}-backing`), ambiguous);
       assert.equal(calls.some(args => args[0] === 'run' && args[args.indexOf('-ceu') + 1]?.includes('losetup -d')), false);
     } finally { rmSync(root, {recursive: true, force: true}); }
+  }
+});
+
+void test('persistent telemetry validates all container and volume ownership before a stop', () => {
+  const projectRoot = '/opt/coffee-platform';
+  const id = 'a'.repeat(64);
+  const calls = [];
+  const existing = new Map();
+  const name = 'coffee-observability-grafana-data';
+  existing.set(`${name}-backing`, {Name: `${name}-backing`, Driver: 'local', Labels: labels('persistent'), Options: null});
+  existing.set(name, {Name: name, Driver: 'local', Labels: labels('persistent'), Options: {type: 'ext4', device: '/dev/loop18', o: 'nodev,nosuid,noexec'}});
+  let foreignReference = false;
+  let foreignWorkingDir = false;
+  const run = args => {
+    calls.push(args);
+    if (args[0] === 'ps' && args.some(value => value.startsWith('label=com.docker.compose.service=')))
+      return args.includes('label=com.docker.compose.service=grafana') ? `${id}\n` : '';
+    if (args[0] === 'inspect') return JSON.stringify([{Id: id, Config: {Labels: {
+      'com.docker.compose.project': 'coffee-platform',
+      'com.docker.compose.service': 'grafana',
+      'com.docker.compose.project.working_dir': foreignWorkingDir ? '/other/coffee-platform' : projectRoot,
+    }}}]);
+    if (args[0] === 'volume' && args[1] === 'inspect') {
+      const volume = existing.get(args[2]);
+      if (!volume) throw Object.assign(new Error('no such volume'), {stderr: 'no such volume'});
+      return JSON.stringify([volume]);
+    }
+    if (args[0] === 'ps' && args.includes(`volume=${name}`)) return foreignReference ? 'b'.repeat(64) : id;
+    if (args[0] === 'ps') return '';
+    if (args[0] === 'network' && args[1] === 'inspect') return JSON.stringify([{Name: args[2], Driver: 'bridge', Internal: true, Labels: {'com.docker.compose.project': 'another-project', 'com.docker.compose.network': args[2]}}]);
+    throw new Error(`unexpected mutation: ${args[0]}`);
+  };
+  assert.deepEqual(inspectOwnedTelemetry({root: projectRoot, run}), [id]);
+  foreignReference = true;
+  assert.throws(() => inspectOwnedTelemetry({root: projectRoot, run}), /unrelated container reference/u);
+  foreignReference = false;
+  foreignWorkingDir = true;
+  assert.throws(() => inspectOwnedTelemetry({root: projectRoot, run}), /does not belong/u);
+  foreignWorkingDir = false;
+  existing.get(name).Labels = labels('fixture');
+  assert.throws(() => inspectOwnedTelemetry({root: projectRoot, run}), /does not belong/u);
+  existing.get(name).Labels = labels('persistent');
+  existing.set('coffee-platform_collector_checkpoints', {Name: 'coffee-platform_collector_checkpoints', Driver: 'local', Labels: {'com.docker.compose.project': 'foreign', 'com.docker.compose.volume': 'collector_checkpoints'}, Options: null});
+  assert.throws(() => inspectOwnedTelemetry({root: projectRoot, run}), /checkpoint volume does not belong/u);
+  assert.equal(calls.some(args => ['stop', 'rm'].includes(args[0])), false);
+});
+
+void test('persistent telemetry refuses an invalid launch context before invoking Docker', () => {
+  const root = mkdtempSync(join(tmpdir(), 'coffee-observability-service-'));
+  const bin = join(root, 'bin');
+  const calls = join(root, 'docker-calls');
+  mkdirSync(bin);
+  const docker = join(bin, 'docker');
+  writeFileSync(docker, '#!/bin/sh\nprintf "%s\\n" "$*" >> "$OBS_SERVICE_TEST_DOCKER_CALLS"\nexit 1\n');
+  chmodSync(docker, 0o700);
+  try {
+    const result = spawnSync(process.execPath, ['tools/observability/service.mjs', 'start'], {encoding: 'utf8',
+      env: {...process.env, PATH: `${bin}${delimiter}${process.env.PATH}`, COFFEE_LAUNCH_CONTEXT_FILE: join(root, 'missing.json'), OBS_SERVICE_TEST_DOCKER_CALLS: calls}});
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /observability lifecycle/u);
+    assert.equal(existsSync(calls), false);
+    const invalidArgs = spawnSync(process.execPath, ['tools/observability/service.mjs', 'stop', '--dry-run'], {encoding: 'utf8',
+      env: {...process.env, PATH: `${bin}${delimiter}${process.env.PATH}`, OBS_SERVICE_TEST_DOCKER_CALLS: calls}});
+    assert.equal(invalidArgs.status, 1);
+    assert.match(invalidArgs.stderr, /usage/u);
+    assert.equal(existsSync(calls), false);
+  } finally { rmSync(root, {recursive: true, force: true}); }
+});
+
+void test('persistent lifecycle orders admission, safe replacement, storage, generation and health without losing data', async () => {
+  const previousContext = process.env.COFFEE_LAUNCH_CONTEXT_FILE;
+  process.env.COFFEE_LAUNCH_CONTEXT_FILE = '/synthetic/context.json';
+  const events = [];
+  const files = new Map(['grafana', 'loki', 'prometheus', 'tempo'].map(name => [name, `saved-${name}`]));
+  const id = 'a'.repeat(64);
+  const imageId = `sha256:${'b'.repeat(64)}`;
+  const refs = {node: process.versions.node, bootstrapProbeSha256: 'c'.repeat(64)};
+  for (const name of ['otelCollectorImage', 'lokiImage', 'prometheusImage', 'tempoImage']) refs[name] = `fixture@sha256:${'d'.repeat(64)}`;
+  const config = {platform: {shutdownGraceMs: 30000, health: {startupGraceMs: 10000, intervalMs: 1000, failureThreshold: 3}}, telemetry: Object.fromEntries([...files.keys()].map(name => [name, {maxDiskBytes: 1073741824}]))};
+  let containers = true;
+  let fail = '';
+  const deps = {
+    validateLaunchContext: async () => { events.push('admission'); if (fail === 'admission') throw Error('admission failed'); return {candidateRoot: process.cwd()}; },
+    realpath: async () => process.cwd(),
+    loadPlatformConfig: async () => config,
+    readFile: async () => JSON.stringify(refs),
+    verifyBootstrapProbe: async () => events.push('probe'),
+    loadVerifiedGateImage: async options => { assert.equal(options.loadImage, false); return {imageId}; },
+    statfs: async () => ({bavail: 1000000n, bsize: 4096n, blocks: 1000000n}),
+    discoverContainerLogs: async () => [],
+    assertTelemetryNetworks: () => events.push('networks'),
+    inspectOwnedTelemetry: () => { events.push('ownership'); if (fail === 'identity') throw Error('foreign identity'); return containers ? [id] : []; },
+    materializeCollectorSecrets: async ({env}) => { assert.equal(env.COFFEE_LAUNCH_CONTEXT_FILE, undefined); events.push('bootstrap-collector'); },
+    materializeGrafanaAdminSecret: async () => events.push('bootstrap-grafana'),
+    provisionStorage: ({name, run}) => { const store = [...files.keys()].find(value => name === `coffee-observability-${value}-data`); assert.ok(store); events.push(`rebind-${store}`); run(['run', '--rm', imageId]); },
+    generate: async () => { events.push('generate'); return {composeOverridePath: '/synthetic/compose.yaml'}; },
+    executeDocker: args => {
+      if (args[0] === 'image') { if (fail === 'image') throw Error('image missing'); return JSON.stringify([{Id: imageId}]); }
+      if (args[0] === 'run') { assert.equal(args[1], '--pull=never'); events.push('helper'); return ''; }
+      if (args[0] === 'stop') { events.push('stop'); return ''; }
+      if (args[0] === 'rm') { events.push('rm'); containers = false; return ''; }
+      if (args[0] === 'compose') { assert.ok(args.includes('--no-deps')); assert.ok(args.includes('--remove-orphans=false')); assert.ok(args.includes('--wait')); assert.equal(args[args.indexOf('--pull') + 1], 'never'); events.push(args.at(-1) === 'otel-collector' ? 'up-collector' : 'up-backends'); containers = true; return ''; }
+      throw Error(`unexpected Docker command ${args[0]}`);
+    },
+  };
+  try {
+    for (const failure of ['admission', 'image', 'identity']) {
+      fail = failure; events.length = 0;
+      await assert.rejects(runService('start', deps));
+      assert.equal(events.includes('stop') || events.includes('rm'), false, failure);
+    }
+    fail = ''; events.length = 0;
+    await runService('start', deps);
+    assert.deepEqual(events, ['admission', 'probe', 'networks', 'ownership', 'bootstrap-collector', 'bootstrap-grafana', 'stop', 'rm', 'rebind-grafana', 'helper', 'rebind-loki', 'helper', 'rebind-prometheus', 'helper', 'rebind-tempo', 'helper', 'generate', 'up-backends', 'up-collector']);
+    events.length = 0;
+    await runService('start', deps);
+    assert.ok(events.indexOf('stop') < events.indexOf('rebind-grafana'));
+    events.length = 0;
+    await runService('stop', deps);
+    assert.deepEqual(events, ['admission', 'probe', 'ownership', 'stop', 'rm']);
+    assert.deepEqual([...files.values()], ['saved-grafana', 'saved-loki', 'saved-prometheus', 'saved-tempo']);
+  } finally {
+    if (previousContext === undefined) delete process.env.COFFEE_LAUNCH_CONTEXT_FILE;
+    else process.env.COFFEE_LAUNCH_CONTEXT_FILE = previousContext;
   }
 });
