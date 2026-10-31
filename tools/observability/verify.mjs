@@ -3565,6 +3565,12 @@ export function observabilityVerificationCoverage(
     evidence.status === "PASS" &&
     sourceHashStable &&
     backendArtifactsComplete &&
+    evidence.syntheticNodeNotReady?.forMs ===
+      config?.telemetry?.alerts?.notReady?.forMs &&
+    evidence.syntheticNodeNotReady?.threshold ===
+      config?.telemetry?.alerts?.notReady?.threshold &&
+    evidence.syntheticNodeNotReady?.ruleUid ===
+      `g14-v${config?.telemetry?.alerts?.version}-service-not-ready-synthetic` &&
     evidence.provenanceStart?.sourceFiles?.status === "PASS" &&
     observabilityGateComplete(evidence) &&
     admitted &&
@@ -3725,6 +3731,9 @@ async function persistEvidence({
     "alert-transitions.json": statusArtifact(alertState, {
       alerts: evidence.alerts,
       inputMetrics: evidence.alertInputs ?? {},
+      syntheticNodeNotReady: evidence.syntheticNodeNotReady ?? {
+        status: "NOT_RUN",
+      },
       nativeNginxAvailability: evidence.nativeNginxAlert ?? {
         status: "NOT_RUN",
       },
@@ -3909,6 +3918,7 @@ export function observabilityGateComplete(evidence) {
     evidence.cleanupErrors.length === 0 &&
     phases.every((phase) => evidence.phases?.[phase] === "PASS") &&
     required.every((status) => status === "PASS") &&
+    syntheticNodeNotReadyComplete(evidence.syntheticNodeNotReady) &&
     diskPressureComplete(evidence)
   );
 }
@@ -3917,6 +3927,42 @@ export function alertEpisodeStartMs(episodeId) {
   if (typeof episodeId !== "string" || !/^[a-f0-9]{16}:/u.test(episodeId))
     return NaN;
   return Date.parse(episodeId.slice(17));
+}
+
+export function syntheticNodeNotReadyComplete(receipt) {
+  const start = alertEpisodeStartMs(receipt?.firing?.episodeId);
+  return (
+    receipt?.status === "PASS" &&
+    receipt.service === "g14-synthetic" &&
+    /^g14-v[1-9][0-9]*-service-not-ready-synthetic$/u.test(
+      receipt.ruleUid ?? "",
+    ) &&
+    receipt.forMs === 300000 &&
+    receipt.threshold === 0 &&
+    receipt.nativeProbeAbsent === true &&
+    receipt.cleanupVerified === true &&
+    receipt.productionRuleUnchanged === true &&
+    Number.isFinite(receipt.activationMs) &&
+    Number.isFinite(receipt.recoveryMs) &&
+    receipt.recoveryMs > receipt.activationMs &&
+    receipt.baseline?.value === 1 &&
+    Number.isFinite(receipt.baseline.timestampUs) &&
+    receipt.baseline.timestampUs < receipt.activationMs * 1000 &&
+    receipt.failed?.value === 0 &&
+    Number.isFinite(receipt.failed.timestampUs) &&
+    receipt.failed.timestampUs > receipt.activationMs * 1000 &&
+    receipt.recovered?.value === 1 &&
+    Number.isFinite(receipt.recovered.timestampUs) &&
+    receipt.recovered.timestampUs > receipt.recoveryMs * 1000 &&
+    Number.isFinite(start) &&
+    start >= receipt.activationMs + receipt.forMs &&
+    Date.parse(receipt.firing.receivedAt) >= start &&
+    Date.parse(receipt.firing.receivedAt) < receipt.recoveryMs &&
+    receipt.failed.timestampUs <=
+      Date.parse(receipt.firing.receivedAt) * 1000 &&
+    receipt.resolved?.episodeId === receipt.firing.episodeId &&
+    Date.parse(receipt.resolved.receivedAt) >= receipt.recoveryMs
+  );
 }
 
 export function parseLokiWalMetrics(text) {
@@ -4616,10 +4662,49 @@ export async function runObservabilityVerification({
     evidence.phases.signals = "PASS";
 
     startPhase("alerts");
+    let syntheticCleanupVerified = true;
     try {
       const nonDisk = definitions.filter(
         (rule) => rule.key !== "diskWatermark" && rule.key !== "notReady",
       );
+      const syntheticRule = createAlertDefinitions({
+        config,
+        readinessServices: ["g14-synthetic"],
+      }).find((rule) => rule.key === "notReady");
+      const productionRule = definitions.find(
+        (rule) => rule.key === "notReady",
+      );
+      const syntheticGroup = "g14-synthetic";
+      const groupPath = `/api/v1/provisioning/folder/${encodeURIComponent(folderUid)}/rule-groups/${syntheticGroup}`;
+      const syntheticPath = `/api/v1/provisioning/alert-rules/${encodeURIComponent(syntheticRule.name)}`;
+      const productionPath = `/api/v1/provisioning/alert-rules/${encodeURIComponent(productionRule.name)}`;
+      const productionBefore = await api({
+        baseUrl: baseUrls.grafana,
+        authorization,
+        path: productionPath,
+      });
+      const readSynthetic = async (afterUs) =>
+        (
+          await readinessMetricSamples({
+            baseUrl: baseUrls.prometheus,
+            services: ["g14-synthetic"],
+            afterUs,
+          })
+        )[0].sample;
+      const query = async (expression) => {
+        const params = new URLSearchParams({ query: expression });
+        const response = await api({
+          baseUrl: baseUrls.prometheus,
+          path: `/api/v1/query?${params}`,
+        });
+        if (
+          response?.status !== "success" ||
+          response.data?.resultType !== "vector" ||
+          !Array.isArray(response.data?.result)
+        )
+          throw new Error("synthetic readiness query returned invalid data");
+        return response.data.result;
+      };
       await fixtureRequest({
         baseUrl: producerUrl,
         path: "/test/state",
@@ -4627,91 +4712,318 @@ export async function runObservabilityVerification({
         runId,
       });
       await fixtureRequest({ baseUrl: producerUrl, runId });
-      await waitFor(
+      const baselineStartUs = Date.now() * 1000;
+      const baseline = await waitFor(
         async () => {
-          const events = (await readSinkEvents(alertPath)).filter((item) =>
-            nonDisk.some((rule) => rule.name === item.name),
+          const sample = await readSynthetic(baselineStartUs);
+          const native = await query(
+            'probe_success{service_name="otel-collector",probe_owner="edge-nginx"}',
           );
-          return events.every(
-            (item) =>
-              item.status !== "firing" ||
-              events.some(
-                (later) =>
-                  later.status === "resolved" &&
-                  later.episodeId === item.episodeId,
-              ),
-          );
+          const value = await query(syntheticRule.query);
+          return sample?.value === 1 &&
+            native.length === 0 &&
+            value.length === 1 &&
+            value[0]?.value?.[1] === "1"
+            ? sample
+            : false;
         },
         {
-          timeoutMs: 420000,
-          intervalMs: 5000,
-          description: "alert episodes resolved before controlled activation",
+          timeoutMs: 120000,
+          intervalMs: 2000,
+          description:
+            "fresh synthetic readiness baseline without native probe",
         },
       );
-      const activationMs = Date.now();
-      await fixtureRequest({
-        baseUrl: producerUrl,
-        path: "/test/state",
-        body: { active: true },
-        runId,
+      await api({
+        baseUrl: baseUrls.grafana,
+        authorization,
+        path: groupPath,
+        expected: [404],
       });
-      await fixtureRequest({ baseUrl: producerUrl, runId });
+      await api({
+        baseUrl: baseUrls.grafana,
+        authorization,
+        path: syntheticPath,
+        expected: [404],
+      });
+      const template = structuredClone(
+        provisioning.alerts.groups[0].rules.find(
+          (rule) => rule.uid === productionRule.name,
+        ),
+      );
+      template.uid = syntheticRule.name;
+      template.title = syntheticRule.name;
+      template.data.find((item) => item.refId === "A").model.expr =
+        syntheticRule.query;
+      let syntheticReceipt;
       const firing = new Map();
-      const maxForMs = Math.max(...nonDisk.map((rule) => rule.forMs));
-      await waitFor(
-        async () => {
-          const events = await readSinkEvents(alertPath);
-          for (const rule of nonDisk) {
-            const event = events.find(
-              (item) =>
-                item.name === rule.name &&
-                item.status === "firing" &&
-                alertEpisodeStartMs(item.episodeId) >=
-                  activationMs + rule.forMs &&
-                Date.parse(item.receivedAt) >=
-                  alertEpisodeStartMs(item.episodeId),
-            );
-            if (event) firing.set(rule.name, event.episodeId);
-          }
-          return firing.size === nonDisk.length;
-        },
-        {
-          timeoutMs:
-            maxForMs +
-            5 * config.telemetry.alerts.evaluationIntervalMs +
-            130000,
-          intervalMs: 5000,
-          description: "four Grafana alert firing episodes",
-        },
-      );
-      await fixtureRequest({
-        baseUrl: producerUrl,
-        path: "/test/state",
-        body: { active: false },
-        runId,
-      });
-      await fixtureRequest({ baseUrl: producerUrl, runId });
-      await waitFor(
-        async () => {
-          const events = await readSinkEvents(alertPath);
-          return nonDisk.every((rule) =>
-            events.some(
-              (item) =>
-                item.name === rule.name &&
-                item.status === "resolved" &&
-                item.episodeId === firing.get(rule.name),
-            ),
+      try {
+        syntheticCleanupVerified = false;
+        await api({
+          baseUrl: baseUrls.grafana,
+          authorization,
+          path: groupPath,
+          method: "PUT",
+          body: {
+            folderUid,
+            title: syntheticGroup,
+            interval: config.telemetry.alerts.evaluationIntervalMs / 1000,
+            rules: [
+              {
+                ...template,
+                orgID: 1,
+                folderUID: folderUid,
+                ruleGroup: syntheticGroup,
+              },
+            ],
+          },
+        });
+        const installedGroup = await api({
+          baseUrl: baseUrls.grafana,
+          authorization,
+          path: groupPath,
+        });
+        const installed = await api({
+          baseUrl: baseUrls.grafana,
+          authorization,
+          path: syntheticPath,
+        });
+        if (
+          installedGroup?.interval !==
+            config.telemetry.alerts.evaluationIntervalMs / 1000 ||
+          installed?.uid !== syntheticRule.name ||
+          installed?.title !== syntheticRule.name ||
+          installed?.for !== productionBefore.for ||
+          installed?.data?.find((item) => item.refId === "A")?.model?.expr !==
+            syntheticRule.query ||
+          installed?.data?.find((item) => item.refId === "B")?.model
+            ?.expression !==
+            `$A ${syntheticRule.operator} ${syntheticRule.threshold}`
+        )
+          throw new Error(
+            "synthetic Grafana readiness rule differs from configured policy",
           );
-        },
-        {
-          timeoutMs:
-            maxForMs +
-            5 * config.telemetry.alerts.evaluationIntervalMs +
-            130000,
-          intervalMs: 5000,
-          description: "four Grafana alert resolved episodes",
-        },
-      );
+        const alertRules = [...nonDisk, syntheticRule];
+        await waitFor(
+          async () => {
+            const events = (await readSinkEvents(alertPath)).filter((item) =>
+              alertRules.some((rule) => rule.name === item.name),
+            );
+            return events.every(
+              (item) =>
+                item.status !== "firing" ||
+                events.some(
+                  (later) =>
+                    later.status === "resolved" &&
+                    later.episodeId === item.episodeId,
+                ),
+            );
+          },
+          {
+            timeoutMs: 420000,
+            intervalMs: 5000,
+            description: "alert episodes resolved before controlled activation",
+          },
+        );
+        const activationMs = Date.now();
+        await fixtureRequest({
+          baseUrl: producerUrl,
+          path: "/test/state",
+          body: { active: true },
+          runId,
+        });
+        await fixtureRequest({ baseUrl: producerUrl, runId });
+        const failed = await waitFor(
+          async () => {
+            const sample = await readSynthetic(activationMs * 1000);
+            return sample?.value === 0 ? sample : false;
+          },
+          {
+            timeoutMs: 120000,
+            intervalMs: 2000,
+            description: "fresh synthetic readiness 1 to 0",
+          },
+        );
+        const maxForMs = Math.max(...alertRules.map((rule) => rule.forMs));
+        await waitFor(
+          async () => {
+            const events = await readSinkEvents(alertPath);
+            for (const rule of alertRules) {
+              const event = events.find(
+                (item) =>
+                  item.name === rule.name &&
+                  item.status === "firing" &&
+                  alertEpisodeStartMs(item.episodeId) >=
+                    activationMs + rule.forMs &&
+                  Date.parse(item.receivedAt) >=
+                    alertEpisodeStartMs(item.episodeId),
+              );
+              if (event) firing.set(rule.name, event.episodeId);
+            }
+            const sample = await readSynthetic((Date.now() - 30000) * 1000);
+            const native = await query(
+              'probe_success{service_name="otel-collector",probe_owner="edge-nginx"}',
+            );
+            const value = await query(syntheticRule.query);
+            return (
+              firing.size === alertRules.length &&
+              sample?.value === 0 &&
+              native.length === 0 &&
+              value.length === 1 &&
+              value[0]?.value?.[1] === "0"
+            );
+          },
+          {
+            timeoutMs:
+              maxForMs +
+              5 * config.telemetry.alerts.evaluationIntervalMs +
+              130000,
+            intervalMs: 5000,
+            description: "synthetic Grafana alert firing episodes",
+          },
+        );
+        const recoveryMs = Date.now();
+        await fixtureRequest({
+          baseUrl: producerUrl,
+          path: "/test/state",
+          body: { active: false },
+          runId,
+        });
+        await fixtureRequest({ baseUrl: producerUrl, runId });
+        const recovered = await waitFor(
+          async () => {
+            const sample = await readSynthetic(recoveryMs * 1000);
+            const native = await query(
+              'probe_success{service_name="otel-collector",probe_owner="edge-nginx"}',
+            );
+            const value = await query(syntheticRule.query);
+            return sample?.value === 1 &&
+              native.length === 0 &&
+              value.length === 1 &&
+              value[0]?.value?.[1] === "1"
+              ? sample
+              : false;
+          },
+          {
+            timeoutMs: 120000,
+            intervalMs: 2000,
+            description: "fresh synthetic readiness 0 to 1",
+          },
+        );
+        const resolved = await waitFor(
+          async () => {
+            const events = await readSinkEvents(alertPath);
+            return alertRules.every((rule) =>
+              events.some(
+                (item) =>
+                  item.name === rule.name &&
+                  item.status === "resolved" &&
+                  item.episodeId === firing.get(rule.name) &&
+                  Date.parse(item.receivedAt) >= recoveryMs,
+              ),
+            )
+              ? events.find(
+                  (item) =>
+                    item.name === syntheticRule.name &&
+                    item.status === "resolved" &&
+                    item.episodeId === firing.get(syntheticRule.name) &&
+                    Date.parse(item.receivedAt) >= recoveryMs,
+                )
+              : false;
+          },
+          {
+            timeoutMs:
+              maxForMs +
+              5 * config.telemetry.alerts.evaluationIntervalMs +
+              130000,
+            intervalMs: 5000,
+            description: "synthetic Grafana alert resolved episodes",
+          },
+        );
+        const syntheticFiring = (await readSinkEvents(alertPath)).find(
+          (item) =>
+            item.name === syntheticRule.name &&
+            item.status === "firing" &&
+            item.episodeId === firing.get(syntheticRule.name),
+        );
+        syntheticReceipt = {
+          status: "PASS",
+          service: "g14-synthetic",
+          ruleUid: syntheticRule.name,
+          forMs: syntheticRule.forMs,
+          threshold: syntheticRule.threshold,
+          nativeProbeAbsent: true,
+          activationMs,
+          recoveryMs,
+          baseline,
+          failed,
+          recovered,
+          firing: {
+            episodeId: syntheticFiring.episodeId,
+            receivedAt: syntheticFiring.receivedAt,
+          },
+          resolved: {
+            episodeId: resolved.episodeId,
+            receivedAt: resolved.receivedAt,
+          },
+        };
+      } finally {
+        let syntheticResetVerified = false;
+        try {
+          await fixtureRequest({
+            baseUrl: producerUrl,
+            path: "/test/state",
+            body: { active: false },
+            runId,
+          });
+          syntheticResetVerified = true;
+        } finally {
+          await api({
+            baseUrl: baseUrls.grafana,
+            authorization,
+            path: groupPath,
+            method: "DELETE",
+            expected: [204, 404],
+          });
+          await api({
+            baseUrl: baseUrls.grafana,
+            authorization,
+            path: groupPath,
+            expected: [404],
+          });
+          await api({
+            baseUrl: baseUrls.grafana,
+            authorization,
+            path: syntheticPath,
+            expected: [404],
+          });
+          const productionAfter = await api({
+            baseUrl: baseUrls.grafana,
+            authorization,
+            path: productionPath,
+          });
+          syntheticCleanupVerified =
+            syntheticResetVerified &&
+            productionAfter?.uid === productionBefore.uid &&
+            productionAfter?.title === productionBefore.title &&
+            productionAfter?.for === productionBefore.for &&
+            productionAfter?.condition === productionBefore.condition &&
+            productionAfter?.noDataState === productionBefore.noDataState &&
+            productionAfter?.execErrState === productionBefore.execErrState &&
+            isDeepStrictEqual(productionAfter?.data, productionBefore.data) &&
+            productionAfter?.data?.find((item) => item.refId === "A")?.model
+              ?.expr === productionRule.query;
+        }
+      }
+      if (!syntheticCleanupVerified)
+        throw new Error("synthetic readiness alert cleanup was not verified");
+      evidence.syntheticNodeNotReady = {
+        ...syntheticReceipt,
+        cleanupVerified: true,
+        productionRuleUnchanged: true,
+      };
+      if (!syntheticNodeNotReadyComplete(evidence.syntheticNodeNotReady))
+        throw new Error("synthetic Node readiness alert evidence invalid");
       const diskRule = definitions.find((rule) => rule.key === "diskWatermark");
       const diskFile = "/data/disk-watermark-fill";
       const diskWriter = (script) =>
@@ -4885,6 +5197,8 @@ export async function runObservabilityVerification({
       }
     }
 
+    if (!syntheticCleanupVerified)
+      throw new Error("synthetic readiness alert cleanup was not verified");
     assertGrafanaGeneration(
       grafanaGeneration,
       JSON.parse(run(["inspect", containerIds.grafana]))[0],
@@ -5193,7 +5507,11 @@ export async function runObservabilityVerification({
         },
       });
       evidence.phases.runtimeMatrix = "PASS";
-      if (evidence.alerts.length === 6 && evidence.alertReadiness === "PASS") {
+      if (
+        evidence.alerts.length === 6 &&
+        evidence.alertReadiness === "PASS" &&
+        syntheticNodeNotReadyComplete(evidence.syntheticNodeNotReady)
+      ) {
         evidence.phases.alerts = "PASS";
         evidence.alertTransitions = "PASS";
       }

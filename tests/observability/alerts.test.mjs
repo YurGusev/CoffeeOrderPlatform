@@ -90,6 +90,30 @@ const config = {
   },
 };
 
+const syntheticNodeNotReady = {
+  status: "PASS",
+  service: "g14-synthetic",
+  ruleUid: "g14-v1-service-not-ready-synthetic",
+  forMs: 300000,
+  threshold: 0,
+  nativeProbeAbsent: true,
+  cleanupVerified: true,
+  productionRuleUnchanged: true,
+  activationMs: 1000000,
+  recoveryMs: 1301000,
+  baseline: { value: 1, timestampUs: 999000000 },
+  failed: { value: 0, timestampUs: 1001000000 },
+  recovered: { value: 1, timestampUs: 1302000000 },
+  firing: {
+    episodeId: "1234567890abcdef:1970-01-01T00:21:40.000Z",
+    receivedAt: "1970-01-01T00:21:40.500Z",
+  },
+  resolved: {
+    episodeId: "1234567890abcdef:1970-01-01T00:21:40.000Z",
+    receivedAt: "1970-01-01T00:21:42.500Z",
+  },
+};
+
 void test("Tempo effective config is parsed after its native status request header", () => {
   const expected = {
     backend_worker: {
@@ -3471,6 +3495,81 @@ void test("restoration preserves proof failure and reports both failures without
         assert.equal(observabilityGateComplete({ cleanupErrors }), false, name);
     }
   }
+  const cleanupStart = source.indexOf(
+    "        let syntheticResetVerified = false;",
+  );
+  const cleanupEnd = source.indexOf(
+    "\n      }\n      if (!syntheticCleanupVerified)",
+    cleanupStart,
+  );
+  const guardStart = source.indexOf(
+    "\n    if (!syntheticCleanupVerified)",
+    cleanupEnd,
+  );
+  const guardEnd = source.indexOf("\n    assertGrafanaGeneration(", guardStart);
+  assert.ok(
+    cleanupStart >= 0 &&
+      cleanupEnd > cleanupStart &&
+      guardStart > cleanupEnd &&
+      guardEnd > guardStart,
+  );
+  for (const resetFails of [false, true]) {
+    const calls = [];
+    let nativeCalled = false;
+    const productionBefore = {
+      uid: "production",
+      title: "production",
+      for: "5m",
+      condition: "B",
+      noDataState: "Alerting",
+      execErrState: "Alerting",
+      data: [{ refId: "A", model: { expr: "production-query" } }],
+    };
+    const execute = runInNewContext(
+      `(async () => { let syntheticCleanupVerified = false; try { ${source.slice(cleanupStart, cleanupEnd)} } catch {} ${source.slice(guardStart, guardEnd)} nativeProof(); })`,
+      {
+        Error,
+        producerUrl: "producer",
+        runId: "run",
+        baseUrls: { grafana: "grafana" },
+        authorization: "auth",
+        groupPath: "group",
+        syntheticPath: "synthetic",
+        productionPath: "production",
+        productionBefore,
+        productionRule: { query: "production-query" },
+        isDeepStrictEqual: (left, right) =>
+          JSON.stringify(left) === JSON.stringify(right),
+        fixtureRequest: async () => {
+          if (resetFails) throw new Error("reset failed");
+        },
+        api: async (options) => {
+          const status =
+            options.method === "DELETE"
+              ? 204
+              : options.path === "production"
+                ? 200
+                : 404;
+          assert.ok((options.expected ?? [200]).includes(status));
+          calls.push([options.method ?? "GET", options.path, status]);
+          return options.path === "production" ? productionBefore : undefined;
+        },
+        nativeProof: () => {
+          nativeCalled = true;
+        },
+      },
+    );
+    if (resetFails)
+      await assert.rejects(execute(), /cleanup was not verified/u);
+    else await execute();
+    assert.deepEqual(calls, [
+      ["DELETE", "group", 204],
+      ["GET", "group", 404],
+      ["GET", "synthetic", 404],
+      ["GET", "production", 200],
+    ]);
+    assert.equal(nativeCalled, !resetFails);
+  }
 });
 
 void test("G14 cannot pass with a missing or incomplete required phase", () => {
@@ -3493,6 +3592,7 @@ void test("G14 cannot pass with a missing or incomplete required phase", () => {
       ].map((name) => [name, "PASS"]),
     ),
     alertTransitions: "PASS",
+    syntheticNodeNotReady: structuredClone(syntheticNodeNotReady),
     launchPathCorrelation: "PASS",
     nativeNginxAlert: pass,
     redactionScan: pass,
@@ -3520,6 +3620,49 @@ void test("G14 cannot pass with a missing or incomplete required phase", () => {
     runtimeShutdownStatus: "PASS",
   };
   assert.equal(observabilityGateComplete(evidence), true);
+  for (const mutate of [
+    (value) => {
+      delete value.syntheticNodeNotReady;
+    },
+    (value) => {
+      value.syntheticNodeNotReady.forMs = 1;
+    },
+    (value) => {
+      value.syntheticNodeNotReady.firing.episodeId =
+        "1234567890abcdef:1970-01-01T00:21:39.000Z";
+    },
+    (value) => {
+      value.syntheticNodeNotReady.resolved.episodeId = "foreign";
+    },
+    (value) => {
+      value.syntheticNodeNotReady.failed.timestampUs = 999000000;
+    },
+    (value) => {
+      value.syntheticNodeNotReady.failed.timestampUs = 2000000000;
+    },
+    (value) => {
+      value.syntheticNodeNotReady.baseline.value = 0;
+    },
+    (value) => {
+      value.syntheticNodeNotReady.recovered.value = 0;
+    },
+    (value) => {
+      value.syntheticNodeNotReady.recovered.timestampUs = 1300000000;
+    },
+    (value) => {
+      value.syntheticNodeNotReady.nativeProbeAbsent = false;
+    },
+    (value) => {
+      value.syntheticNodeNotReady.cleanupVerified = false;
+    },
+    (value) => {
+      value.syntheticNodeNotReady.productionRuleUnchanged = false;
+    },
+  ]) {
+    const changed = structuredClone(evidence);
+    mutate(changed);
+    assert.equal(observabilityGateComplete(changed), false);
+  }
   for (const name of ["loki", "grafana", "prometheus", "tempo"]) {
     delete evidence.diskPressure.backends[name];
     assert.equal(observabilityGateComplete(evidence), false, `${name} missing`);
@@ -3766,6 +3909,7 @@ void test("full G14 coverage requires bound readiness, images, browser traces an
       ].map((phase) => [phase, "PASS"]),
     ),
     alertTransitions: "PASS",
+    syntheticNodeNotReady: structuredClone(syntheticNodeNotReady),
     launchPathCorrelation: "PASS",
     nativeNginxAlert: pass,
     redactionScan: pass,
@@ -3871,6 +4015,10 @@ void test("full G14 coverage requires bound readiness, images, browser traces an
     "PASS",
   );
   for (const change of [
+    (value) => {
+      value.syntheticNodeNotReady.ruleUid =
+        "g14-v2-service-not-ready-synthetic";
+    },
     (value) => {
       delete value.qualificationAdmission;
     },

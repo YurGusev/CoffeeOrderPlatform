@@ -9172,6 +9172,29 @@ void test("browser correlation admission verifies the sealed child bundle and sc
   const observations = join(directory, "observability");
   await mkdir(observations, { mode: 0o700 });
   const observationRun = "00bf08bb-a371-4e52-b26d-23c08e06ce16";
+  const syntheticNodeNotReady = {
+    status: "PASS",
+    service: "g14-synthetic",
+    ruleUid: "g14-v1-service-not-ready-synthetic",
+    forMs: 300000,
+    threshold: 0,
+    nativeProbeAbsent: true,
+    cleanupVerified: true,
+    productionRuleUnchanged: true,
+    activationMs: 1000000,
+    recoveryMs: 1301000,
+    baseline: { value: 1, timestampUs: 999000000 },
+    failed: { value: 0, timestampUs: 1001000000 },
+    recovered: { value: 1, timestampUs: 1302000000 },
+    firing: {
+      episodeId: "1234567890abcdef:1970-01-01T00:21:40.000Z",
+      receivedAt: "1970-01-01T00:21:40.500Z",
+    },
+    resolved: {
+      episodeId: "1234567890abcdef:1970-01-01T00:21:40.000Z",
+      receivedAt: "1970-01-01T00:21:42.500Z",
+    },
+  };
   const names = [
     "alert-transitions.json",
     "correlation-proof.json",
@@ -9198,8 +9221,11 @@ void test("browser correlation admission verifies the sealed child bundle and sc
         browserRefetchMatched: true,
         ownerCausation: true,
       };
+    if (name === "alert-transitions.json")
+      data.syntheticNodeNotReady = syntheticNodeNotReady;
     if (name === "result.json")
       Object.assign(data, {
+        syntheticNodeNotReady,
         browserCorrelationChild: receipt,
         provenance: {
           sourceHashStable: true,
@@ -9272,6 +9298,23 @@ void test("browser correlation admission verifies the sealed child bundle and sc
     13,
     "child and backend evidence remain recorded even when the gate fails",
   );
+  const alertTransitionsPath = join(observations, "alert-transitions.json");
+  const alertTransitionsBytes = await readFile(alertTransitionsPath);
+  const mismatchedAlertTransitions = JSON.parse(alertTransitionsBytes);
+  mismatchedAlertTransitions.syntheticNodeNotReady.recovered.value = 0;
+  await writeFile(
+    alertTransitionsPath,
+    JSON.stringify(mismatchedAlertTransitions),
+  );
+  assert.match(
+    await verifyGateArtifacts(
+      { id: "G14_OBSERVABILITY", command: "pnpm test:observability" },
+      { ...record, artifacts: [] },
+      parentContext.evidenceDir,
+    ),
+    /lineage or cleanup is invalid/u,
+  );
+  await writeFile(alertTransitionsPath, alertTransitionsBytes);
   const backendPath = join(observations, "redaction-scan.json");
   const backendBytes = await readFile(backendPath);
   await rm(backendPath);

@@ -48,7 +48,10 @@ import { admitRealtimeCapacity } from "../../../tools/realtime-capacity.mjs";
 import { readVerifiedRuntimeImages } from "../../../tools/verified-infrastructure-image.mjs";
 import { validateDependencyReadiness } from "../../../tests/observability/runtime-matrix.mjs";
 import { loadPlatformConfig } from "../../../scripts/config-lib.mjs";
-import { observabilityVerificationCoverage } from "../../../tools/observability/verify.mjs";
+import {
+  observabilityVerificationCoverage,
+  syntheticNodeNotReadyComplete,
+} from "../../../tools/observability/verify.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 const BASE = join(ROOT, "verification/launch/v1");
@@ -1489,6 +1492,11 @@ export async function verifyGateArtifacts(
         result.provenance.start?.baseSha !== context.candidateSha ||
         result.provenance.start?.configSha256 !== context.baseConfigSha256 ||
         result.provenance.start?.sourceFiles?.status !== "PASS" ||
+        !syntheticNodeNotReadyComplete(result.syntheticNodeNotReady) ||
+        !isDeepStrictEqual(
+          result.syntheticNodeNotReady,
+          documents["alert-transitions.json"].syntheticNodeNotReady,
+        ) ||
         !isDeepStrictEqual(result.browserCorrelationChild, child.receipt) ||
         correlation.launchPath?.correlationId !==
           child.receipt.proof.correlationId ||
