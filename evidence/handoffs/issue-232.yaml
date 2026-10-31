@@ -4,24 +4,46 @@ status: verified
 inputs: []
 outputs:
   - artifact: .github/workflows/check.yml
-    sha256: 55571b1befab3a298b02f5f362fb7745d3ea3dabac51fca1801cda34d1201714
-    consumers: [13]
+    sha256: 47aba1b4404249ac8e61d8c21db997ce5723b3474ca0e64524ad240abd245cf0
+    consumers:
+      - 13
   - artifact: AGENTS.md
     sha256: 14caebed3d541df0c9f8d50fc0cbf4a32f875db1ed5f26c4b035ebc754737f26
-    consumers: [13]
+    consumers:
+      - 13
 verification:
-  - command: "bash -n /home/yurgusev/.cache/coffee-launch-delivery/ci-coordination.sh"
-    result: "PASS; shell syntax"
-  - command: "python3 /home/yurgusev/.cache/coffee-launch-delivery/coordination-contract.py"
-    result: "4 checks PASS; contention/release/exit42/timeout124; raw receipt SHA-256 235dae83ce9f7f061d03ea6b5919e450c6944b1a2ba63f1d66cf0403aee388a9"
-  - command: "node --input-type=module -"
-    result: "PASS; inline YAML comparison: triggers, owner guard, permissions, labels, checkout unchanged; queue7200s/active1800s/job165min"
-  - command: "node /home/yurgusev/.codex/worktrees/refetch-correlation/CoffeeOrderPlatform/node_modules/prettier/bin/prettier.cjs --check .github/workflows/check.yml AGENTS.md"
-    result: "PASS; 2 files"
-  - command: "git diff --check"
-    result: "PASS"
+  - command: bash -n /home/yurgusev/.cache/coffee-launch-delivery/ci-coordination.sh
+    result: PASS; shell syntax
+  - command: python3 /home/yurgusev/.cache/coffee-launch-delivery/coordination-contract.py
+    result: >-
+      6 checks PASS: contention, exit42, timeout124, release, inherited umask0022/0002 and private
+      new lock; receipt SHA-256 10f346f9fc2c4e9bc000d875d98a7baf83784aa64b2cb47ee73f5a5a09656a2c
+  - command: node --input-type=module -
+    result: >-
+      PASS; inline YAML comparison: triggers, owner guard, permissions, labels, checkout unchanged;
+      queue7200s/active1800s/job165min
+  - command: >-
+      node
+      /home/yurgusev/.codex/worktrees/refetch-correlation/CoffeeOrderPlatform/node_modules/prettier/bin/prettier.cjs
+      --check .github/workflows/check.yml AGENTS.md
+    result: PASS; 2 files
+  - command: git diff --check
+    result: PASS
+  - command: python3 /home/yurgusev/.cache/coffee-launch-delivery/coordination-targeted.py
+    result: >-
+      PASS; два существующих security-scan теста; exact workflow shell, только install stub;
+      25.434s, raw log SHA-256 ede142d03c8bdc1bce05584658eac8c5d2606c4a55adf12148b8a18f9816e16d
+  - command: gh run view 41178217561 --repo YurGusev/CoffeeOrderPlatform --log-failed
+    result: >-
+      FAIL сохранён: 1503 tests,1420 pass,4 fail,79 skip; глобальный umask077 менял права
+      snapshot/nginx fixtures. Исправлено областью subshell только для создания lock; повторный CI
+      обязателен. Raw log SHA-256 ccb2323a800a5e98f7fdd58a4a3cae2fbb37eeaad9e1613092eb5ad74dae5231
 limitations:
-  - "CI job wall limit165min includes queue120min; actual install/check remains30min, formal launch budgets unchanged."
-  - "Advisory flock coordinates only participating commands; legacy commands require separate inspection."
-  - "Self-check uses short fake pnpm children; final full CI pending and must pass before merge."
-  - "GNU timeout grace90s is not a promise of GitHub cancellation grace; runner uses its own cancellation policy."
+  - >-
+    Общий CI job165min включает очередь120min; фактические install/check ограничены30min. Формальные
+    launch бюджеты не меняются.
+  - Advisory flock координирует только участвующие команды; legacy-команды проверяются отдельно.
+  - >-
+    Локальные self-check используют короткие fake pnpm children; реальные security tests запускались
+    отдельно через точный workflow shell. Final CI ещё не подтверждён.
+  - Grace90s относится к GNU timeout, не гарантирует grace отмены GitHub.

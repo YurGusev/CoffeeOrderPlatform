@@ -35,8 +35,8 @@ jobs:
           persist-credentials: false
       - name: Install and pnpm check
         run: |
-          umask 077
           resource_lock="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/coffee-platform-heavy.lock"
+          (umask 077; : >> "$resource_lock")
           queued_at=$EPOCHSECONDS
           printf 'Waiting for shared heavy resource\n'
           exec flock --no-fork --wait 7200 "$resource_lock" \
