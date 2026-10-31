@@ -2947,6 +2947,8 @@ void test("G15 realtime launch path binds child identity to verified parent line
       resources: {
         g15ParentCandidateSha: baseCandidateSha,
         g15ParentCheckoutRoot: "/source",
+        g15ParentRunId: "20261026T123400Z-ddddddd",
+        g08PreparationContextPath: "/source/evidence/context.json",
       },
     },
     sourceRoot: "/source",
@@ -2957,6 +2959,7 @@ void test("G15 realtime launch path binds child identity to verified parent line
     runId: active.context.runId,
     candidateSha: active.context.candidateSha,
     configSha256: active.context.baseConfigSha256,
+    baseConfigSha256: "c".repeat(64),
     receiptPath,
   };
   const launchPath = await runInNewContext(
@@ -2967,9 +2970,19 @@ void test("G15 realtime launch path binds child identity to verified parent line
       join,
       contextPath,
       validateLaunchContext: async (path) => {
-        assert.equal(path, contextPath);
-        return active;
+        if (path === contextPath) return active;
+        assert.equal(path, "/source/evidence/context.json");
+        return {
+          candidateRoot: "/source",
+          context: {
+            runId: active.context.resources.g15ParentRunId,
+            candidateSha: baseCandidateSha,
+            baseConfigSha256: lineage.baseConfigSha256,
+          },
+        };
       },
+      stat: async () => ({ uid: 1000, mode: 0o400 }),
+      process: { getuid: () => 1000 },
       readBrowserFixtureLineage: async (input) => {
         assert.deepEqual(JSON.parse(JSON.stringify(input)), {
           root: "/source",

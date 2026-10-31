@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
 import { readFile, readdir } from "node:fs/promises";
 import { randomBytes, randomUUID, createHash } from "node:crypto";
+import { join } from "node:path";
 import {
   canonicalJson,
   canonicalRequestHash,
@@ -10,6 +11,8 @@ import { createSqlInboxStore } from "../../packages/platform-inbox/dist/index.js
 import { processKafkaRecord } from "../../packages/platform-kafka-runtime/dist/index.js";
 import { toInstant } from "../../packages/platform-time/dist/index.js";
 import { Client } from "pg";
+import { load as parseYaml } from "js-yaml";
+import { validateLaunchContext } from "../../verification/launch/v1/report.mjs";
 import {
   createDatabase,
   withTransaction,
@@ -199,7 +202,114 @@ export async function fixture(run, options = {}) {
     await import("../../apps/orders-aroma-preparation/dist/infrastructure/preparation-store.js");
   const { decodeAromaPreparationEnvelope } =
     await import("../../apps/orders-aroma-preparation/dist/application/messages.js");
-  const receipt = await withCatalogPostgres(
+  const withPostgres = options.launchContextFile
+    ? async (runFixture) => {
+        const active = await validateLaunchContext(options.launchContextFile);
+        assert.deepEqual(launchIdentity, {
+          schemaVersion: active.context.schemaVersion,
+          runId: active.context.runId,
+          candidateSha: active.context.candidateSha,
+          baseConfigSha256: active.context.baseConfigSha256,
+        });
+        const {
+          applyExternalRecoveryMigrations,
+          cleanupExternalRecoveryDatabases,
+          externalRecoveryCleanupSummary,
+          prepareApprovedExternalPostgresAttachment,
+          readExternalRecoveryProofCredentials,
+        } = await import("../../tools/compose-smoke.mjs");
+        const credentials = await readExternalRecoveryProofCredentials(
+          launchIdentity,
+          options.launchContextFile,
+          {
+            candidateRoot: active.candidateRoot,
+            expectedLineage: "G15",
+            resources: active.context.resources,
+          },
+        );
+        const attachment = prepareApprovedExternalPostgresAttachment();
+        const resources = [];
+        let result, failure, cleanupFailure, adminClient;
+        let databaseCleanup;
+        try {
+          const config = parseYaml(
+            await readFile(
+              join(active.candidateRoot, "config/platform.yaml"),
+              "utf8",
+            ),
+          );
+          await applyExternalRecoveryMigrations(
+            credentials,
+            config,
+            options.launchContextFile,
+            resources,
+          );
+          adminClient = new Client({
+            host: credentials.postgres.host,
+            port: credentials.postgres.port,
+            database: "postgres",
+            user: credentials.admin.username,
+            password: credentials.admin.password,
+            ssl: false,
+          });
+          await adminClient.connect();
+          result = await runFixture({
+            adminClient,
+            port: credentials.postgres.port,
+            container: "coffee_postgres",
+            databaseName: "postgres",
+            catalogInitialized: false,
+            externalCredentials: credentials,
+            externalAttachment: attachment,
+          });
+        } catch (error) {
+          failure = error;
+        } finally {
+          try {
+            if (adminClient) await adminClient.end();
+          } catch (error) {
+            cleanupFailure = error;
+          }
+          try {
+            databaseCleanup = await cleanupExternalRecoveryDatabases(
+              credentials,
+              resources,
+              result?.cleanupVerified === true,
+            );
+          } catch (error) {
+            databaseCleanup = {
+              verified: false,
+              removed: [],
+              retained: resources.map(({ database }) => database.name),
+              failure: "EXTERNAL_DATABASE_CLEANUP_FAILED",
+            };
+            cleanupFailure ??= error;
+          }
+        }
+        const cleanup = externalRecoveryCleanupSummary({
+          databases: databaseCleanup,
+          attachment,
+          cleanupFailed: Boolean(cleanupFailure),
+        });
+        if (!cleanup.verified)
+          cleanupFailure ??= new Error(
+            "external Orders fixture cleanup is incomplete",
+          );
+        const error =
+          failure && cleanupFailure
+            ? new AggregateError(
+                [failure, cleanupFailure],
+                "Orders fixture and cleanup failed",
+              )
+            : (failure ?? cleanupFailure);
+        if (error) {
+          error.externalCleanup = cleanup;
+          throw error;
+        }
+        return { ...result, cleanup };
+      }
+    : withCatalogPostgres;
+  const receipt = await withPostgres(
     async ({
       adminClient,
       port,
@@ -209,19 +319,26 @@ export async function fixture(run, options = {}) {
       databaseName: connectedDatabaseName,
       catalogInitialized,
       runLabel,
+      externalCredentials,
+      externalAttachment,
     }) => {
-      const passwords = new Map();
-      for (const role of roles) {
-        const password = randomBytes(24).toString("hex");
-        passwords.set(role, password);
-        await adminClient.query(renderRoleSql(role, password));
+      const passwords = externalCredentials
+        ? new Map(Object.entries(externalCredentials.rolePasswords))
+        : new Map();
+      if (!externalCredentials) {
+        for (const role of roles) {
+          const password = randomBytes(24).toString("hex");
+          passwords.set(role, password);
+          await adminClient.query(renderRoleSql(role, password));
+        }
+        await adminClient.query(
+          `CREATE DATABASE ${databaseName} OWNER ${ordersOwnership.migratorRole}`,
+        );
       }
-      await adminClient.query(
-        `CREATE DATABASE ${databaseName} OWNER ${ordersOwnership.migratorRole}`,
-      );
+      const databaseHost = externalCredentials?.postgres.host ?? "127.0.0.1";
       const migratorRole = ordersOwnership.migratorRole;
       const migrator = new Client({
-        host: "127.0.0.1",
+        host: databaseHost,
         port,
         database: databaseName,
         user: migratorRole,
@@ -233,7 +350,7 @@ export async function fixture(run, options = {}) {
         owner: ordersOwnership.migrationOwner,
         database: databaseName,
         allowedDatabase: databaseName,
-        host: "127.0.0.1",
+        host: databaseHost,
         port,
         user: migratorRole,
         password: passwords.get(migratorRole),
@@ -246,7 +363,7 @@ export async function fixture(run, options = {}) {
           owner: role === ROLE ? "orders-aroma-preparation" : "orders-service",
           database: databaseName,
           allowedDatabase: databaseName,
-          host: "127.0.0.1",
+          host: databaseHost,
           port: connectionPort,
           user: role,
           password: passwords.get(role),
@@ -264,9 +381,10 @@ export async function fixture(run, options = {}) {
         await migrationDatabase.resource.start(AbortSignal.timeout(5_000));
         migrationDatabaseStarted = true;
         await migrator.connect();
-        await migrator.query(
-          renderDatabaseSql(ordersRoleMap, { includeRoleAttributes: false }),
-        );
+        if (!externalCredentials)
+          await migrator.query(
+            renderDatabaseSql(ordersRoleMap, { includeRoleAttributes: false }),
+          );
         const applied = await applyMigrations(migrationDatabase, migrations, {
           schema: ordersRoleMap.schema,
           ledgerTable: "platform_schema_migrations",
@@ -274,7 +392,7 @@ export async function fixture(run, options = {}) {
         });
         assert.deepEqual(
           applied,
-          migrations.map(({ id }) => id),
+          externalCredentials ? [] : migrations.map(({ id }) => id),
         );
         assert.deepEqual(
           await applyMigrations(migrationDatabase, migrations, {
@@ -291,9 +409,10 @@ export async function fixture(run, options = {}) {
           ledger.rows,
           migrations.map(({ id, checksum }) => ({ id, checksum })),
         );
-        await migrator.query(
-          renderDatabaseSql(ordersRoleMap, { includeRoleAttributes: false }),
-        );
+        if (!externalCredentials)
+          await migrator.query(
+            renderDatabaseSql(ordersRoleMap, { includeRoleAttributes: false }),
+          );
         await migrationDatabase.resource.stop(AbortSignal.timeout(5_000));
         migrationDatabaseStarted = false;
         database = await open();
@@ -671,7 +790,7 @@ export async function fixture(run, options = {}) {
           owner: "orders-aroma-preparation",
           database: databaseName,
           allowedDatabase: databaseName,
-          host: "127.0.0.1",
+          host: databaseHost,
           port,
           user: ROLE,
           password: passwords.get(ROLE),
@@ -684,6 +803,7 @@ export async function fixture(run, options = {}) {
             return store;
           },
           container,
+          externalAttachment,
           containerId,
           containerImageId,
           runLabel,
@@ -723,6 +843,7 @@ export async function fixture(run, options = {}) {
     },
     launchIdentity ? { skipCatalogInitialization: true, launchIdentity } : {},
   );
-  assert.equal(receipt.cleanup.containerRemoved, true);
+  if (!options.launchContextFile)
+    assert.equal(receipt.cleanup.containerRemoved, true);
   return receipt;
 }
