@@ -5009,3 +5009,63 @@ void test("external PostgreSQL preflight closes admin clients once and never cre
   assert.equal(failedCleanup.verified, false);
   assert.equal(failedCleanup.failure, "POSTGRES_ATTACHMENT_RETAINED");
 });
+
+void test("catalog slice preserves secret ownership and uses host identity and supplied image pins", async (t) => {
+  const source = await readFile(
+    join(REPO_ROOT, ".cursor/skills/catalog-slice-verify/run.mjs"),
+    "utf8",
+  );
+  const compose = runInNewContext(
+    source.slice(
+      source.indexOf("function composeFile("),
+      source.indexOf("async function loadConfig("),
+    ) + "\ncomposeFile;",
+    { RUNTIME_UID: 23456, RUNTIME_GID: 34567, join },
+  );
+  const toolchain = JSON.parse(
+    await readFile(join(REPO_ROOT, "config/toolchain-versions.json"), "utf8"),
+  );
+  const yaml = compose({
+    project: "catalog-test",
+    runId: "test",
+    root: REPO_ROOT,
+    port: 18510,
+    database: "catalog_test",
+    passwordFile: "/dev/shm/password",
+    secretsFile: "/dev/shm/catalog",
+    postgresImage: toolchain.postgresImage,
+    nodeImage: toolchain.nodeBookwormSlimImage,
+    kafkaImage: toolchain.kafkaImage,
+  });
+  assert.ok(yaml.includes('user: "23456:34567"'));
+  for (const image of [
+    toolchain.postgresImage,
+    toolchain.nodeBookwormSlimImage,
+    toolchain.kafkaImage,
+  ]) {
+    assert.ok(yaml.includes(`image: ${image}`));
+  }
+  const directory = await mkdtemp(join(tmpdir(), "catalog-secret-owner-"));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const path = join(directory, "secret");
+  await writeFile(path, "fixture", { mode: 0o600 });
+  const before = await stat(path);
+  const ownRuntimeSecret = runInNewContext(
+    source.slice(
+      source.indexOf("async function ownRuntimeSecret("),
+      source.indexOf("async function ensureImage("),
+    ) + "\nownRuntimeSecret;",
+    {
+      chmod,
+      stat,
+      assert: assert.ok,
+      RUNTIME_UID: before.uid,
+      RUNTIME_GID: before.gid,
+    },
+  );
+  await ownRuntimeSecret(path);
+  const after = await stat(path);
+  assert.equal(after.uid, before.uid);
+  assert.equal(after.gid, before.gid);
+  assert.equal(after.mode & 0o777, 0o400);
+});
