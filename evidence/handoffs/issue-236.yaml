@@ -21,7 +21,7 @@ outputs:
     sha256: a55af16c43b753f8f1f9debea4eeee3395334a9b5f0d73882b0739eb0a86c4c2
     consumers: [13]
   - artifact: tools/observability/verify.mjs
-    sha256: d9378c7dad54d8f44f45a32eb3eb07993b291066f190ced1afe57d73f386f774
+    sha256: bdc820b08e06ff9b639a76d79e75ca5ac4c16eb63fda98f46bb7b6acdbcdfd0a
     consumers: [13]
   - artifact: verification/launch/v1/scenarios/browser.mjs
     sha256: d20460c2302ba7fce02ee1cee8d08bad2004bbf078e597071557428b7e05bb77
@@ -51,7 +51,19 @@ outputs:
     sha256: 55c7e4d4999aea666b9dcc9b27b5a2846ac892a666ca4122f6490550775204df
     consumers: [13]
   - artifact: tests/observability/alerts.test.mjs
-    sha256: e827db9a717306afcde7c0933a3a456961ba4591c566c981b771d33de00a4fca
+    sha256: 8e97bbf72bb657a6be4938652b4a910e8df802a74260333941915ffd3ccafa89
+    consumers: [13]
+  - artifact: tools/nginx/generate.mjs
+    sha256: 2c7c0d12615f71a24edf58da3ba11d1406c6bc880aca9bb2c59f35c9dedfeda4
+    consumers: [13]
+  - artifact: tools/nginx/check-config.mjs
+    sha256: 9c2cec69034dd25d8ee38e2df5ad58b3a1c47fd18d6ab1745758ac82f3c0a718
+    consumers: [13]
+  - artifact: tests/nginx/image.test.mjs
+    sha256: 5957e028161f7c8d9a6e8759a3bfe750d2b4583cd45a137ef41ad1ac6850fcac
+    consumers: [13]
+  - artifact: docs/launch/29_NGINX_TRANSPORT_AND_AUTH.md
+    sha256: 76831afd6f5dc4ad33f3e3fab3100af8f4808d6870e4002283a2fc2cde629b8e
     consumers: [13]
   - artifact: tools/config-bootstrap/index.mjs
     sha256: 1fdf095beea6ba31fc9d9866ebf2c0e0cab6fdce62effc0fc78b92732f492123
@@ -306,7 +318,27 @@ telemetrySubproofVerification:
     exitCode: 1
     log: /home/yurgusev/.cache/coffee-launch-delivery/issue-236-subproof/telemetry-final3.log
     logSha256: 3481d033328697069773059747e38e6981267889fb235eeeaa74ce623849f1bf
+measurementVerification:
+  - command: "node --test --test-name-pattern='G14 queries actual child telemetry|G14 component requires|Grafana backend queries require fresh owner samples' tests/observability/alerts.test.mjs"
+    result: "3 pass / 0 fail / 0 skip; 1.567 s"
+    log: /home/yurgusev/.cache/coffee-launch-delivery/browser236-identity-regression.log
+    logSha256: db61ae78daf57069f38a18e177c03b40bc31465c6baa04a5f2085478e0568e49
+  - command: "pnpm exec oxlint --type-aware --deny-warnings tools/observability/verify.mjs tests/observability/alerts.test.mjs tools/nginx/generate.mjs tests/nginx/image.test.mjs"
+    result: "exit 0"
+    log: /home/yurgusev/.cache/coffee-launch-delivery/browser236-identity-lint.log
+    logSha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+  - command: "node --input-type=module -e"
+    script: >-
+      import assert from "node:assert/strict"; import {readFile} from "node:fs/promises"; import {load} from "js-yaml"; import {render,readRoutes} from "./tools/nginx/generate.mjs"; const config=load(await readFile("config/platform.yaml","utf8")); const spec=load(await readFile("contracts/openapi/client-v1.yaml","utf8")); const output=render(config.nginxTransport,readRoutes(spec),config.telemetry.nginxStatusEndpoint); assert.match(output,/"request_completion":"\$request_completion"/u); assert.match(output,/"duration_seconds":\$request_time/u); console.log("native nginx generated format: PASS");
+    result: "exit 0; проверка генератора без Docker"
+    log: /home/yurgusev/.cache/coffee-launch-delivery/browser236-nginx-format-test.log
+    logSha256: 57fdc38c58611ccc82eecd289e92e26216b19b236de05ffd0f3310ccdf453aae
 limitations:
+  - >-
+    Измерение ordinary API и проверка privacy событий/связей выполнены только
+    на синтетических входах; native nginx, Loki и browser runtime NOT_RUN.
+    Статистика относится к CID cohort и не атрибутирует длительность отдельному
+    Confirm или causal refetch; численного порога и latency PASS нет.
   - >-
     Владелец 31 октября 2026 разрешил supplemental component diagnostic внутри
     существующего OIDC-only child перед actual browser: G15 lineage, parent G08 и

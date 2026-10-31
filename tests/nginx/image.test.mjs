@@ -900,6 +900,7 @@ try {
         "duration_seconds",
         "method",
         "request_bytes",
+        "request_completion",
         "request_id",
         "response_bytes",
         "route",
@@ -909,6 +910,7 @@ try {
       "nginx access log contains only bounded request metadata",
     );
     assert.equal(accessRecord.route, "client.orders");
+    assert.equal(accessRecord.request_completion, "OK");
     assert.equal(typeof accessRecord.duration_seconds, "number");
     const authorized = (await readFile(requestsFile, "utf8"))
       .trim()
