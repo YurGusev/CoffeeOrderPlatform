@@ -1,0 +1,69 @@
+issue: 238
+baseCommit: 2c631fb735192eb9033a1841c76300cf7a6a1045
+status: verified
+inputs:
+  - issue: 9
+    acceptedMergeCommit: d3b5a29fb0fcfff22d167e368c65566dc382af8d
+    artifact: evidence/handoffs/issue-9.yaml
+    sha256: f68636a4b7f4e1daee73f5f5334e421b44c431cfdce25d92a233b5f17b0ad96e
+outputs:
+  - artifact: apps/web/test/ui-foundation.spec.ts
+    sha256: 4d2ea582b0a89f5cedaad463e6cd76e303000b5080d0b28808d198858507115e
+    consumers:
+      - 13
+verification:
+  - command: gh run view 41181988184 --repo YurGusev/CoffeeOrderPlatform --log-failed
+    result: >-
+      Исходный CI FAIL: dialog остался visible после Escape и waitFor завершился timeout30000ms.
+      Raw log SHA-256 08d15017bc3de84a785072d69f029a6dcbcd66e2c7ed0c0cea607f39452b360d.
+      Цель Escape и активный элемент в исходном CI не записаны.
+  - command: >-
+      flock --wait 7200 /run/user/1000/coffee-platform-heavy.lock timeout --signal=TERM
+      --kill-after=30s 600s bash -euo pipefail -c 'pnpm install --offline --frozen-lockfile
+      --ignore-scripts; pnpm web:build; pnpm test:web-foundation'
+    result: >-
+      PASS, исходная последовательность scenario с временным пассивным event listener;
+      очередь 54s, active 32s, 0 fail. При снятии pending наблюдались focusout на body,
+      body в следующем rAF, затем focusin внутри dialog; Escape в этом запуске пришёл
+      в input и закрыл dialog. Окно подтверждено; CI-failure не воспроизведён.
+      Raw log SHA-256 f995aeda23ff3dacf7e9beb58adfc36e99965d9429363807643a4c5cff92093e.
+  - command: >-
+      flock --wait 7200 /run/user/1000/coffee-platform-heavy.lock timeout --signal=TERM
+      --kill-after=30s 600s pnpm test:web-foundation
+    result: >-
+      PASS, существующий production-shell и fixture browser scenario, 10.10s, 0 fail;
+      присутствуют dirty Escape/outside, pending Escape/outside и закрытие Escape после
+      фактического восстановления focus. Запуск находился внутри общего shell-wrapper;
+      следующий вызов tsc завершился ошибкой выбора CLI flags, не browser test.
+      Raw log SHA-256 e679d57533857cedff04ebd377a0689017870ce0f0d22439e3370087300bcbe2.
+  - command: >-
+      pnpm exec tsc --noEmit --strict --skipLibCheck --target ES2025 --module NodeNext
+      --moduleResolution NodeNext --lib ES2025,DOM,DOM.Iterable --types node
+      apps/web/test/ui-foundation.spec.ts
+    result: >-
+      FAIL TS5112, 0.96s: TypeScript 7 требует явно указать --ignoreConfig при выборе файла;
+      SHA-256 wrapper log e679d57533857cedff04ebd377a0689017870ce0f0d22439e3370087300bcbe2.
+  - command: >-
+      pnpm exec tsc --ignoreConfig --noEmit --strict --skipLibCheck --target ES2025
+      --module NodeNext --moduleResolution NodeNext --lib ES2025,DOM,DOM.Iterable --types node
+      apps/web/test/ui-foundation.spec.ts
+    result: >-
+      FAIL TS2304, 1.26s: предсуществующий Temporal отсутствует в ES2025 lib;
+      SHA-256 log d04fd00ec1271860b75ff18665075694d41abfa17604d48634a5474525d2d344.
+  - command: >-
+      pnpm exec tsc --ignoreConfig --noEmit --strict --skipLibCheck --target ES2025
+      --module NodeNext --moduleResolution NodeNext --lib ES2025,ESNext.Temporal,DOM,DOM.Iterable
+      --types node apps/web/test/ui-foundation.spec.ts
+    result: >-
+      PASS, 1 file, 1.20s; общий flock и 600s active budget;
+      SHA-256 log 74ac59f6b2893c7d7625dfe44ba7f1ef2227386d8c31807e78d96318577568cb.
+  - command: pnpm exec oxlint --type-aware --deny-warnings apps/web/test/ui-foundation.spec.ts
+    result: PASS, 1 file, 1.33s; тот же log 74ac59f6b2893c7d7625dfe44ba7f1ef2227386d8c31807e78d96318577568cb.
+  - command: pnpm exec prettier --check apps/web/test/ui-foundation.spec.ts
+    result: PASS, 1 file, 1.44s; тот же log 74ac59f6b2893c7d7625dfe44ba7f1ef2227386d8c31807e78d96318577568cb.
+limitations:
+  - >-
+    Временная диагностика удалена; локальная проверка подтверждает окно потери фокуса,
+    но не устанавливает фактическую причину исходного CI failure или production defect.
+  - Независимое ревью и final CI остаются обязательными; push и PR этим handoff не подтверждены.
+  - Full platform, served-surface и full-system G14 не запускались и не заявляются PASS.
