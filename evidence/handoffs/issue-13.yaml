@@ -1,0 +1,238 @@
+issue: 13
+baseCommit: a6cceeaa822f9641c678b5dcae521c282391dd3d
+status: source-descriptor-before-formal-verification
+asOfUtc: "2026-10-31T15:04:11.083309+00:00"
+inputs:
+  - issue: 2
+    acceptedMergeCommit: 327638d4494269a151ee7c0ac945ac0053c3e0d4
+    artifact: evidence/handoffs/issue-2.yaml
+    sha256: 7ea123b3e666e3a95b4b71ce58696478449b32b0070521fd6d12c135a7d84d33
+  - issue: 3
+    acceptedMergeCommit: 91c6ed927029604c82a25b2208371a98c4b62237
+    artifact: evidence/handoffs/issue-3.yaml
+    sha256: 890fa7da030702bab6c858d8069e0d50336e41d16ce1b628b96ecc2816ec09e2
+  - issue: 4
+    acceptedMergeCommit: eb34befd76c0654e75d82637251dc4d12d0e0213
+    artifact: evidence/handoffs/issue-4.yaml
+    sha256: 42c823ab2fca8037c741a65e27658ee87877c0f01515e7d2faa9fcd684cb3f0a
+  - issue: 5
+    acceptedMergeCommit: 7db7bc97b41962c0592b82853ebd7dc9bc43c290
+    artifact: evidence/handoffs/issue-5.yaml
+    sha256: f801608e05ca43243eb9258f58ae25b31a7fcfb943ba01f2afe370810998cbdb
+  - issue: 6
+    acceptedMergeCommit: 76c2d580c86bbd2b272369859cbecf97815e2b8e
+    artifact: evidence/handoffs/issue-6.yaml
+    sha256: 032b0a73a07e92cc1d870177505035257ac3e3ac8abd7b2e5e09c89897c4d685
+  - issue: 7
+    acceptedMergeCommit: c88c62c91e5a6833d26c8368e3f45e78948f051c
+    artifact: evidence/handoffs/issue-7.yaml
+    sha256: 692e3e7a6920e2e9203b7f8582636aeb692e4a6478a5473a95b8f2fa6395fc08
+  - issue: 8
+    acceptedMergeCommit: e278aeb10e57d37485542f8668f078456074b038
+    artifact: evidence/handoffs/issue-8.yaml
+    sha256: 7d793e9ffaa5030ea941323d1fa525427c3ff2ed903108fc6b5b884802ead411
+  - issue: 9
+    acceptedMergeCommit: d3b5a29fb0fcfff22d167e368c65566dc382af8d
+    artifact: evidence/handoffs/issue-9.yaml
+    sha256: f68636a4b7f4e1daee73f5f5334e421b44c431cfdce25d92a233b5f17b0ad96e
+  - issue: 10
+    acceptedMergeCommit: 4b2cad1dab30af66ad0b2fe64da280222e506574
+    artifact: evidence/handoffs/issue-10.yaml
+    sha256: 4d23f7ca941bbfbe3d02505a887d6750babfd04ed7ced7b398ccd46fdad67b37
+  - issue: 11
+    acceptedMergeCommit: 2191b82ea114db8f9b1c4839773ef7ca51a204b9
+    artifact: evidence/handoffs/issue-11.yaml
+    sha256: 60626b2c92789a8949b362b7a29d12c43b7e2df429a5a5b96eee7ae0fb60ebef
+  - issue: 12
+    acceptedMergeCommit: d6d860af092e3874f58d31506d473fe75dfc3d2f
+    artifact: evidence/handoffs/issue-12.yaml
+    sha256: 447a52e667d23502d0c29a25311dd9e96a8e08f6030e666f797eb2aa2c8caa8f
+  - issue: 16
+    acceptedMergeCommit: 63be432f2a452d4159abc32183678ca91819c013
+    artifact: evidence/handoffs/issue-16.yaml
+    sha256: b3be754dcfa806bc4703682883b7be7e7c660dc8cb5fef9c8ec6a9e5d0547dc4
+  - issue: 17
+    acceptedMergeCommit: 972e480fff560d2a8c1aed0af7c419322fe1eba4
+    artifact: evidence/handoffs/issue-17.yaml
+    sha256: bb593fe72358c832768de1cfb75a36a48062e72866c2df0988bf268b7871ca61
+  - issue: 18
+    acceptedMergeCommit: cd8cb2d8122622fd385b25944ebe9701f90f56e2
+    artifact: evidence/handoffs/issue-18.yaml
+    sha256: e91e59128844131e7011087bbdd9be3f315d48df1a38d76837d0f1e9186b31cb
+  - issue: 19
+    acceptedMergeCommit: 81aa403e682478ebdf3fb6b555ebcc969d4273f0
+    artifact: evidence/handoffs/issue-19.yaml
+    sha256: 9e5b43b80792a95417a3ef8db56243cadc9e0879e7a03243564700ddcde49c3d
+  - issue: 60
+    acceptedMergeCommit: 69cc341b6d9507f27c5e115aef519d0b96923bfc
+    artifact: evidence/handoffs/issue-60.yaml
+    sha256: c55f321fe2742b96d413377bb49689cdbc9b9860d2535e6945a2c61e4cb134bb
+  - issue: 61
+    acceptedMergeCommit: d1f462838da15b25049842a241f4e3f6f75a6b4f
+    artifact: evidence/handoffs/issue-61.yaml
+    sha256: 3c83d9e42870a35baeb2f12c7dfb62901b316bab536a54a3dadd099ca172459b
+  - issue: 62
+    acceptedMergeCommit: 56b0e99275573b6bdc2461703b3221c5c678cfa6
+    artifact: evidence/handoffs/issue-62.yaml
+    sha256: 704a093a2e18fe3de8fe963ab4b56d16fa6670b87de3ac89ee6c06bc59ceab76
+  - issue: 63
+    acceptedMergeCommit: d16b41dd58db4494a1fb743fa741010249d7afa7
+    artifact: evidence/handoffs/issue-63.yaml
+    sha256: e6df7df6405c7f5da423aa151857b5791211bc2bdbde8508e808f18fd1d3e03c
+  - issue: 64
+    acceptedMergeCommit: e6439599be85a5fc8b83d99293064e877a2ff012
+    artifact: evidence/handoffs/issue-64.yaml
+    sha256: 73283a79ba020cb126351506f324be9439975516af42a90b235d6bdf9484afae
+  - issue: 119
+    acceptedMergeCommit: 53753257b22021023f887050669fc964a7998909
+    artifact: evidence/handoffs/issue-119.yaml
+    sha256: 43a46f611046c36d6212711511192e37d27a48d16c1130692639eaf3d815b1bc
+  - issue: 162
+    acceptedMergeCommit: 327474d917e1f3f1dfd9d12da8a1273775f8591f
+    artifact: evidence/handoffs/issue-162.yaml
+    sha256: f7ba488cc54b5abc44d9e160a2815baf4abfbdaa4a99db70b5946a007f843a54
+  - issue: 210
+    acceptedMergeCommit: a6cceeaa822f9641c678b5dcae521c282391dd3d
+    artifact: evidence/handoffs/issue-210.yaml
+    sha256: 93dccd8c0c978977e4e6cae852d4801415e849b595ef233a95ad2936ba10d20f
+  - issue: 222
+    acceptedMergeCommit: bdeb74080880e25285ad99794c97a1ae63622cb6
+    artifact: evidence/handoffs/issue-222.yaml
+    sha256: 8e48fd09cb6a3afaf3faa20d310fa3b24c5c57eebbd52a5cecfdb058acba9ea6
+  - issue: 228
+    acceptedMergeCommit: b662dd435ec35bc89e0764ce16967fe52c2c143a
+    artifact: evidence/handoffs/issue-228.yaml
+    sha256: 8a115893b5b5d59c1646e87317a7c2b06ea73267db75c93236b5a2a048e3ae42
+  - issue: 236
+    acceptedMergeCommit: d42d42ee825909bd0bbdacd8eafc1bd9c0bca833
+    artifact: evidence/handoffs/issue-236.yaml
+    sha256: f5c651994c2c545fb1164c28667286e8d95c51b09a7ba1b86a8e983fe020b665
+  - issue: 243
+    acceptedMergeCommit: e7da7902b65822ec56b74335bbf7792299594458
+    artifact: evidence/handoffs/issue-243.yaml
+    sha256: 0ba3e7109b09c55524a7fa9c369b3bbb469178837299dbc002987edb08706901
+  - issue: 244
+    acceptedMergeCommit: e15ba1b67014ff392c6b28aec712eb772aa46177
+    artifact: evidence/handoffs/issue-244.yaml
+    sha256: d127ff4a6cca06d14edd37de22f68a37ec38511858d814bf83ad3be8f9841247
+historicalAcceptance:
+  issue: 14
+  acceptedMergeCommit: 9b5a320b936cecafcb74de2d6a1253e3d0a155ce
+  artifactSource:
+    issue: 19
+    mergeCommit: 81aa403e682478ebdf3fb6b555ebcc969d4273f0
+  authorizationArtifact: verification/launch/v1/accepted-handoff-supplement.json
+  sha256: c292264366bf84cab07e87c6b4fcb1ee31093980b95e3afdf0249530a3c0056f
+  note:
+    Исторический issue14 принят по уже согласованному G00 supplement; отсутствующий historical handoff
+    не создаётся задним числом.
+outputs:
+  - artifact: config/platform.yaml
+    sha256: 9548528ae189629cbe12a12562c1e66bdfcc77e16f0c15c9ff30e85b020457c5
+    consumers:
+      - 1
+  - artifact: docs/operations/observability.md
+    sha256: a8dfe55e8e1a603a90eb99888718998b095c2c86897c955b92564cbb1a3fd048
+    consumers:
+      - 1
+  - artifact: docs/reports/launch/20261031T005704Z-a6cceea/ОТЧЁТ.md
+    sha256: 4f40cb27f87d17edd8bbd781151a606df245411385a9d3d311bc7e69032592ce
+    consumers:
+      - 1
+  - artifact: docs/reports/observability-installation.md
+    sha256: 95ef3d18743dc395a008c5531aed2457b18b52d750c923a071b9da1b6beec478
+    consumers:
+      - 1
+  - artifact: evidence/launch-preparation/2026-10-31/load-qualification.md
+    sha256: 06efbbf831d5ee51c98dcdac86aa7774ab87acc7ef37e915e63ce55fdd7c685f
+    consumers:
+      - 1
+  - artifact: evidence/launch/20261031T005704Z-a6cceea/checksums.sha256
+    sha256: 10c9ffd2a50581ca80fc866c861c2745d03048a5652c052e84384de733501352
+    consumers:
+      - 1
+  - artifact: evidence/observability/installation-20261031/service.json
+    sha256: 351c851966de2c591cd2686cddfbb929fa410592d88cf9d54dadc4d8d436d9cf
+    consumers:
+      - 1
+  - artifact: tests/compose/topology.test.mjs
+    sha256: 57deb598a70d5743b3c289521bfdc2881c9b0f3e9243609f816afc915994e3b9
+    consumers:
+      - 1
+  - artifact: tests/config/observability-bootstrap.test.mjs
+    sha256: 806927ce1ca5cdddfbf1d68a0719213060ab6c6eda0bd60ac52afe056eba0f6d
+    consumers:
+      - 1
+  - artifact: tests/observability/alerts.test.mjs
+    sha256: 372091599fc020fcab67a87fc7c1914d58795f75134059273b4ff7c7d9394fc7
+    consumers:
+      - 1
+  - artifact: tests/observability/runtime-matrix.mjs
+    sha256: 97f050cf83aafa67eb8352750ffa601961df5e0e6fbd25f3e6097724a4976945
+    consumers:
+      - 1
+  - artifact: tests/realtime/fixtures/harness.test.mjs
+    sha256: fce5e798dd548f976f6c711b5912becbb7f4d508598c8896211f0b75cd7c6e53
+    consumers:
+      - 1
+  - artifact: tools/compose-smoke.mjs
+    sha256: 519dea1102384cdf43aa98e4ae006efd9ba5a438fdc775b33433c62ff83911d2
+    consumers:
+      - 1
+  - artifact: tools/observability/verify.mjs
+    sha256: 70e63a0b75923acea2e282ea494199ac4eb0424f16588db65fe11fe7bfb8374f
+    consumers:
+      - 1
+  - artifact: verification/launch/v1/report.mjs
+    sha256: c71405c3cb7076c55ef9ea755a7e1c25e2d492fe4dc3047737701f824b3b643c
+    consumers:
+      - 1
+  - artifact: verification/launch/v1/run.mjs
+    sha256: 3848e63f1efd20bad017281d9e2637351ab3125335940e584bc4d051cad1c4b2
+    consumers:
+      - 1
+  - artifact: verification/launch/v1/runner.test.mjs
+    sha256: 78aa0fa7908104d13480a34b15442915ea44804bc3a04248ad2b56a40d23937c
+    consumers:
+      - 1
+verification:
+  - command:
+      node --test --test-name-pattern='G14 queries actual child telemetry|full G14 coverage requires
+      bound readiness' tests/observability/alerts.test.mjs
+    result: "PASS: 2/2, 0 skipped; кодовое состояние 57bfccf"
+    logSha256: d00fc2700e542ef01210ce284cd4c25972e0f794d180cdd41ab278f2c6ce8ce8
+  - command:
+      node --test --test-name-pattern='retention observers|Loki retention fixture|Tempo retention
+      fixture' tests/observability/alerts.test.mjs
+    result: "PASS: 4/4, 0 skipped; кодовое состояние f01ce82"
+    logSha256: 0eff6c9f99beb182c001de042db0baec371c116a0d7390095db6cadba1d21a48
+  - command:
+      pnpm exec oxlint --type-aware --deny-warnings tools/compose-smoke.mjs tests/compose/topology.test.mjs
+      verification/launch/v1/run.mjs verification/launch/v1/runner.test.mjs
+    result: PASS без исключений; кодовое состояние eb25bb5
+    logSha256: b2adde6ad9b4100bc53803006d2131da1002ab70766a9dc7ca8573375be855c4
+  - command:
+      node --test --test-name-pattern='builtin report finalizes a complete fail-closed result|candidate
+      report and owner suites accept only|checksum manifest requires the exact complete' verification/launch/v1/runner.test.mjs
+    result: "PASS: 3/3, 0 skipped; 5.891 s"
+    logSha256: ff43faf75dcc91cc69c0f634b68bc7317168db9db99536e7a1662480f407f501
+consumerContract:
+  consumer: 1
+  admission:
+    Только ДОПУСТИТЬ из полного G00–G19 для одного замороженного candidate SHA с согласованной
+    OIDC lineage и обязательной SSE qualification.
+  limitsSeconds:
+    G14: 1800
+    main: 7200
+    qualification: 2700
+  sourceDescriptor:
+    Фиксирует реальные inputs/outputs и проверки на момент подготовки. Не является runtime
+    допуском или обещанием будущего PASS.
+limitations:
+  - "Полный повторный pnpm check на объединённом состоянии ещё не выполнялся: guard остановил запуск до
+    install из-за builder reserve."
+  - Итоговые G12, обязательная SSE qualification и полный G00–G19 на окончательном SHA ещё NOT_RUN. Component
+    cffe147 и прежние qualification не переносятся.
+  - Фактические runtime results и hashes появятся после выполнения; принятие derived handoff вместе с frozen
+    source descriptor требует решения владельца.
+  - Отрицательный G00 a6cceea сохранён без изменения статуса, он не считается финальным PASS.
