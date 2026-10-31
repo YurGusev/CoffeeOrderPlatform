@@ -8173,6 +8173,108 @@ void test("browser correlation executes the child lifecycle and preserves early 
       success.context.baseConfigSha256,
     );
     assert.deepEqual(admitted.launchPath.launchIdentity, image.launchIdentity);
+    const { readLaunchImageEvidence } =
+      await import("../../verification/launch/v1/run.mjs");
+    const nodeBase = JSON.parse(
+      await readFile(join(root, "config/toolchain-versions.json"), "utf8"),
+    ).nodeImage;
+    const nodeDigest = `sha256:${"9".repeat(64)}`;
+    const nativeProof = {
+      schemaVersion: 1,
+      gateId: "G00_PREFLIGHT",
+      status: "PASS",
+      runId: success.context.runId,
+      candidateSha: sha,
+      checks: [
+        {
+          id: "NATIVE_IMAGE_RUNTIME_IDENTITY",
+          status: "PASS",
+          facts: {
+            declaredBomImages: { node: nodeBase },
+            actualRuntimeProof: {
+              node: {
+                status: "PASS",
+                imageId: nodeDigest,
+                repoDigest: `node@${nodeBase.split("@")[1]}`,
+                os: "linux",
+                architecture: "amd64",
+                cleanupSucceeded: true,
+              },
+            },
+          },
+        },
+      ],
+    };
+    const preflightPath = join(
+      success.evidenceDir,
+      "gates/G00_PREFLIGHT/artifacts/preflight.json",
+    );
+    await mkdir(dirname(preflightPath), { recursive: true, mode: 0o700 });
+    const nativeBytes = Buffer.from(JSON.stringify(nativeProof));
+    await writeFile(preflightPath, nativeBytes, { mode: 0o600 });
+    const imageEvidence = {
+      contextFile: success.contextPath,
+      evidenceDir: success.evidenceDir,
+      result: {
+        runId: success.context.runId,
+        candidateSha: sha,
+        environment: { configSha256: success.context.baseConfigSha256 },
+        gates: [
+          {
+            id: "G00_PREFLIGHT",
+            status: "PASS",
+            artifacts: [
+              {
+                path: preflightPath,
+                sha256: hash(nativeBytes),
+                sizeBytes: nativeBytes.length,
+              },
+            ],
+          },
+        ],
+      },
+      readRuntimeImages: async () =>
+        (await readQualificationInputs(contextPath)).qualification
+          .runtimeImages,
+      readStorageImage: async () => ({
+        runId: success.context.runId,
+        candidateSha: sha,
+        baseImage: nodeBase,
+      }),
+    };
+    assert.deepEqual(await readLaunchImageEvidence(imageEvidence), {
+      nodeImageDigest: nodeDigest,
+      imageDigests: admitted.qualification.runtimeImages.map(
+        ({ imageId }) => imageId,
+      ),
+    });
+    const scanResultPath = join(
+      success.evidenceDir,
+      "gates/G12_SUPPLY_CHAIN/artifacts/supply-chain/result.json",
+    );
+    const scanResultBytes = await readFile(scanResultPath);
+    try {
+      for (const mutate of [
+        (scan) => {
+          scan.provenance.images = scan.provenance.images.filter(
+            (entry) => entry.service !== "edge-gateway",
+          );
+        },
+        (scan) => {
+          scan.runId = "20261030T120001Z-0000000";
+        },
+        (scan) => {
+          scan.candidateSha = "f".repeat(40);
+        },
+      ]) {
+        const scan = JSON.parse(scanResultBytes);
+        mutate(scan);
+        await writeFile(scanResultPath, JSON.stringify(scan));
+        await assert.rejects(readLaunchImageEvidence(imageEvidence));
+      }
+    } finally {
+      await writeFile(scanResultPath, scanResultBytes);
+    }
     const reportPath = join(
       success.evidenceDir,
       "gates/G12_SUPPLY_CHAIN/artifacts/supply-chain/artifacts/edge-gateway.vulnerabilities.json",

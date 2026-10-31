@@ -29,11 +29,13 @@ import { pathToFileURL } from "node:url";
 import test from "node:test";
 import {
   captureKafkaNamespaceArtifact,
+  applyLaunchImageEvidence,
   executeArgv,
   finishRuntimeImageOwnership,
   gateBudgetMs,
   loadMatrix,
   normalizeCandidateInputModes,
+  readLaunchImageEvidence,
   parseArgs as parseLaunchArguments,
   runGate,
   splitCommand,
@@ -6943,5 +6945,196 @@ void test("G14 cannot pass without sealed browser correlation lineage", async ()
     );
   } finally {
     await rm(evidenceDir, { recursive: true, force: true });
+  }
+});
+
+void test("G12 image hydration binds native G00 proof and verified runtime receipts", async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), "launch-image-evidence-"));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const contextFile = join(directory, "context.json");
+  const preflightPath = join(
+    directory,
+    "gates/G00_PREFLIGHT/artifacts/preflight.json",
+  );
+  await mkdir(join(directory, "gates/G00_PREFLIGHT/artifacts"), {
+    recursive: true,
+  });
+  const runId = "20261101T000000Z-abcdef0";
+  const candidateSha = `abcdef0${"1".repeat(33)}`;
+  const configSha256 = "2".repeat(64);
+  const base = `node:26.8.1-alpine@sha256:${"3".repeat(64)}`;
+  const nodeImageId = `sha256:${"4".repeat(64)}`;
+  const proof = {
+    schemaVersion: 1,
+    gateId: "G00_PREFLIGHT",
+    status: "PASS",
+    runId,
+    candidateSha,
+    checks: [
+      {
+        id: "NATIVE_IMAGE_RUNTIME_IDENTITY",
+        status: "PASS",
+        facts: {
+          declaredBomImages: { node: base },
+          actualRuntimeProof: {
+            node: {
+              status: "PASS",
+              imageId: nodeImageId,
+              repoDigest: `node@sha256:${"3".repeat(64)}`,
+              os: "linux",
+              architecture: "amd64",
+              cleanupSucceeded: true,
+            },
+          },
+        },
+      },
+    ],
+  };
+  const context = {
+    runId,
+    candidateSha,
+    baseConfigSha256: configSha256,
+    evidenceDir: directory,
+  };
+  await writeFile(contextFile, JSON.stringify(context));
+  const g00 = { id: "G00_PREFLIGHT", status: "PASS", artifacts: [] };
+  const result = {
+    runId,
+    candidateSha,
+    environment: { configSha256 },
+    gates: [g00],
+  };
+  const images = Array.from({ length: 15 }, (_, index) => ({
+    service: `role-${index}`,
+    imageId: `sha256:${String(index.toString(16)).padStart(64, "0")}`,
+  }));
+  const options = {
+    contextFile,
+    evidenceDir: directory,
+    result,
+    readRuntimeImages: async () => images,
+    readStorageImage: async () => ({ runId, candidateSha, baseImage: base }),
+  };
+  const writeProof = async (value) => {
+    const bytes = Buffer.from(JSON.stringify(value));
+    await writeFile(preflightPath, bytes);
+    g00.artifacts = [
+      {
+        path: preflightPath,
+        sizeBytes: bytes.length,
+        sha256: createHash("sha256").update(bytes).digest("hex"),
+      },
+    ];
+  };
+  await writeProof(proof);
+  assert.deepEqual(await readLaunchImageEvidence(options), {
+    nodeImageDigest: nodeImageId,
+    imageDigests: images.map(({ imageId }) => imageId),
+  });
+  for (const change of [
+    (value) => {
+      value.runId = "20261101T000001Z-abcdef0";
+    },
+    (value) => {
+      value.candidateSha = "f".repeat(40);
+    },
+    (value) => {
+      value.checks[0].facts.actualRuntimeProof.node.imageId = "invalid";
+    },
+    (value) => {
+      value.checks[0].facts.actualRuntimeProof.node.repoDigest = `node@sha256:${"f".repeat(64)}`;
+    },
+    (value) => {
+      value.checks[0].facts.actualRuntimeProof.node.cleanupSucceeded = false;
+    },
+  ]) {
+    const altered = structuredClone(proof);
+    change(altered);
+    await writeProof(altered);
+    await assert.rejects(readLaunchImageEvidence(options));
+  }
+  await writeProof(proof);
+  await writeFile(preflightPath, `${JSON.stringify(proof)} `);
+  await assert.rejects(
+    readLaunchImageEvidence(options),
+    /G12_IMAGE_PREFLIGHT_HASH_MISMATCH/u,
+  );
+  await writeProof(proof);
+  await assert.rejects(
+    readLaunchImageEvidence({
+      ...options,
+      readStorageImage: async () => ({
+        runId: "foreign",
+        candidateSha,
+        baseImage: base,
+      }),
+    }),
+    /G12_IMAGE_NODE_BASE_MISMATCH/u,
+  );
+  await assert.rejects(
+    readLaunchImageEvidence({
+      ...options,
+      readRuntimeImages: async () => {
+        throw new Error("G12_RUNTIME_IMAGE_PROVENANCE_INVALID");
+      },
+    }),
+    /G12_RUNTIME_IMAGE_PROVENANCE_INVALID/u,
+  );
+});
+
+void test("G12 image hydration persists atomically and fails closed on error or deadline", async () => {
+  for (const scenario of [
+    "success",
+    "reader-error",
+    "write-error",
+    "late-read",
+    "late-write",
+  ]) {
+    let now = Date.parse("2026-11-01T00:00:00Z");
+    const previous = { nodeImageDigest: null, imageDigests: null };
+    const result = { environment: { ...previous } };
+    const record = {
+      status: "PASS",
+      reason: "",
+      startedAt: new Date(now).toISOString(),
+    };
+    const images = {
+      nodeImageDigest: `sha256:${"1".repeat(64)}`,
+      imageDigests: Array(15).fill(`sha256:${"2".repeat(64)}`),
+    };
+    const persisted = [];
+    await applyLaunchImageEvidence({
+      contextFile: "/fixture/context.json",
+      evidenceDir: "/fixture",
+      result,
+      gate: { timeout: 1800 },
+      record,
+      workloadDeadline: now + 2000000,
+      now: () => now,
+      readEvidence: async () => {
+        if (scenario === "reader-error") throw new Error("invalid receipt");
+        if (scenario === "late-read") now += 1800001;
+        return images;
+      },
+      persist: async (_directory, current) => {
+        if (scenario === "write-error") throw new Error("write failed");
+        persisted.push(structuredClone(current.environment));
+        if (scenario === "late-write" && persisted.length === 1) now += 1800001;
+      },
+    });
+    if (scenario === "success") {
+      assert.equal(record.status, "PASS");
+      assert.deepEqual(result.environment, images);
+      assert.deepEqual(persisted, [images]);
+    } else {
+      assert.equal(record.status, "FAIL", scenario);
+      assert.deepEqual(result.environment, previous, scenario);
+      assert.match(record.reason, /G12 image evidence validation failed/u);
+      assert.deepEqual(
+        persisted,
+        scenario === "late-write" ? [images, previous] : [],
+        scenario,
+      );
+    }
   }
 });

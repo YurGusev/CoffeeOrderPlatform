@@ -45,7 +45,10 @@ import {
   validateBrowserParentRuntime,
 } from "./scenarios/browser.mjs";
 import { admitRealtimeCapacity } from "../../../tools/realtime-capacity.mjs";
-import { readVerifiedRuntimeImages } from "../../../tools/verified-infrastructure-image.mjs";
+import {
+  loadVerifiedGateImage,
+  readVerifiedRuntimeImages,
+} from "../../../tools/verified-infrastructure-image.mjs";
 import {
   cleanupLaunchRuntimeImages,
   inspectLaunchRuntimeImages,
@@ -2168,6 +2171,88 @@ export async function runGate(
   await updateGateArtifact(evidenceDir, record);
 }
 
+export async function readLaunchImageEvidence({
+  contextFile,
+  evidenceDir,
+  result,
+  readRuntimeImages = readVerifiedRuntimeImages,
+  readStorageImage = loadVerifiedGateImage,
+}) {
+  const context = JSON.parse(await readFile(contextFile, "utf8"));
+  if (
+    context.runId !== result.runId ||
+    context.candidateSha !== result.candidateSha ||
+    context.baseConfigSha256 !== result.environment.configSha256 ||
+    resolve(context.evidenceDir ?? "") !== resolve(evidenceDir)
+  )
+    throw new Error("G12_IMAGE_CONTEXT_MISMATCH");
+  const preflightGate = result.gates.find(
+    (entry) => entry.id === "G00_PREFLIGHT",
+  );
+  if (preflightGate?.status !== "PASS")
+    throw new Error("G12_IMAGE_PREFLIGHT_NOT_PASSED");
+  const path = join(
+    evidenceDir,
+    "gates/G00_PREFLIGHT/artifacts/preflight.json",
+  );
+  await assertNoSymlinkPath(evidenceDir, path);
+  const bytes = await readFile(path);
+  const matchingArtifacts = preflightGate.artifacts.filter(
+    (entry) => resolve(entry.path) === path,
+  );
+  if (
+    matchingArtifacts.length !== 1 ||
+    matchingArtifacts[0].sha256 !==
+      createHash("sha256").update(bytes).digest("hex") ||
+    matchingArtifacts[0].sizeBytes !== bytes.length
+  )
+    throw new Error("G12_IMAGE_PREFLIGHT_HASH_MISMATCH");
+  const preflight = JSON.parse(bytes.toString("utf8"));
+  const checks = preflight.checks?.filter(
+    (entry) => entry.id === "NATIVE_IMAGE_RUNTIME_IDENTITY",
+  );
+  const native = checks?.[0]?.facts?.actualRuntimeProof?.node;
+  const declaredNode = checks?.[0]?.facts?.declaredBomImages?.node;
+  if (
+    preflight.schemaVersion !== 1 ||
+    preflight.gateId !== "G00_PREFLIGHT" ||
+    preflight.status !== "PASS" ||
+    preflight.runId !== context.runId ||
+    preflight.candidateSha !== context.candidateSha ||
+    checks?.length !== 1 ||
+    checks[0].status !== "PASS" ||
+    native?.status !== "PASS" ||
+    native.cleanupSucceeded !== true ||
+    native.os !== "linux" ||
+    native.architecture !== "amd64" ||
+    !/^sha256:[a-f0-9]{64}$/u.test(native.imageId ?? "")
+  )
+    throw new Error("G12_IMAGE_NATIVE_PROOF_INVALID");
+  const [images, storage] = await Promise.all([
+    readRuntimeImages({ contextFile }),
+    readStorageImage({
+      target: "storage-helper",
+      contextFile,
+      loadImage: false,
+    }),
+  ]);
+  const digest = /@(?<digest>sha256:[a-f0-9]{64})$/u.exec(
+    storage.baseImage ?? "",
+  )?.groups?.digest;
+  if (
+    storage.runId !== context.runId ||
+    storage.candidateSha !== context.candidateSha ||
+    declaredNode !== storage.baseImage ||
+    !digest ||
+    !native.repoDigest?.endsWith(`@${digest}`)
+  )
+    throw new Error("G12_IMAGE_NODE_BASE_MISMATCH");
+  return {
+    nodeImageDigest: native.imageId,
+    imageDigests: images.map(({ imageId }) => imageId),
+  };
+}
+
 async function writeEnvironment(evidenceDir, result) {
   const env = {
     runId: result.runId,
@@ -2195,6 +2280,55 @@ async function writeEnvironment(evidenceDir, result) {
     candidatePath: result.environment.candidatePath,
   };
   await atomicJson(join(evidenceDir, "environment.json"), env);
+}
+
+export async function applyLaunchImageEvidence({
+  contextFile,
+  evidenceDir,
+  result,
+  gate,
+  record,
+  workloadDeadline,
+  readEvidence = readLaunchImageEvidence,
+  persist = writeEnvironment,
+  now = Date.now,
+}) {
+  const originalNodeDigest = result.environment.nodeImageDigest;
+  const originalImageDigests = result.environment.imageDigests;
+  let environmentWritten = false;
+  try {
+    const images = await readEvidence({ contextFile, evidenceDir, result });
+    record.durationMs = now() - Date.parse(record.startedAt);
+    record.endedAt = nowIso();
+    if (record.durationMs > gate.timeout * 1000 || now() >= workloadDeadline)
+      throw new Error("G12 image evidence validation exceeded its budget");
+    result.environment.nodeImageDigest = images.nodeImageDigest;
+    result.environment.imageDigests = images.imageDigests;
+    await persist(evidenceDir, result);
+    environmentWritten = true;
+    record.durationMs = now() - Date.parse(record.startedAt);
+    record.endedAt = nowIso();
+    if (record.durationMs > gate.timeout * 1000 || now() >= workloadDeadline)
+      throw new Error("G12 image evidence validation exceeded its budget");
+  } catch (error) {
+    let failure = error;
+    result.environment.nodeImageDigest = originalNodeDigest;
+    result.environment.imageDigests = originalImageDigests;
+    if (environmentWritten) {
+      try {
+        await persist(evidenceDir, result);
+      } catch (rollbackError) {
+        failure = new AggregateError(
+          [error, rollbackError],
+          "G12 image evidence rollback failed",
+        );
+      }
+    }
+    record.durationMs = now() - Date.parse(record.startedAt);
+    record.endedAt = nowIso();
+    record.status = "FAIL";
+    record.reason = `G12 image evidence validation failed: ${redactText(failure.message)}`;
+  }
 }
 
 // Hold each source directory open so a renamed or replaced path cannot redirect copying.
@@ -2476,6 +2610,17 @@ export async function executeRun(options = {}) {
           ? imageOwnershipPath
           : undefined,
       );
+      if (gate.id === "G12_SUPPLY_CHAIN" && record.status === "PASS") {
+        await applyLaunchImageEvidence({
+          contextFile: contextPath,
+          evidenceDir,
+          result,
+          gate,
+          record,
+          workloadDeadline,
+        });
+        await updateGateArtifact(evidenceDir, record);
+      }
       if (
         gate.id === "G10_INTEGRATION" &&
         imageOwnershipPath &&

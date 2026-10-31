@@ -1,7 +1,7 @@
 issue: 13
 baseCommit: a6cceeaa822f9641c678b5dcae521c282391dd3d
 status: source-descriptor-before-formal-verification
-asOfUtc: "2026-10-31T19:43:27Z"
+asOfUtc: "2026-10-31T20:17:11.551746+00:00"
 inputs:
   - issue: 2
     acceptedMergeCommit: 327638d4494269a151ee7c0ac945ac0053c3e0d4
@@ -168,7 +168,7 @@ outputs:
     consumers:
       - 1
   - artifact: tests/config/observability-bootstrap.test.mjs
-    sha256: 806927ce1ca5cdddfbf1d68a0719213060ab6c6eda0bd60ac52afe056eba0f6d
+    sha256: 97c54ef674a246d82ac68f0e031863b460acab784b76e6025f11b770a788245f
     consumers:
       - 1
   - artifact: tests/observability/alerts.test.mjs
@@ -196,11 +196,11 @@ outputs:
     consumers:
       - 1
   - artifact: verification/launch/v1/run.mjs
-    sha256: 3848e63f1efd20bad017281d9e2637351ab3125335940e584bc4d051cad1c4b2
+    sha256: 4eb604a7214a09e4e0de7d5b1f74421c9f0dfeac2707973579342b6150b0df4a
     consumers:
       - 1
   - artifact: verification/launch/v1/runner.test.mjs
-    sha256: cb21d12e3031e5b55756b7c0873bf02c397669fda3fe440560edee583c22b718
+    sha256: 1e75836696a152d6a1c8e3b666cdfa458874822997e8ced242da92b6e3059308
     consumers:
       - 1
 verification:
@@ -236,6 +236,17 @@ verification:
   - command: node --test --test-reporter=spec tests/observability/alerts.test.mjs verification/launch/v1/runner.test.mjs
     result: "PASS: 130/130, fail0/cancelled0/skipped0, 108.048 s; кодовое состояние f58fef4"
     logSha256: 2e60ed0da2fbfaa96d7b2dc390cd1b3424b810439ada22bbf899c780969d08af
+  - command: pnpm check
+    result:
+      "PASS на27067f4: основной suite1544tests/1465pass/0fail/0cancelled/79skip,496.306s; не formal
+      admission"
+    logSha256: 4a2aca55cd9548e92153f57b2b10adc08977335132d745b6254e48238d212981
+  - command: runner targeted G00/G12 metadata hydration tests
+    result: PASS2/2,1.310s; actual atomic persist/rollback/deadline, неверныеG00/G12tuples отклонены
+    logSha256: 0b2ac078bdd89802d8623e52dbfd37fee9329aa93c7ffca7e2552fb4c2e59bb1
+  - command: existing synthetic G12/child lifecycle test
+    result: PASS1/1,56.028s; strict actual15image reader, чужиеSHA/run иmissingrole отклонены
+    logSha256: 1074045e37c106bbaac50662f005a57fb04b4bb8ff2f15b525008f430baeca15
 consumerContract:
   consumer: 1
   admission:
@@ -249,17 +260,20 @@ consumerContract:
     Фиксирует реальные inputs/outputs и проверки на момент подготовки. Не является runtime
     допуском или обещанием будущего PASS.
   publication:
-    ownerDecision: Владелец согласовал 2026-11-01 принятие двух связанных артефактов на одном candidate SHA.
+    ownerDecision:
+      Владелец согласовал 2026-11-01 принятие двух связанных артефактов на одном candidate
+      SHA.
     source: evidence/handoffs/issue-13.yaml
     derived: evidence/launch/<run-id>/handoff.yaml
     binding: Производный handoff содержит SHA-256 точного Git blob исходного descriptor и включён в checksums.sha256.
-    channels: [GitHub PR, Obsidian]
+    channels:
+      - GitHub PR
+      - Obsidian
     note: Фактические файлы и их хэши публикуются после запуска без изменения source SHA.
 limitations:
-  - "Общий pnpm check на ce9e10f прерван guard через311.290s: builder free опустился ниже1ГиБ, завершение
-    -15. Помимо отмен воспроизведён устаревший source-slicing test восстановления; его привязки обновлены
-    к действующему coordinator, все4комбинации сохранены и targeted8/8PASS. Полный check после исправления
-    ещё NOT_RUN."
+  - "После успешного pnpm check27067f4 обнаружены дополнительные обязательные blockers: остаточный formatterG03
+    исправляется в отдельном #247; actualG00/G12facts теперь передаются в environment. Полная проверка объединённого
+    состояния после этих изменений ещё NOT_RUN."
   - Итоговые G12, обязательная SSE qualification и полный G00–G19 на окончательном SHA ещё NOT_RUN. Component
     cffe147 и прежние qualification не переносятся.
   - Фактические runtime results и hashes появятся после выполнения; согласованная публикация двух артефактов
