@@ -8098,69 +8098,120 @@ try {
           `http://${address}:${new URL(config.telemetry[name].endpoint).port}`;
         await waitHealth(name);
       };
-      const originalLokiConfig = configs.loki;
-      const originalLokiBytes = await readFile(backendConfigPaths.loki);
-      const originalLokiHash = createHash("sha256")
-        .update(originalLokiBytes)
-        .digest("hex");
-      const lokiProfile = structuredClone(originalLokiConfig);
-      lokiProfile.ingester.chunk_idle_period = "10s";
-      lokiProfile.ingester.flush_check_period = "5s";
-      lokiProfile.compactor.compaction_interval = "30s";
-      lokiProfile.compactor.retention_delete_delay = "30s";
-      lokiProfile.chunk_store_config ??= {};
-      lokiProfile.chunk_store_config.chunk_cache_config ??= {};
-      lokiProfile.chunk_store_config.chunk_cache_config.embedded_cache ??= {};
-      lokiProfile.chunk_store_config.chunk_cache_config.embedded_cache.enabled = true;
-      lokiProfile.chunk_store_config.chunk_cache_config.embedded_cache.ttl =
-        "30s";
-      const readLokiKnobs = async () => {
-        const text = await api({ baseUrl: baseUrls.loki, path: "/config" });
-        const actual = typeof text === "string" ? loadYaml(text) : text;
-        return {
-          retention: durationMilliseconds(
-            actual?.limits_config?.retention_period,
-          ),
-          chunkIdle: durationMilliseconds(actual?.ingester?.chunk_idle_period),
-          flushCheck: durationMilliseconds(
-            actual?.ingester?.flush_check_period,
-          ),
-          compaction: durationMilliseconds(
-            actual?.compactor?.compaction_interval,
-          ),
-          deleteDelay: durationMilliseconds(
-            actual?.compactor?.retention_delete_delay,
-          ),
-          chunkCacheTtl: durationMilliseconds(
-            actual?.chunk_store_config?.chunk_cache_config?.embedded_cache?.ttl,
-          ),
-          chunkCacheEnabled:
-            actual?.chunk_store_config?.chunk_cache_config?.embedded_cache
-              ?.enabled === true,
-          retentionEnabled: actual?.compactor?.retention_enabled,
-        };
-      };
-      const originalLokiKnobs = await readLokiKnobs();
-      if (
-        Object.entries(originalLokiKnobs).some(([key, value]) =>
-          key === "retentionEnabled" || key === "chunkCacheEnabled"
-            ? typeof value !== "boolean"
-            : !Number.isSafeInteger(value) || value < 0,
-        )
-      )
-        throw new Error("Loki original retention cadence is unavailable");
-      const writeLokiConfig = async (value) => {
-        await rm(backendConfigPaths.loki);
-        await writeFile(
-          backendConfigPaths.loki,
-          dumpYaml(value, { noRefs: true, lineWidth: 120 }),
-          { mode: 0o444 },
+      const retentionRestorers = [];
+      const retentionObservers = [];
+      const retentionRestoreErrors = [];
+      let retentionOperationError;
+      let cancelObservation = false;
+      const observeRetention = (task) => {
+        const tracked = task.then(
+          () => ({ status: "PASS" }),
+          (error) => {
+            cancelObservation = true;
+            return { status: "FAIL", error };
+          },
         );
+        retentionObservers.push(tracked);
       };
-      const lokiStagingProfile = structuredClone(lokiProfile);
-      lokiStagingProfile.compactor.retention_enabled = false;
-      let lokiRestorationError;
+      evidence.retention = {
+        status: "RUNNING",
+        productionEffective: actualEffective,
+        loki: "NOT_RUN",
+        prometheus: "NOT_RUN",
+        tempo: "NOT_RUN",
+      };
       try {
+        const originalLokiConfig = configs.loki;
+        const originalLokiBytes = await readFile(backendConfigPaths.loki);
+        const originalLokiHash = createHash("sha256")
+          .update(originalLokiBytes)
+          .digest("hex");
+        const lokiProfile = structuredClone(originalLokiConfig);
+        lokiProfile.ingester.chunk_idle_period = "10s";
+        lokiProfile.ingester.flush_check_period = "5s";
+        lokiProfile.compactor.compaction_interval = "30s";
+        lokiProfile.compactor.retention_delete_delay = "30s";
+        lokiProfile.chunk_store_config ??= {};
+        lokiProfile.chunk_store_config.chunk_cache_config ??= {};
+        lokiProfile.chunk_store_config.chunk_cache_config.embedded_cache ??= {};
+        lokiProfile.chunk_store_config.chunk_cache_config.embedded_cache.enabled = true;
+        lokiProfile.chunk_store_config.chunk_cache_config.embedded_cache.ttl =
+          "30s";
+        const readLokiKnobs = async () => {
+          const text = await api({ baseUrl: baseUrls.loki, path: "/config" });
+          const actual = typeof text === "string" ? loadYaml(text) : text;
+          return {
+            retention: durationMilliseconds(
+              actual?.limits_config?.retention_period,
+            ),
+            chunkIdle: durationMilliseconds(
+              actual?.ingester?.chunk_idle_period,
+            ),
+            flushCheck: durationMilliseconds(
+              actual?.ingester?.flush_check_period,
+            ),
+            compaction: durationMilliseconds(
+              actual?.compactor?.compaction_interval,
+            ),
+            deleteDelay: durationMilliseconds(
+              actual?.compactor?.retention_delete_delay,
+            ),
+            chunkCacheTtl: durationMilliseconds(
+              actual?.chunk_store_config?.chunk_cache_config?.embedded_cache
+                ?.ttl,
+            ),
+            chunkCacheEnabled:
+              actual?.chunk_store_config?.chunk_cache_config?.embedded_cache
+                ?.enabled === true,
+            retentionEnabled: actual?.compactor?.retention_enabled,
+          };
+        };
+        const originalLokiKnobs = await readLokiKnobs();
+        if (
+          Object.entries(originalLokiKnobs).some(([key, value]) =>
+            key === "retentionEnabled" || key === "chunkCacheEnabled"
+              ? typeof value !== "boolean"
+              : !Number.isSafeInteger(value) || value < 0,
+          )
+        )
+          throw new Error("Loki original retention cadence is unavailable");
+        const writeLokiConfig = async (value) => {
+          await rm(backendConfigPaths.loki);
+          await writeFile(
+            backendConfigPaths.loki,
+            dumpYaml(value, { noRefs: true, lineWidth: 120 }),
+            { mode: 0o444 },
+          );
+        };
+        const lokiStagingProfile = structuredClone(lokiProfile);
+        lokiStagingProfile.compactor.retention_enabled = false;
+        let lokiRestorationError;
+        retentionRestorers.push(async () => {
+          try {
+            await writeLokiConfig(originalLokiConfig);
+            await recreateBackend("loki");
+            const restoredLokiKnobs = await readLokiKnobs();
+            if (
+              Object.keys(originalLokiKnobs).some(
+                (key) => restoredLokiKnobs[key] !== originalLokiKnobs[key],
+              ) ||
+              createHash("sha256")
+                .update(await readFile(backendConfigPaths.loki))
+                .digest("hex") !== originalLokiHash
+            )
+              lokiRestorationError = new Error(
+                "Loki production retention restoration failed",
+              );
+          } catch (error) {
+            lokiRestorationError ??= error;
+          }
+          if (lokiRestorationError)
+            cleanupErrors.push(
+              "Loki retention restore: " + cleanError(lokiRestorationError),
+            );
+          if (lokiRestorationError)
+            retentionRestoreErrors.push(lokiRestorationError);
+        });
         await writeLokiConfig(lokiStagingProfile);
         await recreateBackend("loki");
         const activeLoki = await readLokiKnobs();
@@ -8284,201 +8335,82 @@ try {
               "Loki flushed retention marker visible before cleanup activation",
           },
         );
-        const retentionActivatedAtMs = Date.now();
-        await writeLokiConfig(lokiProfile);
-        await recreateBackend("loki");
-        expectedLoki.retentionEnabled = true;
-        const retentionLoki = await readLokiKnobs();
+        const originalPrometheusCommand = [...services.prometheus.command];
+        const originalFlags = (
+          await api({
+            baseUrl: baseUrls.prometheus,
+            path: "/api/v1/status/flags",
+          })
+        )?.data;
+        const profileFlagNames = [
+          "storage.tsdb.retention.time",
+          "storage.tsdb.min-block-duration",
+          "storage.tsdb.max-block-duration",
+        ];
         if (
-          Object.keys(expectedLoki).some(
-            (key) => retentionLoki[key] !== expectedLoki[key],
+          profileFlagNames.some(
+            (name) =>
+              !Number.isSafeInteger(
+                durationMilliseconds(originalFlags?.[name]),
+              ),
           )
         )
-          throw new Error("Loki fixture retention profile was not effective");
-        evidence.retention = {
-          status: "RUNNING",
-          productionEffective: actualEffective,
-          lokiObservation: { effective: retentionLoki },
-        };
-        const absentSince = { value: undefined };
-        let retentionSuccessAtSeconds;
-        await waitFor(
-          async () => {
-            try {
-              const metrics = await api({
-                baseUrl: baseUrls.loki,
-                path: "/metrics",
-              });
-              const lastSuccess =
-                typeof metrics === "string" &&
-                /^loki_compactor_apply_retention_last_successful_run_timestamp_seconds\s+([0-9.eE+-]+)\s*$/mu.exec(
-                  metrics,
-                );
-              retentionSuccessAtSeconds = Number(lastSuccess?.[1]);
-              Object.assign(evidence.retention.lokiObservation, {
-                observedAt: new Date().toISOString(),
-                retentionSuccessAtSeconds: Number.isFinite(
-                  retentionSuccessAtSeconds,
-                )
-                  ? retentionSuccessAtSeconds
-                  : null,
-              });
-              if (
-                !Number.isFinite(retentionSuccessAtSeconds) ||
-                retentionSuccessAtSeconds * 1000 < retentionActivatedAtMs
-              )
-                throw new Error(
-                  "Loki compactor has not completed a retention run in this profile",
-                );
-              const old = await oldLogs();
-              const controlId = newRunId();
-              const controlMs = Date.now();
-              const control = structuredClone(body);
-              control.resourceLogs[0].resource.attributes[0].value.stringValue = `g14-retention-control-${controlId}`;
-              const record = control.resourceLogs[0].scopeLogs[0].logRecords[0];
-              record.timeUnixNano = record.observedTimeUnixNano = String(
-                BigInt(controlMs) * 1000000n,
-              );
-              record.body.stringValue = JSON.stringify({
-                g14_run_id: controlId,
-                retention_control: true,
-              });
-              await api({
-                baseUrl: baseUrls.loki,
-                path: "/otlp/v1/logs",
-                method: "POST",
-                body: control,
-                expected: [200, 204],
-              });
-              const current = await queryLokiLogs({
-                baseUrl: baseUrls.loki,
-                runId: controlId,
-                startTimeUs: (controlMs - 1000) * 1000,
-              });
-              const currentControlVisible = current.some(
-                (item) =>
-                  hasExactValue(item, controlId) &&
-                  item._timestamp === controlMs * 1000,
-              );
-              const oldMarkerVisible = old.some((record) =>
-                hasExactValue(record, retentionId),
-              );
-              Object.assign(evidence.retention.lokiObservation, {
-                currentControlVisible,
-                oldMarkerVisible,
-              });
-              if (!currentControlVisible)
-                throw new Error(
-                  "Loki fresh current-data control is unavailable",
-                );
-              if (oldMarkerVisible) {
-                absentSince.value = undefined;
-                return false;
-              }
-              absentSince.value ??= Date.now();
-              return Date.now() - absentSince.value >= 60 * 1000;
-            } catch (error) {
-              absentSince.value = undefined;
-              throw error;
-            }
-          },
-          {
-            timeoutMs: 6 * 60 * 1000,
-            intervalMs: 5000,
-            description:
-              "Loki native TTL removes exact old marker and retains current control",
-          },
-        );
-        evidence.retention = {
-          status: "PARTIAL",
-          loki: {
-            status: "PASS",
-            retentionDays: config.telemetry.loki.retentionDays,
-            fixtureOnly: true,
-            sourceConfigSha256: configSourceSha256,
-            schemaSourceSha256,
-            profileSha256: profileHash(lokiProfile),
-            stagingProfileSha256: profileHash(lokiStagingProfile),
-            profile: {
-              chunkIdle: "10s",
-              flushCheck: "5s",
-              compaction: "30s",
-              deleteDelay: "30s",
-              chunkCacheTtl: "30s",
-              chunkCacheEnabled: true,
-            },
-            nativeFlushAndCleanRestart: true,
-            markerId: retentionId,
-            sampleTimestampMs: sampleMs,
-            visibleBeforeExpiry: true,
-            absentObservationWindowMs: 60 * 1000,
-            currentControlVisible: true,
-            retentionSuccessAtSeconds,
-          },
-          prometheus: "NOT_RUN",
-          tempo: "NOT_RUN",
-        };
-      } finally {
-        try {
-          await writeLokiConfig(originalLokiConfig);
-          await recreateBackend("loki");
-          const restoredLokiKnobs = await readLokiKnobs();
-          if (
-            Object.keys(originalLokiKnobs).some(
-              (key) => restoredLokiKnobs[key] !== originalLokiKnobs[key],
-            ) ||
-            createHash("sha256")
-              .update(await readFile(backendConfigPaths.loki))
-              .digest("hex") !== originalLokiHash
-          )
-            lokiRestorationError = new Error(
-              "Loki production retention restoration failed",
-            );
-        } catch (error) {
-          lokiRestorationError ??= error;
-        }
-        if (lokiRestorationError)
-          cleanupErrors.push(
-            "Loki retention restore: " + cleanError(lokiRestorationError),
+          throw new Error(
+            "Prometheus original retention cadence is unavailable",
           );
-      }
-      if (lokiRestorationError) throw lokiRestorationError;
-      const originalPrometheusCommand = [...services.prometheus.command];
-      const originalFlags = (
-        await api({
-          baseUrl: baseUrls.prometheus,
-          path: "/api/v1/status/flags",
-        })
-      )?.data;
-      const profileFlagNames = [
-        "storage.tsdb.retention.time",
-        "storage.tsdb.min-block-duration",
-        "storage.tsdb.max-block-duration",
-      ];
-      if (
-        profileFlagNames.some(
-          (name) =>
-            !Number.isSafeInteger(durationMilliseconds(originalFlags?.[name])),
-        )
-      )
-        throw new Error("Prometheus original retention cadence is unavailable");
-      const prometheusProfile = originalPrometheusCommand.filter(
-        (arg) => !arg.startsWith("--storage.tsdb.retention.time="),
-      );
-      prometheusProfile.push(
-        "--storage.tsdb.retention.time=2m",
-        "--storage.tsdb.min-block-duration=1m",
-        "--storage.tsdb.max-block-duration=1m",
-      );
-      evidence.retention.productionEffective = actualEffective;
-      const saveCompose = () =>
-        writeFile(
-          composeFile,
-          dumpYaml(fixtureCompose, { noRefs: true, lineWidth: 120 }),
-          { mode: 0o600 },
+        const prometheusProfile = originalPrometheusCommand.filter(
+          (arg) => !arg.startsWith("--storage.tsdb.retention.time="),
         );
-      let prometheusRestorationError;
-      try {
+        prometheusProfile.push(
+          "--storage.tsdb.retention.time=2m",
+          "--storage.tsdb.min-block-duration=1m",
+          "--storage.tsdb.max-block-duration=1m",
+        );
+        evidence.retention.productionEffective = actualEffective;
+        const saveCompose = () =>
+          writeFile(
+            composeFile,
+            dumpYaml(fixtureCompose, { noRefs: true, lineWidth: 120 }),
+            { mode: 0o600 },
+          );
+        let prometheusRestorationError;
+        retentionRestorers.push(async () => {
+          try {
+            services.prometheus.command = originalPrometheusCommand;
+            await saveCompose();
+            await recreateBackend("prometheus");
+            const restoredFlags = (
+              await api({
+                baseUrl: baseUrls.prometheus,
+                path: "/api/v1/status/flags",
+              })
+            )?.data;
+            const restoredCompose = loadYaml(
+              await readFile(composeFile, "utf8"),
+            );
+            if (
+              profileFlagNames.some(
+                (name) =>
+                  durationMilliseconds(restoredFlags?.[name]) !==
+                  durationMilliseconds(originalFlags[name]),
+              ) ||
+              profileHash(restoredCompose?.services?.prometheus?.command) !==
+                profileHash(originalPrometheusCommand)
+            )
+              prometheusRestorationError = new Error(
+                "Prometheus production retention restoration failed",
+              );
+          } catch (error) {
+            prometheusRestorationError ??= error;
+          }
+          if (prometheusRestorationError)
+            cleanupErrors.push(
+              "Prometheus retention restore: " +
+                cleanError(prometheusRestorationError),
+            );
+          if (prometheusRestorationError)
+            retentionRestoreErrors.push(prometheusRestorationError);
+        });
         services.prometheus.command = prometheusProfile;
         await saveCompose();
         await recreateBackend("prometheus");
@@ -8501,6 +8433,439 @@ try {
           throw new Error(
             "Prometheus fixture retention profile was not effective",
           );
+        const originalTempoConfig = configs.tempo;
+        const tempoProfile = structuredClone(originalTempoConfig);
+        tempoProfile.backend_worker.compaction.block_retention = "2m";
+        tempoProfile.backend_scheduler.provider = {
+          retention: { interval: "30s" },
+        };
+        tempoProfile.live_store.max_block_duration = "30s";
+        tempoProfile.live_store.complete_block_timeout = "1m";
+        tempoProfile.live_store.flush_op_timeout = "30s";
+        tempoProfile.live_store.block_reclaim_grace = "1m";
+        tempoProfile.storage.trace.blocklist_poll = "30s";
+        tempoProfile.query_frontend = { search: { query_backend_after: "1m" } };
+        const originalTempoBytes = await readFile(backendConfigPaths.tempo);
+        const originalTempoHash = createHash("sha256")
+          .update(originalTempoBytes)
+          .digest("hex");
+        const readTempoKnobs = async () => {
+          const text = await api({
+            baseUrl: baseUrls.tempo,
+            path: "/status/config",
+          });
+          const actual = parseTempoStatusConfigResponse(text);
+          return {
+            retention: durationMilliseconds(
+              actual?.backend_worker?.compaction?.block_retention,
+            ),
+            interval: durationMilliseconds(
+              actual?.backend_scheduler?.provider?.retention?.interval,
+            ),
+            maxBlock: durationMilliseconds(
+              actual?.live_store?.max_block_duration,
+            ),
+            complete: durationMilliseconds(
+              actual?.live_store?.complete_block_timeout,
+            ),
+            cleanup: durationMilliseconds(actual?.live_store?.flush_op_timeout),
+            reclaim: durationMilliseconds(
+              actual?.live_store?.block_reclaim_grace,
+            ),
+            poll: durationMilliseconds(actual?.storage?.trace?.blocklist_poll),
+            queryAfter: durationMilliseconds(
+              actual?.query_frontend?.search?.query_backend_after,
+            ),
+          };
+        };
+        const originalTempoKnobs = await readTempoKnobs();
+        if (
+          Object.values(originalTempoKnobs).some(
+            (value) => !Number.isSafeInteger(value) || value <= 0,
+          )
+        )
+          throw new Error("Tempo original retention cadence is unavailable");
+        const writeTempoConfig = async (value) => {
+          await rm(backendConfigPaths.tempo);
+          await writeFile(
+            backendConfigPaths.tempo,
+            dumpYaml(value, { noRefs: true, lineWidth: 120 }),
+            { mode: 0o444 },
+          );
+        };
+        let tempoRestorationError;
+        retentionRestorers.push(async () => {
+          try {
+            await writeTempoConfig(originalTempoConfig);
+            await recreateBackend("tempo");
+            const restoredTempoKnobs = await readTempoKnobs();
+            if (
+              Object.keys(originalTempoKnobs).some(
+                (key) => restoredTempoKnobs[key] !== originalTempoKnobs[key],
+              ) ||
+              createHash("sha256")
+                .update(await readFile(backendConfigPaths.tempo))
+                .digest("hex") !== originalTempoHash
+            )
+              tempoRestorationError = new Error(
+                "Tempo production retention restoration failed",
+              );
+          } catch (error) {
+            tempoRestorationError ??= error;
+          }
+          if (tempoRestorationError)
+            cleanupErrors.push(
+              "Tempo retention restore: " + cleanError(tempoRestorationError),
+            );
+          if (tempoRestorationError)
+            retentionRestoreErrors.push(tempoRestorationError);
+        });
+        await writeTempoConfig(tempoProfile);
+        await recreateBackend("tempo");
+        const activeTempo = await readTempoKnobs();
+        const expectedTempo = {
+          retention: 120000,
+          interval: 30000,
+          maxBlock: 30000,
+          complete: 60000,
+          cleanup: 30000,
+          reclaim: 60000,
+          poll: 30000,
+          queryAfter: 60000,
+        };
+        if (
+          Object.keys(expectedTempo).some(
+            (key) => activeTempo[key] !== expectedTempo[key],
+          )
+        )
+          throw new Error("Tempo fixture retention profile was not effective");
+        const otlpUrl = `http://${new URL(baseUrls.tempo).hostname}:${new URL(config.telemetry.tempo.otlpEndpoint).port}`;
+        const putTrace = async (name) => {
+          const id = randomBytes(16).toString("hex");
+          const now = Date.now();
+          const data = {
+            resourceSpans: [
+              {
+                resource: {
+                  attributes: [
+                    {
+                      key: "service.name",
+                      value: { stringValue: "g14-retention" },
+                    },
+                  ],
+                },
+                scopeSpans: [
+                  {
+                    scope: { name: "g14-retention" },
+                    spans: [
+                      {
+                        traceId: id,
+                        spanId: randomBytes(8).toString("hex"),
+                        name,
+                        kind: 1,
+                        startTimeUnixNano: String(BigInt(now) * 1000000n),
+                        endTimeUnixNano: String(BigInt(now) * 1000000n + 1000n),
+                      },
+                    ],
+                  },
+                ],
+              },
+            ],
+          };
+          await api({
+            baseUrl: otlpUrl,
+            path: "/v1/traces",
+            method: "POST",
+            body: data,
+            expected: [200, 202, 204],
+          });
+          return id;
+        };
+        await waitFor(
+          async () =>
+            (await oldLogs()).some((record) =>
+              hasExactValue(record, retentionId),
+            ),
+          {
+            timeoutMs: 120000,
+            intervalMs: 2000,
+            description:
+              "Loki flushed marker remains visible before retention activation",
+          },
+        );
+        const retentionActivatedAtMs = Date.now();
+        await writeLokiConfig(lokiProfile);
+        await recreateBackend("loki");
+        expectedLoki.retentionEnabled = true;
+        const retentionLoki = await readLokiKnobs();
+        if (
+          Object.keys(expectedLoki).some(
+            (key) => retentionLoki[key] !== expectedLoki[key],
+          )
+        )
+          throw new Error("Loki fixture retention profile was not effective");
+        for (const name of ["loki", "prometheus", "tempo"])
+          await waitHealth(name);
+        const finalFlags = (
+          await api({
+            baseUrl: baseUrls.prometheus,
+            path: "/api/v1/status/flags",
+          })
+        )?.data;
+        const finalTempo = await readTempoKnobs();
+        if (
+          durationMilliseconds(finalFlags?.["storage.tsdb.retention.time"]) !==
+            120000 ||
+          durationMilliseconds(
+            finalFlags?.["storage.tsdb.min-block-duration"],
+          ) !== 60000 ||
+          durationMilliseconds(
+            finalFlags?.["storage.tsdb.max-block-duration"],
+          ) !== 60000 ||
+          Object.keys(expectedTempo).some(
+            (key) => finalTempo[key] !== expectedTempo[key],
+          )
+        )
+          throw new Error(
+            "backend fixture retention profile changed before observation",
+          );
+        evidence.retention.lokiObservation = { effective: retentionLoki };
+        observeRetention(
+          (async () => {
+            const absentSince = { value: undefined };
+            let retentionSuccessAtSeconds;
+            await waitFor(
+              async () => {
+                if (cancelObservation)
+                  throw Object.assign(
+                    new Error("retention observation interrupted"),
+                    { fatal: true },
+                  );
+                try {
+                  const metrics = await api({
+                    baseUrl: baseUrls.loki,
+                    path: "/metrics",
+                  });
+                  const lastSuccess =
+                    typeof metrics === "string" &&
+                    /^loki_compactor_apply_retention_last_successful_run_timestamp_seconds\s+([0-9.eE+-]+)\s*$/mu.exec(
+                      metrics,
+                    );
+                  retentionSuccessAtSeconds = Number(lastSuccess?.[1]);
+                  Object.assign(evidence.retention.lokiObservation, {
+                    observedAt: new Date().toISOString(),
+                    retentionSuccessAtSeconds: Number.isFinite(
+                      retentionSuccessAtSeconds,
+                    )
+                      ? retentionSuccessAtSeconds
+                      : null,
+                  });
+                  if (
+                    !Number.isFinite(retentionSuccessAtSeconds) ||
+                    retentionSuccessAtSeconds * 1000 < retentionActivatedAtMs
+                  )
+                    throw new Error(
+                      "Loki compactor has not completed a retention run in this profile",
+                    );
+                  const old = await oldLogs();
+                  const controlId = newRunId();
+                  const controlMs = Date.now();
+                  const control = structuredClone(body);
+                  control.resourceLogs[0].resource.attributes[0].value.stringValue = `g14-retention-control-${controlId}`;
+                  const record =
+                    control.resourceLogs[0].scopeLogs[0].logRecords[0];
+                  record.timeUnixNano = record.observedTimeUnixNano = String(
+                    BigInt(controlMs) * 1000000n,
+                  );
+                  record.body.stringValue = JSON.stringify({
+                    g14_run_id: controlId,
+                    retention_control: true,
+                  });
+                  await api({
+                    baseUrl: baseUrls.loki,
+                    path: "/otlp/v1/logs",
+                    method: "POST",
+                    body: control,
+                    expected: [200, 204],
+                  });
+                  const current = await queryLokiLogs({
+                    baseUrl: baseUrls.loki,
+                    runId: controlId,
+                    startTimeUs: (controlMs - 1000) * 1000,
+                  });
+                  const currentControlVisible = current.some(
+                    (item) =>
+                      hasExactValue(item, controlId) &&
+                      item._timestamp === controlMs * 1000,
+                  );
+                  const oldMarkerVisible = old.some((record) =>
+                    hasExactValue(record, retentionId),
+                  );
+                  Object.assign(evidence.retention.lokiObservation, {
+                    currentControlVisible,
+                    oldMarkerVisible,
+                  });
+                  if (!currentControlVisible)
+                    throw new Error(
+                      "Loki fresh current-data control is unavailable",
+                    );
+                  if (oldMarkerVisible) {
+                    absentSince.value = undefined;
+                    return false;
+                  }
+                  absentSince.value ??= Date.now();
+                  return Date.now() - absentSince.value >= 60 * 1000;
+                } catch (error) {
+                  absentSince.value = undefined;
+                  throw error;
+                }
+              },
+              {
+                timeoutMs: 6 * 60 * 1000,
+                intervalMs: 5000,
+                description:
+                  "Loki native TTL removes exact old marker and retains current control",
+              },
+            );
+            evidence.retention.loki = {
+              status: "PASS",
+              retentionDays: config.telemetry.loki.retentionDays,
+              fixtureOnly: true,
+              sourceConfigSha256: configSourceSha256,
+              schemaSourceSha256,
+              profileSha256: profileHash(lokiProfile),
+              stagingProfileSha256: profileHash(lokiStagingProfile),
+              profile: {
+                chunkIdle: "10s",
+                flushCheck: "5s",
+                compaction: "30s",
+                deleteDelay: "30s",
+                chunkCacheTtl: "30s",
+                chunkCacheEnabled: true,
+              },
+              nativeFlushAndCleanRestart: true,
+              markerId: retentionId,
+              sampleTimestampMs: sampleMs,
+              visibleBeforeExpiry: true,
+              absentObservationWindowMs: 60 * 1000,
+              currentControlVisible: true,
+              retentionSuccessAtSeconds,
+            };
+          })(),
+        );
+        const tempoMarkerAtMs = Date.now();
+        const expiredTraceId = await putTrace("g14.retention.expired");
+        evidence.retention.tempoObservation = {
+          effective: activeTempo,
+          traceId: expiredTraceId,
+        };
+        await waitForSameTraceSpans({
+          baseUrl: baseUrls.tempo,
+          traceId: expiredTraceId,
+          expectedSpanNames: { "g14-retention": ["g14.retention.expired"] },
+          timeoutMs: 120000,
+        });
+        observeRetention(
+          (async () => {
+            let traceAbsentSince;
+            await waitFor(
+              async () => {
+                if (cancelObservation)
+                  throw Object.assign(
+                    new Error("retention observation interrupted"),
+                    { fatal: true },
+                  );
+                try {
+                  const response = await fetch(
+                    new URL(`/api/traces/${expiredTraceId}`, baseUrls.tempo),
+                    { signal: AbortSignal.timeout(5000) },
+                  );
+                  evidence.retention.tempoObservation = {
+                    effective: activeTempo,
+                    traceId: expiredTraceId,
+                    observedAt: new Date().toISOString(),
+                    markerAgeMs: Date.now() - tempoMarkerAtMs,
+                    httpStatus: response.status,
+                  };
+                  if (response.status !== 200 && response.status !== 404)
+                    throw new Error(
+                      `Tempo retention query HTTP ${response.status}`,
+                    );
+                  if (response.status === 200) {
+                    const result = JSON.parse(
+                      await boundedResponseText(response, 8 * 1024 * 1024),
+                    );
+                    if (result?.metrics?.failedBlocks > 0)
+                      throw new Error("Tempo retention query is partial");
+                    const groups =
+                      result?.batches ??
+                      result?.resourceSpans ??
+                      result?.trace?.resourceSpans;
+                    if (!Array.isArray(groups))
+                      throw new Error(
+                        "Tempo retention query returned invalid trace data",
+                      );
+                    evidence.retention.tempoObservation.oldTraceVisible =
+                      groups.length > 0;
+                    if (groups.length > 0) {
+                      traceAbsentSince = undefined;
+                      return false;
+                    }
+                  }
+                  evidence.retention.tempoObservation.oldTraceVisible = false;
+                  if (Date.now() < tempoMarkerAtMs + 120000)
+                    throw Object.assign(
+                      new Error(
+                        "Tempo trace disappeared before fixture retention elapsed",
+                      ),
+                      { fatal: true },
+                    );
+                  const controlId = await putTrace("g14.retention.control");
+                  await waitForSameTraceSpans({
+                    baseUrl: baseUrls.tempo,
+                    traceId: controlId,
+                    expectedSpanNames: {
+                      "g14-retention": ["g14.retention.control"],
+                    },
+                    timeoutMs: 30000,
+                    intervalMs: 1000,
+                  });
+                  traceAbsentSince ??= Date.now();
+                  Object.assign(evidence.retention.tempoObservation, {
+                    liveControlVisible: true,
+                    absentForMs: Date.now() - traceAbsentSince,
+                  });
+                  return Date.now() - traceAbsentSince >= 2 * 60 * 1000;
+                } catch (error) {
+                  traceAbsentSince = undefined;
+                  throw error;
+                }
+              },
+              {
+                timeoutMs: 6 * 60 * 1000,
+                intervalMs: 10000,
+                description: "Tempo TTL removes exact trace with live control",
+              },
+            );
+            evidence.retention.tempo = {
+              status: "PASS",
+              fixtureOnly: true,
+              sourceConfigSha256: configSourceSha256,
+              schemaSourceSha256,
+              profileSha256: profileHash(tempoProfile),
+              traceId: expiredTraceId,
+              visibleBeforeExpiry: true,
+              liveControlVisible: true,
+              profile: {
+                retention: "2m",
+                retentionInterval: "30s",
+                completeBlockTimeout: "1m",
+                cleanupInterval: "30s",
+                blocklistPoll: "30s",
+              },
+            };
+          })(),
+        );
         const metricId = newRunId();
         const metricTimeMs = Date.now();
         const metricTimeUs = metricTimeMs * 1000;
@@ -8566,355 +8931,109 @@ try {
             description: "Prometheus retention marker visible",
           },
         );
-        let metricAbsentSince;
-        await waitFor(
-          async () => {
-            try {
-              const samples = await metricQuery();
-              const freshUs = (Date.now() - 30000) * 1000;
-              const live = await queryPrometheusRange({
-                baseUrl: baseUrls.prometheus,
-                expression: 'probe_success{probe_owner="prometheus"}',
-                startTimeUs: freshUs,
-              });
-              if (
-                !live.some(
-                  (sample) => sample.value === 1 && sample._timestamp > freshUs,
-                )
-              )
-                throw new Error("Prometheus current-data control unavailable");
-              if (
-                samples.some(
-                  (sample) =>
-                    sample.value === 1 && sample._timestamp === metricTimeUs,
-                )
-              ) {
-                metricAbsentSince = undefined;
-                return false;
-              }
-              if (Date.now() < metricTimeMs + 120000)
-                throw Object.assign(
-                  new Error(
-                    "Prometheus marker disappeared before fixture retention elapsed",
-                  ),
-                  { fatal: true },
-                );
-              metricAbsentSince ??= Date.now();
-              return (
-                Date.now() - metricAbsentSince >=
-                2 * config.platform.health.intervalMs
-              );
-            } catch (error) {
-              metricAbsentSince = undefined;
-              throw error;
-            }
-          },
-          {
-            timeoutMs: 6 * 60 * 1000,
-            intervalMs: 5000,
-            description:
-              "Prometheus TTL removes exact marker with live control",
-          },
-        );
-        evidence.retention.prometheus = {
-          status: "PASS",
-          fixtureOnly: true,
-          profile: { retention: "2m", minBlock: "1m", maxBlock: "1m" },
-          sourceConfigSha256: configSourceSha256,
-          schemaSourceSha256,
-          profileSha256: profileHash(prometheusProfile),
-          markerId: metricId,
-          sampleTimestampUs: metricTimeUs,
-          visibleBeforeExpiry: true,
-          liveControlVisible: true,
-        };
-      } finally {
-        try {
-          services.prometheus.command = originalPrometheusCommand;
-          await saveCompose();
-          await recreateBackend("prometheus");
-          const restoredFlags = (
-            await api({
-              baseUrl: baseUrls.prometheus,
-              path: "/api/v1/status/flags",
-            })
-          )?.data;
-          const restoredCompose = loadYaml(await readFile(composeFile, "utf8"));
-          if (
-            profileFlagNames.some(
-              (name) =>
-                durationMilliseconds(restoredFlags?.[name]) !==
-                durationMilliseconds(originalFlags[name]),
-            ) ||
-            profileHash(restoredCompose?.services?.prometheus?.command) !==
-              profileHash(originalPrometheusCommand)
-          )
-            prometheusRestorationError = new Error(
-              "Prometheus production retention restoration failed",
-            );
-        } catch (error) {
-          prometheusRestorationError ??= error;
-        }
-        if (prometheusRestorationError)
-          cleanupErrors.push(
-            "Prometheus retention restore: " +
-              cleanError(prometheusRestorationError),
-          );
-      }
-      if (prometheusRestorationError) throw prometheusRestorationError;
-      const originalTempoConfig = configs.tempo;
-      const tempoProfile = structuredClone(originalTempoConfig);
-      tempoProfile.backend_worker.compaction.block_retention = "2m";
-      tempoProfile.backend_scheduler.provider = {
-        retention: { interval: "30s" },
-      };
-      tempoProfile.live_store.max_block_duration = "30s";
-      tempoProfile.live_store.complete_block_timeout = "1m";
-      tempoProfile.live_store.flush_op_timeout = "30s";
-      tempoProfile.live_store.block_reclaim_grace = "1m";
-      tempoProfile.storage.trace.blocklist_poll = "30s";
-      tempoProfile.query_frontend = { search: { query_backend_after: "1m" } };
-      const originalTempoBytes = await readFile(backendConfigPaths.tempo);
-      const originalTempoHash = createHash("sha256")
-        .update(originalTempoBytes)
-        .digest("hex");
-      const readTempoKnobs = async () => {
-        const text = await api({
-          baseUrl: baseUrls.tempo,
-          path: "/status/config",
-        });
-        const actual = parseTempoStatusConfigResponse(text);
-        return {
-          retention: durationMilliseconds(
-            actual?.backend_worker?.compaction?.block_retention,
-          ),
-          interval: durationMilliseconds(
-            actual?.backend_scheduler?.provider?.retention?.interval,
-          ),
-          maxBlock: durationMilliseconds(
-            actual?.live_store?.max_block_duration,
-          ),
-          complete: durationMilliseconds(
-            actual?.live_store?.complete_block_timeout,
-          ),
-          cleanup: durationMilliseconds(actual?.live_store?.flush_op_timeout),
-          reclaim: durationMilliseconds(
-            actual?.live_store?.block_reclaim_grace,
-          ),
-          poll: durationMilliseconds(actual?.storage?.trace?.blocklist_poll),
-          queryAfter: durationMilliseconds(
-            actual?.query_frontend?.search?.query_backend_after,
-          ),
-        };
-      };
-      const originalTempoKnobs = await readTempoKnobs();
-      if (
-        Object.values(originalTempoKnobs).some(
-          (value) => !Number.isSafeInteger(value) || value <= 0,
-        )
-      )
-        throw new Error("Tempo original retention cadence is unavailable");
-      const writeTempoConfig = async (value) => {
-        await rm(backendConfigPaths.tempo);
-        await writeFile(
-          backendConfigPaths.tempo,
-          dumpYaml(value, { noRefs: true, lineWidth: 120 }),
-          { mode: 0o444 },
-        );
-      };
-      let tempoRestorationError;
-      try {
-        await writeTempoConfig(tempoProfile);
-        await recreateBackend("tempo");
-        const activeTempo = await readTempoKnobs();
-        const expectedTempo = {
-          retention: 120000,
-          interval: 30000,
-          maxBlock: 30000,
-          complete: 60000,
-          cleanup: 30000,
-          reclaim: 60000,
-          poll: 30000,
-          queryAfter: 60000,
-        };
-        if (
-          Object.keys(expectedTempo).some(
-            (key) => activeTempo[key] !== expectedTempo[key],
-          )
-        )
-          throw new Error("Tempo fixture retention profile was not effective");
-        const otlpUrl = `http://${new URL(baseUrls.tempo).hostname}:${new URL(config.telemetry.tempo.otlpEndpoint).port}`;
-        const putTrace = async (name) => {
-          const id = randomBytes(16).toString("hex");
-          const now = Date.now();
-          const data = {
-            resourceSpans: [
-              {
-                resource: {
-                  attributes: [
-                    {
-                      key: "service.name",
-                      value: { stringValue: "g14-retention" },
-                    },
-                  ],
-                },
-                scopeSpans: [
-                  {
-                    scope: { name: "g14-retention" },
-                    spans: [
-                      {
-                        traceId: id,
-                        spanId: randomBytes(8).toString("hex"),
-                        name,
-                        kind: 1,
-                        startTimeUnixNano: String(BigInt(now) * 1000000n),
-                        endTimeUnixNano: String(BigInt(now) * 1000000n + 1000n),
-                      },
-                    ],
-                  },
-                ],
-              },
-            ],
-          };
-          await api({
-            baseUrl: otlpUrl,
-            path: "/v1/traces",
-            method: "POST",
-            body: data,
-            expected: [200, 202, 204],
-          });
-          return id;
-        };
-        const tempoMarkerAtMs = Date.now();
-        const expiredTraceId = await putTrace("g14.retention.expired");
-        evidence.retention.tempoObservation = {
-          effective: activeTempo,
-          traceId: expiredTraceId,
-        };
-        await waitForSameTraceSpans({
-          baseUrl: baseUrls.tempo,
-          traceId: expiredTraceId,
-          expectedSpanNames: { "g14-retention": ["g14.retention.expired"] },
-          timeoutMs: 120000,
-        });
-        let traceAbsentSince;
-        await waitFor(
-          async () => {
-            try {
-              const response = await fetch(
-                new URL(`/api/traces/${expiredTraceId}`, baseUrls.tempo),
-                { signal: AbortSignal.timeout(5000) },
-              );
-              evidence.retention.tempoObservation = {
-                effective: activeTempo,
-                traceId: expiredTraceId,
-                observedAt: new Date().toISOString(),
-                markerAgeMs: Date.now() - tempoMarkerAtMs,
-                httpStatus: response.status,
-              };
-              if (response.status !== 200 && response.status !== 404)
-                throw new Error(
-                  `Tempo retention query HTTP ${response.status}`,
-                );
-              if (response.status === 200) {
-                const result = JSON.parse(
-                  await boundedResponseText(response, 8 * 1024 * 1024),
-                );
-                if (result?.metrics?.failedBlocks > 0)
-                  throw new Error("Tempo retention query is partial");
-                const groups =
-                  result?.batches ??
-                  result?.resourceSpans ??
-                  result?.trace?.resourceSpans;
-                if (!Array.isArray(groups))
-                  throw new Error(
-                    "Tempo retention query returned invalid trace data",
+        observeRetention(
+          (async () => {
+            let metricAbsentSince;
+            await waitFor(
+              async () => {
+                if (cancelObservation)
+                  throw Object.assign(
+                    new Error("retention observation interrupted"),
+                    { fatal: true },
                   );
-                evidence.retention.tempoObservation.oldTraceVisible =
-                  groups.length > 0;
-                if (groups.length > 0) {
-                  traceAbsentSince = undefined;
-                  return false;
+                try {
+                  const samples = await metricQuery();
+                  const freshUs = (Date.now() - 30000) * 1000;
+                  const live = await queryPrometheusRange({
+                    baseUrl: baseUrls.prometheus,
+                    expression: 'probe_success{probe_owner="prometheus"}',
+                    startTimeUs: freshUs,
+                  });
+                  if (
+                    !live.some(
+                      (sample) =>
+                        sample.value === 1 && sample._timestamp > freshUs,
+                    )
+                  )
+                    throw new Error(
+                      "Prometheus current-data control unavailable",
+                    );
+                  if (
+                    samples.some(
+                      (sample) =>
+                        sample.value === 1 &&
+                        sample._timestamp === metricTimeUs,
+                    )
+                  ) {
+                    metricAbsentSince = undefined;
+                    return false;
+                  }
+                  if (Date.now() < metricTimeMs + 120000)
+                    throw Object.assign(
+                      new Error(
+                        "Prometheus marker disappeared before fixture retention elapsed",
+                      ),
+                      { fatal: true },
+                    );
+                  metricAbsentSince ??= Date.now();
+                  return (
+                    Date.now() - metricAbsentSince >=
+                    2 * config.platform.health.intervalMs
+                  );
+                } catch (error) {
+                  metricAbsentSince = undefined;
+                  throw error;
                 }
-              }
-              evidence.retention.tempoObservation.oldTraceVisible = false;
-              if (Date.now() < tempoMarkerAtMs + 120000)
-                throw Object.assign(
-                  new Error(
-                    "Tempo trace disappeared before fixture retention elapsed",
-                  ),
-                  { fatal: true },
-                );
-              const controlId = await putTrace("g14.retention.control");
-              await waitForSameTraceSpans({
-                baseUrl: baseUrls.tempo,
-                traceId: controlId,
-                expectedSpanNames: {
-                  "g14-retention": ["g14.retention.control"],
-                },
-                timeoutMs: 30000,
-                intervalMs: 1000,
-              });
-              traceAbsentSince ??= Date.now();
-              Object.assign(evidence.retention.tempoObservation, {
-                liveControlVisible: true,
-                absentForMs: Date.now() - traceAbsentSince,
-              });
-              return Date.now() - traceAbsentSince >= 2 * 60 * 1000;
-            } catch (error) {
-              traceAbsentSince = undefined;
-              throw error;
-            }
-          },
-          {
-            timeoutMs: 6 * 60 * 1000,
-            intervalMs: 10000,
-            description: "Tempo TTL removes exact trace with live control",
-          },
-        );
-        evidence.retention.tempo = {
-          status: "PASS",
-          fixtureOnly: true,
-          sourceConfigSha256: configSourceSha256,
-          schemaSourceSha256,
-          profileSha256: profileHash(tempoProfile),
-          traceId: expiredTraceId,
-          visibleBeforeExpiry: true,
-          liveControlVisible: true,
-          profile: {
-            retention: "2m",
-            retentionInterval: "30s",
-            completeBlockTimeout: "1m",
-            cleanupInterval: "30s",
-            blocklistPoll: "30s",
-          },
-        };
-      } finally {
-        try {
-          await writeTempoConfig(originalTempoConfig);
-          await recreateBackend("tempo");
-          const restoredTempoKnobs = await readTempoKnobs();
-          if (
-            Object.keys(originalTempoKnobs).some(
-              (key) => restoredTempoKnobs[key] !== originalTempoKnobs[key],
-            ) ||
-            createHash("sha256")
-              .update(await readFile(backendConfigPaths.tempo))
-              .digest("hex") !== originalTempoHash
-          )
-            tempoRestorationError = new Error(
-              "Tempo production retention restoration failed",
+              },
+              {
+                timeoutMs: 6 * 60 * 1000,
+                intervalMs: 5000,
+                description:
+                  "Prometheus TTL removes exact marker with live control",
+              },
             );
-        } catch (error) {
-          tempoRestorationError ??= error;
-        }
-        if (tempoRestorationError)
-          cleanupErrors.push(
-            "Tempo retention restore: " + cleanError(tempoRestorationError),
-          );
+            evidence.retention.prometheus = {
+              status: "PASS",
+              fixtureOnly: true,
+              profile: { retention: "2m", minBlock: "1m", maxBlock: "1m" },
+              sourceConfigSha256: configSourceSha256,
+              schemaSourceSha256,
+              profileSha256: profileHash(prometheusProfile),
+              markerId: metricId,
+              sampleTimestampUs: metricTimeUs,
+              visibleBeforeExpiry: true,
+              liveControlVisible: true,
+            };
+          })(),
+        );
+        const results = await Promise.allSettled(retentionObservers);
+        const failed = results.find(
+          (result) =>
+            result.status === "rejected" || result.value.status === "FAIL",
+        );
+        if (failed)
+          throw failed.status === "rejected"
+            ? failed.reason
+            : failed.value.error;
+      } catch (error) {
+        retentionOperationError = error;
+      } finally {
+        cancelObservation = true;
+        await Promise.allSettled(retentionObservers);
+        for (const restore of retentionRestorers) await restore();
       }
-      if (tempoRestorationError) throw tempoRestorationError;
-      evidence.retention.restoredEffective = await readEffective();
+      try {
+        evidence.retention.restoredEffective = await readEffective();
+      } catch (error) {
+        retentionRestoreErrors.push(error);
+        cleanupErrors.push("retention readback: " + cleanError(error));
+      }
+      if (retentionOperationError) throw retentionOperationError;
+      if (retentionRestoreErrors.length)
+        throw new AggregateError(
+          retentionRestoreErrors,
+          "retention restoration failed",
+        );
       if (
         Object.keys(expectedEffective).some(
           (key) =>

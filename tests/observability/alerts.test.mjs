@@ -3650,7 +3650,7 @@ void test("Loki retention fixture changes cache TTL on a clone of the original p
   const start = source.indexOf(
     "const lokiProfile = structuredClone(originalLokiConfig);",
   );
-  const end = source.indexOf("\n      const readLokiKnobs =", start);
+  const end = source.indexOf("const readLokiKnobs =", start);
   assert.ok(start >= 0 && end > start);
   for (const cache of [
     undefined,
@@ -4812,4 +4812,255 @@ void test("Alloy native logfmt retry expiry reports the exact dropped_items fiel
       line.replace("dropped_items=128", "dropped_items=128x"),
     ),
   );
+});
+
+void test("retention observers reject early loss and reset absence on stale controls", async () => {
+  const source = await readFile(
+    new URL("../../tools/observability/verify.mjs", import.meta.url),
+    "utf8",
+  );
+  const predicate = (marker, initial, context) => {
+    const start = source.indexOf(marker);
+    const first = source.indexOf("async () => {", start);
+    const boundary = /\n\s*\},\n\s*\{\n\s*timeoutMs:/u.exec(
+      source.slice(first),
+    );
+    const end = boundary ? first + boundary.index : -1;
+    assert.ok(start >= 0 && first > start && end > first);
+    return runInNewContext(
+      `(() => { let ${initial}; return ${source.slice(first, end)}\n          }; })()`,
+      context,
+    );
+  };
+  let now = 119999;
+  let fresh = true;
+  const clock = class extends Date {
+    constructor(...args) {
+      super(...(args.length ? args : [now]));
+    }
+    static now() {
+      return now;
+    }
+  };
+  const prom = predicate("let metricAbsentSince;", "metricAbsentSince", {
+    Date: clock,
+    cancelObservation: false,
+    metricTimeMs: 0,
+    metricTimeUs: 0,
+    metricQuery: async () => [],
+    baseUrls: { prometheus: "http://prometheus" },
+    queryPrometheusRange: async () => [
+      { value: 1, _timestamp: (fresh ? now : now - 30000) * 1000 },
+    ],
+    config: { platform: { health: { intervalMs: 10000 } } },
+  });
+  await assert.rejects(prom(), /before fixture retention elapsed/u);
+  now = 120000;
+  assert.equal(await prom(), false);
+  now = 125000;
+  fresh = false;
+  await assert.rejects(prom(), /current-data control unavailable/u);
+  fresh = true;
+  now = 130000;
+  assert.equal(await prom(), false);
+  now = 149999;
+  assert.equal(await prom(), false);
+  now = 150000;
+  assert.equal(await prom(), true);
+
+  now = 119999;
+  let live = true;
+  let controls = 0;
+  const tempo = predicate("let traceAbsentSince;", "traceAbsentSince", {
+    Date: clock,
+    cancelObservation: false,
+    URL,
+    AbortSignal,
+    baseUrls: { tempo: "http://tempo" },
+    expiredTraceId: "abcd",
+    tempoMarkerAtMs: 0,
+    activeTempo: {},
+    evidence: { retention: {} },
+    fetch: async () => ({ status: 404 }),
+    putTrace: async () => `control-${++controls}`,
+    waitForSameTraceSpans: async () => {
+      if (!live) throw new Error("fresh trace unavailable");
+    },
+  });
+  await assert.rejects(tempo(), /before fixture retention elapsed/u);
+  now = 120000;
+  assert.equal(await tempo(), false);
+  now = 180000;
+  live = false;
+  await assert.rejects(tempo(), /fresh trace unavailable/u);
+  live = true;
+  now = 190000;
+  assert.equal(await tempo(), false);
+  now = 309999;
+  assert.equal(await tempo(), false);
+  now = 310000;
+  assert.equal(await tempo(), true);
+  assert.equal(controls, 5);
+
+  now = 120000;
+  let lokiFresh = true;
+  const loki = predicate(
+    "const absentSince = { value: undefined };",
+    "absentSince = { value: undefined }",
+    {
+      Date: clock,
+      cancelObservation: false,
+      retentionActivatedAtMs: 120000,
+      baseUrls: { loki: "http://loki" },
+      retentionId: "old",
+      evidence: { retention: { lokiObservation: {} } },
+      api: async ({ path }) =>
+        path === "/metrics"
+          ? "loki_compactor_apply_retention_last_successful_run_timestamp_seconds 120"
+          : undefined,
+      oldLogs: async () => [],
+      newRunId: () => "control",
+      structuredClone,
+      body: {
+        resourceLogs: [
+          {
+            resource: { attributes: [{ value: {} }] },
+            scopeLogs: [{ logRecords: [{ body: {} }] }],
+          },
+        ],
+      },
+      queryLokiLogs: async () =>
+        lokiFresh ? [{ id: "control", _timestamp: now * 1000 }] : [],
+      hasExactValue: (item, value) => item.id === value,
+    },
+  );
+  assert.equal(await loki(), false);
+  now = 150000;
+  lokiFresh = false;
+  await assert.rejects(loki(), /fresh current-data control is unavailable/u);
+  lokiFresh = true;
+  now = 160000;
+  assert.equal(await loki(), false);
+  now = 219999;
+  assert.equal(await loki(), false);
+  now = 220000;
+  assert.equal(await loki(), true);
+});
+
+void test("retention observers settle before all independent restore attempts", async () => {
+  const source = await readFile(
+    new URL("../../tools/observability/verify.mjs", import.meta.url),
+    "utf8",
+  );
+  const between = (first, last) => {
+    const start = source.indexOf(first);
+    const end = source.indexOf(last, start);
+    assert.ok(start >= 0 && end > start);
+    return source.slice(start, end);
+  };
+  const init = between(
+    "const retentionRestorers = [];",
+    "evidence.retention = {",
+  );
+  const loki = between(
+    "let lokiRestorationError;",
+    "await writeLokiConfig(lokiStagingProfile);",
+  );
+  const prom = between(
+    "let prometheusRestorationError;",
+    "services.prometheus.command = prometheusProfile;",
+  );
+  const tempo = between(
+    "let tempoRestorationError;",
+    "await writeTempoConfig(tempoProfile);",
+  );
+  const finish = between(
+    "const results = await Promise.allSettled(retentionObservers);",
+    "if (\n        Object.keys(expectedEffective)",
+  );
+  for (const failObserver of [false, true]) {
+    const events = [];
+    const evidence = { retention: {} };
+    const failure = (name) => async () => {
+      events.push(`restore-${name}`);
+      throw new Error(`${name} restore failed`);
+    };
+    const context = {
+      evidence,
+      events,
+      failObserver,
+      cleanupErrors: [],
+      cleanError: (error) => error.message,
+      writeLokiConfig: failure("loki"),
+      originalLokiConfig: {},
+      services: { prometheus: {} },
+      originalPrometheusCommand: [],
+      saveCompose: failure("prometheus"),
+      writeTempoConfig: failure("tempo"),
+      originalTempoConfig: {},
+      setImmediate,
+      readEffective: async () => {
+        events.push("readback");
+        return {};
+      },
+    };
+    const run = runInNewContext(
+      `(async () => { ${init} try { ${loki} ${prom} ${tempo}
+      for (const name of ["loki", "prometheus", "tempo"]) {
+        observeRetention((async () => {
+          events.push("start-" + name); await new Promise(setImmediate);
+          events.push("end-" + name);
+          if (failObserver && name === "prometheus") throw new Error("observation failed");
+          evidence.retention[name] = { status: "PASS" };
+        })());
+      }
+      ${finish} })()`,
+      context,
+    );
+    await assert.rejects(
+      run,
+      failObserver ? /observation failed/u : /retention restoration failed/u,
+    );
+    assert.deepEqual(events.slice(0, 3), [
+      "start-loki",
+      "start-prometheus",
+      "start-tempo",
+    ]);
+    assert.ok(events.lastIndexOf("end-tempo") < events.indexOf("restore-loki"));
+    assert.deepEqual(events.slice(-4), [
+      "restore-loki",
+      "restore-prometheus",
+      "restore-tempo",
+      "readback",
+    ]);
+    assert.equal(context.cleanupErrors.length, 3);
+    assert.deepEqual(
+      Object.keys(evidence.retention).sort(),
+      failObserver
+        ? ["loki", "restoredEffective", "tempo"]
+        : ["loki", "prometheus", "restoredEffective", "tempo"],
+    );
+  }
+  const earlyEvents = [];
+  const earlyContext = {
+    evidence: { retention: {} },
+    cleanupErrors: [],
+    cleanError: (error) => error.message,
+    originalLokiConfig: {},
+    writeLokiConfig: async () => {
+      earlyEvents.push("restore-loki");
+      throw new Error("restore unavailable");
+    },
+    readEffective: async () => {
+      earlyEvents.push("readback");
+      return {};
+    },
+  };
+  const earlyRun = runInNewContext(
+    `(async () => { ${init} try { ${loki} throw new Error("prepare failed"); ${finish} })()`,
+    earlyContext,
+  );
+  await assert.rejects(earlyRun, /prepare failed/u);
+  assert.deepEqual(earlyEvents, ["restore-loki", "readback"]);
+  assert.equal(earlyContext.cleanupErrors.length, 1);
 });
