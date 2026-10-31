@@ -60,23 +60,65 @@ void test("G14 reads only the run-owned causally linked Published/Processed meta
       connect: async (database) => ({
         async query(sql, values = []) {
           calls.push({ database, sql, values });
-          if (sql.includes("message_type='OrderConfirmed.v1'")) return { rows: [{ message_id: root, topic: "coffee.orders.lifecycle.v1", state: "Published", correlation_id: key, causation_id: null }] };
-          if (sql.includes("FROM orders.inbox_messages")) return { rows: [{ state: "Processed" }] };
-          if (sql.includes("message_type='RealtimeInvalidated.v1'")) return { rows: [{ message_id: frame, topic: "coffee.realtime.invalidate.v1", state: "Published", correlation_id: key, causation_id: cause, owner_version: "4" }] };
+          if (sql.includes("message_type='OrderConfirmed.v1'"))
+            return {
+              rows: [
+                {
+                  message_id: root,
+                  topic: "coffee.orders.lifecycle.v1",
+                  state: "Published",
+                  correlation_id: key,
+                  causation_id: null,
+                },
+              ],
+            };
+          if (sql.includes("FROM orders.inbox_messages"))
+            return { rows: [{ state: "Processed" }] };
+          if (sql.includes("message_type='RealtimeInvalidated.v1'"))
+            return {
+              rows: [
+                {
+                  message_id: frame,
+                  topic: "coffee.realtime.invalidate.v1",
+                  state: "Published",
+                  correlation_id: key,
+                  causation_id: cause,
+                  owner_version: "4",
+                },
+              ],
+            };
           return { rows: [] };
         },
-        async end() { closed = true; },
+        async end() {
+          closed = true;
+        },
       }),
     });
-    const input = { orderRef, correlationId: key, frameId: frame, ownerVersion: "4" };
+    const input = {
+      orderRef,
+      correlationId: key,
+      frameId: frame,
+      ownerVersion: "4",
+    };
     if (cause) {
       const result = await snapshot(input);
-      assert.equal(result.ownerMessageSha256, createHash("sha256").update(root).digest("hex"));
-      assert.equal(result.realtimeMessageSha256, createHash("sha256").update(frame).digest("hex"));
-    } else await assert.rejects(snapshot(input), { message: "G14_OWNER_CHAIN_NOT_PROVEN" });
+      assert.equal(
+        result.ownerMessageSha256,
+        createHash("sha256").update(root).digest("hex"),
+      );
+      assert.equal(
+        result.realtimeMessageSha256,
+        createHash("sha256").update(frame).digest("hex"),
+      );
+    } else
+      await assert.rejects(snapshot(input), {
+        message: "G14_OWNER_CHAIN_NOT_PROVEN",
+      });
     assert.equal(calls[0].sql, "BEGIN READ ONLY");
     assert.equal(calls.at(-1).sql, "ROLLBACK");
-    assert.ok(calls.every((call) => call.database === roleMap.databases[3].name));
+    assert.ok(
+      calls.every((call) => call.database === roleMap.databases[3].name),
+    );
     assert.equal(closed, true);
   }
 });

@@ -4777,37 +4777,59 @@ export async function runObservabilityVerification({
             };
           },
         });
-      let launchResult;
-      if (config.verification.databaseIsolation.enabled) {
-        const { runBrowserParent } =
-          await import("../../verification/launch/v1/scenarios/browser.mjs");
-        const child = await runBrowserParent({
-          runCorrelation: executeLaunchPath,
-        });
-        launchResult = child.result;
-        evidence.browserCorrelationChild = child.browserChild;
+      // This fixture remains a component diagnostic; its synthetic ingress is
+      // never admitted as the browser's correlation or trace evidence.
+      try {
+        const component = await executeLaunchPath();
         if (
-          child.browserChild.proof.correlationId !==
-            evidence.launchPathProof?.correlationId ||
-          child.browserChild.proof.traceId !==
-            evidence.launchPathProof?.traceId ||
-          child.browserChild.proof.browserRefetchMatched !== true ||
-          child.browserChild.proof.sseFrameMatched !== true ||
-          child.browserChild.proof.ownerCausation !== true
+          component.cleanupVerified !== true ||
+          evidence.launchPathOutage?.status !== "PASS"
         )
           throw new Error(
-            "browser child and observed trace/correlation proof differ",
+            "launch component diagnostic cleanup or outage proof failed",
           );
-      } else launchResult = await executeLaunchPath();
-      if (
-        launchResult.cleanupVerified !== true ||
-        evidence.launchPathCorrelation !== "PASS" ||
-        evidence.launchPathOutage?.status !== "PASS"
-      )
+        evidence.launchPathComponent = evidence.launchPathProof;
+      } finally {
+        delete evidence.launchPathProof;
+        evidence.launchPathCorrelation = "NOT_PROVEN";
+      }
+      if (!config.verification.databaseIsolation.enabled)
         throw new Error(
-          "launch path did not prove telemetry, outage and fixture cleanup",
+          "G14 browser correlation requires isolated launch databases",
         );
-      evidence.phases.launchPath = "PASS";
+      const { runBrowserParent } =
+        await import("../../verification/launch/v1/scenarios/browser.mjs");
+      const child = await runBrowserParent({
+        runCorrelation: async (contextPath) => {
+          const identity = await validateLaunchContext(contextPath);
+          const { runManagedRollbackChild } =
+            await import("../../verification/launch/v1/scenarios/rollback.mjs");
+          const script = `import {runG14BrowserProof} from './tools/compose-smoke.mjs'; const r=await runG14BrowserProof({baseCandidateSha:process.argv[1]}); console.log(JSON.stringify({g14BrowserProof:r.g14BrowserProof,cleanup:r.cleanup,externalCleanup:r.externalCleanup}));`;
+          const childResult = await runManagedRollbackChild({
+            args: [
+              "--input-type=module",
+              "--eval",
+              script,
+              provenanceStart.baseSha,
+            ],
+            cwd: identity.candidateRoot,
+            env: { ...process.env, COFFEE_LAUNCH_CONTEXT_FILE: contextPath },
+            terminationGraceMs: 120_000,
+          });
+          return JSON.parse(childResult.stdout.trim().split(/\r?\n/u).at(-1));
+        },
+      });
+      evidence.browserCorrelationChild = child.browserChild;
+      evidence.launchPathProof = {
+        correlationId: child.browserChild.proof.correlationId,
+        browserRefetchMatched: true,
+        ownerCausation: true,
+        traceStatus: "NOT_PROVEN",
+      };
+      evidence.limitations.push(
+        "G14 browser correlation is observed; a shared W3C trace remains NOT_PROVEN.",
+      );
+      evidence.phases.launchPath = "NOT_RUN";
     } catch (error) {
       evidence.phases.launchPath = "FAIL";
       evidence.launchPathFailure = cleanError(error);

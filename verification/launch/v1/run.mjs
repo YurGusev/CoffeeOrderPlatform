@@ -1423,8 +1423,6 @@ export async function verifyGateArtifacts(gate, record, evidenceDir) {
         "pnpm",
         "test:observability",
       ]) ||
-      record.runs[0]?.exitCode !== 0 ||
-      record.runs[0]?.timedOut ||
       record.runs[0]?.outputLimitExceeded
     )
       return failure;
@@ -1433,6 +1431,16 @@ export async function verifyGateArtifacts(gate, record, evidenceDir) {
         evidenceDir,
         parentContext: context,
       });
+      if (child.receipt.proof.traceStatus === "NOT_PROVEN") {
+        for (const path of child.files) {
+          await assertNoSymlinkPath(evidenceDir, path);
+          additions.push(await hashFile(path));
+        }
+        record.artifacts.push(...additions);
+        return "G14 W3C trace is not proven";
+      }
+      if (record.runs[0]?.exitCode !== 0 || record.runs[0]?.timedOut)
+        return failure;
       const names = [
         "alert-transitions.json",
         "correlation-proof.json",

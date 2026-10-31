@@ -659,7 +659,13 @@ export function createG14OrderEvidence({ connect, roleMap, runId }) {
   assert.equal(typeof connect, "function");
   assert.match(runId ?? "", /^[0-9]{8}T[0-9]{6}Z-[0-9a-f]{7}$/u);
   const database = validateSchema(roleMap, runId).orders;
-  return async ({ orderRef, correlationId, frameId, ownerVersion }) => {
+  return async (input) => {
+    exactKeys(
+      input,
+      ["orderRef", "correlationId", "frameId", "ownerVersion"],
+      "G14_OWNER_INPUT_INVALID",
+    );
+    const { orderRef, correlationId, frameId, ownerVersion } = input;
     if (
       !REF.order.test(orderRef ?? "") ||
       !UUID.test(correlationId ?? "") ||
@@ -688,10 +694,16 @@ export function createG14OrderEvidence({ connect, roleMap, runId }) {
         if (
           !/^msg_[0-9A-HJKMNP-TV-Z]{26}$/u.test(root.message_id ?? "") ||
           root.topic !== "coffee.orders.lifecycle.v1" ||
-          root.state !== "Published" || root.correlation_id !== correlationId ||
-          root.causation_id !== null || inbox.rows.length !== 1 || inbox.rows[0].state !== "Processed" ||
-          realtime.rows.length !== 1 || event.topic !== "coffee.realtime.invalidate.v1" || event.state !== "Published" ||
-          event.correlation_id !== correlationId || event.causation_id !== root.message_id ||
+          root.state !== "Published" ||
+          root.correlation_id !== correlationId ||
+          root.causation_id !== null ||
+          inbox.rows.length !== 1 ||
+          inbox.rows[0].state !== "Processed" ||
+          realtime.rows.length !== 1 ||
+          event.topic !== "coffee.realtime.invalidate.v1" ||
+          event.state !== "Published" ||
+          event.correlation_id !== correlationId ||
+          event.causation_id !== root.message_id ||
           event.owner_version !== ownerVersion
         )
           fail("G14_OWNER_CHAIN_NOT_PROVEN");

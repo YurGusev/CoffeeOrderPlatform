@@ -172,6 +172,15 @@ read-only mount с проверкой hash и role-local доступа. Это�
 launch identity. Формальные full-system SLO, chaos и capacity остаются
 `NOT_RUN` до отдельного подтверждения.
 
+Браузерный subproof G14 выполняет один Confirm через UI и связывает его CID с
+Published Outbox, Processed Inbox, SSE frame и последующим owner GET. До Confirm
+он проверяет hash загруженного child config, отключённые provider mutations и
+изолированную provider fixture. Если Recovery опередил consumer или cleanup не
+подтверждён, этот путь не принимается. Отдельный synthetic ingress остаётся
+component diagnostic и не подтверждает browser correlation. При отсутствии
+доказанной общей W3C-трассы child packet сохраняется с `traceStatus: NOT_PROVEN`;
+это не PASS полного G14 и не заменяет SLO, chaos или capacity.
+
 Convergence helper удерживает periodic exporter до подтверждения в Prometheus: `unknown_outcomes_current=1` перед recovery, затем `unknown_outcomes_current=0` и `recovered_applied=1` перед остановкой. Каждая фаза подтверждается run-scoped checkpoint в `/results`; локальные значения и `forceFlush` не доказывают доставку. Истечение bounded ожидания завершает proof с FAIL и cleanup.
 
 Компонентная поставка #210 подтверждена на `e6c2e7d`: G12 и изолированный G14, 15-runtime matrix, persistence, TTL и restore прошли независимую проверку; точные команды, hashes и ограничения приведены в [отчёте](../reports/observability-delivery.md), outputs — в [handoff](../../evidence/handoffs/issue-210.yaml). Это не формальный launch admission G00/G12/G14. #13 отдельно принимает full-system SLO, chaos/failure, capacity и сквозные browser/business/DB/Kafka/SSE критерии. При отказе проверяйте health и loss counters, не повторяйте business effects; при disk pressure освобождайте только собственные telemetry данные и проверяйте восстановление. Не удаляйте `collector_checkpoints` при обычном restart.

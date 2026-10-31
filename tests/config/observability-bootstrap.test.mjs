@@ -7751,6 +7751,10 @@ void test("browser correlation executes the child lifecycle and preserves early 
     join(root, "tools/observability/verify.mjs"),
   );
   await cp(
+    join(REPO_ROOT, "tools/browser-proof.mjs"),
+    join(root, "tools/browser-proof.mjs"),
+  );
+  await cp(
     join(REPO_ROOT, "tests/realtime/fixtures/setup.mjs"),
     join(root, "tests/realtime/fixtures/setup.mjs"),
   );
@@ -7830,6 +7834,7 @@ void test("browser correlation executes the child lifecycle and preserves early 
     "config/toolchain-versions.json",
     "verification/launch/v1/scenarios/browser.mjs",
     "tools/observability/verify.mjs",
+    "tools/browser-proof.mjs",
     "tests/realtime/fixtures/setup.mjs",
     "tools/realtime-capacity.mjs",
   );
@@ -8138,19 +8143,40 @@ void test("browser correlation executes the child lifecycle and preserves early 
         )
         .sort();
       return {
-        cleanupVerified: true,
         cleanup: {
+          verified: true,
+          complete: true,
+          failures: [],
+          retainedResources: [],
+          inventory: { containers: [], volumes: [], networks: [] },
+          fixtureRootRemoved: true,
+          secretsDirRemoved: true,
+          composeOverrideRemoved: true,
+        },
+        externalCleanup: {
           verified: true,
           databases: { verified: true, removed: databases, retained: [] },
           attachment: { attempted: true, removed: true, routePreserved: true },
         },
-        launchPath: {
-          verified: true,
+        g14BrowserProof: {
+          schemaVersion: 1,
+          purpose: "G14_BROWSER_CORRELATION",
+          runId: child.runId,
+          candidateSha: child.candidateSha,
+          configSha256: child.baseConfigSha256,
+          status: "PASS",
           correlationId: "8f53d687-fd3b-47be-b32b-2081d08bc55a",
-          traceId: "00bf08bba3714e52b26d23c08e06ce16",
-          refetchReceipt: { matched: true },
-          sseFrameMatched: true,
-          projectionReceipt: { causationMatched: true },
+          ownerMessageSha256: "a".repeat(64),
+          realtimeMessageSha256: "b".repeat(64),
+          ownerVersion: "5",
+          confirmedVersion: "4",
+          acceptedVersion: "5",
+          confirmCount: 1,
+          reconcileCount: 0,
+          providerIsolated: true,
+          mutationsEnabled: false,
+          traceStatus: "NOT_PROVEN",
+          browserCleanup: "EXACT_OWNED_CONTAINER_REMOVED",
         },
       };
     } finally {
@@ -8865,7 +8891,7 @@ void test("browser correlation admission verifies the sealed child bundle and sc
     .sort();
   const receipt = {
     schemaVersion: 1,
-    status: "PASS",
+    status: "NOT_PROVEN",
     runId: parent.runId,
     candidateSha: parent.candidateSha,
     baseConfigSha256: digest(baseConfig),
@@ -8879,12 +8905,24 @@ void test("browser correlation admission verifies the sealed child bundle and sc
     checkoutRemoved: true,
     evidenceRemoved: true,
     proof: {
-      verified: true,
+      schemaVersion: 1,
+      purpose: "G14_BROWSER_CORRELATION",
+      runId: child.runId,
+      candidateSha: child.candidateSha,
+      configSha256: digest(childConfig),
+      status: "PASS",
       correlationId: "8f53d687-fd3b-47be-b32b-2081d08bc55a",
-      traceId: "00bf08bba3714e52b26d23c08e06ce16",
-      browserRefetchMatched: true,
-      sseFrameMatched: true,
-      ownerCausation: true,
+      ownerMessageSha256: "a".repeat(64),
+      realtimeMessageSha256: "b".repeat(64),
+      ownerVersion: "5",
+      confirmedVersion: "4",
+      acceptedVersion: "5",
+      confirmCount: 1,
+      reconcileCount: 0,
+      providerIsolated: true,
+      mutationsEnabled: false,
+      traceStatus: "NOT_PROVEN",
+      browserCleanup: "EXACT_OWNED_CONTAINER_REMOVED",
     },
     cleanup: {
       verified: true,
@@ -8921,7 +8959,7 @@ void test("browser correlation admission verifies the sealed child bundle and sc
     if (name === "correlation-proof.json")
       data.launchPath = {
         correlationId: receipt.proof.correlationId,
-        traceId: receipt.proof.traceId,
+        traceStatus: receipt.proof.traceStatus,
         browserRefetchMatched: true,
         ownerCausation: true,
       };
@@ -8979,7 +9017,7 @@ void test("browser correlation admission verifies the sealed child bundle and sc
     runs: [
       {
         argv: ["pnpm", "test:observability"],
-        exitCode: 0,
+        exitCode: 1,
         timedOut: false,
         outputLimitExceeded: false,
       },
@@ -8992,12 +9030,12 @@ void test("browser correlation admission verifies the sealed child bundle and sc
       record,
       parentContext.evidenceDir,
     ),
-    /full-system SLO, chaos and capacity proof is not complete/u,
+    /W3C trace is not proven/u,
   );
   assert.equal(
     record.artifacts.length,
-    13,
-    "valid child and observability files remain recorded on denial",
+    6,
+    "valid child packet remains recorded even when the gate fails",
   );
   receipt.cleanup.databases.removed[0] = "coffeeorderdb";
   await writeFile(receiptPath, JSON.stringify(receipt));
@@ -9009,7 +9047,7 @@ void test("browser correlation admission verifies the sealed child bundle and sc
     { code: "G14_BROWSER_CORRELATION_RECEIPT_INVALID" },
   );
   receipt.cleanup.databases.removed = databases;
-  receipt.proof.browserRefetchMatched = false;
+  receipt.proof.acceptedVersion = "4";
   await writeFile(receiptPath, JSON.stringify(receipt));
   await assert.rejects(
     validateBrowserCorrelation({

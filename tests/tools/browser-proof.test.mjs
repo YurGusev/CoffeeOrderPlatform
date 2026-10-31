@@ -21,6 +21,7 @@ import {
   createBrowserNetworkMonitor,
   createG14BrowserNetworkMonitor,
   matchG14BrowserChain,
+  validateG14BrowserEvidence,
   buildRealtimeAuthCloseInvocation,
   proveNaturalSseReauthentication,
   expectedBrowserCompletedResponse,
@@ -41,6 +42,7 @@ import {
   persistBrowserFailureFromChild,
   validateBrowserChildFailureDiagnostic,
   prepareBrowserChildCheckout,
+  validateG14ChildCleanup,
 } from "../../verification/launch/v1/scenarios/browser.mjs";
 
 const RUN_ID = "20261025T132252Z-085cdd6";
@@ -51,31 +53,259 @@ const ITEM_REF = "itm_01ARZ3NDEKTSV4RRFFQ69G5FAV";
 
 void test("G14 binds a real SSE stream and later owner read to exactly one Confirm", async () => {
   const cdp = new EventEmitter();
-  cdp.send = async () => ({ body: JSON.stringify({ orderRef: ORDER_REF, projectionVersion: "5" }), base64Encoded: false });
+  cdp.send = async () => ({
+    body: JSON.stringify({ orderRef: ORDER_REF, projectionVersion: "5" }),
+    base64Encoded: false,
+  });
   const monitor = createG14BrowserNetworkMonitor(cdp);
   const correlationId = "00000000-0000-4000-8000-000000000015";
   const frameId = "msg_01ARZ3NDEKTSV4RRFFQ69G5FAV";
-  const request = (requestId, url, method = "GET", headers = {}) => cdp.emit("Network.requestWillBeSent", { requestId, request: { url: `https://localhost:8443${url}`, method, headers } });
+  const request = (requestId, url, method = "GET", headers = {}) =>
+    cdp.emit("Network.requestWillBeSent", {
+      requestId,
+      request: { url: `https://localhost:8443${url}`, method, headers },
+    });
   request("stream", "/events");
-  cdp.emit("Network.responseReceived", { requestId: "stream", response: { status: 200 } });
-  request("confirm", `/api/client-v1/orders/${ORDER_REF}/commands/confirm`, "POST", { "X-Correlation-ID": correlationId });
-  const frame = { eventName: "resource-invalidated.v1", eventId: frameId, data: JSON.stringify({ subjectType: "order", subjectRef: ORDER_REF, ownerVersion: "5", reason: "AromaStateChanged", correlationId }) };
-  cdp.emit("Network.eventSourceMessageReceived", { ...frame, requestId: "foreign" });
+  cdp.emit("Network.responseReceived", {
+    requestId: "stream",
+    response: { status: 200 },
+  });
+  request(
+    "confirm",
+    `/api/client-v1/orders/${ORDER_REF}/commands/confirm`,
+    "POST",
+    { "X-Correlation-ID": correlationId },
+  );
+  const frame = {
+    eventName: "resource-invalidated.v1",
+    eventId: frameId,
+    data: JSON.stringify({
+      subjectType: "order",
+      subjectRef: ORDER_REF,
+      ownerVersion: "5",
+      reason: "AromaStateChanged",
+      correlationId,
+    }),
+  };
+  cdp.emit("Network.eventSourceMessageReceived", {
+    ...frame,
+    requestId: "foreign",
+  });
+  cdp.emit("Network.eventSourceMessageReceived", {
+    ...frame,
+    requestId: "stream",
+    eventId: "bad",
+  });
   assert.equal(monitor.frames.length, 0);
-  cdp.emit("Network.eventSourceMessageReceived", { ...frame, requestId: "stream" });
-  request("read", `/api/client-v1/orders/${ORDER_REF}`, "GET", { "x-correlation-id": correlationId });
-  cdp.emit("Network.responseReceived", { requestId: "read", response: { status: 200 } });
+  cdp.emit("Network.eventSourceMessageReceived", {
+    ...frame,
+    requestId: "stream",
+  });
+  request("read", `/api/client-v1/orders/${ORDER_REF}`, "GET", {
+    "x-correlation-id": correlationId,
+  });
+  cdp.emit("Network.responseReceived", {
+    requestId: "read",
+    response: { status: 200 },
+  });
   cdp.emit("Network.loadingFinished", { requestId: "read" });
   await new Promise((resolve) => setImmediate(resolve));
-  const telemetry = [{ name: "ui.query.result", correlationId, endpoint: "/api/client-v1/orders/:ref", result: "http:200" }];
-  assert.equal(matchG14BrowserChain(monitor, ORDER_REF, telemetry)?.frame.frameId, frameId);
-  assert.equal(matchG14BrowserChain(monitor, ORDER_REF, [{ ...telemetry[0], correlationId: keyForWrongCorrelation() }]), undefined);
-  assert.equal(matchG14BrowserChain({ ...monitor, reads: [{ ...monitor.reads[0], projectionVersion: "4" }] }, ORDER_REF, telemetry), undefined);
-  assert.equal(matchG14BrowserChain({ ...monitor, frames: [{ ...monitor.frames[0], correlationId: keyForWrongCorrelation() }] }, ORDER_REF, telemetry), undefined);
-  assert.equal(matchG14BrowserChain({ ...monitor, commands: [...monitor.commands, { ...monitor.commands[0], kind: "request-aroma-reconciliation" }] }, ORDER_REF, telemetry), undefined);
+  const telemetry = [
+    {
+      name: "ui.query.result",
+      correlationId,
+      endpoint: "/api/client-v1/orders/:ref",
+      result: "http:200",
+    },
+  ];
+  assert.equal(
+    matchG14BrowserChain(monitor, ORDER_REF, telemetry)?.frame.frameId,
+    frameId,
+  );
+  assert.equal(
+    matchG14BrowserChain(monitor, ORDER_REF, [
+      { ...telemetry[0], correlationId: keyForWrongCorrelation() },
+    ]),
+    undefined,
+  );
+  assert.equal(
+    matchG14BrowserChain(monitor, "ord_01ARZ3NDEKTSV4RRFFQ69G5FAW", telemetry),
+    undefined,
+  );
+  assert.equal(
+    matchG14BrowserChain(
+      { ...monitor, reads: [{ ...monitor.reads[0], status: 503 }] },
+      ORDER_REF,
+      telemetry,
+    ),
+    undefined,
+  );
+  assert.equal(
+    matchG14BrowserChain(
+      {
+        ...monitor,
+        reads: [{ ...monitor.reads[0], sequence: monitor.frames[0].sequence }],
+      },
+      ORDER_REF,
+      telemetry,
+    ),
+    undefined,
+  );
+  assert.equal(
+    matchG14BrowserChain(
+      { ...monitor, reads: [...monitor.reads, monitor.reads[0]] },
+      ORDER_REF,
+      telemetry,
+    ),
+    undefined,
+  );
+  assert.equal(
+    matchG14BrowserChain(
+      {
+        ...monitor,
+        reads: [
+          { ...monitor.reads[0], sequence: monitor.reads[0].sequence + 1 },
+        ],
+        frames: [
+          ...monitor.frames,
+          {
+            ...monitor.frames[0],
+            sequence: monitor.reads[0].sequence,
+            correlationId: keyForWrongCorrelation(),
+          },
+        ],
+      },
+      ORDER_REF,
+      telemetry,
+    ),
+    undefined,
+  );
+  assert.equal(
+    matchG14BrowserChain(
+      { ...monitor, reads: [{ ...monitor.reads[0], projectionVersion: "4" }] },
+      ORDER_REF,
+      telemetry,
+    ),
+    undefined,
+  );
+  assert.equal(
+    matchG14BrowserChain(
+      {
+        ...monitor,
+        frames: [
+          { ...monitor.frames[0], correlationId: keyForWrongCorrelation() },
+        ],
+      },
+      ORDER_REF,
+      telemetry,
+    ),
+    undefined,
+  );
+  assert.equal(
+    matchG14BrowserChain(
+      {
+        ...monitor,
+        commands: [
+          ...monitor.commands,
+          { ...monitor.commands[0], kind: "request-aroma-reconciliation" },
+        ],
+      },
+      ORDER_REF,
+      telemetry,
+    ),
+    undefined,
+  );
 });
 
-function keyForWrongCorrelation() { return "00000000-0000-4000-8000-000000000016"; }
+function keyForWrongCorrelation() {
+  return "00000000-0000-4000-8000-000000000016";
+}
+
+void test("G14 evidence and cleanup reject extra fields, stale version and unknown cleanup", () => {
+  const evidence = {
+    schemaVersion: 1,
+    purpose: "G14_BROWSER_CORRELATION",
+    runId: RUN_ID,
+    candidateSha: CANDIDATE_SHA,
+    configSha256: "a".repeat(64),
+    status: "PASS",
+    correlationId: keyForWrongCorrelation(),
+    ownerMessageSha256: "b".repeat(64),
+    realtimeMessageSha256: "c".repeat(64),
+    ownerVersion: "5",
+    confirmedVersion: "4",
+    acceptedVersion: "6",
+    confirmCount: 1,
+    reconcileCount: 0,
+    providerIsolated: true,
+    mutationsEnabled: false,
+    traceStatus: "NOT_PROVEN",
+    browserCleanup: "EXACT_OWNED_CONTAINER_REMOVED",
+  };
+  const identity = {
+    runId: RUN_ID,
+    candidateSha: CANDIDATE_SHA,
+    configSha256: evidence.configSha256,
+  };
+  assert.equal(validateG14BrowserEvidence(evidence, identity), evidence);
+  for (const change of [
+    { acceptedVersion: "4" },
+    { confirmCount: 2 },
+    { reconcileCount: 1 },
+    { traceStatus: "PASS" },
+    { browserCleanup: "UNCONFIRMED" },
+    { verificationOnly: true },
+  ])
+    assert.throws(() =>
+      validateG14BrowserEvidence({ ...evidence, ...change }, identity),
+    );
+  assert.throws(() => validateBrowserEvidence(evidence, identity));
+  const names = ["customer", "catalog", "pricing", "orders", "integration"]
+    .map(
+      (owner) =>
+        `coffee_verify_${RUN_ID.toLowerCase().replace("-", "_")}_${owner}`,
+    )
+    .sort();
+  const cleanup = {
+    cleanup: {
+      verified: true,
+      complete: true,
+      failures: [],
+      retainedResources: [],
+      inventory: { containers: [], volumes: [], networks: [] },
+      fixtureRootRemoved: true,
+      secretsDirRemoved: true,
+      composeOverrideRemoved: true,
+    },
+    externalCleanup: {
+      verified: true,
+      databases: { verified: true, removed: names, retained: [] },
+      attachment: { attempted: true, removed: true, routePreserved: true },
+    },
+  };
+  assert.equal(
+    validateG14ChildCleanup(cleanup, { runId: RUN_ID }),
+    cleanup.externalCleanup,
+  );
+  assert.throws(() =>
+    validateG14ChildCleanup(
+      { ...cleanup, cleanup: { ...cleanup.cleanup, complete: false } },
+      { runId: RUN_ID },
+    ),
+  );
+  assert.throws(() =>
+    validateG14ChildCleanup(
+      {
+        ...cleanup,
+        externalCleanup: {
+          ...cleanup.externalCleanup,
+          attachment: { attempted: true, removed: false, routePreserved: true },
+        },
+      },
+      { runId: RUN_ID },
+    ),
+  );
+});
 
 function validEvidence() {
   const hash = "b".repeat(64);
