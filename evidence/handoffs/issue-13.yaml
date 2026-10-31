@@ -1,7 +1,7 @@
 issue: 13
 baseCommit: a6cceeaa822f9641c678b5dcae521c282391dd3d
 status: source-descriptor-before-formal-verification
-asOfUtc: "2026-10-31T15:32:16.602422+00:00"
+asOfUtc: "2026-10-31T15:37:29.007898+00:00"
 inputs:
   - issue: 2
     acceptedMergeCommit: 327638d4494269a151ee7c0ac945ac0053c3e0d4
@@ -225,6 +225,9 @@ verification:
       collector waits for validated synthetic cleanup' tests/observability/alerts.test.mjs
     result: "PASS: 8/8, 0 skipped; исправлены source anchors без удаления сценариев"
     logSha256: 2cd89ab85304ef2522ddaec0c53f38ef97f574ce5ecdd6f60f0db8e40be5ee3e
+  - command: node --test --test-reporter=spec tests/observability/alerts.test.mjs verification/launch/v1/runner.test.mjs
+    result: "PASS: 130/130, fail0/cancelled0/skipped0, 108.048 s; кодовое состояние f58fef4"
+    logSha256: 2e60ed0da2fbfaa96d7b2dc390cd1b3424b810439ada22bbf899c780969d08af
 consumerContract:
   consumer: 1
   admission:
