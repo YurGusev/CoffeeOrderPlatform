@@ -1,0 +1,85 @@
+issue: 222
+baseCommit: a6cceeaa822f9641c678b5dcae521c282391dd3d
+status: verified
+inputs:
+  - issue: 210
+    acceptedMergeCommit: a6cceeaa822f9641c678b5dcae521c282391dd3d
+    artifact: evidence/handoffs/issue-210.yaml
+    sha256: 93dccd8c0c978977e4e6cae852d4801415e849b595ef233a95ad2936ba10d20f
+outputs:
+  - artifact: docs/adr/ADR-0036-launch-database-isolation.md
+    sha256: c2199485409fddd1dfaa44cba531a1a612c230ac5adb488fcac847fc0223ee41
+    consumers: [13, 228, 236, 237]
+  - artifact: docs/launch/21_LAUNCH_VERIFICATION_SPEC.md
+    sha256: 8d58c05f5ca2284d6453b310d477c0bceb8eb9dc44059cfa93693022fad78695
+    consumers: [13, 228, 236, 237]
+  - artifact: docs/operations/observability.md
+    sha256: 938bc845d41d2ad850a01829c06603c69b15f72bb7cb90022822344bf22948f4
+    consumers: [13, 228, 236, 237]
+  - artifact: evidence/launch-preparation/2026-10-31/observability-correlation.md
+    sha256: d4b0de854e0c72aec1a4a2607199298e8dc9f4d65b7c8996750f4dfe5bbbc826
+    consumers: [13, 228, 236, 237]
+  - artifact: tests/compose/topology.test.mjs
+    sha256: f86e1fa74a965c0160f703228227fc8e119d4595d5513c3e4708af7ec04c63c9
+    consumers: [13, 228, 236, 237]
+  - artifact: tests/config/observability-bootstrap.test.mjs
+    sha256: 78ed8de9f3b53232c11cdfa29504c26a806f98f8b11fbcb6445e7a6c42f1a2f1
+    consumers: [13, 228, 236, 237]
+  - artifact: tests/observability/alerts.test.mjs
+    sha256: 083ac9a8715bdd8ea626738980e78c5d3b87c42f4c7c6e3e50c174ccd81997c9
+    consumers: [13, 228, 236, 237]
+  - artifact: tests/observability/convergence-metrics-proof.mjs
+    sha256: f4f374c171bd363cd3720c7ac26a9cef52b91a8e5d841fdc1cad5d7021ebf3e0
+    consumers: [13, 228, 236, 237]
+  - artifact: tests/observability/launch-path.mjs
+    sha256: 9693fdc9924662e9ceb670342d8a6851da61090befed27f3172e0cee1bd5df85
+    consumers: [13, 228, 236, 237]
+  - artifact: tests/observability/orders-fixture.mjs
+    sha256: 96921bdc809888d1e3d5838c3f483966a4f1f7e079befe90c17d9fe860a7c8a0
+    consumers: [13, 228, 236, 237]
+  - artifact: tests/observability/runtime-matrix.mjs
+    sha256: 295365096c70b682a8dedff8870043d6ed64643a312b4aa01e52ef76fafb6d89
+    consumers: [13, 228, 236, 237]
+  - artifact: tests/realtime/fixtures/harness.test.mjs
+    sha256: 1aa2d5f27834724392b651c0a9c3010a911d3ec80afcb0d3ee6310bc454b0c69
+    consumers: [13, 228, 236, 237]
+  - artifact: tests/realtime/fixtures/setup.mjs
+    sha256: c93e82d9556cf33e1f4d4bccae4727fab844dba030bdd99117ae46e0eac64a03
+    consumers: [13, 228, 236, 237]
+  - artifact: tools/compose-smoke.mjs
+    sha256: bc720a8a6d89a9450187a203d7eaf8263e53b4ba8099dd644e5df4cba474536b
+    consumers: [13, 228, 236, 237]
+  - artifact: tools/observability/verify.mjs
+    sha256: 51417e2123052d0516e93adc477593c569a6340efcb61192a0535f081950cb33
+    consumers: [13, 228, 236, 237]
+  - artifact: verification/launch/v1/run.mjs
+    sha256: 730183fe20cf6100142d6f1ccd84affe5dd43f77384bbd3178d4632c427f8e9c
+    consumers: [13, 228, 236, 237]
+  - artifact: verification/launch/v1/runner.test.mjs
+    sha256: 8dbfe673a4b37ce9cf6620e1debfb98e8231f4357498cbdda54c741cae97bebd
+    consumers: [13, 228, 236, 237]
+  - artifact: verification/launch/v1/scenarios/browser.mjs
+    sha256: 4a8a427c47c4f60534e04579a160f61364e90355765d76aba6f4f682281851c0
+    consumers: [13, 228, 236, 237]
+  - artifact: docs/reports/observability-runtime.md
+    sha256: b7464b51fc2f842eb0d866221583ee5b0e629555ba735835b573ebf1216efbc4
+    consumers: [13, 228, 236, 237]
+  - artifact: evidence/observability/runtime-20261031/result.json
+    sha256: 527a8961902865273eb06279db807587d3df36ab3494ab9113b896951bc2fe04
+    consumers: [13, 228, 236, 237]
+verification:
+  - command: "/home/yurgusev/.local/lib/nodejs/node-v26.8.1-linux-x64/bin/node --test --test-reporter=tap '--test-name-pattern=G13/G15 external PostgreSQL attachment|external PostgreSQL attachment cleanup|external PostgreSQL cleanup retains|external runtime matrix requires exact|browser correlation executes the child lifecycle|browser correlation admission verifies' tests/compose/topology.test.mjs tests/observability/alerts.test.mjs tests/config/observability-bootstrap.test.mjs"
+    result: "exit0;6pass/0fail/0skip;49.343s; raw SHA256 928cc274de21eca8f1b8eff85890655390e22a41ea8c660dab962d824816518d"
+  - command: "CI 41187484839"
+    result: "SUCCESS на feature e8426e1; последний metadata-only commit проверяется отдельным final CI"
+  - command: "node tools/security-scan.mjs"
+    result: "component G12 PASS run20261031T095545Z-cffe147;1532.184626s; result SHA 0b6e05afc74b58aff9546ee46317a48d972094582eb767720ee88ee17d8fca9a"
+  - command: "python3 /home/yurgusev/.cache/coffee-launch-delivery/run-runtime-matrix.py"
+    result: "exit0;1522.196s; actual15images/matrix/native-nginx/cleanupPASS; witness SHA e8f62daeff0cc7e921e48ff9b490eca28519d1995050b9bab0c031aebb374498"
+limitations:
+  - "Это проверка launch-context runtime-matrix, не полный G14/G00–G19 и не формальный G12 admission."
+  - "Healthy readiness всех14 не доказывает503 при отказах зависимостей; этот пробел остаётся за #13."
+  - "Browser/OIDC component diagnostic и trace/full-system/capacity допускаются только отдельными фактическими proofs."
+  - "NET-1: per-host default-deny Node26 не подтверждён; отдельное решение владельца по ADR0019/G07 ожидается. TCP probe не доказывает обход mTLS/API/data."
+  - "Private operator/evidence хранятся локально; опубликована санитизированная выборка с hashes."
+  - "Прежние FAIL attempts сохранены; причина конкретного прежнего runtime-readiness failure не установлена. Лишний private Compose --wait удалён до успешного запуска; NTFS единственной причиной не доказан."
