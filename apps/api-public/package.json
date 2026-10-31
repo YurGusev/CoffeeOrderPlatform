@@ -13,6 +13,7 @@
     "@coffee-platform/contracts-orders-v1": "workspace:*",
     "@coffee-platform/platform-http": "workspace:*",
     "@coffee-platform/runtime": "workspace:*",
-    "@coffee-platform/security": "workspace:*"
+    "@coffee-platform/security": "workspace:*",
+    "@opentelemetry/api": "1.9.1"
   }
 }

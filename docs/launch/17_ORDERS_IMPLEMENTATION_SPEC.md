@@ -57,6 +57,12 @@ provider/context проверяются тестами. Production provider, con
 exporter и Collector относятся к #64; локальные spans не подтверждают
 production export.
 
+После проверки авторизации `api-public` сохраняет входной W3C carrier; при его
+отсутствии использует валидный активный server span и передаёт один carrier
+в подписанном context и HTTP-заголовке. Orders после авторизации применяет то
+же правило к command context для Outbox. Проверяемые входные claims при этом
+не меняются. Без валидного активного span сохраняется прежний fallback.
+
 ### Приём всплеска Orders
 
 Уточнение владельца от 14 октября 2026: owner-boundary волна 100 одновременно
