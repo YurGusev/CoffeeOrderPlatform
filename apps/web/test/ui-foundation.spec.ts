@@ -444,7 +444,20 @@ async function testScenarioFixture(context: BrowserContext): Promise<void> {
     true,
     "pending dialog closed on Escape",
   );
+  await page.mouse.click(2, 2);
+  assert.equal(
+    await dialog.isVisible(),
+    true,
+    "pending dialog closed on outside interaction",
+  );
   await dialog.getByRole("button", { name: "Снять pending" }).click();
+  await dialog.getByRole("button", { name: "Включить pending" }).waitFor();
+  await page.waitForFunction(() => {
+    const dialog = document.querySelector(
+      '[role="dialog"][aria-label="Foundation dialog test fixture"]',
+    );
+    return dialog?.contains(document.activeElement) === true;
+  });
   await page.keyboard.press("Escape");
   await dialog.waitFor({ state: "hidden" });
 
