@@ -1,0 +1,28 @@
+issue: 247
+baseCommit: e15ba1b67014ff392c6b28aec712eb772aa46177
+status: implemented-awaiting-ci
+inputs:
+  - issue: 231
+    acceptedMergeCommit: 70224f3a88237c64bd9ea550bc88aa54627782ca
+    artifact: evidence/handoffs/issue-231.yaml
+    sha256: 1c7c831ef35d1b5d6b51738960b3c1fa251b3a884c2d440a7fb3115df4d2c817
+outputs:
+  - artifact: .cursor/skills/catalog-slice-verify/run.mjs
+    sha256: 4188e098e7c439df23f2fc9a2ee8370c15ed164cd95352da75f3bfb8af397f64
+    consumers:
+      - 13
+verification:
+  - command: node node_modules/prettier/bin/prettier.cjs --debug-check -- .cursor/skills/catalog-slice-verify/run.mjs
+    result: PASS до и после форматирования; проверен один файл.
+  - command: node node_modules/prettier/bin/prettier.cjs --check -- .cursor/skills/catalog-slice-verify/run.mjs
+    result: PASS после форматирования; исходная проверка завершилась с exit 1.
+  - command: node --check .cursor/skills/catalog-slice-verify/run.mjs
+    result: PASS; файл не исполнялся.
+  - command: cmp -s /home/yurgusev/.cache/coffee-launch-delivery/issue-247/expected.mjs .cursor/skills/catalog-slice-verify/run.mjs
+    result: PASS; оба SHA-256 равны 4188e098e7c439df23f2fc9a2ee8370c15ed164cd95352da75f3bfb8af397f64.
+  - command: pnpm format:check
+    result: PASS; 662 файла, включая изменённый skill; exit 0, 29.98 s.
+limitations:
+  - Живой skill и его Docker, PostgreSQL и provider операции не запускались.
+  - Handoff исключён штатным formatter; YAML проверяется отдельно.
+  - Итоговый CI на head PR ещё не выполнен.
