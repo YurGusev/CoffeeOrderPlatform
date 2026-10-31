@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { generateKeyPairSync, randomUUID } from "node:crypto";
+import { createRequire } from "node:module";
 import test from "node:test";
+import { context as otelContext, trace } from "@opentelemetry/api";
 import { createRuntime } from "../../packages/platform-runtime/dist/index.js";
 import {
   signActorContext,
@@ -1318,4 +1320,158 @@ void test("api-public rejects typed Orders errors with an invalid status or oper
     assert.equal(response.headers["idempotency-replayed"], undefined);
     assert.equal(response.body.includes("private owner cause"), false);
   }
+});
+
+void test("Orders delegation carries the active API span only when incoming traceparent is absent", async (t) => {
+  const observabilityRequire = createRequire(
+    new URL(
+      "../../packages/platform-observability/package.json",
+      import.meta.url,
+    ),
+  );
+  const { AsyncLocalStorageContextManager } = observabilityRequire(
+    "@opentelemetry/context-async-hooks",
+  );
+  const { BasicTracerProvider } = observabilityRequire(
+    "@opentelemetry/sdk-trace-base",
+  );
+  const manager = new AsyncLocalStorageContextManager().enable();
+  const provider = new BasicTracerProvider();
+  assert.equal(otelContext.setGlobalContextManager(manager), true);
+  assert.equal(trace.setGlobalTracerProvider(provider), true);
+  t.after(async () => {
+    trace.disable();
+    otelContext.disable();
+    manager.disable();
+    await provider.shutdown();
+  });
+
+  const apiKeys = generateKeyPairSync("ed25519");
+  const edgeKeys = generateKeyPairSync("ed25519");
+  const edgePublicKey = edgeKeys.publicKey.export({
+    type: "spki",
+    format: "pem",
+  });
+  const captures = [];
+  const adapters = createConfiguredPublicAdapters(
+    {
+      config: {
+        environment: "development",
+        services: { "api-public": { outbound: ["orders-service:4104"] } },
+      },
+      secrets: {
+        security: {
+          apiPublicDelegationSigningPrivateKey: apiKeys.privateKey.export({
+            type: "pkcs8",
+            format: "pem",
+          }),
+          actorContextEdgeVerificationPublicKeys: {
+            active: edgePublicKey,
+            previous: edgePublicKey,
+          },
+        },
+      },
+    },
+    {
+      fetch: async (_path, options) => {
+        captures.push({ options, span: trace.getActiveSpan()?.spanContext() });
+        return new Response(JSON.stringify(card), {
+          status: 201,
+          headers: {
+            "content-type": "application/json",
+            "cache-control": "no-store",
+            "x-correlation-id": options.headers["x-correlation-id"],
+          },
+        });
+      },
+    },
+  );
+  const authenticatedSpans = new Map();
+  const app = await runtime(t, {
+    ...adapters,
+    verifyTransport: () => true,
+    verifyActor: (...args) => {
+      const claims = adapters.verifyActor(...args);
+      authenticatedSpans.set(args[3], trace.getActiveSpan()?.spanContext());
+      return claims;
+    },
+  });
+  const token = (correlationId, traceparent) => {
+    const now = Math.floor(Date.now() / 1_000);
+    return signActorContext(
+      {
+        iss: "edge-gateway",
+        aud: "api-public",
+        originalIssuer: "edge-gateway",
+        sub: "usr_test",
+        permissions: ["orders:create"],
+        operationId: "createOrderDraft",
+        correlationId,
+        traceparent,
+        iat: now,
+        exp: now + 45,
+        jti: randomUUID(),
+        kid: "edge-test",
+      },
+      edgeKeys.privateKey,
+    );
+  };
+  const incoming = `00-${"1".repeat(32)}-${"2".repeat(16)}-01`;
+  const inject = (correlationId, claimTrace, incomingTrace) =>
+    app.inject({
+      method: "POST",
+      url: "/api/client-v1/orders/drafts",
+      headers: {
+        "x-actor-context": token(correlationId, claimTrace),
+        "x-correlation-id": correlationId,
+        "idempotency-key": randomUUID(),
+        ...(incomingTrace === undefined ? {} : { traceparent: incomingTrace }),
+      },
+      payload: orderBody,
+    });
+  const signedTrace = (capture) =>
+    verifyActorContextWithKeySet(capture.options.headers["x-actor-context"], {
+      publicKeys: [apiKeys.publicKey],
+      issuer: "api-public",
+      audience: "orders-service",
+      nowEpochSeconds: Math.floor(Date.now() / 1_000),
+      clockSkewSeconds: 5,
+    }).traceparent;
+
+  const correlationIds = [randomUUID(), randomUUID()];
+  const responses = await Promise.all(
+    correlationIds.map((id) => inject(id, incoming)),
+  );
+  for (const response of responses) assert.equal(response.statusCode, 201);
+  assert.equal(captures.length, 2);
+  assert.notEqual(captures[0].span.traceId, captures[1].span.traceId);
+  for (const capture of captures) {
+    const { span, options } = capture;
+    const expected = `00-${span.traceId}-${span.spanId}-${span.traceFlags.toString(16).padStart(2, "0")}`;
+    assert.deepEqual(
+      authenticatedSpans.get(options.headers["x-correlation-id"]),
+      span,
+    );
+    assert.equal(options.headers.traceparent, expected);
+    assert.equal(signedTrace(capture), expected);
+    assert.ok(correlationIds.includes(options.headers["x-correlation-id"]));
+  }
+
+  const preserved = await inject(randomUUID(), incoming, incoming);
+  assert.equal(preserved.statusCode, 201);
+  assert.equal(captures[2].options.headers.traceparent, incoming);
+  assert.equal(signedTrace(captures[2]), incoming);
+  const other = `00-${"3".repeat(32)}-${"4".repeat(16)}-01`;
+  const rejected = await inject(randomUUID(), other, incoming);
+  assert.equal(rejected.statusCode, 403);
+  assert.equal(captures.length, 3);
+
+  trace.disable();
+  const noActive = await inject(randomUUID(), incoming);
+  assert.equal(noActive.statusCode, 201);
+  assert.equal(captures[3].options.headers.traceparent, undefined);
+  assert.equal(
+    signedTrace(captures[3]),
+    "00-00000000000000000000000000000000-0000000000000000-00",
+  );
 });
