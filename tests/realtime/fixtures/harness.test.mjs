@@ -252,6 +252,7 @@ void test("launch-path initializes offsets only for durable Orders owners on an 
       "utf8",
     ),
   );
+  config.verification.kafkaNamespaceIsolation = false;
   const expected = [];
   for (const serviceName of ["orders-service", "orders-aroma-preparation"])
     for (const consumer of config.services[serviceName].kafka.consumers.filter(
