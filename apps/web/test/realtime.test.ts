@@ -1,18 +1,27 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { load } from "js-yaml";
-import { QueryClient, QueryObserver } from "@tanstack/react-query";
+import {
+  onlineManager,
+  QueryClient,
+  QueryObserver,
+} from "@tanstack/react-query";
 import type {
   OrderCardResponse,
   SseResourceInvalidated,
 } from "@coffee-platform/generated-client-v1";
-import { test } from "vitest";
-import { ProtocolError } from "../src/browser/api/client.js";
+import { test, vi } from "vitest";
+import {
+  api,
+  BROWSER_TELEMETRY,
+  ProtocolError,
+} from "../src/browser/api/client.js";
 import { isFatalOrderCardReadError } from "../src/browser/api/order-card.js";
 import {
   invalidateExistingOrderDetails,
   invalidateOrderHint,
   orderStreamSchemas,
+  orderFetchCorrelation,
   parseOrderStreamData,
 } from "../src/realtime/order-invalidations.js";
 
@@ -76,6 +85,191 @@ test("browser SSE runtime schemas are exact public client-v1 component schemas (
       orderStreamSchemas[event],
       resolveSchema(document.components.schemas[component], document, path),
     );
+  }
+});
+
+test("hint refetch propagates its correlation to the HTTP header and telemetry, including retry only", async () => {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: 1, retryDelay: 0 } },
+  });
+  const browser = Object.assign(new EventTarget(), {
+    location: { origin: "https://coffee.test", pathname: "/app/orders" },
+  });
+  const headers: string[] = [];
+  const events: string[] = [];
+  browser.addEventListener(BROWSER_TELEMETRY, (event) => {
+    events.push(
+      (event as CustomEvent<{ correlationId: string }>).detail.correlationId,
+    );
+  });
+  vi.stubGlobal("window", browser);
+  vi.stubGlobal("fetch", async (_url: string, init: RequestInit) => {
+    headers.push(new Headers(init.headers).get("X-Correlation-ID") ?? "");
+    throw new TypeError("offline");
+  });
+  client.setQueryData(key, card("1"));
+  const observer = new QueryObserver(client, {
+    queryKey: key,
+    queryFn: ({ signal }) =>
+      api.getOrderCard(ref, signal, orderFetchCorrelation(client, key, signal)),
+    staleTime: Infinity,
+  });
+  const unsubscribe = observer.subscribe(() => {});
+  try {
+    await invalidateOrderHint(client, hint, () => true);
+    assert.deepEqual(headers, [hint.correlationId, hint.correlationId]);
+    assert.deepEqual(events, headers);
+    await client.refetchQueries({ queryKey: key, exact: true });
+    assert.equal(headers.length, 4);
+    assert.notEqual(headers[2], hint.correlationId);
+    assert.notEqual(headers[3], hint.correlationId);
+    assert.notEqual(headers[2], headers[3]);
+    assert.deepEqual(events, headers);
+  } finally {
+    unsubscribe();
+    client.clear();
+    vi.unstubAllGlobals();
+  }
+});
+
+test("hint during initial GET applies only to the subsequent read and cannot cross a session", async () => {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  const causes: (string | undefined)[] = [];
+  let release = () => {};
+  let current = true;
+  let hintSignal: AbortSignal | undefined;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const observer = new QueryObserver(client, {
+    queryKey: key,
+    queryFn: async ({ signal }) => {
+      causes.push(orderFetchCorrelation(client, key, signal));
+      if (causes.length === 2) hintSignal = signal;
+      if (causes.length === 1) await gate;
+      return card("1");
+    },
+  });
+  const unsubscribe = observer.subscribe(() => {});
+  try {
+    const invalidation = invalidateOrderHint(client, hint, () => current);
+    release();
+    await invalidation;
+    assert.deepEqual(causes, [undefined, hint.correlationId]);
+    current = false;
+    assert.ok(hintSignal);
+    assert.equal(orderFetchCorrelation(client, key, hintSignal), undefined);
+    await client.refetchQueries({ queryKey: key, exact: true });
+    assert.deepEqual(causes, [undefined, hint.correlationId, undefined]);
+  } finally {
+    unsubscribe();
+    client.clear();
+  }
+});
+
+test("overlapping hints keep their own cause; inactive and replacement queries inherit none", async () => {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  const causes: (string | undefined)[] = [];
+  const secondHint = {
+    ...hint,
+    correlationId: "00000000-0000-4000-8000-000000000013",
+  };
+  let release = () => {};
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  client.setQueryData(key, card("1"));
+  const queryFn = async ({ signal }: { signal: AbortSignal }) => {
+    causes.push(orderFetchCorrelation(client, key, signal));
+    await gate;
+    return card("1");
+  };
+  const observer = new QueryObserver(client, {
+    queryKey: key,
+    queryFn,
+    staleTime: Infinity,
+  });
+  const unsubscribe = observer.subscribe(() => {});
+  try {
+    const first = invalidateOrderHint(client, hint, () => true);
+    const second = invalidateOrderHint(client, secondHint, () => true);
+    assert.deepEqual(causes, [hint.correlationId, secondHint.correlationId]);
+    release();
+    await Promise.all([first, second]);
+    unsubscribe();
+    await invalidateOrderHint(client, hint, () => true);
+    client.removeQueries({ queryKey: key, exact: true });
+    await client.fetchQuery({ queryKey: key, queryFn });
+    assert.deepEqual(causes, [
+      hint.correlationId,
+      secondHint.correlationId,
+      undefined,
+    ]);
+  } finally {
+    unsubscribe();
+    client.clear();
+  }
+});
+
+test("paused hint refetch resumes with its own cause", async () => {
+  onlineManager.setOnline(false);
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  client.mount();
+  client.setQueryData(key, card("1"));
+  const causes: (string | undefined)[] = [];
+  const observer = new QueryObserver(client, {
+    queryKey: key,
+    queryFn: async ({ signal }) => {
+      causes.push(orderFetchCorrelation(client, key, signal));
+      return card("5");
+    },
+    staleTime: Infinity,
+  });
+  const unsubscribe = observer.subscribe(() => {});
+  try {
+    await invalidateOrderHint(client, hint, () => true);
+    assert.deepEqual(causes, []);
+    onlineManager.setOnline(true);
+    await vi.waitFor(() => assert.deepEqual(causes, [hint.correlationId]));
+  } finally {
+    unsubscribe();
+    client.clear();
+    client.unmount();
+    onlineManager.setOnline(true);
+  }
+});
+
+test("hint during a paused initial read waits for a separate correlated owner read", async () => {
+  onlineManager.setOnline(false);
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  client.mount();
+  const causes: (string | undefined)[] = [];
+  const observer = new QueryObserver(client, {
+    queryKey: key,
+    queryFn: async ({ signal }) => {
+      causes.push(orderFetchCorrelation(client, key, signal));
+      return card("1");
+    },
+  });
+  const unsubscribe = observer.subscribe(() => {});
+  try {
+    const invalidation = invalidateOrderHint(client, hint, () => true);
+    onlineManager.setOnline(true);
+    await invalidation;
+    assert.deepEqual(causes, [undefined, hint.correlationId]);
+  } finally {
+    unsubscribe();
+    client.clear();
+    client.unmount();
+    onlineManager.setOnline(true);
   }
 });
 

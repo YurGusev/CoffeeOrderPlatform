@@ -253,6 +253,7 @@ async function request<T>(
   input: Readonly<{
     body?: unknown;
     commandKind?: CommandKind;
+    correlationId?: string;
     expected: readonly number[];
     headers?: Readonly<Record<string, string>>;
     method: "GET" | "POST" | "PUT" | "DELETE";
@@ -263,7 +264,7 @@ async function request<T>(
   }>,
 ): Promise<T> {
   const startedAt = performance.now();
-  const correlationId = crypto.randomUUID();
+  const correlationId = input.correlationId ?? crypto.randomUUID();
   const headers = new Headers({
     Accept: "application/json",
     "X-Correlation-ID": correlationId,
@@ -571,6 +572,7 @@ export const api = {
   getOrderCard: (
     orderRef: string,
     signal?: AbortSignal,
+    correlationId?: string,
   ): Promise<OrderCardResponse> =>
     request({
       expected: [200],
@@ -578,6 +580,7 @@ export const api = {
       path: `/api/client-v1/orders/${encoded(orderRef)}`,
       schema: clientSchemas["OrderCardResponse"],
       ...(signal ? { signal } : {}),
+      ...(correlationId ? { correlationId } : {}),
     }),
   putOrderItem: (
     actorRef: string,
