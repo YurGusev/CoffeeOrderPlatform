@@ -1100,7 +1100,13 @@ export function createG14BrowserNetworkMonitor(cdp) {
   return result;
 }
 
-export function matchG14BrowserChain(monitor, orderRef, telemetry) {
+export function matchG14BrowserChain(
+  monitor,
+  orderRef,
+  telemetry,
+  excludedFrames = new Set(),
+  confirmedVersion = "0",
+) {
   if (!REF.order.test(orderRef ?? "") || monitor.commands.length !== 1)
     return undefined;
   const command = monitor.commands[0];
@@ -1124,10 +1130,10 @@ export function matchG14BrowserChain(monitor, orderRef, telemetry) {
       item.endpoint === "/api/client-v1/orders/:ref" &&
       item.result === "http:200",
   );
-  if (correlatedReads.length !== 1 || correlatedTelemetry.length !== 1)
-    return undefined;
+  if (correlatedTelemetry.length === 0) return undefined;
   for (const frame of monitor.frames) {
     if (
+      excludedFrames.has(frame.frameId) ||
       frame.orderRef !== orderRef ||
       frame.correlationId !== command.correlationId ||
       frame.sequence <= command.sequence
@@ -1142,11 +1148,23 @@ export function matchG14BrowserChain(monitor, orderRef, telemetry) {
             later.sequence > frame.sequence &&
             later.sequence < item.sequence,
         ) &&
-        BigInt(item.projectionVersion) >= BigInt(frame.ownerVersion),
+        BigInt(item.projectionVersion) >= BigInt(frame.ownerVersion) &&
+        BigInt(item.projectionVersion) > BigInt(confirmedVersion),
     );
     if (read) return { command, frame, read };
   }
   return undefined;
+}
+
+export function isG14AcceptedProjection(
+  acceptedVersion,
+  readVersion,
+  confirmedVersion,
+) {
+  return (
+    BigInt(acceptedVersion) >= BigInt(readVersion) &&
+    BigInt(readVersion) > BigInt(confirmedVersion)
+  );
 }
 
 export function validateG14BrowserEvidence(
@@ -1316,8 +1334,16 @@ export async function proveG14Browser(runtimeContext) {
     while (Date.now() < deadline && !owner) {
       runtimeContext.throwIfStopRequested();
       const telemetry = await page.evaluate(() => window.__g14Telemetry);
-      matched = matchG14BrowserChain(monitor, orderRef, telemetry);
-      if (matched) {
+      const excludedFrames = new Set();
+      while (
+        (matched = matchG14BrowserChain(
+          monitor,
+          orderRef,
+          telemetry,
+          excludedFrames,
+          confirmed.projectionVersion,
+        ))
+      ) {
         try {
           owner = await runtimeContext.g14OrderEvidence({
             orderRef,
@@ -1325,8 +1351,10 @@ export async function proveG14Browser(runtimeContext) {
             frameId: matched.frame.frameId,
             ownerVersion: matched.frame.ownerVersion,
           });
+          break;
         } catch (error) {
           if (error?.message !== "G14_OWNER_CHAIN_NOT_PROVEN") throw error;
+          excludedFrames.add(matched.frame.frameId);
         }
       }
       if (!owner) await new Promise((resolve) => setTimeout(resolve, 100));
@@ -1334,8 +1362,11 @@ export async function proveG14Browser(runtimeContext) {
     if (!matched || !owner) fail("G14_BROWSER_CHAIN_NOT_PROVEN");
     const acceptedVersion = await visibleOrderProjectionVersion(page, orderRef);
     if (
-      acceptedVersion !== matched.read.projectionVersion ||
-      BigInt(acceptedVersion) <= BigInt(confirmed.projectionVersion)
+      !isG14AcceptedProjection(
+        acceptedVersion,
+        matched.read.projectionVersion,
+        confirmed.projectionVersion,
+      )
     )
       fail("G14_BROWSER_VERSION_NOT_ACCEPTED");
     if (

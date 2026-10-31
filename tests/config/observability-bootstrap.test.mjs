@@ -8955,7 +8955,15 @@ void test("browser correlation admission verifies the sealed child bundle and sc
     "result.json",
   ];
   for (const name of names) {
-    const data = { status: "PASS", runId: observationRun };
+    const data = {
+      status:
+        name === "correlation-proof.json"
+          ? "NOT_PROVEN"
+          : name === "result.json"
+            ? "FAIL"
+            : "PASS",
+      runId: observationRun,
+    };
     if (name === "correlation-proof.json")
       data.launchPath = {
         correlationId: receipt.proof.correlationId,
@@ -9034,9 +9042,36 @@ void test("browser correlation admission verifies the sealed child bundle and sc
   );
   assert.equal(
     record.artifacts.length,
-    6,
-    "valid child packet remains recorded even when the gate fails",
+    13,
+    "child and backend evidence remain recorded even when the gate fails",
   );
+  const backendPath = join(observations, "redaction-scan.json");
+  const backendBytes = await readFile(backendPath);
+  await rm(backendPath);
+  const missingBackend = { ...record, artifacts: [] };
+  assert.match(
+    await verifyGateArtifacts(
+      { id: "G14_OBSERVABILITY", command: "pnpm test:observability" },
+      missingBackend,
+      parentContext.evidenceDir,
+    ),
+    /lineage or cleanup is invalid/u,
+  );
+  assert.equal(missingBackend.artifacts.length, 6);
+  await writeFile(
+    backendPath,
+    JSON.stringify({ status: "FAIL", runId: observationRun }),
+    { mode: 0o600 },
+  );
+  assert.match(
+    await verifyGateArtifacts(
+      { id: "G14_OBSERVABILITY", command: "pnpm test:observability" },
+      { ...record, artifacts: [] },
+      parentContext.evidenceDir,
+    ),
+    /lineage or cleanup is invalid/u,
+  );
+  await writeFile(backendPath, backendBytes);
   receipt.cleanup.databases.removed[0] = "coffeeorderdb";
   await writeFile(receiptPath, JSON.stringify(receipt));
   await assert.rejects(

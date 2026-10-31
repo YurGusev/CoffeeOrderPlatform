@@ -9,6 +9,7 @@ import {
   mkdir,
   readdir,
   readFile,
+  realpath,
   rm,
   stat,
   writeFile,
@@ -2904,6 +2905,38 @@ export async function writeScopedComposeOverride(projectName, options = {}) {
       },
     });
   }
+  if (options.g14Config) {
+    assert.ok(options.launchContextPath, "G14 config requires child context");
+    const { path: configPath, sha256 } = options.g14Config;
+    assert.match(sha256 ?? "", /^[a-f0-9]{64}$/u);
+    assert.equal(
+      await realpath(configPath),
+      configPath,
+      "G14 config path must be canonical",
+    );
+    const before = await lstat(configPath);
+    assert.ok(
+      before.isFile() &&
+        !before.isSymbolicLink() &&
+        before.uid === process.getuid() &&
+        (before.mode & 0o777) === 0o444,
+      "G14 config must be sealed and owned",
+    );
+    const bytes = await readFile(configPath);
+    const after = await lstat(configPath);
+    assert.ok(
+      before.dev === after.dev &&
+        before.ino === after.ino &&
+        before.size === after.size &&
+        before.mtimeMs === after.mtimeMs,
+      "G14 config identity changed",
+    );
+    assert.equal(
+      createHash("sha256").update(bytes).digest("hex"),
+      sha256,
+      "G14 config hash mismatch",
+    );
+  }
   if (options.launchContextPath) {
     for (const runtime of RUNTIMES) {
       const current = service(runtime);
@@ -2919,6 +2952,16 @@ export async function writeScopedComposeOverride(projectName, options = {}) {
           target: "/run/coffee-launch/context.json",
           read_only: true,
         },
+        ...(options.g14Config
+          ? [
+              {
+                type: "bind",
+                source: options.g14Config.path,
+                target: "/app/config/platform.yaml",
+                read_only: true,
+              },
+            ]
+          : []),
       ];
     }
   }
@@ -9291,6 +9334,19 @@ export async function runComposeSmoke({
       });
       browserFixtureRoot = dirname(browserFixture.browser.homePath);
       const initialComposeFile = composeFile;
+      let g14Config;
+      if (g14Browser) {
+        const path = join(secretsDir, "g14-platform.yaml");
+        const bytes = await readFile(join(ROOT, "config/platform.yaml"));
+        assert.equal(
+          createHash("sha256").update(bytes).digest("hex"),
+          launchIdentity.context.baseConfigSha256,
+          "G14 child config hash mismatch",
+        );
+        await writeFile(path, bytes, { mode: 0o444, flag: "wx" });
+        await chmod(path, 0o444);
+        g14Config = { path, sha256: launchIdentity.context.baseConfigSha256 };
+      }
       composeFile = await writeScopedComposeOverride(projectName, {
         sharedPostgres: externalRecovery,
         recoveryProof: true,
@@ -9301,6 +9357,7 @@ export async function runComposeSmoke({
           : `${projectName}-edge-nginx:latest`,
         runtimeLogging: observability ? platformConfig : undefined,
         browserFixture,
+        g14Config,
         candidateRoot: launchIdentity.candidateRoot,
       });
       composeFiles.push(composeFile);

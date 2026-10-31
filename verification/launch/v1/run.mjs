@@ -1431,15 +1431,15 @@ export async function verifyGateArtifacts(gate, record, evidenceDir) {
         evidenceDir,
         parentContext: context,
       });
-      if (child.receipt.proof.traceStatus === "NOT_PROVEN") {
-        for (const path of child.files) {
-          await assertNoSymlinkPath(evidenceDir, path);
-          additions.push(await hashFile(path));
-        }
-        record.artifacts.push(...additions);
-        return "G14 W3C trace is not proven";
+      const traceNotProven = child.receipt.proof.traceStatus === "NOT_PROVEN";
+      for (const path of child.files) {
+        await assertNoSymlinkPath(evidenceDir, path);
+        record.artifacts.push(await hashFile(path));
       }
-      if (record.runs[0]?.exitCode !== 0 || record.runs[0]?.timedOut)
+      if (
+        record.runs[0]?.timedOut ||
+        (!traceNotProven && record.runs[0]?.exitCode !== 0)
+      )
         return failure;
       const names = [
         "alert-transitions.json",
@@ -1469,12 +1469,16 @@ export async function verifyGateArtifacts(gate, record, evidenceDir) {
       const result = documents["result.json"];
       const correlation = documents["correlation-proof.json"];
       if (
-        result.status !== "PASS" ||
+        result.status !== (traceNotProven ? "FAIL" : "PASS") ||
         !/^[0-9a-f-]{36}$/u.test(result.runId ?? "") ||
         !names.every(
           (name) =>
-            documents[name].status === "PASS" &&
-            documents[name].runId === result.runId,
+            documents[name].status ===
+              (traceNotProven && name === "correlation-proof.json"
+                ? "NOT_PROVEN"
+                : name === "result.json"
+                  ? result.status
+                  : "PASS") && documents[name].runId === result.runId,
         ) ||
         result.provenance?.sourceHashStable !== true ||
         result.provenance.start?.baseSha !== context.candidateSha ||
@@ -1484,6 +1488,8 @@ export async function verifyGateArtifacts(gate, record, evidenceDir) {
         correlation.launchPath?.correlationId !==
           child.receipt.proof.correlationId ||
         correlation.launchPath?.traceId !== child.receipt.proof.traceId ||
+        (traceNotProven &&
+          correlation.launchPath?.traceStatus !== "NOT_PROVEN") ||
         correlation.launchPath?.browserRefetchMatched !== true ||
         correlation.launchPath?.ownerCausation !== true ||
         result.runtimeMetricMatrix?.composeReceipt?.postgres
@@ -1493,9 +1499,9 @@ export async function verifyGateArtifacts(gate, record, evidenceDir) {
         !isDeepStrictEqual(result.cleanupErrors, [])
       )
         return failure;
-      for (const path of child.files) {
-        await assertNoSymlinkPath(evidenceDir, path);
-        additions.push(await hashFile(path));
+      if (traceNotProven) {
+        record.artifacts.push(...additions);
+        return "G14 W3C trace is not proven";
       }
       if (result.fullSystemG14?.status !== "PASS") {
         record.artifacts.push(...additions);

@@ -8,13 +8,13 @@ inputs:
     sha256: f68636a4b7f4e1daee73f5f5334e421b44c431cfdce25d92a233b5f17b0ad96e
 outputs:
   - artifact: tools/browser-proof.mjs
-    sha256: 133d407fc2452564a8c8e827f66c7e05dde26c6399c5e80917f7b7c981fe6af9
+    sha256: 03e51c8e63dbff60181279e6a66ebb6ddf5ce966635c1f9045dc4212cb3fd0ee
     consumers: [13]
   - artifact: tools/browser-owner-evidence.mjs
     sha256: 3e07d1e210327054329ff57580e0ce901bc6646fbb97a9e57e27b9d1295effc0
     consumers: [13]
   - artifact: tools/compose-smoke.mjs
-    sha256: c3ed8f295c7f3de456cdd2060d290ae239b7bc24306bb91de476ab477f4bff01
+    sha256: 63512e5508386eb4445a051677b75f3e0956bc2ed613fa4738aff4c081a1c7fb
     consumers: [13]
   - artifact: tools/observability/verify.mjs
     sha256: cc23ec8f5aed86c2142d356235673c977d335980c2b6d2f1fa62e61691aa8cc1
@@ -23,19 +23,19 @@ outputs:
     sha256: 21d2951b1785fb7943caaa049c3693982b332cb7966e28bc14d4ebecdab31f26
     consumers: [13]
   - artifact: verification/launch/v1/run.mjs
-    sha256: 8e2bfd747b0fbe4dfa94b65c14205234237a47c49447b490071c9738e20c02d0
+    sha256: 077581063a136f622ed5ebc245fabea0c6e0566b301bec30fa01836894f096dc
     consumers: [13]
   - artifact: tests/tools/browser-proof.test.mjs
-    sha256: fdd4e727f580c646cc93368fc8a8a1fb795b8447817edb3db87537f33b468ecf
+    sha256: 26be0356912f29872fa67c20f45835fa53a5ce065559f4ba3a8f2f9c1f9c6a42
     consumers: [13]
   - artifact: tests/tools/browser-owner-evidence.test.mjs
     sha256: 2ad5fe7e81710f0a271ae018653e6ad784933bbf1e0f23db89d2642bb90d38d6
     consumers: [13]
   - artifact: tests/config/observability-bootstrap.test.mjs
-    sha256: 8f71afa1cdf89a58ca642684e7fe162001559bc207ebac05e3381deb151ef448
+    sha256: b5016f3df64e8b1a267d8576fe8528534934d48d1064e7bbab538438b1be552d
     consumers: [13]
   - artifact: tests/compose/topology.test.mjs
-    sha256: 09c0a7224f6355adb11a226f3b633ef09e9d02ae8a6069a328ed0423de8635cb
+    sha256: b2729e61a25c380d39f89e453cca306dfa75e88834f208269f3a665574337900
     consumers: [13]
   - artifact: docs/operations/observability.md
     sha256: 2b7e2a3c3340387b246243ffeeece09f54ec24b975eab88801c196aa06aba5b2
@@ -68,6 +68,37 @@ verification:
   - command: git diff --check
     result: passed
     exitCode: 0
+reviewVerification:
+  - command: "node --test tests/tools/browser-proof.test.mjs tests/tools/browser-owner-evidence.test.mjs"
+    result: "passed: 37 tests"
+    exitCode: 0
+    log: /home/yurgusev/.cache/coffee-launch-delivery/issue-236-review/browser-tests-final.log
+    logSha256: a0bfe1a65a689e5c00566c3b519ab4c18b07e633242c81c18c36e45554ec2752
+  - command: "node --test --test-name-pattern='G14 seals the child config|G14 provider boundary' tests/compose/topology.test.mjs"
+    result: "passed: 2 tests"
+    exitCode: 0
+    log: /home/yurgusev/.cache/coffee-launch-delivery/issue-236-review/topology-tests.log
+    logSha256: bcfe2feef0c0e2a8ba2e01f960e5cef93f789fc24e1d04c37e290961c6e4765e
+  - command: "umask 077 && node --test --test-name-pattern='browser correlation admission' tests/config/observability-bootstrap.test.mjs"
+    result: "passed: 1 test"
+    exitCode: 0
+    log: /home/yurgusev/.cache/coffee-launch-delivery/issue-236-review/admission-tests-final2.log
+    logSha256: 683724825b4cf5e43ca57e3c57da93fa6c23bbdb1ae0af2c2cf1bdad9d42a83a
+  - command: "pnpm exec oxlint --type-aware --deny-warnings tools/compose-smoke.mjs tools/browser-proof.mjs verification/launch/v1/run.mjs tests/tools/browser-proof.test.mjs tests/config/observability-bootstrap.test.mjs tests/compose/topology.test.mjs"
+    result: "passed"
+    exitCode: 0
+    log: /home/yurgusev/.cache/coffee-launch-delivery/issue-236-review/lint-final2.log
+    logSha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+  - command: "pnpm exec prettier --check tools/compose-smoke.mjs tools/browser-proof.mjs verification/launch/v1/run.mjs tests/tools/browser-proof.test.mjs tests/config/observability-bootstrap.test.mjs tests/compose/topology.test.mjs"
+    result: "passed"
+    exitCode: 0
+    log: /home/yurgusev/.cache/coffee-launch-delivery/issue-236-review/format-final2.log
+    logSha256: 17aa973d3f004560237d9a95171210b0671deff23d61628eecf7322ff5938f20
+  - command: "git diff --check"
+    result: "passed"
+    exitCode: 0
+    log: /home/yurgusev/.cache/coffee-launch-delivery/issue-236-review/diff-check-final.log
+    logSha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
 limitations:
   - >-
     #222, #228 и #229 включены локальными merge как stacked dependencies; их принятие

@@ -529,6 +529,68 @@ void test("smoke rejects mismatched or missing G12 runtime IDs before startup", 
   }
 });
 
+void test("G14 seals the child config for every Node runtime and rejects mismatch", async (t) => {
+  const { writeScopedComposeOverride } =
+    await import("../../tools/compose-smoke.mjs");
+  const { load } = await import("js-yaml");
+  const dir = await mkdtemp(join(tmpdir(), "g14-child-config-"));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const context = join(dir, "context.json");
+  const config = join(dir, "platform.yaml");
+  await writeFile(context, "{}", { mode: 0o400 });
+  await writeFile(config, "child: true\n", { mode: 0o444 });
+  await chmod(config, 0o444);
+  const sha256 = createHash("sha256")
+    .update(await readFile(config))
+    .digest("hex");
+  const override = await writeScopedComposeOverride("coffee-g14-config", {
+    launchContextPath: context,
+    g14Config: { path: config, sha256 },
+  });
+  t.after(() => rm(override, { force: true }));
+  const services = load(await readFile(override, "utf8")).services;
+  for (const runtime of RUNTIMES) {
+    assert.equal(
+      services[runtime].environment.COFFEE_LAUNCH_CONTEXT_FILE,
+      "/run/coffee-launch/context.json",
+    );
+    assert.deepEqual(
+      services[runtime].volumes.filter(
+        ({ target }) => target === "/app/config/platform.yaml",
+      ),
+      [
+        {
+          type: "bind",
+          source: config,
+          target: "/app/config/platform.yaml",
+          read_only: true,
+        },
+      ],
+    );
+    assert.equal(
+      services[runtime].volumes.find(
+        ({ target }) => target === "/run/coffee-launch/context.json",
+      ).source,
+      context,
+    );
+  }
+  await assert.rejects(
+    writeScopedComposeOverride("coffee-g14-config", {
+      launchContextPath: context,
+      g14Config: { path: config, sha256: "a".repeat(64) },
+    }),
+    /G14 config hash mismatch/u,
+  );
+  await chmod(config, 0o644);
+  await assert.rejects(
+    writeScopedComposeOverride("coffee-g14-config", {
+      launchContextPath: context,
+      g14Config: { path: config, sha256 },
+    }),
+    /G14 config must be sealed and owned/u,
+  );
+});
+
 void test("all smoke modes isolate networks and can bind a readonly launch context", async (t) => {
   const { writeScopedComposeOverride } =
     await import("../../tools/compose-smoke.mjs");

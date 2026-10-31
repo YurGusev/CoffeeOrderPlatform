@@ -21,6 +21,7 @@ import {
   createBrowserNetworkMonitor,
   createG14BrowserNetworkMonitor,
   matchG14BrowserChain,
+  isG14AcceptedProjection,
   validateG14BrowserEvidence,
   buildRealtimeAuthCloseInvocation,
   proveNaturalSseReauthentication,
@@ -151,11 +152,54 @@ void test("G14 binds a real SSE stream and later owner read to exactly one Confi
     ),
     undefined,
   );
+  assert.equal(isG14AcceptedProjection("6", "5", "4"), true);
+  assert.equal(isG14AcceptedProjection("4", "5", "3"), false);
+  assert.equal(isG14AcceptedProjection("6", "5", "5"), false);
+  const secondFrame = {
+    ...monitor.frames[0],
+    frameId: "msg_01ARZ3NDEKTSV4RRFFQ69G5FAW",
+    ownerVersion: "6",
+    sequence: monitor.reads[0].sequence + 1,
+  };
+  const repeated = {
+    ...monitor,
+    frames: [...monitor.frames, secondFrame],
+    reads: [
+      ...monitor.reads,
+      {
+        ...monitor.reads[0],
+        projectionVersion: "6",
+        sequence: secondFrame.sequence + 1,
+      },
+    ],
+  };
+  assert.equal(
+    matchG14BrowserChain(repeated, ORDER_REF, [...telemetry, ...telemetry])
+      ?.frame.frameId,
+    frameId,
+  );
+  assert.equal(
+    matchG14BrowserChain(repeated, ORDER_REF, telemetry, new Set([frameId]))
+      ?.frame.frameId,
+    secondFrame.frameId,
+  );
+  assert.equal(
+    matchG14BrowserChain(repeated, ORDER_REF, telemetry, new Set(), "5")?.frame
+      .frameId,
+    secondFrame.frameId,
+  );
   assert.equal(
     matchG14BrowserChain(
-      { ...monitor, reads: [...monitor.reads, monitor.reads[0]] },
+      {
+        ...repeated,
+        reads: [
+          repeated.reads[0],
+          { ...repeated.reads[1], projectionVersion: "5" },
+        ],
+      },
       ORDER_REF,
       telemetry,
+      new Set([frameId]),
     ),
     undefined,
   );
