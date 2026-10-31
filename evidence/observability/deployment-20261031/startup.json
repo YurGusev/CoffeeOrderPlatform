@@ -1,0 +1,29 @@
+{
+  "candidateSha": "0b7a95b2d7ef210ce2547087aa51d472eae770f6",
+  "scope": "normal zero-owner component; not formal launch admission",
+  "firstStart": {
+    "exitCode": 0,
+    "durationSeconds": 66.012,
+    "rawReceiptSha256": "70182cbe32f67a73e51c928ca2c1ae553022d54e4ed3ca82d0eb610491ffdd7e"
+  },
+  "stop": {
+    "exitCode": 0,
+    "durationSeconds": 15.003,
+    "rawReceiptSha256": "d5053276a110a54b5b3e8fc8659089c7d0c12e67e38e0185573b7100c6a54b40"
+  },
+  "recoveryStart": {
+    "exitCode": 0,
+    "durationSeconds": 40.007,
+    "rawReceiptSha256": "dae7ea2f320f87b833d4538298d54912d66b30e8cc8f7fd9b820ef0e5200842e"
+  },
+  "userUnit": {
+    "prepared": true,
+    "staticVerifyExitCode": 0,
+    "linger": "yes",
+    "installed": false,
+    "enabled": false,
+    "actualStartFromUnit": "NOT_RUN",
+    "serverReboot": "NOT_RUN",
+    "rawReceiptSha256": "c22aa78dfec663711e9749a681454d69735b4e2e3685e0397578746d69fc4c17"
+  }
+}

@@ -1,0 +1,53 @@
+{
+  "candidateSha": "0b7a95b2d7ef210ce2547087aa51d472eae770f6",
+  "scope": "normal zero-owner component; not formal launch admission",
+  "record": {
+    "status": "PASS",
+    "checks": {
+      "context": "PASS",
+      "ownership": "PASS",
+      "health": "PASS",
+      "auth": "PASS",
+      "signals": "PASS",
+      "grafana": "PASS",
+      "persistence": "NOT_RUN",
+      "annotationCleanup": "NOT_RUN"
+    },
+    "health": {
+      "otel-collector": 200,
+      "grafana": 200,
+      "loki": 200,
+      "prometheus": 200,
+      "tempo": 200
+    },
+    "negativeAuth": {
+      "missingBearer": 401,
+      "invalidBearer": 401,
+      "anonymousGrafana": 401
+    },
+    "rawReceiptSha256": "51b364b7acdad5097e8af4f688e8d3ae75651e6155dcc608cd6e868b5c45fb49"
+  },
+  "recoveryVerify": {
+    "status": "PASS",
+    "checks": {
+      "context": "PASS",
+      "ownership": "PASS",
+      "health": "PASS",
+      "auth": "NOT_RUN",
+      "signals": "NOT_RUN",
+      "grafana": "PASS",
+      "persistence": "PASS",
+      "annotationCleanup": "PASS"
+    },
+    "health": {
+      "otel-collector": 200,
+      "grafana": 200,
+      "loki": 200,
+      "prometheus": 200,
+      "tempo": 200
+    },
+    "annotationDeleted": true,
+    "rawReceiptSha256": "047dcdedb6e916de40669d387f2d342eaf2b7532bce3810d9fc3ebf8726e8b92"
+  },
+  "limitation": "Native Loki marker does not prove application filelog; verify auth/signals were not repeated as new sends."
+}
