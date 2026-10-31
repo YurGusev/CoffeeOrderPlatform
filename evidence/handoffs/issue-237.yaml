@@ -1,0 +1,38 @@
+issue: 237
+baseCommit: 2c631fb735192eb9033a1841c76300cf7a6a1045
+status: verified
+inputs: []
+outputs:
+  - artifact: "tools/observability/verify.mjs"
+    sha256: 9064fdae6278597787107ebef204077e043a5ceb8079816311ebfe8889898018
+    consumers: [13]
+  - artifact: "tests/observability/alerts.test.mjs"
+    sha256: ecc07c3a001ef88125ed6250de3ff1da9bf56d6547428ff6fb26b3ee47b5f7e2
+    consumers: [13]
+verification:
+  - command: "node --experimental-strip-types --test --test-name-pattern=\"startup diagnostics bound and redact container state, health output and logs\" tests/observability/alerts.test.mjs"
+    result: "до исправления: exit 1, 0 pass / 1 fail; утечка синтетических state-unknown, health-unknown, error-unknown и startup-unknown; 1.25 s; raw log SHA-256 121cb67550a5537a8babd1f6ce5373ca71700d8bceb5ca6e0234f4929f14858a"
+  - command: "node --experimental-strip-types --test --test-name-pattern=\"startup diagnostics bound and redact container state, health output and logs\" tests/observability/alerts.test.mjs"
+    result: "после исправления: exit 0, 1 pass / 0 fail / 0 reported skip, 41 тест не выбран; 1.11 s; raw log SHA-256 5673a6094a817660e782c00d0b12fdc0051a39c21841fe58ae4014c7fc4a595a"
+  - command: "node_modules/.bin/oxlint --type-aware --deny-warnings tools/observability/verify.mjs tests/observability/alerts.test.mjs"
+    result: "exit 0; 0.71 s; raw log SHA-256 5673a6094a817660e782c00d0b12fdc0051a39c21841fe58ae4014c7fc4a595a"
+  - command: "node node_modules/prettier/bin/prettier.cjs --check tools/observability/verify.mjs tests/observability/alerts.test.mjs"
+    result: "exit 0; 2 файла; 1.45 s; raw log SHA-256 5673a6094a817660e782c00d0b12fdc0051a39c21841fe58ae4014c7fc4a595a"
+  - command: "node node_modules/typescript/bin/tsc -b packages/platform-config --pretty false"
+    result: "exit 0; 0.52 s; raw log SHA-256 8e4b684b1869776df909631c0277c8fb0d6223308e3da61ccf6fcd6d5d1c4e40"
+  - command: "node node_modules/typescript/bin/tsc -b packages/platform-idempotency apps/aroma-convergence --pretty false"
+    result: "exit 0; 4.08 s; raw log SHA-256 abea116c956622413f022fa7f8376c821e681baf0d9bf48d4d694a17f3f715de"
+  - command: "node node_modules/typescript/bin/tsc -b packages/platform-migrations --pretty false"
+    result: "exit 0; 0.58 s; raw log SHA-256 71d70c1bbed50427daff3f5ea26609e1cd94a0364473a151e06e833cea134441"
+  - command: "node node_modules/typescript/bin/tsc -b apps/aroma-gateway apps/orders-service --pretty false"
+    result: "exit 0; 2.18 s; raw log SHA-256 8fe2e753ad92bf6208769a2548d738185078a1d2df99f755663f18b6939c0ad9"
+  - command: "node --experimental-strip-types --test --test-name-pattern=\"catalog slice preserves secret ownership|external recovery projection accepts canonical mapping\" tests/compose/topology.test.mjs"
+    result: "exit 0; 2 pass / 0 fail / 0 reported skip, 39 тестов не выбрано; 0.96 s; raw log SHA-256 467ec18c5eb528393b2b13d6450209d074b2249c5d977191ef29d3a737f6086c"
+  - command: "git diff --check"
+    result: "exit 0 до добавления handoff; 0.01 s; raw log SHA-256 5673a6094a817660e782c00d0b12fdc0051a39c21841fe58ae4014c7fc4a595a"
+limitations:
+  - "Локальная проверка: independent review и final CI не выполнены; полный G14 и launch #13 не проверялись."
+  - "Исходники проверены на локальном merge 3c7ecd0d89bb5a4baa05794cb2b9330c788f2e8a с непринятой зависимостью #222 b308bb6e31595ca5927abfbb117021c687f7bf55; перед PR/merge #237 требуется её принятие и обновление accepted input/hashes по итоговой базе."
+  - "Выбраны только указанные тесты; реальный Docker, HTTP, provider и native build не запускались. Доступные сигналы и пределы диагностик покрыты синтетическим mock."
+  - "Первые три попытки теста и первая попытка topology не стартовали полностью из-за отсутствия dist импортов; после локальной сборки только требуемых TS проектов проверки повторены. Первая проверка Prettier выявила неформатированный тест и повторена после форматирования."
+  - "Raw logs доступны локально в /home/yurgusev/.cache/coffee-launch-delivery/diagnostic-237-*.log с правами 0600; это не опубликованные CI artifacts."

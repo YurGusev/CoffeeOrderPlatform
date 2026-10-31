@@ -1545,12 +1545,12 @@ function redactDiagnosticText(value, secrets) {
         secret ? result.replaceAll(secret, "[REDACTED]") : result,
       value,
     )
+    .replace(/\b(Basic|Bearer)\s+[^\s"']+/giu, "$1 [REDACTED]")
     .replace(
       /(authorization|token|password|secret)([=: ]+)\S+/giu,
       "$1$2[REDACTED]",
     )
-    .replace(/o2oi_[A-Za-z0-9_-]+/gu, "[REDACTED]")
-    .replace(/\b(Basic|Bearer)\s+[^\s"']+/giu, "$1 [REDACTED]");
+    .replace(/o2oi_[A-Za-z0-9_-]+/gu, "[REDACTED]");
 }
 
 function sanitizedDiagnostics(value, secrets) {
