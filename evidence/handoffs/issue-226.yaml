@@ -1,0 +1,30 @@
+issue: 226
+baseCommit: a6cceeaa822f9641c678b5dcae521c282391dd3d
+status: verified
+inputs:
+  - issue: 194
+    acceptedMergeCommit: 364c3034e91f168dcb51d94ef64e34389fc90b52
+    artifact: docs/integrations/tasty/http-policy.md
+    sha256: 8c60928fc00e147002aafbe7c13e0712d9f45351b14f8a6e24b7ebb6c96bb3d9
+outputs:
+  - artifact: tests/tasty/provider-http.test.mjs
+    sha256: fbd9ea14e1a856703fa98ac77fd987b4ae5e5ca4083af242a62f96c90ae73870
+    consumers: [223, 13]
+  - artifact: docs/integrations/tasty/http-policy.md
+    sha256: 3fcb81601de2a5174a682c437c2873f2bb7f601cceb255311c848b2473e3601a
+    consumers: [223, 13]
+verification:
+  - command: "pnpm exec tsc -b apps/tasty-gateway --pretty false"
+    result: "exit 0; 1.018 s; raw log SHA-256 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  - command: "node --test --test-reporter=tap tests/tasty/provider-http.test.mjs"
+    result: "exit 0; 0.716 s; raw log SHA-256 c6469862aafa690f79bba64523f911c80a042208a69a6a056e065b78a452c496; 6 pass / 0 fail / 0 skip; TAP duration 630.533887 ms"
+  - command: "pnpm exec oxlint --type-aware --deny-warnings tests/tasty/provider-http.test.mjs"
+    result: "exit 0; 1.168 s; raw log SHA-256 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  - command: "pnpm exec prettier --check tests/tasty/provider-http.test.mjs docs/integrations/tasty/http-policy.md"
+    result: "exit 0; 1.318 s; raw log SHA-256 17aa973d3f004560237d9a95171210b0671deff23d61628eecf7322ff5938f20"
+  - command: "git diff --check"
+    result: "exit 0; 0.008 s; raw log SHA-256 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+limitations:
+  - "Функциональный fixture budget 5000 ms не является production setting или SLO; deadline/cancellation client150 ms и synthetic200 ms сохранены."
+  - "Проверки локальные: реальный Tasty, runtime admission и полный launch #13 не проверялись; final CI проверяется отдельно на final PR head."
+  - "Prettier нормализует существующий test file; semantic delta — только второй client и четыре functional call sites."
