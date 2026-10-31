@@ -17,7 +17,9 @@
   defaults: положительные безопасные целые, `timeoutMs` не более 2147483647.
   Срок доступен для #195 через read-only `timeoutMs`. Будущий trusted composition
   root #196 берёт параметры из `config/platform.yaml`; здесь config/runtime не
-  меняются. Локальный fixture задаёт 150 ms и 64 bytes: это не production settings.
+  меняются. Локальный fixture задаёт 150 ms для deadline/cancellation и 5000 ms для
+  функциональных ответов при лимите 64 bytes: это не production settings и не
+  SLO.
 - Один timeout охватывает fetch и всё чтение тела. Caller AbortSignal
   отменяет запрос. Проверяются Content-Length и фактически полученные bytes.
   Не-2xx, redirect, timeout, cancellation, transport error, oversized response,
