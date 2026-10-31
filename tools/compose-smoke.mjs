@@ -2334,6 +2334,23 @@ export function externalRecoveryMigrationCredentialRequest(
   };
 }
 
+export function retainG14AfterCollectorFailure({
+  g14Browser,
+  observability,
+  cleanupHookError,
+  options,
+  databases,
+}) {
+  if (!(g14Browser && observability && cleanupHookError)) return undefined;
+  options.keep = true;
+  return {
+    verified: false,
+    removed: [],
+    retained: databases.map(({ database }) => database.name),
+    failure: "G14_COLLECTOR_RESTORE_UNCONFIRMED",
+  };
+}
+
 export function externalRecoveryCleanupSummary({
   databases,
   attachment,
@@ -8808,12 +8825,21 @@ function assertAromaMutationJournal(rows, sourceGrindKeyHash) {
   return rows;
 }
 
-export async function runG14BrowserProof({ baseCandidateSha }) {
+export async function runG14BrowserProof({
+  baseCandidateSha,
+  observability,
+  onProof,
+}) {
   return runComposeSmoke({
     args: ["--recovery-proof"],
+    observability,
     g14Browser: {
       baseCandidateSha,
-      onReady: proveG14Browser,
+      onReady: async (context) => {
+        const proof = await proveG14Browser(context);
+        if (onProof) await onProof(proof);
+        return proof;
+      },
       onCleanup: async () => {},
     },
   });
@@ -9135,6 +9161,7 @@ export async function runComposeSmoke({
   let receipt;
   let primaryError;
   let cleanupHookError;
+  let retainG14Resources = false;
   let standardCleanupError;
   const cleanupFailures = [];
   let rollbackStage = options.mutationDisableRollback ? "bootstrap" : null;
@@ -10695,6 +10722,15 @@ export async function runComposeSmoke({
         }
       }
     }
+    const retainedDatabases = retainG14AfterCollectorFailure({
+      g14Browser,
+      observability,
+      cleanupHookError,
+      options,
+      databases: externalRunDatabaseResources,
+    });
+    retainG14Resources = retainedDatabases !== undefined;
+    if (retainedDatabases) externalDatabaseCleanupReceipt = retainedDatabases;
     try {
       if (
         recoveryDeliveryTables &&
@@ -10789,7 +10825,7 @@ export async function runComposeSmoke({
           );
         }
       }
-      if (browserFixture) {
+      if (browserFixture && !retainG14Resources) {
         try {
           await browserFixture.cleanup();
         } catch (error) {
@@ -10980,6 +11016,18 @@ export async function runComposeSmoke({
   const errors = [primaryError, standardCleanupError, cleanupHookError].filter(
     Boolean,
   );
+  const g14Retained = retainG14Resources
+    ? {
+        runId: launchIdentity?.context.runId,
+        projectName,
+        composeFile,
+        secretsDir,
+        browserFixtureRoot,
+        databases: externalRunDatabaseResources.map(
+          ({ database }) => database.name,
+        ),
+      }
+    : undefined;
   if (options.mutationDisableRollback && errors.length > 0) {
     const cause = primaryError ?? standardCleanupError ?? cleanupHookError;
     const cleanup = rollbackCleanupReceipt ?? {
@@ -11049,11 +11097,13 @@ export async function runComposeSmoke({
     );
     if (finalizedExternalCleanup)
       combined.externalCleanup = finalizedExternalCleanup;
+    if (g14Retained) combined.g14Retained = g14Retained;
     throw combined;
   }
   if (errors.length === 1) {
     if (finalizedExternalCleanup)
       errors[0].externalCleanup = finalizedExternalCleanup;
+    if (g14Retained) errors[0].g14Retained = g14Retained;
     throw errors[0];
   }
   console.log(JSON.stringify(receipt));

@@ -529,6 +529,76 @@ void test("smoke rejects mismatched or missing G12 runtime IDs before startup", 
   }
 });
 
+void test("G14 retains scoped resources when collector restoration is unconfirmed", async (t) => {
+  const {
+    retainG14AfterCollectorFailure,
+    externalRecoveryCleanupSummary,
+    removeBuiltRuntimeImages,
+  } = await import("../../tools/compose-smoke.mjs");
+  const options = { keep: false, noBuild: false };
+  const databases = [{ database: { name: "coffee_verify_run_orders" } }];
+  const receipt = retainG14AfterCollectorFailure({
+    g14Browser: {},
+    observability: {},
+    cleanupHookError: new Error("IPC disconnected"),
+    options,
+    databases,
+  });
+  assert.equal(options.keep, true);
+  assert.deepEqual(receipt, {
+    verified: false,
+    removed: [],
+    retained: ["coffee_verify_run_orders"],
+    failure: "G14_COLLECTOR_RESTORE_UNCONFIRMED",
+  });
+  const calls = [];
+  t.mock.method(childProcess, "execFileSync", (...args) => calls.push(args));
+  syncBuiltinESMExports();
+  try {
+    removeBuiltRuntimeImages(["sha256:example"], options);
+    assert.deepEqual(calls, []);
+  } finally {
+    t.mock.restoreAll();
+    syncBuiltinESMExports();
+  }
+  const summary = externalRecoveryCleanupSummary({
+    databases: receipt,
+    attachment: {
+      baselineAttached: false,
+      attempted: true,
+      attached: true,
+      routeBefore: "route",
+      routeAfter: "route",
+    },
+    cleanupFailed: true,
+  });
+  assert.equal(summary.verified, false);
+  assert.equal(summary.attachment.removed, false);
+  const normal = { keep: false };
+  assert.equal(
+    retainG14AfterCollectorFailure({
+      g14Browser: undefined,
+      observability: {},
+      cleanupHookError: new Error("error"),
+      options: normal,
+      databases,
+    }),
+    undefined,
+  );
+  assert.equal(normal.keep, false);
+  assert.equal(
+    retainG14AfterCollectorFailure({
+      g14Browser: {},
+      observability: {},
+      cleanupHookError: undefined,
+      options: normal,
+      databases,
+    }),
+    undefined,
+  );
+  assert.equal(normal.keep, false);
+});
+
 void test("G14 seals the child config for every Node runtime and rejects mismatch", async (t) => {
   const { writeScopedComposeOverride } =
     await import("../../tools/compose-smoke.mjs");

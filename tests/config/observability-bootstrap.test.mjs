@@ -8174,6 +8174,9 @@ void test("browser correlation executes the child lifecycle and preserves early 
           ownerMessageSha256: "a".repeat(64),
           realtimeMessageSha256: "b".repeat(64),
           ownerVersion: "5",
+          ownerTraceparent: `00-${"a".repeat(32)}-${"b".repeat(16)}-01`,
+          realtimeTraceparent: `00-${"a".repeat(32)}-${"b".repeat(16)}-01`,
+          traceId: "a".repeat(32),
           confirmedVersion: "4",
           acceptedVersion: "5",
           confirmCount: 1,
@@ -8926,6 +8929,9 @@ void test("browser correlation admission verifies the sealed child bundle and sc
       ownerMessageSha256: "a".repeat(64),
       realtimeMessageSha256: "b".repeat(64),
       ownerVersion: "5",
+      ownerTraceparent: `00-${"a".repeat(32)}-${"b".repeat(16)}-01`,
+      realtimeTraceparent: `00-${"a".repeat(32)}-${"b".repeat(16)}-01`,
+      traceId: "a".repeat(32),
       confirmedVersion: "4",
       acceptedVersion: "5",
       confirmCount: 1,
@@ -9564,3 +9570,116 @@ async function createMigrationLaunchFixture({
     throw error;
   }
 }
+
+void test("G14 telemetry sources require exact child networks and all G12 role images", async () => {
+  const { validateG14TelemetrySources } =
+    await import("../../tools/observability/verify.mjs");
+  const { OBSERVABILITY_TARGETS } =
+    await import("../../tools/observability/generate.mjs");
+  const projectName = "coffee-launch-20261031t120000z-abcdef0";
+  const names = [
+    "coffee_edge_backend",
+    "coffee_public_api_backend",
+    "coffee_internal_api",
+    "coffee_kafka_event",
+  ];
+  const networks = Object.fromEntries(
+    names.map((name) => [name, `${projectName}_${name}`]),
+  );
+  const payload = {
+    projectName,
+    runtimes: OBSERVABILITY_TARGETS.filter((role) => role !== "edge-nginx"),
+    networks,
+  };
+  const verifiedImages = OBSERVABILITY_TARGETS.map((service, index) => ({
+    service,
+    imageId: `sha256:${index.toString(16).padStart(64, "0")}`,
+  }));
+  const rows = Object.fromEntries(
+    verifiedImages.map(({ service, imageId }, index) => {
+      const id = (index + 1).toString(16).padStart(64, "0");
+      return [
+        service,
+        {
+          Id: id,
+          Image: imageId,
+          State: { Running: true },
+          Config: {
+            Labels: {
+              "com.docker.compose.project": projectName,
+              "com.docker.compose.service": service,
+            },
+          },
+          LogPath: `/var/lib/docker/containers/${id}/${id}-json.log`,
+          NetworkSettings: {
+            Networks: {
+              [networks.coffee_internal_api]: { NetworkID: "a".repeat(64) },
+            },
+          },
+        },
+      ];
+    }),
+  );
+  const runDocker = (args) => {
+    if (args[0] === "ps")
+      return Object.values(rows).find((row) =>
+        args.includes(
+          `label=com.docker.compose.service=${row.Config.Labels["com.docker.compose.service"]}`,
+        ),
+      ).Id;
+    if (args[0] === "network") {
+      const logical = names.find((name) => networks[name] === args[2]);
+      return JSON.stringify([
+        {
+          Name: args[2],
+          Id: "a".repeat(64),
+          Internal: true,
+          Labels: {
+            "com.docker.compose.project": projectName,
+            "com.docker.compose.network": logical,
+          },
+        },
+      ]);
+    }
+    return JSON.stringify([
+      Object.values(rows).find((row) => row.Id === args[1]),
+    ]);
+  };
+  const input = { payload, projectName, verifiedImages, runDocker };
+  assert.equal((await validateG14TelemetrySources(input)).logFiles.length, 15);
+  rows["orders-service"].Image = `sha256:${"f".repeat(64)}`;
+  await assert.rejects(
+    validateG14TelemetrySources(input),
+    /image or network invalid/u,
+  );
+  rows["orders-service"].Image = verifiedImages.find(
+    ({ service }) => service === "orders-service",
+  ).imageId;
+  rows["orders-service"].NetworkSettings.Networks[
+    networks.coffee_internal_api
+  ].NetworkID = "b".repeat(64);
+  await assert.rejects(
+    validateG14TelemetrySources(input),
+    /image or network invalid/u,
+  );
+  rows["orders-service"].NetworkSettings.Networks[
+    networks.coffee_internal_api
+  ].NetworkID = "a".repeat(64);
+  await assert.rejects(
+    validateG14TelemetrySources({
+      ...input,
+      payload: {
+        ...payload,
+        networks: { ...networks, coffee_kafka_event: "other" },
+      },
+    }),
+    /network name invalid/u,
+  );
+  await assert.rejects(
+    validateG14TelemetrySources({
+      ...input,
+      payload: { ...payload, runtimes: payload.runtimes.slice(1) },
+    }),
+    /runtime identity invalid/u,
+  );
+});

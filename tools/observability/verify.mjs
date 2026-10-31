@@ -11,6 +11,7 @@ import {
 } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
+import { isDeepStrictEqual } from "node:util";
 import { fileURLToPath } from "node:url";
 import { dump as dumpYaml, load as loadYaml } from "js-yaml";
 import { loadPlatformConfig } from "../../scripts/config-lib.mjs";
@@ -38,6 +39,7 @@ import {
 import {
   loadVerifiedGateImage,
   removeVerifiedGateImage,
+  readVerifiedRuntimeImages,
 } from "../verified-infrastructure-image.mjs";
 import { provisionStorage, removeStorage } from "./storage.mjs";
 import { validateLaunchContext } from "../../verification/launch/v1/report.mjs";
@@ -46,6 +48,72 @@ const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const NODE_RUNTIME_TARGETS = OBSERVABILITY_TARGETS.filter(
   (runtime) => runtime !== "edge-nginx",
 );
+export async function validateG14TelemetrySources({
+  payload,
+  projectName,
+  verifiedImages,
+  runDocker,
+}) {
+  if (
+    !payload ||
+    payload.projectName !== projectName ||
+    !Array.isArray(payload.runtimes) ||
+    payload.runtimes.length !== NODE_RUNTIME_TARGETS.length ||
+    !NODE_RUNTIME_TARGETS.every((role) => payload.runtimes.includes(role))
+  )
+    throw new Error("G14 runtime identity invalid");
+  const imageByRole = new Map(
+    verifiedImages.map(({ service, imageId }) => [service, imageId]),
+  );
+  const names = [
+    "coffee_edge_backend",
+    "coffee_public_api_backend",
+    "coffee_internal_api",
+    "coffee_kafka_event",
+  ];
+  const networkIds = new Map();
+  const networks = names.map((name) => {
+    const expected = `${projectName}_${name}`;
+    if (payload.networks?.[name] !== expected)
+      throw new Error("G14 network name invalid");
+    const rows = JSON.parse(runDocker(["network", "inspect", expected]));
+    const network = rows[0];
+    if (
+      rows.length !== 1 ||
+      network?.Name !== expected ||
+      !/^[a-f0-9]{64}$/u.test(network.Id ?? "") ||
+      network.Internal !== true ||
+      network.Labels?.["com.docker.compose.project"] !== projectName ||
+      network.Labels?.["com.docker.compose.network"] !== name
+    )
+      throw new Error("G14 network identity invalid");
+    networkIds.set(expected, network.Id);
+    return expected;
+  });
+  const logFiles = await discoverContainerLogs({ projectName, runDocker });
+  if (
+    logFiles.length !== OBSERVABILITY_TARGETS.length ||
+    imageByRole.size !== OBSERVABILITY_TARGETS.length
+  )
+    throw new Error("G14 runtime inventory incomplete");
+  for (const { service, containerId } of logFiles) {
+    const rows = JSON.parse(runDocker(["inspect", containerId]));
+    const container = rows[0];
+    if (
+      rows.length !== 1 ||
+      container?.Id !== containerId ||
+      container.Image !== imageByRole.get(service) ||
+      !networks.some(
+        (name) =>
+          container.NetworkSettings?.Networks?.[name]?.NetworkID ===
+          networkIds.get(name),
+      )
+    )
+      throw new Error("G14 runtime image or network invalid");
+  }
+  return { logFiles, networks };
+}
+
 const sleep = (ms) =>
   new Promise((resolveSleep) => setTimeout(resolveSleep, ms));
 const docker = (args) =>
@@ -4804,19 +4872,179 @@ export async function runObservabilityVerification({
           const identity = await validateLaunchContext(contextPath);
           const { runManagedRollbackChild } =
             await import("../../verification/launch/v1/scenarios/rollback.mjs");
-          const script = `import {runG14BrowserProof} from './tools/compose-smoke.mjs'; const r=await runG14BrowserProof({baseCandidateSha:process.argv[1]}); console.log(JSON.stringify({g14BrowserProof:r.g14BrowserProof,cleanup:r.cleanup,externalCleanup:r.externalCleanup}));`;
-          const childResult = await runManagedRollbackChild({
-            args: [
-              "--input-type=module",
-              "--eval",
-              script,
-              provenanceStart.baseSha,
-            ],
-            cwd: identity.candidateRoot,
-            env: { ...process.env, COFFEE_LAUNCH_CONTEXT_FILE: contextPath },
-            terminationGraceMs: 120_000,
+          const { validateG14BrowserEvidence } =
+            await import("../browser-proof.mjs");
+          const verifiedImages = await readVerifiedRuntimeImages({
+            contextFile: process.env.COFFEE_LAUNCH_CONTEXT_FILE,
           });
-          return JSON.parse(childResult.stdout.trim().split(/\r?\n/u).at(-1));
+          const expectedProject = identity.context.resources.composeProject;
+          if (
+            expectedProject !==
+            `coffee-launch-${identity.context.runId.toLowerCase()}`
+          )
+            throw new Error("G14 child project identity invalid");
+          let stage = "init";
+          let observedProof;
+          let childEnded = false;
+          let collectorNeedsRestore = false;
+          let collectorTasks = Promise.resolve();
+          const changeCollector = (selectedLogs, networks = []) => {
+            if (selectedLogs !== logFiles) collectorNeedsRestore = true;
+            const task = collectorTasks
+              .catch(() => {})
+              .then(() => configureCollector(selectedLogs, networks));
+            collectorTasks = task;
+            return task.then(() => {
+              if (selectedLogs === logFiles) collectorNeedsRestore = false;
+            });
+          };
+          const script = `import {runG14BrowserProof} from './tools/compose-smoke.mjs';
+import {validateLaunchContext} from './verification/launch/v1/report.mjs';
+const identity=await validateLaunchContext(process.env.COFFEE_LAUNCH_CONTEXT_FILE);
+const runId=identity.context.runId;
+const request=(stage,payload)=>new Promise((resolve,reject)=>{
+ const disconnected=()=>{process.removeListener('message',received);reject(new Error('G14_IPC_DISCONNECTED'));};
+ const received=(message,handle)=>{process.removeListener('disconnect',disconnected);if(handle||!message||message.stage!==stage||message.ok!==true)reject(new Error('G14_IPC_REJECTED'));else resolve(message.payload);};
+ process.once('disconnect',disconnected);process.once('message',received);
+ process.send({stage,runId,payload},error=>{if(error){process.removeListener('message',received);process.removeListener('disconnect',disconnected);reject(new Error('G14_IPC_SEND_FAILED'));}});
+});
+const init=await request('init',null);
+const observability={exporterToken:init.exporterToken,onReady:context=>request('roles-ready',context),onCleanup:()=>request('cleanup',null)};
+try {
+ const r=await runG14BrowserProof({baseCandidateSha:process.argv[1],observability,onProof:proof=>request('browser-proof',proof)});
+ if(process.connected)process.disconnect();console.log(JSON.stringify({g14BrowserProof:r.g14BrowserProof,cleanup:r.cleanup,externalCleanup:r.externalCleanup}));
+} catch(error) {
+ if(error.g14Retained)console.log(JSON.stringify({g14Retained:error.g14Retained}));
+ if(process.connected)process.disconnect();throw error;
+}`;
+          let childResult;
+          let retainedInfo;
+          let restoreError;
+          try {
+            childResult = await runManagedRollbackChild({
+              args: [
+                "--input-type=module",
+                "--eval",
+                script,
+                provenanceStart.baseSha,
+              ],
+              cwd: identity.candidateRoot,
+              env: { ...process.env, COFFEE_LAUNCH_CONTEXT_FILE: contextPath },
+              terminationGraceMs: 120_000,
+              onIpc: async (message) => {
+                if (
+                  Object.keys(message).sort().join(",") !==
+                    "payload,runId,stage" ||
+                  message.runId !== identity.context.runId ||
+                  (message.stage !== stage &&
+                    !(
+                      message.stage === "cleanup" &&
+                      ["roles-ready", "browser-proof"].includes(stage)
+                    ))
+                )
+                  throw new Error("G14 IPC stage invalid");
+                if (message.stage === "cleanup") {
+                  if (message.payload !== null)
+                    throw new Error("G14 IPC cleanup invalid");
+                  if (collectorNeedsRestore) await changeCollector(logFiles);
+                  stage = "done";
+                  return null;
+                }
+                if (stage === "init") {
+                  if (message.payload !== null)
+                    throw new Error("G14 IPC init invalid");
+                  stage = "roles-ready";
+                  return { exporterToken: producerToken };
+                }
+                if (stage === "roles-ready") {
+                  const { logFiles: childLogs, networks } =
+                    await validateG14TelemetrySources({
+                      payload: message.payload,
+                      projectName: expectedProject,
+                      verifiedImages,
+                      runDocker: run,
+                    });
+                  if (childEnded) throw new Error("G14 child already ended");
+                  await changeCollector(childLogs, networks);
+                  stage = "browser-proof";
+                  return null;
+                }
+                if (stage === "browser-proof") {
+                  observedProof = validateG14BrowserEvidence(message.payload, {
+                    runId: identity.context.runId,
+                    candidateSha: identity.context.candidateSha,
+                    configSha256: identity.context.baseConfigSha256,
+                  });
+                  stage = "cleanup";
+                  return null;
+                }
+                throw new Error("G14 IPC unexpected stage");
+              },
+            });
+          } catch (error) {
+            let retained;
+            try {
+              retained = JSON.parse(
+                error.result?.stdout?.trim().split(/\r?\n/u).at(-1) ?? "{}",
+              ).g14Retained;
+            } catch {
+              /* the child may have exited before reporting */
+            }
+            const safePath = (path) =>
+              typeof path === "string" &&
+              path.startsWith("/dev/shm/") &&
+              resolve(path) === path;
+            const valid =
+              retained?.runId === identity.context.runId &&
+              retained.projectName === expectedProject &&
+              [
+                retained.composeFile,
+                retained.secretsDir,
+                retained.browserFixtureRoot,
+              ].every((path) => path === undefined || safePath(path)) &&
+              Array.isArray(retained.databases) &&
+              retained.databases.length <= 5 &&
+              retained.databases.every((name) =>
+                /^coffee_verify_[a-z0-9_]+$/u.test(name),
+              );
+            retainedInfo = {
+              runId: identity.context.runId,
+              projectName: expectedProject,
+              cleanup: "UNKNOWN",
+              ...(valid
+                ? {
+                    composeFile: retained.composeFile,
+                    secretsDir: retained.secretsDir,
+                    browserFixtureRoot: retained.browserFixtureRoot,
+                    databases: retained.databases,
+                  }
+                : {}),
+            };
+            error.g14Retained = retainedInfo;
+            throw error;
+          } finally {
+            childEnded = true;
+            try {
+              if (collectorNeedsRestore) await changeCollector(logFiles);
+            } catch (error) {
+              error.g14Retained = retainedInfo ?? {
+                runId: identity.context.runId,
+                projectName: expectedProject,
+                cleanup: "UNKNOWN",
+              };
+              restoreError = error;
+              cleanupErrors.push(`G14 collector restore: ${cleanError(error)}`);
+            }
+          }
+          if (restoreError) throw restoreError;
+          if (stage !== "done" || !observedProof)
+            throw new Error("G14 IPC incomplete");
+          const result = JSON.parse(
+            childResult.stdout.trim().split(/\r?\n/u).at(-1),
+          );
+          if (!isDeepStrictEqual(result.g14BrowserProof, observedProof))
+            throw new Error("G14 IPC proof differs from child result");
+          return result;
         },
       });
       evidence.browserCorrelationChild = child.browserChild;
@@ -4833,6 +5061,7 @@ export async function runObservabilityVerification({
     } catch (error) {
       evidence.phases.launchPath = "FAIL";
       evidence.launchPathFailure = cleanError(error);
+      if (error.g14Retained) evidence.launchPathRetained = error.g14Retained;
       if (error.externalCleanup)
         evidence.launchPathExternalCleanup = error.externalCleanup;
     } finally {

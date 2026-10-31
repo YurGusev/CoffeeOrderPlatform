@@ -511,18 +511,24 @@ export function runManagedRollbackChild({
   timeoutMs = 1_800_000,
   terminationGraceMs = 30_000,
   timeoutGate,
+  onIpc,
 }) {
   return new Promise((resolvePromise, rejectPromise) => {
     const child = spawn(process.execPath, args, {
       cwd,
       env,
       detached: process.platform !== "win32",
-      stdio: ["ignore", "pipe", "pipe"],
+      stdio: onIpc
+        ? ["ignore", "pipe", "pipe", "ipc"]
+        : ["ignore", "pipe", "pipe"],
     });
     const stdout = [];
     const stderr = [];
     let outputBytes = 0;
     let overflow = false;
+    let ipcFailed = false;
+    let ipcBusy = false;
+    let ipcCompleted = false;
     let timedOut = false;
     let interruptedBy;
     let killTimer;
@@ -586,6 +592,45 @@ export function runManagedRollbackChild({
     }
     process.once("SIGINT", signalHandler);
     process.once("SIGTERM", signalHandler);
+    if (onIpc)
+      child.on("disconnect", () => {
+        if (!ipcCompleted) ipcFailed = true;
+      });
+    if (onIpc)
+      child.on("message", (message, handle) => {
+        if (
+          handle ||
+          ipcBusy ||
+          !message ||
+          typeof message !== "object" ||
+          Buffer.byteLength(JSON.stringify(message)) > 32768
+        ) {
+          ipcFailed = true;
+          stopChild("SIGTERM");
+          return;
+        }
+        ipcBusy = true;
+        Promise.resolve()
+          .then(() => onIpc(message))
+          .then(
+            (payload) => {
+              if (message.stage === "cleanup") ipcCompleted = true;
+              if (child.connected)
+                child.send(
+                  { ok: true, stage: message.stage, payload },
+                  () => {},
+                );
+            },
+            () => {
+              ipcFailed = true;
+              if (child.connected)
+                child.send({ ok: false, stage: message.stage }, () => {});
+            },
+          )
+          .finally(() => {
+            ipcBusy = false;
+          });
+      });
     child.stdout.on("data", (chunk) => append(stdout, chunk));
     child.stderr.on("data", (chunk) => append(stderr, chunk));
     child.once("error", () => {
@@ -604,7 +649,7 @@ export function runManagedRollbackChild({
         stderr: Buffer.concat(stderr).toString("utf8"),
         joined: true,
       };
-      if (timedOut || interruptedBy || overflow || code !== 0) {
+      if (timedOut || interruptedBy || overflow || ipcFailed || code !== 0) {
         const error = new Error(
           timedOut
             ? "ROLLBACK_CHILD_TIMEOUT"
@@ -612,7 +657,9 @@ export function runManagedRollbackChild({
               ? `ROLLBACK_CHILD_INTERRUPTED_${interruptedBy}`
               : overflow
                 ? "ROLLBACK_CHILD_OUTPUT_LIMIT"
-                : "ROLLBACK_CHILD_FAILED",
+                : ipcFailed
+                  ? "ROLLBACK_CHILD_IPC_FAILED"
+                  : "ROLLBACK_CHILD_FAILED",
         );
         error.result = result;
         rejectPromise(error);

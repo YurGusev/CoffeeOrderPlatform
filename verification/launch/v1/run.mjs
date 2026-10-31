@@ -1487,7 +1487,8 @@ export async function verifyGateArtifacts(gate, record, evidenceDir) {
         !isDeepStrictEqual(result.browserCorrelationChild, child.receipt) ||
         correlation.launchPath?.correlationId !==
           child.receipt.proof.correlationId ||
-        correlation.launchPath?.traceId !== child.receipt.proof.traceId ||
+        (!traceNotProven &&
+          correlation.launchPath?.traceId !== child.receipt.proof.traceId) ||
         (traceNotProven &&
           correlation.launchPath?.traceStatus !== "NOT_PROVEN") ||
         correlation.launchPath?.browserRefetchMatched !== true ||

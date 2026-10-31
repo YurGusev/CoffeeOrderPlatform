@@ -51,7 +51,24 @@ const actorRef = "actor:g15-browser-fixture";
 void test("G14 reads only the run-owned causally linked Published/Processed metadata", async () => {
   const root = "msg_01ARZ3NDEKTSV4RRFFQ69G5FAV";
   const frame = "msg_01ARZ3NDEKTSV4RRFFQ69G5FAW";
-  for (const cause of [root, null]) {
+  for (const [cause, rootTrace, eventTrace] of [
+    [
+      root,
+      `00-${"a".repeat(32)}-${"b".repeat(16)}-01`,
+      `00-${"a".repeat(32)}-${"b".repeat(16)}-01`,
+    ],
+    [
+      null,
+      `00-${"a".repeat(32)}-${"b".repeat(16)}-01`,
+      `00-${"a".repeat(32)}-${"b".repeat(16)}-01`,
+    ],
+    [root, "invalid", "invalid"],
+    [
+      root,
+      `00-${"a".repeat(32)}-${"b".repeat(16)}-01`,
+      `00-${"c".repeat(32)}-${"b".repeat(16)}-01`,
+    ],
+  ]) {
     const calls = [];
     let closed = false;
     const snapshot = createG14OrderEvidence({
@@ -69,6 +86,7 @@ void test("G14 reads only the run-owned causally linked Published/Processed meta
                   state: "Published",
                   correlation_id: key,
                   causation_id: null,
+                  traceparent: rootTrace,
                 },
               ],
             };
@@ -84,6 +102,7 @@ void test("G14 reads only the run-owned causally linked Published/Processed meta
                   correlation_id: key,
                   causation_id: cause,
                   owner_version: "4",
+                  traceparent: eventTrace,
                 },
               ],
             };
@@ -100,12 +119,14 @@ void test("G14 reads only the run-owned causally linked Published/Processed meta
       frameId: frame,
       ownerVersion: "4",
     };
-    if (cause) {
+    if (cause && rootTrace !== "invalid" && rootTrace === eventTrace) {
       const result = await snapshot(input);
       assert.equal(
         result.ownerMessageSha256,
         createHash("sha256").update(root).digest("hex"),
       );
+      assert.equal(result.traceId, "a".repeat(32));
+      assert.equal(result.ownerTraceparent, result.realtimeTraceparent);
       assert.equal(
         result.realtimeMessageSha256,
         createHash("sha256").update(frame).digest("hex"),

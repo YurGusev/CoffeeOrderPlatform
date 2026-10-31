@@ -12,37 +12,43 @@ pendingDependencies:
     status: awaiting-acceptance
 outputs:
   - artifact: tools/browser-proof.mjs
-    sha256: 03e51c8e63dbff60181279e6a66ebb6ddf5ce966635c1f9045dc4212cb3fd0ee
+    sha256: 3dccbef2dd50d073616d478de43ff49a0d6493e4574f6323f8ea1a2533b32a14
     consumers: [13]
   - artifact: tools/browser-owner-evidence.mjs
-    sha256: 3e07d1e210327054329ff57580e0ce901bc6646fbb97a9e57e27b9d1295effc0
+    sha256: 058f3eb8bf3470301536fe8ad6b32981d80ef4392e1e5c17aa23b3737b328ad3
     consumers: [13]
   - artifact: tools/compose-smoke.mjs
-    sha256: 4a910ee422c31d48ab9bbdfc63138b0dc31b44fe7c1d0b655a78086f5afb8cc4
+    sha256: a55af16c43b753f8f1f9debea4eeee3395334a9b5f0d73882b0739eb0a86c4c2
     consumers: [13]
   - artifact: tools/observability/verify.mjs
-    sha256: cc23ec8f5aed86c2142d356235673c977d335980c2b6d2f1fa62e61691aa8cc1
+    sha256: a1d8d28916d8db6e3970c37a83afb472271289b6ad6a8568c2641e75318c9f17
     consumers: [13]
   - artifact: verification/launch/v1/scenarios/browser.mjs
     sha256: d20460c2302ba7fce02ee1cee8d08bad2004bbf078e597071557428b7e05bb77
     consumers: [13]
   - artifact: verification/launch/v1/run.mjs
-    sha256: 077581063a136f622ed5ebc245fabea0c6e0566b301bec30fa01836894f096dc
+    sha256: ff639b8a42143859690a0051766c4b007c856413580c45d303cb0e06239add20
     consumers: [13]
   - artifact: tests/tools/browser-proof.test.mjs
-    sha256: 045dd3bc6acc24f491e0836b72a95067afcf5532d880d7c206aeaad88743b63d
+    sha256: 888374438222abd307c64c24470b2fd6b52a66decfcd5a2897b0887b7ee3c697
     consumers: [13]
   - artifact: tests/tools/browser-owner-evidence.test.mjs
-    sha256: 2ad5fe7e81710f0a271ae018653e6ad784933bbf1e0f23db89d2642bb90d38d6
+    sha256: f8716bd4915ab17793127728fb0b42bf427f42fdc2c1c888fb8c90409bf47435
     consumers: [13]
   - artifact: tests/config/observability-bootstrap.test.mjs
-    sha256: c1f0dc74bcaba8b3fb8f92be1b01619d39ffc6b31f6c787a069781b6f4ac096c
+    sha256: 0948941fe3ef7e7c30a7c5a75fa033a096eb816317dcb90cd0360baa9e363df9
     consumers: [13]
   - artifact: tests/compose/topology.test.mjs
-    sha256: 558860bdf8965c1ea2ce680e7b41f8380551be182e41b82af9643929aa50f9aa
+    sha256: e53244fbe8aa1f585d3e102813ccbd1bd6cb534749d67e65b209584012b316b7
     consumers: [13]
   - artifact: docs/operations/observability.md
     sha256: 2b7e2a3c3340387b246243ffeeece09f54ec24b975eab88801c196aa06aba5b2
+    consumers: [13]
+  - artifact: verification/launch/v1/scenarios/rollback.mjs
+    sha256: d5967a2e31846025b1489d00a85073a4ac631b60bde2865211904db58f54d85f
+    consumers: [13]
+  - artifact: verification/launch/v1/runner.test.mjs
+    sha256: 55c7e4d4999aea666b9dcc9b27b5a2846ac892a666ca4122f6490550775204df
     consumers: [13]
 verification:
   - command: pnpm install --offline --frozen-lockfile --ignore-scripts
@@ -144,7 +150,81 @@ baselineVerification:
     exitCode: 0
     log: /home/yurgusev/.cache/coffee-launch-delivery/issue-236-baseline/diff.log
     logSha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+ipcVerification:
+  - command: "umask 077 && node --test tests/tools/browser-proof.test.mjs tests/tools/browser-owner-evidence.test.mjs"
+    result: "passed: 37 tests"
+    exitCode: 0
+    log: /home/yurgusev/.cache/coffee-launch-delivery/issue-236-ipc/unit-final.log
+    logSha256: 3b6f3ed3a0857b2fd234a034ba6f8ebc2fbf91737dce8e588ec6d26d30ba52e4
+  - command: "umask 077 && node --test --test-name-pattern='browser correlation (executes|admission)|G14 telemetry sources' tests/config/observability-bootstrap.test.mjs"
+    result: "passed: 3 tests"
+    exitCode: 0
+    log: /home/yurgusev/.cache/coffee-launch-delivery/issue-236-ipc/lifecycle-final.log
+    logSha256: 449772772cb309fcf4083e804a182fa116d0a1fb1f60812687e8a42bb6d9cf2e
+  - command: "umask 077 && node --test --test-name-pattern='G14 retains scoped resources|G14 seals the child config|G14 provider boundary|external PostgreSQL attachment cleanup' tests/compose/topology.test.mjs"
+    result: "passed: 4 tests"
+    exitCode: 0
+    log: /home/yurgusev/.cache/coffee-launch-delivery/issue-236-ipc/retention-final.log
+    logSha256: 187ab2830bf2fcb1ca77a2309f957d032c10fd7c7d55339f0e588a8389072b9e
+  - command: "umask 077 && node --test --test-name-pattern='managed G14 child IPC' verification/launch/v1/runner.test.mjs"
+    result: "passed: 1 test"
+    exitCode: 0
+    log: /home/yurgusev/.cache/coffee-launch-delivery/issue-236-ipc/ipc-final2.log
+    logSha256: cb00244f2aab44fa9c5ea331b330a4393289d4ed720d297a9f9c3ebe3d0e1375
+  - command: "umask 077 && pnpm exec tsc -b apps/catalog-activation-worker --pretty false"
+    result: "passed"
+    exitCode: 0
+    log: /home/yurgusev/.cache/coffee-launch-delivery/issue-236-ipc/tsc-catalog.log
+    logSha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+  - command: "umask 077 && pnpm exec tsc -b apps/catalog-supplier-sync --pretty false"
+    result: "passed"
+    exitCode: 0
+    log: /home/yurgusev/.cache/coffee-launch-delivery/issue-236-ipc/tsc-supplier.log
+    logSha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+  - command: "umask 077 && pnpm exec tsc -b apps/orders-aroma-preparation --pretty false"
+    result: "passed"
+    exitCode: 0
+    log: /home/yurgusev/.cache/coffee-launch-delivery/issue-236-ipc/tsc-preparation.log
+    logSha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+  - command: "umask 077 && pnpm exec oxlint --type-aware --deny-warnings tools/compose-smoke.mjs tools/browser-owner-evidence.mjs tools/browser-proof.mjs tools/observability/verify.mjs verification/launch/v1/scenarios/rollback.mjs verification/launch/v1/runner.test.mjs verification/launch/v1/run.mjs tests/tools/browser-owner-evidence.test.mjs tests/tools/browser-proof.test.mjs tests/config/observability-bootstrap.test.mjs tests/compose/topology.test.mjs"
+    result: "passed"
+    exitCode: 0
+    log: /home/yurgusev/.cache/coffee-launch-delivery/issue-236-ipc/lint-final2.log
+    logSha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+  - command: "umask 077 && pnpm exec prettier --check tools/compose-smoke.mjs tools/browser-owner-evidence.mjs tools/browser-proof.mjs tools/observability/verify.mjs verification/launch/v1/scenarios/rollback.mjs verification/launch/v1/runner.test.mjs verification/launch/v1/run.mjs tests/tools/browser-owner-evidence.test.mjs tests/tools/browser-proof.test.mjs tests/config/observability-bootstrap.test.mjs tests/compose/topology.test.mjs"
+    result: "passed"
+    exitCode: 0
+    log: /home/yurgusev/.cache/coffee-launch-delivery/issue-236-ipc/format-final2.log
+    logSha256: 17aa973d3f004560237d9a95171210b0671deff23d61628eecf7322ff5938f20
+  - command: "umask 077 && git diff --check"
+    result: "passed"
+    exitCode: 0
+    log: /home/yurgusev/.cache/coffee-launch-delivery/issue-236-ipc/diff-final.log
+    logSha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+  - command: "umask 077 && node --test --test-name-pattern='managed G14 child IPC' verification/launch/v1/runner.test.mjs"
+    result: "failed: missing catalog-activation-worker dist before scoped tsc"
+    exitCode: 1
+    log: /home/yurgusev/.cache/coffee-launch-delivery/issue-236-ipc/ipc-initial.log
+    logSha256: 0f197ae763bb9809dafb1cf48f566e248053ef1114eb9ffe803de4d3c62a0be0
+  - command: "umask 077 && node --test --test-name-pattern='managed G14 child IPC' verification/launch/v1/runner.test.mjs"
+    result: "failed: missing catalog-supplier-sync dist before scoped tsc"
+    exitCode: 1
+    log: /home/yurgusev/.cache/coffee-launch-delivery/issue-236-ipc/ipc-second.log
+    logSha256: b8c7b49b795195abf748b331b44f06934b2861b948b8d143ff8a1ade0a6cba1c
+  - command: "umask 077 && node --test --test-name-pattern='managed G14 child IPC' verification/launch/v1/runner.test.mjs"
+    result: "failed: missing orders-aroma-preparation dist before scoped tsc"
+    exitCode: 1
+    log: /home/yurgusev/.cache/coffee-launch-delivery/issue-236-ipc/ipc-third.log
+    logSha256: 0b72aa9ae53d1c4a1839222e8c97e3737067acb32d14228e852d8511a18787af
+  - command: umask 077 && pnpm exec oxlint --type-aware --deny-warnings tools/compose-smoke.mjs tools/browser-owner-evidence.mjs tools/browser-proof.mjs tools/observability/verify.mjs verification/launch/v1/scenarios/rollback.mjs verification/launch/v1/runner.test.mjs verification/launch/v1/run.mjs tests/tools/browser-owner-evidence.test.mjs tests/tools/browser-proof.test.mjs tests/config/observability-bootstrap.test.mjs tests/compose/topology.test.mjs
+    result: "failed: no-unsafe-finally; исправлено до финального lint"
+    exitCode: 1
+    log: /home/yurgusev/.cache/coffee-launch-delivery/issue-236-ipc/lint-third.log
+    logSha256: e2c18ed924f5dd879f83cea7d678769e95b495b57ce9e300bf05f1e131992f50
 limitations:
+  - >-
+    G14 IPC и fail-closed retention проверены изолированными Node-тестами;
+    реальный Collector, аварийный disconnect и очистка child runtime не запускались.
   - >-
     #222, #228 и #229 включены локальными merge как stacked dependencies; их принятие
     и соответствующие accepted handoffs необходимы до merge #236 и здесь не заявляются.

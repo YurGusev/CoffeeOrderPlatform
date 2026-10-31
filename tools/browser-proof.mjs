@@ -1184,6 +1184,9 @@ export function validateG14BrowserEvidence(
       "ownerMessageSha256",
       "realtimeMessageSha256",
       "ownerVersion",
+      "ownerTraceparent",
+      "realtimeTraceparent",
+      "traceId",
       "confirmedVersion",
       "acceptedVersion",
       "confirmCount",
@@ -1206,6 +1209,11 @@ export function validateG14BrowserEvidence(
     !/^[0-9a-f]{64}$/u.test(evidence.ownerMessageSha256 ?? "") ||
     !/^[0-9a-f]{64}$/u.test(evidence.realtimeMessageSha256 ?? "") ||
     !/^[1-9]\d{0,18}$/u.test(evidence.ownerVersion ?? "") ||
+    !/^(?!ff)[0-9a-f]{2}-(?!0{32})[0-9a-f]{32}-(?!0{16})[0-9a-f]{16}-[0-9a-f]{2}$/u.test(
+      evidence.ownerTraceparent ?? "",
+    ) ||
+    evidence.realtimeTraceparent !== evidence.ownerTraceparent ||
+    evidence.traceId !== evidence.ownerTraceparent.slice(3, 35) ||
     !/^[1-9]\d{0,18}$/u.test(evidence.confirmedVersion ?? "") ||
     !/^[1-9]\d{0,18}$/u.test(evidence.acceptedVersion ?? "") ||
     BigInt(evidence.acceptedVersion) < BigInt(evidence.ownerVersion) ||
