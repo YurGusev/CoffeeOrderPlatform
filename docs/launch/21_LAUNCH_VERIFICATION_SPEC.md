@@ -74,6 +74,7 @@ evidence/launch/<run-id>/
   gates/<gate-id>/{result.json,stdout.log,stderr.log,artifacts/**}
   defects.json
   decision.json
+  handoff.yaml
   checksums.sha256
 evidence/handoffs/issue-13.yaml
 ```
@@ -521,6 +522,18 @@ digests, таблицу G00–G19, exact commands/durations/results, ссылк�
 times, observability/rollback результаты, defect issues, открытые риски и
 непроверенное поведение. Отчёт генерируется из result JSON; ручное изменение
 decision запрещено schema/checksum check.
+
+До заморозки candidate SHA исходный `evidence/handoffs/issue-13.yaml` фиксирует
+фактические inputs, outputs и выполненные проверки на момент подготовки, без
+предсказания PASS. G19 создаёт отдельный `evidence/launch/<run-id>/handoff.yaml`
+из фактических статусов, команд и хэшей evidence и связывает его с SHA-256
+точного Git blob исходного descriptor этого кандидата. Отсутствующий или
+недоступный descriptor означает FAIL G19 и `НЕ ДОПУСТИТЬ`; отчёт и handoff с
+`NOT_PROVEN` всё равно сохраняются. Производный handoff включён в
+`checksums.sha256`, не хэширует себя или manifest. Владелец согласовал
+публикацию обоих артефактов и их хэшей в PR и Obsidian после запуска, без
+изменения source SHA. Лимиты G14 1800 с, основного запуска 7200 с и отдельной
+qualification 2700 с сохраняются.
 
 ## 12. Не входит
 

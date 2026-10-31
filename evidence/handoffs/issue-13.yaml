@@ -1,7 +1,7 @@
 issue: 13
 baseCommit: a6cceeaa822f9641c678b5dcae521c282391dd3d
 status: source-descriptor-before-formal-verification
-asOfUtc: "2026-10-31T15:37:29.007898+00:00"
+asOfUtc: "2026-10-31T19:43:27Z"
 inputs:
   - issue: 2
     acceptedMergeCommit: 327638d4494269a151ee7c0ac945ac0053c3e0d4
@@ -131,6 +131,14 @@ outputs:
     sha256: 9548528ae189629cbe12a12562c1e66bdfcc77e16f0c15c9ff30e85b020457c5
     consumers:
       - 1
+  - artifact: docs/launch/13_DELIVERY_DEPENDENCY_GRAPH.md
+    sha256: 9081c00f4060b0b902e3ee48b3b7f26d71b6382591ad0b3ae1057fe488017812
+    consumers:
+      - 1
+  - artifact: docs/launch/21_LAUNCH_VERIFICATION_SPEC.md
+    sha256: e49460e44069e592319dd57a9d3104673b5485b2bf8a6717365ae7d98b039179
+    consumers:
+      - 1
   - artifact: docs/operations/observability.md
     sha256: a8dfe55e8e1a603a90eb99888718998b095c2c86897c955b92564cbb1a3fd048
     consumers:
@@ -240,6 +248,13 @@ consumerContract:
   sourceDescriptor:
     Фиксирует реальные inputs/outputs и проверки на момент подготовки. Не является runtime
     допуском или обещанием будущего PASS.
+  publication:
+    ownerDecision: Владелец согласовал 2026-11-01 принятие двух связанных артефактов на одном candidate SHA.
+    source: evidence/handoffs/issue-13.yaml
+    derived: evidence/launch/<run-id>/handoff.yaml
+    binding: Производный handoff содержит SHA-256 точного Git blob исходного descriptor и включён в checksums.sha256.
+    channels: [GitHub PR, Obsidian]
+    note: Фактические файлы и их хэши публикуются после запуска без изменения source SHA.
 limitations:
   - "Общий pnpm check на ce9e10f прерван guard через311.290s: builder free опустился ниже1ГиБ, завершение
     -15. Помимо отмен воспроизведён устаревший source-slicing test восстановления; его привязки обновлены
@@ -247,6 +262,6 @@ limitations:
     ещё NOT_RUN."
   - Итоговые G12, обязательная SSE qualification и полный G00–G19 на окончательном SHA ещё NOT_RUN. Component
     cffe147 и прежние qualification не переносятся.
-  - Фактические runtime results и hashes появятся после выполнения; принятие derived handoff вместе с frozen
-    source descriptor требует решения владельца.
+  - Фактические runtime results и hashes появятся после выполнения; согласованная публикация двух артефактов
+    не является доказательством PASS до полного запуска.
   - Отрицательный G00 a6cceea сохранён без изменения статуса, он не считается финальным PASS.
