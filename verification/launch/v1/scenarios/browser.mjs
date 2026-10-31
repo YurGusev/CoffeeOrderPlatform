@@ -52,6 +52,19 @@ const CORRELATION_ARTIFACTS = Object.freeze({
   childConfig: "browser-config.yaml",
   receipt: "browser-correlation.json",
 });
+const QUALIFICATION_ARTIFACTS = Object.freeze({
+  childContext: "browser-context.json",
+  lineage: "browser-lineage.json",
+  bundle: "browser-source.bundle",
+  baseConfig: "browser-base.yaml",
+  childConfig: "browser-config.yaml",
+  parentContext: "parent-context.json",
+  manifest: "profile-manifest.json",
+  result: "result.json",
+  cleanup: "cleanup.json",
+  containers: "containers.json",
+  seal: "seal.json",
+});
 const PARENT_KEYS = Object.freeze([
   "schemaVersion",
   "gateId",
@@ -600,7 +613,19 @@ export async function verifyBrowserChildBundle({
   lineageReceipt,
   baseConfigBytes,
   childConfigBytes,
+  baseSourceRoot = childContext.sourceRepoRoot,
 }) {
+  if (
+    baseSourceRoot !== childContext.sourceRepoRoot &&
+    (git(baseSourceRoot, "rev-parse", "HEAD") !== baseCandidateSha ||
+      !gitBytes(
+        baseSourceRoot,
+        "cat-file",
+        "blob",
+        `${baseCandidateSha}:config/platform.yaml`,
+      ).equals(baseConfigBytes))
+  )
+    fail("G15_BUNDLE_BASE_MISMATCH");
   const tempRoot = await mkdtemp(join(tmpdir(), "coffee-g15-admission-"));
   const objectStore = join(tempRoot, "objects.git");
   const checkoutRoot = join(tempRoot, "checkout");
@@ -616,7 +641,7 @@ export async function verifyBrowserChildBundle({
         objectStore,
         "fetch",
         "--no-tags",
-        childContext.sourceRepoRoot,
+        baseSourceRoot,
         `${baseCandidateSha}:refs/heads/g15-base`,
       ],
       "G15_BUNDLE_BASE_MISSING",
@@ -1024,7 +1049,20 @@ export async function validateBrowserCorrelation({
   };
 }
 
-export async function runBrowserParent({ runCorrelation } = {}) {
+export async function runBrowserParent({
+  runCorrelation,
+  runQualification,
+  qualificationRunId,
+} = {}) {
+  if (runQualification !== undefined) {
+    if (
+      typeof runQualification !== "function" ||
+      runCorrelation ||
+      !/^i12-[a-f0-9]{16}$/u.test(qualificationRunId ?? "")
+    )
+      fail("REALTIME_QUALIFICATION_CALLBACK_INVALID");
+  } else if (qualificationRunId !== undefined)
+    fail("REALTIME_QUALIFICATION_CALLBACK_INVALID");
   const contextPath = process.env.COFFEE_LAUNCH_CONTEXT_FILE;
   if (!contextPath) fail("G15_LAUNCH_CONTEXT_REQUIRED");
   const launch = await validateLaunchContext(contextPath);
@@ -1142,13 +1180,47 @@ export async function runBrowserParent({ runCorrelation } = {}) {
       contextPath: contextRecord.path,
       baseCandidateSha: parentContext.candidateSha,
     });
-    const artifactsDir = join(
-      evidenceDir,
-      runCorrelation
-        ? "gates/G14_OBSERVABILITY/artifacts"
-        : "gates/G15_BROWSER/artifacts",
-    );
-    const artifacts = runCorrelation ? CORRELATION_ARTIFACTS : ARTIFACTS;
+    let artifactsDir;
+    if (runQualification) {
+      for (const directory of [
+        join(parentContext.sourceRepoRoot, "evidence"),
+        join(parentContext.sourceRepoRoot, "evidence/launch"),
+        join(parentContext.sourceRepoRoot, "evidence/launch/qualifications"),
+      ]) {
+        try {
+          await mkdir(directory, { mode: 0o700 });
+        } catch (error) {
+          if (error.code !== "EEXIST") throw error;
+        }
+        const info = await lstat(directory);
+        if (
+          !info.isDirectory() ||
+          info.isSymbolicLink() ||
+          info.uid !== process.getuid() ||
+          (info.mode & 0o022) !== 0 ||
+          (await realpath(directory)) !== directory
+        )
+          fail("REALTIME_QUALIFICATION_DIRECTORY_INVALID");
+      }
+      artifactsDir = join(
+        parentContext.sourceRepoRoot,
+        "evidence/launch/qualifications",
+        qualificationRunId,
+      );
+      await mkdir(artifactsDir, { mode: 0o700 });
+    } else {
+      artifactsDir = join(
+        evidenceDir,
+        runCorrelation
+          ? "gates/G14_OBSERVABILITY/artifacts"
+          : "gates/G15_BROWSER/artifacts",
+      );
+    }
+    const artifacts = runQualification
+      ? QUALIFICATION_ARTIFACTS
+      : runCorrelation
+        ? CORRELATION_ARTIFACTS
+        : ARTIFACTS;
     const lineageBytes = await readFile(lineage.receiptPath);
     await writePrivateFile(
       join(artifactsDir, artifacts.lineage),
@@ -1170,6 +1242,158 @@ export async function runBrowserParent({ runCorrelation } = {}) {
       variantBytes,
       0o400,
     );
+
+    if (runQualification) {
+      const result = await runQualification(contextRecord.path);
+      if (
+        result?.runId !== qualificationRunId ||
+        typeof result?.resultDir !== "string"
+      )
+        fail("REALTIME_QUALIFICATION_RESULT_INVALID");
+      const { classifyResult } =
+        await import("../../../../tests/realtime/fixtures/protocol.mjs");
+      const copied = {};
+      for (const [key, name, limit] of [
+        ["manifest", "profile-manifest.json", 16 * 1024 * 1024],
+        ["result", "result.json", 4 * 1024 * 1024],
+        ["cleanup", "cleanup.json", 1024 * 1024],
+        ["containers", "containers.json", 1024 * 1024],
+      ]) {
+        const path = join(result.resultDir, name);
+        const info = await lstat(path);
+        if (
+          !info.isFile() ||
+          info.isSymbolicLink() ||
+          info.uid !== process.getuid() ||
+          info.size > limit ||
+          (await realpath(path)) !== path
+        )
+          fail("REALTIME_QUALIFICATION_RAW_INVALID");
+        copied[key] = await readFile(path);
+        await writePrivateFile(
+          join(artifactsDir, artifacts[key]),
+          copied[key],
+          0o400,
+        );
+      }
+      const rawResult = JSON.parse(copied.result);
+      const rawCleanup = JSON.parse(copied.cleanup);
+      const rawContainers = JSON.parse(copied.containers);
+      const manifest = JSON.parse(copied.manifest);
+      const roles = [
+        "kafka",
+        "idp",
+        "orders-fixture",
+        "edge-gateway",
+        "api-public",
+        "realtime-gateway",
+        "edge-nginx",
+        "driver",
+      ];
+      if (
+        rawResult.status !== "PASS" ||
+        rawResult.launchProof !== true ||
+        rawResult.cleanupVerified !== true ||
+        rawCleanup.verified !== true ||
+        rawCleanup.network?.created !== true ||
+        rawCleanup.network?.removed !== true ||
+        rawCleanup.network?.name !== `${qualificationRunId}-net` ||
+        rawCleanup.owner?.removed !== true ||
+        rawCleanup.syntheticPrivateMaterialRemoved !== true ||
+        !Array.isArray(rawCleanup.receipts) ||
+        !Array.isArray(rawContainers) ||
+        rawCleanup.receipts.length !== roles.length ||
+        rawContainers.length !== roles.length ||
+        !roles.every((role) => {
+          const containers = rawContainers.filter(
+            (entry) => entry.role === role,
+          );
+          const receipts = rawCleanup.receipts.filter(
+            (entry) => entry.role === role,
+          );
+          return (
+            containers.length === 1 &&
+            receipts.length === 1 &&
+            receipts[0].id === containers[0].id &&
+            receipts[0].removed === true &&
+            receipts[0].logsCaptured === true
+          );
+        }) ||
+        classifyResult(rawResult).status !== "PASS" ||
+        rawResult.manifestSha256 !== sha256(copied.manifest) ||
+        !manifest.qualification ||
+        manifest.runId !== qualificationRunId
+      )
+        fail("REALTIME_QUALIFICATION_RESULT_INVALID");
+      const parentContextBytes = await readFile(contextPath);
+      await writePrivateFile(
+        join(artifactsDir, artifacts.parentContext),
+        parentContextBytes,
+        0o400,
+      );
+      git(childRoot, "update-ref", CHILD_REF, childContext.candidateSha);
+      const bundlePath = join(artifactsDir, artifacts.bundle);
+      execFileSync(
+        "git",
+        [
+          "-C",
+          childRoot,
+          "bundle",
+          "create",
+          bundlePath,
+          CHILD_REF,
+          `^${parentContext.candidateSha}`,
+        ],
+        { stdio: "ignore", timeout: 120_000 },
+      );
+      await chmod(bundlePath, 0o400);
+      const bundleBytes = await assertPrivateFile(
+        bundlePath,
+        0o400,
+        MAX_BUNDLE_BYTES,
+      );
+      const contextBytes = await readFile(contextRecord.path);
+      await rm(childRoot, { recursive: true, force: false });
+      await rm(childEvidenceDir, { recursive: true, force: false });
+      successfulChild = true;
+      await verifyBrowserChildBundle({
+        bundlePath,
+        baseCandidateSha: parentContext.candidateSha,
+        childContext,
+        lineageReceipt: JSON.parse(lineageBytes),
+        baseConfigBytes,
+        childConfigBytes: variantBytes,
+      });
+      const seal = {
+        schemaVersion: 1,
+        status: "SEALED",
+        runId: qualificationRunId,
+        parentRunId: parentContext.runId,
+        candidateSha: parentContext.candidateSha,
+        baseConfigSha256: parentContext.baseConfigSha256,
+        childRunId,
+        childCandidateSha: childSha,
+        checkoutRemoved: true,
+        evidenceRemoved: true,
+        hashes: {
+          parentContext: sha256(parentContextBytes),
+          childContext: sha256(contextBytes),
+          lineage: sha256(lineageBytes),
+          bundle: sha256(bundleBytes),
+          baseConfig: sha256(baseConfigBytes),
+          childConfig: sha256(variantBytes),
+          ...Object.fromEntries(
+            Object.entries(copied).map(([key, bytes]) => [key, sha256(bytes)]),
+          ),
+        },
+      };
+      await writePrivateFile(
+        join(artifactsDir, artifacts.seal),
+        Buffer.from(`${JSON.stringify(seal, null, 2)}\n`),
+        0o400,
+      );
+      return { qualificationSeal: seal, artifactsDir };
+    }
 
     if (runCorrelation) {
       const result = await runCorrelation(contextRecord.path);
@@ -1379,7 +1603,13 @@ export async function runBrowserParent({ runCorrelation } = {}) {
   } catch (error) {
     if (successfulChild) throw error;
     // Retain an uncertain child checkout and its evidence as a failure witness.
-    if (!runCorrelation && childContext && childRunId && childSha) {
+    if (
+      !runCorrelation &&
+      !runQualification &&
+      childContext &&
+      childRunId &&
+      childSha
+    ) {
       try {
         await persistBrowserFailureFromChild({
           error,

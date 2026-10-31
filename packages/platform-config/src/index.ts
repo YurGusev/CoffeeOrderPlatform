@@ -2434,9 +2434,17 @@ export function parsePlatformConfig(value: unknown): PlatformConfig {
     const verification = record(source["verification"], "config.verification");
     exactKeys(
       verification,
-      ["aromaSandbox", "securityScan", "unitCoverage"],
+      ["aromaSandbox", "securityScan", "unitCoverage", "realtimeQualification"],
       "config.verification",
       ["databaseIsolation", "kafkaNamespaceIsolation"],
+    );
+    const path = "config.verification.realtimeQualification";
+    const policy = record(verification["realtimeQualification"], path);
+    exactKeys(policy, ["budgetSeconds", "maximumAgeSeconds"], path);
+    positiveIntegerValue(policy["budgetSeconds"], `${path}.budgetSeconds`);
+    positiveIntegerValue(
+      policy["maximumAgeSeconds"],
+      `${path}.maximumAgeSeconds`,
     );
     if (verification["aromaSandbox"] !== null)
       record(verification["aromaSandbox"], "config.verification.aromaSandbox");
