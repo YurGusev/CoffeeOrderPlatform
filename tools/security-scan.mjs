@@ -56,17 +56,22 @@ const SHA256 = /^sha256:[0-9a-f]{64}$/u;
 const APPROVED_TEMPO = Object.freeze({
   version: "13.4.1",
   zipSha256: "08b0de5ed46b3b60693b41495bc00633ae63c3f2e76faa819c7fa95a4dbbc529",
-  manifestSha256: "7c6d68297c3c30623c2f123aeef4e5163de98351af3f31557d72c6796516c9c4",
-  binarySha256: "292f1875dbcc18125701cca2762da7e65300a4ca3ea3c4105f24b7cd57694588",
-  signingKeySourceSha256: "010f8c4bc078a6b11be3f7a902c90a559a13e2e6f44c4d5632f01b9e8e6e68a2",
+  manifestSha256:
+    "7c6d68297c3c30623c2f123aeef4e5163de98351af3f31557d72c6796516c9c4",
+  binarySha256:
+    "292f1875dbcc18125701cca2762da7e65300a4ca3ea3c4105f24b7cd57694588",
+  signingKeySourceSha256:
+    "010f8c4bc078a6b11be3f7a902c90a559a13e2e6f44c4d5632f01b9e8e6e68a2",
   signingKeyFingerprint: "F33B25B691074E84636570F37E4D0C6A708866E7",
   moduleVersion: "v1.5.1-0.20260910130453-bcfe9f230c1d",
   moduleH1: "h1:BphMCaYqWY+j1fdRPNFPkYE4A4QIev1KlHjRkSVJ8O4=",
   revision: "bcfe9f230c1de0f79cfd2110b38062e0f41c81e9",
-  fixCommits: ["650eb1985a0776789c8564122990f588a742356f", "bb8ca663db34a0980c9758b40d918fda3b4dbec3"],
+  fixCommits: [
+    "650eb1985a0776789c8564122990f588a742356f",
+    "bb8ca663db34a0980c9758b40d918fda3b4dbec3",
+  ],
 });
 const APPROVED_CVES = Object.freeze(["CVE-2026-21728", "CVE-2026-28377"]);
-
 
 function fail(code) {
   throw Object.assign(new Error(code), { code });
@@ -278,57 +283,121 @@ export function inspectFindings(report) {
   return Object.freeze({ high, critical });
 }
 
-export function adjudicateGrafanaFindings({ report, image, toolchain, approvedFixed = [] }) {
+export function adjudicateGrafanaFindings({
+  report,
+  image,
+  toolchain,
+  approvedFixed = [],
+}) {
   const pin = toolchain.grafanaPlugins?.tempo;
   const module = toolchain.grafanaTempoModule;
   const binding = image?.buildInputBinding?.vendorPlugins;
   const effective = binding?.effectiveFiles?.tempo;
-  const target = "opt/grafana/plugins/tempo/gpx_grafana-tempo-datasource_linux_amd64";
-  if (!Array.isArray(approvedFixed) || approvedFixed.length !== 2 ||
-      new Set(approvedFixed).size !== 2 || APPROVED_CVES.some((id) => !approvedFixed.includes(id)) ||
-      image?.service !== "grafana" || !SHA256.test(image?.imageId ?? "") || !SHA256.test(image?.manifestDigest ?? "") ||
-      !SHA256.test(image?.platformManifestDigest ?? "") || report?.Metadata?.ImageID !== image.imageId ||
-      pin?.version !== APPROVED_TEMPO.version || pin?.zipSha256 !== APPROVED_TEMPO.zipSha256 ||
-      pin?.manifestSha256 !== APPROVED_TEMPO.manifestSha256 || pin?.binarySha256 !== APPROVED_TEMPO.binarySha256 ||
-      toolchain.grafanaSigningKeySourceSha256 !== APPROVED_TEMPO.signingKeySourceSha256 ||
-      toolchain.grafanaSigningKeyFingerprint !== APPROVED_TEMPO.signingKeyFingerprint ||
-      module?.version !== APPROVED_TEMPO.moduleVersion || module?.h1 !== APPROVED_TEMPO.moduleH1 ||
-      module?.revision !== APPROVED_TEMPO.revision || module?.replacement !== null || JSON.stringify(module?.fixCommits) !== JSON.stringify(APPROVED_TEMPO.fixCommits) ||
-      effective?.path !== `/${target}` || effective?.sha256 !== APPROVED_TEMPO.binarySha256 || !SHA256.test(effective?.layerDigest ?? "") ||
-      binding?.signingKeyFingerprint !== APPROVED_TEMPO.signingKeyFingerprint ||
-      binding?.signingKeySourceSha256 !== APPROVED_TEMPO.signingKeySourceSha256 ||
-      JSON.stringify(binding?.plugins?.tempo) !== JSON.stringify(pin)) return [];
+  const target =
+    "opt/grafana/plugins/tempo/gpx_grafana-tempo-datasource_linux_amd64";
+  if (
+    !Array.isArray(approvedFixed) ||
+    approvedFixed.length !== 2 ||
+    new Set(approvedFixed).size !== 2 ||
+    APPROVED_CVES.some((id) => !approvedFixed.includes(id)) ||
+    image?.service !== "grafana" ||
+    !SHA256.test(image?.imageId ?? "") ||
+    !SHA256.test(image?.manifestDigest ?? "") ||
+    !SHA256.test(image?.platformManifestDigest ?? "") ||
+    report?.Metadata?.ImageID !== image.imageId ||
+    pin?.version !== APPROVED_TEMPO.version ||
+    pin?.zipSha256 !== APPROVED_TEMPO.zipSha256 ||
+    pin?.manifestSha256 !== APPROVED_TEMPO.manifestSha256 ||
+    pin?.binarySha256 !== APPROVED_TEMPO.binarySha256 ||
+    toolchain.grafanaSigningKeySourceSha256 !==
+      APPROVED_TEMPO.signingKeySourceSha256 ||
+    toolchain.grafanaSigningKeyFingerprint !==
+      APPROVED_TEMPO.signingKeyFingerprint ||
+    module?.version !== APPROVED_TEMPO.moduleVersion ||
+    module?.h1 !== APPROVED_TEMPO.moduleH1 ||
+    module?.revision !== APPROVED_TEMPO.revision ||
+    module?.replacement !== null ||
+    JSON.stringify(module?.fixCommits) !==
+      JSON.stringify(APPROVED_TEMPO.fixCommits) ||
+    effective?.path !== `/${target}` ||
+    effective?.sha256 !== APPROVED_TEMPO.binarySha256 ||
+    !SHA256.test(effective?.layerDigest ?? "") ||
+    binding?.signingKeyFingerprint !== APPROVED_TEMPO.signingKeyFingerprint ||
+    binding?.signingKeySourceSha256 !== APPROVED_TEMPO.signingKeySourceSha256 ||
+    JSON.stringify(binding?.plugins?.tempo) !== JSON.stringify(pin)
+  )
+    return [];
   const rows = (report.Results ?? []).filter((row) => row?.Target === target);
   if (rows.length !== 1 || !Array.isArray(rows[0].Vulnerabilities)) return [];
   const decisions = [];
   for (const id of APPROVED_CVES) {
-    const found = rows[0].Vulnerabilities.filter((v) => v?.VulnerabilityID === id && v?.Severity === "HIGH");
+    const found = rows[0].Vulnerabilities.filter(
+      (v) => v?.VulnerabilityID === id && v?.Severity === "HIGH",
+    );
     if (found.length !== 1) continue;
     const finding = found[0];
-    if (finding.PkgName !== "github.com/grafana/tempo" || finding.InstalledVersion !== APPROVED_TEMPO.moduleVersion ||
-        finding.PkgIdentifier?.PURL !== `pkg:golang/github.com/grafana/tempo@${APPROVED_TEMPO.moduleVersion}` ||
-        !SHA256.test(finding.Fingerprint ?? "") || decisions.some((decision) => decision.fingerprint === finding.Fingerprint)) continue;
-    decisions.push({vulnerabilityId: id, fingerprint: finding.Fingerprint, status: "fixed_in_exact_vendor_artifact"});
+    if (
+      finding.PkgName !== "github.com/grafana/tempo" ||
+      finding.InstalledVersion !== APPROVED_TEMPO.moduleVersion ||
+      finding.PkgIdentifier?.PURL !==
+        `pkg:golang/github.com/grafana/tempo@${APPROVED_TEMPO.moduleVersion}` ||
+      !SHA256.test(finding.Fingerprint ?? "") ||
+      decisions.some((decision) => decision.fingerprint === finding.Fingerprint)
+    )
+      continue;
+    decisions.push({
+      vulnerabilityId: id,
+      fingerprint: finding.Fingerprint,
+      status: "fixed_in_exact_vendor_artifact",
+    });
   }
   return decisions;
 }
 
 // Interchange projection of the already-verified local decision, not a vendor statement.
-export function buildOpenVex({decisions, runId, candidateSha, platformManifestDigest, timestamp}) {
-  if (!Array.isArray(decisions) || decisions.some((decision) => !APPROVED_CVES.includes(decision.vulnerabilityId)) ||
-      new Set(decisions.map((decision) => decision.vulnerabilityId)).size !== decisions.length ||
-      typeof runId !== "string" || !runId || !/^[a-f0-9]{40}$/u.test(candidateSha ?? "") ||
-      !SHA256.test(platformManifestDigest ?? "") || isoTime(timestamp) === null) fail("OPENVEX_INPUT_INVALID");
+export function buildOpenVex({
+  decisions,
+  runId,
+  candidateSha,
+  platformManifestDigest,
+  timestamp,
+}) {
+  if (
+    !Array.isArray(decisions) ||
+    decisions.some(
+      (decision) => !APPROVED_CVES.includes(decision.vulnerabilityId),
+    ) ||
+    new Set(decisions.map((decision) => decision.vulnerabilityId)).size !==
+      decisions.length ||
+    typeof runId !== "string" ||
+    !runId ||
+    !/^[a-f0-9]{40}$/u.test(candidateSha ?? "") ||
+    !SHA256.test(platformManifestDigest ?? "") ||
+    isoTime(timestamp) === null
+  )
+    fail("OPENVEX_INPUT_INVALID");
   if (!decisions.length) return null;
-  const id = sha256(Buffer.from(`${runId}\0${candidateSha}\0${platformManifestDigest}`));
-  const notes = `Project Operations assessment of Grafana-signed plugin binary sha256:${APPROVED_TEMPO.binarySha256}; ` +
+  const id = sha256(
+    Buffer.from(`${runId}\0${candidateSha}\0${platformManifestDigest}`),
+  );
+  const notes =
+    `Project Operations assessment of Grafana-signed plugin binary sha256:${APPROVED_TEMPO.binarySha256}; ` +
     `ZIP sha256:${APPROVED_TEMPO.zipSha256}, signed manifest sha256:${APPROVED_TEMPO.manifestSha256}, key ${APPROVED_TEMPO.signingKeyFingerprint}; ` +
     `${APPROVED_TEMPO.moduleVersion}, ${APPROVED_TEMPO.moduleH1}, no replacement; source fixes ${APPROVED_TEMPO.fixCommits.join(", ")}. ` +
     "Machine-code reproducibility was not proven; this is not a vendor statement.";
-  return {"@context": "https://openvex.dev/ns/v0.2.0", "@id": `https://github.com/YurGusev/CoffeeOrderPlatform/vex/${id}`,
-    author: "CoffeeOrderPlatform Operations", timestamp, version: 1,
-    statements: decisions.map(({vulnerabilityId}) => ({vulnerability: {name: vulnerabilityId},
-      products: [{"@id": `pkg:oci/grafana@${platformManifestDigest}`}], status: "fixed", status_notes: notes}))};
+  return {
+    "@context": "https://openvex.dev/ns/v0.2.0",
+    "@id": `https://github.com/YurGusev/CoffeeOrderPlatform/vex/${id}`,
+    author: "CoffeeOrderPlatform Operations",
+    timestamp,
+    version: 1,
+    statements: decisions.map(({ vulnerabilityId }) => ({
+      vulnerability: { name: vulnerabilityId },
+      products: [{ "@id": `pkg:oci/grafana@${platformManifestDigest}` }],
+      status: "fixed",
+      status_notes: notes,
+    })),
+  };
 }
 
 export function validateOpenVex(document, inputs) {
@@ -624,7 +693,12 @@ async function validateInputs({
     toolchain.trivyImage !== SCANNER_IMAGE
   )
     fail("SCANNER_PIN_MISMATCH");
-  for (const key of [...UPSTREAM_IMAGES, "kafkaImage", "nodeImage", "grafanaImage"])
+  for (const key of [
+    ...UPSTREAM_IMAGES,
+    "kafkaImage",
+    "nodeImage",
+    "grafanaImage",
+  ])
     if (!/^.+@sha256:[0-9a-f]{64}$/u.test(toolchain[key] ?? ""))
       fail("UPSTREAM_IMAGE_PIN_INVALID");
   if (
@@ -671,66 +745,198 @@ async function collectManifestFiles(root) {
   return [...new Set(files)].sort((a, b) => a.localeCompare(b, "en"));
 }
 
-async function prepareGrafanaPlugins({ toolchain, temporary, outputRoot, run }) {
-  const version = /^grafana\/grafana:(\d+\.\d+\.\d+)-slim@sha256:[a-f0-9]{64}$/u.exec(toolchain.grafanaImage ?? "")?.[1];
+async function prepareGrafanaPlugins({
+  toolchain,
+  temporary,
+  outputRoot,
+  run,
+}) {
+  const version =
+    /^grafana\/grafana:(\d+\.\d+\.\d+)-slim@sha256:[a-f0-9]{64}$/u.exec(
+      toolchain.grafanaImage ?? "",
+    )?.[1];
   if (!version) fail("GRAFANA_BASE_IMAGE_PIN_INVALID");
   const root = join(temporary, "grafana-plugins");
   const keyDir = join(temporary, "grafana-signing-key");
-  await mkdir(root, {mode: 0o700});
-  await mkdir(keyDir, {mode: 0o700});
+  await mkdir(root, { mode: 0o700 });
+  await mkdir(keyDir, { mode: 0o700 });
   const keySource = join(temporary, "grafana-static-retriever.go");
-  await run("curl", ["--fail", "--location", "--proto", "=https", "--proto-redir", "=https", "--max-filesize", "2097152", "--output", keySource,
-    `https://raw.githubusercontent.com/grafana/grafana/v${version}/pkg/plugins/manager/signature/statickey/static_retriever.go`]);
+  await run("curl", [
+    "--fail",
+    "--location",
+    "--proto",
+    "=https",
+    "--proto-redir",
+    "=https",
+    "--max-filesize",
+    "2097152",
+    "--output",
+    keySource,
+    `https://raw.githubusercontent.com/grafana/grafana/v${version}/pkg/plugins/manager/signature/statickey/static_retriever.go`,
+  ]);
   const keyBytes = await readRegular(keySource);
-  if (sha256(keyBytes) !== toolchain.grafanaSigningKeySourceSha256) fail("GRAFANA_KEY_SOURCE_MISMATCH");
-  const publicKey = /const publicKeyText = `([\s\S]+?)`/u.exec(keyBytes.toString("utf8"))?.[1];
+  if (sha256(keyBytes) !== toolchain.grafanaSigningKeySourceSha256)
+    fail("GRAFANA_KEY_SOURCE_MISMATCH");
+  const publicKey = /const publicKeyText = `([\s\S]+?)`/u.exec(
+    keyBytes.toString("utf8"),
+  )?.[1];
   if (!publicKey) fail("GRAFANA_KEY_INVALID");
   const keyFile = join(temporary, "grafana-signing-key.asc");
-  await writeFile(keyFile, publicKey, {flag: "wx", mode: 0o600});
-  const gpg = ["--no-options", "--homedir", keyDir, "--batch", "--no-auto-key-retrieve"];
+  await writeFile(keyFile, publicKey, { flag: "wx", mode: 0o600 });
+  const gpg = [
+    "--no-options",
+    "--homedir",
+    keyDir,
+    "--batch",
+    "--no-auto-key-retrieve",
+  ];
   await run("gpg", [...gpg, "--import", keyFile]);
   const bindings = {};
   for (const name of ["loki", "tempo", "prometheus"]) {
     const pin = toolchain.grafanaPlugins?.[name];
-    if (!/^\d+\.\d+\.\d+$/u.test(pin?.version ?? "") ||
-        ["zipSha256", "manifestSha256", "binarySha256"].some((key) => !/^[0-9a-f]{64}$/u.test(pin?.[key] ?? ""))) fail("GRAFANA_PLUGIN_PIN_INVALID");
+    if (
+      !/^\d+\.\d+\.\d+$/u.test(pin?.version ?? "") ||
+      ["zipSha256", "manifestSha256", "binarySha256"].some(
+        (key) => !/^[0-9a-f]{64}$/u.test(pin?.[key] ?? ""),
+      )
+    )
+      fail("GRAFANA_PLUGIN_PIN_INVALID");
     const archive = join(temporary, `${name}.zip`);
     const url = `https://github.com/grafana/grafana-${name}-datasource/releases/download/v${pin.version}/${name}-${pin.version}.linux_amd64.zip`;
-    await run("curl", ["--fail", "--location", "--proto", "=https", "--proto-redir", "=https", "--max-filesize", "33554432", "--output", archive, url]);
-    if (await hashRegularFile(archive, 33554432) !== pin.zipSha256) fail("GRAFANA_PLUGIN_ZIP_MISMATCH");
-    const names = (await run("unzip", ["-Z1", archive], {capture: true, maxCaptureBytes: 2 * 1024 * 1024})).split("\n").filter(Boolean);
-    const detail = (await run("zipinfo", ["-l", archive], {capture: true, maxCaptureBytes: 2 * 1024 * 1024})).split("\n");
-    const entries = detail.filter((line) => /^[bcdlps-][rwxstST-]{9}\s/u.test(line));
+    await run("curl", [
+      "--fail",
+      "--location",
+      "--proto",
+      "=https",
+      "--proto-redir",
+      "=https",
+      "--max-filesize",
+      "33554432",
+      "--output",
+      archive,
+      url,
+    ]);
+    if ((await hashRegularFile(archive, 33554432)) !== pin.zipSha256)
+      fail("GRAFANA_PLUGIN_ZIP_MISMATCH");
+    const names = (
+      await run("unzip", ["-Z1", archive], {
+        capture: true,
+        maxCaptureBytes: 2 * 1024 * 1024,
+      })
+    )
+      .split("\n")
+      .filter(Boolean);
+    const detail = (
+      await run("zipinfo", ["-l", archive], {
+        capture: true,
+        maxCaptureBytes: 2 * 1024 * 1024,
+      })
+    ).split("\n");
+    const entries = detail.filter((line) =>
+      /^[bcdlps-][rwxstST-]{9}\s/u.test(line),
+    );
     const sizes = entries.map((line) => Number(line.trim().split(/\s+/u)[3]));
-    if (!names.length || new Set(names).size !== names.length || entries.length !== names.length ||
-      names.some((entry) => !new RegExp(`^${name}/[A-Za-z0-9._/-]*$`, "u").test(entry) || entry.split("/").some((segment) => segment === ".." || segment === ".")) ||
+    if (
+      !names.length ||
+      new Set(names).size !== names.length ||
+      entries.length !== names.length ||
+      names.some(
+        (entry) =>
+          !new RegExp(`^${name}/[A-Za-z0-9._/-]*$`, "u").test(entry) ||
+          entry
+            .split("/")
+            .some((segment) => segment === ".." || segment === "."),
+      ) ||
       entries.some((line) => !["-", "d"].includes(line[0])) ||
       sizes.some((size) => !Number.isSafeInteger(size) || size < 0) ||
-      sizes.reduce((sum, size) => sum + size, 0) > 128 * 1024 * 1024) fail("GRAFANA_PLUGIN_ZIP_INVALID");
+      sizes.reduce((sum, size) => sum + size, 0) > 128 * 1024 * 1024
+    )
+      fail("GRAFANA_PLUGIN_ZIP_INVALID");
     await run("unzip", ["-q", archive, "-d", root]);
     const pluginRoot = join(root, name);
     const signedPath = join(pluginRoot, "MANIFEST.txt");
     const signed = await readRegular(signedPath);
-    if (sha256(signed) !== pin.manifestSha256) fail("GRAFANA_PLUGIN_MANIFEST_MISMATCH");
+    if (sha256(signed) !== pin.manifestSha256)
+      fail("GRAFANA_PLUGIN_MANIFEST_MISMATCH");
     const statusPath = join(temporary, `${name}-gpg.status`);
     const plainPath = join(temporary, `${name}-manifest.json`);
-    await run("gpg", [...gpg, "--status-file", statusPath, "--output", plainPath, "--decrypt", signedPath]);
+    await run("gpg", [
+      ...gpg,
+      "--status-file",
+      statusPath,
+      "--output",
+      plainPath,
+      "--decrypt",
+      signedPath,
+    ]);
     const status = (await readRegular(statusPath)).toString("utf8");
-    if (!status.split("\n").some((line) => line.startsWith(`[GNUPG:] VALIDSIG ${toolchain.grafanaSigningKeyFingerprint} `))) fail("GRAFANA_PLUGIN_SIGNATURE_INVALID");
-    const manifest = parseJson(await readRegular(plainPath), "GRAFANA_PLUGIN_MANIFEST_INVALID");
-    if (manifest.plugin !== name || manifest.version !== pin.version || manifest.signatureType !== "grafana" || manifest.signedByOrg !== "grafana" || !manifest.files || typeof manifest.files !== "object" || Array.isArray(manifest.files)) fail("GRAFANA_PLUGIN_MANIFEST_INVALID");
-    const files = names.filter((entry) => !entry.endsWith("/") && entry !== `${name}/MANIFEST.txt`).map((entry) => entry.slice(name.length + 1));
-    if (files.length !== Object.keys(manifest.files).length || files.some((file) => !Object.hasOwn(manifest.files, file))) fail("GRAFANA_PLUGIN_FILE_SET_MISMATCH");
-    for (const file of files) if ((await hashRegularFile(join(pluginRoot, file), 64 * 1024 * 1024)) !== manifest.files[file]) fail("GRAFANA_PLUGIN_FILE_HASH_MISMATCH");
+    if (
+      !status
+        .split("\n")
+        .some((line) =>
+          line.startsWith(
+            `[GNUPG:] VALIDSIG ${toolchain.grafanaSigningKeyFingerprint} `,
+          ),
+        )
+    )
+      fail("GRAFANA_PLUGIN_SIGNATURE_INVALID");
+    const manifest = parseJson(
+      await readRegular(plainPath),
+      "GRAFANA_PLUGIN_MANIFEST_INVALID",
+    );
+    if (
+      manifest.plugin !== name ||
+      manifest.version !== pin.version ||
+      manifest.signatureType !== "grafana" ||
+      manifest.signedByOrg !== "grafana" ||
+      !manifest.files ||
+      typeof manifest.files !== "object" ||
+      Array.isArray(manifest.files)
+    )
+      fail("GRAFANA_PLUGIN_MANIFEST_INVALID");
+    const files = names
+      .filter(
+        (entry) => !entry.endsWith("/") && entry !== `${name}/MANIFEST.txt`,
+      )
+      .map((entry) => entry.slice(name.length + 1));
+    if (
+      files.length !== Object.keys(manifest.files).length ||
+      files.some((file) => !Object.hasOwn(manifest.files, file))
+    )
+      fail("GRAFANA_PLUGIN_FILE_SET_MISMATCH");
+    for (const file of files)
+      if (
+        (await hashRegularFile(join(pluginRoot, file), 64 * 1024 * 1024)) !==
+        manifest.files[file]
+      )
+        fail("GRAFANA_PLUGIN_FILE_HASH_MISMATCH");
     const binaryPath = `gpx_grafana-${name}-datasource_linux_amd64`;
-    if ((await hashRegularFile(join(pluginRoot, binaryPath), 64 * 1024 * 1024)) !== pin.binarySha256) fail("GRAFANA_PLUGIN_BINARY_MISMATCH");
-    await writeScannerOutput(join(outputRoot, `grafana-${name}-manifest.txt`), signed);
-    bindings[name] = {...pin};
+    if (
+      (await hashRegularFile(
+        join(pluginRoot, binaryPath),
+        64 * 1024 * 1024,
+      )) !== pin.binarySha256
+    )
+      fail("GRAFANA_PLUGIN_BINARY_MISMATCH");
+    await writeScannerOutput(
+      join(outputRoot, `grafana-${name}-manifest.txt`),
+      signed,
+    );
+    bindings[name] = { ...pin };
   }
   const tree = await hashDirectoryTree(root);
-  return {path: root, treeSha256: tree.sha256, treeBytes: tree.bytes,
-    binding: {treeSha256: tree.sha256, treeBytes: tree.bytes, signingKeySourceSha256: toolchain.grafanaSigningKeySourceSha256,
-      signingKeyFingerprint: toolchain.grafanaSigningKeyFingerprint, plugins: bindings}};
+  return {
+    path: root,
+    treeSha256: tree.sha256,
+    treeBytes: tree.bytes,
+    binding: {
+      treeSha256: tree.sha256,
+      treeBytes: tree.bytes,
+      signingKeySourceSha256: toolchain.grafanaSigningKeySourceSha256,
+      signingKeyFingerprint: toolchain.grafanaSigningKeyFingerprint,
+      plugins: bindings,
+    },
+  };
 }
 
 async function createManifestInput(root, target) {
@@ -852,14 +1058,17 @@ export async function createBuildInputSnapshot({
   });
 }
 
-
 export async function verifyBuildInputSnapshot(sourceSnapshot) {
   const tree = await hashDirectoryTree(sourceSnapshot.contextPath);
   if (
     tree.sha256 !== sourceSnapshot.extractedTreeSha256 ||
     tree.bytes !== sourceSnapshot.extractedBytes ||
-    (await hashRegularFile(sourceSnapshot.archivePath, MAX_BUILD_CONTEXT_BYTES)) !== sourceSnapshot.archiveSha256
-  ) fail("BUILD_CONTEXT_CHANGED");
+    (await hashRegularFile(
+      sourceSnapshot.archivePath,
+      MAX_BUILD_CONTEXT_BYTES,
+    )) !== sourceSnapshot.archiveSha256
+  )
+    fail("BUILD_CONTEXT_CHANGED");
 }
 
 async function hashRegularFile(path, maxBytes) {
@@ -1809,12 +2018,35 @@ export async function verifyOciAttestation({
   });
 }
 
-export async function verifyGrafanaImageFiles({ image, toolchain, temporary, run }) {
-  const config = parseJson(await readOciJson(image.imageLayoutPath, image.dockerArchiveManifest.Config), "GRAFANA_IMAGE_CONFIG_INVALID");
-  if (!Array.isArray(config?.config?.Env) || config.config.Env.filter((value) => value.startsWith("GF_PATHS_PLUGINS=")).join("\0") !== "GF_PATHS_PLUGINS=/opt/grafana/plugins")
+export async function verifyGrafanaImageFiles({
+  image,
+  toolchain,
+  temporary,
+  run,
+}) {
+  const config = parseJson(
+    await readOciJson(
+      image.imageLayoutPath,
+      image.dockerArchiveManifest.Config,
+    ),
+    "GRAFANA_IMAGE_CONFIG_INVALID",
+  );
+  if (
+    !Array.isArray(config?.config?.Env) ||
+    config.config.Env.filter((value) =>
+      value.startsWith("GF_PATHS_PLUGINS="),
+    ).join("\0") !== "GF_PATHS_PLUGINS=/opt/grafana/plugins"
+  )
     fail("GRAFANA_IMAGE_CONFIG_INVALID");
-  const targets = Object.fromEntries(["loki", "tempo", "prometheus"].map((name) => [name, `opt/grafana/plugins/${name}/gpx_grafana-${name}-datasource_linux_amd64`]));
-  const matches = Object.fromEntries(Object.keys(targets).map((name) => [name, []]));
+  const targets = Object.fromEntries(
+    ["loki", "tempo", "prometheus"].map((name) => [
+      name,
+      `opt/grafana/plugins/${name}/gpx_grafana-${name}-datasource_linux_amd64`,
+    ]),
+  );
+  const matches = Object.fromEntries(
+    Object.keys(targets).map((name) => [name, []]),
+  );
   const directories = new Set();
   const whiteouts = new Set([".wh..wh..opq"]);
   for (const target of Object.values(targets)) {
@@ -1828,7 +2060,11 @@ export async function verifyGrafanaImageFiles({ image, toolchain, temporary, run
       }
     }
   }
-  const protectedPaths = [...directories, ...whiteouts, ...Object.values(targets)];
+  const protectedPaths = [
+    ...directories,
+    ...whiteouts,
+    ...Object.values(targets),
+  ];
   // Inspect types in every layer: textual tar listings omit links and file types.
   const inspectTar = `import json,sys,tarfile
 wanted=set(json.loads(sys.argv[2]))
@@ -1842,31 +2078,57 @@ with tarfile.open(sys.argv[1], mode="r|*") as archive:
 print(json.dumps(rows))`;
   for (const layer of image.dockerArchiveManifest.Layers) {
     const archive = join(image.imageLayoutPath, layer);
-    const entries = parseJson(Buffer.from(await run("python3", ["-c", inspectTar, archive, JSON.stringify(protectedPaths)], {capture: true, maxCaptureBytes: MAX_GIT_OUTPUT_BYTES})), "GRAFANA_IMAGE_LAYER_INVALID");
+    const entries = parseJson(
+      Buffer.from(
+        await run(
+          "python3",
+          ["-c", inspectTar, archive, JSON.stringify(protectedPaths)],
+          { capture: true, maxCaptureBytes: MAX_GIT_OUTPUT_BYTES },
+        ),
+      ),
+      "GRAFANA_IMAGE_LAYER_INVALID",
+    );
     if (!Array.isArray(entries)) fail("GRAFANA_IMAGE_LAYER_INVALID");
     for (const [entry, original, type] of entries) {
       if (whiteouts.has(entry)) fail("GRAFANA_IMAGE_WHITEOUT_INVALID");
-      if (directories.has(entry) && type !== "directory") fail("GRAFANA_IMAGE_ANCESTOR_INVALID");
+      if (directories.has(entry) && type !== "directory")
+        fail("GRAFANA_IMAGE_ANCESTOR_INVALID");
       for (const [name, target] of Object.entries(targets)) {
         if (entry === target) {
           if (type !== "file") fail("GRAFANA_IMAGE_BINARY_INVALID");
-          matches[name].push({layer, original});
+          matches[name].push({ layer, original });
         }
       }
     }
   }
   const proofRoot = join(temporary, "grafana-image-files");
-  await mkdir(proofRoot, {mode: 0o700});
+  await mkdir(proofRoot, { mode: 0o700 });
   const files = {};
   for (const [name, target] of Object.entries(targets)) {
-    if (matches[name].length !== 1) fail("GRAFANA_IMAGE_BINARY_ABSENT_OR_AMBIGUOUS");
-    const {layer, original} = matches[name][0];
-    await run("tar", ["-xf", join(image.imageLayoutPath, layer), "-C", proofRoot, original]);
-    const observed = await inspectRegularFile(join(proofRoot, target), 64 * 1024 * 1024);
-    if (observed.sha256 !== toolchain.grafanaPlugins[name].binarySha256) fail("GRAFANA_IMAGE_BINARY_MISMATCH");
-    files[name] = {path: `/${target}`, sha256: observed.sha256, sizeBytes: observed.bytes, layerDigest: `sha256:${layer.split("/").at(-1)}`};
+    if (matches[name].length !== 1)
+      fail("GRAFANA_IMAGE_BINARY_ABSENT_OR_AMBIGUOUS");
+    const { layer, original } = matches[name][0];
+    await run("tar", [
+      "-xf",
+      join(image.imageLayoutPath, layer),
+      "-C",
+      proofRoot,
+      original,
+    ]);
+    const observed = await inspectRegularFile(
+      join(proofRoot, target),
+      64 * 1024 * 1024,
+    );
+    if (observed.sha256 !== toolchain.grafanaPlugins[name].binarySha256)
+      fail("GRAFANA_IMAGE_BINARY_MISMATCH");
+    files[name] = {
+      path: `/${target}`,
+      sha256: observed.sha256,
+      sizeBytes: observed.bytes,
+      layerDigest: `sha256:${layer.split("/").at(-1)}`,
+    };
   }
-  await rm(proofRoot, {recursive: true, force: true});
+  await rm(proofRoot, { recursive: true, force: true });
   return files;
 }
 
@@ -1889,19 +2151,26 @@ function imageBuildArgs({
     "--allow",
     "network.host",
     ...(service === "grafana"
-      ? ["--build-arg", `GRAFANA_IMAGE=${grafanaImage}`, "--build-context", `grafana-plugins=${pluginContext}`, "--target", "grafana"]
+      ? [
+          "--build-arg",
+          `GRAFANA_IMAGE=${grafanaImage}`,
+          "--build-context",
+          `grafana-plugins=${pluginContext}`,
+          "--target",
+          "grafana",
+        ]
       : service === "edge-nginx"
-      ? ["--file", "apps/edge-nginx/Dockerfile", "--target", "edge-nginx"]
-      : service === "kafka"
-        ? ["--build-arg", `KAFKA_IMAGE=${kafkaImage}`, "--target", "kafka"]
-        : service === "storage-helper"
-          ? [
-              "--build-arg",
-              `NODE_IMAGE=${nodeImage}`,
-              "--target",
-              "storage-helper",
-            ]
-          : ["--build-arg", `RUNTIME=${runtime}`, "--target", "runtime"]),
+        ? ["--file", "apps/edge-nginx/Dockerfile", "--target", "edge-nginx"]
+        : service === "kafka"
+          ? ["--build-arg", `KAFKA_IMAGE=${kafkaImage}`, "--target", "kafka"]
+          : service === "storage-helper"
+            ? [
+                "--build-arg",
+                `NODE_IMAGE=${nodeImage}`,
+                "--target",
+                "storage-helper",
+              ]
+            : ["--build-arg", `RUNTIME=${runtime}`, "--target", "runtime"]),
     "--platform",
     "linux/amd64",
     "--metadata-file",
@@ -1961,12 +2230,20 @@ async function buildProductImages({
     await verifyBuildInputSnapshot(sourceSnapshot);
     if (service === "grafana") {
       const before = await hashDirectoryTree(vendorPlugins.path);
-      if (before.sha256 !== vendorPlugins.treeSha256 || before.bytes !== vendorPlugins.treeBytes) fail("PLUGIN_CONTEXT_CHANGED");
+      if (
+        before.sha256 !== vendorPlugins.treeSha256 ||
+        before.bytes !== vendorPlugins.treeBytes
+      )
+        fail("PLUGIN_CONTEXT_CHANGED");
     }
     await run("docker", args, { cwd: contextPath, onChild });
     if (service === "grafana") {
       const after = await hashDirectoryTree(vendorPlugins.path);
-      if (after.sha256 !== vendorPlugins.treeSha256 || after.bytes !== vendorPlugins.treeBytes) fail("PLUGIN_CONTEXT_CHANGED");
+      if (
+        after.sha256 !== vendorPlugins.treeSha256 ||
+        after.bytes !== vendorPlugins.treeBytes
+      )
+        fail("PLUGIN_CONTEXT_CHANGED");
     }
     await verifyBuildInputSnapshot(sourceSnapshot);
     const metadataBytes = await readRegular(metadataPath);
@@ -1981,7 +2258,9 @@ async function buildProductImages({
         ? kafkaBaseMaterial
         : service === "storage-helper"
           ? storageHelperBaseMaterial
-          : service === "grafana" ? grafanaBaseMaterial : null;
+          : service === "grafana"
+            ? grafanaBaseMaterial
+            : null;
     const attestation = await verifyOciAttestation({
       service,
       layout: imageLayoutPath,
@@ -2010,8 +2289,13 @@ async function buildProductImages({
         archiveSizeBytes: sourceSnapshot.size,
         extractedTreeSha256: sourceSnapshot.extractedTreeSha256,
         extractedBytes: sourceSnapshot.extractedBytes,
-        sourceKind: service === "grafana" ? "git-archive-plus-verified-plugins" : "git-archive-local-context",
-        ...(service === "grafana" ? {vendorPlugins: vendorPlugins.binding} : {}),
+        sourceKind:
+          service === "grafana"
+            ? "git-archive-plus-verified-plugins"
+            : "git-archive-local-context",
+        ...(service === "grafana"
+          ? { vendorPlugins: vendorPlugins.binding }
+          : {}),
         buildkitMaterialsCompleteness:
           attestation.buildkitMaterialsCompleteness,
         invocation: {
@@ -2025,7 +2309,8 @@ async function buildProductImages({
       },
     };
     if (service === "grafana") {
-      image.buildInputBinding.vendorPlugins.effectiveFiles = await verifyGrafanaImageFiles({ image, toolchain, temporary, run });
+      image.buildInputBinding.vendorPlugins.effectiveFiles =
+        await verifyGrafanaImageFiles({ image, toolchain, temporary, run });
     }
     if (["kafka", "storage-helper", "grafana"].includes(service))
       await writeDockerCompatibilityManifest({
@@ -2568,9 +2853,19 @@ export async function runSecurityScan({
       run: runBounded,
     });
     stage = "grafana-base-index";
-    const grafanaBaseMaterial = await inspectBaseMaterial({ sourceRef: validated.toolchain.grafanaImage, target: "grafana", outputRoot, run: runBounded });
+    const grafanaBaseMaterial = await inspectBaseMaterial({
+      sourceRef: validated.toolchain.grafanaImage,
+      target: "grafana",
+      outputRoot,
+      run: runBounded,
+    });
     stage = "grafana-plugins";
-    const vendorPlugins = await prepareGrafanaPlugins({toolchain: validated.toolchain, temporary, outputRoot, run: runBounded});
+    const vendorPlugins = await prepareGrafanaPlugins({
+      toolchain: validated.toolchain,
+      temporary,
+      outputRoot,
+      run: runBounded,
+    });
     await createManifestInput(sourceSnapshot.contextPath, inputDir);
     const scannerImage = SCANNER_IMAGE;
     await freeSpace(outputRoot, policy, statfsFn);
@@ -2751,7 +3046,8 @@ export async function runSecurityScan({
             })),
           };
           if (image.service === "kafka") kafkaBuild = artifact;
-          else if (image.service === "storage-helper") storageHelperBuild = artifact;
+          else if (image.service === "storage-helper")
+            storageHelperBuild = artifact;
           else grafanaBuild = artifact;
         }
       } catch (error) {
@@ -2821,32 +3117,80 @@ export async function runSecurityScan({
     result.findings = summarizeFindings(result.reports);
     stage = "finding-evaluation";
     if (!grafanaBuild) fail("GRAFANA_ARTIFACT_MISSING");
-    const grafanaReportBytes = await readRegular(join(outputRoot, "grafana.vulnerabilities.json"), MAX_REPORT_BYTES);
-    const grafanaReport = parseJson(grafanaReportBytes, "VULNERABILITY_REPORT_INVALID");
-    const recordedGrafana = result.reports.filter((entry) => entry.path === "grafana.vulnerabilities.json");
+    const grafanaReportBytes = await readRegular(
+      join(outputRoot, "grafana.vulnerabilities.json"),
+      MAX_REPORT_BYTES,
+    );
+    const grafanaReport = parseJson(
+      grafanaReportBytes,
+      "VULNERABILITY_REPORT_INVALID",
+    );
+    const recordedGrafana = result.reports.filter(
+      (entry) => entry.path === "grafana.vulnerabilities.json",
+    );
     const observedGrafana = inspectFindings(grafanaReport);
-    if (recordedGrafana.length !== 1 || recordedGrafana[0].sha256 !== sha256(grafanaReportBytes) ||
-        recordedGrafana[0].findings.high !== observedGrafana.high || recordedGrafana[0].findings.critical !== observedGrafana.critical)
+    if (
+      recordedGrafana.length !== 1 ||
+      recordedGrafana[0].sha256 !== sha256(grafanaReportBytes) ||
+      recordedGrafana[0].findings.high !== observedGrafana.high ||
+      recordedGrafana[0].findings.critical !== observedGrafana.critical
+    )
       fail("GRAFANA_SCAN_REPORT_CHANGED");
-    const decisions = adjudicateGrafanaFindings({report: grafanaReport, image: grafanaBuild.image, toolchain: validated.toolchain, approvedFixed: policy.approvedFixed ?? []});
-    result.evaluation = {rawHigh: result.findings.high, resolvedFixed: decisions.length,
-      unresolvedHigh: result.findings.high - decisions.length, critical: result.findings.critical};
+    const decisions = adjudicateGrafanaFindings({
+      report: grafanaReport,
+      image: grafanaBuild.image,
+      toolchain: validated.toolchain,
+      approvedFixed: policy.approvedFixed ?? [],
+    });
+    result.evaluation = {
+      rawHigh: result.findings.high,
+      resolvedFixed: decisions.length,
+      unresolvedHigh: result.findings.high - decisions.length,
+      critical: result.findings.critical,
+    };
     const evaluatedAt = new Date(clock()).toISOString();
-    const openVex = buildOpenVex({decisions, runId: identity.context.runId, candidateSha: identity.context.candidateSha,
-      platformManifestDigest: grafanaBuild.image.platformManifestDigest, timestamp: evaluatedAt});
-    const adjudication = {schemaVersion: 1, gate: "G12_SUPPLY_CHAIN", runId: identity.context.runId,
-      candidateSha: identity.context.candidateSha, treeSha: identity.environment.treeSha,
-      configSha256: identity.environment.configSha256, toolchainVersionsSha256: identity.environment.toolchainVersionsSha256,
-      lockfileSha256: identity.environment.lockfileSha256, imageId: grafanaBuild.image.imageId,
-      manifestDigest: grafanaBuild.image.manifestDigest, platformManifestDigest: grafanaBuild.image.platformManifestDigest,
-      rawReportSha256: sha256(grafanaReportBytes), approvedFixed: policy.approvedFixed ?? [],
-      vendorPlugins: grafanaBuild.image.buildInputBinding.vendorPlugins, module: validated.toolchain.grafanaTempoModule,
-      decisions, evaluatedAt, openVex};
-    const adjudicationBytes = Buffer.from(`${JSON.stringify(adjudication, null, 2)}\n`);
-    await writeScannerOutput(join(outputRoot, "grafana-adjudication.json"), adjudicationBytes);
-    result.adjudication = {path: "artifacts/grafana-adjudication.json", sha256: sha256(adjudicationBytes)};
-    result.code = result.evaluation.unresolvedHigh + result.evaluation.critical > 0
-        ? "HIGH_OR_CRITICAL_FINDINGS" : "G12_SCAN_CLEAN";
+    const openVex = buildOpenVex({
+      decisions,
+      runId: identity.context.runId,
+      candidateSha: identity.context.candidateSha,
+      platformManifestDigest: grafanaBuild.image.platformManifestDigest,
+      timestamp: evaluatedAt,
+    });
+    const adjudication = {
+      schemaVersion: 1,
+      gate: "G12_SUPPLY_CHAIN",
+      runId: identity.context.runId,
+      candidateSha: identity.context.candidateSha,
+      treeSha: identity.environment.treeSha,
+      configSha256: identity.environment.configSha256,
+      toolchainVersionsSha256: identity.environment.toolchainVersionsSha256,
+      lockfileSha256: identity.environment.lockfileSha256,
+      imageId: grafanaBuild.image.imageId,
+      manifestDigest: grafanaBuild.image.manifestDigest,
+      platformManifestDigest: grafanaBuild.image.platformManifestDigest,
+      rawReportSha256: sha256(grafanaReportBytes),
+      approvedFixed: policy.approvedFixed ?? [],
+      vendorPlugins: grafanaBuild.image.buildInputBinding.vendorPlugins,
+      module: validated.toolchain.grafanaTempoModule,
+      decisions,
+      evaluatedAt,
+      openVex,
+    };
+    const adjudicationBytes = Buffer.from(
+      `${JSON.stringify(adjudication, null, 2)}\n`,
+    );
+    await writeScannerOutput(
+      join(outputRoot, "grafana-adjudication.json"),
+      adjudicationBytes,
+    );
+    result.adjudication = {
+      path: "artifacts/grafana-adjudication.json",
+      sha256: sha256(adjudicationBytes),
+    };
+    result.code =
+      result.evaluation.unresolvedHigh + result.evaluation.critical > 0
+        ? "HIGH_OR_CRITICAL_FINDINGS"
+        : "G12_SCAN_CLEAN";
     result.status = result.code === "G12_SCAN_CLEAN" ? "PASS" : "FAIL";
     if (result.status === "FAIL") result.failure = { code: result.code, stage };
     if (result.status === "PASS") {
@@ -3059,9 +3403,11 @@ export async function runSecurityScan({
         withFileTypes: true,
       }).catch(() => [])) {
         if (!entry.isFile() || entry.isSymbolicLink()) continue;
-        const maxBytes = ["kafka.oci.tar", "storage-helper.oci.tar", "grafana.oci.tar"].includes(
-          entry.name,
-        )
+        const maxBytes = [
+          "kafka.oci.tar",
+          "storage-helper.oci.tar",
+          "grafana.oci.tar",
+        ].includes(entry.name)
           ? MAX_BUILD_CONTEXT_BYTES
           : [
                 "kafka-base-index.json",

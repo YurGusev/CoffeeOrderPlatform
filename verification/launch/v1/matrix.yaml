@@ -176,7 +176,8 @@ gates:
     predecessors: [G13_COMPOSE]
     command: pnpm test:observability
     timeout: 1800
-    inputs: [accepted-issue-64-handoff, accepted-issue-210-handoff, compose-project]
+    inputs:
+      [accepted-issue-64-handoff, accepted-issue-210-handoff, compose-project]
     expectedArtifacts: [result.json, stdout.log, stderr.log]
     passCriteria: проверки health/metrics/traces/correlation/alerts/redaction проходят
     cleanup: exact-run-resources-only

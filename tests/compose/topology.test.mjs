@@ -5095,6 +5095,7 @@ void test("external PostgreSQL attachment cleanup requires acknowledged ownershi
     attachApprovedExternalPostgres,
     cleanupApprovedExternalPostgresAttachment,
     externalRecoveryCleanupSummary,
+    prepareApprovedExternalPostgresAttachment,
   } = await import("../../tools/compose-smoke.mjs");
   const containerId =
     "267958ce276e65d96c4a5d2cfc4541de35f9785de3dd15c04c34798cf7b1c85f";
@@ -5107,10 +5108,14 @@ void test("external PostgreSQL attachment cleanup requires acknowledged ownershi
   const initialRoute =
     "00000000:00000000:00000000:00000000:00000000:00000000:0";
 
-  async function exercise(connectOutcome, { badIdentity = false } = {}) {
-    let attached = false;
+  async function exercise(
+    connectOutcome,
+    { badIdentity = false, baselineAttached = false, prepare = false } = {},
+  ) {
+    let attached = baselineAttached;
     let route = initialRoute;
     let image = imageId;
+    let drift = "";
     const calls = [];
     t.mock.method(childProcess, "execFileSync", (_command, args) => {
       calls.push([...args]);
@@ -5135,7 +5140,7 @@ void test("external PostgreSQL attachment cleanup requires acknowledged ownershi
         return JSON.stringify([
           {
             Id: containerId,
-            Image: image,
+            Image: drift === "identity" ? "sha256:foreign" : image,
             Name: "/coffee_postgres",
             NetworkSettings: {
               Networks: {
@@ -5143,8 +5148,12 @@ void test("external PostgreSQL attachment cleanup requires acknowledged ownershi
                 ...(attached
                   ? {
                       coffee_postgres_data: {
-                        NetworkID: dataNetworkId,
-                        Aliases: ["coffee_postgres"],
+                        NetworkID:
+                          drift === "network" ? "foreign" : dataNetworkId,
+                        Aliases:
+                          drift === "alias" ? ["foreign"] : ["coffee_postgres"],
+                        EndpointID:
+                          drift === "endpoint" ? "foreign" : "approved",
                       },
                     }
                   : {}),
@@ -5158,7 +5167,12 @@ void test("external PostgreSQL attachment cleanup requires acknowledged ownershi
           {
             Id: dataNetworkId,
             Name: "coffee_postgres_data",
-            Containers: attached ? { [containerId]: {} } : {},
+            Containers: attached
+              ? {
+                  [containerId]: {},
+                  ...(drift === "extra-endpoint" ? { foreign: {} } : {}),
+                }
+              : {},
           },
         ]);
       }
@@ -5171,36 +5185,136 @@ void test("external PostgreSQL attachment cleanup requires acknowledged ownershi
           },
         ]);
       }
-      if (args[0] === "exec" && args[1] === containerId) return route;
+      if (args[0] === "exec" && args[1] === containerId)
+        return drift === "route" ? "foreign-route" : route;
       throw new Error(`unexpected fake Docker operation: ${args[0]}`);
     });
     syncBuiltinESMExports();
 
-    const attachment = {
-      before: {
-        container: {
-          NetworkSettings: {
-            Networks: { coffee_network: { NetworkID: legacyNetworkId } },
-          },
-        },
-        legacyNetwork: { Containers: { [containerId]: {} } },
-      },
-      routeBefore: initialRoute,
-      attached: false,
-      attempted: false,
-    };
+    const attachment =
+      baselineAttached || prepare
+        ? prepareApprovedExternalPostgresAttachment()
+        : {
+            before: {
+              container: {
+                NetworkSettings: {
+                  Networks: { coffee_network: { NetworkID: legacyNetworkId } },
+                },
+              },
+              legacyNetwork: { Containers: { [containerId]: {} } },
+            },
+            routeBefore: initialRoute,
+            attached: false,
+            attempted: false,
+          };
     return {
       attachment,
       calls,
       get attached() {
         return attached;
       },
+      setDrift: (value) => {
+        drift = value;
+      },
+      prepare: () => prepareApprovedExternalPostgresAttachment(),
       runAttach: () => attachApprovedExternalPostgres(attachment),
       cleanup: () => cleanupApprovedExternalPostgresAttachment(attachment),
     };
   }
 
   try {
+    const detached = await exercise("success", { prepare: true });
+    assert.equal(detached.attachment.baselineAttached, false);
+    detached.runAttach();
+    detached.cleanup();
+    assert.equal(detached.attached, false);
+    assert.deepEqual(
+      detached.calls
+        .filter((args) => args[0] === "network")
+        .map((args) => args[1]),
+      ["connect", "disconnect"],
+    );
+    assert.equal(
+      externalRecoveryCleanupSummary({
+        databases: { verified: true, removed: [] },
+        attachment: detached.attachment,
+      }).verified,
+      true,
+    );
+
+    const baseline = await exercise("success", { baselineAttached: true });
+    assert.equal(baseline.attachment.baselineAttached, true);
+    baseline.runAttach();
+    baseline.cleanup();
+    assert.equal(baseline.attached, true);
+    assert.equal(
+      baseline.calls.some((args) => args[0] === "network"),
+      false,
+    );
+    assert.equal(
+      externalRecoveryCleanupSummary({
+        databases: { verified: true, removed: [] },
+        attachment: baseline.attachment,
+      }).verified,
+      true,
+    );
+    assert.deepEqual(
+      externalRecoveryCleanupSummary({
+        databases: { verified: true, removed: [] },
+        attachment: baseline.attachment,
+      }).attachment,
+      {
+        baselineAttached: true,
+        attempted: false,
+        removed: false,
+        routePreserved: true,
+      },
+    );
+
+    for (const drift of [
+      "identity",
+      "network",
+      "alias",
+      "endpoint",
+      "extra-endpoint",
+      "route",
+    ]) {
+      const changed = await exercise("success", { baselineAttached: true });
+      changed.runAttach();
+      changed.setDrift(drift);
+      assert.throws(changed.cleanup, undefined, drift);
+      assert.equal(changed.attached, true);
+      assert.equal(
+        changed.calls.some((args) => args[0] === "network"),
+        false,
+      );
+      assert.equal(
+        externalRecoveryCleanupSummary({
+          databases: { verified: true, removed: [] },
+          attachment: changed.attachment,
+        }).verified,
+        false,
+      );
+      const beforeAttach = await exercise("success", {
+        baselineAttached: true,
+      });
+      beforeAttach.setDrift(drift);
+      assert.throws(beforeAttach.runAttach, undefined, drift);
+      assert.equal(
+        beforeAttach.calls.some((args) => args[0] === "network"),
+        false,
+      );
+    }
+    for (const drift of ["identity", "network", "alias", "extra-endpoint"]) {
+      const rejected = await exercise("success", { baselineAttached: true });
+      rejected.setDrift(drift);
+      assert.throws(rejected.prepare, undefined, drift);
+      assert.equal(
+        rejected.calls.some((args) => args[0] === "network"),
+        false,
+      );
+    }
+
     const failed = await exercise("failure-after-foreign-attach");
     assert.throws(failed.runAttach, /connect outcome unknown/u);
     assert.equal(failed.attachment.attached, false);
@@ -5487,6 +5601,47 @@ void test("external PostgreSQL preflight closes admin clients once and never cre
   assert.equal(failedCleanup.failure, "POSTGRES_ATTACHMENT_RETAINED");
 });
 
+void test("external recovery projection accepts canonical mapping once and rejects re-projection", async () => {
+  const { projectRecoveryPlatformConfig } =
+    await import("../../tools/compose-smoke.mjs");
+  const { load: parseYaml } = await import("js-yaml");
+  const { projectLaunchDatabaseTargets } =
+    await import("../../scripts/db-bootstrap.mjs");
+  const config = parseYaml(
+    await readFile(join(REPO_ROOT, "config/platform.yaml"), "utf8"),
+  );
+  const ownership = JSON.parse(
+    await readFile(join(REPO_ROOT, "config/database-ownership.json"), "utf8"),
+  );
+  const roleMap = JSON.parse(
+    await readFile(join(REPO_ROOT, "config/database-role-map.json"), "utf8"),
+  );
+  const launchIdentity = {
+    schemaVersion: 1,
+    runId: "20261024T120000Z-a12bc34",
+    candidateSha: `a12bc34${"0".repeat(33)}`,
+    baseConfigSha256: "a".repeat(64),
+  };
+  const projected = projectLaunchDatabaseTargets({
+    ownership,
+    roleMap,
+    launchIdentity,
+  });
+  const result = projectRecoveryPlatformConfig(config, projected.ownership);
+  assert.equal(
+    result.services["orders-service"].database,
+    "coffee_verify_20261024t120000z_a12bc34_orders",
+  );
+  assert.equal(
+    config.services["orders-service"].database,
+    "coffee_platform_orders",
+  );
+  assert.throws(
+    () => projectRecoveryPlatformConfig(result, projected.ownership),
+    /canonical platform config database differs/u,
+  );
+});
+
 void test("catalog slice preserves secret ownership and uses host identity and supplied image pins", async (t) => {
   const source = await readFile(
     join(REPO_ROOT, ".cursor/skills/catalog-slice-verify/run.mjs"),
@@ -5545,45 +5700,4 @@ void test("catalog slice preserves secret ownership and uses host identity and s
   assert.equal(after.uid, before.uid);
   assert.equal(after.gid, before.gid);
   assert.equal(after.mode & 0o777, 0o400);
-});
-
-void test("external recovery projection accepts canonical mapping once and rejects re-projection", async () => {
-  const { projectRecoveryPlatformConfig } =
-    await import("../../tools/compose-smoke.mjs");
-  const { load: parseYaml } = await import("js-yaml");
-  const { projectLaunchDatabaseTargets } =
-    await import("../../scripts/db-bootstrap.mjs");
-  const config = parseYaml(
-    await readFile(join(REPO_ROOT, "config/platform.yaml"), "utf8"),
-  );
-  const ownership = JSON.parse(
-    await readFile(join(REPO_ROOT, "config/database-ownership.json"), "utf8"),
-  );
-  const roleMap = JSON.parse(
-    await readFile(join(REPO_ROOT, "config/database-role-map.json"), "utf8"),
-  );
-  const launchIdentity = {
-    schemaVersion: 1,
-    runId: "20261024T120000Z-a12bc34",
-    candidateSha: `a12bc34${"0".repeat(33)}`,
-    baseConfigSha256: "a".repeat(64),
-  };
-  const projected = projectLaunchDatabaseTargets({
-    ownership,
-    roleMap,
-    launchIdentity,
-  });
-  const result = projectRecoveryPlatformConfig(config, projected.ownership);
-  assert.equal(
-    result.services["orders-service"].database,
-    "coffee_verify_20261024t120000z_a12bc34_orders",
-  );
-  assert.equal(
-    config.services["orders-service"].database,
-    "coffee_platform_orders",
-  );
-  assert.throws(
-    () => projectRecoveryPlatformConfig(result, projected.ownership),
-    /canonical platform config database differs/u,
-  );
 });
