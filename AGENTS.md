@@ -141,6 +141,16 @@ Read-only исследование разрешено всегда. Если з�
 
 ### Тестирование
 
+На общем self-hosted `dev-machine` native builds, полный `pnpm check`, G12,
+runtime matrix, SSE qualification и полный launch используют один OS `flock`:
+`${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/coffee-platform-heavy.lock`.
+Например, локальная команда: `flock --no-fork "${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/coffee-platform-heavy.lock" pnpm check`.
+Supervisor может удерживать тот же lock через `fcntl.flock`; лимит выполнения
+считается после получения lock. CI отделяет ожидание до 120 минут от прежних
+30 минут install/check. Узкие unit/typecheck не требуют reservation. Перед
+тяжёлым запуском проверить также уже работающие legacy-команды: advisory lock
+не останавливает процессы, которые его не используют. Чужие процессы не завершать.
+
 - Запускать самый узкий существующий набор тестов, покрывающий изменённое
   поведение.
 - Перечни сценариев в предметных навыках — набор для выбора по изменению и риску.

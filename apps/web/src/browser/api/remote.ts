@@ -34,6 +34,7 @@ import {
 } from "./session-identity.js";
 import { currentEpochMilliseconds, instantEpochMilliseconds } from "./time.js";
 import { queryKeys } from "../app/query-keys.js";
+import { orderFetchCorrelation } from "../../realtime/order-invalidations.js";
 
 function isForbiddenSearchError(error: unknown): error is ApiError {
   return error instanceof ApiError && error.problem.status === 403;
@@ -145,7 +146,11 @@ function orderCardQueryOptions(
     queryFn: async ({ signal }: { signal: AbortSignal }) => {
       const session = captureApplicationSession(actorRef);
       try {
-        const next = await api.getOrderCard(orderRef, signal);
+        const next = await api.getOrderCard(
+          orderRef,
+          signal,
+          orderFetchCorrelation(queryClient, orderKey, signal),
+        );
         assertApplicationSession(session);
         const accepted = acceptOrderCard(
           queryClient.getQueryData<OrderCardResponse>(orderKey),

@@ -1,0 +1,133 @@
+issue: 229
+baseCommit: f412aaa4657a435d2bb6f6d3c45ee162dbf8ec9a
+status: verified
+inputs:
+  - issue: 9
+    acceptedMergeCommit: d3b5a29fb0fcfff22d167e368c65566dc382af8d
+    artifact: evidence/handoffs/issue-9.yaml
+    sha256: f68636a4b7f4e1daee73f5f5334e421b44c431cfdce25d92a233b5f17b0ad96e
+outputs:
+  - artifact: apps/web/src/browser/api/client.ts
+    sha256: a51f84035779996e71179543189d2093ca5fbef74c504c288e9115d5d25d9811
+    consumers:
+      - 13
+  - artifact: apps/web/src/browser/api/remote.ts
+    sha256: e592c8c7902fb27f3d8ce0198f421dd6a4891ac8fa619b920bfd54f9c7b9a036
+    consumers:
+      - 13
+  - artifact: apps/web/src/realtime/order-invalidations.ts
+    sha256: cb57ac45feb680345500eae5fe432808e6890ec37fe838b194cc2ae7484a9cc4
+    consumers:
+      - 13
+  - artifact: apps/web/test/realtime.test.ts
+    sha256: 1def97eba0ae9420c8f7f7e96a6c5b62c71e744b87aad780b3aafa68a65e0f61
+    consumers:
+      - 13
+  - artifact: apps/web/test/operator-flow.spec.ts
+    sha256: e809b152dbc5b7fe4bcad3e0fe34b57d3cf791eec332ba30c7e4ef6b0cad22fc
+    consumers:
+      - 13
+  - artifact: docs/launch/30_FRONTEND_OPERATOR_RUNBOOK.md
+    sha256: 02333a66ae8ea19afbc5db776d84e272a6c42880657df8a345f69d533707c33d
+    consumers:
+      - 13
+verification:
+  - command: pnpm install --offline --frozen-lockfile --ignore-scripts
+    result: passed
+    exitCode: 0
+    detail: 10.4 s по выводу pnpm; отдельный лог не записан.
+  - command: pnpm exec tsc -p apps/web/tsconfig.json --pretty false
+    result: failed-missing-dependencies
+    exitCode: 1
+    detail: >-
+      Первый запуск в чистом worktree: отсутствовали dist локальных generated-пакетов и UI; также
+      была выявлена и исправлена ошибка типа в новой реализации. Лог и длительность не записаны.
+  - command: pnpm exec vitest run apps/web/test/realtime.test.ts apps/web/test/query-policy.test.ts
+    result: failed-missing-dependencies
+    exitCode: 1
+    detail: >-
+      Первый запуск до сборки TypeScript references не загрузил
+      generated-client-v1/runtime-schemas.gen.js; тесты не стартовали. Лог и длительность не
+      записаны.
+  - command: pnpm exec tsc -b apps/web --pretty false
+    result: passed
+    exitCode: 0
+    detail: Scoped typecheck с локальными TypeScript references; лог и длительность не записаны.
+  - command: pnpm exec vitest run apps/web/test/realtime.test.ts apps/web/test/query-policy.test.ts
+    result: passed
+    exitCode: 0
+    detail: >-
+      2 файла, 18 тестов, 0 ошибок; длительность Vitest 1.49 s по выводу инструмента.
+      Криптографически сохранённого лога нет.
+  - command: >-
+      pnpm exec oxlint --type-aware --deny-warnings apps/web/src/browser/api/client.ts
+      apps/web/src/browser/api/remote.ts apps/web/src/realtime/order-invalidations.ts
+      apps/web/test/realtime.test.ts apps/web/test/operator-flow.spec.ts
+    result: passed
+    exitCode: 0
+    detail: Scoped lint; лог и длительность не записаны.
+  - command: >-
+      pnpm exec prettier --check apps/web/src/realtime/order-invalidations.ts
+      apps/web/src/browser/api/client.ts apps/web/src/browser/api/remote.ts
+      apps/web/test/realtime.test.ts apps/web/test/operator-flow.spec.ts
+      docs/launch/30_FRONTEND_OPERATOR_RUNBOOK.md
+    result: passed
+    exitCode: 0
+    detail: 6 файлов; лог и длительность не записаны.
+  - command: git diff --check
+    result: passed
+    exitCode: 0
+    detail: Лог и длительность не записаны.
+  - command: pnpm exec tsc -b apps/web --pretty false
+    result: passed
+    exitCode: 0
+    detail: >-
+      Финальная проверка root: 9.984 s; raw log SHA-256
+      e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855.
+  - command: pnpm exec vitest run apps/web/test/realtime.test.ts apps/web/test/query-policy.test.ts
+    result: passed
+    exitCode: 0
+    detail: >-
+      Финальная проверка root: 14.013 s; raw log SHA-256
+      44282680d2974a263f58b38e06188ef9c470164560d390a87df53b3ba2342287.
+  - command: >-
+      pnpm exec oxlint --type-aware --deny-warnings apps/web/src/browser/api/client.ts
+      apps/web/src/browser/api/remote.ts apps/web/src/realtime/order-invalidations.ts
+      apps/web/test/realtime.test.ts apps/web/test/operator-flow.spec.ts
+    result: passed
+    exitCode: 0
+    detail: >-
+      Финальная проверка root: 3.195 s; raw log SHA-256
+      e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855.
+  - command: >-
+      pnpm exec prettier --check apps/web/src/browser/api/client.ts
+      apps/web/src/browser/api/remote.ts apps/web/src/realtime/order-invalidations.ts
+      apps/web/test/realtime.test.ts apps/web/test/operator-flow.spec.ts
+      docs/launch/30_FRONTEND_OPERATOR_RUNBOOK.md evidence/handoffs/issue-229.yaml
+    result: passed
+    exitCode: 0
+    detail: >-
+      Финальная проверка root: 4.661 s; raw log SHA-256
+      17aa973d3f004560237d9a95171210b0671deff23d61628eecf7322ff5938f20.
+  - command: git diff --check
+    result: passed
+    exitCode: 0
+    detail: >-
+      Финальная проверка root: 0.066 s; raw log SHA-256
+      e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855.
+  - command: >-
+      pnpm web:build && WEB_TEST_GROUP=realtime node --experimental-strip-types
+      apps/web/test/operator-flow.spec.ts
+    result: passed
+    exitCode: 0
+    detail: >-
+      Реальный Chromium/native SSE fixture, 10 сценариев; lock ожидание241s, очередь+работа272.231s,
+      raw log SHA-256 63fb5f6a0338705fd3af42fea5211404df1c185edbd1b90b424d2a8277e6b672. Не full G14.
+limitations:
+  - >-
+    Browser realtime regression PASS10/10. Полная цепочка owner → Kafka → SSE → owner GET и runtime
+    G14 NOT_RUN; этот handoff не подменяет её.
+  - Final CI PENDING; этот handoff не подтверждает merge readiness, deployment или launch.
+  - >-
+    Первичные результаты worker сохранены с честным отсутствием отдельных логов; финальная проверка
+    root и браузер имеют raw logs/SHA-256 в приватном OUT.
