@@ -867,7 +867,7 @@ function reportMarkdown(
     "",
     "## Evidence links",
     "",
-    `[Полное evidence дерево](../../../../evidence/launch/${result.runId}/), [commands.ndjson](../../../../evidence/launch/${result.runId}/commands.ndjson), [checksums.sha256](../../../../evidence/launch/${result.runId}/checksums.sha256).`,
+    `[Полное evidence дерево](../../../../evidence/launch/${result.runId}/), [commands.ndjson](../../../../evidence/launch/${result.runId}/commands.ndjson), [handoff.yaml](../../../../evidence/launch/${result.runId}/handoff.yaml), [checksums.sha256](../../../../evidence/launch/${result.runId}/checksums.sha256).`,
     "",
   );
   lines.push(
@@ -1090,6 +1090,7 @@ async function writeFinalFiles(
   environmentErrors,
   preflight,
   fingerprint,
+  sourceDescriptor,
 ) {
   const decisionPath = join(evidenceDir, "decision.json");
   const resultPath = join(evidenceDir, "run-result.json");
@@ -1118,6 +1119,59 @@ async function writeFinalFiles(
       candidateSha: result.candidateSha,
       mandatoryGatesPass: mandatoryPass,
       evidenceErrors: [...evidenceErrors, ...environmentErrors],
+    }),
+  );
+  const handoffPath = join(evidenceDir, "handoff.yaml");
+  const artifactHashes = [];
+  for (const file of await listFiles(evidenceDir))
+    if (file !== handoffPath && file !== join(evidenceDir, "checksums.sha256"))
+      artifactHashes.push(await fileDigest(file, evidenceDir));
+  artifactHashes.sort((a, b) => a.path.localeCompare(b.path, "en"));
+  // JSON is YAML 1.2 and lets G19 run before candidate dependencies exist.
+  await writeRegularNoFollow(
+    evidenceDir,
+    handoffPath,
+    json({
+      issue: 13,
+      kind: "DERIVED_RUN_HANDOFF",
+      runId: result.runId,
+      candidateSha: result.candidateSha,
+      sourceSha: result.sourceSha,
+      sourceDescriptorPath: "evidence/handoffs/issue-13.yaml",
+      sourceDescriptorSha256: sourceDescriptor.sha256,
+      sourceDescriptorStatus: sourceDescriptor.status,
+      decision: result.decision,
+      mandatoryGatesPass: mandatoryPass,
+      evidenceErrors: [...evidenceErrors, ...environmentErrors].map(redactText),
+      limits: {
+        gateTimeoutSeconds: Object.fromEntries(
+          result.gates.map((gate) => [gate.id, gate.timeoutSeconds]),
+        ),
+        otherLimitsSource:
+          "evidence/handoffs/issue-13.yaml#consumerContract.limitsSeconds",
+      },
+      gates: result.gates.map((gate) => ({
+        id: gate.id,
+        status: gate.status,
+        expectedCommand: gate.expectedCommand,
+        durationMs: gate.durationMs,
+        reason: redactText(gate.reason || ""),
+        runs: gate.runs.map((run) => ({
+          argv: run.argv,
+          timeoutMs: run.timeoutMs,
+          durationMs: run.durationMs,
+          exitCode: run.exitCode,
+          timedOut: run.timedOut,
+          outputLimitExceeded: run.outputLimitExceeded,
+        })),
+      })),
+      artifactHashes,
+      limitations:
+        sourceDescriptor.status === "BOUND"
+          ? []
+          : [
+              "Source descriptor absent from exact candidate commit or unavailable; source binding is NOT_PROVEN.",
+            ],
     }),
   );
   const rows = [];
@@ -1193,8 +1247,38 @@ export async function finalizeReport(evidenceDir, expectedSourceRoot = null) {
     "ОТЧЁТ.md",
   );
   await assertNoSymlinkPath(sourceRoot, reportTarget, true);
+  const descriptor = spawnSync(
+    "git",
+    ["show", `${result.candidateSha}:evidence/handoffs/issue-13.yaml`],
+    {
+      cwd: result.environment.candidatePath,
+      timeout: 10_000,
+      maxBuffer: 4 * 1024 * 1024,
+    },
+  );
+  const sourceDescriptor =
+    descriptor.status === 0 && !descriptor.error
+      ? {
+          status: "BOUND",
+          sha256: createHash("sha256").update(descriptor.stdout).digest("hex"),
+        }
+      : { status: "NOT_PROVEN", sha256: null };
+  const descriptorError =
+    "G19: source descriptor отсутствует в точном candidate commit или недоступен";
+  if (sourceDescriptor.status !== "BOUND") {
+    const gate = result.gates[19];
+    gate.status = "FAIL";
+    if (!String(gate.reason ?? "").includes(descriptorError))
+      gate.reason = [gate.reason, descriptorError].filter(Boolean).join("; ");
+    await writeRegularNoFollow(
+      evidenceDir,
+      join(evidenceDir, "gates", gate.id, "result.json"),
+      json(gate),
+    );
+  }
   const defects = await writeDefects(evidenceDir, sourceRoot, result);
   let evidenceErrors = await validateEvidence(evidenceDir, result, sourceRoot);
+  if (sourceDescriptor.status !== "BOUND") evidenceErrors.push(descriptorError);
   const environmentErrors = environmentProofErrors(result.environment);
   const preflight = await preflightFindings(evidenceDir);
   const fingerprint = await sandboxFingerprint(evidenceDir, result.gates[16]);
@@ -1207,6 +1291,7 @@ export async function finalizeReport(evidenceDir, expectedSourceRoot = null) {
     environmentErrors,
     preflight,
     fingerprint,
+    sourceDescriptor,
   );
   try {
     await validateChecksumManifest(evidenceDir, sourceRoot, result.runId);
@@ -1221,6 +1306,7 @@ export async function finalizeReport(evidenceDir, expectedSourceRoot = null) {
       environmentErrors,
       preflight,
       fingerprint,
+      sourceDescriptor,
     );
   }
   try {

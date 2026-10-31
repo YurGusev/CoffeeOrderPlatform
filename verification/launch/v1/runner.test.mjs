@@ -5577,11 +5577,40 @@ void test("builtin report finalizes a complete fail-closed result without candid
   const directory = await mkdtemp(join(tmpdir(), "launch-report-"));
   t.after(() => rm(directory, { recursive: true, force: true }));
   const sourceRoot = join(directory, "source");
-  const evidenceDir = join(
+  const descriptorPath = join(sourceRoot, "evidence/handoffs/issue-13.yaml");
+  const descriptorBytes =
+    "issue: 13\nstatus: source-descriptor-before-formal-verification\n";
+  await mkdir(join(sourceRoot, "evidence/handoffs"), { recursive: true });
+  await writeFile(descriptorPath, descriptorBytes);
+  execFileSync("git", ["init", "--quiet", sourceRoot]);
+  execFileSync("git", [
+    "-C",
     sourceRoot,
-    "evidence",
-    "launch",
-    "20261023T120000Z-1234567",
+    "add",
+    "evidence/handoffs/issue-13.yaml",
+  ]);
+  execFileSync("git", [
+    "-C",
+    sourceRoot,
+    "-c",
+    "user.name=Fixture",
+    "-c",
+    "user.email=fixture@example.invalid",
+    "commit",
+    "--quiet",
+    "-m",
+    "fixture",
+  ]);
+  const candidateSha = execFileSync(
+    "git",
+    ["-C", sourceRoot, "rev-parse", "HEAD"],
+    { encoding: "utf8" },
+  ).trim();
+  const runId = `20261023T120000Z-${candidateSha.slice(0, 7)}`;
+  const evidenceDir = join(sourceRoot, "evidence", "launch", runId);
+  await writeFile(
+    descriptorPath,
+    "modified checkout descriptor; must not be used\n",
   );
   const gates = EXPECTED_GATES.map(([id, expectedCommand, timeoutSeconds]) => ({
     id,
@@ -5600,13 +5629,13 @@ void test("builtin report finalizes a complete fail-closed result without candid
   }));
   const result = {
     schemaVersion: 1,
-    runId: "20261023T120000Z-1234567",
-    candidateSha: `1234567${"1".repeat(33)}`,
+    runId: runId,
+    candidateSha: candidateSha,
     sourceSha: "2".repeat(40),
     startedAt: "2026-10-23T12:00:00Z",
     endedAt: "2026-10-23T12:00:00Z",
     environment: {
-      runId: "20261023T120000Z-1234567",
+      runId: runId,
       dirty: false,
       platform: "linux",
       osRelease: "fixture",
@@ -5617,7 +5646,7 @@ void test("builtin report finalizes a complete fail-closed result without candid
       pnpm: "unknown",
       nodeImageDigest: null,
       timezone: "UTC",
-      candidatePath: join(directory, "checkout"),
+      candidatePath: sourceRoot,
       treeSha: "3".repeat(40),
       toolVersions: {
         docker: null,
@@ -5633,20 +5662,20 @@ void test("builtin report finalizes a complete fail-closed result without candid
       imageDigests: null,
       resources: {
         composeProject: {
-          name: "coffee-launch-20261023t120000z-1234567",
+          name: `coffee-launch-${runId.toLowerCase()}`,
           created: false,
         },
         databases: CANONICAL_DATABASE_OWNERS.map((owner) => ({
           name: deriveLaunchDatabaseName(
             {
-              runId: "20261023T120000Z-1234567",
-              candidateSha: `1234567${"1".repeat(33)}`,
+              runId: runId,
+              candidateSha: candidateSha,
             },
             owner,
           ),
           created: false,
         })),
-        kafkaPrefix: { name: "20261023T120000Z-1234567", created: false },
+        kafkaPrefix: { name: runId, created: false },
       },
     },
     gates,
@@ -5687,6 +5716,67 @@ void test("builtin report finalizes a complete fail-closed result without candid
     );
   }
   assert.equal(finalized.errors.length, 0);
+  const handoffPath = join(evidenceDir, "handoff.yaml");
+  const handoff = JSON.parse(await readFile(handoffPath, "utf8"));
+  assert.equal(handoff.sourceDescriptorStatus, "BOUND");
+  assert.equal(handoff.sourceDescriptorPath, "evidence/handoffs/issue-13.yaml");
+  assert.equal(
+    handoff.sourceDescriptorSha256,
+    createHash("sha256").update(descriptorBytes).digest("hex"),
+  );
+  assert.equal(handoff.runId, runId);
+  assert.equal(handoff.candidateSha, candidateSha);
+  assert.equal(handoff.decision, "НЕ ДОПУСТИТЬ");
+  assert.equal(handoff.gates.length, 20);
+  assert.equal(
+    handoff.gates.find((gate) => gate.id === "G12_SUPPLY_CHAIN").status,
+    "FAIL",
+  );
+  assert.equal(
+    handoff.gates.find((gate) => gate.id === "G14_OBSERVABILITY").status,
+    "NOT_RUN",
+  );
+  assert.equal(handoff.limits.gateTimeoutSeconds.G14_OBSERVABILITY, 1800);
+  for (const name of ["run-result.json", "decision.json"]) {
+    const row = handoff.artifactHashes.find(({ path }) => path === name);
+    const bytes = await readFile(join(evidenceDir, name));
+    assert.equal(row.sha256, createHash("sha256").update(bytes).digest("hex"));
+  }
+  assert.equal(
+    handoff.artifactHashes.some(({ path }) =>
+      ["handoff.yaml", "checksums.sha256"].includes(path),
+    ),
+    false,
+  );
+  assert.match(
+    await readFile(join(evidenceDir, "checksums.sha256"), "utf8"),
+    /handoff\.yaml$/m,
+  );
+  await rename(join(sourceRoot, ".git"), join(directory, "saved-git"));
+  const unbound = await finalizeReport(evidenceDir);
+  const unboundHandoff = JSON.parse(await readFile(handoffPath, "utf8"));
+  assert.equal(unboundHandoff.sourceDescriptorStatus, "NOT_PROVEN");
+  assert.equal(unboundHandoff.sourceDescriptorSha256, null);
+  assert.equal(unbound.result.decision, "НЕ ДОПУСТИТЬ");
+  assert.equal(unbound.result.gates[19].status, "FAIL");
+  assert.match(unbound.result.gates[19].reason, /source descriptor/u);
+  assert.equal(
+    unbound.result.gates.find((gate) => gate.id === "G12_SUPPLY_CHAIN").status,
+    "FAIL",
+  );
+  assert.ok(unbound.errors.some((error) => /source descriptor/u.test(error)));
+  assert.equal(unboundHandoff.gates[19].status, "FAIL");
+  const repeatedUnbound = await finalizeReport(evidenceDir);
+  assert.equal(
+    repeatedUnbound.result.gates[19].reason,
+    unbound.result.gates[19].reason,
+  );
+  await rename(join(directory, "saved-git"), join(sourceRoot, ".git"));
+  await finalizeReport(evidenceDir);
+  assert.equal(
+    JSON.parse(await readFile(handoffPath, "utf8")).sourceDescriptorStatus,
+    "BOUND",
+  );
   const report = await readFile(finalized.reportPath, "utf8");
   assert.match(report, /^# НЕ ДОПУСТИТЬ/m);
   assert.doesNotMatch(report, /\n\n$/);
@@ -5757,6 +5847,18 @@ void test("builtin report finalizes a complete fail-closed result without candid
   );
   const exactReportCommand = await finalizeReport(evidenceDir);
   assert.equal(exactReportCommand.errors.length, 0);
+  const finalHandoff = JSON.parse(await readFile(handoffPath, "utf8"));
+  assert.equal(finalHandoff.gates[19].status, "PASS");
+  assert.deepEqual(finalHandoff.gates[19].runs[0].argv, [
+    "pnpm",
+    "launch:verify:report",
+  ]);
+  assert.equal(finalHandoff.gates[19].runs[0].exitCode, 0);
+  assert.equal(
+    finalHandoff.gates.find((gate) => gate.id === "G12_SUPPLY_CHAIN").status,
+    "FAIL",
+  );
+  assert.equal(finalHandoff.decision, "НЕ ДОПУСТИТЬ");
 
   reportGate.runs[0].argv = ["pnpm", "forged-report"];
   await writeFile(
@@ -5775,7 +5877,6 @@ void test("builtin report finalizes a complete fail-closed result without candid
     ),
   );
 
-  const runId = result.runId;
   const baseConfigSha256 = "4".repeat(64);
   result.environment.configSha256 = baseConfigSha256;
   await writeFile(
@@ -5927,6 +6028,11 @@ void test("candidate report and owner suites accept only the exact launch candid
       await readFile(new URL(`../../../${helperPath}`, import.meta.url)),
     );
   await writeFile(join(candidateRoot, "candidate.txt"), "candidate checkout\n");
+  await mkdir(join(candidateRoot, "evidence/handoffs"), { recursive: true });
+  await writeFile(
+    join(candidateRoot, "evidence/handoffs/issue-13.yaml"),
+    "issue: 13\n",
+  );
   execFileSync("git", ["add", "."], { cwd: candidateRoot });
   execFileSync("git", ["commit", "-qm", "candidate fixture"], {
     cwd: candidateRoot,
@@ -6113,6 +6219,7 @@ void test("candidate report and owner suites accept only the exact launch candid
     join(evidenceDir, "run-result.json"),
     join(evidenceDir, "defects.json"),
     join(evidenceDir, "decision.json"),
+    join(evidenceDir, "handoff.yaml"),
     join(evidenceDir, "checksums.sha256"),
     join(evidenceDir, "gates/G00_PREFLIGHT/artifacts/defect.json"),
     reportPath,
