@@ -25,14 +25,24 @@ jobs:
         github.event.pull_request.head.repo.full_name == github.repository &&
         github.event.pull_request.user.login == github.repository_owner))
     runs-on: [self-hosted, coffee-local]
-    timeout-minutes: 30
+    # До 120 минут ожидания общего ресурса + прежние 30 минут работы.
+    timeout-minutes: 165
     steps:
       - uses: actions/checkout@v4
         with:
           # pnpm contracts:breaking сравнивает контракты с origin/develop.
           fetch-depth: 0
           persist-credentials: false
-      - name: Install
-        run: pnpm install --frozen-lockfile
-      - name: pnpm check
-        run: pnpm check
+      - name: Install and pnpm check
+        run: |
+          umask 077
+          resource_lock="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/coffee-platform-heavy.lock"
+          queued_at=$EPOCHSECONDS
+          printf 'Waiting for shared heavy resource\n'
+          exec flock --no-fork --wait 7200 "$resource_lock" \
+            timeout --signal=TERM --kill-after=90s 1800s \
+            bash -euo pipefail -c '
+              printf "Resource acquired after %ss\n" "$((EPOCHSECONDS - $1))"
+              pnpm install --frozen-lockfile
+              pnpm check
+            ' coffee-ci "$queued_at"

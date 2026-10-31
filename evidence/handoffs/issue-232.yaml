@@ -1,0 +1,27 @@
+issue: 232
+baseCommit: 5f8b07d9e436334d3ebae90d408f4abcbed941cc
+status: verified
+inputs: []
+outputs:
+  - artifact: .github/workflows/check.yml
+    sha256: 55571b1befab3a298b02f5f362fb7745d3ea3dabac51fca1801cda34d1201714
+    consumers: [13]
+  - artifact: AGENTS.md
+    sha256: 14caebed3d541df0c9f8d50fc0cbf4a32f875db1ed5f26c4b035ebc754737f26
+    consumers: [13]
+verification:
+  - command: "bash -n /home/yurgusev/.cache/coffee-launch-delivery/ci-coordination.sh"
+    result: "PASS; shell syntax"
+  - command: "python3 /home/yurgusev/.cache/coffee-launch-delivery/coordination-contract.py"
+    result: "4 checks PASS; contention/release/exit42/timeout124; raw receipt SHA-256 235dae83ce9f7f061d03ea6b5919e450c6944b1a2ba63f1d66cf0403aee388a9"
+  - command: "node --input-type=module -"
+    result: "PASS; inline YAML comparison: triggers, owner guard, permissions, labels, checkout unchanged; queue7200s/active1800s/job165min"
+  - command: "node /home/yurgusev/.codex/worktrees/refetch-correlation/CoffeeOrderPlatform/node_modules/prettier/bin/prettier.cjs --check .github/workflows/check.yml AGENTS.md"
+    result: "PASS; 2 files"
+  - command: "git diff --check"
+    result: "PASS"
+limitations:
+  - "CI job wall limit165min includes queue120min; actual install/check remains30min, formal launch budgets unchanged."
+  - "Advisory flock coordinates only participating commands; legacy commands require separate inspection."
+  - "Self-check uses short fake pnpm children; final full CI pending and must pass before merge."
+  - "GNU timeout grace90s is not a promise of GitHub cancellation grace; runner uses its own cancellation policy."
