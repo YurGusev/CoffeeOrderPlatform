@@ -1970,6 +1970,7 @@ const G14_DURABLE_SPANS = {
 async function waitForG14CausalTraces({
   proof,
   anchors,
+  apiAnchors,
   baseUrl,
   startTimeUs,
   fetchImpl,
@@ -2107,6 +2108,16 @@ async function waitForG14CausalTraces({
           )
         )
           continue;
+        const apiAnchor = apiAnchors.find(
+          (candidate) =>
+            candidate.traceId === anchor.traceId &&
+            spans.some(
+              ({ role, span }) =>
+                role === "api-public" &&
+                decodeId(span.spanId, 16) === candidate.spanId,
+            ),
+        );
+        if (!apiAnchor) continue;
         let connection = null;
         if (!traceIds.has(anchor.traceId)) {
           const requestSpanKeys = new Set(
@@ -2159,6 +2170,7 @@ async function waitForG14CausalTraces({
           traceId: anchor.traceId,
           spanId: anchor.spanId,
           role: "orders-service",
+          apiSpanId: apiAnchor.spanId,
           connection,
         });
       }
@@ -2199,6 +2211,8 @@ export async function collectG14BrowserTelemetry({
   nativeNginxImageId,
   ordersContainerId,
   ordersImageId,
+  apiContainerId,
+  apiImageId,
   secrets = [],
   fetchImpl = fetch,
   timeoutMs = 55000,
@@ -2215,6 +2229,8 @@ export async function collectG14BrowserTelemetry({
     !/^sha256:[a-f0-9]{64}$/u.test(nativeNginxImageId ?? "") ||
     !/^[a-f0-9]{64}$/u.test(ordersContainerId ?? "") ||
     !/^sha256:[a-f0-9]{64}$/u.test(ordersImageId ?? "") ||
+    !/^[a-f0-9]{64}$/u.test(apiContainerId ?? "") ||
+    !/^sha256:[a-f0-9]{64}$/u.test(apiImageId ?? "") ||
     !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(
       proof?.correlationId ?? "",
     ) ||
@@ -2248,9 +2264,10 @@ export async function collectG14BrowserTelemetry({
     error.fatal = true;
     throw error;
   };
-  const requiredLogs = ["edge-nginx", "orders-service"];
+  const requiredLogs = ["edge-nginx", "api-public", "orders-service"];
   const nativeLogPath = `/var/lib/docker/containers/${nativeNginxContainerId}/${nativeNginxContainerId}-json.log`;
   const ordersLogPath = `/var/lib/docker/containers/${ordersContainerId}/${ordersContainerId}-json.log`;
+  const apiLogPath = `/var/lib/docker/containers/${apiContainerId}/${apiContainerId}-json.log`;
   const deadline = AbortSignal.timeout(Math.ceil(timeoutMs));
   const deadlineAt = Date.now() + timeoutMs;
   const boundedFetch = (url, options) =>
@@ -2273,7 +2290,7 @@ export async function collectG14BrowserTelemetry({
       const matched = rows.filter((row) =>
         row.service_name === "edge-nginx"
           ? row.correlation_id === proof.correlationId
-          : row.service_name === "orders-service" &&
+          : ["api-public", "orders-service"].includes(row.service_name) &&
             (row.correlationId === proof.correlationId ||
               row.req?.correlationId === proof.correlationId),
       );
@@ -2292,6 +2309,34 @@ export async function collectG14BrowserTelemetry({
         error.fatal = true;
         throw error;
       }
+      const apiRows = matched.filter(
+        (row) => row.service_name === "api-public",
+      );
+      if (apiRows.some((row) => row.log_file_path !== apiLogPath)) {
+        const error = new Error("G14_API_LOG_IDENTITY_INVALID");
+        error.fatal = true;
+        throw error;
+      }
+      const apiAnchors = [
+        ...new Map(
+          apiRows
+            .filter(
+              (row) =>
+                /^[a-f0-9]{32}$/u.test(row.traceId ?? "") &&
+                /^[a-f0-9]{16}$/u.test(row.spanId ?? ""),
+            )
+            .map(({ traceId, spanId }) => [
+              `${traceId}:${spanId}`,
+              { traceId, spanId },
+            ]),
+        ).values(),
+      ];
+      if (apiAnchors.length > 50) {
+        const error = new Error("G14_API_TRACE_ANCHORS_EXCEED_LIMIT");
+        error.fatal = true;
+        throw error;
+      }
+      if (!apiAnchors.length) return false;
       const traceAnchors = [
         ...new Map(
           orderRows
@@ -2387,6 +2432,7 @@ export async function collectG14BrowserTelemetry({
       return {
         counts,
         traceAnchors,
+        apiAnchors,
         measurement: {
           status: "MEASURED",
           scope:
@@ -2416,11 +2462,12 @@ export async function collectG14BrowserTelemetry({
     },
     { timeoutMs, intervalMs, description: "G14 browser CID logs" },
   );
-  const tracePromise = logsPromise.then(({ traceAnchors }) =>
+  const tracePromise = logsPromise.then(({ traceAnchors, apiAnchors }) =>
     waitForG14CausalTraces({
       baseUrl: tempoUrl,
       proof,
       anchors: traceAnchors,
+      apiAnchors,
       startTimeUs,
       fetchImpl: boundedFetch,
       timeoutMs: Math.max(1, deadlineAt - Date.now()),
@@ -2465,6 +2512,11 @@ export async function collectG14BrowserTelemetry({
       role: "orders-service",
       containerId: ordersContainerId,
       imageId: ordersImageId,
+    },
+    apiSource: {
+      role: "api-public",
+      containerId: apiContainerId,
+      imageId: apiImageId,
     },
     logCounts: logs.value.counts,
     ordinaryApiMeasurement: logs.value.measurement,
@@ -3466,6 +3518,7 @@ export function observabilityVerificationCoverage(
   const orders = expectedImages?.find(
     ({ service }) => service === "orders-service",
   );
+  const api = expectedImages?.find(({ service }) => service === "api-public");
   const measurement = telemetry?.ordinaryApiMeasurement;
   const measured =
     measurement?.status === "MEASURED" &&
@@ -3511,6 +3564,11 @@ export function observabilityVerificationCoverage(
     telemetry.ownerSource?.role === "orders-service" &&
     telemetry.ownerSource.imageId === orders?.imageId &&
     /^[a-f0-9]{64}$/u.test(telemetry.ownerSource.containerId ?? "") &&
+    telemetry.apiSource?.role === "api-public" &&
+    telemetry.apiSource.imageId === api?.imageId &&
+    /^[a-f0-9]{64}$/u.test(telemetry.apiSource.containerId ?? "") &&
+    Number.isSafeInteger(telemetry.logCounts?.["api-public"]) &&
+    telemetry.logCounts["api-public"] > 0 &&
     Array.isArray(telemetry.durableTraceIds) &&
     telemetry.durableTraceIds.includes(child?.traceId) &&
     new Set(telemetry.durableTraceIds).size ===
@@ -3537,6 +3595,7 @@ export function observabilityVerificationCoverage(
           binding.traceId === id &&
           binding.role === "orders-service" &&
           /^[a-f0-9]{16}$/u.test(binding.spanId ?? "") &&
+          /^[a-f0-9]{16}$/u.test(binding.apiSpanId ?? "") &&
           (telemetry.durableTraceIds.includes(id) ||
             (binding.connection &&
               /^[a-f0-9]{16}$/u.test(binding.connection.sourceSpanId ?? "") &&
@@ -6280,6 +6339,7 @@ export async function runObservabilityVerification({
           let browserTelemetryStartedAtUs;
           let browserNginxContainerId;
           let browserOrdersContainerId;
+          let browserApiContainerId;
           let childEnded = false;
           let collectorNeedsRestore = false;
           let collectorTasks = Promise.resolve();
@@ -6366,6 +6426,9 @@ try {
                   browserOrdersContainerId = childLogs.find(
                     ({ service }) => service === "orders-service",
                   )?.containerId;
+                  browserApiContainerId = childLogs.find(
+                    ({ service }) => service === "api-public",
+                  )?.containerId;
                   await changeCollector(childLogs, networks);
                   browserTelemetryStartedAtUs = Date.now() * 1000;
                   stage = "browser-proof";
@@ -6387,6 +6450,10 @@ try {
                     ordersContainerId: browserOrdersContainerId,
                     ordersImageId: verifiedImages.find(
                       ({ service }) => service === "orders-service",
+                    )?.imageId,
+                    apiContainerId: browserApiContainerId,
+                    apiImageId: verifiedImages.find(
+                      ({ service }) => service === "api-public",
                     )?.imageId,
                     lokiUrl: baseUrls.loki,
                     tempoUrl: baseUrls.tempo,

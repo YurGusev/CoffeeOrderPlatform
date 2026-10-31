@@ -2811,6 +2811,8 @@ void test("G14 queries actual child telemetry before cleanup and fails closed on
   const cid = "8f53d687-fd3b-47be-b32b-2081d08bc55a";
   const nativeNginxContainerId = "b".repeat(64);
   const ordersContainerId = "d".repeat(64);
+  const apiContainerId = "9".repeat(64);
+  const apiLogPath = `/var/lib/docker/containers/${apiContainerId}/${apiContainerId}-json.log`;
   const ordersLogPath = `/var/lib/docker/containers/${ordersContainerId}/${ordersContainerId}-json.log`;
   const nativeLogPath = `/var/lib/docker/containers/${nativeNginxContainerId}/${nativeNginxContainerId}-json.log`;
   const proof = {
@@ -2823,6 +2825,7 @@ void test("G14 queries actual child telemetry before cleanup and fails closed on
     configSha256: "c".repeat(64),
   };
   const required = {
+    "api-public": ["HTTP POST"],
     "orders-service": [
       "Outbox.relay",
       "Kafka.produce",
@@ -2843,6 +2846,11 @@ void test("G14 queries actual child telemetry before cleanup and fails closed on
   const responses =
     ({
       wrongCid = false,
+      missingApi = false,
+      wrongApiCid = false,
+      foreignApi = false,
+      wrongApiTrace = false,
+      wrongApiSpan = false,
       empty = false,
       wrongTrace = false,
       privateLog = false,
@@ -2872,7 +2880,10 @@ void test("G14 queries actual child telemetry before cleanup and fails closed on
             status: "success",
             data: {
               resultType: "streams",
-              result: ["edge-nginx", "orders-service"].map((role) => ({
+              result: (missingApi
+                ? ["edge-nginx", "orders-service"]
+                : ["edge-nginx", "api-public", "orders-service"]
+              ).map((role) => ({
                 stream: { service_name: role },
                 values: (role === "edge-nginx" ? ["POST", "GET"] : ["orders"])
                   .map((method, index) => [
@@ -2880,16 +2891,29 @@ void test("G14 queries actual child telemetry before cleanup and fails closed on
                     JSON.stringify({
                       ...(role === "edge-nginx"
                         ? { correlation_id: correlation }
-                        : { correlationId: correlation }),
+                        : {
+                            correlationId:
+                              role === "api-public" && wrongApiCid
+                                ? "8f53d687-fd3b-47be-b32b-2081d08bc55b"
+                                : correlation,
+                          }),
                       ...(wrongCid ? { unrelated: cid } : {}),
                       ...(privateLog ? { password: "canary-secret" } : {}),
                       ...(privateLogField
                         ? { [privateLogField]: "private-marker" }
                         : {
-                            traceId: detachedRequest ? "e".repeat(32) : traceId,
-                            spanId: wrongAnchor
-                              ? "f".repeat(16)
-                              : "c".repeat(16),
+                            traceId:
+                              role === "api-public" && wrongApiTrace
+                                ? "f".repeat(32)
+                                : detachedRequest
+                                  ? "e".repeat(32)
+                                  : traceId,
+                            spanId:
+                              role === "api-public"
+                                ? (wrongApiSpan ? "f" : "1").repeat(16)
+                                : wrongAnchor && role === "orders-service"
+                                  ? "f".repeat(16)
+                                  : "c".repeat(16),
                           }),
                       ...(role === "edge-nginx"
                         ? {
@@ -2915,7 +2939,16 @@ void test("G14 queries actual child telemetry before cleanup and fails closed on
                               : nativeLogPath,
                           },
                         ]
-                      : [{ log_file_path: ordersLogPath }]),
+                      : [
+                          {
+                            log_file_path:
+                              role === "api-public"
+                                ? foreignApi
+                                  ? "/foreign/log"
+                                  : apiLogPath
+                                : ordersLogPath,
+                          },
+                        ]),
                   ])
                   .concat(role === "edge-nginx" ? extraRows : []),
               })),
@@ -2934,7 +2967,10 @@ void test("G14 queries actual child telemetry before cleanup and fails closed on
       const linked = requestedTrace === "d".repeat(32);
       const requestTrace = requestedTrace === "e".repeat(32);
       const selected = requestTrace
-        ? { "orders-service": ["HTTP POST", "db.transaction"] }
+        ? {
+            "api-public": ["HTTP POST"],
+            "orders-service": ["HTTP POST", "db.transaction"],
+          }
         : linked
           ? { "realtime-gateway": ["Kafka.consume"] }
           : Object.fromEntries(
@@ -2956,7 +2992,7 @@ void test("G14 queries actual child telemetry before cleanup and fails closed on
                   {
                     spans: names.map((name) => ({
                       traceId: wrongTrace ? "b".repeat(32) : requestedTrace,
-                      spanId: "c".repeat(16),
+                      spanId: (role === "api-public" ? "1" : "c").repeat(16),
                       name,
                       ...(linked
                         ? {
@@ -3065,6 +3101,8 @@ void test("G14 queries actual child telemetry before cleanup and fails closed on
       nativeNginxImageId: `sha256:${"e".repeat(64)}`,
       ordersContainerId,
       ordersImageId: `sha256:${"f".repeat(64)}`,
+      apiContainerId,
+      apiImageId: `sha256:${"1".repeat(64)}`,
       fetchImpl,
       timeoutMs: 30,
       intervalMs: 1,
@@ -3135,7 +3173,19 @@ void test("G14 queries actual child telemetry before cleanup and fails closed on
       events.indexOf("proof-ack") < events.indexOf("cleanup"),
   );
   assert.equal(JSON.stringify(result).includes("canary-secret"), false);
-  assert.deepEqual(result.logCounts, { "edge-nginx": 2, "orders-service": 1 });
+  assert.deepEqual(result.logCounts, {
+    "edge-nginx": 2,
+    "api-public": 1,
+    "orders-service": 1,
+  });
+  for (const altered of [
+    { missingApi: true },
+    { wrongApiCid: true },
+    { foreignApi: true },
+    { wrongApiTrace: true },
+    { wrongApiSpan: true },
+  ])
+    assert.equal((await collect(responses(altered))).status, "NOT_PROVEN");
   const { windowStartUtc, windowEndUtc, ...measurement } =
     result.ordinaryApiMeasurement;
   assert.equal(windowStartUtc, new Date(startTimeUs / 1000).toISOString());
@@ -4232,6 +4282,8 @@ void test("full G14 coverage requires bound readiness, images, browser traces an
       containerId: "5".repeat(64),
       imageId: id,
     },
+    apiSource: { role: "api-public", containerId: "6".repeat(64), imageId: id },
+    logCounts: { "api-public": 1 },
     durableTraceIds: [traceId],
     durableLinks: [],
     requestTraceIds: [traceId],
@@ -4240,6 +4292,7 @@ void test("full G14 coverage requires bound readiness, images, browser traces an
         traceId,
         spanId: "7".repeat(16),
         role: "orders-service",
+        apiSpanId: "8".repeat(16),
       },
     ],
     spans: {
@@ -4452,6 +4505,22 @@ void test("full G14 coverage requires bound readiness, images, browser traces an
     },
     (value) => {
       value.launchPathProof.telemetrySubproof.nativeSource.imageId = `sha256:${"f".repeat(64)}`;
+    },
+    (value) => {
+      delete value.launchPathProof.telemetrySubproof.apiSource;
+    },
+    (value) => {
+      value.launchPathProof.telemetrySubproof.apiSource.imageId = `sha256:${"f".repeat(64)}`;
+    },
+    (value) => {
+      value.launchPathProof.telemetrySubproof.apiSource.containerId = "foreign";
+    },
+    (value) => {
+      value.launchPathProof.telemetrySubproof.logCounts["api-public"] = 0;
+    },
+    (value) => {
+      delete value.launchPathProof.telemetrySubproof.requestBindings[0]
+        .apiSpanId;
     },
     (value) => {
       value.browserCorrelationChild.proof.realtimeTraceparent = "foreign";
