@@ -15,9 +15,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { setTimeout as delay } from "node:timers/promises";
 
-const root = dirname(
-  dirname(dirname(dirname(fileURLToPath(import.meta.url)))),
-);
+const root = dirname(dirname(dirname(dirname(fileURLToPath(import.meta.url)))));
 const evidenceRoot = join(root, "evidence", "web-verify");
 const documentTitle = "CoffeeOrderPlatform — Оператор";
 const loginLinkName = "Войти через защищённый контур";
@@ -77,18 +75,12 @@ const notCovered = [
     "customers-search",
     "Поиск клиентов рисуется только после GET /auth/session 200.",
   ],
-  [
-    "customers-create",
-    "Диалог «Новый клиент» рисуется только после сессии.",
-  ],
+  ["customers-create", "Диалог «Новый клиент» рисуется только после сессии."],
   [
     "catalog-without-order",
     "Текст «Не выбран заказ» рисуется только после сессии.",
   ],
-  [
-    "catalog-search",
-    "Поиск товаров рисуется только после сессии и orderRef.",
-  ],
+  ["catalog-search", "Поиск товаров рисуется только после сессии и orderRef."],
   [
     "catalog-add",
     "Кнопка «Добавить» рисуется только после сессии и выдачи каталога.",
@@ -101,10 +93,7 @@ const notCovered = [
     "new-order-create",
     "Кнопка «Создать черновик» рисуется только после сессии и customerRef.",
   ],
-  [
-    "order-card-read",
-    "Карточка заказа читает owner API после сессии.",
-  ],
+  ["order-card-read", "Карточка заказа читает owner API после сессии."],
   [
     "order-card-items",
     "Количество и удаление позиции доступны только на открытой карточке.",
@@ -173,7 +162,10 @@ function writeResult(dir, status, scenarios) {
     (item) => item.status === "not-covered",
   ).length;
   const payload = { status, passed, failed, notCovered: uncovered, scenarios };
-  writeFileSync(join(dir, "result.json"), `${JSON.stringify(payload, null, 2)}\n`);
+  writeFileSync(
+    join(dir, "result.json"),
+    `${JSON.stringify(payload, null, 2)}\n`,
+  );
   return payload;
 }
 
@@ -203,10 +195,9 @@ function listenInodes(port) {
       if (parts.length < 10 || parts[3] !== "0A") continue;
       const [address, remotePort] = parts[1].split(":");
       if (remotePort !== hexPort) continue;
-      const loopback =
-        file.endsWith("tcp6")
-          ? address === "00000000000000000000000001000000"
-          : address === "0100007F";
+      const loopback = file.endsWith("tcp6")
+        ? address === "00000000000000000000000001000000"
+        : address === "0100007F";
       if (!loopback) continue;
       inodes.add(parts[9]);
     }
@@ -295,7 +286,9 @@ async function stopMarked(id, storedPid) {
 }
 
 function usage() {
-  console.error("usage: node .cursor/skills/verify-web/run.mjs [--down <run-id>]");
+  console.error(
+    "usage: node .cursor/skills/verify-web/run.mjs [--down <run-id>]",
+  );
 }
 
 async function down(id) {
@@ -375,7 +368,10 @@ async function driveScenario(page, origin, item, timeout) {
   const href = await link.getAttribute("href");
   const actual = new URL(href ?? "", origin);
   const expected = new URL(loginHref(item.path), origin);
-  if (`${actual.pathname}${actual.search}` !== `${expected.pathname}${expected.search}`) {
+  if (
+    `${actual.pathname}${actual.search}` !==
+    `${expected.pathname}${expected.search}`
+  ) {
     throw new Error(
       `ссылка входа ${actual.pathname}${actual.search}, ожидалась ${expected.pathname}${expected.search}`,
     );
@@ -383,7 +379,8 @@ async function driveScenario(page, origin, item, timeout) {
   const title = await page.title();
   if (title !== documentTitle) throw new Error(`title «${title}»`);
   const body = await page.locator("body").innerText();
-  if (!body.includes(gateTitle)) throw new Error("на экране нет «Требуется вход»");
+  if (!body.includes(gateTitle))
+    throw new Error("на экране нет «Требуется вход»");
   for (const text of item.absent) {
     if (body.includes(text)) {
       throw new Error(`на экране входа виден текст закрытого экрана «${text}»`);

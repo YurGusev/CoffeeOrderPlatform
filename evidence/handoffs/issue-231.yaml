@@ -1,0 +1,125 @@
+issue: 231
+baseCommit: f412aaa4657a435d2bb6f6d3c45ee162dbf8ec9a
+status: verified
+inputs: []
+outputs:
+  - artifact: ".cursor/skills/orders-slice-verify/internal-fixture.mjs"
+    sha256: 5ce5a69cc02fd308b114c2eebd81009ce49773bdac5603dae8e49fc6e21b9e82
+    consumers: [13]
+  - artifact: ".cursor/skills/orders-slice-verify/run.mjs"
+    sha256: 70497e69516ecbbd7a952da7ce1e209f2236bd30ee1ef0ddb8e0627363474168
+    consumers: [13]
+  - artifact: ".cursor/skills/verify-web/run.mjs"
+    sha256: 4e53a0a36260e41718a40ff6a3a28a79ce5b6f5e8f7850e0c448d3440e2fd6d4
+    consumers: [13]
+  - artifact: "apps/tasty-gateway/src/infrastructure/provider/cart-decoder.ts"
+    sha256: 575aface7b49d1c299766f83e7428463b0c37d2a0e632b4c1bb7807568d07779
+    consumers: [13]
+  - artifact: "apps/tasty-gateway/src/infrastructure/provider/catalog-decoder.ts"
+    sha256: 685d2dc79c76d6b8b9da77a64789e9fa5bedf1dda527520e3dec837e482bd585
+    consumers: [13]
+  - artifact: "apps/tasty-gateway/src/infrastructure/provider/http-client.ts"
+    sha256: f082229023b450b50975dab424f39c51117b49ad779ae0a0b0a8f4933c4e8d4e
+    consumers: [13]
+  - artifact: "apps/tasty-gateway/src/infrastructure/provider/session.ts"
+    sha256: 39cca6d924b19198f045e5b5fd421eb95d177cf62c32afdd89ff89ebfa07b8e0
+    consumers: [13]
+  - artifact: "apps/tasty-gateway/tsconfig.json"
+    sha256: 5b4b55bfb81fb6c8f607e25828289d11f790a112b724e25c13a2bc5d60050aec
+    consumers: [13]
+  - artifact: "config/service-catalog.schema.json"
+    sha256: 7c0b4c38b2d8b4de5a9533843f18cef91561ad48f2dc7e02ff3787f6016b3bbd
+    consumers: [13]
+  - artifact: "config/toolchain-versions.schema.json"
+    sha256: 1deb1eb9aaf4a98314652ea9812bdc1a80b715efe94f23d0b93434069fc1ac60
+    consumers: [13]
+  - artifact: "scripts/catalog-live-harness.mjs"
+    sha256: 364f6f4d9fa556951df225786458bbcf88724704482e53055131f8821013304f
+    consumers: [13]
+  - artifact: "scripts/check-toolchain-versions.mjs"
+    sha256: cd041d9fa9755441d3cd40013b385b7eb012e7b0867bbac5da7b3b71d2b527b4
+    consumers: [13]
+  - artifact: "tests/aroma/observer-live.test.mjs"
+    sha256: c510d24f451593f4dafb877a66af749552fd99195ac15654834816c8e16ae36a
+    consumers: [13]
+  - artifact: "tests/observability/fixture.mjs"
+    sha256: 7d1a7e89346be63420f4868101362f0c1e241794eaa3de8d4b824971ef1b6b57
+    consumers: [13]
+  - artifact: "tests/observability/runtime-matrix-probe.mjs"
+    sha256: 8550c1e484df349da34b9ef45b2942d09477cec77a0ffa064f9489f35ad0a7c9
+    consumers: [13]
+  - artifact: "tests/observability/storage.test.mjs"
+    sha256: 1feaf2252737e5221d2fce90da8ef1c19aeeb49835809f6682a951306e7252f5
+    consumers: [13]
+  - artifact: "tests/tasty/cart-decoder.test.mjs"
+    sha256: e4fb190cf20b882c11d7558c8a48a2e6945bfded3c6ffa169399f8ca00faa62f
+    consumers: [13]
+  - artifact: "tests/tasty/catalog-decoder.test.mjs"
+    sha256: 8a0eed61af2ac2fef317d799df22f68cc0185027b974bd6487f0f00a80adbfba
+    consumers: [13]
+  - artifact: "tests/tasty/provider-session.test.mjs"
+    sha256: e7936b12688511641af590db5fcb682921efc7ac83f25d7cf0d4651cd47de91f
+    consumers: [13]
+  - artifact: "tests/tools/security-scan.test.mjs"
+    sha256: 6533ae740bb08f7ef6997d80966bd998055987fccd822d1cdb5c86c56624dd0c
+    consumers: [13]
+  - artifact: "tools/config-bootstrap/index.mjs"
+    sha256: cdf2ce6a8226065962ef9318a175040e03bd1884431dcd6dc3fba3d7d4df22a2
+    consumers: [13]
+  - artifact: "tools/grokverify-customer.mjs"
+    sha256: bb1218d514a524f57c8f448a1c7f04153eb1679dc63c736cb0bb79998a710590
+    consumers: [13]
+  - artifact: "tools/security-scan.mjs"
+    sha256: aef6b6ef0a60b5d76f7dd7ba9594493d2ea521dbe99553ce62085bdca4d17921
+    consumers: [13]
+  - artifact: "tools/verified-infrastructure-image.mjs"
+    sha256: 6405bf04b62c00ba992c4670463c4ac99297f0781d9a0d213ff85a3c9326f1a6
+    consumers: [13]
+  - artifact: "tools/observability/alert-sink.mjs"
+    sha256: 109922eff720fa0a13954ceecae12f99655b9e809b28e4307fc276d661f24c3f
+    consumers: [13]
+  - artifact: "tools/observability/alerts.mjs"
+    sha256: fd5f4a4689515152c89a0f4e41f3f4cf12cca42bd6ac886cd86bb11e8965397f
+    consumers: [13]
+  - artifact: "tools/observability/bootstrap.mjs"
+    sha256: 56ee27283fbb894ba212f0feb017d645f2d509aa406f7166b95b05777f61f172
+    consumers: [13]
+  - artifact: "tools/observability/generate.mjs"
+    sha256: ae8b37e45fad14f29e74ee756a1b20aff858e928957516ed250b79dc6e9224a1
+    consumers: [13]
+  - artifact: "tools/observability/health.mjs"
+    sha256: 4e2aaaeaeff1bd08d6ffedd90806145a9e5af33fde0018985927ba09ca2cfe92
+    consumers: [13]
+  - artifact: "tools/observability/storage.mjs"
+    sha256: 3025b417ed4058d937f2f4d82973a854b1d2b6e6e03ecc7584f55cf58c82fc47
+    consumers: [13]
+  - artifact: "verification/launch/v1/matrix.yaml"
+    sha256: b14ea94372ce79ee1bae587fe81b7835a983cf058111e228e3b27d2ead7ff23f
+    consumers: [13]
+verification:
+  - command: "node node_modules/prettier/bin/prettier.cjs --debug-check .cursor/skills/orders-slice-verify/internal-fixture.mjs .cursor/skills/orders-slice-verify/run.mjs .cursor/skills/verify-web/run.mjs apps/tasty-gateway/src/infrastructure/provider/cart-decoder.ts apps/tasty-gateway/src/infrastructure/provider/catalog-decoder.ts apps/tasty-gateway/src/infrastructure/provider/http-client.ts apps/tasty-gateway/src/infrastructure/provider/session.ts apps/tasty-gateway/tsconfig.json config/service-catalog.schema.json config/toolchain-versions.schema.json scripts/catalog-live-harness.mjs scripts/check-toolchain-versions.mjs tests/aroma/observer-live.test.mjs tests/observability/fixture.mjs tests/observability/runtime-matrix-probe.mjs tests/observability/storage.test.mjs tests/tasty/cart-decoder.test.mjs tests/tasty/catalog-decoder.test.mjs tests/tasty/provider-session.test.mjs tests/tools/security-scan.test.mjs tools/config-bootstrap/index.mjs tools/grokverify-customer.mjs tools/security-scan.mjs tools/verified-infrastructure-image.mjs tools/observability/alert-sink.mjs tools/observability/alerts.mjs tools/observability/bootstrap.mjs tools/observability/generate.mjs tools/observability/health.mjs tools/observability/storage.mjs verification/launch/v1/matrix.yaml"
+    result: "до записи: exit 2; 29 AST PASS, 2 исключения BigInt; 6.765 s; raw log SHA-256 f950eb35ede27af701633c22c999d8582fc8edb5d68a148058388ddc848b9e4f"
+  - command: "node /home/yurgusev/.cache/coffee-launch-delivery/format-proof.mjs"
+    result: "exit 0; Prettier 3.9.6; 31/31 побайтно равны CLI-выводу из f412, 31/31 AST и идемпотентность равны; 4/4 JSON/YAML равны; 19.90 s; script SHA-256 619fbc48256f544f4443b2525336917906c3e9f6de53184e1000e39172df0718; raw log SHA-256 4f0d36848cda32e3d3ba658843a2a0a93eb5d0dbb39a707c2c14e1c66a4e5a4c"
+  - command: "node node_modules/prettier/bin/prettier.cjs --check .cursor/skills/orders-slice-verify/internal-fixture.mjs .cursor/skills/orders-slice-verify/run.mjs .cursor/skills/verify-web/run.mjs apps/tasty-gateway/src/infrastructure/provider/cart-decoder.ts apps/tasty-gateway/src/infrastructure/provider/catalog-decoder.ts apps/tasty-gateway/src/infrastructure/provider/http-client.ts apps/tasty-gateway/src/infrastructure/provider/session.ts apps/tasty-gateway/tsconfig.json config/service-catalog.schema.json config/toolchain-versions.schema.json scripts/catalog-live-harness.mjs scripts/check-toolchain-versions.mjs tests/aroma/observer-live.test.mjs tests/observability/fixture.mjs tests/observability/runtime-matrix-probe.mjs tests/observability/storage.test.mjs tests/tasty/cart-decoder.test.mjs tests/tasty/catalog-decoder.test.mjs tests/tasty/provider-session.test.mjs tests/tools/security-scan.test.mjs tools/config-bootstrap/index.mjs tools/grokverify-customer.mjs tools/security-scan.mjs tools/verified-infrastructure-image.mjs tools/observability/alert-sink.mjs tools/observability/alerts.mjs tools/observability/bootstrap.mjs tools/observability/generate.mjs tools/observability/health.mjs tools/observability/storage.mjs verification/launch/v1/matrix.yaml"
+    result: "exit 0; 31/31; 6.353 s; raw log SHA-256 48219db6a36bb0f3098f302f593dd9173b0affa3e713bc1783389a5015405c9a"
+  - command: "node scripts/check-toolchain-versions.mjs"
+    result: "exit 0; 0.462 s; raw log SHA-256 48219db6a36bb0f3098f302f593dd9173b0affa3e713bc1783389a5015405c9a"
+  - command: "node --experimental-strip-types --test tests/observability/storage.test.mjs"
+    result: "exit 0; 15 pass, 0 fail, 0 skip; 2.087 s; raw log SHA-256 48219db6a36bb0f3098f302f593dd9173b0affa3e713bc1783389a5015405c9a"
+  - command: "node node_modules/typescript/bin/tsc -b packages/platform-idempotency packages/platform-config --pretty false"
+    result: "exit 0; 2.75 s; raw log SHA-256 e1118f835f880fc5014470604088acb5dafeae03d6d2609050604efb65c993d3"
+  - command: "node --test --test-name-pattern=\"launch-path PostgreSQL fixture requests a pinned image and bounded tmpfs\" tests/compose/topology.test.mjs"
+    result: "exit 0; 1 pass, 0 fail, 0 reported skip, 37 других тестов не выбраны; 0.75 s; raw log SHA-256 a5e3d211b358b58a341616bbfc5da636aea727b030f12604f73196a9ef61e61b"
+  - command: "node --test --test-name-pattern=\"catalog harness keeps default setup and scopes launch PostgreSQL ownership\" tests/realtime/fixtures/harness.test.mjs"
+    result: "exit 0; 1 pass, 0 fail, 0 reported skip, 43 других теста не выбраны; 0.33 s; raw log SHA-256 26e9d99761f2d59797f7e92bc81c22d878fcb00fbbac948c81263a2d86a8b612"
+  - command: "node --experimental-strip-types --test --test-name-pattern=\"G12 accepts Buildx mode=min|G12 binds Kafka provenance|G12 flags every HIGH|G12 compares only Trivy|G12 requires fresh, internally ordered|G12 scanner arguments\" tests/tools/security-scan.test.mjs"
+    result: "exit 0; 6 pass, 0 fail, 0 reported skip, 10 других тестов не выбраны; 0.33 s; raw log SHA-256 32e72235fb03cb4a4c0f64916868303322f5cf75fde91f0dd182896ebb52c628"
+  - command: "git diff --check"
+    result: "exit 0; 0.051 s до добавления handoff; raw log SHA-256 48219db6a36bb0f3098f302f593dd9173b0affa3e713bc1783389a5015405c9a"
+limitations:
+  - "Компонентная локальная проверка; независимое review, final CI и полный G03 не подтверждены. В baseline ещё 12 неформатированных файлов вне scope #231."
+  - "Prettier --debug-check не завершился на tests/aroma/observer-live.test.mjs и tests/observability/storage.test.mjs: внутренняя JSON-сериализация AST не поддерживает BigInt; сравнение AST с isDeepStrictEqual и проверка идемпотентности прошли для всех 31 файлов."
+  - "Проверки topology и realtime ограничены выбранными сценариями чтения withCatalogPostgres; полные suites не запускались. Полные lint и typecheck, PostgreSQL, Kafka, provider, Docker, browser и native build не выполнялись."
+  - "Приватные журналы и скрипт находятся в /home/yurgusev/.cache/coffee-launch-delivery/format-*; они не являются опубликованными CI artifacts."
+  - "Результат и hashes привязаны к f412; после интеграции принятых изменений необходимо повторить релевантные проверки и пересчитать изменённые outputs."
