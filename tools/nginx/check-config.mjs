@@ -60,6 +60,7 @@ try {
     ),
   );
   assert.match(generated, /"duration_seconds":\$request_time/);
+  assert.match(generated, /"request_completion":"\$request_completion"/);
   assert.match(
     generated,
     /server \{ listen 8081; server_name edge-nginx; location = \/nginx_status \{ stub_status; access_log off; \} location \/ \{ return 404; \} \}/,

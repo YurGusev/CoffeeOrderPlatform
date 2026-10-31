@@ -1744,11 +1744,18 @@ function inspectProducerRedaction({
   };
 }
 
+const SENSITIVE_TELEMETRY_FIELD =
+  /password|passwd|credential|api.?key|token|secret|authorization|cookie|session|private.?key|email|phone|actor|address|(?:client|remote|source|forwarded).?ip|(?:request|callback|target).?(?:uri|url)|payload|request.?body/iu;
+
 function containsSensitiveField(value, depth = 0) {
-  if (depth >= 8 || value === null || typeof value !== "object") return false;
+  if (value === null || typeof value !== "object") return false;
+  if (depth >= 8) return true;
   return Object.entries(value).some(
     ([key, child]) =>
-      /authorization|password|secret|token/iu.test(key) ||
+      SENSITIVE_TELEMETRY_FIELD.test(key) ||
+      (key === "key" &&
+        typeof child === "string" &&
+        SENSITIVE_TELEMETRY_FIELD.test(child)) ||
       containsSensitiveField(child, depth + 1),
   );
 }
@@ -1958,6 +1965,7 @@ export async function collectG14BrowserTelemetry({
   startTimeUs,
   lokiUrl,
   tempoUrl,
+  nativeNginxContainerId,
   secrets = [],
   fetchImpl = fetch,
   timeoutMs = 55000,
@@ -1970,6 +1978,7 @@ export async function collectG14BrowserTelemetry({
     !Number.isFinite(intervalMs) ||
     intervalMs <= 0 ||
     !Number.isFinite(startTimeUs) ||
+    !/^[a-f0-9]{64}$/u.test(nativeNginxContainerId ?? "") ||
     !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(
       proof?.correlationId ?? "",
     ) ||
@@ -1999,6 +2008,7 @@ export async function collectG14BrowserTelemetry({
     throw error;
   };
   const requiredLogs = ["edge-nginx", "orders-service"];
+  const nativeLogPath = `/var/lib/docker/containers/${nativeNginxContainerId}/${nativeNginxContainerId}-json.log`;
   const deadline = AbortSignal.timeout(Math.ceil(timeoutMs));
   const boundedFetch = (url, options) =>
     fetchImpl(url, {
@@ -2007,10 +2017,12 @@ export async function collectG14BrowserTelemetry({
     });
   const logsPromise = waitFor(
     async () => {
+      const endTimeUs = Date.now() * 1000;
       const rows = await queryLokiLogs({
         baseUrl: lokiUrl,
         runId: proof.correlationId,
         startTimeUs,
+        endTimeUs,
         fetchImpl: boundedFetch,
       });
       if (rows.some((row) => containsSensitiveField(row) || sensitive(row)))
@@ -2028,7 +2040,107 @@ export async function collectG14BrowserTelemetry({
           matched.filter((row) => row.service_name === role).length,
         ]),
       );
-      return requiredLogs.every((role) => counts[role] > 0) ? counts : false;
+      if (!requiredLogs.every((role) => counts[role] > 0)) return false;
+      const requests = new Map();
+      let excluded = 0;
+      let duplicates = 0;
+      for (const row of rows.filter(
+        (record) => record.service_name === "edge-nginx",
+      )) {
+        if (
+          row.correlation_id !== proof.correlationId ||
+          row.log_file_path !== nativeLogPath ||
+          typeof row.route !== "string" ||
+          typeof row.method !== "string"
+        ) {
+          const error = new Error("G14_NATIVE_LOG_IDENTITY_INVALID");
+          error.fatal = true;
+          throw error;
+        }
+        if (
+          row.route !== "client.orders" ||
+          !["GET", "POST", "PUT", "DELETE"].includes(row.method)
+        ) {
+          excluded += 1;
+          continue;
+        }
+        if (
+          !/^[a-f0-9]{32}$/u.test(row.request_id ?? "") ||
+          !Number.isInteger(row.status) ||
+          row.status < 100 ||
+          row.status > 599 ||
+          typeof row.duration_seconds !== "number" ||
+          !Number.isFinite(row.duration_seconds) ||
+          row.duration_seconds < 0 ||
+          !["OK", ""].includes(row.request_completion)
+        ) {
+          const error = new Error("G14_NATIVE_LOG_MEASUREMENT_INVALID");
+          error.fatal = true;
+          throw error;
+        }
+        const record = {
+          method: row.method,
+          status: row.status,
+          duration: row.duration_seconds,
+          completion: row.request_completion,
+        };
+        if (requests.has(row.request_id)) {
+          if (!isDeepStrictEqual(requests.get(row.request_id), record)) {
+            const error = new Error("G14_NATIVE_LOG_DUPLICATE_CONFLICT");
+            error.fatal = true;
+            throw error;
+          }
+          duplicates += 1;
+        } else requests.set(row.request_id, record);
+      }
+      const entries = [...requests.values()];
+      const completed = entries.filter(
+        ({ completion, status }) => completion === "OK" && status !== 499,
+      );
+      if (
+        !["GET", "POST"].every((method) =>
+          completed.some(
+            (entry) => entry.method === method && entry.status === 200,
+          ),
+        )
+      )
+        return false;
+      const durations = completed
+        .map(({ duration }) => duration)
+        .sort((a, b) => a - b);
+      const rank = (fraction) =>
+        durations[Math.ceil(durations.length * fraction) - 1];
+      const statusCounts = {};
+      for (const { status } of entries)
+        statusCounts[status] = (statusCounts[status] ?? 0) + 1;
+      return {
+        counts,
+        measurement: {
+          status: "MEASURED",
+          scope:
+            "observed subset, verified CID, native edge-nginx, client.orders, observation window",
+          unit: "seconds",
+          percentile: "nearest-rank",
+          windowStartUtc: new Date(startTimeUs / 1000).toISOString(),
+          windowEndUtc: new Date(endTimeUs / 1000).toISOString(),
+          sampleCount: durations.length,
+          successCount: completed.filter(
+            ({ status }) => status >= 200 && status < 400,
+          ).length,
+          errorCount: completed.filter(({ status }) => status >= 400).length,
+          abortedCount: entries.filter(({ status }) => status === 499).length,
+          incompleteCount: entries.filter(
+            ({ status, completion }) => status !== 499 && completion === "",
+          ).length,
+          excludedCount: excluded,
+          duplicateCount: duplicates,
+          statusCounts,
+          min: durations[0],
+          max: durations.at(-1),
+          p50: rank(0.5),
+          p95: rank(0.95),
+        },
+      };
     },
     { timeoutMs, intervalMs, description: "G14 browser CID logs" },
   );
@@ -2040,16 +2152,9 @@ export async function collectG14BrowserTelemetry({
     timeoutMs,
     intervalMs,
     inspectSpan: (span, resource) => {
-      const attributes = [
-        ...(span.attributes ?? []),
-        ...(resource?.attributes ?? []),
-      ];
       if (
-        attributes.some(({ key }) =>
-          /authorization|password|secret|token|cookie|session|email|phone|address|payload|request[._-]?body/iu.test(
-            key ?? "",
-          ),
-        ) ||
+        containsSensitiveField(span) ||
+        containsSensitiveField(resource) ||
         sensitive(span) ||
         sensitive(resource)
       )
@@ -2082,7 +2187,8 @@ export async function collectG14BrowserTelemetry({
     configSha256: proof.configSha256,
     correlationId: proof.correlationId,
     traceId: proof.traceId,
-    logCounts: logs.value,
+    logCounts: logs.value.counts,
+    ordinaryApiMeasurement: logs.value.measurement,
     spans,
     spanCount: trace.value.traceRows.length,
   };
@@ -5077,6 +5183,7 @@ export async function runObservabilityVerification({
           let stage = "init";
           let observedProof;
           let browserTelemetryStartedAtUs;
+          let browserNginxContainerId;
           let childEnded = false;
           let collectorNeedsRestore = false;
           let collectorTasks = Promise.resolve();
@@ -5157,6 +5264,9 @@ try {
                       runDocker: run,
                     });
                   if (childEnded) throw new Error("G14 child already ended");
+                  browserNginxContainerId = childLogs.find(
+                    ({ service }) => service === "edge-nginx",
+                  )?.containerId;
                   await changeCollector(childLogs, networks);
                   browserTelemetryStartedAtUs = Date.now() * 1000;
                   stage = "browser-proof";
@@ -5171,6 +5281,7 @@ try {
                   browserTelemetry = await collectG14BrowserTelemetry({
                     proof: observedProof,
                     startTimeUs: browserTelemetryStartedAtUs,
+                    nativeNginxContainerId: browserNginxContainerId,
                     lokiUrl: baseUrls.loki,
                     tempoUrl: baseUrls.tempo,
                     secrets,
