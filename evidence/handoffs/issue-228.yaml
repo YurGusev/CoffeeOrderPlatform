@@ -6,6 +6,8 @@ stackedDependencies:
     note: Принятая develop включена отдельным локальным merge.
   - commit: b308bb6e31595ca5927abfbb117021c687f7bf55
     note: Полный локальный merge #222 для reuse OIDC lifecycle; принятие #222 не подтверждено и необходимо до PR и merge #228.
+  - commit: e8426e1f8ba5749ff184c23c25dae5f2de771cc9
+    note: Обновление #222 с develop 70224f3; принятие #222 и runtime proof остаются обязательными.
 outputs:
   - artifact: config/platform.yaml
     sha256: a1a78e59e483dcc4a28a955aaa316d297d9068d6b17c4b7b958b3ab0ec32ab0a
@@ -23,10 +25,10 @@ outputs:
     sha256: f4b83a3aef8db624f8552e254614ef32116ef9f4c69d33e1d84af2331a7c8f16
     consumers: [13]
   - artifact: docs/launch/30_FRONTEND_OPERATOR_RUNBOOK.md
-    sha256: cf90b28468cdfb45cf50c18e4667beee6ba0d66285cce5c4d2fbff810295fb10
+    sha256: abbc1f6b4ee1f4abcba5157750ff7335bd3500b420899fe960f51faca3a45bfd
     consumers: [13]
   - artifact: tests/config/observability-bootstrap.test.mjs
-    sha256: db02716788cdc91556dac0e5e21a4a606dd1d01660df6c02c7f067c7b48693ca
+    sha256: 3bfb56e2d3201ea75274de5058c978188847ea05c9a8eb9c978038b13bad734b
     consumers: [13]
   - artifact: tests/realtime/fixtures/harness.test.mjs
     sha256: 3246d676c412a6f8f868ed45e168bab1104d58ad8be88a33fc321cdb1c48cb89
@@ -44,8 +46,9 @@ outputs:
     sha256: 07ec716860b0d3ce73661b8badbf3c250b5e826622c4ac52853518d83216f1d5
     consumers: [13]
   - artifact: verification/launch/v1/scenarios/browser.mjs
-    sha256: a60c68fc60378aef1a22559386a79d335a399b3aca0021f39fd92a3b7cc12f87
+    sha256: 5b1c2e8b3e03d202f0a71db1c616553625d3601f1e0e30d9b09bdbe849ace464
     consumers: [13]
+verificationBasis: Локальные результаты до включения e842 относятся к дереву 4696a4c; повторные интеграционные проверки фиксируются отдельно.
 verification:
   - command: "node --test tests/config/platform-config.test.mjs"
     result: "38 pass / 0 fail / 0 skip; 27.584 s; log SHA-256 b731c6e633a008ba5477a12f20d0a3d018e359fca1f160e678c7647b56b2262b"

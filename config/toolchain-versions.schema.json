@@ -204,11 +204,7 @@
     "grafanaPlugins": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "loki",
-        "tempo",
-        "prometheus"
-      ],
+      "required": ["loki", "tempo", "prometheus"],
       "properties": {
         "loki": {
           "type": "object",
@@ -307,15 +303,9 @@
     "grafanaTempoModule": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "version",
-        "h1",
-        "revision",
-        "fixCommits",
-        "replacement"
-      ],
+      "required": ["version", "h1", "revision", "fixCommits", "replacement"],
       "properties": {
-        "replacement": {"type": "null"},
+        "replacement": { "type": "null" },
         "version": {
           "type": "string"
         },
