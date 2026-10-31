@@ -4249,11 +4249,14 @@ async function realtimeScenarios(
   // Strict runtime wire validation, exact query/version semantics and monotonic GET.
   {
     const page = await context.newPage();
+    await captureBrowserTelemetry(page);
     await installCommonMocks(page, { nativeRealtime: true });
     let reads = 0;
+    const correlationIds: string[] = [];
     let card = { ...orderCard("3"), version: "999" };
     await page.route(orderPath, (route) => {
       reads += 1;
+      correlationIds.push(route.request().headers()["x-correlation-id"] ?? "");
       return fulfillJson(route, card);
     });
     await page.goto(`${origin}/app/orders/${orderRef}`, {
@@ -4300,6 +4303,20 @@ async function realtimeScenarios(
       reads,
       2,
       "dedup uses projectionVersion, not Order.version=999",
+    );
+    assert.equal(correlationIds[1], hintFrame("4").correlationId);
+    assert.notEqual(correlationIds[0], correlationIds[1]);
+    const events = await page.evaluate(
+      () =>
+        (window as Window & { __coffeeTelemetry?: BrowserTelemetryEvent[] })
+          .__coffeeTelemetry ?? [],
+    );
+    assert.ok(
+      events.some(
+        (event) =>
+          event.name === "ui.query.result" &&
+          event.correlationId === correlationIds[1],
+      ),
     );
     fixture.frame("resource-invalidated.v1", hintFrame("4"));
     fixture.frame("resource-invalidated.v1", hintFrame("3"));

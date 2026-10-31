@@ -113,7 +113,9 @@ malformed replay, неизвестный 4xx-код и временный `5xx` 
 protocol-кода, а не всем классом 4xx. Replay разрешён только после re-auth того же
 server-derived actor.
 
-Каждый запрос получает новый `X-Correlation-ID`. Browser публикует локальный
+Каждый запрос получает новый `X-Correlation-ID`, кроме вызванного валидным SSE
+hint обновления Order Card: этот GET и его повторы используют `correlationId` hint.
+Browser публикует локальный
 redacted event `coffee:browser-telemetry` с именами `ui.query.result`,
 `ui.command.result` или `ui.recovery.result`, нормализованными route/endpoint,
 категорией результата и duration. Payload, контакты, цены и owner refs в событие не
