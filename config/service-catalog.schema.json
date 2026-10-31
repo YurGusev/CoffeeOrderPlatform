@@ -44,7 +44,9 @@
       "required": ["otel-collector", "grafana-bootstrap"],
       "properties": {
         "otel-collector": {
-          "const": [{ "name": "exporterToken", "ref": "telemetry.exporterToken" }]
+          "const": [
+            { "name": "exporterToken", "ref": "telemetry.exporterToken" }
+          ]
         },
         "grafana-bootstrap": {
           "const": [{ "name": "admin-secret", "ref": "telemetry.grafanaAdmin" }]

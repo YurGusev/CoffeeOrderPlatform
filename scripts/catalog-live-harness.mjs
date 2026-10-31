@@ -16,8 +16,14 @@ import { validateLaunchDatabaseIdentity } from "../packages/platform-config/dist
 
 const exec = promisify(execFile);
 const root = resolve(import.meta.dirname, "..");
-const image = JSON.parse(readFileSync(resolve(root, "config/toolchain-versions.json"), "utf8")).postgresFixtureImage;
-assert.match(image ?? "", /^postgres:17\.11@sha256:[0-9a-f]{64}$/u, "disposable PostgreSQL image must be pinned");
+const image = JSON.parse(
+  readFileSync(resolve(root, "config/toolchain-versions.json"), "utf8"),
+).postgresFixtureImage;
+assert.match(
+  image ?? "",
+  /^postgres:17\.11@sha256:[0-9a-f]{64}$/u,
+  "disposable PostgreSQL image must be pinned",
+);
 const databaseName = "coffee_platform_catalog";
 const password = `catalog-${randomBytes(12).toString("hex")}`;
 const pool = Object.freeze({
@@ -311,7 +317,11 @@ export async function withCatalogPostgres(
         "PostgreSQL must bind loopback only",
       );
       assert.match(actual.hostPort, /^[1-9][0-9]*$/u);
-      assert.equal(actual.tmpfs?.["/var/lib/postgresql/data"], "rw,noexec,nosuid,size=536870912", "disposable PostgreSQL must use bounded tmpfs");
+      assert.equal(
+        actual.tmpfs?.["/var/lib/postgresql/data"],
+        "rw,noexec,nosuid,size=536870912",
+        "disposable PostgreSQL must use bounded tmpfs",
+      );
       if (expected) assert.deepEqual(actual, expected);
     };
     containerIdentity = await inspectContainer();
@@ -319,10 +329,34 @@ export async function withCatalogPostgres(
     const port = Number(containerIdentity.hostPort);
     await waitForPostgres(port, targetDatabase);
     assertOwnedContainer(await inspectContainer(), containerIdentity);
-    const filesystem = (await docker("exec", containerId, "stat", "-f", "-c", "%T|%S|%b", "/var/lib/postgresql/data")).stdout.trim().split("|");
-    assert.equal(filesystem.length, 3, "disposable PostgreSQL filesystem fields");
-    assert.equal(filesystem[0], "tmpfs", "disposable PostgreSQL filesystem type");
-    assert.equal(Number(filesystem[1]) * Number(filesystem[2]), 536870912, "disposable PostgreSQL tmpfs capacity");
+    const filesystem = (
+      await docker(
+        "exec",
+        containerId,
+        "stat",
+        "-f",
+        "-c",
+        "%T|%S|%b",
+        "/var/lib/postgresql/data",
+      )
+    ).stdout
+      .trim()
+      .split("|");
+    assert.equal(
+      filesystem.length,
+      3,
+      "disposable PostgreSQL filesystem fields",
+    );
+    assert.equal(
+      filesystem[0],
+      "tmpfs",
+      "disposable PostgreSQL filesystem type",
+    );
+    assert.equal(
+      Number(filesystem[1]) * Number(filesystem[2]),
+      536870912,
+      "disposable PostgreSQL tmpfs capacity",
+    );
     adminClient = new Client({
       host: "127.0.0.1",
       port,
