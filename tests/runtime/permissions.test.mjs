@@ -50,10 +50,21 @@ void test("enforce flags allow addons only for Kafka runtimes", async () => {
   const manifest = await validatePermissionManifest(root, "api-public");
   assert.deepEqual(permissionFlags(manifest, "enforce", root).slice(0, 2), [
     "--permission",
-    "--allow-net=customer-service:4101,catalog-service:4102,pricing-service:4103,orders-service:4104",
+    "--allow-net",
   ]);
   assert.ok(
     permissionFlags(manifest, "audit", root).includes("--permission-audit"),
+  );
+  assert.ok(permissionFlags(manifest, "audit", root).includes("--allow-net"));
+  const edgeManifest = await validatePermissionManifest(root, "edge-gateway");
+  assert.equal(
+    permissionFlags(edgeManifest, "enforce", root).includes("--allow-net"),
+    false,
+  );
+  assert.ok(
+    permissionFlags(edgeManifest, "enforce", root, "4000").includes(
+      "--allow-net",
+    ),
   );
   assert.equal(
     permissionFlags(manifest, "enforce", root).some((flag) =>
@@ -75,6 +86,11 @@ void test("enforce flags allow addons only for Kafka runtimes", async () => {
     telemetry: { collector: { otlpEndpoint: "http://otel-collector:4319" } },
   });
   assert.equal(alternateIngest, "otel-collector:4319");
+  assert.ok(
+    permissionFlags(edgeManifest, "enforce", root, undefined, ingest).includes(
+      "--allow-net",
+    ),
+  );
   const telemetryFlags = permissionFlags(
     manifest,
     "enforce",
@@ -82,15 +98,9 @@ void test("enforce flags allow addons only for Kafka runtimes", async () => {
     "4050",
     ingest,
   );
-  assert.ok(
-    telemetryFlags.includes(
-      "--allow-net=customer-service:4101,catalog-service:4102,pricing-service:4103,orders-service:4104,otel-collector:4318,0.0.0.0:4050",
-    ),
-  );
+  assert.ok(telemetryFlags.includes("--allow-net"));
   assert.equal(
-    telemetryFlags.some(
-      (flag) => flag.startsWith("--allow-net=") && flag.includes("openobserve"),
-    ),
+    telemetryFlags.some((flag) => flag.startsWith("--allow-net=")),
     false,
   );
   for (const endpoint of [
@@ -110,6 +120,35 @@ void test("enforce flags allow addons only for Kafka runtimes", async () => {
       /invalid telemetry ingest endpoint/u,
     );
   }
+});
+
+void test("Node network permission is global rather than a host and port filter", () => {
+  const denied = spawnSync(
+    process.execPath,
+    [
+      "--permission",
+      "--eval",
+      "require('node:net').createServer().listen(0, '127.0.0.1')",
+    ],
+    { encoding: "utf8" },
+  );
+  assert.notEqual(denied.status, 0);
+  assert.match(denied.stderr, /ERR_ACCESS_DENIED/);
+  const source = `import { createServer, createConnection } from 'node:net';
+const servers = [createServer((socket) => socket.end()), createServer((socket) => socket.end())];
+for (const server of servers) await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+for (const server of servers) await new Promise((resolve, reject) => {
+  const socket = createConnection({ host: '127.0.0.1', port: server.address().port });
+  socket.on('connect', () => { socket.end(); resolve(); });
+  socket.on('error', reject);
+});
+await Promise.all(servers.map((server) => new Promise((resolve) => server.close(resolve))));`;
+  const allowed = spawnSync(
+    process.execPath,
+    ["--permission", "--allow-net", "--input-type=module", "--eval", source],
+    { encoding: "utf8" },
+  );
+  assert.equal(allowed.status, 0, allowed.stderr);
 });
 
 void test("Node Permission Model audit permits an operation while enforce denies it", () => {

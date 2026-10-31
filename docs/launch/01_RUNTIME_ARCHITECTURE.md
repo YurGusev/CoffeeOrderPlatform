@@ -55,10 +55,12 @@ Gateway проверить transport caller, original caller и operation audien
 AROMA credentials доступны только `aroma-gateway`.
 
 Эти trust zones не совпадают один-к-одному с Docker networks. Exact physical
-attachments, отдельные `coffee_postgres_data`/`coffee_kafka_event`, разрешённые
-host:port и default-deny проверки заданы в
+attachments, отдельные `coffee_postgres_data`/`coffee_kafka_event` и инвентарь
+host:port заданы в
 [матрице runtime](23_RUNTIME_CONFIGURATION_MATRIX.md). Ни один новый runtime не
 подключается к legacy `coffee_network`.
+Ограничения общего TCP plane и действующие границы авторизации уточняет
+[ADR-0041](../adr/ADR-0041-local-server-network-boundaries.md).
 
 ## Технические пакеты платформы
 

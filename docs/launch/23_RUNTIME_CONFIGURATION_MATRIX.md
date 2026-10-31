@@ -190,10 +190,16 @@ platform policy и не указывается ни у одного нового
 
 `platform/launch-v1-connectivity-policy.json` материализует таблицы полями
 `dockerNetworks`, `hostPortPolicy.default=deny`, `allowedHostPorts`,
-`allowedExternalEgress` и `denyAssertions`. DNS/IP назначения после resolution
-тоже обязаны принадлежать allowlist; redirect к другому AROMA host запрещён.
+`allowedExternalEgress` и `denyAssertions`. `hostPortPolicy` относится к
+публикуемым портам хоста. Остальные списки описывают ожидаемые связи, а не
+применяемый Node фильтр host:port или DNS/IP. Provider-клиент Gateway запрещает
+redirect к другому AROMA host. Граница сети определена в
+[ADR-0041](../adr/ADR-0041-local-server-network-boundaries.md).
 
 ## Permission/network invariants
+
+Следующий перечень задаёт роли и назначение связей; TCP-достижимость внутри
+общего plane не равна разрешению прикладной операции.
 
 - nginx: только public ingress, private Edge/api-public/realtime; owner/internal/provider запрещены;
 - Edge authorizer: только private nginx caller и утверждённый OIDC outbound; business egress запрещён;
@@ -202,17 +208,18 @@ platform policy и не указывается ни у одного нового
 - owner runtime: только своя DB/роль и перечисленные HTTP/Kafka связи;
 - Gateway: Integration DB + provider egress; Kafka и business DB запрещены;
 - realtime: business DB запрещена.
-- новый runtime в `coffee_network`, неизвестная network или неописанный
-  host:port запрещены.
+- новый runtime в `coffee_network` и неизвестная network запрещены policy;
+  неописанный host:port отсутствует в инвентаре, но Node не фильтрует его TCP.
 
-Негативный topology suite обязан доказать отказ Edge→owner,
-`api-public`/`api-internal`→PostgreSQL/Kafka, Customer→Kafka, Gateway→Kafka,
-non-Gateway→AROMA origin и любого нового runtime→`coffee_network`. В #19 эти
-инварианты проверяются на policy/fixtures; реальные container connect probes
-материализует #3.
+Негативные проверки policy/fixtures и Compose проверяют объявления и network
+attachments; сами по себе они не доказывают отказ TCP между участниками общего
+plane. Private вызовы дополнительно ограничены mTLS и caller authorization,
+доступ к данным — PostgreSQL roles. Provider-клиент ограничивает origin и
+redirect; это не запрет произвольного TCP из процесса.
 
-`pnpm config:check` сравнивает эту таблицу с `platform.yaml`, service catalog,
-Compose, Permission manifests и SOPS secretRef allowlists поле-в-поле.
+`pnpm config:check` проверяет platform config, service catalog и secret refs;
+он не сравнивает эту таблицу с Compose и Permission manifests. Проверка
+connectivity authority и согласованности manifests выполняется отдельно.
 
 ## Настройки долговечных AROMA workers
 
