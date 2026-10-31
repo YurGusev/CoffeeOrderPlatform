@@ -13,7 +13,10 @@ export type TastyCartSnapshot = Readonly<{
   completeness: "Unproven";
 }>;
 
-export type TastyCartErrorCode = "TASTY_CART_INCOMPLETE" | "TASTY_CART_INVALID" | "TASTY_CART_UNSUPPORTED_LINE";
+export type TastyCartErrorCode =
+  | "TASTY_CART_INCOMPLETE"
+  | "TASTY_CART_INVALID"
+  | "TASTY_CART_UNSUPPORTED_LINE";
 
 export class TastyCartDecodeError extends Error {
   readonly code: TastyCartErrorCode;
@@ -30,7 +33,8 @@ function fail(code: TastyCartErrorCode): never {
 }
 
 function record(value: unknown): Record<string, unknown> {
-  if (value === null || typeof value !== "object" || Array.isArray(value)) fail("TASTY_CART_INVALID");
+  if (value === null || typeof value !== "object" || Array.isArray(value))
+    fail("TASTY_CART_INVALID");
   return value as Record<string, unknown>;
 }
 
@@ -40,7 +44,8 @@ function required(source: Record<string, unknown>, key: string): unknown {
 }
 
 function id(value: unknown): string {
-  if (typeof value !== "number" || !Number.isSafeInteger(value) || value <= 0) fail("TASTY_CART_INVALID");
+  if (typeof value !== "number" || !Number.isSafeInteger(value) || value <= 0)
+    fail("TASTY_CART_INVALID");
   return String(value);
 }
 
@@ -62,11 +67,23 @@ function line(value: unknown): TastyCartLine {
   const blocked = boolean(required(source, "is_blocked"));
   const type = required(source, "type");
   if (typeof type !== "string") fail("TASTY_CART_INVALID");
-  if (gift || promocode || itemData !== null || !active || blocked || (type !== "bean_coffee" && type !== "ground_coffee")) {
+  if (
+    gift ||
+    promocode ||
+    itemData !== null ||
+    !active ||
+    blocked ||
+    (type !== "bean_coffee" && type !== "ground_coffee")
+  ) {
     fail("TASTY_CART_UNSUPPORTED_LINE");
   }
   const quantity = required(source, "quantity");
-  if (typeof quantity !== "number" || !Number.isSafeInteger(quantity) || quantity <= 0) fail("TASTY_CART_INVALID");
+  if (
+    typeof quantity !== "number" ||
+    !Number.isSafeInteger(quantity) ||
+    quantity <= 0
+  )
+    fail("TASTY_CART_INVALID");
   const product = record(required(source, "product"));
   return {
     rowId: id(required(source, "id")),
@@ -84,12 +101,24 @@ export function decodeTastyCartResponse(body: unknown): TastyCartSnapshot {
   if (!Array.isArray(data)) fail("TASTY_CART_INVALID");
   const meta = record(required(source, "meta"));
   if (data.length === 0) {
-    for (const key of ["price", "price_without_discount", "weight", "coffee_weight", "tea_weight"]) {
+    for (const key of [
+      "price",
+      "price_without_discount",
+      "weight",
+      "coffee_weight",
+      "tea_weight",
+    ]) {
       const value = required(meta, key);
-      if (typeof value !== "number" || !Number.isFinite(value) || value !== 0) fail("TASTY_CART_INVALID");
+      if (typeof value !== "number" || !Number.isFinite(value) || value !== 0)
+        fail("TASTY_CART_INVALID");
     }
   }
   const lines = data.map(line);
-  if (new Set(lines.map(entry => entry.rowId)).size !== lines.length) fail("TASTY_CART_INVALID");
-  return {kind: lines.length === 0 ? "empty" : "nonempty", lines, completeness: "Unproven"};
+  if (new Set(lines.map((entry) => entry.rowId)).size !== lines.length)
+    fail("TASTY_CART_INVALID");
+  return {
+    kind: lines.length === 0 ? "empty" : "nonempty",
+    lines,
+    completeness: "Unproven",
+  };
 }
