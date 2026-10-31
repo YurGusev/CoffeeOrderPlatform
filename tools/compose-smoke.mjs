@@ -3272,7 +3272,9 @@ export function assertObservabilityPostgresIdentity({
     "fixture PostgreSQL image changed",
   );
   const networks = Object.keys(info?.NetworkSettings?.Networks ?? {}).sort();
-  const expectedNetworks = ["bridge", networkName].sort();
+  const expectedNetworks = ["bridge", networkName].sort((left, right) =>
+    String(left) < String(right) ? -1 : String(left) > String(right) ? 1 : 0,
+  );
   assert.ok(
     JSON.stringify(networks) === JSON.stringify(expectedNetworks) ||
       (allowIncompleteNetwork &&

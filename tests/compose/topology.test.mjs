@@ -5341,7 +5341,7 @@ void test("external PostgreSQL cleanup retains run databases until consumers are
     assert.deepEqual(receipt.removed, databases.map(({ name }) => name).sort());
     assert.deepEqual(receipt.retained, []);
     assert.equal(
-      queries.filter((sql) => /^DROP DATABASE/u.test(sql)).length,
+      queries.filter((sql) => sql.startsWith("DROP DATABASE")).length,
       5,
     );
     assert.equal(remaining.size, 0);

@@ -1890,7 +1890,7 @@ void test("convergence proof derives run-scoped DB and Kafka names before access
     );
     await assert.rejects(
       resolveConvergenceTargets({
-        configBytes: Buffer.from(`${configBytes} `),
+        configBytes: Buffer.concat([configBytes, Buffer.from(" ")]),
         contextPath,
         ownershipPath: fileURLToPath(
           new URL("../../config/database-ownership.json", import.meta.url),

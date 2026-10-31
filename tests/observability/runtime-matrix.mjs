@@ -1289,6 +1289,8 @@ export function summarizeComposeReceipt(receipt, projectName, external) {
   const postgresStorage = receipt?.recoveryProof?.postgresStorage;
   const postgres = receipt?.recoveryProof?.postgres;
   const cleanup = receipt?.externalCleanup;
+  const compareStrings = (left, right) =>
+    String(left) < String(right) ? -1 : String(left) > String(right) ? 1 : 0;
   const expectedDatabases = [
     "customer",
     "catalog",
@@ -1308,12 +1310,12 @@ export function summarizeComposeReceipt(receipt, projectName, external) {
       postgres?.externalPostgres === true &&
       postgres.runtimeRoleCount === 10 &&
       Array.isArray(postgres.databases) &&
-      JSON.stringify([...postgres.databases].sort()) ===
+      JSON.stringify([...postgres.databases].sort(compareStrings)) ===
         JSON.stringify(expectedDatabases) &&
       cleanup?.verified === true &&
       cleanup.databases?.verified === true &&
       Array.isArray(cleanup.databases.removed) &&
-      JSON.stringify([...cleanup.databases.removed].sort()) ===
+      JSON.stringify([...cleanup.databases.removed].sort(compareStrings)) ===
         JSON.stringify(expectedDatabases) &&
       Array.isArray(cleanup.databases.retained) &&
       cleanup.databases.retained.length === 0 &&
