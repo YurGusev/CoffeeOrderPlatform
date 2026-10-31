@@ -1,7 +1,7 @@
 issue: 13
 baseCommit: a37789c2bb13775f96f5590fb74b6e9a8f51aca2
 status: source-descriptor-before-formal-verification
-asOfUtc: "2026-10-31T20:31:54.670325+00:00"
+asOfUtc: "2026-10-31T20:43:40.474782+00:00"
 inputs:
   - issue: 2
     acceptedMergeCommit: 327638d4494269a151ee7c0ac945ac0053c3e0d4
@@ -256,6 +256,15 @@ verification:
       "PASS: основной suite 1530 tests / 1451 pass / 0 fail / 79 skipped, 272.119 s; отдельный formatter
       PASS 662 files"
     logSha256: 6c0942c42b71bbe5c1d7fdd64d55d4f6f45c49364ac0ebeb92909e256c56ba6a
+  - command: pnpm format:check на dfd1b6a
+    result: PASS, 31.006 s
+    logSha256: 31ce62401b5d39dad14bd6fda5d7bb1f56ebbe6e9c959025fd1691c57f990570
+  - command: pnpm check на dfd1b6a
+    result: PASS, 469.185 s; основной suite 1546 tests / 1467 pass / 0 fail / 0 cancelled / 79 skipped
+    logSha256: ab9feebfbb15479bba5c304db0b087a69895644650088093f907e24cf43df963
+  - command: pnpm security:secrets на dfd1b6a
+    result: PASS, 1.920 s
+    logSha256: a219e1d01452451f8e90a321d14603bf7be45c9f68d471e8207118c5b4ad6c19
 consumerContract:
   consumer: 1
   admission:
@@ -280,8 +289,9 @@ consumerContract:
       - Obsidian
     note: Фактические файлы и их хэши публикуются после запуска без изменения source SHA.
 limitations:
-  - "Остаточное форматирование G03 принято через #247 / PR #248; CI 41237794738 PASS. Передача фактов G00/G12
-    в environment исправлена. Полная проверка объединённого состояния после этих изменений ещё NOT_RUN."
+  - "На dfd1b6a успешно завершены pnpm format:check (31.006 s), pnpm check (469.185 s) и pnpm security:secrets
+    (1.920 s). Основной suite: 1546 tests / 1467 pass / 0 fail / 0 cancelled / 79 skipped. Это локальные
+    проверки исходников, не formal G00–G19 admission."
   - Итоговые G12, обязательная SSE qualification и полный G00–G19 на окончательном SHA ещё NOT_RUN. Component
     cffe147 и прежние qualification не переносятся.
   - Фактические runtime results и hashes появятся после выполнения; согласованная публикация двух артефактов
