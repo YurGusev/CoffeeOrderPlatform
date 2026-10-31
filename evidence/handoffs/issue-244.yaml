@@ -1,0 +1,79 @@
+issue: 244
+baseCommit: d42d42ee825909bd0bbdacd8eafc1bd9c0bca833
+status: implemented-awaiting-ci
+inputs:
+  - issue: 12
+    acceptedMergeCommit: d6d860af092e3874f58d31506d473fe75dfc3d2f
+    artifact: evidence/handoffs/issue-12.yaml
+    sha256: 447a52e667d23502d0c29a25311dd9e96a8e08f6030e666f797eb2aa2c8caa8f
+  - issue: 236
+    acceptedMergeCommit: d42d42ee825909bd0bbdacd8eafc1bd9c0bca833
+    artifact: evidence/handoffs/issue-236.yaml
+    sha256: f5c651994c2c545fb1164c28667286e8d95c51b09a7ba1b86a8e983fe020b665
+outputs:
+  - artifact: apps/api-public/package.json
+    sha256: 2c78625897b04026e671511876e8ee6d45692eb463de586f045d413c715b18b8
+    consumers:
+      - 13
+  - artifact: apps/api-public/src/index.ts
+    sha256: a989e0a10e0d8fb3da0f6c1f3261376160c64396ad48045483f7d2f2b6ddeefb
+    consumers:
+      - 13
+  - artifact: apps/orders-service/src/http/index.ts
+    sha256: 71cf7c83da7b4d805099c133878387b48fea2867424909163de56589db79495d
+    consumers:
+      - 13
+  - artifact: docs/launch/17_ORDERS_IMPLEMENTATION_SPEC.md
+    sha256: 2a629ae88591e3077583c678b1df9af726805caa573b6f02ac32a3ba1d53242e
+    consumers:
+      - 13
+  - artifact: pnpm-lock.yaml
+    sha256: 4f0b2b76cf939fafb42d3ad80ac57caf6c5134c23e143add8b04092c812abbaa
+    consumers:
+      - 13
+  - artifact: tests/orders/observability.test.mjs
+    sha256: a66bb567619f5f63b233bd97c7f8794e8818e0ee1230d88f2def50fa729a42ed
+    consumers:
+      - 13
+  - artifact: tests/orders/public-api.test.mjs
+    sha256: a53ae849a93f2180f2c6c9cf4daf6a64a017a6ca166c9f8414eed87f9e3f771e
+    consumers:
+      - 13
+behavior:
+  - После авторизации api-public сохраняет валидный входной carrier; при отсутствии использует валидный
+    активный server span. Один forwarding context используется для подписи claims и HTTP headers.
+  - Orders после авторизации сохраняет входной carrier или использует валидный активный server span для
+    command context и Outbox.
+  - Проверяемые raw claims не меняются. Без валидного active span сохраняется прежний fallback; wire schema
+    и idempotency hash не меняются.
+  - api-public явно объявляет уже закреплённый @opentelemetry/api 1.9.1 как production dependency; новых
+    пакетов, версий или toolchain pins нет.
+checks:
+  - command: pnpm exec tsc -b apps/orders-service apps/api-public --pretty false
+    result: PASS
+    logSha256: e48035aeab4ee8c85fb7421c957673755fcdc55063fb3b928ae67b53c702fedb
+  - command: node --test tests/orders/public-api.test.mjs
+    result: "PASS: 10/10, 0 skipped"
+    logSha256: 7a0ba967bb4048b6704d112cceccca43c2c19580a9ba83b1b47c6165661dda17
+  - command: node --test --test-name-pattern='Orders real HTTP route spans' tests/orders/observability.test.mjs
+    result: "PASS: 1/1, 0 skipped, 1.321 s"
+    logSha256: 8e2ed8b1144a6f799981fdff94377c899ddf2547b6a5764aa5dfd815304665e2
+  - command:
+      pnpm --offline --filter @coffee-platform/api-public deploy --prod --legacy --package-import-method=copy
+      /tmp/coffee-244-deploy.uMnoEum8/output
+    result:
+      "PASS: 6 s, downloaded 0; ESM import внутри deployed root находит @opentelemetry/api 1.9.1 без
+      root dev dependencies; собственный каталог удалён"
+    logSha256: 39eb1bf9fb90e10ed5fac32a9efcfccac0c478f1a86fd3304f27d8389b099601
+additionalChecks:
+  typeAwareLint: PASS, log SHA256 395f5aa10e1e75853ae1e6af2c9843d225f20bd5ae35be1d66a04a8c5557c5d4
+  codeFormat: PASS, log SHA256 bfbed055983d2118eec0dd825490e71d5ea7e7c7bdd5ba21d51134ecee465b81
+  toolchainVersions: PASS; lock semantic diff ограничен одним importer dependency
+  independentReview: Замечаний к совокупным шести code/test/package файлам нет.
+  diffCheck: PASS
+limitations:
+  - "Реальная цепь API→Orders→Outbox→Kafka→Tempo и G12/G14 не запускались; это обязательство consumer #13."
+  - Production-layout import не заменяет запуск готового image.
+  - В doc17 добавлен только абзац о carrier; неизменённая историческая таблица permissions уже не проходит
+    прямой Prettier check. Документы исключены из штатного formatter.
+  - CI должен пройти на финальном head PR; локальные проверки не объявляются CI PASS.
