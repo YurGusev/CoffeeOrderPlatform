@@ -2129,7 +2129,10 @@ void test("G09 accepts only exact context-bound 10/40 runtime database evidence"
     },
     legacyTargetsExcluded: ["coffeeorder_staging", "coffeeorderdb"],
   };
-  const migrationArtifactDir = join(evidenceDir, "gates/G08_MIGRATIONS/artifacts");
+  const migrationArtifactDir = join(
+    evidenceDir,
+    "gates/G08_MIGRATIONS/artifacts",
+  );
   await mkdir(migrationArtifactDir, { recursive: true });
   await writeFile(
     join(migrationArtifactDir, "result.json"),
@@ -3033,9 +3036,7 @@ void test("AROMA mutation capability is approval-bound, single-use, phase-ordere
       createAromaMutationGrant({
         offerRef,
         maximumQuantity: "2",
-        expiresAtUtc: new Date(
-          issuedAt + 2 * 60 * 60 * 1000 + 1,
-        ).toISOString(),
+        expiresAtUtc: new Date(issuedAt + 2 * 60 * 60 * 1000 + 1).toISOString(),
         capability,
         now: () => issuedAt,
       }),

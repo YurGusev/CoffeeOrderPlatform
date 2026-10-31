@@ -136,12 +136,37 @@ const sample = {
     logging: { maxSizeMiB: 8, maxFiles: 3 },
     diskWatermarkPercent: 80,
     externalReportingEnabled: false,
-    alerts: {evaluationIntervalMs: 60000, diskUsage: {forMs: 0}, sinkMemoryMiB: 128},
-    grafana: {endpoint: "http://grafana:3000", memoryLimitMiB: 512, maxDiskBytes: 1073741824},
-    loki: {endpoint: "http://loki:3100", memoryLimitMiB: 512, maxDiskBytes: 1073741824, retentionDays: 3},
-    prometheus: {endpoint: "http://prometheus:9090", memoryLimitMiB: 512, maxDiskBytes: 1073741824, retentionDays: 3, outOfOrderWindowMs: 1800000},
-    tempo: {endpoint: "http://tempo:3200", otlpEndpoint: "http://tempo:4318", memoryLimitMiB: 768, maxDiskBytes: 1073741824, retentionDays: 3, finishOnShutdownTimeoutMs: 10000},
-
+    alerts: {
+      evaluationIntervalMs: 60000,
+      diskUsage: { forMs: 0 },
+      sinkMemoryMiB: 128,
+    },
+    grafana: {
+      endpoint: "http://grafana:3000",
+      memoryLimitMiB: 512,
+      maxDiskBytes: 1073741824,
+    },
+    loki: {
+      endpoint: "http://loki:3100",
+      memoryLimitMiB: 512,
+      maxDiskBytes: 1073741824,
+      retentionDays: 3,
+    },
+    prometheus: {
+      endpoint: "http://prometheus:9090",
+      memoryLimitMiB: 512,
+      maxDiskBytes: 1073741824,
+      retentionDays: 3,
+      outOfOrderWindowMs: 1800000,
+    },
+    tempo: {
+      endpoint: "http://tempo:3200",
+      otlpEndpoint: "http://tempo:4318",
+      memoryLimitMiB: 768,
+      maxDiskBytes: 1073741824,
+      retentionDays: 3,
+      finishOnShutdownTimeoutMs: 10000,
+    },
   },
 };
 const logs = [
@@ -160,18 +185,36 @@ const logs = [
 void test("infrastructure scopes separate Collector and Grafana credentials", async () => {
   const catalog = await loadServiceCatalog(REPO_ROOT);
   assert.deepEqual(catalog.infrastructureSecretScopes, {
-    "otel-collector": [{name: "exporterToken", ref: "telemetry.exporterToken"}],
-    "grafana-bootstrap": [{name: "admin-secret", ref: "telemetry.grafanaAdmin"}],
+    "otel-collector": [
+      { name: "exporterToken", ref: "telemetry.exporterToken" },
+    ],
+    "grafana-bootstrap": [
+      { name: "admin-secret", ref: "telemetry.grafanaAdmin" },
+    ],
   });
-  assert.deepEqual(await infrastructureSecretEntries("grafana-bootstrap", {root: REPO_ROOT}), [["admin-secret", "telemetry.grafanaAdmin"]]);
+  assert.deepEqual(
+    await infrastructureSecretEntries("grafana-bootstrap", { root: REPO_ROOT }),
+    [["admin-secret", "telemetry.grafanaAdmin"]],
+  );
   const root = await mkdtemp("/dev/shm/coffee-observability-catalog-");
   try {
-    await mkdir(`${root}/config`, {recursive: true});
-    await cp(`${REPO_ROOT}/config/service-catalog.schema.json`, `${root}/config/service-catalog.schema.json`);
-    catalog.infrastructureSecretScopes["otel-collector"].push({name: "admin-secret", ref: "telemetry.grafanaAdmin"});
-    await writeFile(`${root}/config/service-catalog.json`, JSON.stringify(catalog));
+    await mkdir(`${root}/config`, { recursive: true });
+    await cp(
+      `${REPO_ROOT}/config/service-catalog.schema.json`,
+      `${root}/config/service-catalog.schema.json`,
+    );
+    catalog.infrastructureSecretScopes["otel-collector"].push({
+      name: "admin-secret",
+      ref: "telemetry.grafanaAdmin",
+    });
+    await writeFile(
+      `${root}/config/service-catalog.json`,
+      JSON.stringify(catalog),
+    );
     await assert.rejects(loadServiceCatalog(root), /CONFIG-SCHEMA/u);
-  } finally { await rm(root, {recursive: true, force: true}); }
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });
 
 void test("bootstrap probe is an executable matching the BOM SHA-256", async () => {
@@ -190,13 +233,41 @@ void test("bootstrap probe is an executable matching the BOM SHA-256", async () 
 
 void test("observability health probes all services with the configured timeout", async () => {
   const urls = [];
-  const results = await checkObservabilityHealth({config: sample, collectorProbe: () => true, fetchImpl: async (url, options) => {
-    assert.ok(url instanceof URL); urls.push(url.href); assert.ok(options.signal); return {ok: true, status: 200};
-  }});
-  assert.deepEqual(results.map(result => result.name), ["otel-collector", "grafana", "loki", "prometheus", "tempo"]);
-  assert.deepEqual(urls, ["http://grafana:3000/api/health", "http://loki:3100/ready", "http://prometheus:9090/-/ready", "http://tempo:3200/ready"]);
-  await assert.rejects(checkObservabilityHealth({config: sample, fetchImpl: async () => ({ok: true, status: 200})}), /loopback probe is required/u);
-  await assert.rejects(checkObservabilityHealth({config: sample, collectorProbe: () => false, fetchImpl: async () => ({ok: true, status: 200})}), /loopback probe failed/u);
+  const results = await checkObservabilityHealth({
+    config: sample,
+    collectorProbe: () => true,
+    fetchImpl: async (url, options) => {
+      assert.ok(url instanceof URL);
+      urls.push(url.href);
+      assert.ok(options.signal);
+      return { ok: true, status: 200 };
+    },
+  });
+  assert.deepEqual(
+    results.map((result) => result.name),
+    ["otel-collector", "grafana", "loki", "prometheus", "tempo"],
+  );
+  assert.deepEqual(urls, [
+    "http://grafana:3000/api/health",
+    "http://loki:3100/ready",
+    "http://prometheus:9090/-/ready",
+    "http://tempo:3200/ready",
+  ]);
+  await assert.rejects(
+    checkObservabilityHealth({
+      config: sample,
+      fetchImpl: async () => ({ ok: true, status: 200 }),
+    }),
+    /loopback probe is required/u,
+  );
+  await assert.rejects(
+    checkObservabilityHealth({
+      config: sample,
+      collectorProbe: () => false,
+      fetchImpl: async () => ({ ok: true, status: 200 }),
+    }),
+    /loopback probe failed/u,
+  );
 });
 
 void test("Collector config ownership is changed only by pinned Node with CAP_CHOWN and retains mode 0400", () => {
@@ -287,32 +358,108 @@ void test("observability generator rejects a symlink output directory without ch
 });
 
 void test("observability provenance includes all pinned images, bounded storage and no credentials", async () => {
-  const imageRefs = Object.fromEntries(["otelCollectorImage", "grafanaImage", "lokiImage", "prometheusImage", "tempoImage", "nodeImage"].map(name => [name, `fixture@sha256:${"a".repeat(64)}`]));
+  const imageRefs = Object.fromEntries(
+    [
+      "otelCollectorImage",
+      "grafanaImage",
+      "lokiImage",
+      "prometheusImage",
+      "tempoImage",
+      "nodeImage",
+    ].map((name) => [name, `fixture@sha256:${"a".repeat(64)}`]),
+  );
   imageRefs.bootstrapProbeSha256 = "b".repeat(64);
-  const storageVolumes = Object.fromEntries(["grafana", "loki", "prometheus", "tempo"].map(name => [name, `coffee-test-${name}-data`]));
-  const alertSinkImage = {imageId: `sha256:${"d".repeat(64)}`, receiptSha256: "e".repeat(64), candidateSha: "f".repeat(40), runId: "fixture"};
-  const grafanaImage = {imageId: `sha256:${"1".repeat(64)}`, receiptSha256: "2".repeat(64), candidateSha: "3".repeat(40), runId: "fixture"};
-  const provenance = await createObservabilityProvenance({root: REPO_ROOT, config: sample, imageRefs, grafanaImage, alertSinkImage, logFiles: logs, storageVolumes, collectorConfigSha256: "c".repeat(64)});
+  const storageVolumes = Object.fromEntries(
+    ["grafana", "loki", "prometheus", "tempo"].map((name) => [
+      name,
+      `coffee-test-${name}-data`,
+    ]),
+  );
+  const alertSinkImage = {
+    imageId: `sha256:${"d".repeat(64)}`,
+    receiptSha256: "e".repeat(64),
+    candidateSha: "f".repeat(40),
+    runId: "fixture",
+  };
+  const grafanaImage = {
+    imageId: `sha256:${"1".repeat(64)}`,
+    receiptSha256: "2".repeat(64),
+    candidateSha: "3".repeat(40),
+    runId: "fixture",
+  };
+  const provenance = await createObservabilityProvenance({
+    root: REPO_ROOT,
+    config: sample,
+    imageRefs,
+    grafanaImage,
+    alertSinkImage,
+    logFiles: logs,
+    storageVolumes,
+    collectorConfigSha256: "c".repeat(64),
+  });
   assert.deepEqual(provenance.storageVolumes, storageVolumes);
-  assert.deepEqual(Object.keys(provenance.images), ["otelCollector", "grafanaBase", "loki", "prometheus", "tempo", "nodeHelper"]);
+  assert.deepEqual(Object.keys(provenance.images), [
+    "otelCollector",
+    "grafanaBase",
+    "loki",
+    "prometheus",
+    "tempo",
+    "nodeHelper",
+  ]);
   assert.equal(provenance.images.grafanaBase, imageRefs.grafanaImage);
   assert.deepEqual(provenance.grafanaImage, grafanaImage);
   assert.deepEqual(provenance.alertSinkImage, alertSinkImage);
   assert.equal(provenance.limits.loki.maxDiskBytes, 1073741824);
-  assert.doesNotMatch(JSON.stringify(provenance), /producer-token|admin-secret/u);
+  assert.doesNotMatch(
+    JSON.stringify(provenance),
+    /producer-token|admin-secret/u,
+  );
 });
 
 void test("backend ownership helper refuses foreign volumes before changing ownership", () => {
-  const storageVolumes = Object.fromEntries(["grafana", "loki", "prometheus", "tempo"].map(name => [name, `coffee-test-${name}-data`]));
+  const storageVolumes = Object.fromEntries(
+    ["grafana", "loki", "prometheus", "tempo"].map((name) => [
+      name,
+      `coffee-test-${name}-data`,
+    ]),
+  );
   const calls = [];
   const nodeImage = `node:fixture@sha256:${"a".repeat(64)}`;
-  const runDocker = args => {
+  const runDocker = (args) => {
     calls.push(args);
-    if (args[0] === "volume") return JSON.stringify([{Driver: "local", Labels: {"coffee.owner": args[2].includes("tempo") ? "foreign" : "operations", "coffee.lifecycle": "fixture"}, Options: {type: "ext4", o: "nodev,nosuid,noexec", device: "/dev/loop1"}}]);
+    if (args[0] === "volume")
+      return JSON.stringify([
+        {
+          Driver: "local",
+          Labels: {
+            "coffee.owner": args[2].includes("tempo")
+              ? "foreign"
+              : "operations",
+            "coffee.lifecycle": "fixture",
+          },
+          Options: {
+            type: "ext4",
+            o: "nodev,nosuid,noexec",
+            device: "/dev/loop1",
+          },
+        },
+      ]);
     throw new Error("unexpected mutation");
   };
-  assert.throws(() => ensureBackendOwnership({storageVolumes, grafanaAdminSecretPath: "/tmp/admin-secret", nodeImage, runDocker}), /unrelated telemetry volume/u);
-  assert.equal(calls.some(args => args[0] === "run"), false);
+  assert.throws(
+    () =>
+      ensureBackendOwnership({
+        storageVolumes,
+        grafanaAdminSecretPath: "/tmp/admin-secret",
+        nodeImage,
+        runDocker,
+      }),
+    /unrelated telemetry volume/u,
+  );
+  assert.equal(
+    calls.some((args) => args[0] === "run"),
+    false,
+  );
 });
 
 void test("Collector config accepts only exact selected log files and bounds export", () => {
@@ -500,84 +647,233 @@ void test("Collector config accepts only exact selected log files and bounds exp
   );
 });
 
-
 void test("generated Collector and backend configs preserve bounded delivery and isolate each store", async () => {
-  const collector = createCollectorConfig({config: sample, logFiles: logs, exporterToken: "producer-token"});
-  assert.equal(collector.exporters["otlp_http/logs"].endpoint, "http://loki:3100/otlp");
-  assert.equal(collector.exporters["otlp_http/metrics"].endpoint, "http://prometheus:9090/api/v1/otlp");
-  assert.equal(collector.exporters["otlp_http/traces"].endpoint, "http://tempo:4318");
+  const collector = createCollectorConfig({
+    config: sample,
+    logFiles: logs,
+    exporterToken: "producer-token",
+  });
+  assert.equal(
+    collector.exporters["otlp_http/logs"].endpoint,
+    "http://loki:3100/otlp",
+  );
+  assert.equal(
+    collector.exporters["otlp_http/metrics"].endpoint,
+    "http://prometheus:9090/api/v1/otlp",
+  );
+  assert.equal(
+    collector.exporters["otlp_http/traces"].endpoint,
+    "http://tempo:4318",
+  );
   assert.equal(collector.receivers.filelog.storage, "file_storage");
-  for (const signal of ["logs", "metrics", "traces"]) assert.equal(collector.exporters[`otlp_http/${signal}`].sending_queue.queue_size, 2048);
-  const alloy = createAlloyConfig({config: sample, logFiles: logs, exporterToken: "producer-token"});
+  for (const signal of ["logs", "metrics", "traces"])
+    assert.equal(
+      collector.exporters[`otlp_http/${signal}`].sending_queue.queue_size,
+      2048,
+    );
+  const alloy = createAlloyConfig({
+    config: sample,
+    logFiles: logs,
+    exporterToken: "producer-token",
+  });
   assert.match(alloy, /auth = otelcol.auth.bearer.producer.handler/u);
   assert.match(alloy, /endpoint = "0.0.0.0:4318"/u);
   assert.match(alloy, /operators = /u);
-  assert.match(alloy, /logs = \[otelcol.processor.memory_limiter.main.input\]/u);
+  assert.match(
+    alloy,
+    /logs = \[otelcol.processor.memory_limiter.main.input\]/u,
+  );
   assert.match(alloy, /prometheus.exporter.unix "storage"/u);
-  assert.match(alloy, /\/telemetry-storage\/\(grafana\|loki\|prometheus\|tempo\)/u);
+  assert.match(
+    alloy,
+    /\/telemetry-storage\/\(grafana\|loki\|prometheus\|tempo\)/u,
+  );
   assert.match(alloy, /prometheus.exporter.blackbox "health"/u);
   assert.match(alloy, /probe_owner = "edge-nginx"/u);
   assert.match(alloy, /otelcol.receiver.nginx "edge"/u);
   const backend = createBackendConfigs(sample);
-  assert.equal(backend.prometheus.storage.tsdb.out_of_order_time_window, "1800000ms");
+  assert.equal(
+    backend.prometheus.storage.tsdb.out_of_order_time_window,
+    "1800000ms",
+  );
   assert.equal(backend.loki.analytics.reporting_enabled, false);
   assert.equal(backend.tempo.usage_report.reporting_enabled, false);
   assert.equal(backend.loki.ingester.wal.disk_full_threshold, 0.8);
   assert.equal(backend.loki.limits_config.retention_period, "72h");
   assert.equal(backend.tempo.backend_worker.compaction.block_retention, "72h");
-  assert.equal(backend.tempo.backend_worker.finish_on_shutdown_timeout, "10000ms");
-  assert.deepEqual(backend.datasources.datasources.map(source => source.uid), ["loki", "prometheus", "tempo"]);
-  const images = Object.fromEntries(["otelCollectorImage", "grafanaImage", "lokiImage", "prometheusImage", "tempoImage", "nodeImage"].map(name => [name, `fixture@sha256:${"a".repeat(64)}`]));
+  assert.equal(
+    backend.tempo.backend_worker.finish_on_shutdown_timeout,
+    "10000ms",
+  );
+  assert.deepEqual(
+    backend.datasources.datasources.map((source) => source.uid),
+    ["loki", "prometheus", "tempo"],
+  );
+  const images = Object.fromEntries(
+    [
+      "otelCollectorImage",
+      "grafanaImage",
+      "lokiImage",
+      "prometheusImage",
+      "tempoImage",
+      "nodeImage",
+    ].map((name) => [name, `fixture@sha256:${"a".repeat(64)}`]),
+  );
   images.bootstrapProbeSha256 = "a".repeat(64);
   const names = ["grafana", "loki", "prometheus", "tempo"];
-  const storageVolumes = Object.fromEntries(names.map(name => [name, `coffee-test-${name}-data`]));
-  const backendConfigPaths = Object.fromEntries([...names, "datasources", "alerts", "contacts"].map(name => [name, `/tmp/${name}.yaml`]));
+  const storageVolumes = Object.fromEntries(
+    names.map((name) => [name, `coffee-test-${name}-data`]),
+  );
+  const backendConfigPaths = Object.fromEntries(
+    [...names, "datasources", "alerts", "contacts"].map((name) => [
+      name,
+      `/tmp/${name}.yaml`,
+    ]),
+  );
   const alertSinkImage = `sha256:${"b".repeat(64)}`;
   const grafanaImage = `sha256:${"c".repeat(64)}`;
-  const compose = createComposeOverride({config: sample, imageRefs: images, grafanaImage, alertSinkImage, logFiles: logs, collectorConfigPath: "/tmp/collector.yaml", storageVolumes, backendConfigPaths, grafanaAdminSecretPath: "/tmp/admin-secret"});
+  const compose = createComposeOverride({
+    config: sample,
+    imageRefs: images,
+    grafanaImage,
+    alertSinkImage,
+    logFiles: logs,
+    collectorConfigPath: "/tmp/collector.yaml",
+    storageVolumes,
+    backendConfigPaths,
+    grafanaAdminSecretPath: "/tmp/admin-secret",
+  });
   for (const name of names) {
     assert.equal(compose.volumes[`${name}_data`].name, storageVolumes[name]);
     assert.deepEqual(compose.services[name].networks, ["coffee_observability"]);
     assert.equal(compose.services[name].ports, undefined);
   }
   assert.equal(compose.services.grafana.mem_limit, "512m");
-  assert.equal(compose.services.grafana.environment.GF_PLUGINS_PREINSTALL_DISABLED, "true");
+  assert.equal(
+    compose.services.grafana.environment.GF_PLUGINS_PREINSTALL_DISABLED,
+    "true",
+  );
   assert.equal(compose.services.grafana.image, grafanaImage);
   assert.notEqual(compose.services.grafana.image, images.grafanaImage);
-  assert.ok(compose.services.grafana.volumes.some(volume => volume.target === "/var/lib/grafana"));
-  assert.ok(compose.services.grafana.volumes.every(volume => !"/opt/grafana/plugins".startsWith(`${volume.target}/`) && volume.target !== "/opt/grafana/plugins"));
-  assert.match(compose.services.prometheus.command.join(" "), /--web.enable-otlp-receiver/u);
+  assert.ok(
+    compose.services.grafana.volumes.some(
+      (volume) => volume.target === "/var/lib/grafana",
+    ),
+  );
+  assert.ok(
+    compose.services.grafana.volumes.every(
+      (volume) =>
+        !"/opt/grafana/plugins".startsWith(`${volume.target}/`) &&
+        volume.target !== "/opt/grafana/plugins",
+    ),
+  );
+  assert.match(
+    compose.services.prometheus.command.join(" "),
+    /--web.enable-otlp-receiver/u,
+  );
   assert.deepEqual(compose.services["otel-collector"].expose, ["4318"]);
-  assert.equal(compose.services["otel-collector"].healthcheck.test.at(-1), "http://127.0.0.1:13133/-/ready");
-  assert.ok(compose.services["otel-collector"].command.includes("--server.http.listen-addr=127.0.0.1:13133"));
-  assert.deepEqual(compose.services["otel-collector"].volumes.find(volume => volume.target === "/var/lib/alloy"), {type: "volume", source: "collector_checkpoints", target: "/var/lib/alloy", volume: {nocopy: true}});
-  assert.equal(compose.services["otel-collector"].volumes.filter(volume => volume.target.startsWith("/telemetry-storage/") && volume.read_only).length, 4);
-  assert.deepEqual(compose.services["alert-sink"].tmpfs, ["/run/alerts:rw,noexec,nosuid,nodev,uid=1000,gid=1000,size=32m"]);
+  assert.equal(
+    compose.services["otel-collector"].healthcheck.test.at(-1),
+    "http://127.0.0.1:13133/-/ready",
+  );
+  assert.ok(
+    compose.services["otel-collector"].command.includes(
+      "--server.http.listen-addr=127.0.0.1:13133",
+    ),
+  );
+  assert.deepEqual(
+    compose.services["otel-collector"].volumes.find(
+      (volume) => volume.target === "/var/lib/alloy",
+    ),
+    {
+      type: "volume",
+      source: "collector_checkpoints",
+      target: "/var/lib/alloy",
+      volume: { nocopy: true },
+    },
+  );
+  assert.equal(
+    compose.services["otel-collector"].volumes.filter(
+      (volume) =>
+        volume.target.startsWith("/telemetry-storage/") && volume.read_only,
+    ).length,
+    4,
+  );
+  assert.deepEqual(compose.services["alert-sink"].tmpfs, [
+    "/run/alerts:rw,noexec,nosuid,nodev,uid=1000,gid=1000,size=32m",
+  ]);
   assert.equal(compose.services["alert-sink"].image, alertSinkImage);
   assert.notEqual(compose.services["alert-sink"].image, images.nodeImage);
   const evidenceDir = await mkdtemp("/dev/shm/coffee-alert-evidence-");
   const link = `${evidenceDir}-link`;
-  const args = {config: sample, imageRefs: images, grafanaImage, alertSinkImage, logFiles: logs, collectorConfigPath: "/tmp/collector.yaml", storageVolumes, backendConfigPaths, grafanaAdminSecretPath: "/tmp/admin-secret"};
-  for (const invalid of [undefined, images.grafanaImage, "sha256:bad"]) assert.throws(() => createComposeOverride({...args, grafanaImage: invalid}), /verified grafanaImage ID is required/u);
-  for (const invalid of [undefined, images.nodeImage, "sha256:bad"]) assert.throws(() => createComposeOverride({...args, alertSinkImage: invalid}), /verified alertSinkImage ID is required/u);
+  const args = {
+    config: sample,
+    imageRefs: images,
+    grafanaImage,
+    alertSinkImage,
+    logFiles: logs,
+    collectorConfigPath: "/tmp/collector.yaml",
+    storageVolumes,
+    backendConfigPaths,
+    grafanaAdminSecretPath: "/tmp/admin-secret",
+  };
+  for (const invalid of [undefined, images.grafanaImage, "sha256:bad"])
+    assert.throws(
+      () => createComposeOverride({ ...args, grafanaImage: invalid }),
+      /verified grafanaImage ID is required/u,
+    );
+  for (const invalid of [undefined, images.nodeImage, "sha256:bad"])
+    assert.throws(
+      () => createComposeOverride({ ...args, alertSinkImage: invalid }),
+      /verified alertSinkImage ID is required/u,
+    );
   try {
     if (process.getuid() !== 1000) {
-      assert.throws(() => createComposeOverride({...args, alertEvidenceDir: evidenceDir}), /owned by UID 1000/u);
+      assert.throws(
+        () => createComposeOverride({ ...args, alertEvidenceDir: evidenceDir }),
+        /owned by UID 1000/u,
+      );
       return;
     }
-    const isolated = createComposeOverride({...args, alertEvidenceDir: evidenceDir, observabilityNetworkName: "coffee-observability-network"});
-    assert.deepEqual(isolated.networks.coffee_observability, {name: "coffee-observability-network", internal: true});
-    assert.ok(isolated.services["otel-collector"].networks.includes("coffee_observability"));
+    const isolated = createComposeOverride({
+      ...args,
+      alertEvidenceDir: evidenceDir,
+      observabilityNetworkName: "coffee-observability-network",
+    });
+    assert.deepEqual(isolated.networks.coffee_observability, {
+      name: "coffee-observability-network",
+      internal: true,
+    });
+    assert.ok(
+      isolated.services["otel-collector"].networks.includes(
+        "coffee_observability",
+      ),
+    );
     assert.equal(isolated.services["alert-sink"].tmpfs, undefined);
-    assert.deepEqual(isolated.services["alert-sink"].volumes.at(-1), {type: "bind", source: evidenceDir, target: "/run/alerts"});
+    assert.deepEqual(isolated.services["alert-sink"].volumes.at(-1), {
+      type: "bind",
+      source: evidenceDir,
+      target: "/run/alerts",
+    });
     await symlink(evidenceDir, link, "dir");
-    assert.throws(() => createComposeOverride({...args, alertEvidenceDir: link}), /real mode 0700/u);
+    assert.throws(
+      () => createComposeOverride({ ...args, alertEvidenceDir: link }),
+      /real mode 0700/u,
+    );
     await chmod(evidenceDir, 0o755);
-    assert.throws(() => createComposeOverride({...args, alertEvidenceDir: evidenceDir}), /real mode 0700/u);
-    for (const name of ["coffee/production", null]) assert.throws(() => createComposeOverride({...args, observabilityNetworkName: name}), /invalid observability network/u);
+    assert.throws(
+      () => createComposeOverride({ ...args, alertEvidenceDir: evidenceDir }),
+      /real mode 0700/u,
+    );
+    for (const name of ["coffee/production", null])
+      assert.throws(
+        () =>
+          createComposeOverride({ ...args, observabilityNetworkName: name }),
+        /invalid observability network/u,
+      );
   } finally {
-    await rm(link, {force: true});
-    await rm(evidenceDir, {recursive: true, force: true});
+    await rm(link, { force: true });
+    await rm(evidenceDir, { recursive: true, force: true });
   }
 });
 
@@ -728,8 +1024,12 @@ if (args[0] === "set") {
 } else if (args[0] === "--decrypt") process.stdout.write(fs.readFileSync(plainPath));
 else process.exit(1);
 `;
-    await writeFile(join(fixture.bin, "sops"), source, {mode: 0o700});
-    const first = await provisionDevelopmentGrafanaAdmin({root: fixture.root, outputDir, env: fixture.env});
+    await writeFile(join(fixture.bin, "sops"), source, { mode: 0o700 });
+    const first = await provisionDevelopmentGrafanaAdmin({
+      root: fixture.root,
+      outputDir,
+      env: fixture.env,
+    });
     assert.equal(first.created, true);
     assert.equal((await stat(secretPath)).mode & 0o777, 0o600);
     assert.equal((await stat(first.path)).mode & 0o777, 0o400);
@@ -742,7 +1042,11 @@ else process.exit(1);
     delete after.environments.development.telemetry.grafanaAdmin;
     assert.deepEqual(after.environments, encrypted.environments);
     const ciphertextBeforeRepeat = await readFile(secretPath, "utf8");
-    const second = await provisionDevelopmentGrafanaAdmin({root: fixture.root, outputDir, env: fixture.env});
+    const second = await provisionDevelopmentGrafanaAdmin({
+      root: fixture.root,
+      outputDir,
+      env: fixture.env,
+    });
     assert.equal(second.created, false);
     assert.equal(await readFile(secretPath, "utf8"), ciphertextBeforeRepeat);
     assert.equal((await readFile(second.path, "utf8")).trim(), credential);
@@ -751,12 +1055,19 @@ else process.exit(1);
     config.environment = "staging";
     config.telemetry.releaseDigest = `sha256:${"a".repeat(64)}`;
     await writeFile(configPath, dumpYaml(config));
-    await assert.rejects(provisionDevelopmentGrafanaAdmin({root: fixture.root, outputDir, env: fixture.env}), /restricted to development/u);
+    await assert.rejects(
+      provisionDevelopmentGrafanaAdmin({
+        root: fixture.root,
+        outputDir,
+        env: fixture.env,
+      }),
+      /restricted to development/u,
+    );
     assert.equal(await readFile(secretPath, "utf8"), ciphertextBeforeRepeat);
   } finally {
-    await rm(outputDir, {recursive: true, force: true});
-    await rm(fixture.root, {recursive: true, force: true});
-    await rm(fixture.bin, {recursive: true, force: true});
+    await rm(outputDir, { recursive: true, force: true });
+    await rm(fixture.root, { recursive: true, force: true });
+    await rm(fixture.bin, { recursive: true, force: true });
   }
 });
 
@@ -877,7 +1188,7 @@ void test("collector/admin materializers atomically replace owned files with mod
     });
 
     const collector = JSON.parse(await readFile(collectorPath, "utf8"));
-    assert.deepEqual(collector, {exporterToken: "fixture-secret-value"});
+    assert.deepEqual(collector, { exporterToken: "fixture-secret-value" });
     assert.equal(await readFile(adminPath, "utf8"), "fixture-secret-value\n");
     for (const [path, oldMetadata] of [
       [collectorPath, oldCollector],

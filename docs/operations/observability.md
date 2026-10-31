@@ -16,16 +16,16 @@ Native nginx сохраняет собственный transport logger, пер�
 
 Метрики публикуются только при наличии owner resource:
 
-| Instrument | Владелец / применимость |
-| --- | --- |
-| `runtime_http_*`, `runtime_ready`, process/producer counters | Node runtime |
-| `db.client.connection.waiting`, `db.client.connection.checkout_wait`, `db.client.transaction.*` | Runtime с собственной DB; waiting отражает текущую очередь |
-| `messaging.kafka.consumer.lag`, `messaging.kafka.event.age` | Зарегистрированный Kafka consumer |
-| `messaging.outbox.oldest_unpublished.age`, `messaging.inbox.*` | Соответствующий Outbox/Inbox owner |
-| `coffee_aroma_attempt_*`, `coffee_aroma_unknown_outcomes_current` | `aroma-convergence`; current — нерешённые outcomes, не исторический counter |
-| `coffee_realtime_*` | `realtime-gateway` |
-| `nginx_*` | Native `edge-nginx` через private `stub_status` |
-| `probe_success` | Health probes Alloy; nginx availability принадлежит `edge-nginx` |
+| Instrument                                                                                      | Владелец / применимость                                                     |
+| ----------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| `runtime_http_*`, `runtime_ready`, process/producer counters                                    | Node runtime                                                                |
+| `db.client.connection.waiting`, `db.client.connection.checkout_wait`, `db.client.transaction.*` | Runtime с собственной DB; waiting отражает текущую очередь                  |
+| `messaging.kafka.consumer.lag`, `messaging.kafka.event.age`                                     | Зарегистрированный Kafka consumer                                           |
+| `messaging.outbox.oldest_unpublished.age`, `messaging.inbox.*`                                  | Соответствующий Outbox/Inbox owner                                          |
+| `coffee_aroma_attempt_*`, `coffee_aroma_unknown_outcomes_current`                               | `aroma-convergence`; current — нерешённые outcomes, не исторический counter |
+| `coffee_realtime_*`                                                                             | `realtime-gateway`                                                          |
+| `nginx_*`                                                                                       | Native `edge-nginx` через private `stub_status`                             |
+| `probe_success`                                                                                 | Health probes Alloy; nginx availability принадлежит `edge-nginx`            |
 
 `messaging.inbox.received.age` измеряет путь от получения Kafka record до входа в Inbox после checkout owner DB transaction, без времени handler; `messaging.kafka.event.age` отдельно измеряет возраст от `occurredAt`. Histogram в Prometheus представляется семействами `_count`, `_sum`, `_bucket`.
 
