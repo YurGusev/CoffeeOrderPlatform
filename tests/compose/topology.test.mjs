@@ -48,7 +48,11 @@ const OBSERVABILITY_CONFIG = {
 };
 
 void test("programmatic observability hooks require a bounded recovery-proof run", async () => {
-  const { runComposeSmoke, isExternalRecoveryProof, readRecoveryProofCredentials } = await import("../../tools/compose-smoke.mjs");
+  const {
+    runComposeSmoke,
+    isExternalRecoveryProof,
+    readRecoveryProofCredentials,
+  } = await import("../../tools/compose-smoke.mjs");
   const hooks = {
     exporterToken: "fixture-exporter-token",
     onReady: async () => {},
@@ -61,21 +65,33 @@ void test("programmatic observability hooks require a bounded recovery-proof run
   assert.equal(localCredentials.launchIdentity, undefined);
   assert.equal(localCredentials.postgres, undefined);
   assert.equal(localCredentials.ownership.databases.length, 5);
-  assert.equal(Object.keys(localCredentials.databaseCredentialsByRuntime).length, 10);
+  assert.equal(
+    Object.keys(localCredentials.databaseCredentialsByRuntime).length,
+    10,
+  );
   await assert.rejects(
     runComposeSmoke({ args: ["--recovery-proof", "--observability-fixture"] }),
     /requires programmatic observability hooks/,
   );
   await assert.rejects(
-    runComposeSmoke({ args: ["--observability-fixture"], observability: hooks }),
+    runComposeSmoke({
+      args: ["--observability-fixture"],
+      observability: hooks,
+    }),
     /requires programmatic observability hooks/,
   );
   await assert.rejects(
-    runComposeSmoke({ args: ["--recovery-proof", "--observability-fixture", "--keep"], observability: hooks }),
+    runComposeSmoke({
+      args: ["--recovery-proof", "--observability-fixture", "--keep"],
+      observability: hooks,
+    }),
     /requires programmatic observability hooks/,
   );
   await assert.rejects(
-    runComposeSmoke({ args: ["--recovery-proof", "--observability-fixture", "--no-build"], observability: hooks }),
+    runComposeSmoke({
+      args: ["--recovery-proof", "--observability-fixture", "--no-build"],
+      observability: hooks,
+    }),
     /requires programmatic observability hooks/,
   );
   await assert.rejects(
@@ -130,22 +146,52 @@ void test("programmatic observability hooks require a bounded recovery-proof run
 });
 
 void test("G14 verifies the exact owned PostgreSQL container before use and cleanup", async () => {
-  const { assertObservabilityPostgresIdentity } = await import("../../tools/compose-smoke.mjs");
-  const id = "a".repeat(64), projectName = "coffee-fixture", networkName = `${projectName}_coffee_postgres_data`, fixtureRunId = "fixture-run";
-  const image = JSON.parse(await readFile(join(REPO_ROOT, "config/toolchain-versions.json"), "utf8")).postgresFixtureImage;
-  const info = {Id: id, Name: `/${projectName}-postgres-proof`, Config: {Image: image, Labels: {"coffee.g14.fixture": fixtureRunId}},
-    NetworkSettings: {Networks: {bridge: {}, [networkName]: {}}, Ports: {"5432/tcp": [{HostIp: "127.0.0.1", HostPort: "43210"}]}}};
-  const input = {id, projectName, networkName, fixtureRunId, run: () => JSON.stringify([info])};
+  const { assertObservabilityPostgresIdentity } =
+    await import("../../tools/compose-smoke.mjs");
+  const id = "a".repeat(64),
+    projectName = "coffee-fixture",
+    networkName = `${projectName}_coffee_postgres_data`,
+    fixtureRunId = "fixture-run";
+  const image = JSON.parse(
+    await readFile(join(REPO_ROOT, "config/toolchain-versions.json"), "utf8"),
+  ).postgresFixtureImage;
+  const info = {
+    Id: id,
+    Name: `/${projectName}-postgres-proof`,
+    Config: { Image: image, Labels: { "coffee.g14.fixture": fixtureRunId } },
+    NetworkSettings: {
+      Networks: { bridge: {}, [networkName]: {} },
+      Ports: { "5432/tcp": [{ HostIp: "127.0.0.1", HostPort: "43210" }] },
+    },
+  };
+  const input = {
+    id,
+    projectName,
+    networkName,
+    fixtureRunId,
+    run: () => JSON.stringify([info]),
+  };
   assert.doesNotThrow(() => assertObservabilityPostgresIdentity(input));
   info.Config.Labels["coffee.g14.fixture"] = "foreign";
-  assert.throws(() => assertObservabilityPostgresIdentity(input), /owner changed/u);
+  assert.throws(
+    () => assertObservabilityPostgresIdentity(input),
+    /owner changed/u,
+  );
   info.Config.Labels["coffee.g14.fixture"] = fixtureRunId;
   info.NetworkSettings.Ports["5432/tcp"][0].HostIp = "0.0.0.0";
   assert.throws(() => assertObservabilityPostgresIdentity(input), /loopback/u);
   info.NetworkSettings.Ports["5432/tcp"][0].HostIp = "127.0.0.1";
   delete info.NetworkSettings.Networks[networkName];
-  assert.throws(() => assertObservabilityPostgresIdentity(input), /network mismatch/u);
-  assert.doesNotThrow(() => assertObservabilityPostgresIdentity({...input, allowIncompleteNetwork: true}));
+  assert.throws(
+    () => assertObservabilityPostgresIdentity(input),
+    /network mismatch/u,
+  );
+  assert.doesNotThrow(() =>
+    assertObservabilityPostgresIdentity({
+      ...input,
+      allowIncompleteNetwork: true,
+    }),
+  );
 });
 
 void test("G14 PostgreSQL proof storage is verified tmpfs while other proof storage stays unchanged", async () => {
@@ -248,23 +294,47 @@ return {startDatabaseProofContainer, assertEphemeralDatabaseProofStorage};})()`,
 });
 
 void test("launch-path PostgreSQL fixture requests a pinned image and bounded tmpfs", async () => {
-  const source = await readFile(join(REPO_ROOT, "scripts/catalog-live-harness.mjs"), "utf8");
-  const image = JSON.parse(await readFile(join(REPO_ROOT, "config/toolchain-versions.json"), "utf8")).postgresFixtureImage;
+  const source = await readFile(
+    join(REPO_ROOT, "scripts/catalog-live-harness.mjs"),
+    "utf8",
+  );
+  const image = JSON.parse(
+    await readFile(join(REPO_ROOT, "config/toolchain-versions.json"), "utf8"),
+  ).postgresFixtureImage;
   assert.match(image, /^postgres:17\.11@sha256:[0-9a-f]{64}$/u);
   const calls = [];
   const start = source.indexOf("export async function withCatalogPostgres(");
   assert.ok(start >= 0);
-  const fixture = runInNewContext(`(()=>{${source.slice(start).replace("export async function", "async function")};return withCatalogPostgres;})()`, {
-    assert, process: {pid: 123}, performance, AggregateError, Error, image, databaseName: "coffee_platform_catalog", password: "fixture",
-    randomBytes: () => ({toString: () => "aabbccdd"}),
-    docker: async (...args) => { calls.push(args); throw new Error("fixture stops before Docker"); },
-  });
-  await assert.rejects(fixture(async () => {}), /owned-container cleanup was not verified/u);
+  const fixture = runInNewContext(
+    `(()=>{${source.slice(start).replace("export async function", "async function")};return withCatalogPostgres;})()`,
+    {
+      assert,
+      process: { pid: 123 },
+      performance,
+      AggregateError,
+      Error,
+      image,
+      databaseName: "coffee_platform_catalog",
+      password: "fixture",
+      randomBytes: () => ({ toString: () => "aabbccdd" }),
+      docker: async (...args) => {
+        calls.push(args);
+        throw new Error("fixture stops before Docker");
+      },
+    },
+  );
+  await assert.rejects(
+    fixture(async () => {}),
+    /owned-container cleanup was not verified/u,
+  );
   assert.equal(calls.length, 1);
   assert.equal(calls[0].at(-1), image);
   const index = calls[0].indexOf("--tmpfs");
   assert.ok(index > 0);
-  assert.equal(calls[0][index + 1], "/var/lib/postgresql/data:rw,noexec,nosuid,size=536870912");
+  assert.equal(
+    calls[0][index + 1],
+    "/var/lib/postgresql/data:rw,noexec,nosuid,size=536870912",
+  );
   assert.ok(calls[0].includes("127.0.0.1::5432"));
 });
 
@@ -319,35 +389,95 @@ void test("smoke removes only project-scoped images built by this run", async (t
 });
 
 void test("smoke accepts only runtime image IDs verified by G12 before startup", async (t) => {
-  const { assertVerifiedRuntimeImages } = await import("../../tools/compose-smoke.mjs");
-  const catalog = JSON.parse(await readFile(join(REPO_ROOT, "config/service-catalog.json"), "utf8"));
-  const verifiedImages = catalog.runtimes.map(({ name }, index) => ({ service: name, imageId: `sha256:${(index + 1).toString(16).padStart(64, "0")}` }));
-  const expected = new Map(verifiedImages.map(({ service, imageId }) => [`coffee-test-${service}:latest`, imageId]));
+  const { assertVerifiedRuntimeImages } =
+    await import("../../tools/compose-smoke.mjs");
+  const catalog = JSON.parse(
+    await readFile(join(REPO_ROOT, "config/service-catalog.json"), "utf8"),
+  );
+  const verifiedImages = catalog.runtimes.map(({ name }, index) => ({
+    service: name,
+    imageId: `sha256:${(index + 1).toString(16).padStart(64, "0")}`,
+  }));
+  const expected = new Map(
+    verifiedImages.map(({ service, imageId }) => [
+      `coffee-test-${service}:latest`,
+      imageId,
+    ]),
+  );
   const calls = [];
   t.mock.method(childProcess, "execFileSync", (command, args) => {
     calls.push([command, args]);
     assert.equal(command, "docker");
-    assert.deepEqual(args.slice(0, 4), ["image", "inspect", "--format", "{{.Id}}"]);
+    assert.deepEqual(args.slice(0, 4), [
+      "image",
+      "inspect",
+      "--format",
+      "{{.Id}}",
+    ]);
     return `${expected.get(args[4])}\n`;
   });
   syncBuiltinESMExports();
   try {
-    assert.doesNotThrow(() => assertVerifiedRuntimeImages({ projectName: "coffee-test", verifiedImages }));
+    assert.doesNotThrow(() =>
+      assertVerifiedRuntimeImages({
+        projectName: "coffee-test",
+        verifiedImages,
+      }),
+    );
     assert.equal(calls.length, 15);
-    expected.set("coffee-platform-edge-nginx:local", verifiedImages.at(-1).imageId);
-    assert.doesNotThrow(() => assertVerifiedRuntimeImages({ projectName: "coffee-test", verifiedImages, noBuild: true }));
+    expected.set(
+      "coffee-platform-edge-nginx:local",
+      verifiedImages.at(-1).imageId,
+    );
+    assert.doesNotThrow(() =>
+      assertVerifiedRuntimeImages({
+        projectName: "coffee-test",
+        verifiedImages,
+        noBuild: true,
+      }),
+    );
     assert.equal(calls.at(-1)[1].at(-1), "coffee-platform-edge-nginx:local");
-    const source = await readFile(join(REPO_ROOT, "tools/compose-smoke.mjs"), "utf8");
-    const binding = source.indexOf("const verifiedImages = await readVerifiedRuntimeImages(");
-    const build = source.indexOf("buildRuntimeImages(", source.indexOf('markRollbackStage("build")'));
+    const source = await readFile(
+      join(REPO_ROOT, "tools/compose-smoke.mjs"),
+      "utf8",
+    );
+    const binding = source.indexOf(
+      "const verifiedImages = await readVerifiedRuntimeImages(",
+    );
+    const build = source.indexOf(
+      "buildRuntimeImages(",
+      source.indexOf('markRollbackStage("build")'),
+    );
     assert.ok(build >= 0 && binding > build);
-    assert.ok(source.indexOf("verifyBuildInputSnapshot(snapshot)", build) < binding);
-    const predicate = source.match(/const bindRuntimeImages = ([^\n]+);/u)?.[1];
+    assert.ok(
+      source.indexOf("verifyBuildInputSnapshot(snapshot)", build) < binding,
+    );
+    const predicate = source.match(
+      /const bindRuntimeImages =\s*([^;]+);/u,
+    )?.[1];
     assert.ok(predicate);
-    for (const flag of ["databaseProof", "customerProof", "aromaBindingProof", "aromaCartProof", "mutationDisableRollback"])
-      assert.equal(runInNewContext(predicate, { options: { [flag]: true }, browser: undefined }), false);
-    assert.equal(runInNewContext(predicate, { options: {}, browser: {} }), false);
-    assert.equal(runInNewContext(predicate, { options: {}, browser: undefined }), true);
+    for (const flag of [
+      "databaseProof",
+      "customerProof",
+      "aromaBindingProof",
+      "aromaCartProof",
+      "mutationDisableRollback",
+    ])
+      assert.equal(
+        runInNewContext(predicate, {
+          options: { [flag]: true },
+          browser: undefined,
+        }),
+        false,
+      );
+    assert.equal(
+      runInNewContext(predicate, { options: {}, browser: {} }),
+      false,
+    );
+    assert.equal(
+      runInNewContext(predicate, { options: {}, browser: undefined }),
+      true,
+    );
     assert.ok(source.includes("if (launchIdentity && bindRuntimeImages)"));
     assert.ok(binding < source.indexOf("composeAttempted = true;", binding));
   } finally {
@@ -357,9 +487,15 @@ void test("smoke accepts only runtime image IDs verified by G12 before startup",
 });
 
 void test("smoke rejects mismatched or missing G12 runtime IDs before startup", async (t) => {
-  const { assertVerifiedRuntimeImages } = await import("../../tools/compose-smoke.mjs");
-  const catalog = JSON.parse(await readFile(join(REPO_ROOT, "config/service-catalog.json"), "utf8"));
-  const verifiedImages = catalog.runtimes.map(({ name }) => ({ service: name, imageId: `sha256:${"a".repeat(64)}` }));
+  const { assertVerifiedRuntimeImages } =
+    await import("../../tools/compose-smoke.mjs");
+  const catalog = JSON.parse(
+    await readFile(join(REPO_ROOT, "config/service-catalog.json"), "utf8"),
+  );
+  const verifiedImages = catalog.runtimes.map(({ name }) => ({
+    service: name,
+    imageId: `sha256:${"a".repeat(64)}`,
+  }));
   const calls = [];
   t.mock.method(childProcess, "execFileSync", (command, args) => {
     calls.push([command, args]);
@@ -367,16 +503,162 @@ void test("smoke rejects mismatched or missing G12 runtime IDs before startup", 
   });
   syncBuiltinESMExports();
   try {
-    assert.throws(() => assertVerifiedRuntimeImages({ projectName: "coffee-test", verifiedImages }), /differs from the scanned G12 artifact/u);
+    assert.throws(
+      () =>
+        assertVerifiedRuntimeImages({
+          projectName: "coffee-test",
+          verifiedImages,
+        }),
+      /differs from the scanned G12 artifact/u,
+    );
     assert.equal(calls.length, 1);
     assert.deepEqual(calls[0][1].slice(0, 2), ["image", "inspect"]);
     calls.length = 0;
-    assert.throws(() => assertVerifiedRuntimeImages({ projectName: "coffee-test", verifiedImages: [] }), /G12 image ID missing/u);
+    assert.throws(
+      () =>
+        assertVerifiedRuntimeImages({
+          projectName: "coffee-test",
+          verifiedImages: [],
+        }),
+      /G12 image ID missing/u,
+    );
     assert.deepEqual(calls, []);
   } finally {
     t.mock.restoreAll();
     syncBuiltinESMExports();
   }
+});
+
+void test("G14 retains scoped resources when collector restoration is unconfirmed", async (t) => {
+  const {
+    retainG14AfterCollectorFailure,
+    externalRecoveryCleanupSummary,
+    removeBuiltRuntimeImages,
+  } = await import("../../tools/compose-smoke.mjs");
+  const options = { keep: false, noBuild: false };
+  const databases = [{ database: { name: "coffee_verify_run_orders" } }];
+  const receipt = retainG14AfterCollectorFailure({
+    g14Browser: {},
+    observability: {},
+    cleanupHookError: new Error("IPC disconnected"),
+    options,
+    databases,
+  });
+  assert.equal(options.keep, true);
+  assert.deepEqual(receipt, {
+    verified: false,
+    removed: [],
+    retained: ["coffee_verify_run_orders"],
+    failure: "G14_COLLECTOR_RESTORE_UNCONFIRMED",
+  });
+  const calls = [];
+  t.mock.method(childProcess, "execFileSync", (...args) => calls.push(args));
+  syncBuiltinESMExports();
+  try {
+    removeBuiltRuntimeImages(["sha256:example"], options);
+    assert.deepEqual(calls, []);
+  } finally {
+    t.mock.restoreAll();
+    syncBuiltinESMExports();
+  }
+  const summary = externalRecoveryCleanupSummary({
+    databases: receipt,
+    attachment: {
+      baselineAttached: false,
+      attempted: true,
+      attached: true,
+      routeBefore: "route",
+      routeAfter: "route",
+    },
+    cleanupFailed: true,
+  });
+  assert.equal(summary.verified, false);
+  assert.equal(summary.attachment.removed, false);
+  const normal = { keep: false };
+  assert.equal(
+    retainG14AfterCollectorFailure({
+      g14Browser: undefined,
+      observability: {},
+      cleanupHookError: new Error("error"),
+      options: normal,
+      databases,
+    }),
+    undefined,
+  );
+  assert.equal(normal.keep, false);
+  assert.equal(
+    retainG14AfterCollectorFailure({
+      g14Browser: {},
+      observability: {},
+      cleanupHookError: undefined,
+      options: normal,
+      databases,
+    }),
+    undefined,
+  );
+  assert.equal(normal.keep, false);
+});
+
+void test("G14 seals the child config for every Node runtime and rejects mismatch", async (t) => {
+  const { writeScopedComposeOverride } =
+    await import("../../tools/compose-smoke.mjs");
+  const { load } = await import("js-yaml");
+  const dir = await mkdtemp(join(tmpdir(), "g14-child-config-"));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const context = join(dir, "context.json");
+  const config = join(dir, "platform.yaml");
+  await writeFile(context, "{}", { mode: 0o400 });
+  await writeFile(config, "child: true\n", { mode: 0o444 });
+  await chmod(config, 0o444);
+  const sha256 = createHash("sha256")
+    .update(await readFile(config))
+    .digest("hex");
+  const override = await writeScopedComposeOverride("coffee-g14-config", {
+    launchContextPath: context,
+    g14Config: { path: config, sha256 },
+  });
+  t.after(() => rm(override, { force: true }));
+  const services = load(await readFile(override, "utf8")).services;
+  for (const runtime of RUNTIMES) {
+    assert.equal(
+      services[runtime].environment.COFFEE_LAUNCH_CONTEXT_FILE,
+      "/run/coffee-launch/context.json",
+    );
+    assert.deepEqual(
+      services[runtime].volumes.filter(
+        ({ target }) => target === "/app/config/platform.yaml",
+      ),
+      [
+        {
+          type: "bind",
+          source: config,
+          target: "/app/config/platform.yaml",
+          read_only: true,
+        },
+      ],
+    );
+    assert.equal(
+      services[runtime].volumes.find(
+        ({ target }) => target === "/run/coffee-launch/context.json",
+      ).source,
+      context,
+    );
+  }
+  await assert.rejects(
+    writeScopedComposeOverride("coffee-g14-config", {
+      launchContextPath: context,
+      g14Config: { path: config, sha256: "a".repeat(64) },
+    }),
+    /G14 config hash mismatch/u,
+  );
+  await chmod(config, 0o644);
+  await assert.rejects(
+    writeScopedComposeOverride("coffee-g14-config", {
+      launchContextPath: context,
+      g14Config: { path: config, sha256 },
+    }),
+    /G14 config must be sealed and owned/u,
+  );
 });
 
 void test("all smoke modes isolate networks and can bind a readonly launch context", async (t) => {
@@ -998,9 +1280,22 @@ void test("observability overlay keeps separate backends private and bounds exac
   const collector = overlay.services["otel-collector"];
   assert.equal(overlay.services.grafana.image, `sha256:${"b".repeat(64)}`);
   assert.notEqual(overlay.services.grafana.image, imageRefs.grafanaImage);
-  assert.ok(overlay.services.grafana.volumes.some(({target}) => target === "/var/lib/grafana"));
-  assert.ok(overlay.services.grafana.volumes.every(({target}) => target !== "/opt/grafana/plugins" && !"/opt/grafana/plugins".startsWith(`${target}/`)));
-  assert.equal(overlay.services["alert-sink"].image, `sha256:${"a".repeat(64)}`);
+  assert.ok(
+    overlay.services.grafana.volumes.some(
+      ({ target }) => target === "/var/lib/grafana",
+    ),
+  );
+  assert.ok(
+    overlay.services.grafana.volumes.every(
+      ({ target }) =>
+        target !== "/opt/grafana/plugins" &&
+        !"/opt/grafana/plugins".startsWith(`${target}/`),
+    ),
+  );
+  assert.equal(
+    overlay.services["alert-sink"].image,
+    `sha256:${"a".repeat(64)}`,
+  );
   assert.notEqual(overlay.services["alert-sink"].image, imageRefs.nodeImage);
   assert.equal(overlay.services.openobserve, undefined);
   assert.equal(collector.image, imageRefs.otelCollectorImage);
@@ -1049,7 +1344,9 @@ void test("observability overlay keeps separate backends private and bounds exac
     const service = overlay.services[name];
     assert.equal(
       service.image,
-      name === "grafana" ? `sha256:${"b".repeat(64)}` : imageRefs[`${name}Image`],
+      name === "grafana"
+        ? `sha256:${"b".repeat(64)}`
+        : imageRefs[`${name}Image`],
     );
     assert.equal(service.user, uid[name]);
     assert.equal(
@@ -1384,7 +1681,8 @@ void test("Orders recovery reads a complete bounded snapshot from every configur
 void test("verified infrastructure image loader accepts only context-bound Kafka artifacts", async (t) => {
   const { loadVerifiedGateImage } =
     await import("../../tools/verified-infrastructure-image.mjs");
-  const {RUNTIME_NAMES} = await import("../../packages/platform-config/src/index.ts");
+  const { RUNTIME_NAMES } =
+    await import("../../packages/platform-config/src/index.ts");
   const root = await mkdtemp("/tmp/coffee-kafka-artifact-proof-");
   t.after(() => rm(root, { recursive: true, force: true }));
   const candidateRoot = join(root, "candidate");
@@ -1404,7 +1702,25 @@ void test("verified infrastructure image loader accepts only context-bound Kafka
   const imageId = `sha256:${"2".repeat(64)}`;
   const manifestDigest = `sha256:${"3".repeat(64)}`;
   const platformManifestDigest = `sha256:${"4".repeat(64)}`;
-  const platformBytes = Buffer.from(JSON.stringify({verification: {securityScan: {enabled: true, cpu: 2, memoryMiB: 2048, parallel: 1, minimumFreeDiskGiB: 20, maximumDatabaseAgeHours: 24, approvedFixed: [], egressRepositories: ["ghcr.io/aquasecurity/trivy-db", "ghcr.io/aquasecurity/trivy-java-db"]}}}));
+  const platformBytes = Buffer.from(
+    JSON.stringify({
+      verification: {
+        securityScan: {
+          enabled: true,
+          cpu: 2,
+          memoryMiB: 2048,
+          parallel: 1,
+          minimumFreeDiskGiB: 20,
+          maximumDatabaseAgeHours: 24,
+          approvedFixed: [],
+          egressRepositories: [
+            "ghcr.io/aquasecurity/trivy-db",
+            "ghcr.io/aquasecurity/trivy-java-db",
+          ],
+        },
+      },
+    }),
+  );
   const index = {
     schemaVersion: 2,
     mediaType: "application/vnd.oci.image.index.v1+json",
@@ -1419,8 +1735,31 @@ void test("verified infrastructure image loader accepts only context-bound Kafka
   };
   const indexBytes = Buffer.from(JSON.stringify(index));
   const grafanaImage = `grafana:fixture@sha256:${hash(indexBytes)}`;
-  const pins = Object.fromEntries(["loki", "tempo", "prometheus"].map(name => [name, {version: "1.0.0", zipSha256: hash(`${name}-zip`), manifestSha256: hash(`${name}-manifest`), binarySha256: hash(`${name}-binary`)}]));
-  const toolchain = {kafkaImage: `apache/kafka:4.3.2@sha256:${hash(indexBytes)}`, grafanaImage, grafanaPlugins: pins, grafanaSigningKeySourceSha256: hash("key"), grafanaSigningKeyFingerprint: "A".repeat(40), grafanaTempoModule: {version: "fixture", h1: "fixture", revision: "a".repeat(40), fixCommits: ["b".repeat(40), "c".repeat(40)], replacement: null}};
+  const pins = Object.fromEntries(
+    ["loki", "tempo", "prometheus"].map((name) => [
+      name,
+      {
+        version: "1.0.0",
+        zipSha256: hash(`${name}-zip`),
+        manifestSha256: hash(`${name}-manifest`),
+        binarySha256: hash(`${name}-binary`),
+      },
+    ]),
+  );
+  const toolchain = {
+    kafkaImage: `apache/kafka:4.3.2@sha256:${hash(indexBytes)}`,
+    grafanaImage,
+    grafanaPlugins: pins,
+    grafanaSigningKeySourceSha256: hash("key"),
+    grafanaSigningKeyFingerprint: "A".repeat(40),
+    grafanaTempoModule: {
+      version: "fixture",
+      h1: "fixture",
+      revision: "a".repeat(40),
+      fixCommits: ["b".repeat(40), "c".repeat(40)],
+      replacement: null,
+    },
+  };
   const toolchainBytes = Buffer.from(JSON.stringify(toolchain));
   const lockfileBytes = Buffer.from("lock fixture");
   const context = {
@@ -1547,37 +1886,188 @@ void test("verified infrastructure image loader accepts only context-bound Kafka
     },
   };
   const grafanaId = `sha256:${hash("grafana-image")}`;
-  const grafanaBase = {sourceRef: grafanaImage, platformManifestDigest, indexArtifact: {path: "artifacts/grafana-base-index.json", sha256: hash(indexBytes), sizeBytes: indexBytes.length}};
-  const vendorPlugins = {treeSha256: hash("plugins"), treeBytes: 1, signingKeySourceSha256: toolchain.grafanaSigningKeySourceSha256, signingKeyFingerprint: toolchain.grafanaSigningKeyFingerprint, plugins: pins, effectiveFiles: Object.fromEntries(Object.keys(pins).map(name => [name, {path: `/opt/grafana/plugins/${name}/gpx_grafana-${name}-datasource_linux_amd64`, sha256: pins[name].binarySha256, sizeBytes: 1, layerDigest: platformManifestDigest}]))};
-  const grafanaReceipt = {...receipt, target: "grafana", importTag: `coffee-g12-${hash(Buffer.from(runId)).slice(0, 12)}-grafana:latest`, baseImage: grafanaImage, imageId: grafanaId, baseMaterial: grafanaBase, buildInputBinding: {...receipt.buildInputBinding, sourceKind: "git-archive-plus-verified-plugins", invocation: {...receipt.buildInputBinding.invocation, target: "grafana"}, vendorPlugins}, ociArtifact: {...receipt.ociArtifact, path: "artifacts/grafana.oci.tar"}};
+  const grafanaBase = {
+    sourceRef: grafanaImage,
+    platformManifestDigest,
+    indexArtifact: {
+      path: "artifacts/grafana-base-index.json",
+      sha256: hash(indexBytes),
+      sizeBytes: indexBytes.length,
+    },
+  };
+  const vendorPlugins = {
+    treeSha256: hash("plugins"),
+    treeBytes: 1,
+    signingKeySourceSha256: toolchain.grafanaSigningKeySourceSha256,
+    signingKeyFingerprint: toolchain.grafanaSigningKeyFingerprint,
+    plugins: pins,
+    effectiveFiles: Object.fromEntries(
+      Object.keys(pins).map((name) => [
+        name,
+        {
+          path: `/opt/grafana/plugins/${name}/gpx_grafana-${name}-datasource_linux_amd64`,
+          sha256: pins[name].binarySha256,
+          sizeBytes: 1,
+          layerDigest: platformManifestDigest,
+        },
+      ]),
+    ),
+  };
+  const grafanaReceipt = {
+    ...receipt,
+    target: "grafana",
+    importTag: `coffee-g12-${hash(Buffer.from(runId)).slice(0, 12)}-grafana:latest`,
+    baseImage: grafanaImage,
+    imageId: grafanaId,
+    baseMaterial: grafanaBase,
+    buildInputBinding: {
+      ...receipt.buildInputBinding,
+      sourceKind: "git-archive-plus-verified-plugins",
+      invocation: {
+        ...receipt.buildInputBinding.invocation,
+        target: "grafana",
+      },
+      vendorPlugins,
+    },
+    ociArtifact: { ...receipt.ociArtifact, path: "artifacts/grafana.oci.tar" },
+  };
   const grafanaReceiptBytes = Buffer.from(JSON.stringify(grafanaReceipt));
-  result.grafana = {path: "artifacts/grafana-receipt.json", receiptSha256: hash(grafanaReceiptBytes), imageId: grafanaId, importTag: grafanaReceipt.importTag, manifestDigest, ociArtifactPath: grafanaReceipt.ociArtifact.path, ociArtifactSha256: grafanaReceipt.ociArtifact.sha256};
-  result.provenance.images.push({service: "grafana", imageId: grafanaId, manifestDigest, platformManifestDigest, provenanceStatus: "PASS", metadataSha256: grafanaReceipt.provenanceSha256, attestationSha256: grafanaReceipt.attestationSha256, baseMaterial: grafanaBase});
-  const services = [...RUNTIME_NAMES, "grafana", "storage-helper", "edge-nginx", "kafka", "otel-collector", "loki", "prometheus", "tempo", "lockfile"];
+  result.grafana = {
+    path: "artifacts/grafana-receipt.json",
+    receiptSha256: hash(grafanaReceiptBytes),
+    imageId: grafanaId,
+    importTag: grafanaReceipt.importTag,
+    manifestDigest,
+    ociArtifactPath: grafanaReceipt.ociArtifact.path,
+    ociArtifactSha256: grafanaReceipt.ociArtifact.sha256,
+  };
+  result.provenance.images.push({
+    service: "grafana",
+    imageId: grafanaId,
+    manifestDigest,
+    platformManifestDigest,
+    provenanceStatus: "PASS",
+    metadataSha256: grafanaReceipt.provenanceSha256,
+    attestationSha256: grafanaReceipt.attestationSha256,
+    baseMaterial: grafanaBase,
+  });
+  const services = [
+    ...RUNTIME_NAMES,
+    "grafana",
+    "storage-helper",
+    "edge-nginx",
+    "kafka",
+    "otel-collector",
+    "loki",
+    "prometheus",
+    "tempo",
+    "lockfile",
+  ];
   result.reports = [];
   for (const service of services) {
-    const existing = result.provenance.images.find(entry => entry.service === service);
+    const existing = result.provenance.images.find(
+      (entry) => entry.service === service,
+    );
     const scannedImageId = existing?.imageId ?? `sha256:${hash(service)}`;
     if (!existing && service !== "lockfile") {
-      const upstream = ["otel-collector", "loki", "prometheus", "tempo"].includes(service);
-      result.provenance.images.push(upstream
-        ? {service, imageId: scannedImageId, manifestDigest, sourceReference: `${service}:fixture@${manifestDigest}`, identityStatus: "PINNED_DIGEST_VERIFIED"}
-        : {service, imageId: scannedImageId, manifestDigest, platformManifestDigest, provenanceStatus: "PASS", metadataSha256: hash(`${service}-metadata`), attestationSha256: hash(`${service}-attestation`)});
+      const upstream = [
+        "otel-collector",
+        "loki",
+        "prometheus",
+        "tempo",
+      ].includes(service);
+      result.provenance.images.push(
+        upstream
+          ? {
+              service,
+              imageId: scannedImageId,
+              manifestDigest,
+              sourceReference: `${service}:fixture@${manifestDigest}`,
+              identityStatus: "PINNED_DIGEST_VERIFIED",
+            }
+          : {
+              service,
+              imageId: scannedImageId,
+              manifestDigest,
+              platformManifestDigest,
+              provenanceStatus: "PASS",
+              metadataSha256: hash(`${service}-metadata`),
+              attestationSha256: hash(`${service}-attestation`),
+            },
+      );
     }
     for (const suffix of ["sbom.cdx.json", "vulnerabilities.json"]) {
       const name = `${service}.${suffix}`;
-      const contents = Buffer.from(JSON.stringify(suffix === "vulnerabilities.json" ? {Results: [], Metadata: service === "lockfile" ? {} : {ImageID: scannedImageId}} : {bomFormat: "CycloneDX", specVersion: "1.6", version: 1, components: []}));
-      await writeFile(join(supplyChainDir, "artifacts", name), contents, {mode: 0o600});
-      result.reports.push({path: name, sha256: hash(contents), findings: {high: 0, critical: 0}});
+      const contents = Buffer.from(
+        JSON.stringify(
+          suffix === "vulnerabilities.json"
+            ? {
+                Results: [],
+                Metadata:
+                  service === "lockfile" ? {} : { ImageID: scannedImageId },
+              }
+            : {
+                bomFormat: "CycloneDX",
+                specVersion: "1.6",
+                version: 1,
+                components: [],
+              },
+        ),
+      );
+      await writeFile(join(supplyChainDir, "artifacts", name), contents, {
+        mode: 0o600,
+      });
+      result.reports.push({
+        path: name,
+        sha256: hash(contents),
+        findings: { high: 0, critical: 0 },
+      });
     }
   }
-  result.findings = {high: 0, critical: 0};
-  result.evaluation = {rawHigh: 0, resolvedFixed: 0, unresolvedHigh: 0, critical: 0};
-  const decision = {schemaVersion: 1, gate: "G12_SUPPLY_CHAIN", runId, candidateSha, treeSha: environment.treeSha, configSha256: context.baseConfigSha256, toolchainVersionsSha256: environment.toolchainVersionsSha256, lockfileSha256: environment.lockfileSha256, imageId: grafanaId, manifestDigest, platformManifestDigest, rawReportSha256: result.reports.find(entry => entry.path === "grafana.vulnerabilities.json").sha256, approvedFixed: [], vendorPlugins, module: toolchain.grafanaTempoModule, decisions: [], evaluatedAt: "2026-10-30T00:00:00.000Z", openVex: null};
+  result.findings = { high: 0, critical: 0 };
+  result.evaluation = {
+    rawHigh: 0,
+    resolvedFixed: 0,
+    unresolvedHigh: 0,
+    critical: 0,
+  };
+  const decision = {
+    schemaVersion: 1,
+    gate: "G12_SUPPLY_CHAIN",
+    runId,
+    candidateSha,
+    treeSha: environment.treeSha,
+    configSha256: context.baseConfigSha256,
+    toolchainVersionsSha256: environment.toolchainVersionsSha256,
+    lockfileSha256: environment.lockfileSha256,
+    imageId: grafanaId,
+    manifestDigest,
+    platformManifestDigest,
+    rawReportSha256: result.reports.find(
+      (entry) => entry.path === "grafana.vulnerabilities.json",
+    ).sha256,
+    approvedFixed: [],
+    vendorPlugins,
+    module: toolchain.grafanaTempoModule,
+    decisions: [],
+    evaluatedAt: "2026-10-30T00:00:00.000Z",
+    openVex: null,
+  };
   const decisionBytes = Buffer.from(JSON.stringify(decision));
-  result.adjudication = {path: "artifacts/grafana-adjudication.json", sha256: hash(decisionBytes)};
-  await writeFile(join(supplyChainDir, "artifacts/grafana-receipt.json"), grafanaReceiptBytes, {mode: 0o600});
-  await writeFile(join(supplyChainDir, "artifacts/grafana-adjudication.json"), decisionBytes, {mode: 0o600});
+  result.adjudication = {
+    path: "artifacts/grafana-adjudication.json",
+    sha256: hash(decisionBytes),
+  };
+  await writeFile(
+    join(supplyChainDir, "artifacts/grafana-receipt.json"),
+    grafanaReceiptBytes,
+    { mode: 0o600 },
+  );
+  await writeFile(
+    join(supplyChainDir, "artifacts/grafana-adjudication.json"),
+    decisionBytes,
+    { mode: 0o600 },
+  );
   for (const [path, bytes] of [
     [join(supplyChainDir, "result.json"), Buffer.from(JSON.stringify(result))],
     [join(supplyChainDir, "artifacts/kafka-receipt.json"), receiptBytes],
@@ -4549,8 +5039,14 @@ void test("G13/G15 external PostgreSQL attachment is exact and keeps the shared 
     { name: "AssertionError" },
   );
   assert.equal(isExternalRecoveryProof({ recoveryProof: true }), true);
-  assert.equal(isExternalRecoveryProof({ recoveryProof: true, observabilityFixture: true }), false,
-    "bounded G14 fixture uses disposable PostgreSQL and never selects external G08 credentials");
+  assert.equal(
+    isExternalRecoveryProof({
+      recoveryProof: true,
+      observabilityFixture: true,
+    }),
+    false,
+    "bounded G14 fixture uses disposable PostgreSQL and never selects external G08 credentials",
+  );
   assert.equal(
     isExternalRecoveryProof({
       recoveryProof: true,
@@ -4577,6 +5073,17 @@ void test("G13/G15 external PostgreSQL attachment is exact and keeps the shared 
       expectedSystemIdentifier: "7613370342949990434",
       preparationContextPath: "/parent/evidence/launch/run/context.json",
     },
+  );
+  assert.equal(
+    externalRecoveryMigrationCredentialRequest(
+      {
+        candidateRoot: "/validated-child",
+        postgres: { systemIdentifier: "7613370342949990434" },
+      },
+      "/child/context.json",
+      "orders",
+    ).root,
+    "/validated-child",
   );
   assert.deepEqual(
     externalRecoveryMigrationCredentialRequest(
@@ -4648,7 +5155,7 @@ void test("G13/G15 external PostgreSQL attachment is exact and keeps the shared 
   }
 });
 
-void test("G13 uses its current G08 context while malformed G15 lineage fails before PostgreSQL", async (t) => {
+void test("G13/G14 use current G08 context while malformed browser lineage fails before PostgreSQL", async (t) => {
   const { readExternalRecoveryProofCredentials } =
     await import("../../tools/compose-smoke.mjs");
   const launchIdentity = {
@@ -4675,6 +5182,15 @@ void test("G13 uses its current G08 context while malformed G15 lineage fails be
     (error) =>
       ["CONFIG-G08-BUNDLE", "CONFIG-G08-CONTEXT"].includes(error?.ruleId),
     "ordinary G13 must enter the current-context G08 reader",
+  );
+
+  await assert.rejects(
+    readExternalRecoveryProofCredentials(launchIdentity, "/", {
+      candidateRoot: REPO_ROOT,
+      expectedLineage: "G14",
+      resources: { g08PreparationContextPath: "/foreign/context.json" },
+    }),
+    /cannot downgrade to G13\/G14/u,
   );
 
   for (const resources of [
@@ -4711,6 +5227,7 @@ void test("external PostgreSQL attachment cleanup requires acknowledged ownershi
     attachApprovedExternalPostgres,
     cleanupApprovedExternalPostgresAttachment,
     externalRecoveryCleanupSummary,
+    prepareApprovedExternalPostgresAttachment,
   } = await import("../../tools/compose-smoke.mjs");
   const containerId =
     "267958ce276e65d96c4a5d2cfc4541de35f9785de3dd15c04c34798cf7b1c85f";
@@ -4723,10 +5240,14 @@ void test("external PostgreSQL attachment cleanup requires acknowledged ownershi
   const initialRoute =
     "00000000:00000000:00000000:00000000:00000000:00000000:0";
 
-  async function exercise(connectOutcome, { badIdentity = false } = {}) {
-    let attached = false;
+  async function exercise(
+    connectOutcome,
+    { badIdentity = false, baselineAttached = false, prepare = false } = {},
+  ) {
+    let attached = baselineAttached;
     let route = initialRoute;
     let image = imageId;
+    let drift = "";
     const calls = [];
     t.mock.method(childProcess, "execFileSync", (_command, args) => {
       calls.push([...args]);
@@ -4751,7 +5272,7 @@ void test("external PostgreSQL attachment cleanup requires acknowledged ownershi
         return JSON.stringify([
           {
             Id: containerId,
-            Image: image,
+            Image: drift === "identity" ? "sha256:foreign" : image,
             Name: "/coffee_postgres",
             NetworkSettings: {
               Networks: {
@@ -4759,8 +5280,12 @@ void test("external PostgreSQL attachment cleanup requires acknowledged ownershi
                 ...(attached
                   ? {
                       coffee_postgres_data: {
-                        NetworkID: dataNetworkId,
-                        Aliases: ["coffee_postgres"],
+                        NetworkID:
+                          drift === "network" ? "foreign" : dataNetworkId,
+                        Aliases:
+                          drift === "alias" ? ["foreign"] : ["coffee_postgres"],
+                        EndpointID:
+                          drift === "endpoint" ? "foreign" : "approved",
                       },
                     }
                   : {}),
@@ -4774,7 +5299,12 @@ void test("external PostgreSQL attachment cleanup requires acknowledged ownershi
           {
             Id: dataNetworkId,
             Name: "coffee_postgres_data",
-            Containers: attached ? { [containerId]: {} } : {},
+            Containers: attached
+              ? {
+                  [containerId]: {},
+                  ...(drift === "extra-endpoint" ? { foreign: {} } : {}),
+                }
+              : {},
           },
         ]);
       }
@@ -4787,36 +5317,136 @@ void test("external PostgreSQL attachment cleanup requires acknowledged ownershi
           },
         ]);
       }
-      if (args[0] === "exec" && args[1] === containerId) return route;
+      if (args[0] === "exec" && args[1] === containerId)
+        return drift === "route" ? "foreign-route" : route;
       throw new Error(`unexpected fake Docker operation: ${args[0]}`);
     });
     syncBuiltinESMExports();
 
-    const attachment = {
-      before: {
-        container: {
-          NetworkSettings: {
-            Networks: { coffee_network: { NetworkID: legacyNetworkId } },
-          },
-        },
-        legacyNetwork: { Containers: { [containerId]: {} } },
-      },
-      routeBefore: initialRoute,
-      attached: false,
-      attempted: false,
-    };
+    const attachment =
+      baselineAttached || prepare
+        ? prepareApprovedExternalPostgresAttachment()
+        : {
+            before: {
+              container: {
+                NetworkSettings: {
+                  Networks: { coffee_network: { NetworkID: legacyNetworkId } },
+                },
+              },
+              legacyNetwork: { Containers: { [containerId]: {} } },
+            },
+            routeBefore: initialRoute,
+            attached: false,
+            attempted: false,
+          };
     return {
       attachment,
       calls,
       get attached() {
         return attached;
       },
+      setDrift: (value) => {
+        drift = value;
+      },
+      prepare: () => prepareApprovedExternalPostgresAttachment(),
       runAttach: () => attachApprovedExternalPostgres(attachment),
       cleanup: () => cleanupApprovedExternalPostgresAttachment(attachment),
     };
   }
 
   try {
+    const detached = await exercise("success", { prepare: true });
+    assert.equal(detached.attachment.baselineAttached, false);
+    detached.runAttach();
+    detached.cleanup();
+    assert.equal(detached.attached, false);
+    assert.deepEqual(
+      detached.calls
+        .filter((args) => args[0] === "network")
+        .map((args) => args[1]),
+      ["connect", "disconnect"],
+    );
+    assert.equal(
+      externalRecoveryCleanupSummary({
+        databases: { verified: true, removed: [] },
+        attachment: detached.attachment,
+      }).verified,
+      true,
+    );
+
+    const baseline = await exercise("success", { baselineAttached: true });
+    assert.equal(baseline.attachment.baselineAttached, true);
+    baseline.runAttach();
+    baseline.cleanup();
+    assert.equal(baseline.attached, true);
+    assert.equal(
+      baseline.calls.some((args) => args[0] === "network"),
+      false,
+    );
+    assert.equal(
+      externalRecoveryCleanupSummary({
+        databases: { verified: true, removed: [] },
+        attachment: baseline.attachment,
+      }).verified,
+      true,
+    );
+    assert.deepEqual(
+      externalRecoveryCleanupSummary({
+        databases: { verified: true, removed: [] },
+        attachment: baseline.attachment,
+      }).attachment,
+      {
+        baselineAttached: true,
+        attempted: false,
+        removed: false,
+        routePreserved: true,
+      },
+    );
+
+    for (const drift of [
+      "identity",
+      "network",
+      "alias",
+      "endpoint",
+      "extra-endpoint",
+      "route",
+    ]) {
+      const changed = await exercise("success", { baselineAttached: true });
+      changed.runAttach();
+      changed.setDrift(drift);
+      assert.throws(changed.cleanup, undefined, drift);
+      assert.equal(changed.attached, true);
+      assert.equal(
+        changed.calls.some((args) => args[0] === "network"),
+        false,
+      );
+      assert.equal(
+        externalRecoveryCleanupSummary({
+          databases: { verified: true, removed: [] },
+          attachment: changed.attachment,
+        }).verified,
+        false,
+      );
+      const beforeAttach = await exercise("success", {
+        baselineAttached: true,
+      });
+      beforeAttach.setDrift(drift);
+      assert.throws(beforeAttach.runAttach, undefined, drift);
+      assert.equal(
+        beforeAttach.calls.some((args) => args[0] === "network"),
+        false,
+      );
+    }
+    for (const drift of ["identity", "network", "alias", "extra-endpoint"]) {
+      const rejected = await exercise("success", { baselineAttached: true });
+      rejected.setDrift(drift);
+      assert.throws(rejected.prepare, undefined, drift);
+      assert.equal(
+        rejected.calls.some((args) => args[0] === "network"),
+        false,
+      );
+    }
+
     const failed = await exercise("failure-after-foreign-attach");
     assert.throws(failed.runAttach, /connect outcome unknown/u);
     assert.equal(failed.attachment.attached, false);
@@ -4872,6 +5502,99 @@ void test("external PostgreSQL attachment cleanup requires acknowledged ownershi
   } finally {
     t.mock.restoreAll();
     syncBuiltinESMExports();
+  }
+});
+
+void test("external PostgreSQL cleanup retains run databases until consumers are confirmed stopped", async (t) => {
+  const { cleanupExternalRecoveryDatabases } =
+    await import("../../tools/compose-smoke.mjs");
+  const owners = ["customer", "catalog", "pricing", "orders", "integration"];
+  const databases = owners.map((owner) => ({
+    name: `coffee_verify_20261030t120000z_123abcd_${owner}`,
+    migratorRole: `coffee_${owner}_migrator`,
+  }));
+  const resources = databases.map((database) => ({
+    database,
+    state: "created-acknowledged",
+  }));
+  const credentials = {
+    postgres: {
+      host: "coffee_postgres",
+      port: 5432,
+      systemIdentifier: "7613370342949990434",
+    },
+    admin: { username: "coffeeuser", password: "fixture-only" },
+  };
+  const remaining = new Map(
+    databases.map((database) => [database.name, database.migratorRole]),
+  );
+  const queries = [];
+  let connections = 0;
+  t.mock.method(pg.Client.prototype, "connect", async function () {
+    connections += 1;
+  });
+  t.mock.method(pg.Client.prototype, "end", async function () {});
+  t.mock.method(pg.Client.prototype, "query", async function (sql, args) {
+    queries.push(sql);
+    if (sql.includes("system_identifier"))
+      return {
+        rows: [
+          {
+            current_database: "postgres",
+            current_user: "coffeeuser",
+            server_version: "17.11",
+            system_identifier: "7613370342949990434",
+            is_superuser: true,
+          },
+        ],
+      };
+    if (sql.includes("pg_stat_activity")) return { rows: [] };
+    if (sql.includes("pg_get_userbyid"))
+      return {
+        rows: remaining.has(args[0]) ? [{ owner: remaining.get(args[0]) }] : [],
+      };
+    const match = /^DROP DATABASE "([a-z0-9_]+)"$/u.exec(sql);
+    if (match) {
+      assert.ok(remaining.delete(match[1]));
+      return { rows: [] };
+    }
+    throw new Error("unexpected fake PostgreSQL query");
+  });
+  try {
+    for (const stopped of [false, undefined]) {
+      const receipt = await cleanupExternalRecoveryDatabases(
+        credentials,
+        resources,
+        stopped,
+      );
+      assert.deepEqual(receipt, {
+        verified: false,
+        removed: [],
+        retained: databases.map(({ name }) => name),
+        failure: "COMPOSE_CONSUMERS_NOT_STOPPED",
+      });
+    }
+    assert.equal(
+      connections,
+      0,
+      "no activity probe or DROP is allowed without consumer cleanup proof",
+    );
+    assert.deepEqual(queries, []);
+    const receipt = await cleanupExternalRecoveryDatabases(
+      credentials,
+      resources,
+      true,
+    );
+    assert.equal(receipt.verified, true);
+    assert.deepEqual(receipt.removed, databases.map(({ name }) => name).sort());
+    assert.deepEqual(receipt.retained, []);
+    assert.equal(
+      queries.filter((sql) => sql.startsWith("DROP DATABASE")).length,
+      5,
+    );
+    assert.equal(remaining.size, 0);
+  } finally {
+    t.mock.restoreAll();
   }
 });
 
@@ -5010,6 +5733,47 @@ void test("external PostgreSQL preflight closes admin clients once and never cre
   assert.equal(failedCleanup.failure, "POSTGRES_ATTACHMENT_RETAINED");
 });
 
+void test("external recovery projection accepts canonical mapping once and rejects re-projection", async () => {
+  const { projectRecoveryPlatformConfig } =
+    await import("../../tools/compose-smoke.mjs");
+  const { load: parseYaml } = await import("js-yaml");
+  const { projectLaunchDatabaseTargets } =
+    await import("../../scripts/db-bootstrap.mjs");
+  const config = parseYaml(
+    await readFile(join(REPO_ROOT, "config/platform.yaml"), "utf8"),
+  );
+  const ownership = JSON.parse(
+    await readFile(join(REPO_ROOT, "config/database-ownership.json"), "utf8"),
+  );
+  const roleMap = JSON.parse(
+    await readFile(join(REPO_ROOT, "config/database-role-map.json"), "utf8"),
+  );
+  const launchIdentity = {
+    schemaVersion: 1,
+    runId: "20261024T120000Z-a12bc34",
+    candidateSha: `a12bc34${"0".repeat(33)}`,
+    baseConfigSha256: "a".repeat(64),
+  };
+  const projected = projectLaunchDatabaseTargets({
+    ownership,
+    roleMap,
+    launchIdentity,
+  });
+  const result = projectRecoveryPlatformConfig(config, projected.ownership);
+  assert.equal(
+    result.services["orders-service"].database,
+    "coffee_verify_20261024t120000z_a12bc34_orders",
+  );
+  assert.equal(
+    config.services["orders-service"].database,
+    "coffee_platform_orders",
+  );
+  assert.throws(
+    () => projectRecoveryPlatformConfig(result, projected.ownership),
+    /canonical platform config database differs/u,
+  );
+});
+
 void test("catalog slice preserves secret ownership and uses host identity and supplied image pins", async (t) => {
   const source = await readFile(
     join(REPO_ROOT, ".cursor/skills/catalog-slice-verify/run.mjs"),
@@ -5068,4 +5832,118 @@ void test("catalog slice preserves secret ownership and uses host identity and s
   assert.equal(after.uid, before.uid);
   assert.equal(after.gid, before.gid);
   assert.equal(after.mode & 0o777, 0o400);
+});
+
+void test("G14 provider boundary rejects enabled mutations and non-isolated fixture", async () => {
+  const { validateG14ProviderBoundary } =
+    await import("../../tools/compose-smoke.mjs");
+  const projectName = "coffee-g14";
+  const networkName = `${projectName}_coffee_provider_egress`;
+  const network = {
+    Name: networkName,
+    Id: "b".repeat(64),
+    Internal: true,
+    Labels: {
+      "com.docker.compose.project": projectName,
+      "com.docker.compose.network": "coffee_provider_egress",
+    },
+  };
+  const container = (service, networks) => ({
+    Id: "a".repeat(64),
+    State: { Running: true },
+    Config: {
+      Labels: {
+        "com.docker.compose.project": projectName,
+        "com.docker.compose.service": service,
+      },
+    },
+    NetworkSettings: { Networks: networks },
+  });
+  const fixture = container("aroma-provider-fixture", {
+    [networkName]: { NetworkID: network.Id, Aliases: ["aromateacoffee.ru"] },
+  });
+  fixture.Image = `sha256:${"d".repeat(64)}`;
+  fixture.Config.Image =
+    "node:26.8.1-trixie-slim@sha256:c0753125a3789977aefe869cbebccf70e3cfd7ea84ca48547458f02e4f1d7146";
+  fixture.Config.Cmd = ["node", "/run/aroma-proof/provider-server.mjs"];
+  fixture.Mounts = [
+    {
+      Type: "bind",
+      Source: "/dev/shm/fixture",
+      Destination: "/run/aroma-proof",
+    },
+  ];
+  const internalNetworks = ["coffee_internal_api", "coffee_postgres_data"].map(
+    (name, index) => ({
+      Name: `${projectName}_${name}`,
+      Id: String(index).repeat(64),
+      Internal: true,
+      Labels: {
+        "com.docker.compose.project": projectName,
+        "com.docker.compose.network": name,
+      },
+    }),
+  );
+  const gateway = container("aroma-gateway", {
+    [networkName]: { NetworkID: network.Id },
+    ...Object.fromEntries(
+      internalNetworks.map((item) => [item.Name, { NetworkID: item.Id }]),
+    ),
+  });
+  const input = {
+    projectName,
+    expectedConfigSha256: "c".repeat(64),
+    mounted: { sha256: "c".repeat(64), mutationsEnabled: false },
+    gateway,
+    fixture,
+    network,
+    internalNetworks,
+    fixtureImageId: fixture.Image,
+    fixtureDirectory: "/dev/shm/fixture",
+  };
+  assert.equal(validateG14ProviderBoundary(input).providerIsolated, true);
+  assert.throws(() =>
+    validateG14ProviderBoundary({
+      ...input,
+      mounted: { ...input.mounted, mutationsEnabled: true },
+    }),
+  );
+  assert.throws(() =>
+    validateG14ProviderBoundary({
+      ...input,
+      mounted: { ...input.mounted, sha256: "d".repeat(64) },
+    }),
+  );
+  assert.throws(() =>
+    validateG14ProviderBoundary({
+      ...input,
+      network: { ...network, Internal: false },
+    }),
+  );
+  assert.throws(() =>
+    validateG14ProviderBoundary({
+      ...input,
+      fixtureImageId: `sha256:${"e".repeat(64)}`,
+    }),
+  );
+  assert.throws(() =>
+    validateG14ProviderBoundary({
+      ...input,
+      internalNetworks: [
+        { ...internalNetworks[0], Internal: false },
+        internalNetworks[1],
+      ],
+    }),
+  );
+  assert.throws(() =>
+    validateG14ProviderBoundary({
+      ...input,
+      fixture: {
+        ...fixture,
+        NetworkSettings: {
+          Networks: { [networkName]: { NetworkID: network.Id, Aliases: [] } },
+        },
+      },
+    }),
+  );
 });

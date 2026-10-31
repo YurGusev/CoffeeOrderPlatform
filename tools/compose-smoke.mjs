@@ -9,6 +9,7 @@ import {
   mkdir,
   readdir,
   readFile,
+  realpath,
   rm,
   stat,
   writeFile,
@@ -40,10 +41,13 @@ import {
 import {
   buildRealtimeAuthCloseInvocation,
   proveBrowser,
+  proveG14Browser,
+  validateG14BrowserEvidence,
   validateBrowserRuntimeArtifact,
 } from "./browser-proof.mjs";
 import {
   createBrowserOwnerEvidence,
+  createG14OrderEvidence,
   validateBrowserProof,
 } from "./browser-owner-evidence.mjs";
 import {
@@ -72,7 +76,10 @@ import {
   dropDeliveryTables,
 } from "../scripts/db-live-proof.mjs";
 import { createRuntimeLoggingOverride } from "./observability/generate.mjs";
-import { createBuildInputSnapshot, verifyBuildInputSnapshot } from "./security-scan.mjs";
+import {
+  createBuildInputSnapshot,
+  verifyBuildInputSnapshot,
+} from "./security-scan.mjs";
 import { validateLaunchContext } from "../verification/launch/v1/report.mjs";
 import {
   loadVerifiedGateImage,
@@ -1253,8 +1260,9 @@ const COMPOSE_NETWORKS = [
   "coffee_kafka_event",
   "coffee_provider_egress",
 ];
-const DATABASE_PROOF_IMAGE =
-  JSON.parse(readFileSync(join(ROOT, "config/toolchain-versions.json"), "utf8")).postgresFixtureImage;
+const DATABASE_PROOF_IMAGE = JSON.parse(
+  readFileSync(join(ROOT, "config/toolchain-versions.json"), "utf8"),
+).postgresFixtureImage;
 const CUSTOMER_TEST_IMAGE =
   "node:26.8.1-trixie-slim@sha256:c0753125a3789977aefe869cbebccf70e3cfd7ea84ca48547458f02e4f1d7146";
 const RUNTIMES = [
@@ -1373,7 +1381,8 @@ function parseArguments(argv) {
     else if (argument === "--database-proof") options.databaseProof = true;
     else if (argument === "--customer-proof") options.customerProof = true;
     else if (argument === "--recovery-proof") options.recoveryProof = true;
-    else if (argument === "--observability-fixture") options.observabilityFixture = true;
+    else if (argument === "--observability-fixture")
+      options.observabilityFixture = true;
     else if (argument === "--browser-proof") options.browserProof = true;
     else if (argument === "--mutation-disable-rollback")
       options.mutationDisableRollback = true;
@@ -1435,7 +1444,9 @@ function parseArguments(argv) {
       "--database-proof, --customer-proof, --recovery-proof, --aroma-binding-proof and --aroma-cart-proof are mutually exclusive",
     );
   if (options.observabilityFixture && !options.recoveryProof)
-    throw new Error("--observability-fixture requires programmatic observability hooks and isolated --recovery-proof");
+    throw new Error(
+      "--observability-fixture requires programmatic observability hooks and isolated --recovery-proof",
+    );
   if (options.recoveryProof && options.stubSecrets)
     throw new Error(
       "--recovery-proof requires generated fixture credentials, not --stub-secrets",
@@ -1645,16 +1656,37 @@ export function removeBuiltRuntimeImages(images, options) {
   }
 }
 
-export function assertVerifiedRuntimeImages({ projectName, verifiedImages, noBuild = false }) {
-  const images = new Map(verifiedImages.map(({ service, imageId }) => [service, imageId]));
+export function assertVerifiedRuntimeImages({
+  projectName,
+  verifiedImages,
+  noBuild = false,
+}) {
+  const images = new Map(
+    verifiedImages.map(({ service, imageId }) => [service, imageId]),
+  );
   for (const service of [...RUNTIMES, "edge-nginx"]) {
     const expected = images.get(service);
-    assert.match(expected ?? "", /^sha256:[a-f0-9]{64}$/u, `G12 image ID missing for ${service}`);
-    const reference = service === "edge-nginx" && noBuild
-      ? "coffee-platform-edge-nginx:local"
-      : `${projectName}-${service}:latest`;
-    const actual = runDocker(["image", "inspect", "--format", "{{.Id}}", reference]).trim();
-    assert.equal(actual, expected, `${service} image differs from the scanned G12 artifact`);
+    assert.match(
+      expected ?? "",
+      /^sha256:[a-f0-9]{64}$/u,
+      `G12 image ID missing for ${service}`,
+    );
+    const reference =
+      service === "edge-nginx" && noBuild
+        ? "coffee-platform-edge-nginx:local"
+        : `${projectName}-${service}:latest`;
+    const actual = runDocker([
+      "image",
+      "inspect",
+      "--format",
+      "{{.Id}}",
+      reference,
+    ]).trim();
+    assert.equal(
+      actual,
+      expected,
+      `${service} image differs from the scanned G12 artifact`,
+    );
   }
 }
 
@@ -2099,7 +2131,7 @@ export async function readExternalRecoveryProofCredentials(
     "external recovery launch metadata has a closed shape",
   );
   assert.ok(
-    ["G13", "G15"].includes(launchMetadata.expectedLineage),
+    ["G13", "G14", "G15"].includes(launchMetadata.expectedLineage),
     "external recovery launch lineage is invalid",
   );
   assert.equal(typeof launchMetadata.candidateRoot, "string");
@@ -2137,18 +2169,18 @@ export async function readExternalRecoveryProofCredentials(
       (key) => Object.hasOwn(resources, key),
     );
   if (
-    launchMetadata.expectedLineage === "G13" &&
+    ["G13", "G14"].includes(launchMetadata.expectedLineage) &&
     (hasPreparationContextPath || hasBrowserParentMetadata)
   )
     throw new Error(
-      "external recovery lineage metadata cannot downgrade to G13",
+      "external recovery lineage metadata cannot downgrade to G13/G14",
     );
   if (
     launchMetadata.expectedLineage === "G15" &&
     (!hasPreparationContextPath || !hasAllBrowserParentMetadata)
   )
     throw new Error("G15 G08 parent preparation reference is missing");
-  const configRoot = ROOT;
+  const configRoot = launchMetadata.candidateRoot;
   const preparationSource = hasPreparationContextPath
     ? { preparationContextPath: browserPreparationContextPath }
     : {};
@@ -2180,9 +2212,11 @@ export async function readExternalRecoveryProofCredentials(
     "external recovery proof target differs from the approved PostgreSQL system identifier",
   );
   const ownership = await readJson(
-    join(ROOT, "config/database-ownership.json"),
+    join(configRoot, "config/database-ownership.json"),
   );
-  const roleMap = await readJson(join(ROOT, "config/database-role-map.json"));
+  const roleMap = await readJson(
+    join(configRoot, "config/database-role-map.json"),
+  );
   const projected = projectLaunchDatabaseTargets({
     ownership,
     roleMap,
@@ -2251,6 +2285,7 @@ export async function readExternalRecoveryProofCredentials(
     roleMap: projected.roleMap,
     ownership: projected.ownership,
     launchIdentity,
+    candidateRoot: configRoot,
     postgres,
     g08PreparationContextPath: browserPreparationContextPath,
     admin,
@@ -2288,7 +2323,7 @@ export function externalRecoveryMigrationCredentialRequest(
   owner,
 ) {
   return {
-    root: ROOT,
+    root: credentials.candidateRoot ?? ROOT,
     contextPath,
     owner,
     kind: "migrator",
@@ -2296,6 +2331,23 @@ export function externalRecoveryMigrationCredentialRequest(
     ...(typeof credentials.g08PreparationContextPath === "string"
       ? { preparationContextPath: credentials.g08PreparationContextPath }
       : {}),
+  };
+}
+
+export function retainG14AfterCollectorFailure({
+  g14Browser,
+  observability,
+  cleanupHookError,
+  options,
+  databases,
+}) {
+  if (!(g14Browser && observability && cleanupHookError)) return undefined;
+  options.keep = true;
+  return {
+    verified: false,
+    removed: [],
+    retained: databases.map(({ database }) => database.name),
+    failure: "G14_COLLECTOR_RESTORE_UNCONFIRMED",
   };
 }
 
@@ -2310,22 +2362,27 @@ export function externalRecoveryCleanupSummary({
     retained: [],
     failure: "DATABASE_CLEANUP_NOT_CONFIRMED",
   };
+  const baselineAttached = attachment?.baselineAttached === true;
   const attempted = attachment?.attempted === true;
-  const removed = !attempted || attachment?.absenceConfirmed === true;
+  const removed = attachment?.absenceConfirmed === true;
+  const attachmentVerified = baselineAttached
+    ? !attempted && !removed && attachment.baselineConfirmed === true
+    : attempted && removed;
   const routePreserved =
-    !attempted ||
-    (typeof attachment?.routeBefore === "string" &&
-      attachment.routeAfter === attachment.routeBefore);
+    typeof attachment?.routeBefore === "string" &&
+    attachment.routeAfter === attachment.routeBefore;
   const verified =
     databaseCleanup.verified === true &&
-    removed &&
+    attachmentVerified &&
     routePreserved &&
     cleanupFailed !== true;
   const failure = !verified
     ? databaseCleanup.verified !== true
       ? (databaseCleanup.failure ?? "DATABASE_CLEANUP_UNVERIFIED")
-      : !removed
-        ? "POSTGRES_ATTACHMENT_RETAINED"
+      : !attachmentVerified
+        ? baselineAttached
+          ? "POSTGRES_BASELINE_UNVERIFIED"
+          : "POSTGRES_ATTACHMENT_RETAINED"
         : !routePreserved
           ? "POSTGRES_ROUTE_UNVERIFIED"
           : "EXTERNAL_CLEANUP_FAILED"
@@ -2333,7 +2390,7 @@ export function externalRecoveryCleanupSummary({
   return {
     verified,
     databases: databaseCleanup,
-    attachment: { attempted, removed, routePreserved },
+    attachment: { baselineAttached, attempted, removed, routePreserved },
     ...(failure ? { failure } : {}),
   };
 }
@@ -2870,6 +2927,38 @@ export async function writeScopedComposeOverride(projectName, options = {}) {
       },
     });
   }
+  if (options.g14Config) {
+    assert.ok(options.launchContextPath, "G14 config requires child context");
+    const { path: configPath, sha256 } = options.g14Config;
+    assert.match(sha256 ?? "", /^[a-f0-9]{64}$/u);
+    assert.equal(
+      await realpath(configPath),
+      configPath,
+      "G14 config path must be canonical",
+    );
+    const before = await lstat(configPath);
+    assert.ok(
+      before.isFile() &&
+        !before.isSymbolicLink() &&
+        before.uid === process.getuid() &&
+        (before.mode & 0o777) === 0o444,
+      "G14 config must be sealed and owned",
+    );
+    const bytes = await readFile(configPath);
+    const after = await lstat(configPath);
+    assert.ok(
+      before.dev === after.dev &&
+        before.ino === after.ino &&
+        before.size === after.size &&
+        before.mtimeMs === after.mtimeMs,
+      "G14 config identity changed",
+    );
+    assert.equal(
+      createHash("sha256").update(bytes).digest("hex"),
+      sha256,
+      "G14 config hash mismatch",
+    );
+  }
   if (options.launchContextPath) {
     for (const runtime of RUNTIMES) {
       const current = service(runtime);
@@ -2885,6 +2974,16 @@ export async function writeScopedComposeOverride(projectName, options = {}) {
           target: "/run/coffee-launch/context.json",
           read_only: true,
         },
+        ...(options.g14Config
+          ? [
+              {
+                type: "bind",
+                source: options.g14Config.path,
+                target: "/app/config/platform.yaml",
+                read_only: true,
+              },
+            ]
+          : []),
       ];
     }
   }
@@ -2985,7 +3084,9 @@ const APPROVED_EXTERNAL_POSTGRES = Object.freeze({
 
 export function isExternalRecoveryProof(options) {
   return (
-    options.recoveryProof === true && options.mutationDisableRollback !== true && options.observabilityFixture !== true
+    options.recoveryProof === true &&
+    options.mutationDisableRollback !== true &&
+    options.observabilityFixture !== true
   );
 }
 
@@ -3031,8 +3132,17 @@ function assertApprovedExternalPostgresDockerState({ attached }) {
   const legacy = containerNetworks.coffee_network;
   assert.equal(legacy?.NetworkID, APPROVED_EXTERNAL_POSTGRES.legacyNetworkId);
   const data = containerNetworks[EXTERNAL_POSTGRES_NETWORK];
-  assert.equal(Boolean(data), attached);
-  if (attached) assert.ok(data.Aliases?.includes("coffee_postgres"));
+  if (attached !== undefined) assert.equal(Boolean(data), attached);
+  assert.deepEqual(
+    Object.keys(containerNetworks).sort(),
+    data
+      ? [EXTERNAL_POSTGRES_NETWORK, "coffee_network"].sort()
+      : ["coffee_network"],
+  );
+  if (data) {
+    assert.equal(data.NetworkID, APPROVED_EXTERNAL_POSTGRES.dataNetworkId);
+    assert.ok(data.Aliases?.includes("coffee_postgres"));
+  }
 
   const dataNetwork = inspectDockerObject([
     APPROVED_EXTERNAL_POSTGRES.dataNetworkId,
@@ -3042,7 +3152,7 @@ function assertApprovedExternalPostgresDockerState({ attached }) {
   const endpoints = Object.keys(dataNetwork.Containers ?? {});
   assert.deepEqual(
     endpoints.sort(),
-    attached ? [APPROVED_EXTERNAL_POSTGRES.containerId] : [],
+    data ? [APPROVED_EXTERNAL_POSTGRES.containerId] : [],
   );
   const legacyNetwork = inspectDockerObject([
     APPROVED_EXTERNAL_POSTGRES.legacyNetworkId,
@@ -3056,21 +3166,54 @@ function assertApprovedExternalPostgresDockerState({ attached }) {
   return { container, dataNetwork, legacyNetwork };
 }
 
-function prepareApprovedExternalPostgresAttachment() {
-  const before = assertApprovedExternalPostgresDockerState({ attached: false });
+export function prepareApprovedExternalPostgresAttachment() {
+  const before = assertApprovedExternalPostgresDockerState({});
   const routeBefore = externalPostgresRoute(
     APPROVED_EXTERNAL_POSTGRES.containerId,
   );
   return {
     before,
     routeBefore,
+    baselineAttached: Boolean(
+      before.container.NetworkSettings.Networks[EXTERNAL_POSTGRES_NETWORK],
+    ),
+    baselineConfirmed: false,
     attached: false,
     attempted: false,
     absenceConfirmed: false,
   };
 }
 
+function assertExternalPostgresBaseline(attachment) {
+  const after = assertApprovedExternalPostgresDockerState({ attached: true });
+  assert.deepEqual(
+    after.container.NetworkSettings.Networks,
+    attachment.before.container.NetworkSettings.Networks,
+  );
+  assert.deepEqual(
+    after.dataNetwork.Containers,
+    attachment.before.dataNetwork.Containers,
+  );
+  assert.deepEqual(
+    after.legacyNetwork.Containers,
+    attachment.before.legacyNetwork.Containers,
+  );
+  const routeAfter = externalPostgresRoute(
+    APPROVED_EXTERNAL_POSTGRES.containerId,
+  );
+  assert.equal(
+    routeAfter,
+    attachment.routeBefore,
+    "external PostgreSQL baseline default route changed",
+  );
+  attachment.routeAfter = routeAfter;
+}
+
 export function attachApprovedExternalPostgres(attachment) {
+  if (attachment.baselineAttached) {
+    assertExternalPostgresBaseline(attachment);
+    return;
+  }
   attachment.attempted = true;
   runDocker(
     externalPostgresConnectArgs(
@@ -3132,7 +3275,12 @@ function disconnectApprovedExternalPostgres(attachment) {
 }
 
 export function cleanupApprovedExternalPostgresAttachment(attachment) {
-  if (attachment?.attached) disconnectApprovedExternalPostgres(attachment);
+  if (attachment?.baselineAttached) {
+    attachment.baselineConfirmed = false;
+    assertExternalPostgresBaseline(attachment);
+    attachment.baselineConfirmed = true;
+  } else if (attachment?.attached)
+    disconnectApprovedExternalPostgres(attachment);
   else if (attachment?.attempted) {
     assertApprovedExternalPostgresDockerState({ attached: false });
     attachment.absenceConfirmed = true;
@@ -3190,7 +3338,11 @@ function startDatabaseProofContainer(
   ];
   const createdId = runDocker(args).trim();
   if (fixtureRunId) {
-    assert.match(createdId, /^[a-f0-9]{64}$/u, "fixture PostgreSQL ID unavailable");
+    assert.match(
+      createdId,
+      /^[a-f0-9]{64}$/u,
+      "fixture PostgreSQL ID unavailable",
+    );
     onFixtureCreated(createdId);
   }
   if (publishHost) {
@@ -3208,20 +3360,50 @@ function startDatabaseProofContainer(
   return fixtureRunId ? createdId : container;
 }
 
-export function assertObservabilityPostgresIdentity({id, projectName, networkName, fixtureRunId, allowIncompleteNetwork = false, run = runDocker}) {
+export function assertObservabilityPostgresIdentity({
+  id,
+  projectName,
+  networkName,
+  fixtureRunId,
+  allowIncompleteNetwork = false,
+  run = runDocker,
+}) {
   assert.match(id ?? "", /^[a-f0-9]{64}$/u);
   const info = JSON.parse(run(["inspect", id]))[0];
   assert.equal(info?.Id, id, "fixture PostgreSQL ID changed");
-  assert.equal(info?.Name, `/${projectName}-postgres-proof`, "fixture PostgreSQL name changed");
-  assert.equal(info?.Config?.Labels?.["coffee.g14.fixture"], fixtureRunId, "fixture PostgreSQL owner changed");
-  assert.equal(info?.Config?.Image, DATABASE_PROOF_IMAGE, "fixture PostgreSQL image changed");
+  assert.equal(
+    info?.Name,
+    `/${projectName}-postgres-proof`,
+    "fixture PostgreSQL name changed",
+  );
+  assert.equal(
+    info?.Config?.Labels?.["coffee.g14.fixture"],
+    fixtureRunId,
+    "fixture PostgreSQL owner changed",
+  );
+  assert.equal(
+    info?.Config?.Image,
+    DATABASE_PROOF_IMAGE,
+    "fixture PostgreSQL image changed",
+  );
   const networks = Object.keys(info?.NetworkSettings?.Networks ?? {}).sort();
-  const expectedNetworks = ["bridge", networkName].sort();
-  assert.ok(JSON.stringify(networks) === JSON.stringify(expectedNetworks) ||
-    (allowIncompleteNetwork && JSON.stringify(networks) === JSON.stringify(["bridge"])), "fixture PostgreSQL network mismatch");
+  const expectedNetworks = ["bridge", networkName].sort((left, right) =>
+    String(left) < String(right) ? -1 : String(left) > String(right) ? 1 : 0,
+  );
+  assert.ok(
+    JSON.stringify(networks) === JSON.stringify(expectedNetworks) ||
+      (allowIncompleteNetwork &&
+        JSON.stringify(networks) === JSON.stringify(["bridge"])),
+    "fixture PostgreSQL network mismatch",
+  );
   const bindings = info?.NetworkSettings?.Ports?.["5432/tcp"];
-  assert.ok(Array.isArray(bindings) && bindings.length === 1 && bindings[0].HostIp === "127.0.0.1" && /^[1-9][0-9]*$/u.test(bindings[0].HostPort),
-    "fixture PostgreSQL must publish exactly one loopback port");
+  assert.ok(
+    Array.isArray(bindings) &&
+      bindings.length === 1 &&
+      bindings[0].HostIp === "127.0.0.1" &&
+      /^[1-9][0-9]*$/u.test(bindings[0].HostPort),
+    "fixture PostgreSQL must publish exactly one loopback port",
+  );
 }
 
 function assertEphemeralDatabaseProofStorage(container) {
@@ -3933,7 +4115,19 @@ export async function applyExternalRecoveryMigrations(
   };
 }
 
-async function cleanupExternalRecoveryDatabases(credentials, resources) {
+export async function cleanupExternalRecoveryDatabases(
+  credentials,
+  resources,
+  consumersStopped,
+) {
+  if (consumersStopped !== true) {
+    return {
+      verified: false,
+      removed: [],
+      retained: resources.map(({ database }) => database.name),
+      failure: "COMPOSE_CONSUMERS_NOT_STOPPED",
+    };
+  }
   const admin = await externalAdminClient(credentials, credentials.postgres);
   try {
     return await cleanupMigrationDatabases(resources, async (database) => {
@@ -6880,6 +7074,166 @@ const bytes=await readFile(process.env.COFFEE_CONFIG_FILE);const config=load(byt
 console.log(JSON.stringify({sha256:createHash('sha256').update(bytes).digest('hex'),mutationsEnabled:config.services['aroma-convergence'].mutationsEnabled}));\n`;
 }
 
+export function validateG14ProviderBoundary({
+  projectName,
+  expectedConfigSha256,
+  mounted,
+  gateway,
+  fixture,
+  network,
+  internalNetworks,
+  fixtureImageId,
+  fixtureDirectory,
+}) {
+  assert.match(expectedConfigSha256 ?? "", /^[0-9a-f]{64}$/u);
+  assert.deepEqual(mounted, {
+    sha256: expectedConfigSha256,
+    mutationsEnabled: false,
+  });
+  const networkName = `${projectName}_coffee_provider_egress`;
+  assert.match(network.Id ?? "", /^[0-9a-f]{64}$/u);
+  assert.equal(network.Name, networkName);
+  assert.equal(network.Internal, true);
+  assert.equal(network.Labels?.["com.docker.compose.project"], projectName);
+  assert.equal(
+    network.Labels?.["com.docker.compose.network"],
+    "coffee_provider_egress",
+  );
+  for (const [container, service] of [
+    [gateway, "aroma-gateway"],
+    [fixture, "aroma-provider-fixture"],
+  ]) {
+    assert.match(container.Id ?? "", /^[0-9a-f]{64}$/u);
+    assert.equal(container.State?.Running, true);
+    assert.equal(
+      container.Config?.Labels?.["com.docker.compose.project"],
+      projectName,
+    );
+    assert.equal(
+      container.Config?.Labels?.["com.docker.compose.service"],
+      service,
+    );
+    assert.equal(
+      container.NetworkSettings?.Networks?.[networkName]?.NetworkID,
+      network.Id,
+    );
+  }
+  assert.deepEqual(Object.keys(fixture.NetworkSettings.Networks), [
+    networkName,
+  ]);
+  assert.match(fixtureImageId ?? "", /^sha256:[0-9a-f]{64}$/u);
+  assert.equal(fixture.Image, fixtureImageId);
+  assert.equal(fixture.Config.Image, CUSTOMER_TEST_IMAGE);
+  assert.deepEqual(fixture.Config.Cmd, [
+    "node",
+    "/run/aroma-proof/provider-server.mjs",
+  ]);
+  assert.ok(
+    fixture.Mounts?.some(
+      (mount) =>
+        mount.Type === "bind" &&
+        mount.Source === fixtureDirectory &&
+        mount.Destination === "/run/aroma-proof",
+    ),
+  );
+  assert.deepEqual(
+    Object.keys(gateway.NetworkSettings.Networks).sort(),
+    [
+      `${projectName}_coffee_internal_api`,
+      `${projectName}_coffee_postgres_data`,
+      networkName,
+    ].sort(),
+  );
+  assert.equal(internalNetworks.length, 2);
+  for (const name of ["coffee_internal_api", "coffee_postgres_data"]) {
+    const value = internalNetworks.find(
+      (item) => item.Name === `${projectName}_${name}`,
+    );
+    assert.equal(value?.Internal, true);
+    assert.match(value?.Id ?? "", /^[0-9a-f]{64}$/u);
+    assert.equal(value?.Labels?.["com.docker.compose.project"], projectName);
+    assert.equal(value?.Labels?.["com.docker.compose.network"], name);
+    assert.equal(
+      gateway.NetworkSettings.Networks[value.Name].NetworkID,
+      value.Id,
+    );
+  }
+  assert.ok(
+    fixture.NetworkSettings.Networks[networkName].Aliases?.includes(
+      "aromateacoffee.ru",
+    ),
+  );
+  return {
+    configSha256: expectedConfigSha256,
+    mutationsEnabled: false,
+    providerIsolated: true,
+  };
+}
+
+export function attestG14ProviderBoundary({
+  projectName,
+  secretsDir,
+  composeFile,
+  expectedConfigSha256,
+}) {
+  const rows = serviceRows(projectName, secretsDir, composeFile);
+  const row = (service) => {
+    const matches = rows.filter(
+      (value) => value.Service === service && value.State === "running",
+    );
+    assert.equal(matches.length, 1);
+    return matches[0];
+  };
+  const gateway = JSON.parse(
+    runDocker(["inspect", row("aroma-gateway").ID]),
+  )[0];
+  const fixture = JSON.parse(
+    runDocker(["inspect", row("aroma-provider-fixture").ID]),
+  )[0];
+  row("aroma-convergence");
+  const network = JSON.parse(
+    runDocker(["network", "inspect", `${projectName}_coffee_provider_egress`]),
+  )[0];
+  const internalNetworks = ["coffee_internal_api", "coffee_postgres_data"].map(
+    (name) =>
+      JSON.parse(
+        runDocker(["network", "inspect", `${projectName}_${name}`]),
+      )[0],
+  );
+  const fixtureImageId = runDocker([
+    "image",
+    "inspect",
+    "--format",
+    "{{.Id}}",
+    CUSTOMER_TEST_IMAGE,
+  ]).trim();
+  const fixtureDirectory = join(secretsDir, "aroma-cart-proof");
+  const mounted = parseFinalJsonLine(
+    runCompose(
+      projectName,
+      secretsDir,
+      ["exec", "-T", "aroma-convergence", "node", "--input-type=module"],
+      {
+        composeFile,
+        timeout: 10_000,
+        input: rollbackRuntimeConfigProofSource(),
+      },
+    ),
+    "G14_RUNTIME_CONFIG_READ_FAILED",
+  );
+  return validateG14ProviderBoundary({
+    projectName,
+    expectedConfigSha256,
+    mounted,
+    gateway,
+    fixture,
+    network,
+    internalNetworks,
+    fixtureImageId,
+    fixtureDirectory,
+  });
+}
+
 async function runRollbackOwnerHttp(
   projectName,
   secretsDir,
@@ -8471,17 +8825,51 @@ function assertAromaMutationJournal(rows, sourceGrindKeyHash) {
   return rows;
 }
 
+export async function runG14BrowserProof({
+  baseCandidateSha,
+  observability,
+  onProof,
+}) {
+  return runComposeSmoke({
+    args: ["--recovery-proof"],
+    observability,
+    g14Browser: {
+      baseCandidateSha,
+      onReady: async (context) => {
+        const proof = await proveG14Browser(context);
+        if (onProof) await onProof(proof);
+        return proof;
+      },
+      onCleanup: async () => {},
+    },
+  });
+}
+
 export async function runComposeSmoke({
   args = process.argv.slice(2),
   observability,
   browser,
+  g14Browser,
 } = {}) {
   rollbackComposeDiagnostic = undefined;
   const options = parseArguments(args);
+  assert.ok(
+    !(browser && g14Browser),
+    "G14 and G15 browser hooks are mutually exclusive",
+  );
+  const browserHook = browser ?? g14Browser;
   if (options.observabilityFixture) {
-    assert.ok(observability !== undefined && options.recoveryProof && !options.stubSecrets && !options.noBuild && !options.keep &&
-      !options.browserProof && !options.mutationDisableRollback && !options.provisionNetwork,
-      "--observability-fixture requires programmatic observability hooks and isolated --recovery-proof");
+    assert.ok(
+      observability !== undefined &&
+        options.recoveryProof &&
+        !options.stubSecrets &&
+        !options.noBuild &&
+        !options.keep &&
+        !options.browserProof &&
+        !options.mutationDisableRollback &&
+        !options.provisionNetwork,
+      "--observability-fixture requires programmatic observability hooks and isolated --recovery-proof",
+    );
   }
   const externalRecovery = isExternalRecoveryProof(options);
   if (observability !== undefined) {
@@ -8534,6 +8922,24 @@ export async function runComposeSmoke({
     assert.match(browser.baseCandidateSha ?? "", COMMIT_SHA);
     assert.equal(typeof browser.onReady, "function");
     assert.equal(typeof browser.onCleanup, "function");
+  }
+  if (g14Browser !== undefined) {
+    assert.deepEqual(Object.keys(g14Browser).sort(), [
+      "baseCandidateSha",
+      "onCleanup",
+      "onReady",
+    ]);
+    assert.ok(
+      options.recoveryProof &&
+        !options.stubSecrets &&
+        !options.noBuild &&
+        !options.keep &&
+        !options.mutationDisableRollback &&
+        !options.observabilityFixture,
+    );
+    assert.match(g14Browser.baseCandidateSha ?? "", COMMIT_SHA);
+    assert.equal(typeof g14Browser.onReady, "function");
+    assert.equal(typeof g14Browser.onCleanup, "function");
   }
   if (options.browserProof)
     assert.ok(browser, "--browser-proof requires the integrated browser hook");
@@ -8595,9 +9001,21 @@ export async function runComposeSmoke({
           await readFile(join(ROOT, "config/database-ownership.json"), "utf8"),
         );
         if (options.observabilityFixture) {
-          assert.equal(config.environment, "development", "G14 fixture requires the development environment");
-          assert.equal(config.verification?.databaseIsolation?.enabled, false, "G14 fixture requires canonical database isolation disabled");
-          assert.equal(config.verification?.kafkaNamespaceIsolation, false, "G14 fixture requires canonical Kafka namespace isolation disabled");
+          assert.equal(
+            config.environment,
+            "development",
+            "G14 fixture requires the development environment",
+          );
+          assert.equal(
+            config.verification?.databaseIsolation?.enabled,
+            false,
+            "G14 fixture requires canonical database isolation disabled",
+          );
+          assert.equal(
+            config.verification?.kafkaNamespaceIsolation,
+            false,
+            "G14 fixture requires canonical Kafka namespace isolation disabled",
+          );
         } else {
           const targetConfig = {
             environment: config.environment,
@@ -8645,13 +9063,16 @@ export async function runComposeSmoke({
       },
     );
   }
-  if (browser !== undefined)
+  if (browserHook !== undefined)
     assert.ok(
       launchIdentity,
       "G15 browser hooks require a validated launch context",
     );
   if (options.observabilityFixture)
-    assert.ok(launchIdentity, "G14 fixture requires a validated G12 launch context");
+    assert.ok(
+      launchIdentity,
+      "G14 fixture requires a validated G12 launch context",
+    );
   const projectName =
     options.projectName ??
     launchIdentity?.context.resources.composeProject ??
@@ -8702,7 +9123,9 @@ export async function runComposeSmoke({
   let composeAttempted = false;
   const builtImages = [];
   let databaseProofContainer;
-  const fixturePostgresRunId = options.observabilityFixture ? randomUUID() : undefined;
+  const fixturePostgresRunId = options.observabilityFixture
+    ? randomUUID()
+    : undefined;
   let databaseProofStorage;
   let recoveryDatabaseProof;
   let recoveryProofCredentials;
@@ -8731,11 +9154,14 @@ export async function runComposeSmoke({
   let browserFixtureRoot;
   let browserContext;
   let browserOwnerEvidence;
+  let g14OrderEvidence;
+  let g14BrowserProof;
   let browserProof;
   let browserCallbackAttempted = false;
   let receipt;
   let primaryError;
   let cleanupHookError;
+  let retainG14Resources = false;
   let standardCleanupError;
   const cleanupFailures = [];
   let rollbackStage = options.mutationDisableRollback ? "bootstrap" : null;
@@ -8835,7 +9261,11 @@ export async function runComposeSmoke({
         ? {
             candidateRoot: launchIdentity.candidateRoot,
             resources: launchIdentity.context.resources,
-            expectedLineage: browser ? "G15" : "G13",
+            expectedLineage: browserHook
+              ? "G15"
+              : observability
+                ? "G14"
+                : "G13",
           }
         : undefined;
     if (proofLaunchIdentity) {
@@ -8924,7 +9354,9 @@ export async function runComposeSmoke({
       aromaBindingProof: options.aromaBindingProof,
       aromaCartProof: options.aromaCartProof,
       recoveryProof: options.recoveryProof,
-      launchContextPath: options.observabilityFixture ? undefined : launchContextPath,
+      launchContextPath: options.observabilityFixture
+        ? undefined
+        : launchContextPath,
       kafkaImage: verifiedKafka?.imageId,
       edgeNginxImage: options.noBuild
         ? undefined
@@ -8967,11 +9399,11 @@ export async function runComposeSmoke({
           : { [DATABASE_PROOF_RUNTIME]: databaseProofCredentials.owner },
       recoveryProofCredentials,
     });
-    if (browser) {
+    if (browserHook) {
       const lineage = await readBrowserFixtureLineage({
         root: ROOT,
         contextPath: launchContextPath,
-        baseCandidateSha: browser.baseCandidateSha,
+        baseCandidateSha: browserHook.baseCandidateSha,
       });
       browserFixture = await materializeBrowserFixture({
         root: ROOT,
@@ -8981,6 +9413,19 @@ export async function runComposeSmoke({
       });
       browserFixtureRoot = dirname(browserFixture.browser.homePath);
       const initialComposeFile = composeFile;
+      let g14Config;
+      if (g14Browser) {
+        const path = join(secretsDir, "g14-platform.yaml");
+        const bytes = await readFile(join(ROOT, "config/platform.yaml"));
+        assert.equal(
+          createHash("sha256").update(bytes).digest("hex"),
+          launchIdentity.context.baseConfigSha256,
+          "G14 child config hash mismatch",
+        );
+        await writeFile(path, bytes, { mode: 0o444, flag: "wx" });
+        await chmod(path, 0o444);
+        g14Config = { path, sha256: launchIdentity.context.baseConfigSha256 };
+      }
       composeFile = await writeScopedComposeOverride(projectName, {
         sharedPostgres: externalRecovery,
         recoveryProof: true,
@@ -8991,6 +9436,7 @@ export async function runComposeSmoke({
           : `${projectName}-edge-nginx:latest`,
         runtimeLogging: observability ? platformConfig : undefined,
         browserFixture,
+        g14Config,
         candidateRoot: launchIdentity.candidateRoot,
       });
       composeFiles.push(composeFile);
@@ -9078,10 +9524,23 @@ export async function runComposeSmoke({
             options.aromaBindingProof ||
             options.aromaCartProof,
           ephemeralPgData: observability !== undefined,
-          ...(options.observabilityFixture ? {fixtureRunId: fixturePostgresRunId, onFixtureCreated: id => { databaseProofContainer = id; }} : {}),
+          ...(options.observabilityFixture
+            ? {
+                fixtureRunId: fixturePostgresRunId,
+                onFixtureCreated: (id) => {
+                  databaseProofContainer = id;
+                },
+              }
+            : {}),
         },
       );
-      if (options.observabilityFixture) assertObservabilityPostgresIdentity({id: databaseProofContainer, projectName, networkName: databaseProofNetwork, fixtureRunId: fixturePostgresRunId});
+      if (options.observabilityFixture)
+        assertObservabilityPostgresIdentity({
+          id: databaseProofContainer,
+          projectName,
+          networkName: databaseProofNetwork,
+          fixtureRunId: fixturePostgresRunId,
+        });
       if (observability !== undefined) {
         databaseProofStorage = assertEphemeralDatabaseProofStorage(
           databaseProofContainer,
@@ -9200,7 +9659,7 @@ export async function runComposeSmoke({
         );
         recoveryDeliveryDatabase = deliveryDatabase;
         recoveryDeliveryTables = true;
-        if (browser) {
+        if (browserHook) {
           const ownedDatabaseNames = new Set(
             recoveryProofCredentials.roleMap.databases.map(
               (database) => database.name,
@@ -9221,6 +9680,12 @@ export async function runComposeSmoke({
             actorRef: "actor:g15-browser-fixture",
             runId: launchIdentity.context.runId,
           });
+          if (g14Browser)
+            g14OrderEvidence = createG14OrderEvidence({
+              connect: ownerConnections,
+              roleMap: recoveryProofCredentials.roleMap,
+              runId: launchIdentity.context.runId,
+            });
         }
         if (options.mutationDisableRollback) {
           markRollbackBootstrapSubstage("owner-seed");
@@ -9244,7 +9709,7 @@ export async function runComposeSmoke({
     if (externalRecovery) {
       recoveryDatabaseProof = await applyExternalRecoveryMigrations(
         recoveryProofCredentials,
-        recoveryPlatformConfig,
+        platformConfig,
         launchContextPath,
         externalRunDatabaseResources,
       );
@@ -9267,7 +9732,7 @@ export async function runComposeSmoke({
       );
       recoveryDeliveryDatabase = deliveryDatabase;
       recoveryDeliveryTables = true;
-      if (browser) {
+      if (browserHook) {
         const ownedDatabaseNames = new Set(
           recoveryProofCredentials.roleMap.databases.map(
             (database) => database.name,
@@ -9288,19 +9753,38 @@ export async function runComposeSmoke({
           actorRef: "actor:g15-browser-fixture",
           runId: launchIdentity.context.runId,
         });
+        if (g14Browser)
+          g14OrderEvidence = createG14OrderEvidence({
+            connect: ownerConnections,
+            roleMap: recoveryProofCredentials.roleMap,
+            runId: launchIdentity.context.runId,
+          });
       }
     }
     if (options.mutationDisableRollback) markRollbackStage("build");
-    const bindRuntimeImages = !(options.databaseProof || options.customerProof || options.aromaBindingProof || options.aromaCartProof || browser || options.mutationDisableRollback);
+    const bindRuntimeImages = !(
+      options.databaseProof ||
+      options.customerProof ||
+      options.aromaBindingProof ||
+      options.aromaCartProof ||
+      browser ||
+      options.mutationDisableRollback
+    );
+    const imageContextPath = g14Browser
+      ? recoveryProofCredentials?.g08PreparationContextPath
+      : launchContextPath;
+    const imageIdentity = g14Browser
+      ? await validateLaunchContext(imageContextPath)
+      : launchIdentity;
     if (!options.noBuild) {
       let temporary;
       let snapshot;
       try {
-        if (launchIdentity && bindRuntimeImages) {
+        if (imageIdentity && bindRuntimeImages) {
           temporary = await mkdtemp(join(tmpdir(), "coffee-runtime-build-"));
           snapshot = await createBuildInputSnapshot({
-            candidateRoot: launchIdentity.candidateRoot,
-            candidateSha: launchIdentity.context.candidateSha,
+            candidateRoot: imageIdentity.candidateRoot,
+            candidateSha: imageIdentity.context.candidateSha,
             temporary,
           });
           await verifyBuildInputSnapshot(snapshot);
@@ -9324,8 +9808,14 @@ export async function runComposeSmoke({
       }
     }
     if (bindRuntimeImages) {
-      const verifiedImages = await readVerifiedRuntimeImages({contextFile: launchContextPath});
-      assertVerifiedRuntimeImages({projectName, verifiedImages, noBuild: options.noBuild});
+      const verifiedImages = await readVerifiedRuntimeImages({
+        contextFile: imageContextPath,
+      });
+      assertVerifiedRuntimeImages({
+        projectName,
+        verifiedImages,
+        noBuild: options.noBuild,
+      });
     }
     throwIfRollbackTerminationRequested();
     if (options.customerProof)
@@ -9405,7 +9895,7 @@ export async function runComposeSmoke({
         "Kafka runtime differs from the scanned G12 artifact",
       );
     }
-    if (browser) {
+    if (browserHook) {
       const idp = rows.get("g15-idp");
       assert.ok(idp, "G15 IdP fixture is absent from Compose ps");
       assert.equal(idp.State, "running");
@@ -9797,7 +10287,7 @@ export async function runComposeSmoke({
           actualGroups,
         });
       }
-      if (observability || browser) {
+      if (observability || browserHook) {
         const resolvedCompose = JSON.parse(
           runCompose(projectName, secretsDir, ["config", "--format", "json"], {
             composeFile,
@@ -9824,7 +10314,7 @@ export async function runComposeSmoke({
           observabilityContext = runtimeContext;
           await observability.onReady(observabilityContext);
         }
-        if (browser) {
+        if (browserHook) {
           browserContext = {
             projectName,
             runId: launchIdentity.context.runId,
@@ -9845,6 +10335,20 @@ export async function runComposeSmoke({
               ),
             nginxContainerId: rows.get("edge-nginx")?.ID,
             ownerEvidence: browserOwnerEvidence,
+            ...(g14Browser
+              ? {
+                  g14OrderEvidence,
+                  configSha256: launchIdentity.context.baseConfigSha256,
+                  attestG14Safety: () =>
+                    attestG14ProviderBoundary({
+                      projectName,
+                      secretsDir,
+                      composeFile,
+                      expectedConfigSha256:
+                        launchIdentity.context.baseConfigSha256,
+                    }),
+                }
+              : {}),
             browserFixture: {
               profile: browserFixture.profile,
               runId: browserFixture.runId,
@@ -9881,6 +10385,18 @@ export async function runComposeSmoke({
           },
         );
       }
+      if (g14Browser) {
+        throwIfRollbackTerminationRequested();
+        browserCallbackAttempted = true;
+        g14BrowserProof = validateG14BrowserEvidence(
+          await g14Browser.onReady(browserContext),
+          {
+            runId: launchIdentity.context.runId,
+            candidateSha: launchIdentity.context.candidateSha,
+            configSha256: launchIdentity.context.baseConfigSha256,
+          },
+        );
+      }
       if (options.mutationDisableRollback) {
         rollbackEvidence = await runMutationDisableRollbackProof({
           projectName,
@@ -9902,7 +10418,7 @@ export async function runComposeSmoke({
           markInitialUnknownSubstage: markRollbackInitialUnknownSubstage,
           markDisabledReconcileSubstage: markRollbackDisabledReconcileSubstage,
         });
-      } else if (options.recoveryProof && !browser) {
+      } else if (options.recoveryProof && !browserHook) {
         assert.ok(
           aromaCartProviderFixture,
           "recovery proof local provider fixture is missing",
@@ -10068,7 +10584,13 @@ export async function runComposeSmoke({
       assertStopped(projectName, secretsDir, composeFile);
     }
     receipt = {
-      ...(options.observabilityFixture ? { proofKind: "observability-fixture" } : {}),
+      ...(observability
+        ? {
+            proofKind: options.observabilityFixture
+              ? "observability-fixture"
+              : "observability-external",
+          }
+        : {}),
       project: projectName,
       runtimes:
         options.aromaBindingProof || options.aromaCartProof
@@ -10112,7 +10634,7 @@ export async function runComposeSmoke({
             : kafkaRetention,
       kafkaNamespaceInventory,
       recoveryProof:
-        options.recoveryProof && !browser
+        options.recoveryProof && !browserHook
           ? {
               postgres: recoveryDatabaseProof,
               postgresStorage: databaseProofStorage,
@@ -10125,6 +10647,7 @@ export async function runComposeSmoke({
         ? { externalCleanup: { verified: false, failure: "CLEANUP_PENDING" } }
         : {}),
       browserProof,
+      ...(g14Browser ? { g14BrowserProof } : {}),
       mutationDisableRollback: rollbackEvidence,
       aromaBindingProof: options.aromaBindingProof
         ? {
@@ -10167,7 +10690,7 @@ export async function runComposeSmoke({
       dbIntegrationProof:
         options.databaseProof ||
         options.customerProof ||
-        (options.recoveryProof && !browser) ||
+        (options.recoveryProof && !browserHook) ||
         options.aromaBindingProof ||
         options.aromaCartProof,
       customerIntegrationProof: options.customerProof,
@@ -10193,12 +10716,21 @@ export async function runComposeSmoke({
     if (browserFixture) {
       if (browserCallbackAttempted) {
         try {
-          await browser.onCleanup(browserContext);
+          await browserHook.onCleanup(browserContext);
         } catch (error) {
           cleanupHookError ??= error;
         }
       }
     }
+    const retainedDatabases = retainG14AfterCollectorFailure({
+      g14Browser,
+      observability,
+      cleanupHookError,
+      options,
+      databases: externalRunDatabaseResources,
+    });
+    retainG14Resources = retainedDatabases !== undefined;
+    if (retainedDatabases) externalDatabaseCleanupReceipt = retainedDatabases;
     try {
       if (
         recoveryDeliveryTables &&
@@ -10240,7 +10772,11 @@ export async function runComposeSmoke({
         } catch (error) {
           if (options.mutationDisableRollback)
             cleanupFailures.push("compose-down");
-          else if (browserFixture || externalRecovery || options.observabilityFixture)
+          else if (
+            browserFixture ||
+            externalRecovery ||
+            options.observabilityFixture
+          )
             cleanupHookError ??= error;
         }
       } else if (!composeAttempted && !options.keep) composeDownComplete = true;
@@ -10251,6 +10787,7 @@ export async function runComposeSmoke({
               await cleanupExternalRecoveryDatabases(
                 recoveryProofCredentials,
                 externalRunDatabaseResources,
+                composeDownComplete,
               );
             if (!externalDatabaseCleanupReceipt.verified)
               cleanupHookError ??= new Error(
@@ -10288,7 +10825,7 @@ export async function runComposeSmoke({
           );
         }
       }
-      if (browserFixture) {
+      if (browserFixture && !retainG14Resources) {
         try {
           await browserFixture.cleanup();
         } catch (error) {
@@ -10297,7 +10834,14 @@ export async function runComposeSmoke({
       }
       if (databaseProofContainer && !options.keep) {
         try {
-          if (options.observabilityFixture) assertObservabilityPostgresIdentity({id: databaseProofContainer, projectName, networkName: databaseProofNetwork, fixtureRunId: fixturePostgresRunId, allowIncompleteNetwork: true});
+          if (options.observabilityFixture)
+            assertObservabilityPostgresIdentity({
+              id: databaseProofContainer,
+              projectName,
+              networkName: databaseProofNetwork,
+              fixtureRunId: fixturePostgresRunId,
+              allowIncompleteNetwork: true,
+            });
           runDocker(["rm", "--force", "--volumes", databaseProofContainer]);
         } catch (error) {
           if (options.mutationDisableRollback)
@@ -10386,7 +10930,7 @@ export async function runComposeSmoke({
           }),
         );
     }
-    if (browser && !options.keep) {
+    if (browserHook && !options.keep) {
       let inventory = { containers: [], volumes: [], networks: [] };
       const failures = [];
       let verified = true;
@@ -10472,6 +11016,18 @@ export async function runComposeSmoke({
   const errors = [primaryError, standardCleanupError, cleanupHookError].filter(
     Boolean,
   );
+  const g14Retained = retainG14Resources
+    ? {
+        runId: launchIdentity?.context.runId,
+        projectName,
+        composeFile,
+        secretsDir,
+        browserFixtureRoot,
+        databases: externalRunDatabaseResources.map(
+          ({ database }) => database.name,
+        ),
+      }
+    : undefined;
   if (options.mutationDisableRollback && errors.length > 0) {
     const cause = primaryError ?? standardCleanupError ?? cleanupHookError;
     const cleanup = rollbackCleanupReceipt ?? {
@@ -10541,11 +11097,13 @@ export async function runComposeSmoke({
     );
     if (finalizedExternalCleanup)
       combined.externalCleanup = finalizedExternalCleanup;
+    if (g14Retained) combined.g14Retained = g14Retained;
     throw combined;
   }
   if (errors.length === 1) {
     if (finalizedExternalCleanup)
       errors[0].externalCleanup = finalizedExternalCleanup;
+    if (g14Retained) errors[0].g14Retained = g14Retained;
     throw errors[0];
   }
   console.log(JSON.stringify(receipt));

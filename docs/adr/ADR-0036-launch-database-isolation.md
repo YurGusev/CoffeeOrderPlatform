@@ -56,6 +56,10 @@ base digest обратной заменой единственного literal f
 Обязательны отрицательные проверки policy/context/production/SHA/owner/path и
 фактический runtime proof пяти вычисленных DB с cleanup только собственных
 ресурсов. Static и mock tests не доказывают этот runtime результат.
+При использовании внешнего PostgreSQL runner проверяет точные identity и состояние
+сетей: уже существующее допустимое подключение к `coffee_postgres_data` сохраняется;
+только подтверждённое подключение, созданное текущим запуском, отключается при cleanup.
+Исходный маршрут и endpoints повторно проверяются, при расхождении cleanup завершается ошибкой.
 Standalone G18 на disposable PostgreSQL не заменяет full launch и не отменяет
 требование G13 использовать внешний PostgreSQL без создания PostgreSQL service.
 Исторические FAIL и их manifests сохраняются. Этот ADR не разрешает deployment,

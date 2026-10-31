@@ -668,6 +668,8 @@ export async function runTransportFixture(options, hooks = {}) {
       "api-public",
       "realtime-gateway",
     ].includes(role);
+    const nativeProduct =
+      scopedProduct && Boolean(setup.manifest.qualification);
     const scopedOwner = [
       "api-internal",
       "orders-service",
@@ -719,16 +721,29 @@ export async function runTransportFixture(options, hooks = {}) {
     ];
     for (const a of aliases) base.push("--network-alias", a);
     if (fixtures) {
+      if (!nativeProduct) base.push("--entrypoint", "docker-entrypoint.sh");
       base.push(
-        "--entrypoint",
-        "docker-entrypoint.sh",
         "--user",
         "1000:1000",
         "--read-only",
         "--tmpfs",
         "/tmp:rw,nosuid,nodev,size=67108864,uid=1000,gid=1000",
       );
-      if (scopedProduct || scopedOwner) {
+      if (nativeProduct) {
+        base.push(
+          "--mount",
+          `type=bind,src=${setup.privateDir}/platform.yaml,dst=/app/config/platform.yaml,readonly`,
+          "--mount",
+          `type=bind,src=${setup.privateDir}/${role}.yaml,dst=/run/secrets/coffee-platform.yaml,readonly`,
+          "--mount",
+          `type=bind,src=${setup.launchContextFile},dst=/run/coffee-launch/context.json,readonly`,
+        );
+        if (role === "edge-gateway")
+          base.push(
+            "--mount",
+            `type=bind,src=${setup.privateDir}/certs/ca.crt,dst=/run/g15-browser/idp-ca.crt,readonly`,
+          );
+      } else if (scopedProduct || scopedOwner) {
         base.push(
           "--mount",
           `type=bind,src=${setup.snapshot},dst=/app,readonly`,
@@ -796,6 +811,36 @@ export async function runTransportFixture(options, hooks = {}) {
     ).trim();
     owned.push({ role, name, id, cpus, memory, nofile });
     const inspect = JSON.parse(await docker("inspect", id))[0];
+    if (nativeProduct) {
+      assert.equal(inspect.Image, image, `${role} verified image identity`);
+      assert.deepEqual(inspect.Config.Entrypoint, [
+        "node",
+        "scripts/permission-enforce.mjs",
+      ]);
+      assert.deepEqual(inspect.Config.Cmd, ["--entry", "dist/main.js"]);
+    }
+    if (role === "edge-nginx" && setup.manifest.qualification) {
+      assert.equal(inspect.Image, image, "nginx verified image identity");
+      assert.deepEqual(inspect.Config.Entrypoint, ["nginx"]);
+      assert.deepEqual(inspect.Config.Cmd, ["-g", "daemon off;"]);
+      assert.deepEqual(
+        inspect.Mounts.map(({ Type, Source, Destination, RW }) => ({
+          Type,
+          Source,
+          Destination,
+          RW,
+        })),
+        [
+          {
+            Type: "bind",
+            Source: join(setup.privateDir, "nginx-secrets"),
+            Destination: "/run/secrets/edge-nginx",
+            RW: false,
+          },
+        ],
+        "native nginx uses its baked configuration and snippets",
+      );
+    }
     assert.equal(inspect.Config.Labels[LABEL], options.runId);
     assert.equal(inspect.HostConfig.NanoCpus, cpus * 1000000000);
     assert.equal(inspect.HostConfig.Memory, memory);
@@ -832,57 +877,102 @@ export async function runTransportFixture(options, hooks = {}) {
       },
       networks: inspect.NetworkSettings.Networks,
     };
+    if (
+      nativeProduct ||
+      (role === "edge-nginx" && setup.manifest.qualification)
+    )
+      receipt.native = {
+        entrypoint: inspect.Config.Entrypoint,
+        command: inspect.Config.Cmd,
+        mounts: inspect.Mounts.map(({ Destination, RW }) => ({
+          Destination,
+          RW,
+        })),
+      };
     if (scopedProduct || scopedOwner) {
-      const expectedMounts = [
-        {
-          Type: "bind",
-          Source: join(setup.snapshot),
-          Destination: "/app",
-          RW: false,
-        },
-        {
-          Type: "bind",
-          Source: join(setup.privateDir, "platform.yaml"),
-          Destination: "/fixture/platform.yaml",
-          RW: false,
-        },
-        {
-          Type: "bind",
-          Source: join(setup.privateDir, `${role}.yaml`),
-          Destination: `/fixture/${role}.yaml`,
-          RW: false,
-        },
-        ...(ownershipFile
+      const expectedMounts = (
+        nativeProduct
           ? [
               {
                 Type: "bind",
-                Source: ownershipFile,
-                Destination: "/fixture/database-ownership.json",
+                Source: join(setup.privateDir, "platform.yaml"),
+                Destination: "/app/config/platform.yaml",
                 RW: false,
               },
-            ]
-          : []),
-        ...(setup.launchIdentity
-          ? [
+              {
+                Type: "bind",
+                Source: join(setup.privateDir, `${role}.yaml`),
+                Destination: "/run/secrets/coffee-platform.yaml",
+                RW: false,
+              },
               {
                 Type: "bind",
                 Source: setup.launchContextFile,
-                Destination: "/fixture/launch-context.json",
+                Destination: "/run/coffee-launch/context.json",
                 RW: false,
               },
+              ...(role === "edge-gateway"
+                ? [
+                    {
+                      Type: "bind",
+                      Source: join(setup.privateDir, "certs/ca.crt"),
+                      Destination: "/run/g15-browser/idp-ca.crt",
+                      RW: false,
+                    },
+                  ]
+                : []),
             ]
-          : []),
-        ...(scopedProduct && role === "edge-gateway"
-          ? [
+          : [
               {
                 Type: "bind",
-                Source: join(setup.privateDir, "certs/ca.crt"),
-                Destination: "/fixture/certs/ca.crt",
+                Source: join(setup.snapshot),
+                Destination: "/app",
                 RW: false,
               },
+              {
+                Type: "bind",
+                Source: join(setup.privateDir, "platform.yaml"),
+                Destination: "/fixture/platform.yaml",
+                RW: false,
+              },
+              {
+                Type: "bind",
+                Source: join(setup.privateDir, `${role}.yaml`),
+                Destination: `/fixture/${role}.yaml`,
+                RW: false,
+              },
+              ...(ownershipFile
+                ? [
+                    {
+                      Type: "bind",
+                      Source: ownershipFile,
+                      Destination: "/fixture/database-ownership.json",
+                      RW: false,
+                    },
+                  ]
+                : []),
+              ...(setup.launchIdentity
+                ? [
+                    {
+                      Type: "bind",
+                      Source: setup.launchContextFile,
+                      Destination: "/fixture/launch-context.json",
+                      RW: false,
+                    },
+                  ]
+                : []),
+              ...(scopedProduct && role === "edge-gateway"
+                ? [
+                    {
+                      Type: "bind",
+                      Source: join(setup.privateDir, "certs/ca.crt"),
+                      Destination: "/fixture/certs/ca.crt",
+                      RW: false,
+                    },
+                  ]
+                : []),
             ]
-          : []),
-      ].sort((a, b) => a.Destination.localeCompare(b.Destination));
+      ).sort((a, b) => a.Destination.localeCompare(b.Destination));
       const actualMounts = inspect.Mounts.map(
         ({ Type, Source, Destination, RW }) => ({
           Type,
@@ -904,15 +994,22 @@ export async function runTransportFixture(options, hooks = {}) {
             : role === "orders-aroma-preparation"
               ? "orders-service"
               : "edge-gateway";
-      const readablePaths = [
-        "/fixture/platform.yaml",
-        `/fixture/${role}.yaml`,
-        ...(ownershipFile ? ["/fixture/database-ownership.json"] : []),
-        ...(setup.launchIdentity ? ["/fixture/launch-context.json"] : []),
-        ...(scopedProduct && role === "edge-gateway"
-          ? ["/fixture/certs/ca.crt"]
-          : []),
-      ];
+      const readablePaths = nativeProduct
+        ? [
+            "/app/config/platform.yaml",
+            "/run/secrets/coffee-platform.yaml",
+            "/run/coffee-launch/context.json",
+            ...(role === "edge-gateway" ? ["/run/g15-browser/idp-ca.crt"] : []),
+          ]
+        : [
+            "/fixture/platform.yaml",
+            `/fixture/${role}.yaml`,
+            ...(ownershipFile ? ["/fixture/database-ownership.json"] : []),
+            ...(setup.launchIdentity ? ["/fixture/launch-context.json"] : []),
+            ...(scopedProduct && role === "edge-gateway"
+              ? ["/fixture/certs/ca.crt"]
+              : []),
+          ];
       const deniedPaths = [
         "/fixture/fixture.json",
         `/fixture/${foreignRole}.yaml`,
@@ -920,7 +1017,10 @@ export async function runTransportFixture(options, hooks = {}) {
         "/results/private/fixture.json",
       ];
       const expectedConfigSha256 = setup.manifest.configSha256;
-      const probe = `const fs=require('node:fs/promises');const crypto=require('node:crypto');const readable=${JSON.stringify(readablePaths)},denied=${JSON.stringify(deniedPaths)},expectedConfigSha256=${JSON.stringify(expectedConfigSha256)},expectedOwnershipSha256=${JSON.stringify(expectedOwnershipSha256)};(async()=>{const canRead=[];for(const p of readable)try{await fs.readFile(p);canRead.push(p)}catch{}const canReadDenied=[];for(const p of denied)try{await fs.readFile(p);canReadDenied.push(p)}catch{}const configSha256=crypto.createHash('sha256').update(await fs.readFile('/fixture/platform.yaml')).digest('hex');const ownershipSha256=expectedOwnershipSha256===undefined?undefined:crypto.createHash('sha256').update(await fs.readFile('/fixture/database-ownership.json')).digest('hex');if(canRead.length!==readable.length||canReadDenied.length||configSha256!==expectedConfigSha256||ownershipSha256!==expectedOwnershipSha256)throw new Error('scoped fixture mount access mismatch');console.log(JSON.stringify({readablePaths:canRead,deniedPaths:denied,configSha256,...(ownershipSha256?{ownershipSha256}:{})}))})().catch(e=>{console.error(e.message);process.exitCode=1});`;
+      const configPath = nativeProduct
+        ? "/app/config/platform.yaml"
+        : "/fixture/platform.yaml";
+      const probe = `const fs=require('node:fs/promises');const crypto=require('node:crypto');const readable=${JSON.stringify(readablePaths)},denied=${JSON.stringify(deniedPaths)},expectedConfigSha256=${JSON.stringify(expectedConfigSha256)},expectedOwnershipSha256=${JSON.stringify(expectedOwnershipSha256)};(async()=>{const canRead=[];for(const p of readable)try{await fs.readFile(p);canRead.push(p)}catch{}const canReadDenied=[];for(const p of denied)try{await fs.readFile(p);canReadDenied.push(p)}catch{}const configSha256=crypto.createHash('sha256').update(await fs.readFile(${JSON.stringify(configPath)})).digest('hex');const ownershipSha256=expectedOwnershipSha256===undefined?undefined:crypto.createHash('sha256').update(await fs.readFile('/fixture/database-ownership.json')).digest('hex');if(canRead.length!==readable.length||canReadDenied.length||configSha256!==expectedConfigSha256||ownershipSha256!==expectedOwnershipSha256)throw new Error('scoped fixture mount access mismatch');console.log(JSON.stringify({readablePaths:canRead,deniedPaths:denied,configSha256,...(ownershipSha256?{ownershipSha256}:{})}))})().catch(e=>{console.error(e.message);process.exitCode=1});`;
       const scope = JSON.parse(
         await docker(
           "exec",
@@ -1695,25 +1795,49 @@ export async function runTransportFixture(options, hooks = {}) {
           );
         await launch(
           "edge-gateway",
-          setup.images.node,
-          productArgs("edge-gateway", Boolean(setup.launchIdentity)),
+          setup.manifest.qualification
+            ? setup.images["edge-gateway"]
+            : setup.images.node,
+          productArgs(
+            "edge-gateway",
+            Boolean(setup.launchIdentity),
+            setup.manifest.qualification
+              ? { port: setup.config.services["edge-gateway"].listen.port }
+              : undefined,
+          ),
           { aliases: ["edge-gateway"] },
         );
         await launch(
           "api-public",
-          setup.images.node,
+          setup.manifest.qualification
+            ? setup.images["api-public"]
+            : setup.images.node,
           [
             ...(ownerResource?.host
               ? ["--add-host", `orders-service:${ownerResource.host}`]
               : []),
-            ...productArgs("api-public", Boolean(setup.launchIdentity)),
+            ...productArgs(
+              "api-public",
+              Boolean(setup.launchIdentity),
+              setup.manifest.qualification
+                ? { port: setup.config.services["api-public"].listen.port }
+                : undefined,
+            ),
           ],
           { aliases: ["api-public"] },
         );
         await launch(
           "realtime-gateway",
-          setup.images.node,
-          productArgs("realtime-gateway", Boolean(setup.launchIdentity)),
+          setup.manifest.qualification
+            ? setup.images["realtime-gateway"]
+            : setup.images.node,
+          productArgs(
+            "realtime-gateway",
+            Boolean(setup.launchIdentity),
+            setup.manifest.qualification
+              ? { port: setup.config.services["realtime-gateway"].listen.port }
+              : undefined,
+          ),
           {
             memory: setup.manifest.containerBudgets["realtime-gateway"].memory,
             nofile: 12288,
@@ -1732,18 +1856,30 @@ export async function runTransportFixture(options, hooks = {}) {
             "--read-only",
             "--tmpfs",
             "/tmp:rw,nosuid,nodev,size=67108864,uid=101,gid=101",
-            "--mount",
-            `type=bind,src=${setup.privateDir}/nginx.conf,dst=/etc/nginx/nginx.conf,readonly`,
+            ...(setup.manifest.qualification
+              ? []
+              : [
+                  "--mount",
+                  `type=bind,src=${setup.privateDir}/nginx.conf,dst=/etc/nginx/nginx.conf,readonly`,
+                ]),
             "--mount",
             `type=bind,src=${setup.privateDir}/nginx-secrets,dst=/run/secrets/edge-nginx,readonly`,
-            "--mount",
-            `type=bind,src=${ROOT}/apps/edge-nginx/snippets,dst=/etc/nginx/snippets,readonly`,
+            ...(setup.manifest.qualification
+              ? []
+              : [
+                  "--mount",
+                  `type=bind,src=${ROOT}/apps/edge-nginx/snippets,dst=/etc/nginx/snippets,readonly`,
+                ]),
             "--IMAGE--",
-            ...(ownerResource?.nginxImage ? [] : ["nginx"]),
-            "-e",
-            "stderr",
-            "-g",
-            "daemon off; error_log stderr warn;",
+            ...(setup.manifest.qualification
+              ? []
+              : [
+                  ...(ownerResource?.nginxImage ? [] : ["nginx"]),
+                  "-e",
+                  "stderr",
+                  "-g",
+                  "daemon off; error_log stderr warn;",
+                ]),
           ],
           {
             memory: setup.manifest.containerBudgets["edge-nginx"].memory,
@@ -1997,7 +2133,12 @@ export async function runTransportFixture(options, hooks = {}) {
     }
     if (!retainedPreparation) {
       try {
-        await erasePrivate(dir);
+        await erasePrivate(dir, {
+          consumersStopped:
+            receipts.every((receipt) => receipt.removed) &&
+            ownerCleanup.removed &&
+            networkRemoved,
+        });
         syntheticPrivateMaterialRemoved = true;
       } catch (e) {
         result.error ??= {

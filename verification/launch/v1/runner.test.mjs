@@ -1771,6 +1771,71 @@ setInterval(() => {}, 1000);`;
   }
 });
 
+void test("managed G14 child IPC joins ordered stages without exposing producer token", async () => {
+  const token = "private-ipc-producer-token";
+  const source = `const request=(stage,payload)=>new Promise((resolve,reject)=>{process.once('message',m=>m.ok&&m.stage===stage?resolve(m.payload):reject(Error('rejected')));process.send({stage,payload});});
+try { const init=await request('init',null); if(typeof init.token!=='string'||!init.token||JSON.stringify([process.argv,process.env]).includes(init.token))throw Error('token privacy'); await request('roles-ready',null); await request('browser-proof',null); await request('cleanup',null); process.disconnect(); console.log('done'); } catch { try { await request('cleanup',null); } catch {} process.disconnect(); process.exitCode=1; }`;
+  const stages = [];
+  const result = await runManagedRollbackChild({
+    args: ["--input-type=module", "-e", source],
+    cwd: process.cwd(),
+    env: process.env,
+    timeoutMs: 5000,
+    onIpc: async ({ stage }) => {
+      stages.push(stage);
+      return stage === "init" ? { token } : null;
+    },
+  });
+  assert.deepEqual(stages, ["init", "roles-ready", "browser-proof", "cleanup"]);
+  assert.equal(result.stdout.trim(), "done");
+  assert.equal(JSON.stringify(result).includes(token), false);
+  const failures = [];
+  await assert.rejects(
+    runManagedRollbackChild({
+      args: ["--input-type=module", "-e", source],
+      cwd: process.cwd(),
+      env: process.env,
+      timeoutMs: 5000,
+      onIpc: async ({ stage }) => {
+        failures.push(stage);
+        if (stage === "roles-ready") throw Error("private failure");
+        return stage === "init" ? { token } : null;
+      },
+    }),
+    (error) =>
+      error.message === "ROLLBACK_CHILD_IPC_FAILED" &&
+      !JSON.stringify(error.result).includes(token),
+  );
+  assert.deepEqual(failures, ["init", "roles-ready", "cleanup"]);
+  await assert.rejects(
+    runManagedRollbackChild({
+      args: ["--input-type=module", "-e", "process.disconnect()"],
+      cwd: process.cwd(),
+      env: process.env,
+      timeoutMs: 5000,
+      onIpc: async () => null,
+    }),
+    (error) =>
+      error.message === "ROLLBACK_CHILD_IPC_FAILED" && error.result.joined,
+  );
+  await assert.rejects(
+    runManagedRollbackChild({
+      args: [
+        "--input-type=module",
+        "-e",
+        "process.send({stage:'init'});setInterval(()=>{},1000)",
+      ],
+      cwd: process.cwd(),
+      env: process.env,
+      timeoutMs: 100,
+      terminationGraceMs: 500,
+      onIpc: async () => null,
+    }),
+    (error) =>
+      error.message === "ROLLBACK_CHILD_TIMEOUT" && error.result.joined,
+  );
+});
+
 async function aromaApprovalFixture(overrides = {}) {
   const sha = "1234567890abcdef1234567890abcdef12345678";
   const now = Date.parse("2026-10-23T12:00:00.000Z");
@@ -2129,7 +2194,10 @@ void test("G09 accepts only exact context-bound 10/40 runtime database evidence"
     },
     legacyTargetsExcluded: ["coffeeorder_staging", "coffeeorderdb"],
   };
-  const migrationArtifactDir = join(evidenceDir, "gates/G08_MIGRATIONS/artifacts");
+  const migrationArtifactDir = join(
+    evidenceDir,
+    "gates/G08_MIGRATIONS/artifacts",
+  );
   await mkdir(migrationArtifactDir, { recursive: true });
   await writeFile(
     join(migrationArtifactDir, "result.json"),
@@ -3033,9 +3101,7 @@ void test("AROMA mutation capability is approval-bound, single-use, phase-ordere
       createAromaMutationGrant({
         offerRef,
         maximumQuantity: "2",
-        expiresAtUtc: new Date(
-          issuedAt + 2 * 60 * 60 * 1000 + 1,
-        ).toISOString(),
+        expiresAtUtc: new Date(issuedAt + 2 * 60 * 60 * 1000 + 1).toISOString(),
         capability,
         now: () => issuedAt,
       }),
@@ -6658,3 +6724,36 @@ void test(
     }
   },
 );
+
+void test("G14 cannot pass without sealed browser correlation lineage", async () => {
+  const evidenceDir = await mkdtemp(
+    join(tmpdir(), "coffee-browser-correlation-"),
+  );
+  try {
+    await mkdir(join(evidenceDir, "gates/G14_OBSERVABILITY/artifacts"), {
+      recursive: true,
+    });
+    await writeFile(join(evidenceDir, "context.json"), "{}\n", { mode: 0o600 });
+    const failure = await verifyGateArtifacts(
+      { id: "G14_OBSERVABILITY", command: "pnpm test:observability" },
+      {
+        runs: [
+          {
+            argv: ["pnpm", "test:observability"],
+            exitCode: 0,
+            timedOut: false,
+            outputLimitExceeded: false,
+          },
+        ],
+        artifacts: [],
+      },
+      evidenceDir,
+    );
+    assert.match(
+      failure,
+      /browser correlation child lineage or cleanup is invalid/u,
+    );
+  } finally {
+    await rm(evidenceDir, { recursive: true, force: true });
+  }
+});

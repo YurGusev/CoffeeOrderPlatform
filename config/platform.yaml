@@ -4,6 +4,9 @@ environment: development
 toolchainRef: config/toolchain-versions.json
 verification:
   aromaSandbox: null
+  realtimeQualification:
+    budgetSeconds: 2700
+    maximumAgeSeconds: 7200
   securityScan:
     enabled: true
     cpu: 2

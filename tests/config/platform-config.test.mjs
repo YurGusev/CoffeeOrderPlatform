@@ -121,6 +121,50 @@ void test("GREEN: platform parser preserves a null or fully explicit browser OID
   );
 });
 
+void test("realtime qualification policy is strict and outside runtime config", async () => {
+  const document = parseYaml(
+    await readFile(join(REPO_ROOT, "config/platform.yaml"), "utf8"),
+    { json: true },
+  );
+  const schema = JSON.parse(
+    await readFile(join(REPO_ROOT, "config/platform.schema.json"), "utf8"),
+  );
+  const nginxSchema = JSON.parse(
+    await readFile(join(REPO_ROOT, "config/nginx-profile.schema.json"), "utf8"),
+  );
+  const ajv = new Ajv2020({ allErrors: true, strict: true });
+  ajv.addSchema(nginxSchema);
+  const validate = ajv.compile(schema);
+  assert.deepEqual(document.verification.realtimeQualification, {
+    budgetSeconds: 2700,
+    maximumAgeSeconds: 7200,
+  });
+  assert.equal(validate(document), true, JSON.stringify(validate.errors));
+  assert.equal(
+    Object.hasOwn(parsePlatformConfig(document), "verification"),
+    false,
+  );
+
+  for (const policy of [
+    { budgetSeconds: 2701, maximumAgeSeconds: 7200 },
+    { budgetSeconds: 2700, maximumAgeSeconds: 7201 },
+    { budgetSeconds: 2700 },
+    { budgetSeconds: 2700, maximumAgeSeconds: 7200, unknown: true },
+    { budgetSeconds: "2700", maximumAgeSeconds: 7200 },
+    { budgetSeconds: 0, maximumAgeSeconds: 7200 },
+  ]) {
+    const changed = structuredClone(document);
+    changed.verification.realtimeQualification = policy;
+    assert.equal(validate(changed), false);
+  }
+  const invalid = structuredClone(document);
+  invalid.verification.realtimeQualification.budgetSeconds = 0;
+  assert.throws(() => parsePlatformConfig(invalid), PlatformConfigError);
+  delete invalid.verification.realtimeQualification;
+  assert.equal(validate(invalid), false);
+  assert.throws(() => parsePlatformConfig(invalid), PlatformConfigError);
+});
+
 void test("G16 sandbox verification stays optional, strict and outside runtime config", async () => {
   const path = join(REPO_ROOT, "config/platform.yaml");
   const document = parseYaml(await readFile(path, "utf8"), { json: true });
@@ -541,9 +585,13 @@ void test("telemetry config is strict, immutable, and rejects missing or inconsi
   assert.equal(parsed.telemetry.grafana.memoryLimitMiB, 512);
   const undersizedGrafana = structuredClone(document);
   undersizedGrafana.telemetry.grafana.memoryLimitMiB = 511;
-  assert.throws(() => parsePlatformConfig(undersizedGrafana), PlatformConfigError);
+  assert.throws(
+    () => parsePlatformConfig(undersizedGrafana),
+    PlatformConfigError,
+  );
   assert.equal(
-    platformSchema.$defs.telemetry.properties.grafana.properties.memoryLimitMiB.minimum,
+    platformSchema.$defs.telemetry.properties.grafana.properties.memoryLimitMiB
+      .minimum,
     512,
   );
   assert.equal(parsed.telemetry.namespace, "coffee-platform");
@@ -815,7 +863,10 @@ void test("RED: config loader rejects Grafana memory below 512 MiB", async () =>
   try {
     const path = join(root, "config/platform.yaml");
     const document = parseYaml(await readFile(path, "utf8"), { json: true });
-    assert.equal((await loadPlatformConfig(root)).telemetry.grafana.memoryLimitMiB, 512);
+    assert.equal(
+      (await loadPlatformConfig(root)).telemetry.grafana.memoryLimitMiB,
+      512,
+    );
     document.telemetry.grafana.memoryLimitMiB = 511;
     await writeFile(path, dumpYaml(document), "utf8");
     await assert.rejects(loadPlatformConfig(root), /CONFIG-SCHEMA/u);
