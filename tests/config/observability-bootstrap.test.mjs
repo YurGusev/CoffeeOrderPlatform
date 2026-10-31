@@ -7948,6 +7948,7 @@ void test("browser correlation executes the child lifecycle and preserves early 
     root,
     sourceRoot,
   ]);
+  await chmod(join(sourceRoot, "evidence"), 0o700);
   execFileSync("git", [
     "-C",
     sourceRoot,

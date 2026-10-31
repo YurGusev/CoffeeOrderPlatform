@@ -5,63 +5,97 @@ stackedDependencies:
   - commit: 5f8b07d9e436334d3ebae90d408f4abcbed941cc
     note: Принятая develop включена отдельным локальным merge.
   - commit: b308bb6e31595ca5927abfbb117021c687f7bf55
-    note: Полный локальный merge #222 для reuse OIDC lifecycle; принятие #222 не подтверждено и необходимо до PR и merge #228.
+    note: Полный локальный merge
+  - commit: e8426e1f8ba5749ff184c23c25dae5f2de771cc9
+    note: Обновление
 outputs:
   - artifact: config/platform.yaml
     sha256: a1a78e59e483dcc4a28a955aaa316d297d9068d6b17c4b7b958b3ab0ec32ab0a
-    consumers: [13]
+    consumers:
+      - 13
   - artifact: config/platform.schema.json
     sha256: c98e12946f19e81a5dae1f95514774e014f0551958e5b08965f9d5aa2bee92ee
-    consumers: [13]
+    consumers:
+      - 13
   - artifact: packages/platform-config/src/index.ts
     sha256: d56cc399bfcf0629d230d91cec53821b2f457ac8cfd1d226a5166f18a740a5a3
-    consumers: [13]
+    consumers:
+      - 13
   - artifact: tests/config/platform-config.test.mjs
     sha256: 75bf253eeb3936bc5532ac09bfa6c18e23b450dadceae307af8f85b99944bf8f
-    consumers: [13]
+    consumers:
+      - 13
   - artifact: docs/launch/21_LAUNCH_VERIFICATION_SPEC.md
     sha256: f4b83a3aef8db624f8552e254614ef32116ef9f4c69d33e1d84af2331a7c8f16
-    consumers: [13]
+    consumers:
+      - 13
   - artifact: docs/launch/30_FRONTEND_OPERATOR_RUNBOOK.md
-    sha256: cf90b28468cdfb45cf50c18e4667beee6ba0d66285cce5c4d2fbff810295fb10
-    consumers: [13]
+    sha256: abbc1f6b4ee1f4abcba5157750ff7335bd3500b420899fe960f51faca3a45bfd
+    consumers:
+      - 13
   - artifact: tests/config/observability-bootstrap.test.mjs
-    sha256: db02716788cdc91556dac0e5e21a4a606dd1d01660df6c02c7f067c7b48693ca
-    consumers: [13]
+    sha256: 7bc66f06ffc35e5b3d0de24c3f013e73b7d928696eebe039f710856f9f25b302
+    consumers:
+      - 13
   - artifact: tests/realtime/fixtures/harness.test.mjs
     sha256: 3246d676c412a6f8f868ed45e168bab1104d58ad8be88a33fc321cdb1c48cb89
-    consumers: [13]
+    consumers:
+      - 13
   - artifact: tests/realtime/fixtures/setup.mjs
     sha256: 5572a2f2687b4480368d711d7fdeaf1e894ba2bd3e0c8b7fd62589f574a5aa9a
-    consumers: [13]
+    consumers:
+      - 13
   - artifact: tests/realtime/soak.test.mjs
     sha256: bca125d509f8ef6747231be310c1ee7bfdb4b3a517bbc3c59e3e213e445bf842
-    consumers: [13]
+    consumers:
+      - 13
   - artifact: tools/realtime-capacity.mjs
     sha256: 948aa9f0e6b6b4a211af47d81928058a650cd0e463107a80d5ce64c64fb68fc8
-    consumers: [13]
+    consumers:
+      - 13
   - artifact: verification/launch/v1/run.mjs
     sha256: 07ec716860b0d3ce73661b8badbf3c250b5e826622c4ac52853518d83216f1d5
-    consumers: [13]
+    consumers:
+      - 13
   - artifact: verification/launch/v1/scenarios/browser.mjs
-    sha256: a60c68fc60378aef1a22559386a79d335a399b3aca0021f39fd92a3b7cc12f87
-    consumers: [13]
+    sha256: 5b1c2e8b3e03d202f0a71db1c616553625d3601f1e0e30d9b09bdbe849ace464
+    consumers:
+      - 13
+verificationBasis: Локальные результаты до включения e842 относятся к дереву 4696a4c; повторные интеграционные проверки фиксируются отдельно.
 verification:
-  - command: "node --test tests/config/platform-config.test.mjs"
-    result: "38 pass / 0 fail / 0 skip; 27.584 s; log SHA-256 b731c6e633a008ba5477a12f20d0a3d018e359fca1f160e678c7647b56b2262b"
-  - command: "node --test --test-name-pattern='browser correlation executes the child lifecycle and preserves early image failure evidence' tests/config/observability-bootstrap.test.mjs"
-    result: "1 pass / 0 fail / 0 skip; 47.222 s; log SHA-256 fba4c2c608b3c52bbea711dd8a81a8d5711e02057c7b98a0458e9c396aea4788; packet A принят другим checkout B после удаления A, копия с отдельным context C отклонена с EEXIST"
-  - command: "node --test --test-name-pattern='qualification|capacity producer|G14 refuses|G12 Kafka proof|G12 cleanup|operator-1 (CLI|manifest|admission|driver|full)|prepared operator-1|product launch' tests/realtime/fixtures/harness.test.mjs"
-    result: "16 pass / 0 fail / 0 skip; 0.826 s; log SHA-256 c5bc38772feeec00064df8b1972ecfdcf313b214f3cac52ace7c3bcbeb7e85ea"
-  - command: "pnpm exec oxlint --type-aware --deny-warnings tests/realtime/fixtures/setup.mjs tests/realtime/soak.test.mjs tests/realtime/fixtures/harness.test.mjs tests/config/observability-bootstrap.test.mjs tools/realtime-capacity.mjs verification/launch/v1/run.mjs verification/launch/v1/scenarios/browser.mjs"
-    result: "exit 0; log SHA-256 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-  - command: "pnpm exec prettier --check tests/realtime/fixtures/setup.mjs tests/realtime/soak.test.mjs tests/realtime/fixtures/harness.test.mjs tests/config/observability-bootstrap.test.mjs tools/realtime-capacity.mjs verification/launch/v1/run.mjs verification/launch/v1/scenarios/browser.mjs docs/launch/21_LAUNCH_VERIFICATION_SPEC.md docs/launch/30_FRONTEND_OPERATOR_RUNBOOK.md evidence/handoffs/issue-228.yaml"
-    result: "exit 0; log SHA-256 17aa973d3f004560237d9a95171210b0671deff23d61628eecf7322ff5938f20"
+  - command: node --test tests/config/platform-config.test.mjs
+    result: 38 pass / 0 fail / 0 skip; 27.584 s; log SHA-256 b731c6e633a008ba5477a12f20d0a3d018e359fca1f160e678c7647b56b2262b
+  - command: node --test --test-name-pattern='browser correlation executes the child lifecycle and preserves early image failure evidence' tests/config/observability-bootstrap.test.mjs
+    result: 1 pass / 0 fail / 0 skip; 47.222 s; log SHA-256 fba4c2c608b3c52bbea711dd8a81a8d5711e02057c7b98a0458e9c396aea4788; packet A принят другим checkout B после удаления A, копия с отдельным context C отклонена с EEXIST
+  - command: node --test --test-name-pattern='qualification|capacity producer|G14 refuses|G12 Kafka proof|G12 cleanup|operator-1 (CLI|manifest|admission|driver|full)|prepared operator-1|product launch' tests/realtime/fixtures/harness.test.mjs
+    result: 16 pass / 0 fail / 0 skip; 0.826 s; log SHA-256 c5bc38772feeec00064df8b1972ecfdcf313b214f3cac52ace7c3bcbeb7e85ea
+  - command: pnpm exec oxlint --type-aware --deny-warnings tests/realtime/fixtures/setup.mjs tests/realtime/soak.test.mjs tests/realtime/fixtures/harness.test.mjs tests/config/observability-bootstrap.test.mjs tools/realtime-capacity.mjs verification/launch/v1/run.mjs verification/launch/v1/scenarios/browser.mjs
+    result: exit 0; log SHA-256 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+  - command: pnpm exec prettier --check tests/realtime/fixtures/setup.mjs tests/realtime/soak.test.mjs tests/realtime/fixtures/harness.test.mjs tests/config/observability-bootstrap.test.mjs tools/realtime-capacity.mjs verification/launch/v1/run.mjs verification/launch/v1/scenarios/browser.mjs docs/launch/21_LAUNCH_VERIFICATION_SPEC.md docs/launch/30_FRONTEND_OPERATOR_RUNBOOK.md evidence/handoffs/issue-228.yaml
+    result: exit 0; log SHA-256 17aa973d3f004560237d9a95171210b0671deff23d61628eecf7322ff5938f20
+  - command: (umask 002; /usr/bin/time -p node --test --test-name-pattern='browser correlation executes the child lifecycle and preserves early image failure evidence' tests/config/observability-bootstrap.test.mjs)
+    result: До исправления FAIL REALTIME_QUALIFICATION_DIRECTORY_INVALID,16.91s, rawSHA9536823bd5f4912cfc593872e1bcb66c8dc502d46242e40f4add620b327414c5; после фикса PASS1/1,0skip,46.81s, rawSHAcb86827764844452d5c29c86cba1533290490b71676e1e9a8a11ec1be1fdab21
+  - command: (umask 022; /usr/bin/time -p node --test --test-name-pattern='browser correlation executes the child lifecycle and preserves early image failure evidence' tests/config/observability-bootstrap.test.mjs)
+    result: PASS1/1,0skip,42.75s, rawSHA17785e7c7811b01608b561d5954f9b9fccc7276748ad61371683b92639111bc6
 independentReview:
   source: Существенных source findings не обнаружено; native runtime не проверялся.
-  focusedTests: "8 pass / 0 fail / 0 skip; 0.614 s; log SHA-256 f5b1a4feba17bacdaaf10139d4d295f113e1782c8aedd3284f524b3ce3996865"
+  focusedTests: 8 pass / 0 fail / 0 skip; 0.614 s; log SHA-256 f5b1a4feba17bacdaaf10139d4d295f113e1782c8aedd3284f524b3ce3996865
+integrationVerification:
+  candidateCommit: aecaf1f
+  checks:
+    - command: node --test --test-name-pattern='realtime qualification policy' tests/config/platform-config.test.mjs
+      result: 1 pass / 0 fail / 0 skip; 2.330 s; log SHA-256 b43da965815b1d1671120bfc937710254f53fe45c6ead343db418226df696015
+    - command: node --test --test-name-pattern='browser correlation executes the child lifecycle|browser correlation admission verifies' tests/config/observability-bootstrap.test.mjs
+      result: 2 pass / 0 fail / 0 skip; 77.323 s; log SHA-256 95da479178aa862f71f717a83803883dcd8e5d70aed9e9f0c3cd7939302bcef0
+    - command: pnpm exec tsc -b packages/platform-migrations --pretty false
+      result: exit 0; log SHA-256 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+    - command: pnpm exec tsc -b packages/platform-http apps/aroma-gateway apps/orders-service --pretty false
+      result: exit 0; log SHA-256 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+    - command: node --test --test-name-pattern='external recovery projection accepts canonical mapping|catalog slice preserves secret ownership' tests/compose/topology.test.mjs
+      result: 2 pass / 0 fail / 0 skip; 0.995 s; log SHA-256 b5cf8c4dd61e3f07c8c4b9d88b7b6c0aa77d60e97ab02ad9bedfbaa8b3dc9fe5
 limitations:
   - "Кандидат не принят: native images и полный 1800000 ms профиль фактически NOT_RUN; synthetic tests не являются qualification PASS."
   - "Full-system G14, реальные OrderConfirm и production IdP не доказаны этим изменением; без отдельного актуального qualification PASS merge #13 запрещён."
-  - "Для producer нужен живой checkout и проверенный G12 context того же SHA; завершённый обычный runner удаляет checkout, поэтому операционная orchestration должна сохранить его до sealing."
+  - Для producer нужен живой checkout и проверенный G12 context того же SHA; завершённый обычный runner удаляет checkout, поэтому операционная orchestration должна сохранить его до sealing.
   - "Принятие и runtime proof #222, независимое ревью, финальный CI и фактическая 30-минутная нагрузка остаются обязательными."
+  - "CI41194823488 FAIL сохранён. Исправлена только owned temp fixture: evidence0700 после clone; production directory guard/umask не ослаблялись. Новый final CI ожидается."
