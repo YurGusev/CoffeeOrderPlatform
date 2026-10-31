@@ -1,7 +1,12 @@
 #!/usr/bin/env node
 
 import { execFileSync, spawn } from "node:child_process";
-import { randomBytes, randomUUID, generateKeyPairSync, sign } from "node:crypto";
+import {
+  randomBytes,
+  randomUUID,
+  generateKeyPairSync,
+  sign,
+} from "node:crypto";
 import { existsSync } from "node:fs";
 import {
   chmod,
@@ -122,7 +127,11 @@ function assertSafe(value, pattern, label) {
   assert(pattern.test(value), `${label} is not safe to interpolate`);
 }
 
-function run(command, args, { input, cwd = ROOT, inherit = false, timeoutMs, env } = {}) {
+function run(
+  command,
+  args,
+  { input, cwd = ROOT, inherit = false, timeoutMs, env } = {},
+) {
   return new Promise((resolveRun, rejectRun) => {
     const child = spawn(command, args, {
       cwd,
@@ -177,7 +186,8 @@ function canonical(value) {
     typeof value === "number"
   )
     return JSON.stringify(value);
-  if (Array.isArray(value)) return `[${value.map((entry) => canonical(entry)).join(",")}]`;
+  if (Array.isArray(value))
+    return `[${value.map((entry) => canonical(entry)).join(",")}]`;
   assert(typeof value === "object", "claim value is not canonical");
   return `{${Object.keys(value)
     .sort()
@@ -222,7 +232,9 @@ function canListen(port) {
     const server = createServer();
     server.unref();
     server.on("error", () => resolveListen(false));
-    server.listen({ host: "127.0.0.1", port }, () => server.close(() => resolveListen(true)));
+    server.listen({ host: "127.0.0.1", port }, () =>
+      server.close(() => resolveListen(true)),
+    );
   });
 }
 
@@ -253,7 +265,10 @@ function secretDirectory(project) {
 
 function exactImage(toolchain, key) {
   const value = toolchain[key];
-  assert(typeof value === "string" && IMAGE_PIN.test(value), `${key} is not an exact image pin`);
+  assert(
+    typeof value === "string" && IMAGE_PIN.test(value),
+    `${key} is not an exact image pin`,
+  );
   return value;
 }
 
@@ -268,11 +283,24 @@ async function stageFixture(source, target) {
 
 async function alignKafkaSecrets(directory, image) {
   const listed = (
-    await run("docker", ["run", "--rm", "--entrypoint", "sh", image, "-c", "id -u; id -g"])
-  ).stdout.trim().split("\n");
+    await run("docker", [
+      "run",
+      "--rm",
+      "--entrypoint",
+      "sh",
+      image,
+      "-c",
+      "id -u; id -g",
+    ])
+  ).stdout
+    .trim()
+    .split("\n");
   const uid = listed[0];
   const gid = listed[1];
-  assert(/^\d+$/u.test(uid ?? "") && /^\d+$/u.test(gid ?? ""), "kafka image user is missing");
+  assert(
+    /^\d+$/u.test(uid ?? "") && /^\d+$/u.test(gid ?? ""),
+    "kafka image user is missing",
+  );
   const names = await readdir(directory);
   assert(names.length > 0, "kafka secrets are missing");
   await chmod(directory, 0o755);
@@ -312,7 +340,15 @@ async function writeExt(path, environment, runtime) {
   );
 }
 
-async function issueCert(directory, environment, runtime, caCert, caKey, serialPath, first) {
+async function issueCert(
+  directory,
+  environment,
+  runtime,
+  caCert,
+  caKey,
+  serialPath,
+  first,
+) {
   const key = join(directory, `${runtime}.key`);
   const csr = join(directory, `${runtime}.csr`);
   const cert = join(directory, `${runtime}.crt`);
@@ -382,10 +418,42 @@ async function createTransport(directory, environment) {
     "keyUsage=critical,keyCertSign,cRLSign",
   ]);
   const caPem = await readFile(caCert, "utf8");
-  const server = await issueCert(directory, environment, "orders-service", caCert, caKey, serial, true);
-  const apiPublic = await issueCert(directory, environment, "api-public", caCert, caKey, serial, false);
-  const catalog = await issueCert(directory, environment, "catalog-service", caCert, caKey, serial, false);
-  const internal = await issueCert(directory, environment, "api-internal", caCert, caKey, serial, false);
+  const server = await issueCert(
+    directory,
+    environment,
+    "orders-service",
+    caCert,
+    caKey,
+    serial,
+    true,
+  );
+  const apiPublic = await issueCert(
+    directory,
+    environment,
+    "api-public",
+    caCert,
+    caKey,
+    serial,
+    false,
+  );
+  const catalog = await issueCert(
+    directory,
+    environment,
+    "catalog-service",
+    caCert,
+    caKey,
+    serial,
+    false,
+  );
+  const internal = await issueCert(
+    directory,
+    environment,
+    "api-internal",
+    caCert,
+    caKey,
+    serial,
+    false,
+  );
   return { caPem, server, apiPublic, catalog, internal };
 }
 
@@ -450,7 +518,9 @@ async function kafkaMaterial(dir) {
   const listed = Object.entries(users)
     .map(([name, password]) => `user_${name}="${password}"`)
     .join(" ");
-  await writeFile(join(dir, "kafka.keystore.password"), `${storePassword}\n`, { mode: 0o600 });
+  await writeFile(join(dir, "kafka.keystore.password"), `${storePassword}\n`, {
+    mode: 0o600,
+  });
   await writeFile(
     join(dir, "kafka_jaas.conf"),
     `KafkaServer { org.apache.kafka.common.security.plain.PlainLoginModule required username="broker" password="${users.broker}" ${listed}; };\n`,
@@ -479,7 +549,9 @@ async function loadConfig() {
   const toolchain = JSON.parse(
     await readFile(join(ROOT, "config/toolchain-versions.json"), "utf8"),
   );
-  const config = load(await readFile(join(ROOT, "config/platform.yaml"), "utf8"));
+  const config = load(
+    await readFile(join(ROOT, "config/platform.yaml"), "utf8"),
+  );
   const environment = config?.environment;
   const service = config?.services?.["orders-service"];
   const database = service?.database;
@@ -489,16 +561,24 @@ async function loadConfig() {
   assertSafe(environment, /^[a-z0-9-]+$/u, "environment");
   assertSafe(database, /^[a-z][a-z0-9_]+$/u, "database");
   assert(
-    config?.postgres?.host === "coffee_postgres" && config?.postgres?.port === 5432,
+    config?.postgres?.host === "coffee_postgres" &&
+      config?.postgres?.port === 5432,
     "postgres address is not coffee_postgres:5432",
   );
   assert(listenPort === 4104, "orders-service listen port is not 4104");
   assert(
-    Array.isArray(service?.outbound) && service.outbound.includes("api-internal:4051"),
+    Array.isArray(service?.outbound) &&
+      service.outbound.includes("api-internal:4051"),
     "orders-service outbound is not api-internal:4051",
   );
-  assert(config?.kafka?.brokers?.join(",") === "kafka:9092", "kafka broker is not kafka:9092");
-  assert(config?.kafka?.clientProtocol === "SASL_SSL", "kafka protocol is not SASL_SSL");
+  assert(
+    config?.kafka?.brokers?.join(",") === "kafka:9092",
+    "kafka broker is not kafka:9092",
+  );
+  assert(
+    config?.kafka?.clientProtocol === "SASL_SSL",
+    "kafka protocol is not SASL_SSL",
+  );
   return {
     environment,
     database,
@@ -510,10 +590,13 @@ async function loadConfig() {
 
 async function migrationSql() {
   const directory = join(ROOT, "apps/orders-service/migrations");
-  const names = (await readdir(directory)).filter((name) => name.endsWith(".sql")).sort();
+  const names = (await readdir(directory))
+    .filter((name) => name.endsWith(".sql"))
+    .sort();
   assert(names.length > 0, "orders migrations are missing");
   const parts = [];
-  for (const name of names) parts.push(await readFile(join(directory, name), "utf8"));
+  for (const name of names)
+    parts.push(await readFile(join(directory, name), "utf8"));
   const sql = parts.join("\n");
   assert(
     sql.includes("GRANT USAGE ON SCHEMA orders TO coffee_orders_service_rw"),
@@ -525,10 +608,19 @@ async function migrationSql() {
 function hostNodeLaunch() {
   const linker = "/lib64/ld-linux-x86-64.so.2";
   const libDir = "/lib/x86_64-linux-gnu";
-  assert(existsSync(linker), "host dynamic linker /lib64/ld-linux-x86-64.so.2 is missing");
-  assert(existsSync(libDir), "host library directory /lib/x86_64-linux-gnu is missing");
+  assert(
+    existsSync(linker),
+    "host dynamic linker /lib64/ld-linux-x86-64.so.2 is missing",
+  );
+  assert(
+    existsSync(libDir),
+    "host library directory /lib/x86_64-linux-gnu is missing",
+  );
   const nodeRoot = dirname(dirname(process.execPath));
-  assert(existsSync(join(nodeRoot, "bin/node")), "the runner Node prefix does not contain bin/node");
+  assert(
+    existsSync(join(nodeRoot, "bin/node")),
+    "the runner Node prefix does not contain bin/node",
+  );
   return { linker, libDir, nodeRoot };
 }
 
@@ -536,21 +628,33 @@ async function ensureDependencies() {
   const yaml = join(ROOT, "node_modules/js-yaml/package.json");
   if (!existsSync(yaml)) {
     const stats = await statfs(ROOT);
-    assert(stats.bavail * stats.bsize >= 3 * 1024 ** 3, "free disk is below 3 GiB");
-    process.stderr.write("orders-slice-verify: pnpm install --frozen-lockfile\n");
+    assert(
+      stats.bavail * stats.bsize >= 3 * 1024 ** 3,
+      "free disk is below 3 GiB",
+    );
+    process.stderr.write(
+      "orders-slice-verify: pnpm install --frozen-lockfile\n",
+    );
     await run("pnpm", ["install", "--frozen-lockfile"], { inherit: true });
   }
   process.stderr.write("orders-slice-verify: tsc -b apps/orders-service\n");
-  await run("pnpm", ["exec", "tsc", "-b", "apps/orders-service", "--pretty", "false"], {
-    inherit: true,
-  });
+  await run(
+    "pnpm",
+    ["exec", "tsc", "-b", "apps/orders-service", "--pretty", "false"],
+    {
+      inherit: true,
+    },
+  );
   assert(
     existsSync(join(ROOT, "apps/orders-service/dist/main.js")),
     "apps/orders-service/dist/main.js was not produced",
   );
   hostNodeLaunch();
   try {
-    await run(process.execPath, ["-e", "require('@confluentinc/kafka-javascript')"]);
+    await run(process.execPath, [
+      "-e",
+      "require('@confluentinc/kafka-javascript')",
+    ]);
   } catch (error) {
     throw new Error(
       `runner Node cannot load @confluentinc/kafka-javascript (${redact(error.message)})`,
@@ -586,7 +690,18 @@ function actorToken(privateKey, operationId, correlationId) {
   );
 }
 
-function httpsCall({ port, ca, cert, key, servername, expectedSan, method, path, headers, body }) {
+function httpsCall({
+  port,
+  ca,
+  cert,
+  key,
+  servername,
+  expectedSan,
+  method,
+  path,
+  headers,
+  body,
+}) {
   return new Promise((resolveCall, rejectCall) => {
     const request = httpsRequest(
       {
@@ -606,7 +721,9 @@ function httpsCall({ port, ca, cert, key, servername, expectedSan, method, path,
             .map((item) => item.trim())
             .find((item) => item.startsWith("URI:"))
             ?.slice(4);
-          return san === expectedSan ? undefined : new Error("peer identity mismatch");
+          return san === expectedSan
+            ? undefined
+            : new Error("peer identity mismatch");
         },
       },
       (response) => {
@@ -654,7 +771,8 @@ function composeFile(input) {
   const kafkaEnv = {
     KAFKA_NODE_ID: "1",
     KAFKA_PROCESS_ROLES: "broker,controller",
-    KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "CONTROLLER:PLAINTEXT,SASL_SSL:SASL_SSL",
+    KAFKA_LISTENER_SECURITY_PROTOCOL_MAP:
+      "CONTROLLER:PLAINTEXT,SASL_SSL:SASL_SSL",
     KAFKA_CONTROLLER_QUORUM_VOTERS: "1@kafka:29093",
     KAFKA_LISTENERS: "SASL_SSL://:9092,CONTROLLER://:29093",
     KAFKA_ADVERTISED_LISTENERS: "SASL_SSL://kafka:9092",
@@ -670,7 +788,8 @@ function composeFile(input) {
     KAFKA_SSL_CLIENT_AUTH: "requested",
     KAFKA_SASL_ENABLED_MECHANISMS: "PLAIN",
     KAFKA_SASL_MECHANISM_INTER_BROKER_PROTOCOL: "PLAIN",
-    KAFKA_OPTS: "-Djava.security.auth.login.config=/etc/kafka/secrets/kafka_jaas.conf",
+    KAFKA_OPTS:
+      "-Djava.security.auth.login.config=/etc/kafka/secrets/kafka_jaas.conf",
     KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: "1",
     KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: "1",
     KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: "1",
@@ -828,7 +947,8 @@ function counts(scenarios) {
   return {
     passed: scenarios.filter((item) => item.status === "pass").length,
     failed: scenarios.filter((item) => item.status === "fail").length,
-    notCovered: scenarios.filter((item) => item.status === "not-covered").length,
+    notCovered: scenarios.filter((item) => item.status === "not-covered")
+      .length,
   };
 }
 
@@ -842,16 +962,25 @@ async function main() {
   }
   if (args[0] === "--down") {
     const runId = args[1];
-    assert(args.length === 2 && RUN_ID_PATTERN.test(runId ?? ""), "--down requires one run id");
+    assert(
+      args.length === 2 && RUN_ID_PATTERN.test(runId ?? ""),
+      "--down requires one run id",
+    );
     await tearDown(runId);
-    process.stderr.write(`orders-slice-verify: removed orders-slice-verify-${runId}\n`);
+    process.stderr.write(
+      `orders-slice-verify: removed orders-slice-verify-${runId}\n`,
+    );
     return 0;
   }
-  assert(args.length === 0 || (args.length === 1 && args[0] === "--keep"), "unknown arguments");
+  assert(
+    args.length === 0 || (args.length === 1 && args[0] === "--keep"),
+    "unknown arguments",
+  );
   const keep = args[0] === "--keep";
   await run("docker", ["ps", "-q"]);
   await ensureDependencies();
-  const { environment, database, postgresImage, nodeImage, kafkaImage } = await loadConfig();
+  const { environment, database, postgresImage, nodeImage, kafkaImage } =
+    await loadConfig();
   const migrations = await migrationSql();
   const runId = newRunId();
   const project = projectName(runId);
@@ -872,10 +1001,18 @@ async function main() {
     }
     const tally = counts(scenarios);
     const requiredDone = REQUIRED.every((id) =>
-      scenarios.some((scenario) => scenario.id === id && scenario.status === "pass"),
+      scenarios.some(
+        (scenario) => scenario.id === id && scenario.status === "pass",
+      ),
     );
-    const failed = scenarios.some((scenario) => scenario.status === "fail") || status === "fail";
-    overall = failed ? "fail" : status === "pass" && requiredDone ? "pass" : "incomplete";
+    const failed =
+      scenarios.some((scenario) => scenario.status === "fail") ||
+      status === "fail";
+    overall = failed
+      ? "fail"
+      : status === "pass" && requiredDone
+        ? "pass"
+        : "incomplete";
     await mkdir(evidenceDir, { recursive: true, mode: 0o700 });
     await writeFile(
       join(evidenceDir, "result.json"),
@@ -885,7 +1022,10 @@ async function main() {
       join(evidenceDir, "http.ndjson"),
       `${httpLog.map((line) => JSON.stringify(line)).join("\n")}${httpLog.length ? "\n" : ""}`,
     );
-    await writeFile(join(evidenceDir, "db.json"), `${JSON.stringify(dbLog, null, 2)}\n`);
+    await writeFile(
+      join(evidenceDir, "db.json"),
+      `${JSON.stringify(dbLog, null, 2)}\n`,
+    );
     return overall;
   };
   try {
@@ -903,7 +1043,8 @@ async function main() {
     await writeFile(passwordFile, `${password}\n`, { mode: 0o600 });
     await chmod(passwordFile, 0o400);
     const transport = await createTransport(certDir, environment);
-    for (const name of await readdir(certDir)) await chmod(join(certDir, name), 0o400);
+    for (const name of await readdir(certDir))
+      await chmod(join(certDir, name), 0o400);
     await chmod(certDir, 0o700);
     await stageFixture(certDir, fixtureDir);
     const kafka = await kafkaMaterial(kafkaDir);
@@ -943,7 +1084,9 @@ async function main() {
         telemetry: { exporterToken: remember(randomBytes(24).toString("hex")) },
       },
     };
-    await writeFile(secretsFile, `${JSON.stringify(document)}\n`, { mode: 0o600 });
+    await writeFile(secretsFile, `${JSON.stringify(document)}\n`, {
+      mode: 0o600,
+    });
     await chmod(secretsFile, 0o400);
     await ensureImage(postgresImage);
     await ensureImage(nodeImage);
@@ -1002,7 +1145,8 @@ async function main() {
     }
     let dirty = true;
     try {
-      dirty = (await run("git", ["status", "--porcelain"])).stdout.trim().length > 0;
+      dirty =
+        (await run("git", ["status", "--porcelain"])).stdout.trim().length > 0;
     } catch {
       dirty = true;
     }
@@ -1012,7 +1156,11 @@ async function main() {
         {
           slice: "orders-service",
           boundary: `orders-service -> PostgreSQL ${database} + Kafka SASL_SSL + fixture api-internal`,
-          images: { postgres: postgresImage, node: nodeImage, kafka: kafkaImage },
+          images: {
+            postgres: postgresImage,
+            node: nodeImage,
+            kafka: kafkaImage,
+          },
           hostPort: port,
           containerPort: 4104,
           databasePublished: false,
@@ -1044,8 +1192,12 @@ async function main() {
       },
     ) => {
       const payload = body === undefined ? undefined : JSON.stringify(body);
-      const headers = { "x-correlation-id": correlationId, ...(extraHeaders ?? {}) };
-      if (idempotencyKey !== undefined) headers["idempotency-key"] = idempotencyKey;
+      const headers = {
+        "x-correlation-id": correlationId,
+        ...(extraHeaders ?? {}),
+      };
+      if (idempotencyKey !== undefined)
+        headers["idempotency-key"] = idempotencyKey;
       if (operationId !== undefined) {
         headers["x-actor-context"] = actorToken(
           delegation.privateKey,
@@ -1072,7 +1224,13 @@ async function main() {
           body: payload,
         });
       } catch (error) {
-        outcome = { status: 0, headers: {}, text: "", json: null, error: error?.code ?? "error" };
+        outcome = {
+          status: 0,
+          headers: {},
+          text: "",
+          json: null,
+          error: error?.code ?? "error",
+        };
       }
       httpLog.push({
         scenario,
@@ -1081,9 +1239,11 @@ async function main() {
         status: outcome.status,
         error: outcome.error ?? null,
         request: body ?? null,
-        response: outcome.json ?? (outcome.text ? outcome.text.slice(0, 500) : null),
+        response:
+          outcome.json ?? (outcome.text ? outcome.text.slice(0, 500) : null),
         contentType: header(outcome.headers, "content-type") ?? null,
-        idempotencyReplayed: header(outcome.headers, "idempotency-replayed") ?? null,
+        idempotencyReplayed:
+          header(outcome.headers, "idempotency-replayed") ?? null,
       });
       return outcome;
     };
@@ -1151,12 +1311,19 @@ async function main() {
     async function waitLogs(container, needle, timeoutMs) {
       const deadline = Date.now() + timeoutMs;
       while (Date.now() < deadline) {
-        const logs = await run("docker", ["logs", container]).catch((error) => ({
-          stdout: error.stdout ?? "",
-          stderr: error.stderr ?? "",
-        }));
+        const logs = await run("docker", ["logs", container]).catch(
+          (error) => ({
+            stdout: error.stdout ?? "",
+            stderr: error.stderr ?? "",
+          }),
+        );
         if (`${logs.stdout}${logs.stderr}`.includes(needle)) return;
-        const state = await run("docker", ["inspect", "--format", "{{.State.Status}}", container])
+        const state = await run("docker", [
+          "inspect",
+          "--format",
+          "{{.State.Status}}",
+          container,
+        ])
           .then((result) => result.stdout.trim())
           .catch(() => "missing");
         if (state === "exited" || state === "dead") break;
@@ -1187,7 +1354,12 @@ async function main() {
         } catch (error) {
           last = redact(error.stderr || error.message).slice(0, 300);
         }
-        const state = await run("docker", ["inspect", "--format", "{{.State.Status}}", `${project}-kafka`])
+        const state = await run("docker", [
+          "inspect",
+          "--format",
+          "{{.State.Status}}",
+          `${project}-kafka`,
+        ])
           .then((result) => result.stdout.trim())
           .catch(() => "missing");
         if (state === "exited" || state === "dead") break;
@@ -1199,10 +1371,19 @@ async function main() {
       const deadline = Date.now() + 60_000;
       let last = "not-started";
       while (Date.now() < deadline) {
-        const health = await call("startup", { method: "GET", path: "/health/ready" });
+        const health = await call("startup", {
+          method: "GET",
+          path: "/health/ready",
+        });
         last = health.error ?? `${health.status} ${health.json?.status ?? ""}`;
-        if (health.status === 200 && health.json?.status === "ready") return health;
-        const state = await run("docker", ["inspect", "--format", "{{.State.Status}}", `${project}-orders`])
+        if (health.status === 200 && health.json?.status === "ready")
+          return health;
+        const state = await run("docker", [
+          "inspect",
+          "--format",
+          "{{.State.Status}}",
+          `${project}-orders`,
+        ])
           .then((result) => result.stdout.trim())
           .catch(() => "missing");
         if (state === "exited" || state === "dead") break;
@@ -1210,8 +1391,21 @@ async function main() {
       }
       throw new Error(`orders-service did not become ready (${last})`);
     }
-    process.stderr.write(`orders-slice-verify: up ${project} on 127.0.0.1:${port}\n`);
-    await run("docker", ["compose", "-p", project, "-f", composePath, "up", "-d", "postgres", "kafka", "internal"]);
+    process.stderr.write(
+      `orders-slice-verify: up ${project} on 127.0.0.1:${port}\n`,
+    );
+    await run("docker", [
+      "compose",
+      "-p",
+      project,
+      "-f",
+      composePath,
+      "up",
+      "-d",
+      "postgres",
+      "kafka",
+      "internal",
+    ]);
     await waitHealthy(`${project}-postgres`);
     await waitLogs(`${project}-internal`, "fixture listening", 30_000);
     await waitKafka();
@@ -1258,7 +1452,16 @@ async function main() {
       ],
       { input: bootstrap },
     );
-    await run("docker", ["compose", "-p", project, "-f", composePath, "up", "-d", "orders"]);
+    await run("docker", [
+      "compose",
+      "-p",
+      project,
+      "-f",
+      composePath,
+      "up",
+      "-d",
+      "orders",
+    ]);
     const ready = await waitReady();
     const published = (
       await run("docker", ["port", `${project}-orders`, "4104/tcp"])
@@ -1284,333 +1487,468 @@ async function main() {
       portOwned: published.includes(`127.0.0.1:${port}`) && owned === runId,
       migrationFiles: migrations.names.length,
     };
-    await writeFile(join(evidenceDir, "doctor.json"), `${JSON.stringify(doctor, null, 2)}\n`);
+    await writeFile(
+      join(evidenceDir, "doctor.json"),
+      `${JSON.stringify(doctor, null, 2)}\n`,
+    );
     assert(doctor.ok, `doctor failed ${JSON.stringify(doctor)}`);
 
     const plan = [
-      ["empty-ready", "Пустая база: сервис готов", async () => {
-        const health = await call("empty-ready", { method: "GET", path: "/health/ready" });
-        assert(
-          health.status === 200 &&
-            health.json?.status === "ready" &&
-            health.json?.runtime === "orders-service",
-          `ready returned ${health.status}`,
-        );
-        const db = await snapshot("empty-ready");
-        assert(
-          db.orders === 0 && db.items === 0 && db.outbox === 0 && db.idempotencyRows === 0,
-          "empty database was not empty",
-        );
-      }],
-      ["create-draft", "Создание черновика сохраняет строку владельца", async () => {
-        const created = { customerRef: FIXTURE.customerRef };
-        const bare = await httpsCall({
-          port,
-          ca: transport.caPem,
-          servername,
-          expectedSan,
-          method: "POST",
-          path: "/api/client-v1/orders/drafts",
-          headers: {
-            "content-type": "application/json",
-            "content-length": String(Buffer.byteLength(JSON.stringify(created))),
-          },
-          body: JSON.stringify(created),
-        })
-          .then(() => ({ status: 1 }))
-          .catch(() => ({ status: 0 }));
-        httpLog.push({
-          scenario: "create-draft",
-          method: "POST",
-          path: "/api/client-v1/orders/drafts",
-          status: bare.status,
-          error: bare.status === 0 ? "tls-rejected" : null,
-          request: created,
-          response: null,
-          contentType: null,
-          idempotencyReplayed: null,
-        });
-        assert(bare.status === 0, "request without a client certificate was accepted");
-        const foreign = await call("create-draft", {
-          method: "POST",
-          path: "/api/client-v1/orders/drafts",
-          body: created,
-          operationId: "createOrderDraft",
-          material: transport.catalog,
-          idempotencyKey: randomUUID(),
-        });
-        assert(
-          foreign.status === 401 && foreign.json?.code === "AUTHENTICATION_REQUIRED",
-          `foreign certificate returned ${foreign.status} ${foreign.json?.code}`,
-        );
-        const unsigned = await call("create-draft", {
-          method: "POST",
-          path: "/api/client-v1/orders/drafts",
-          body: created,
-          idempotencyKey: randomUUID(),
-        });
-        assert(
-          unsigned.status === 401 && unsigned.json?.code === "AUTHENTICATION_REQUIRED",
-          `unsigned create returned ${unsigned.status}`,
-        );
-        const invalid = await call("create-draft", {
-          method: "POST",
-          path: "/api/client-v1/orders/drafts",
-          body: {},
-          operationId: "createOrderDraft",
-          idempotencyKey: randomUUID(),
-        });
-        assert(
-          invalid.status === 400 && invalid.json?.code === "VALIDATION_FAILED",
-          `invalid body returned ${invalid.status} ${invalid.json?.code}`,
-        );
-        const rejected = await snapshot("create-draft-rejected");
-        assert(rejected.orders === 0 && rejected.idempotencyRows === 0, "rejected requests wrote rows");
-        const key = randomUUID();
-        const response = await call("create-draft", {
-          method: "POST",
-          path: "/api/client-v1/orders/drafts",
-          body: created,
-          operationId: "createOrderDraft",
-          idempotencyKey: key,
-        });
-        assert(response.status === 201, `create returned ${response.status} ${response.json?.code ?? ""}`);
-        assert(/^ord_[0-9A-HJKMNP-TV-Z]{26}$/u.test(response.json?.orderRef ?? ""), "orderRef is missing");
-        assert(response.json?.status === "Draft" && response.json?.version === "1", "draft version is not 1");
-        assert(response.json?.customer?.customerRef === FIXTURE.customerRef, "customer snapshot mismatch");
-        assert(response.json?.customer?.displayName === FIXTURE.displayName, "display name mismatch");
-        assert(response.json?.items?.length === 0, "new draft is not empty");
-        assert(header(response.headers, "idempotency-replayed") === undefined, "first create was marked replayed");
-        const db = await snapshot("create-draft");
-        assert(
-          db.orders === 1 &&
-            db.items === 0 &&
-            db.idempotencyCompleted === 1 &&
-            db.outbox === 0 &&
-            db.status === "Draft" &&
-            db.version === "1" &&
-            db.orderRef === response.json.orderRef,
-          "owner rows after create did not match",
-        );
-        world.orderRef = response.json.orderRef;
-        world.version = response.json.version;
-        world.createKey = key;
-        world.createBody = created;
-      }],
-      ["replay-draft", "Повтор того же создания не создаёт второй заказ", async () => {
-        const replay = await call("replay-draft", {
-          method: "POST",
-          path: "/api/client-v1/orders/drafts",
-          body: world.createBody,
-          operationId: "createOrderDraft",
-          idempotencyKey: world.createKey,
-        });
-        assert(
-          replay.status === 201 && replay.json?.orderRef === world.orderRef,
-          `replay returned ${replay.status}`,
-        );
-        assert(header(replay.headers, "idempotency-replayed") === "true", "replay was not marked");
-        const conflict = await call("replay-draft", {
-          method: "POST",
-          path: "/api/client-v1/orders/drafts",
-          body: { customerRef: FIXTURE.otherCustomerRef },
-          operationId: "createOrderDraft",
-          idempotencyKey: world.createKey,
-        });
-        assert(
-          conflict.status === 409 && conflict.json?.code === "IDEMPOTENCY_CONFLICT",
-          `idempotency conflict returned ${conflict.status} ${conflict.json?.code}`,
-        );
-        const db = await snapshot("replay-draft");
-        assert(db.orders === 1 && db.idempotencyRows === 1 && db.orderRef === world.orderRef, "replay changed owner rows");
-      }],
-      ["put-item", "Позиция черновика сохраняется после проверки цены", async () => {
-        const response = await call("put-item", {
-          method: "PUT",
-          path: `/api/client-v1/orders/${world.orderRef}/items/${FIXTURE.itemRef}`,
-          body: itemBody(world.version),
-          operationId: "upsertOrderItem",
-          idempotencyKey: randomUUID(),
-        });
-        assert(response.status === 200, `put returned ${response.status} ${response.json?.code ?? ""}`);
-        assert(response.json?.items?.length === 1, "put did not store one item");
-        assert(response.json.items[0].itemRef === FIXTURE.itemRef, "itemRef mismatch");
-        assert(response.json.items[0].displayName === FIXTURE.displayName, "item name mismatch");
-        world.version = response.json.version;
-        const db = await snapshot("put-item");
-        assert(db.items === 1 && db.status === "Draft" && db.version === world.version, "item row mismatch");
-      }],
-      ["get-card", "Чтение карточки возвращает тот же черновик", async () => {
-        const response = await call("get-card", {
-          method: "GET",
-          path: `/api/client-v1/orders/${world.orderRef}`,
-          operationId: "getOrderCard",
-        });
-        assert(response.status === 200, `get returned ${response.status} ${response.json?.code ?? ""}`);
-        assert(
-          response.json?.orderRef === world.orderRef &&
-            response.json?.status === "Draft" &&
-            response.json?.version === world.version &&
-            response.json?.items?.length === 1 &&
-            response.json?.aroma?.state === "NotRequested",
-          "card did not match the stored draft",
-        );
-        const db = await snapshot("get-card");
-        assert(db.orders === 1 && db.items === 1, "get changed owner rows");
-      }],
-      ["delete-item", "Удаление позиции оставляет пустой черновик", async () => {
-        const response = await call("delete-item", {
-          method: "DELETE",
-          path: `/api/client-v1/orders/${world.orderRef}/items/${FIXTURE.itemRef}`,
-          operationId: "removeOrderItem",
-          idempotencyKey: randomUUID(),
-          extraHeaders: { "if-match-version": world.version },
-        });
-        assert(response.status === 200, `delete returned ${response.status} ${response.json?.code ?? ""}`);
-        assert(response.json?.items?.length === 0 && response.json?.status === "Draft", "delete left an item");
-        world.version = response.json.version;
-        const db = await snapshot("delete-item");
-        assert(db.items === 0 && db.status === "Draft" && db.outbox === 0, "delete row mismatch");
-      }],
-      ["confirm-empty", "Пустой черновик не подтверждается", async () => {
-        const before = await snapshot("confirm-empty-before");
-        const response = await call("confirm-empty", {
-          method: "POST",
-          path: `/api/client-v1/orders/${world.orderRef}/commands/confirm`,
-          body: { expectedVersion: world.version },
-          operationId: "confirmOrder",
-          idempotencyKey: randomUUID(),
-        });
-        assert(
-          response.status === 422 && response.json?.code === "ORDER_EMPTY",
-          `empty confirm returned ${response.status} ${response.json?.code}`,
-        );
-        const db = await snapshot("confirm-empty");
-        assert(
-          db.status === "Draft" &&
-            db.version === world.version &&
-            db.items === 0 &&
-            db.outbox === 0 &&
-            db.idempotencyRows === before.idempotencyRows,
-          "empty confirm changed the draft",
-        );
-      }],
-      ["confirm-order", "Подтверждение пишет Confirmed и публикует OrderConfirmed.v1", async () => {
-        const put = await call("confirm-order", {
-          method: "PUT",
-          path: `/api/client-v1/orders/${world.orderRef}/items/${FIXTURE.itemRef}`,
-          body: itemBody(world.version),
-          operationId: "upsertOrderItem",
-          idempotencyKey: randomUUID(),
-        });
-        assert(put.status === 200 && put.json?.items?.length === 1, `restore put returned ${put.status}`);
-        world.version = put.json.version;
-        const key = randomUUID();
-        const response = await call("confirm-order", {
-          method: "POST",
-          path: `/api/client-v1/orders/${world.orderRef}/commands/confirm`,
-          body: { expectedVersion: world.version },
-          operationId: "confirmOrder",
-          idempotencyKey: key,
-        });
-        assert(response.status === 200, `confirm returned ${response.status} ${response.json?.code ?? ""}`);
-        assert(response.json?.status === "Confirmed", "confirm did not set Confirmed");
-        assert(header(response.headers, "idempotency-replayed") === undefined, "first confirm was marked replayed");
-        world.version = response.json.version;
-        const replay = await call("confirm-order", {
-          method: "POST",
-          path: `/api/client-v1/orders/${world.orderRef}/commands/confirm`,
-          body: { expectedVersion: put.json.version },
-          operationId: "confirmOrder",
-          idempotencyKey: key,
-        });
-        assert(replay.status === 200 && replay.json?.status === "Confirmed", `confirm replay returned ${replay.status}`);
-        assert(header(replay.headers, "idempotency-replayed") === "true", "confirm replay was not marked");
-        const conflict = await call("confirm-order", {
-          method: "POST",
-          path: `/api/client-v1/orders/${world.orderRef}/commands/confirm`,
-          body: { expectedVersion: world.version },
-          operationId: "confirmOrder",
-          idempotencyKey: key,
-        });
-        assert(
-          conflict.status === 409 && conflict.json?.code === "IDEMPOTENCY_CONFLICT",
-          `confirm conflict returned ${conflict.status} ${conflict.json?.code}`,
-        );
-        let db = await snapshot("confirm-order");
-        const deadline = Date.now() + 30_000;
-        while (db.outboxPublished !== 1 && Date.now() < deadline) {
-          await delay(500);
-          db = await snapshot("confirm-order");
-        }
-        assert(
-          db.status === "Confirmed" &&
-            db.version === world.version &&
+      [
+        "empty-ready",
+        "Пустая база: сервис готов",
+        async () => {
+          const health = await call("empty-ready", {
+            method: "GET",
+            path: "/health/ready",
+          });
+          assert(
+            health.status === 200 &&
+              health.json?.status === "ready" &&
+              health.json?.runtime === "orders-service",
+            `ready returned ${health.status}`,
+          );
+          const db = await snapshot("empty-ready");
+          assert(
+            db.orders === 0 &&
+              db.items === 0 &&
+              db.outbox === 0 &&
+              db.idempotencyRows === 0,
+            "empty database was not empty",
+          );
+        },
+      ],
+      [
+        "create-draft",
+        "Создание черновика сохраняет строку владельца",
+        async () => {
+          const created = { customerRef: FIXTURE.customerRef };
+          const bare = await httpsCall({
+            port,
+            ca: transport.caPem,
+            servername,
+            expectedSan,
+            method: "POST",
+            path: "/api/client-v1/orders/drafts",
+            headers: {
+              "content-type": "application/json",
+              "content-length": String(
+                Buffer.byteLength(JSON.stringify(created)),
+              ),
+            },
+            body: JSON.stringify(created),
+          })
+            .then(() => ({ status: 1 }))
+            .catch(() => ({ status: 0 }));
+          httpLog.push({
+            scenario: "create-draft",
+            method: "POST",
+            path: "/api/client-v1/orders/drafts",
+            status: bare.status,
+            error: bare.status === 0 ? "tls-rejected" : null,
+            request: created,
+            response: null,
+            contentType: null,
+            idempotencyReplayed: null,
+          });
+          assert(
+            bare.status === 0,
+            "request without a client certificate was accepted",
+          );
+          const foreign = await call("create-draft", {
+            method: "POST",
+            path: "/api/client-v1/orders/drafts",
+            body: created,
+            operationId: "createOrderDraft",
+            material: transport.catalog,
+            idempotencyKey: randomUUID(),
+          });
+          assert(
+            foreign.status === 401 &&
+              foreign.json?.code === "AUTHENTICATION_REQUIRED",
+            `foreign certificate returned ${foreign.status} ${foreign.json?.code}`,
+          );
+          const unsigned = await call("create-draft", {
+            method: "POST",
+            path: "/api/client-v1/orders/drafts",
+            body: created,
+            idempotencyKey: randomUUID(),
+          });
+          assert(
+            unsigned.status === 401 &&
+              unsigned.json?.code === "AUTHENTICATION_REQUIRED",
+            `unsigned create returned ${unsigned.status}`,
+          );
+          const invalid = await call("create-draft", {
+            method: "POST",
+            path: "/api/client-v1/orders/drafts",
+            body: {},
+            operationId: "createOrderDraft",
+            idempotencyKey: randomUUID(),
+          });
+          assert(
+            invalid.status === 400 &&
+              invalid.json?.code === "VALIDATION_FAILED",
+            `invalid body returned ${invalid.status} ${invalid.json?.code}`,
+          );
+          const rejected = await snapshot("create-draft-rejected");
+          assert(
+            rejected.orders === 0 && rejected.idempotencyRows === 0,
+            "rejected requests wrote rows",
+          );
+          const key = randomUUID();
+          const response = await call("create-draft", {
+            method: "POST",
+            path: "/api/client-v1/orders/drafts",
+            body: created,
+            operationId: "createOrderDraft",
+            idempotencyKey: key,
+          });
+          assert(
+            response.status === 201,
+            `create returned ${response.status} ${response.json?.code ?? ""}`,
+          );
+          assert(
+            /^ord_[0-9A-HJKMNP-TV-Z]{26}$/u.test(response.json?.orderRef ?? ""),
+            "orderRef is missing",
+          );
+          assert(
+            response.json?.status === "Draft" && response.json?.version === "1",
+            "draft version is not 1",
+          );
+          assert(
+            response.json?.customer?.customerRef === FIXTURE.customerRef,
+            "customer snapshot mismatch",
+          );
+          assert(
+            response.json?.customer?.displayName === FIXTURE.displayName,
+            "display name mismatch",
+          );
+          assert(response.json?.items?.length === 0, "new draft is not empty");
+          assert(
+            header(response.headers, "idempotency-replayed") === undefined,
+            "first create was marked replayed",
+          );
+          const db = await snapshot("create-draft");
+          assert(
+            db.orders === 1 &&
+              db.items === 0 &&
+              db.idempotencyCompleted === 1 &&
+              db.outbox === 0 &&
+              db.status === "Draft" &&
+              db.version === "1" &&
+              db.orderRef === response.json.orderRef,
+            "owner rows after create did not match",
+          );
+          world.orderRef = response.json.orderRef;
+          world.version = response.json.version;
+          world.createKey = key;
+          world.createBody = created;
+        },
+      ],
+      [
+        "replay-draft",
+        "Повтор того же создания не создаёт второй заказ",
+        async () => {
+          const replay = await call("replay-draft", {
+            method: "POST",
+            path: "/api/client-v1/orders/drafts",
+            body: world.createBody,
+            operationId: "createOrderDraft",
+            idempotencyKey: world.createKey,
+          });
+          assert(
+            replay.status === 201 && replay.json?.orderRef === world.orderRef,
+            `replay returned ${replay.status}`,
+          );
+          assert(
+            header(replay.headers, "idempotency-replayed") === "true",
+            "replay was not marked",
+          );
+          const conflict = await call("replay-draft", {
+            method: "POST",
+            path: "/api/client-v1/orders/drafts",
+            body: { customerRef: FIXTURE.otherCustomerRef },
+            operationId: "createOrderDraft",
+            idempotencyKey: world.createKey,
+          });
+          assert(
+            conflict.status === 409 &&
+              conflict.json?.code === "IDEMPOTENCY_CONFLICT",
+            `idempotency conflict returned ${conflict.status} ${conflict.json?.code}`,
+          );
+          const db = await snapshot("replay-draft");
+          assert(
+            db.orders === 1 &&
+              db.idempotencyRows === 1 &&
+              db.orderRef === world.orderRef,
+            "replay changed owner rows",
+          );
+        },
+      ],
+      [
+        "put-item",
+        "Позиция черновика сохраняется после проверки цены",
+        async () => {
+          const response = await call("put-item", {
+            method: "PUT",
+            path: `/api/client-v1/orders/${world.orderRef}/items/${FIXTURE.itemRef}`,
+            body: itemBody(world.version),
+            operationId: "upsertOrderItem",
+            idempotencyKey: randomUUID(),
+          });
+          assert(
+            response.status === 200,
+            `put returned ${response.status} ${response.json?.code ?? ""}`,
+          );
+          assert(
+            response.json?.items?.length === 1,
+            "put did not store one item",
+          );
+          assert(
+            response.json.items[0].itemRef === FIXTURE.itemRef,
+            "itemRef mismatch",
+          );
+          assert(
+            response.json.items[0].displayName === FIXTURE.displayName,
+            "item name mismatch",
+          );
+          world.version = response.json.version;
+          const db = await snapshot("put-item");
+          assert(
             db.items === 1 &&
-            db.outbox === 1 &&
-            db.outboxPublished === 1 &&
-            db.messageTypes?.[0] === "OrderConfirmed.v1",
-          `outbox after confirm was ${JSON.stringify({ status: db.status, outbox: db.outbox, published: db.outboxPublished, types: db.messageTypes })}`,
-        );
-        const consumed = await run(
-          "docker",
-          [
-            "exec",
-            `${project}-kafka`,
-            "/opt/kafka/bin/kafka-console-consumer.sh",
-            "--bootstrap-server",
-            "kafka:9092",
-            "--topic",
-            "coffee.orders.lifecycle.v1",
-            "--from-beginning",
-            "--max-messages",
-            "1",
-            "--timeout-ms",
-            "20000",
-            "--command-config",
-            "/etc/kafka/secrets/client.properties",
-          ],
-          { timeoutMs: 30_000 },
-        );
-        const line = consumed.stdout
-          .split("\n")
-          .map((item) => item.trim())
-          .find((item) => item.startsWith("{"));
-        const message = JSON.parse(line ?? "");
-        const event = {
-          topic: "coffee.orders.lifecycle.v1",
-          messageType: message.messageType ?? null,
-          orderRefMatches:
-            message.payload?.orderRef === world.orderRef || message.aggregate?.ref === world.orderRef,
-        };
-        dbLog["confirm-order-kafka"] = event;
-        assert(
-          event.messageType === "OrderConfirmed.v1" && event.orderRefMatches === true,
-          "kafka message did not match the confirmed order",
-        );
-      }],
-      ["reconcile-blocked", "Сверка до наблюдения отклоняется и не пишет событие", async () => {
-        const response = await call("reconcile-blocked", {
-          method: "POST",
-          path: `/api/client-v1/orders/${world.orderRef}/commands/request-aroma-reconciliation`,
-          body: { expectedVersion: world.version, reason: "slice" },
-          operationId: "requestAromaReconciliation",
-          idempotencyKey: randomUUID(),
-        });
-        assert(
-          response.status === 409 && response.json?.code === "AROMA_RECONCILIATION_NOT_ALLOWED",
-          `reconcile returned ${response.status} ${response.json?.code}`,
-        );
-        const db = await snapshot("reconcile-blocked");
-        assert(
-          db.status === "Confirmed" &&
-            db.version === world.version &&
-            db.outbox === 1 &&
-            db.messageTypes?.length === 1 &&
-            db.messageTypes[0] === "OrderConfirmed.v1",
-          "blocked reconcile wrote another event",
-        );
-      }],
+              db.status === "Draft" &&
+              db.version === world.version,
+            "item row mismatch",
+          );
+        },
+      ],
+      [
+        "get-card",
+        "Чтение карточки возвращает тот же черновик",
+        async () => {
+          const response = await call("get-card", {
+            method: "GET",
+            path: `/api/client-v1/orders/${world.orderRef}`,
+            operationId: "getOrderCard",
+          });
+          assert(
+            response.status === 200,
+            `get returned ${response.status} ${response.json?.code ?? ""}`,
+          );
+          assert(
+            response.json?.orderRef === world.orderRef &&
+              response.json?.status === "Draft" &&
+              response.json?.version === world.version &&
+              response.json?.items?.length === 1 &&
+              response.json?.aroma?.state === "NotRequested",
+            "card did not match the stored draft",
+          );
+          const db = await snapshot("get-card");
+          assert(db.orders === 1 && db.items === 1, "get changed owner rows");
+        },
+      ],
+      [
+        "delete-item",
+        "Удаление позиции оставляет пустой черновик",
+        async () => {
+          const response = await call("delete-item", {
+            method: "DELETE",
+            path: `/api/client-v1/orders/${world.orderRef}/items/${FIXTURE.itemRef}`,
+            operationId: "removeOrderItem",
+            idempotencyKey: randomUUID(),
+            extraHeaders: { "if-match-version": world.version },
+          });
+          assert(
+            response.status === 200,
+            `delete returned ${response.status} ${response.json?.code ?? ""}`,
+          );
+          assert(
+            response.json?.items?.length === 0 &&
+              response.json?.status === "Draft",
+            "delete left an item",
+          );
+          world.version = response.json.version;
+          const db = await snapshot("delete-item");
+          assert(
+            db.items === 0 && db.status === "Draft" && db.outbox === 0,
+            "delete row mismatch",
+          );
+        },
+      ],
+      [
+        "confirm-empty",
+        "Пустой черновик не подтверждается",
+        async () => {
+          const before = await snapshot("confirm-empty-before");
+          const response = await call("confirm-empty", {
+            method: "POST",
+            path: `/api/client-v1/orders/${world.orderRef}/commands/confirm`,
+            body: { expectedVersion: world.version },
+            operationId: "confirmOrder",
+            idempotencyKey: randomUUID(),
+          });
+          assert(
+            response.status === 422 && response.json?.code === "ORDER_EMPTY",
+            `empty confirm returned ${response.status} ${response.json?.code}`,
+          );
+          const db = await snapshot("confirm-empty");
+          assert(
+            db.status === "Draft" &&
+              db.version === world.version &&
+              db.items === 0 &&
+              db.outbox === 0 &&
+              db.idempotencyRows === before.idempotencyRows,
+            "empty confirm changed the draft",
+          );
+        },
+      ],
+      [
+        "confirm-order",
+        "Подтверждение пишет Confirmed и публикует OrderConfirmed.v1",
+        async () => {
+          const put = await call("confirm-order", {
+            method: "PUT",
+            path: `/api/client-v1/orders/${world.orderRef}/items/${FIXTURE.itemRef}`,
+            body: itemBody(world.version),
+            operationId: "upsertOrderItem",
+            idempotencyKey: randomUUID(),
+          });
+          assert(
+            put.status === 200 && put.json?.items?.length === 1,
+            `restore put returned ${put.status}`,
+          );
+          world.version = put.json.version;
+          const key = randomUUID();
+          const response = await call("confirm-order", {
+            method: "POST",
+            path: `/api/client-v1/orders/${world.orderRef}/commands/confirm`,
+            body: { expectedVersion: world.version },
+            operationId: "confirmOrder",
+            idempotencyKey: key,
+          });
+          assert(
+            response.status === 200,
+            `confirm returned ${response.status} ${response.json?.code ?? ""}`,
+          );
+          assert(
+            response.json?.status === "Confirmed",
+            "confirm did not set Confirmed",
+          );
+          assert(
+            header(response.headers, "idempotency-replayed") === undefined,
+            "first confirm was marked replayed",
+          );
+          world.version = response.json.version;
+          const replay = await call("confirm-order", {
+            method: "POST",
+            path: `/api/client-v1/orders/${world.orderRef}/commands/confirm`,
+            body: { expectedVersion: put.json.version },
+            operationId: "confirmOrder",
+            idempotencyKey: key,
+          });
+          assert(
+            replay.status === 200 && replay.json?.status === "Confirmed",
+            `confirm replay returned ${replay.status}`,
+          );
+          assert(
+            header(replay.headers, "idempotency-replayed") === "true",
+            "confirm replay was not marked",
+          );
+          const conflict = await call("confirm-order", {
+            method: "POST",
+            path: `/api/client-v1/orders/${world.orderRef}/commands/confirm`,
+            body: { expectedVersion: world.version },
+            operationId: "confirmOrder",
+            idempotencyKey: key,
+          });
+          assert(
+            conflict.status === 409 &&
+              conflict.json?.code === "IDEMPOTENCY_CONFLICT",
+            `confirm conflict returned ${conflict.status} ${conflict.json?.code}`,
+          );
+          let db = await snapshot("confirm-order");
+          const deadline = Date.now() + 30_000;
+          while (db.outboxPublished !== 1 && Date.now() < deadline) {
+            await delay(500);
+            db = await snapshot("confirm-order");
+          }
+          assert(
+            db.status === "Confirmed" &&
+              db.version === world.version &&
+              db.items === 1 &&
+              db.outbox === 1 &&
+              db.outboxPublished === 1 &&
+              db.messageTypes?.[0] === "OrderConfirmed.v1",
+            `outbox after confirm was ${JSON.stringify({ status: db.status, outbox: db.outbox, published: db.outboxPublished, types: db.messageTypes })}`,
+          );
+          const consumed = await run(
+            "docker",
+            [
+              "exec",
+              `${project}-kafka`,
+              "/opt/kafka/bin/kafka-console-consumer.sh",
+              "--bootstrap-server",
+              "kafka:9092",
+              "--topic",
+              "coffee.orders.lifecycle.v1",
+              "--from-beginning",
+              "--max-messages",
+              "1",
+              "--timeout-ms",
+              "20000",
+              "--command-config",
+              "/etc/kafka/secrets/client.properties",
+            ],
+            { timeoutMs: 30_000 },
+          );
+          const line = consumed.stdout
+            .split("\n")
+            .map((item) => item.trim())
+            .find((item) => item.startsWith("{"));
+          const message = JSON.parse(line ?? "");
+          const event = {
+            topic: "coffee.orders.lifecycle.v1",
+            messageType: message.messageType ?? null,
+            orderRefMatches:
+              message.payload?.orderRef === world.orderRef ||
+              message.aggregate?.ref === world.orderRef,
+          };
+          dbLog["confirm-order-kafka"] = event;
+          assert(
+            event.messageType === "OrderConfirmed.v1" &&
+              event.orderRefMatches === true,
+            "kafka message did not match the confirmed order",
+          );
+        },
+      ],
+      [
+        "reconcile-blocked",
+        "Сверка до наблюдения отклоняется и не пишет событие",
+        async () => {
+          const response = await call("reconcile-blocked", {
+            method: "POST",
+            path: `/api/client-v1/orders/${world.orderRef}/commands/request-aroma-reconciliation`,
+            body: { expectedVersion: world.version, reason: "slice" },
+            operationId: "requestAromaReconciliation",
+            idempotencyKey: randomUUID(),
+          });
+          assert(
+            response.status === 409 &&
+              response.json?.code === "AROMA_RECONCILIATION_NOT_ALLOWED",
+            `reconcile returned ${response.status} ${response.json?.code}`,
+          );
+          const db = await snapshot("reconcile-blocked");
+          assert(
+            db.status === "Confirmed" &&
+              db.version === world.version &&
+              db.outbox === 1 &&
+              db.messageTypes?.length === 1 &&
+              db.messageTypes[0] === "OrderConfirmed.v1",
+            "blocked reconcile wrote another event",
+          );
+        },
+      ],
     ];
 
     for (const [id, title, runScenario] of plan) {
@@ -1635,7 +1973,12 @@ async function main() {
     return result === "pass" ? 0 : 1;
   } catch (error) {
     if (!scenarios.some((item) => item.status === "fail")) {
-      scenarios.push({ id: "run", title: "Прогон", status: "fail", detail: detail(error) });
+      scenarios.push({
+        id: "run",
+        title: "Прогон",
+        status: "fail",
+        detail: detail(error),
+      });
     }
     await writeResult("fail").catch(() => {});
     process.stderr.write(`${detail(error)}\n`);
@@ -1649,7 +1992,10 @@ async function main() {
     await saveLogs(`${project}-internal`, join(evidenceDir, "fixture.log"));
     await saveLogs(`${project}-kafka`, join(evidenceDir, "kafka.log"));
     if (!keep) await tearDown(runId);
-    else process.stderr.write(`orders-slice-verify: kept ${project}; remove with node .cursor/skills/orders-slice-verify/run.mjs --down ${runId}\n`);
+    else
+      process.stderr.write(
+        `orders-slice-verify: kept ${project}; remove with node .cursor/skills/orders-slice-verify/run.mjs --down ${runId}\n`,
+      );
   }
 }
 
@@ -1709,7 +2055,9 @@ async function tearDown(runId) {
     ids = "";
   }
   for (const id of ids.split("\n").filter(Boolean)) {
-    const name = (await run("docker", ["inspect", "--format", "{{.Name}}", id])).stdout
+    const name = (
+      await run("docker", ["inspect", "--format", "{{.Name}}", id])
+    ).stdout
       .trim()
       .replace(/^\//u, "");
     assert(name.startsWith(`${project}-`), `refusing to remove ${name}`);
@@ -1748,11 +2096,20 @@ async function removeNetwork(name, runId) {
 }
 
 async function removeProjectVolumes(project) {
-  assert(project.startsWith("orders-slice-verify-"), "refusing to remove foreign volumes");
+  assert(
+    project.startsWith("orders-slice-verify-"),
+    "refusing to remove foreign volumes",
+  );
   let names = "";
   try {
     names = (
-      await run("docker", ["volume", "ls", "-q", "--filter", `label=com.docker.compose.project=${project}`])
+      await run("docker", [
+        "volume",
+        "ls",
+        "-q",
+        "--filter",
+        `label=com.docker.compose.project=${project}`,
+      ])
     ).stdout;
   } catch {
     return;

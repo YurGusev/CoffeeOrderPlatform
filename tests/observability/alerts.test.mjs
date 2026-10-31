@@ -1770,11 +1770,35 @@ void test("external runtime matrix requires exact five database targets and conf
     externalCleanup: {
       verified: true,
       databases: { verified: true, removed: databases, retained: [] },
-      attachment: { attempted: true, removed: true, routePreserved: true },
+      attachment: {
+        baselineAttached: false,
+        attempted: true,
+        removed: true,
+        routePreserved: true,
+      },
     },
   };
   assert.equal(
     summarizeComposeReceipt(receipt, project, true).postgres.databaseCount,
+    5,
+  );
+  assert.equal(
+    summarizeComposeReceipt(
+      {
+        ...receipt,
+        externalCleanup: {
+          ...receipt.externalCleanup,
+          attachment: {
+            baselineAttached: true,
+            attempted: false,
+            removed: false,
+            routePreserved: true,
+          },
+        },
+      },
+      project,
+      true,
+    ).postgres.databaseCount,
     5,
   );
   for (const invalid of [
@@ -1796,9 +1820,38 @@ void test("external runtime matrix requires exact five database targets and conf
       ...receipt,
       externalCleanup: {
         ...receipt.externalCleanup,
-        attachment: { attempted: true, removed: false, routePreserved: true },
+        attachment: {
+          baselineAttached: false,
+          attempted: true,
+          removed: false,
+          routePreserved: true,
+        },
       },
     },
+    ...[
+      {
+        baselineAttached: true,
+        attempted: true,
+        removed: false,
+        routePreserved: true,
+      },
+      {
+        baselineAttached: true,
+        attempted: false,
+        removed: true,
+        routePreserved: true,
+      },
+      {
+        baselineAttached: false,
+        attempted: false,
+        removed: false,
+        routePreserved: true,
+      },
+      { attempted: true, removed: true, routePreserved: true },
+    ].map((attachment) => ({
+      ...receipt,
+      externalCleanup: { ...receipt.externalCleanup, attachment },
+    })),
   ])
     assert.throws(
       () => summarizeComposeReceipt(invalid, project, true),
@@ -3187,7 +3240,12 @@ void test("launch observability artifacts survive removal of the temporary candi
         retained,
         failure: "COMPOSE_CONSUMERS_NOT_STOPPED",
       },
-      attachment: { attempted: true, removed: false, routePreserved: false },
+      attachment: {
+        baselineAttached: false,
+        attempted: true,
+        removed: false,
+        routePreserved: false,
+      },
       failure: "COMPOSE_CONSUMERS_NOT_STOPPED",
     };
     const evidence = {

@@ -54,7 +54,9 @@ function readBody(request) {
       }
       chunks.push(chunk);
     });
-    request.on("end", () => resolveBody(Buffer.concat(chunks).toString("utf8")));
+    request.on("end", () =>
+      resolveBody(Buffer.concat(chunks).toString("utf8")),
+    );
     request.on("error", rejectBody);
   });
 }
@@ -80,11 +82,18 @@ function problem(response, status, code, instance, correlationId) {
 const server = createServer(tls, async (request, response) => {
   const path = request.url ?? "/";
   const correlationId = String(
-    request.headers["x-correlation-id"] ?? "00000000-0000-4000-8000-000000000000",
+    request.headers["x-correlation-id"] ??
+      "00000000-0000-4000-8000-000000000000",
   );
   try {
     if (!peerMatches(request)) {
-      problem(response, 401, "SERVICE_AUTHENTICATION_REQUIRED", path, correlationId);
+      problem(
+        response,
+        401,
+        "SERVICE_AUTHENTICATION_REQUIRED",
+        path,
+        correlationId,
+      );
       process.stdout.write(`${request.method} ${path} 401\n`);
       return;
     }
@@ -93,11 +102,19 @@ const server = createServer(tls, async (request, response) => {
       process.stdout.write("GET /health/ready 200\n");
       return;
     }
-    const input = /^\/api\/internal-v1\/customers\/([^/]+)\/order-input$/u.exec(path);
+    const input = /^\/api\/internal-v1\/customers\/([^/]+)\/order-input$/u.exec(
+      path,
+    );
     if (request.method === "GET" && input) {
       const ref = decodeURIComponent(input[1] ?? "");
       if (!request.headers["x-service-delegation"]) {
-        problem(response, 401, "SERVICE_AUTHENTICATION_REQUIRED", path, correlationId);
+        problem(
+          response,
+          401,
+          "SERVICE_AUTHENTICATION_REQUIRED",
+          path,
+          correlationId,
+        );
         process.stdout.write(`GET order-input 401\n`);
         return;
       }
@@ -120,7 +137,10 @@ const server = createServer(tls, async (request, response) => {
       process.stdout.write("GET order-input 200\n");
       return;
     }
-    if (request.method === "POST" && path === "/api/internal-v1/pricing/quotes:verify") {
+    if (
+      request.method === "POST" &&
+      path === "/api/internal-v1/pricing/quotes:verify"
+    ) {
       const parsed = JSON.parse(await readBody(request));
       const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
       send(

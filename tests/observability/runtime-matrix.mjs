@@ -1319,8 +1319,12 @@ export function summarizeComposeReceipt(receipt, projectName, external) {
         JSON.stringify(expectedDatabases) &&
       Array.isArray(cleanup.databases.retained) &&
       cleanup.databases.retained.length === 0 &&
-      cleanup.attachment?.attempted === true &&
-      cleanup.attachment.removed === true &&
+      ((cleanup.attachment?.baselineAttached === false &&
+        cleanup.attachment.attempted === true &&
+        cleanup.attachment.removed === true) ||
+        (cleanup.attachment?.baselineAttached === true &&
+          cleanup.attachment.attempted === false &&
+          cleanup.attachment.removed === false)) &&
       cleanup.attachment.routePreserved === true
     : receipt?.proofKind === "observability-fixture" &&
       receipt?.credentialSource === "local-fixture" &&

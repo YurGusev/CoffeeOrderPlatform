@@ -2345,22 +2345,27 @@ export function externalRecoveryCleanupSummary({
     retained: [],
     failure: "DATABASE_CLEANUP_NOT_CONFIRMED",
   };
+  const baselineAttached = attachment?.baselineAttached === true;
   const attempted = attachment?.attempted === true;
-  const removed = !attempted || attachment?.absenceConfirmed === true;
+  const removed = attachment?.absenceConfirmed === true;
+  const attachmentVerified = baselineAttached
+    ? !attempted && !removed && attachment.baselineConfirmed === true
+    : attempted && removed;
   const routePreserved =
-    !attempted ||
-    (typeof attachment?.routeBefore === "string" &&
-      attachment.routeAfter === attachment.routeBefore);
+    typeof attachment?.routeBefore === "string" &&
+    attachment.routeAfter === attachment.routeBefore;
   const verified =
     databaseCleanup.verified === true &&
-    removed &&
+    attachmentVerified &&
     routePreserved &&
     cleanupFailed !== true;
   const failure = !verified
     ? databaseCleanup.verified !== true
       ? (databaseCleanup.failure ?? "DATABASE_CLEANUP_UNVERIFIED")
-      : !removed
-        ? "POSTGRES_ATTACHMENT_RETAINED"
+      : !attachmentVerified
+        ? baselineAttached
+          ? "POSTGRES_BASELINE_UNVERIFIED"
+          : "POSTGRES_ATTACHMENT_RETAINED"
         : !routePreserved
           ? "POSTGRES_ROUTE_UNVERIFIED"
           : "EXTERNAL_CLEANUP_FAILED"
@@ -2368,7 +2373,7 @@ export function externalRecoveryCleanupSummary({
   return {
     verified,
     databases: databaseCleanup,
-    attachment: { attempted, removed, routePreserved },
+    attachment: { baselineAttached, attempted, removed, routePreserved },
     ...(failure ? { failure } : {}),
   };
 }
@@ -3110,8 +3115,17 @@ function assertApprovedExternalPostgresDockerState({ attached }) {
   const legacy = containerNetworks.coffee_network;
   assert.equal(legacy?.NetworkID, APPROVED_EXTERNAL_POSTGRES.legacyNetworkId);
   const data = containerNetworks[EXTERNAL_POSTGRES_NETWORK];
-  assert.equal(Boolean(data), attached);
-  if (attached) assert.ok(data.Aliases?.includes("coffee_postgres"));
+  if (attached !== undefined) assert.equal(Boolean(data), attached);
+  assert.deepEqual(
+    Object.keys(containerNetworks).sort(),
+    data
+      ? [EXTERNAL_POSTGRES_NETWORK, "coffee_network"].sort()
+      : ["coffee_network"],
+  );
+  if (data) {
+    assert.equal(data.NetworkID, APPROVED_EXTERNAL_POSTGRES.dataNetworkId);
+    assert.ok(data.Aliases?.includes("coffee_postgres"));
+  }
 
   const dataNetwork = inspectDockerObject([
     APPROVED_EXTERNAL_POSTGRES.dataNetworkId,
@@ -3121,7 +3135,7 @@ function assertApprovedExternalPostgresDockerState({ attached }) {
   const endpoints = Object.keys(dataNetwork.Containers ?? {});
   assert.deepEqual(
     endpoints.sort(),
-    attached ? [APPROVED_EXTERNAL_POSTGRES.containerId] : [],
+    data ? [APPROVED_EXTERNAL_POSTGRES.containerId] : [],
   );
   const legacyNetwork = inspectDockerObject([
     APPROVED_EXTERNAL_POSTGRES.legacyNetworkId,
@@ -3136,20 +3150,53 @@ function assertApprovedExternalPostgresDockerState({ attached }) {
 }
 
 export function prepareApprovedExternalPostgresAttachment() {
-  const before = assertApprovedExternalPostgresDockerState({ attached: false });
+  const before = assertApprovedExternalPostgresDockerState({});
   const routeBefore = externalPostgresRoute(
     APPROVED_EXTERNAL_POSTGRES.containerId,
   );
   return {
     before,
     routeBefore,
+    baselineAttached: Boolean(
+      before.container.NetworkSettings.Networks[EXTERNAL_POSTGRES_NETWORK],
+    ),
+    baselineConfirmed: false,
     attached: false,
     attempted: false,
     absenceConfirmed: false,
   };
 }
 
+function assertExternalPostgresBaseline(attachment) {
+  const after = assertApprovedExternalPostgresDockerState({ attached: true });
+  assert.deepEqual(
+    after.container.NetworkSettings.Networks,
+    attachment.before.container.NetworkSettings.Networks,
+  );
+  assert.deepEqual(
+    after.dataNetwork.Containers,
+    attachment.before.dataNetwork.Containers,
+  );
+  assert.deepEqual(
+    after.legacyNetwork.Containers,
+    attachment.before.legacyNetwork.Containers,
+  );
+  const routeAfter = externalPostgresRoute(
+    APPROVED_EXTERNAL_POSTGRES.containerId,
+  );
+  assert.equal(
+    routeAfter,
+    attachment.routeBefore,
+    "external PostgreSQL baseline default route changed",
+  );
+  attachment.routeAfter = routeAfter;
+}
+
 export function attachApprovedExternalPostgres(attachment) {
+  if (attachment.baselineAttached) {
+    assertExternalPostgresBaseline(attachment);
+    return;
+  }
   attachment.attempted = true;
   runDocker(
     externalPostgresConnectArgs(
@@ -3211,7 +3258,12 @@ function disconnectApprovedExternalPostgres(attachment) {
 }
 
 export function cleanupApprovedExternalPostgresAttachment(attachment) {
-  if (attachment?.attached) disconnectApprovedExternalPostgres(attachment);
+  if (attachment?.baselineAttached) {
+    attachment.baselineConfirmed = false;
+    assertExternalPostgresBaseline(attachment);
+    attachment.baselineConfirmed = true;
+  } else if (attachment?.attached)
+    disconnectApprovedExternalPostgres(attachment);
   else if (attachment?.attempted) {
     assertApprovedExternalPostgresDockerState({ attached: false });
     attachment.absenceConfirmed = true;

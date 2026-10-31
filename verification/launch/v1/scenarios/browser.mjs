@@ -1013,8 +1013,14 @@ export async function validateBrowserCorrelation({
     receipt.cleanup.databases?.verified !== true ||
     !isDeepStrictEqual(receipt.cleanup.databases.removed, expectedNames) ||
     !isDeepStrictEqual(receipt.cleanup.databases.retained, []) ||
-    receipt.cleanup.attachment?.attempted !== true ||
-    receipt.cleanup.attachment.removed !== true ||
+    !(
+      (receipt.cleanup.attachment?.baselineAttached === false &&
+        receipt.cleanup.attachment.attempted === true &&
+        receipt.cleanup.attachment.removed === true) ||
+      (receipt.cleanup.attachment?.baselineAttached === true &&
+        receipt.cleanup.attachment.attempted === false &&
+        receipt.cleanup.attachment.removed === false)
+    ) ||
     receipt.cleanup.attachment.routePreserved !== true ||
     dirname(childContext.checkoutDir) !== resolve(parentContext.checkoutDir) ||
     !childContext.checkoutDir.startsWith(

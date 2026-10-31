@@ -8156,7 +8156,12 @@ void test("browser correlation executes the child lifecycle and preserves early 
         externalCleanup: {
           verified: true,
           databases: { verified: true, removed: databases, retained: [] },
-          attachment: { attempted: true, removed: true, routePreserved: true },
+          attachment: {
+            baselineAttached: false,
+            attempted: true,
+            removed: true,
+            routePreserved: true,
+          },
         },
         g14BrowserProof: {
           schemaVersion: 1,
@@ -8927,7 +8932,12 @@ void test("browser correlation admission verifies the sealed child bundle and sc
     cleanup: {
       verified: true,
       databases: { verified: true, removed: [...databases], retained: [] },
-      attachment: { attempted: true, removed: true, routePreserved: true },
+      attachment: {
+        baselineAttached: false,
+        attempted: true,
+        removed: true,
+        routePreserved: true,
+      },
     },
   };
   const receiptPath = join(directory, "browser-correlation.json");
@@ -8942,6 +8952,60 @@ void test("browser correlation admission verifies the sealed child bundle and sc
     ).files.length,
     6,
   );
+  receipt.cleanup.attachment = {
+    baselineAttached: true,
+    attempted: false,
+    removed: false,
+    routePreserved: true,
+  };
+  await writeFile(receiptPath, JSON.stringify(receipt));
+  assert.equal(
+    (
+      await validateBrowserCorrelation({
+        evidenceDir: parentContext.evidenceDir,
+        parentContext,
+      })
+    ).files.length,
+    6,
+  );
+  for (const attachment of [
+    {
+      baselineAttached: true,
+      attempted: true,
+      removed: false,
+      routePreserved: true,
+    },
+    {
+      baselineAttached: true,
+      attempted: false,
+      removed: true,
+      routePreserved: true,
+    },
+    {
+      baselineAttached: false,
+      attempted: false,
+      removed: false,
+      routePreserved: true,
+    },
+    { attempted: true, removed: true, routePreserved: true },
+  ]) {
+    receipt.cleanup.attachment = attachment;
+    await writeFile(receiptPath, JSON.stringify(receipt));
+    await assert.rejects(
+      validateBrowserCorrelation({
+        evidenceDir: parentContext.evidenceDir,
+        parentContext,
+      }),
+      { code: "G14_BROWSER_CORRELATION_RECEIPT_INVALID" },
+    );
+  }
+  receipt.cleanup.attachment = {
+    baselineAttached: false,
+    attempted: true,
+    removed: true,
+    routePreserved: true,
+  };
+  await writeFile(receiptPath, JSON.stringify(receipt));
   const observations = join(directory, "observability");
   await mkdir(observations, { mode: 0o700 });
   const observationRun = "00bf08bb-a371-4e52-b26d-23c08e06ce16";
