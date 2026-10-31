@@ -11,6 +11,7 @@ import {
 } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
+import { isDeepStrictEqual } from "node:util";
 import { fileURLToPath } from "node:url";
 import { dump as dumpYaml, load as loadYaml } from "js-yaml";
 import { loadPlatformConfig } from "../../scripts/config-lib.mjs";
@@ -38,6 +39,7 @@ import {
 import {
   loadVerifiedGateImage,
   removeVerifiedGateImage,
+  readVerifiedRuntimeImages,
 } from "../verified-infrastructure-image.mjs";
 import { provisionStorage, removeStorage } from "./storage.mjs";
 import { validateLaunchContext } from "../../verification/launch/v1/report.mjs";
@@ -46,6 +48,72 @@ const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const NODE_RUNTIME_TARGETS = OBSERVABILITY_TARGETS.filter(
   (runtime) => runtime !== "edge-nginx",
 );
+export async function validateG14TelemetrySources({
+  payload,
+  projectName,
+  verifiedImages,
+  runDocker,
+}) {
+  if (
+    !payload ||
+    payload.projectName !== projectName ||
+    !Array.isArray(payload.runtimes) ||
+    payload.runtimes.length !== NODE_RUNTIME_TARGETS.length ||
+    !NODE_RUNTIME_TARGETS.every((role) => payload.runtimes.includes(role))
+  )
+    throw new Error("G14 runtime identity invalid");
+  const imageByRole = new Map(
+    verifiedImages.map(({ service, imageId }) => [service, imageId]),
+  );
+  const names = [
+    "coffee_edge_backend",
+    "coffee_public_api_backend",
+    "coffee_internal_api",
+    "coffee_kafka_event",
+  ];
+  const networkIds = new Map();
+  const networks = names.map((name) => {
+    const expected = `${projectName}_${name}`;
+    if (payload.networks?.[name] !== expected)
+      throw new Error("G14 network name invalid");
+    const rows = JSON.parse(runDocker(["network", "inspect", expected]));
+    const network = rows[0];
+    if (
+      rows.length !== 1 ||
+      network?.Name !== expected ||
+      !/^[a-f0-9]{64}$/u.test(network.Id ?? "") ||
+      network.Internal !== true ||
+      network.Labels?.["com.docker.compose.project"] !== projectName ||
+      network.Labels?.["com.docker.compose.network"] !== name
+    )
+      throw new Error("G14 network identity invalid");
+    networkIds.set(expected, network.Id);
+    return expected;
+  });
+  const logFiles = await discoverContainerLogs({ projectName, runDocker });
+  if (
+    logFiles.length !== OBSERVABILITY_TARGETS.length ||
+    imageByRole.size !== OBSERVABILITY_TARGETS.length
+  )
+    throw new Error("G14 runtime inventory incomplete");
+  for (const { service, containerId } of logFiles) {
+    const rows = JSON.parse(runDocker(["inspect", containerId]));
+    const container = rows[0];
+    if (
+      rows.length !== 1 ||
+      container?.Id !== containerId ||
+      container.Image !== imageByRole.get(service) ||
+      !networks.some(
+        (name) =>
+          container.NetworkSettings?.Networks?.[name]?.NetworkID ===
+          networkIds.get(name),
+      )
+    )
+      throw new Error("G14 runtime image or network invalid");
+  }
+  return { logFiles, networks };
+}
+
 const sleep = (ms) =>
   new Promise((resolveSleep) => setTimeout(resolveSleep, ms));
 const docker = (args) =>
@@ -1676,11 +1744,18 @@ function inspectProducerRedaction({
   };
 }
 
+const SENSITIVE_TELEMETRY_FIELD =
+  /password|passwd|credential|api.?key|token|secret|authorization|cookie|session|private.?key|email|phone|actor|address|(?:client|remote|source|forwarded).?ip|(?:request|callback|target).?(?:uri|url)|payload|request.?body/iu;
+
 function containsSensitiveField(value, depth = 0) {
-  if (depth >= 8 || value === null || typeof value !== "object") return false;
+  if (value === null || typeof value !== "object") return false;
+  if (depth >= 8) return true;
   return Object.entries(value).some(
     ([key, child]) =>
-      /authorization|password|secret|token/iu.test(key) ||
+      SENSITIVE_TELEMETRY_FIELD.test(key) ||
+      (key === "key" &&
+        typeof child === "string" &&
+        SENSITIVE_TELEMETRY_FIELD.test(child)) ||
       containsSensitiveField(child, depth + 1),
   );
 }
@@ -1729,9 +1804,22 @@ export async function waitForSameTraceSpans({
   timeoutMs = 60000,
   intervalMs = 2000,
   onObservation,
+  inspectSpan,
 }) {
   if (!/^[0-9a-f]{32}$/u.test(traceId))
     throw new TypeError("traceId must be 32 lowercase hexadecimal characters");
+  if (
+    !expectedSpanNames ||
+    Object.keys(expectedSpanNames).length === 0 ||
+    Object.entries(expectedSpanNames).some(
+      ([role, names]) =>
+        !role ||
+        !Array.isArray(names) ||
+        names.length === 0 ||
+        names.some((name) => typeof name !== "string" || name.length === 0),
+    )
+  )
+    throw new TypeError("expectedSpanNames must contain nonempty role spans");
   let lastSuccessful = null;
   return waitFor(
     async () => {
@@ -1794,6 +1882,7 @@ export async function waitForSameTraceSpans({
               : Buffer.from(span.traceId ?? "", "base64").toString("hex");
             if (spanTrace !== traceId)
               throw new Error("Tempo returned a span from a different trace");
+            inspectSpan?.(span, group.resource);
             found.push({
               service_name: service,
               operation_name: span.name,
@@ -1837,6 +1926,272 @@ export async function waitForSameTraceSpans({
       description: "all expected same-trace runtime spans in Tempo",
     },
   );
+}
+
+export function validateG14ComponentCleanup(component, runId) {
+  if (!/^[0-9]{8}T[0-9]{6}Z-[0-9a-f]{7}$/u.test(runId ?? ""))
+    throw new Error("G14 component child identity invalid");
+  const expected = ["customer", "catalog", "pricing", "orders", "integration"]
+    .map(
+      (owner) =>
+        `coffee_verify_${runId.toLowerCase().replace("-", "_")}_${owner}`,
+    )
+    .sort();
+  if (
+    component?.cleanupVerified !== true ||
+    component.cleanup?.verified !== true ||
+    component.cleanup.databases?.verified !== true ||
+    !isDeepStrictEqual(component.cleanup.databases.removed, expected) ||
+    !isDeepStrictEqual(component.cleanup.databases.retained, []) ||
+    component.cleanup.attachment?.routePreserved !== true
+  )
+    throw new Error("G14 component diagnostic cleanup is unverified");
+  return component.cleanup;
+}
+
+const G14_DURABLE_SPANS = {
+  "orders-service": ["Outbox.relay", "Kafka.produce"],
+  "orders-aroma-preparation": [
+    "Kafka.consume",
+    "Inbox.consumeOnce",
+    "Outbox.relay",
+    "Kafka.produce",
+  ],
+  "realtime-gateway": ["Kafka.consume"],
+};
+
+export async function collectG14BrowserTelemetry({
+  proof,
+  startTimeUs,
+  lokiUrl,
+  tempoUrl,
+  nativeNginxContainerId,
+  secrets = [],
+  fetchImpl = fetch,
+  timeoutMs = 55000,
+  intervalMs = 2000,
+}) {
+  if (
+    !Number.isFinite(timeoutMs) ||
+    timeoutMs <= 0 ||
+    timeoutMs > 55000 ||
+    !Number.isFinite(intervalMs) ||
+    intervalMs <= 0 ||
+    !Number.isFinite(startTimeUs) ||
+    !/^[a-f0-9]{64}$/u.test(nativeNginxContainerId ?? "") ||
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(
+      proof?.correlationId ?? "",
+    ) ||
+    !/^[0-9a-f]{32}$/u.test(proof?.traceId ?? "") ||
+    !/^[0-9]{8}T[0-9]{6}Z-[0-9a-f]{7}$/u.test(proof?.runId ?? "") ||
+    !/^[0-9a-f]{40}$/u.test(proof?.candidateSha ?? "") ||
+    !/^[0-9a-f]{64}$/u.test(proof?.configSha256 ?? "")
+  )
+    throw new TypeError("G14 telemetry proof input invalid");
+  const failure = (reason) => ({
+    status: "NOT_PROVEN",
+    reason,
+    runId: proof.runId,
+    candidateSha: proof.candidateSha,
+    configSha256: proof.configSha256,
+  });
+  const sensitive = (value) =>
+    secrets.some(
+      (secret) =>
+        typeof secret === "string" &&
+        secret.length > 0 &&
+        (JSON.stringify(value) ?? "").includes(secret),
+    );
+  const rejectPrivacy = () => {
+    const error = new Error("G14_TELEMETRY_PRIVACY");
+    error.fatal = true;
+    throw error;
+  };
+  const requiredLogs = ["edge-nginx", "orders-service"];
+  const nativeLogPath = `/var/lib/docker/containers/${nativeNginxContainerId}/${nativeNginxContainerId}-json.log`;
+  const deadline = AbortSignal.timeout(Math.ceil(timeoutMs));
+  const boundedFetch = (url, options) =>
+    fetchImpl(url, {
+      ...options,
+      signal: AbortSignal.any([options.signal, deadline]),
+    });
+  const logsPromise = waitFor(
+    async () => {
+      const endTimeUs = Date.now() * 1000;
+      const rows = await queryLokiLogs({
+        baseUrl: lokiUrl,
+        runId: proof.correlationId,
+        startTimeUs,
+        endTimeUs,
+        fetchImpl: boundedFetch,
+      });
+      if (rows.some((row) => containsSensitiveField(row) || sensitive(row)))
+        rejectPrivacy();
+      const matched = rows.filter((row) =>
+        row.service_name === "edge-nginx"
+          ? row.correlation_id === proof.correlationId
+          : row.service_name === "orders-service" &&
+            (row.correlationId === proof.correlationId ||
+              row.req?.correlationId === proof.correlationId),
+      );
+      const counts = Object.fromEntries(
+        requiredLogs.map((role) => [
+          role,
+          matched.filter((row) => row.service_name === role).length,
+        ]),
+      );
+      if (!requiredLogs.every((role) => counts[role] > 0)) return false;
+      const requests = new Map();
+      let excluded = 0;
+      let duplicates = 0;
+      for (const row of rows.filter(
+        (record) => record.service_name === "edge-nginx",
+      )) {
+        if (
+          row.correlation_id !== proof.correlationId ||
+          row.log_file_path !== nativeLogPath ||
+          typeof row.route !== "string" ||
+          typeof row.method !== "string"
+        ) {
+          const error = new Error("G14_NATIVE_LOG_IDENTITY_INVALID");
+          error.fatal = true;
+          throw error;
+        }
+        if (
+          row.route !== "client.orders" ||
+          !["GET", "POST", "PUT", "DELETE"].includes(row.method)
+        ) {
+          excluded += 1;
+          continue;
+        }
+        if (
+          !/^[a-f0-9]{32}$/u.test(row.request_id ?? "") ||
+          !Number.isInteger(row.status) ||
+          row.status < 100 ||
+          row.status > 599 ||
+          typeof row.duration_seconds !== "number" ||
+          !Number.isFinite(row.duration_seconds) ||
+          row.duration_seconds < 0 ||
+          !["OK", ""].includes(row.request_completion)
+        ) {
+          const error = new Error("G14_NATIVE_LOG_MEASUREMENT_INVALID");
+          error.fatal = true;
+          throw error;
+        }
+        const record = {
+          method: row.method,
+          status: row.status,
+          duration: row.duration_seconds,
+          completion: row.request_completion,
+        };
+        if (requests.has(row.request_id)) {
+          if (!isDeepStrictEqual(requests.get(row.request_id), record)) {
+            const error = new Error("G14_NATIVE_LOG_DUPLICATE_CONFLICT");
+            error.fatal = true;
+            throw error;
+          }
+          duplicates += 1;
+        } else requests.set(row.request_id, record);
+      }
+      const entries = [...requests.values()];
+      const completed = entries.filter(
+        ({ completion, status }) => completion === "OK" && status !== 499,
+      );
+      if (
+        !["GET", "POST"].every((method) =>
+          completed.some(
+            (entry) => entry.method === method && entry.status === 200,
+          ),
+        )
+      )
+        return false;
+      const durations = completed
+        .map(({ duration }) => duration)
+        .sort((a, b) => a - b);
+      const rank = (fraction) =>
+        durations[Math.ceil(durations.length * fraction) - 1];
+      const statusCounts = {};
+      for (const { status } of entries)
+        statusCounts[status] = (statusCounts[status] ?? 0) + 1;
+      return {
+        counts,
+        measurement: {
+          status: "MEASURED",
+          scope:
+            "observed subset, verified CID, native edge-nginx, client.orders, observation window",
+          unit: "seconds",
+          percentile: "nearest-rank",
+          windowStartUtc: new Date(startTimeUs / 1000).toISOString(),
+          windowEndUtc: new Date(endTimeUs / 1000).toISOString(),
+          sampleCount: durations.length,
+          successCount: completed.filter(
+            ({ status }) => status >= 200 && status < 400,
+          ).length,
+          errorCount: completed.filter(({ status }) => status >= 400).length,
+          abortedCount: entries.filter(({ status }) => status === 499).length,
+          incompleteCount: entries.filter(
+            ({ status, completion }) => status !== 499 && completion === "",
+          ).length,
+          excludedCount: excluded,
+          duplicateCount: duplicates,
+          statusCounts,
+          min: durations[0],
+          max: durations.at(-1),
+          p50: rank(0.5),
+          p95: rank(0.95),
+        },
+      };
+    },
+    { timeoutMs, intervalMs, description: "G14 browser CID logs" },
+  );
+  const tracePromise = waitForSameTraceSpans({
+    baseUrl: tempoUrl,
+    traceId: proof.traceId,
+    expectedSpanNames: G14_DURABLE_SPANS,
+    fetchImpl: boundedFetch,
+    timeoutMs,
+    intervalMs,
+    inspectSpan: (span, resource) => {
+      if (
+        containsSensitiveField(span) ||
+        containsSensitiveField(resource) ||
+        sensitive(span) ||
+        sensitive(resource)
+      )
+        rejectPrivacy();
+    },
+  });
+  const [logs, trace] = await Promise.allSettled([logsPromise, tracePromise]);
+  if (logs.status !== "fulfilled" || trace.status !== "fulfilled") {
+    const errors = [logs, trace].filter(
+      (result) => result.status === "rejected",
+    );
+    return failure(
+      errors.some(({ reason }) => reason?.message === "G14_TELEMETRY_PRIVACY")
+        ? "PRIVACY_REJECTED"
+        : "MISSING_OR_QUERY_FAILED",
+    );
+  }
+  if (trace.value.traceRows.length === 0)
+    return failure("MISSING_OR_QUERY_FAILED");
+  const spans = Object.fromEntries(
+    Object.entries(G14_DURABLE_SPANS).map(([role, names]) => [
+      role,
+      names.filter((name) => trace.value.spanInventory[role]?.includes(name)),
+    ]),
+  );
+  return {
+    status: "OBSERVED",
+    runId: proof.runId,
+    candidateSha: proof.candidateSha,
+    configSha256: proof.configSha256,
+    correlationId: proof.correlationId,
+    traceId: proof.traceId,
+    logCounts: logs.value.counts,
+    ordinaryApiMeasurement: logs.value.measurement,
+    spans,
+    spanCount: trace.value.traceRows.length,
+  };
 }
 
 export async function queryLokiLogs({
@@ -4777,40 +5132,248 @@ export async function runObservabilityVerification({
             };
           },
         });
-      let launchResult;
-      if (config.verification.databaseIsolation.enabled) {
-        const { runBrowserParent } =
-          await import("../../verification/launch/v1/scenarios/browser.mjs");
-        const child = await runBrowserParent({
-          runCorrelation: executeLaunchPath,
-        });
-        launchResult = child.result;
-        evidence.browserCorrelationChild = child.browserChild;
-        if (
-          child.browserChild.proof.correlationId !==
-            evidence.launchPathProof?.correlationId ||
-          child.browserChild.proof.traceId !==
-            evidence.launchPathProof?.traceId ||
-          child.browserChild.proof.browserRefetchMatched !== true ||
-          child.browserChild.proof.sseFrameMatched !== true ||
-          child.browserChild.proof.ownerCausation !== true
-        )
-          throw new Error(
-            "browser child and observed trace/correlation proof differ",
-          );
-      } else launchResult = await executeLaunchPath();
-      if (
-        launchResult.cleanupVerified !== true ||
-        evidence.launchPathCorrelation !== "PASS" ||
-        evidence.launchPathOutage?.status !== "PASS"
-      )
+      if (!config.verification.databaseIsolation.enabled)
         throw new Error(
-          "launch path did not prove telemetry, outage and fixture cleanup",
+          "G14 browser correlation requires isolated launch databases",
         );
-      evidence.phases.launchPath = "PASS";
+      const { runBrowserParent } =
+        await import("../../verification/launch/v1/scenarios/browser.mjs");
+      let browserTelemetry;
+      const child = await runBrowserParent({
+        runCorrelation: async (contextPath) => {
+          const identity = await validateLaunchContext(contextPath);
+          // This synthetic diagnostic remains separate from the actual browser proof.
+          try {
+            const component = await executeLaunchPath(contextPath);
+            const externalCleanup = validateG14ComponentCleanup(
+              component,
+              identity.context.runId,
+            );
+            if (evidence.launchPathOutage?.status !== "PASS")
+              throw new Error(
+                "launch component diagnostic outage proof failed",
+              );
+            evidence.launchPathComponent = {
+              ...evidence.launchPathProof,
+              purpose: "SYNTHETIC_COMPONENT_DIAGNOSTIC",
+              parentRunId: validatedLaunch.context.runId,
+              parentCandidateSha: validatedLaunch.context.candidateSha,
+              childRunId: identity.context.runId,
+              childCandidateSha: identity.context.candidateSha,
+              childConfigSha256: identity.context.baseConfigSha256,
+              externalCleanup,
+            };
+          } finally {
+            delete evidence.launchPathProof;
+            evidence.launchPathCorrelation = "NOT_PROVEN";
+          }
+          const { runManagedRollbackChild } =
+            await import("../../verification/launch/v1/scenarios/rollback.mjs");
+          const { validateG14BrowserEvidence } =
+            await import("../browser-proof.mjs");
+          const verifiedImages = await readVerifiedRuntimeImages({
+            contextFile: process.env.COFFEE_LAUNCH_CONTEXT_FILE,
+          });
+          const expectedProject = identity.context.resources.composeProject;
+          if (
+            expectedProject !==
+            `coffee-launch-${identity.context.runId.toLowerCase()}`
+          )
+            throw new Error("G14 child project identity invalid");
+          let stage = "init";
+          let observedProof;
+          let browserTelemetryStartedAtUs;
+          let browserNginxContainerId;
+          let childEnded = false;
+          let collectorNeedsRestore = false;
+          let collectorTasks = Promise.resolve();
+          const changeCollector = (selectedLogs, networks = []) => {
+            if (selectedLogs !== logFiles) collectorNeedsRestore = true;
+            const task = collectorTasks
+              .catch(() => {})
+              .then(() => configureCollector(selectedLogs, networks));
+            collectorTasks = task;
+            return task.then(() => {
+              if (selectedLogs === logFiles) collectorNeedsRestore = false;
+            });
+          };
+          const script = `import {runG14BrowserProof} from './tools/compose-smoke.mjs';
+import {validateLaunchContext} from './verification/launch/v1/report.mjs';
+const identity=await validateLaunchContext(process.env.COFFEE_LAUNCH_CONTEXT_FILE);
+const runId=identity.context.runId;
+const request=(stage,payload)=>new Promise((resolve,reject)=>{
+ const disconnected=()=>{process.removeListener('message',received);reject(new Error('G14_IPC_DISCONNECTED'));};
+ const received=(message,handle)=>{process.removeListener('disconnect',disconnected);if(handle||!message||message.stage!==stage||message.ok!==true)reject(new Error('G14_IPC_REJECTED'));else resolve(message.payload);};
+ process.once('disconnect',disconnected);process.once('message',received);
+ process.send({stage,runId,payload},error=>{if(error){process.removeListener('message',received);process.removeListener('disconnect',disconnected);reject(new Error('G14_IPC_SEND_FAILED'));}});
+});
+const init=await request('init',null);
+const observability={exporterToken:init.exporterToken,onReady:context=>request('roles-ready',context),onCleanup:()=>request('cleanup',null)};
+try {
+ const r=await runG14BrowserProof({baseCandidateSha:process.argv[1],observability,onProof:proof=>request('browser-proof',proof)});
+ if(process.connected)process.disconnect();console.log(JSON.stringify({g14BrowserProof:r.g14BrowserProof,cleanup:r.cleanup,externalCleanup:r.externalCleanup}));
+} catch(error) {
+ if(error.g14Retained)console.log(JSON.stringify({g14Retained:error.g14Retained}));
+ if(process.connected)process.disconnect();throw error;
+}`;
+          let childResult;
+          let retainedInfo;
+          let restoreError;
+          try {
+            childResult = await runManagedRollbackChild({
+              args: [
+                "--input-type=module",
+                "--eval",
+                script,
+                provenanceStart.baseSha,
+              ],
+              cwd: identity.candidateRoot,
+              env: { ...process.env, COFFEE_LAUNCH_CONTEXT_FILE: contextPath },
+              terminationGraceMs: 120_000,
+              onIpc: async (message) => {
+                if (
+                  Object.keys(message).sort().join(",") !==
+                    "payload,runId,stage" ||
+                  message.runId !== identity.context.runId ||
+                  (message.stage !== stage &&
+                    !(
+                      message.stage === "cleanup" &&
+                      ["roles-ready", "browser-proof"].includes(stage)
+                    ))
+                )
+                  throw new Error("G14 IPC stage invalid");
+                if (message.stage === "cleanup") {
+                  if (message.payload !== null)
+                    throw new Error("G14 IPC cleanup invalid");
+                  if (collectorNeedsRestore) await changeCollector(logFiles);
+                  stage = "done";
+                  return null;
+                }
+                if (stage === "init") {
+                  if (message.payload !== null)
+                    throw new Error("G14 IPC init invalid");
+                  stage = "roles-ready";
+                  return { exporterToken: producerToken };
+                }
+                if (stage === "roles-ready") {
+                  const { logFiles: childLogs, networks } =
+                    await validateG14TelemetrySources({
+                      payload: message.payload,
+                      projectName: expectedProject,
+                      verifiedImages,
+                      runDocker: run,
+                    });
+                  if (childEnded) throw new Error("G14 child already ended");
+                  browserNginxContainerId = childLogs.find(
+                    ({ service }) => service === "edge-nginx",
+                  )?.containerId;
+                  await changeCollector(childLogs, networks);
+                  browserTelemetryStartedAtUs = Date.now() * 1000;
+                  stage = "browser-proof";
+                  return null;
+                }
+                if (stage === "browser-proof") {
+                  observedProof = validateG14BrowserEvidence(message.payload, {
+                    runId: identity.context.runId,
+                    candidateSha: identity.context.candidateSha,
+                    configSha256: identity.context.baseConfigSha256,
+                  });
+                  browserTelemetry = await collectG14BrowserTelemetry({
+                    proof: observedProof,
+                    startTimeUs: browserTelemetryStartedAtUs,
+                    nativeNginxContainerId: browserNginxContainerId,
+                    lokiUrl: baseUrls.loki,
+                    tempoUrl: baseUrls.tempo,
+                    secrets,
+                  });
+                  stage = "cleanup";
+                  return null;
+                }
+                throw new Error("G14 IPC unexpected stage");
+              },
+            });
+          } catch (error) {
+            let retained;
+            try {
+              retained = JSON.parse(
+                error.result?.stdout?.trim().split(/\r?\n/u).at(-1) ?? "{}",
+              ).g14Retained;
+            } catch {
+              /* the child may have exited before reporting */
+            }
+            const safePath = (path) =>
+              typeof path === "string" &&
+              path.startsWith("/dev/shm/") &&
+              resolve(path) === path;
+            const valid =
+              retained?.runId === identity.context.runId &&
+              retained.projectName === expectedProject &&
+              [
+                retained.composeFile,
+                retained.secretsDir,
+                retained.browserFixtureRoot,
+              ].every((path) => path === undefined || safePath(path)) &&
+              Array.isArray(retained.databases) &&
+              retained.databases.length <= 5 &&
+              retained.databases.every((name) =>
+                /^coffee_verify_[a-z0-9_]+$/u.test(name),
+              );
+            retainedInfo = {
+              runId: identity.context.runId,
+              projectName: expectedProject,
+              cleanup: "UNKNOWN",
+              ...(valid
+                ? {
+                    composeFile: retained.composeFile,
+                    secretsDir: retained.secretsDir,
+                    browserFixtureRoot: retained.browserFixtureRoot,
+                    databases: retained.databases,
+                  }
+                : {}),
+            };
+            error.g14Retained = retainedInfo;
+            throw error;
+          } finally {
+            childEnded = true;
+            try {
+              if (collectorNeedsRestore) await changeCollector(logFiles);
+            } catch (error) {
+              error.g14Retained = retainedInfo ?? {
+                runId: identity.context.runId,
+                projectName: expectedProject,
+                cleanup: "UNKNOWN",
+              };
+              restoreError = error;
+              cleanupErrors.push(`G14 collector restore: ${cleanError(error)}`);
+            }
+          }
+          if (restoreError) throw restoreError;
+          if (stage !== "done" || !observedProof)
+            throw new Error("G14 IPC incomplete");
+          const result = JSON.parse(
+            childResult.stdout.trim().split(/\r?\n/u).at(-1),
+          );
+          if (!isDeepStrictEqual(result.g14BrowserProof, observedProof))
+            throw new Error("G14 IPC proof differs from child result");
+          return result;
+        },
+      });
+      evidence.browserCorrelationChild = child.browserChild;
+      evidence.launchPathProof = {
+        correlationId: child.browserChild.proof.correlationId,
+        browserRefetchMatched: true,
+        ownerCausation: true,
+        telemetrySubproof: browserTelemetry,
+        traceStatus: "NOT_PROVEN",
+      };
+      evidence.limitations.push(
+        "G14 browser correlation is observed; a shared W3C trace remains NOT_PROVEN.",
+      );
+      evidence.phases.launchPath = "NOT_RUN";
     } catch (error) {
       evidence.phases.launchPath = "FAIL";
       evidence.launchPathFailure = cleanError(error);
+      if (error.g14Retained) evidence.launchPathRetained = error.g14Retained;
       if (error.externalCleanup)
         evidence.launchPathExternalCleanup = error.externalCleanup;
     } finally {

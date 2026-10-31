@@ -71,6 +71,20 @@ Target values **до capacity измерений**, со scope `config/platform.
 
 Новый browser end-to-end SLO начинается при первом байте принятого публичного запроса и заканчивается доставкой последнего байта обычного API response; измеряется на #13, **не объявляется равным 5s** прежнего Edge timer. Authorizer absolute 500ms, API absolute 4500ms и nginx idle 6s относятся к разным границам и не складываются в обещание полного SLA. `proxy_next_upstream off` для auth/API/SSE и любых будущих callbacks; nginx никогда не повторяет потерянную mutation и не cache-ит protected responses. Browser/owner recovery сохраняют `Idempotency-Key` и expected version по исходным contracts.
 
+Для этого измерения native nginx сохраняет безопасные `duration_seconds` и
+`request_completion` в access log. По [определению nginx](https://nginx.org/en/docs/http/ngx_http_log_module.html#var_request_time)
+время считается от первого прочитанного байта до записи лога после отправки
+последнего байта; [`request_completion`](https://nginx.org/en/docs/http/ngx_http_core_module.html#var_request_completion)
+равно `OK` для завершённого запроса.
+G14 измеряет наблюдённую выборку cohort `client.orders` с проверенным correlation ID и точным
+источником native контейнера в окне browser flow, исключая незавершённые
+запросы из статистики. Отчёт показывает число наблюдений, статусы, ошибки,
+обрывы, исключённые и дубликаты, минимум, максимум и p50/p95 методом
+nearest-rank. Он не приписывает отдельную длительность конкретным Confirm или
+causal refetch: их связь доказывается отдельно browser/owner proof. Численного
+порога или latency PASS это измерение не устанавливает; без фактических данных
+его статус остаётся `NOT_PROVEN`.
+
 SSE: `proxy_http_version 1.1`, очистка hop-by-hop `Connection`, `proxy_buffering off`, `proxy_cache off`, compression off, `X-Accel-Buffering: no`; `Last-Event-ID` проходит без подмены, events лишь invalidation/refetch, один realtime instance, slow-client cleanup/queue budget принадлежат #12. Разрыв TLS/reload вызывает reconnect с новой auth проверкой и owner refetch, не replay эффекта. Technical cap512 остаётся reference ceiling; согласованный operator-1 soak не повышает admission, CPU/RSS/FD/TTL. Старый5000target superseded решением владельца13октября2026; исторический FAIL сохранён.
 
 ## 5. Config authority, telemetry и acceptance

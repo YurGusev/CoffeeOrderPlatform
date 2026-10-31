@@ -21,7 +21,10 @@ import {
   validateBrowserFixtureGitLineage,
   validateBrowserFixtureLineage,
 } from "../../../../tools/config-bootstrap/browser-fixture.mjs";
-import { validateBrowserRuntimeArtifact } from "../../../../tools/browser-proof.mjs";
+import {
+  validateBrowserRuntimeArtifact,
+  validateG14BrowserEvidence,
+} from "../../../../tools/browser-proof.mjs";
 import { validateLaunchContext } from "../report.mjs";
 import { inspectLaunchCheckout, runManagedRollbackChild } from "./rollback.mjs";
 
@@ -991,7 +994,7 @@ export async function validateBrowserCorrelation({
     .sort();
   if (
     receipt.schemaVersion !== 1 ||
-    receipt.status !== "PASS" ||
+    receipt.status !== "NOT_PROVEN" ||
     receipt.runId !== parentContext.runId ||
     receipt.candidateSha !== parentContext.candidateSha ||
     receipt.baseConfigSha256 !== parentContext.baseConfigSha256 ||
@@ -1006,12 +1009,6 @@ export async function validateBrowserCorrelation({
     receipt.childConfigArtifactSha256 !== childContext.baseConfigSha256 ||
     receipt.checkoutRemoved !== true ||
     receipt.evidenceRemoved !== true ||
-    receipt.proof?.verified !== true ||
-    !/^[0-9a-f-]{36}$/u.test(receipt.proof.correlationId ?? "") ||
-    !/^[0-9a-f]{32}$/u.test(receipt.proof.traceId ?? "") ||
-    receipt.proof.browserRefetchMatched !== true ||
-    receipt.proof.sseFrameMatched !== true ||
-    receipt.proof.ownerCausation !== true ||
     receipt.cleanup?.verified !== true ||
     receipt.cleanup.databases?.verified !== true ||
     !isDeepStrictEqual(receipt.cleanup.databases.removed, expectedNames) ||
@@ -1031,6 +1028,15 @@ export async function validateBrowserCorrelation({
     )
   )
     fail("G14_BROWSER_CORRELATION_RECEIPT_INVALID");
+  try {
+    validateG14BrowserEvidence(receipt.proof, {
+      runId: childContext.runId,
+      candidateSha: childContext.candidateSha,
+      configSha256: childContext.baseConfigSha256,
+    });
+  } catch {
+    fail("G14_BROWSER_CORRELATION_RECEIPT_INVALID");
+  }
   for (const path of [childContext.checkoutDir, childContext.evidenceDir]) {
     try {
       await lstat(path);
@@ -1053,6 +1059,45 @@ export async function validateBrowserCorrelation({
       join(directory, name),
     ),
   };
+}
+
+export function validateG14ChildCleanup(result, childContext) {
+  const names = ["customer", "catalog", "pricing", "orders", "integration"]
+    .map(
+      (owner) =>
+        `coffee_verify_${childContext.runId.toLowerCase().replace("-", "_")}_${owner}`,
+    )
+    .sort();
+  const external = result?.externalCleanup;
+  if (
+    result?.cleanup?.verified !== true ||
+    result.cleanup.complete !== true ||
+    result.cleanup.fixtureRootRemoved !== true ||
+    result.cleanup.secretsDirRemoved !== true ||
+    result.cleanup.composeOverrideRemoved !== true ||
+    result.cleanup.failures?.length !== 0 ||
+    result.cleanup.retainedResources?.length !== 0 ||
+    !isDeepStrictEqual(result.cleanup.inventory, {
+      containers: [],
+      volumes: [],
+      networks: [],
+    }) ||
+    external?.verified !== true ||
+    external.databases?.verified !== true ||
+    !isDeepStrictEqual(external.databases.removed, names) ||
+    !isDeepStrictEqual(external.databases.retained, []) ||
+    !(
+      (external.attachment?.baselineAttached === false &&
+        external.attachment.attempted === true &&
+        external.attachment.removed === true) ||
+      (external.attachment?.baselineAttached === true &&
+        external.attachment.attempted === false &&
+        external.attachment.removed === false)
+    ) ||
+    external.attachment.routePreserved !== true
+  )
+    fail("G14_BROWSER_CORRELATION_CLEANUP_INVALID");
+  return external;
 }
 
 export async function runBrowserParent({
@@ -1403,12 +1448,12 @@ export async function runBrowserParent({
 
     if (runCorrelation) {
       const result = await runCorrelation(contextRecord.path);
-      if (
-        result?.cleanupVerified !== true ||
-        result?.launchPath?.verified !== true ||
-        result?.cleanup?.verified !== true
-      )
-        fail("G14_BROWSER_CORRELATION_CLEANUP_INVALID");
+      validateG14ChildCleanup(result, childContext);
+      validateG14BrowserEvidence(result.g14BrowserProof, {
+        runId: childContext.runId,
+        candidateSha: childContext.candidateSha,
+        configSha256: childContext.baseConfigSha256,
+      });
       git(childRoot, "update-ref", CHILD_REF, childContext.candidateSha);
       const bundlePath = join(artifactsDir, artifacts.bundle);
       execFileSync(
@@ -1431,7 +1476,7 @@ export async function runBrowserParent({
       const bundleBytes = await readFile(bundlePath);
       const childReceipt = {
         schemaVersion: 1,
-        status: "PASS",
+        status: "NOT_PROVEN",
         runId: parentContext.runId,
         candidateSha: parentContext.candidateSha,
         baseConfigSha256: parentContext.baseConfigSha256,
@@ -1444,15 +1489,8 @@ export async function runBrowserParent({
         childConfigArtifactSha256: sha256(variantBytes),
         checkoutRemoved: true,
         evidenceRemoved: true,
-        cleanup: result.cleanup,
-        proof: {
-          verified: result.launchPath.verified,
-          correlationId: result.launchPath.correlationId,
-          traceId: result.launchPath.traceId,
-          browserRefetchMatched: result.launchPath.refetchReceipt?.matched,
-          sseFrameMatched: result.launchPath.sseFrameMatched,
-          ownerCausation: result.launchPath.projectionReceipt?.causationMatched,
-        },
+        cleanup: result.externalCleanup,
+        proof: result.g14BrowserProof,
       };
       await rm(childRoot, { recursive: true, force: false });
       await rm(childEvidenceDir, { recursive: true, force: false });

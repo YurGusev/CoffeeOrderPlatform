@@ -36,6 +36,8 @@ import {
   queryLokiLogs,
   waitForOwnedMetricFamilySamples,
   waitForSameTraceSpans,
+  collectG14BrowserTelemetry,
+  validateG14ComponentCleanup,
   waitForConvergenceMetricSamples,
   readSinkEvents,
   durationMilliseconds,
@@ -2360,6 +2362,442 @@ void test("Grafana backend queries require fresh owner samples and exact traces"
     }),
     /did not complete/u,
   );
+});
+
+void test("G14 component requires five child database removals before browser", () => {
+  const runId = "20261030T120000Z-abcdef0";
+  const names = ["customer", "catalog", "pricing", "orders", "integration"]
+    .map(
+      (owner) =>
+        `coffee_verify_${runId.toLowerCase().replace("-", "_")}_${owner}`,
+    )
+    .sort();
+  const cleanup = {
+    verified: true,
+    databases: { verified: true, removed: names, retained: [] },
+    attachment: { routePreserved: true },
+  };
+  const component = { cleanupVerified: true, cleanup };
+  assert.equal(validateG14ComponentCleanup(component, runId), cleanup);
+  for (const altered of [
+    { ...component, cleanupVerified: false },
+    { ...component, cleanup: { ...cleanup, verified: false } },
+    {
+      ...component,
+      cleanup: {
+        ...cleanup,
+        databases: { ...cleanup.databases, removed: names.slice(1) },
+      },
+    },
+    {
+      ...component,
+      cleanup: {
+        ...cleanup,
+        databases: { ...cleanup.databases, retained: [names[0]] },
+      },
+    },
+    {
+      ...component,
+      cleanup: { ...cleanup, attachment: { routePreserved: false } },
+    },
+  ])
+    assert.throws(
+      () => validateG14ComponentCleanup(altered, runId),
+      /cleanup is unverified/u,
+    );
+});
+
+void test("G14 queries actual child telemetry before cleanup and fails closed on missing or private data", async () => {
+  const { runManagedRollbackChild } =
+    await import("../../verification/launch/v1/scenarios/rollback.mjs");
+  const traceId = "a".repeat(32);
+  const cid = "8f53d687-fd3b-47be-b32b-2081d08bc55a";
+  const nativeNginxContainerId = "b".repeat(64);
+  const nativeLogPath = `/var/lib/docker/containers/${nativeNginxContainerId}/${nativeNginxContainerId}-json.log`;
+  const proof = {
+    correlationId: cid,
+    traceId,
+    runId: "20261030T120000Z-abcdef0",
+    candidateSha: "abcdef0" + "0".repeat(33),
+    configSha256: "c".repeat(64),
+  };
+  const required = {
+    "orders-service": ["Outbox.relay", "Kafka.produce"],
+    "orders-aroma-preparation": [
+      "Kafka.consume",
+      "Inbox.consumeOnce",
+      "Outbox.relay",
+      "Kafka.produce",
+    ],
+    "realtime-gateway": ["Kafka.consume"],
+  };
+  const nowMs = Date.now();
+  const startTimeUs = (nowMs - 1000) * 1000;
+  const events = [];
+  const responses =
+    ({
+      wrongCid = false,
+      empty = false,
+      wrongTrace = false,
+      privateLog = false,
+      privateSpan = false,
+      privateField,
+      privateLocation,
+      privateLogField,
+      missingCompletion = false,
+      foreignContainer = false,
+      extraRows = [],
+      edgeOverrides = {},
+    } = {}) =>
+    async (url) => {
+      if (url.pathname === "/loki/api/v1/query_range") {
+        events.push("loki");
+        const correlation = wrongCid
+          ? "8f53d687-fd3b-47be-b32b-2081d08bc55b"
+          : cid;
+        return new Response(
+          JSON.stringify({
+            status: "success",
+            data: {
+              resultType: "streams",
+              result: ["edge-nginx", "orders-service"].map((role) => ({
+                stream: { service_name: role },
+                values: (role === "edge-nginx" ? ["POST", "GET"] : ["orders"])
+                  .map((method, index) => [
+                    String(BigInt(nowMs) * 1000000n),
+                    JSON.stringify({
+                      ...(role === "edge-nginx"
+                        ? { correlation_id: correlation }
+                        : { correlationId: correlation }),
+                      ...(wrongCid ? { unrelated: cid } : {}),
+                      ...(privateLog ? { password: "canary-secret" } : {}),
+                      ...(privateLogField
+                        ? { [privateLogField]: "private-marker" }
+                        : {}),
+                      ...(role === "edge-nginx"
+                        ? {
+                            method,
+                            route: "client.orders",
+                            request_id: String(index + 1).repeat(32),
+                            status: 200,
+                            duration_seconds: index === 0 ? 0.12 : 0.3,
+                            ...(missingCompletion
+                              ? {}
+                              : { request_completion: "OK" }),
+                            request_bytes: 128,
+                            response_bytes: 256,
+                            ...edgeOverrides,
+                          }
+                        : {}),
+                    }),
+                    ...(role === "edge-nginx"
+                      ? [
+                          {
+                            log_file_path: foreignContainer
+                              ? "/foreign/log"
+                              : nativeLogPath,
+                          },
+                        ]
+                      : []),
+                  ])
+                  .concat(role === "edge-nginx" ? extraRows : []),
+              })),
+            },
+          }),
+        );
+      }
+      events.push("tempo");
+      return new Response(
+        JSON.stringify({
+          resourceSpans: empty
+            ? []
+            : Object.entries(required).map(([role, names]) => ({
+                resource: {
+                  attributes: [
+                    { key: "service.name", value: { stringValue: role } },
+                  ],
+                },
+                scopeSpans: [
+                  {
+                    spans: names.map((name) => ({
+                      traceId: wrongTrace ? "b".repeat(32) : traceId,
+                      name,
+                      ...(privateSpan
+                        ? {
+                            attributes: [
+                              {
+                                key: "http.request.body",
+                                value: { stringValue: "sensitive" },
+                              },
+                            ],
+                          }
+                        : {}),
+                      ...(privateField && privateLocation === "attributes"
+                        ? {
+                            attributes: [
+                              {
+                                key: privateField,
+                                value: { stringValue: "private-marker" },
+                              },
+                            ],
+                          }
+                        : {}),
+                      ...(privateField && privateLocation === "events"
+                        ? {
+                            events: [
+                              {
+                                attributes: [
+                                  {
+                                    key: privateField,
+                                    value: { stringValue: "private-marker" },
+                                  },
+                                ],
+                              },
+                            ],
+                          }
+                        : {}),
+                      ...(privateLocation === "deep"
+                        ? {
+                            events: [
+                              {
+                                attributes: [
+                                  {
+                                    key: "safe",
+                                    value: {
+                                      nested: {
+                                        nested: {
+                                          nested: { email: "private-marker" },
+                                        },
+                                      },
+                                    },
+                                  },
+                                ],
+                              },
+                            ],
+                          }
+                        : {}),
+                      ...(privateField && privateLocation === "links"
+                        ? {
+                            links: [
+                              {
+                                attributes: [
+                                  {
+                                    key: privateField,
+                                    value: { stringValue: "private-marker" },
+                                  },
+                                ],
+                              },
+                            ],
+                          }
+                        : {}),
+                    })),
+                  },
+                ],
+              })),
+        }),
+      );
+    };
+  const collect = (fetchImpl) =>
+    collectG14BrowserTelemetry({
+      proof,
+      startTimeUs,
+      lokiUrl: "http://loki:3100",
+      tempoUrl: "http://tempo:3200",
+      nativeNginxContainerId,
+      fetchImpl,
+      timeoutMs: 30,
+      intervalMs: 1,
+      secrets: ["canary-secret"],
+    });
+  const source = `const request=stage=>new Promise((resolve,reject)=>{process.once('message',m=>m.ok?resolve():reject(Error('nack')));process.send({stage});}); await request('init');await request('roles-ready');await request('browser-proof');await request('cleanup');process.disconnect();`;
+  let result;
+  await runManagedRollbackChild({
+    args: ["--input-type=module", "-e", source],
+    cwd: process.cwd(),
+    env: process.env,
+    timeoutMs: 5000,
+    onIpc: async ({ stage }) => {
+      if (stage === "browser-proof") {
+        result = await collect(responses());
+        events.push("proof-ack");
+      }
+      if (stage === "cleanup") events.push("cleanup");
+      return null;
+    },
+  });
+  await assert.rejects(
+    waitForSameTraceSpans({
+      baseUrl: "http://tempo:3200",
+      traceId,
+      expectedSpanNames: {},
+      fetchImpl: responses(),
+      timeoutMs: 30,
+      intervalMs: 1,
+    }),
+    /nonempty role spans/u,
+  );
+  assert.equal(result.status, "OBSERVED");
+  assert.ok(
+    events.indexOf("loki") < events.indexOf("proof-ack") &&
+      events.indexOf("tempo") < events.indexOf("proof-ack") &&
+      events.indexOf("proof-ack") < events.indexOf("cleanup"),
+  );
+  assert.equal(JSON.stringify(result).includes("canary-secret"), false);
+  assert.deepEqual(result.logCounts, { "edge-nginx": 2, "orders-service": 1 });
+  const { windowStartUtc, windowEndUtc, ...measurement } =
+    result.ordinaryApiMeasurement;
+  assert.equal(windowStartUtc, new Date(startTimeUs / 1000).toISOString());
+  assert.ok(Date.parse(windowEndUtc) >= nowMs);
+  assert.deepEqual(measurement, {
+    status: "MEASURED",
+    scope:
+      "observed subset, verified CID, native edge-nginx, client.orders, observation window",
+    unit: "seconds",
+    percentile: "nearest-rank",
+    sampleCount: 2,
+    successCount: 2,
+    errorCount: 0,
+    abortedCount: 0,
+    incompleteCount: 0,
+    excludedCount: 0,
+    duplicateCount: 0,
+    statusCounts: { 200: 2 },
+    min: 0.12,
+    max: 0.3,
+    p50: 0.12,
+    p95: 0.3,
+  });
+  events.length = 0;
+  await runManagedRollbackChild({
+    args: ["--input-type=module", "-e", source],
+    cwd: process.cwd(),
+    env: process.env,
+    timeoutMs: 5000,
+    onIpc: async ({ stage }) => {
+      if (stage === "browser-proof") {
+        result = await collect(responses({ wrongCid: true }));
+        events.push("proof-ack");
+      }
+      if (stage === "cleanup") events.push("cleanup");
+      return null;
+    },
+  });
+  assert.equal(result.status, "NOT_PROVEN");
+  assert.ok(events.indexOf("proof-ack") < events.indexOf("cleanup"));
+  for (const change of [
+    { wrongCid: true },
+    { empty: true },
+    { wrongTrace: true },
+    { missingCompletion: true },
+    { foreignContainer: true },
+    { edgeOverrides: { duration_seconds: -1 } },
+    { edgeOverrides: { duration_seconds: "bad" } },
+    { edgeOverrides: { request_id: "invalid" } },
+    { edgeOverrides: { route: null } },
+    { edgeOverrides: { method: null } },
+    { edgeOverrides: { request_completion: "unknown" } },
+    { edgeOverrides: { request_completion: "" } },
+  ])
+    assert.equal((await collect(responses(change))).status, "NOT_PROVEN");
+  const edgeRow = (body) => [
+    String(BigInt(nowMs) * 1000000n),
+    JSON.stringify({
+      correlation_id: cid,
+      route: "client.orders",
+      method: "GET",
+      request_id: "3".repeat(32),
+      status: 200,
+      duration_seconds: 0.45,
+      request_completion: "OK",
+      ...body,
+    }),
+    { log_file_path: nativeLogPath },
+  ];
+  const measured = await collect(
+    responses({
+      extraRows: [
+        edgeRow({}),
+        edgeRow({}),
+        edgeRow({
+          request_id: "4".repeat(32),
+          status: 503,
+          duration_seconds: 0.6,
+        }),
+        edgeRow({
+          request_id: "5".repeat(32),
+          status: 499,
+          request_completion: "",
+        }),
+        edgeRow({ request_id: "6".repeat(32), route: "events" }),
+        edgeRow({ request_id: "7".repeat(32), request_completion: "" }),
+      ],
+    }),
+  );
+  assert.equal(measured.ordinaryApiMeasurement.sampleCount, 4);
+  assert.equal(measured.ordinaryApiMeasurement.errorCount, 1);
+  assert.equal(measured.ordinaryApiMeasurement.abortedCount, 1);
+  assert.equal(measured.ordinaryApiMeasurement.incompleteCount, 1);
+  assert.equal(measured.ordinaryApiMeasurement.excludedCount, 1);
+  assert.equal(measured.ordinaryApiMeasurement.duplicateCount, 1);
+  assert.equal(measured.ordinaryApiMeasurement.p50, 0.3);
+  assert.equal(measured.ordinaryApiMeasurement.p95, 0.6);
+  assert.equal(
+    (
+      await collect(
+        responses({
+          extraRows: [edgeRow({}), edgeRow({ duration_seconds: 0.7 })],
+        }),
+      )
+    ).status,
+    "NOT_PROVEN",
+  );
+  assert.equal(
+    (
+      await collect(
+        responses({
+          extraRows: [
+            edgeRow({ correlation_id: "8f53d687-fd3b-47be-b32b-2081d08bc55b" }),
+          ],
+        }),
+      )
+    ).status,
+    "NOT_PROVEN",
+  );
+  for (const change of [{ privateLog: true }, { privateSpan: true }]) {
+    const failure = await collect(responses(change));
+    assert.equal(failure.reason, "PRIVACY_REJECTED");
+    assert.equal(JSON.stringify(failure).includes("canary-secret"), false);
+  }
+  for (const privateLogField of [
+    "email",
+    "phone",
+    "cookie",
+    "session",
+    "payload",
+    "request_body",
+  ]) {
+    const failure = await collect(responses({ privateLogField }));
+    assert.equal(failure.reason, "PRIVACY_REJECTED");
+    assert.equal(JSON.stringify(failure).includes("private-marker"), false);
+  }
+  for (const privateLocation of ["attributes", "events", "links"])
+    for (const privateField of [
+      "email",
+      "phone",
+      "cookie",
+      "session",
+      "payload",
+      "http.request.body",
+    ]) {
+      const failure = await collect(
+        responses({ privateField, privateLocation }),
+      );
+      assert.equal(failure.reason, "PRIVACY_REJECTED");
+      assert.equal(JSON.stringify(failure).includes("private-marker"), false);
+    }
+  const deeplyNested = await collect(responses({ privateLocation: "deep" }));
+  assert.equal(deeplyNested.reason, "PRIVACY_REJECTED");
+  assert.equal(JSON.stringify(deeplyNested).includes("private-marker"), false);
 });
 
 void test("convergence proof accepts both actual recovery metric values and rejects another owner", async () => {

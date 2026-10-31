@@ -3,6 +3,7 @@ import test from "node:test";
 import { createHash } from "node:crypto";
 import {
   createBrowserOwnerEvidence,
+  createG14OrderEvidence,
   validateBrowserProof,
 } from "../../tools/browser-owner-evidence.mjs";
 
@@ -46,6 +47,102 @@ const itemRef = "itm_01ARZ3NDEKTSV4RRFFQ69G5FAV";
 const key = "1a6b9b0a-e6ad-4d6f-a74f-95e461a5b2d7";
 const requestHash = "a".repeat(64);
 const actorRef = "actor:g15-browser-fixture";
+
+void test("G14 reads only the run-owned causally linked Published/Processed metadata", async () => {
+  const root = "msg_01ARZ3NDEKTSV4RRFFQ69G5FAV";
+  const frame = "msg_01ARZ3NDEKTSV4RRFFQ69G5FAW";
+  for (const [cause, rootTrace, eventTrace] of [
+    [
+      root,
+      `00-${"a".repeat(32)}-${"b".repeat(16)}-01`,
+      `00-${"a".repeat(32)}-${"b".repeat(16)}-01`,
+    ],
+    [
+      null,
+      `00-${"a".repeat(32)}-${"b".repeat(16)}-01`,
+      `00-${"a".repeat(32)}-${"b".repeat(16)}-01`,
+    ],
+    [root, "invalid", "invalid"],
+    [
+      root,
+      `00-${"a".repeat(32)}-${"b".repeat(16)}-01`,
+      `00-${"c".repeat(32)}-${"b".repeat(16)}-01`,
+    ],
+  ]) {
+    const calls = [];
+    let closed = false;
+    const snapshot = createG14OrderEvidence({
+      roleMap,
+      runId,
+      connect: async (database) => ({
+        async query(sql, values = []) {
+          calls.push({ database, sql, values });
+          if (sql.includes("message_type='OrderConfirmed.v1'"))
+            return {
+              rows: [
+                {
+                  message_id: root,
+                  topic: "coffee.orders.lifecycle.v1",
+                  state: "Published",
+                  correlation_id: key,
+                  causation_id: null,
+                  traceparent: rootTrace,
+                },
+              ],
+            };
+          if (sql.includes("FROM orders.inbox_messages"))
+            return { rows: [{ state: "Processed" }] };
+          if (sql.includes("message_type='RealtimeInvalidated.v1'"))
+            return {
+              rows: [
+                {
+                  message_id: frame,
+                  topic: "coffee.realtime.invalidate.v1",
+                  state: "Published",
+                  correlation_id: key,
+                  causation_id: cause,
+                  owner_version: "4",
+                  traceparent: eventTrace,
+                },
+              ],
+            };
+          return { rows: [] };
+        },
+        async end() {
+          closed = true;
+        },
+      }),
+    });
+    const input = {
+      orderRef,
+      correlationId: key,
+      frameId: frame,
+      ownerVersion: "4",
+    };
+    if (cause && rootTrace !== "invalid" && rootTrace === eventTrace) {
+      const result = await snapshot(input);
+      assert.equal(
+        result.ownerMessageSha256,
+        createHash("sha256").update(root).digest("hex"),
+      );
+      assert.equal(result.traceId, "a".repeat(32));
+      assert.equal(result.ownerTraceparent, result.realtimeTraceparent);
+      assert.equal(
+        result.realtimeMessageSha256,
+        createHash("sha256").update(frame).digest("hex"),
+      );
+    } else
+      await assert.rejects(snapshot(input), {
+        message: "G14_OWNER_CHAIN_NOT_PROVEN",
+      });
+    assert.equal(calls[0].sql, "BEGIN READ ONLY");
+    assert.equal(calls.at(-1).sql, "ROLLBACK");
+    assert.ok(
+      calls.every((call) => call.database === roleMap.databases[3].name),
+    );
+    assert.equal(closed, true);
+  }
+});
 
 function canonicalOrdersAcl() {
   return [

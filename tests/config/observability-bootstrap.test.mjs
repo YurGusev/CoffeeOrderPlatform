@@ -3490,7 +3490,9 @@ void test("G15 child credentials reuse the unchanged parent G08 receipt only thr
     databaseIsolation: true,
   });
   const { roleNames } = await writeMigrationPreparationArtifact(parent);
-  const child = await createBrowserChildMigrationLaunchFixture(parent);
+  const child = await createBrowserChildMigrationLaunchFixture(parent, {
+    nested: true,
+  });
   const childBundlePath = join(
     child.root,
     "secrets/platform.secrets.sops.yaml",
@@ -3642,6 +3644,85 @@ void test("G15 child credentials reuse the unchanged parent G08 receipt only thr
     connectionsBeforeDirtyParent,
     "a dirty G15 parent checkout must be rejected before PostgreSQL access",
   );
+
+  const trackedParent = join(parent.fixture.root, "config/platform.yaml");
+  const trackedBytes = await readFile(trackedParent);
+  await chmod(trackedParent, 0o644);
+  await writeFile(
+    trackedParent,
+    Buffer.concat([trackedBytes, Buffer.from("\n# dirty\n")]),
+  );
+  try {
+    await assert.rejects(
+      readPreparedPostgresIdentity({
+        root: child.root,
+        contextPath: child.contextPath,
+        preparationContextPath: parent.contextPath,
+        env: parent.fixture.env,
+      }),
+      { ruleId: "CONFIG-G08-G15-LINEAGE" },
+    );
+  } finally {
+    await writeFile(trackedParent, trackedBytes);
+    await chmod(trackedParent, 0o400);
+  }
+  execFileSync("git", [
+    "-C",
+    parent.fixture.root,
+    "update-index",
+    "--assume-unchanged",
+    "config/platform.yaml",
+  ]);
+  try {
+    await assert.rejects(
+      readPreparedPostgresIdentity({
+        root: child.root,
+        contextPath: child.contextPath,
+        preparationContextPath: parent.contextPath,
+        env: parent.fixture.env,
+      }),
+      { ruleId: "CONFIG-G08-G15-LINEAGE" },
+    );
+  } finally {
+    execFileSync("git", [
+      "-C",
+      parent.fixture.root,
+      "update-index",
+      "--no-assume-unchanged",
+      "config/platform.yaml",
+    ]);
+  }
+  const sibling = join(parent.fixture.root, ".g15-browser-child-fake");
+  await mkdir(sibling, { mode: 0o700 });
+  await writeFile(join(sibling, "unexpected"), "untracked\n");
+  try {
+    await assert.rejects(
+      readPreparedPostgresIdentity({
+        root: child.root,
+        contextPath: child.contextPath,
+        preparationContextPath: parent.contextPath,
+        env: parent.fixture.env,
+      }),
+      { ruleId: "CONFIG-G08-G15-LINEAGE" },
+    );
+  } finally {
+    await rm(sibling, { recursive: true, force: true });
+  }
+  await chmod(child.root, 0o755);
+  try {
+    await assert.rejects(
+      readPreparedPostgresIdentity({
+        root: child.root,
+        contextPath: child.contextPath,
+        preparationContextPath: parent.contextPath,
+        env: parent.fixture.env,
+      }),
+      { ruleId: "CONFIG-G08-G15-LINEAGE" },
+    );
+  } finally {
+    await chmod(child.root, 0o700);
+  }
+  assert.equal(connectCalls.length, connectionsBeforeDirtyParent);
 
   const connectionsBeforeParentRace = connectCalls.length;
   const queriesBeforeParentRace = queryCalls.length;
@@ -6254,10 +6335,12 @@ async function createBrowserLaunchFixture({
 
 async function createBrowserChildMigrationLaunchFixture(
   parent,
-  { mutateConfig, skipLineageValidation = false } = {},
+  { mutateConfig, skipLineageValidation = false, nested = false } = {},
 ) {
   const childRoot = await mkdtemp(
-    "/dev/shm/coffee-observability-g15-child-fixture-",
+    nested
+      ? join(parent.fixture.root, ".g15-browser-child-")
+      : "/dev/shm/coffee-observability-g15-child-fixture-",
   );
   const timestamp = new Date()
     .toISOString()
@@ -7751,6 +7834,10 @@ void test("browser correlation executes the child lifecycle and preserves early 
     join(root, "tools/observability/verify.mjs"),
   );
   await cp(
+    join(REPO_ROOT, "tools/browser-proof.mjs"),
+    join(root, "tools/browser-proof.mjs"),
+  );
+  await cp(
     join(REPO_ROOT, "tests/realtime/fixtures/setup.mjs"),
     join(root, "tests/realtime/fixtures/setup.mjs"),
   );
@@ -7758,6 +7845,12 @@ void test("browser correlation executes the child lifecycle and preserves early 
     join(REPO_ROOT, "tools/realtime-capacity.mjs"),
     join(root, "tools/realtime-capacity.mjs"),
   );
+  for (const file of [
+    "verification/launch/v1/scenarios/rollback.mjs",
+    "tools/config-bootstrap/index.mjs",
+  ]) {
+    await cp(join(REPO_ROOT, file), join(root, file));
+  }
   const platformPath = join(root, "config/platform.yaml");
   const config = (await readFile(platformPath, "utf8")).replace(
     "    enabled: false\n  kafkaNamespaceIsolation: false",
@@ -7830,8 +7923,11 @@ void test("browser correlation executes the child lifecycle and preserves early 
     "config/toolchain-versions.json",
     "verification/launch/v1/scenarios/browser.mjs",
     "tools/observability/verify.mjs",
+    "tools/browser-proof.mjs",
     "tests/realtime/fixtures/setup.mjs",
     "tools/realtime-capacity.mjs",
+    "verification/launch/v1/scenarios/rollback.mjs",
+    "tools/config-bootstrap/index.mjs",
   );
   git(
     "-c",
@@ -7942,6 +8038,35 @@ void test("browser correlation executes the child lifecycle and preserves early 
       pathToFileURL(join(root, "tests/realtime/fixtures/setup.mjs")).href
     );
   process.env.COFFEE_LAUNCH_CONTEXT_FILE = success.contextPath;
+  const verifierSource = await readFile(
+    join(REPO_ROOT, "tools/observability/verify.mjs"),
+    "utf8",
+  );
+  const callbackStart = verifierSource.indexOf(
+    "runCorrelation: async (contextPath) => {",
+  );
+  const componentStart = verifierSource.indexOf(
+    "await executeLaunchPath(contextPath)",
+    callbackStart,
+  );
+  const componentCleanup = verifierSource.indexOf(
+    "validateG14ComponentCleanup(",
+    componentStart,
+  );
+  const browserStart = verifierSource.indexOf(
+    "await runManagedRollbackChild({",
+    componentCleanup,
+  );
+  assert.ok(
+    callbackStart >= 0 &&
+      componentStart > callbackStart &&
+      componentCleanup > componentStart &&
+      browserStart > componentCleanup,
+  );
+  assert.equal(
+    (verifierSource.match(/await executeLaunchPath\(/gu) ?? []).length,
+    1,
+  );
   assert.equal(git("status", "--porcelain=v1", "--untracked-files=all"), "");
   let observed;
   const synthetic = join(directory, "synthetic-callback");
@@ -8002,6 +8127,33 @@ void test("browser correlation executes the child lifecycle and preserves early 
       ),
     );
     assert.equal(image.lineageReceiptSha256, hash(lineageBytes));
+    const { fixture: ordersFixture } = await import(
+      pathToFileURL(join(root, "tests/observability/orders-fixture.mjs")).href
+    );
+    let postgresConnects = 0;
+    const pgMock = t.mock.method(Client.prototype, "connect", async () => {
+      postgresConnects++;
+      throw new Error("unexpected PostgreSQL");
+    });
+    try {
+      await assert.rejects(
+        ordersFixture(async () => assert.fail("unprepared G08"), {
+          launchIdentity: image.launchIdentity,
+          launchContextFile: contextPath,
+        }),
+        (error) =>
+          [
+            "CONFIG-G08-ADMIN-SECRET",
+            "CONFIG-G08-BUNDLE",
+            "CONFIG-G08-CONTEXT",
+            "CONFIG-G08-PREPARATION",
+          ].includes(error.ruleId),
+      );
+      assert.equal(postgresConnects, 0);
+    } finally {
+      pgMock.mock.restore();
+    }
+
     const admitted = await readQualificationInputs(contextPath);
     const { RUNTIME_NAMES } =
       await import("../../packages/platform-config/src/index.ts");
@@ -8139,24 +8291,48 @@ void test("browser correlation executes the child lifecycle and preserves early 
         )
         .sort();
       return {
-        cleanupVerified: true,
         cleanup: {
+          verified: true,
+          complete: true,
+          failures: [],
+          retainedResources: [],
+          inventory: { containers: [], volumes: [], networks: [] },
+          fixtureRootRemoved: true,
+          secretsDirRemoved: true,
+          composeOverrideRemoved: true,
+        },
+        externalCleanup: {
           verified: true,
           databases: { verified: true, removed: databases, retained: [] },
           attachment: {
-            baselineAttached: false,
-            attempted: true,
-            removed: true,
+            baselineAttached: true,
+            attempted: false,
+            removed: false,
             routePreserved: true,
           },
         },
-        launchPath: {
-          verified: true,
+        g14BrowserProof: {
+          schemaVersion: 1,
+          purpose: "G14_BROWSER_CORRELATION",
+          runId: child.runId,
+          candidateSha: child.candidateSha,
+          configSha256: child.baseConfigSha256,
+          status: "PASS",
           correlationId: "8f53d687-fd3b-47be-b32b-2081d08bc55a",
-          traceId: "00bf08bba3714e52b26d23c08e06ce16",
-          refetchReceipt: { matched: true },
-          sseFrameMatched: true,
-          projectionReceipt: { causationMatched: true },
+          ownerMessageSha256: "a".repeat(64),
+          realtimeMessageSha256: "b".repeat(64),
+          ownerVersion: "5",
+          ownerTraceparent: `00-${"a".repeat(32)}-${"b".repeat(16)}-01`,
+          realtimeTraceparent: `00-${"a".repeat(32)}-${"b".repeat(16)}-01`,
+          traceId: "a".repeat(32),
+          confirmedVersion: "4",
+          acceptedVersion: "5",
+          confirmCount: 1,
+          reconcileCount: 0,
+          providerIsolated: true,
+          mutationsEnabled: false,
+          traceStatus: "NOT_PROVEN",
+          browserCleanup: "EXACT_OWNED_CONTAINER_REMOVED",
         },
       };
     } finally {
@@ -8165,6 +8341,12 @@ void test("browser correlation executes the child lifecycle and preserves early 
   };
   const result = await runBrowserParent({ runCorrelation: callback });
   assert.equal(result.browserChild.childCandidateSha, observed.candidateSha);
+  assert.deepEqual(result.browserChild.cleanup.attachment, {
+    baselineAttached: true,
+    attempted: false,
+    removed: false,
+    routePreserved: true,
+  });
   assert.equal(await stat(observed.checkoutDir).catch(() => null), null);
   assert.equal(await stat(observed.evidenceDir).catch(() => null), null);
   assert.equal(await stat(synthetic).catch(() => null), null);
@@ -8871,7 +9053,7 @@ void test("browser correlation admission verifies the sealed child bundle and sc
     .sort();
   const receipt = {
     schemaVersion: 1,
-    status: "PASS",
+    status: "NOT_PROVEN",
     runId: parent.runId,
     candidateSha: parent.candidateSha,
     baseConfigSha256: digest(baseConfig),
@@ -8885,12 +9067,27 @@ void test("browser correlation admission verifies the sealed child bundle and sc
     checkoutRemoved: true,
     evidenceRemoved: true,
     proof: {
-      verified: true,
+      schemaVersion: 1,
+      purpose: "G14_BROWSER_CORRELATION",
+      runId: child.runId,
+      candidateSha: child.candidateSha,
+      configSha256: digest(childConfig),
+      status: "PASS",
       correlationId: "8f53d687-fd3b-47be-b32b-2081d08bc55a",
-      traceId: "00bf08bba3714e52b26d23c08e06ce16",
-      browserRefetchMatched: true,
-      sseFrameMatched: true,
-      ownerCausation: true,
+      ownerMessageSha256: "a".repeat(64),
+      realtimeMessageSha256: "b".repeat(64),
+      ownerVersion: "5",
+      ownerTraceparent: `00-${"a".repeat(32)}-${"b".repeat(16)}-01`,
+      realtimeTraceparent: `00-${"a".repeat(32)}-${"b".repeat(16)}-01`,
+      traceId: "a".repeat(32),
+      confirmedVersion: "4",
+      acceptedVersion: "5",
+      confirmCount: 1,
+      reconcileCount: 0,
+      providerIsolated: true,
+      mutationsEnabled: false,
+      traceStatus: "NOT_PROVEN",
+      browserCleanup: "EXACT_OWNED_CONTAINER_REMOVED",
     },
     cleanup: {
       verified: true,
@@ -8982,11 +9179,19 @@ void test("browser correlation admission verifies the sealed child bundle and sc
     "result.json",
   ];
   for (const name of names) {
-    const data = { status: "PASS", runId: observationRun };
+    const data = {
+      status:
+        name === "correlation-proof.json"
+          ? "NOT_PROVEN"
+          : name === "result.json"
+            ? "FAIL"
+            : "PASS",
+      runId: observationRun,
+    };
     if (name === "correlation-proof.json")
       data.launchPath = {
         correlationId: receipt.proof.correlationId,
-        traceId: receipt.proof.traceId,
+        traceStatus: receipt.proof.traceStatus,
         browserRefetchMatched: true,
         ownerCausation: true,
       };
@@ -9044,7 +9249,7 @@ void test("browser correlation admission verifies the sealed child bundle and sc
     runs: [
       {
         argv: ["pnpm", "test:observability"],
-        exitCode: 0,
+        exitCode: 1,
         timedOut: false,
         outputLimitExceeded: false,
       },
@@ -9057,13 +9262,40 @@ void test("browser correlation admission verifies the sealed child bundle and sc
       record,
       parentContext.evidenceDir,
     ),
-    /full-system SLO, chaos and capacity proof is not complete/u,
+    /W3C trace is not proven/u,
   );
   assert.equal(
     record.artifacts.length,
     13,
-    "valid child and observability files remain recorded on denial",
+    "child and backend evidence remain recorded even when the gate fails",
   );
+  const backendPath = join(observations, "redaction-scan.json");
+  const backendBytes = await readFile(backendPath);
+  await rm(backendPath);
+  const missingBackend = { ...record, artifacts: [] };
+  assert.match(
+    await verifyGateArtifacts(
+      { id: "G14_OBSERVABILITY", command: "pnpm test:observability" },
+      missingBackend,
+      parentContext.evidenceDir,
+    ),
+    /lineage or cleanup is invalid/u,
+  );
+  assert.equal(missingBackend.artifacts.length, 6);
+  await writeFile(
+    backendPath,
+    JSON.stringify({ status: "FAIL", runId: observationRun }),
+    { mode: 0o600 },
+  );
+  assert.match(
+    await verifyGateArtifacts(
+      { id: "G14_OBSERVABILITY", command: "pnpm test:observability" },
+      { ...record, artifacts: [] },
+      parentContext.evidenceDir,
+    ),
+    /lineage or cleanup is invalid/u,
+  );
+  await writeFile(backendPath, backendBytes);
   receipt.cleanup.databases.removed[0] = "coffeeorderdb";
   await writeFile(receiptPath, JSON.stringify(receipt));
   await assert.rejects(
@@ -9074,7 +9306,7 @@ void test("browser correlation admission verifies the sealed child bundle and sc
     { code: "G14_BROWSER_CORRELATION_RECEIPT_INVALID" },
   );
   receipt.cleanup.databases.removed = databases;
-  receipt.proof.browserRefetchMatched = false;
+  receipt.proof.acceptedVersion = "4";
   await writeFile(receiptPath, JSON.stringify(receipt));
   await assert.rejects(
     validateBrowserCorrelation({
@@ -9486,3 +9718,116 @@ async function createMigrationLaunchFixture({
     throw error;
   }
 }
+
+void test("G14 telemetry sources require exact child networks and all G12 role images", async () => {
+  const { validateG14TelemetrySources } =
+    await import("../../tools/observability/verify.mjs");
+  const { OBSERVABILITY_TARGETS } =
+    await import("../../tools/observability/generate.mjs");
+  const projectName = "coffee-launch-20261031t120000z-abcdef0";
+  const names = [
+    "coffee_edge_backend",
+    "coffee_public_api_backend",
+    "coffee_internal_api",
+    "coffee_kafka_event",
+  ];
+  const networks = Object.fromEntries(
+    names.map((name) => [name, `${projectName}_${name}`]),
+  );
+  const payload = {
+    projectName,
+    runtimes: OBSERVABILITY_TARGETS.filter((role) => role !== "edge-nginx"),
+    networks,
+  };
+  const verifiedImages = OBSERVABILITY_TARGETS.map((service, index) => ({
+    service,
+    imageId: `sha256:${index.toString(16).padStart(64, "0")}`,
+  }));
+  const rows = Object.fromEntries(
+    verifiedImages.map(({ service, imageId }, index) => {
+      const id = (index + 1).toString(16).padStart(64, "0");
+      return [
+        service,
+        {
+          Id: id,
+          Image: imageId,
+          State: { Running: true },
+          Config: {
+            Labels: {
+              "com.docker.compose.project": projectName,
+              "com.docker.compose.service": service,
+            },
+          },
+          LogPath: `/var/lib/docker/containers/${id}/${id}-json.log`,
+          NetworkSettings: {
+            Networks: {
+              [networks.coffee_internal_api]: { NetworkID: "a".repeat(64) },
+            },
+          },
+        },
+      ];
+    }),
+  );
+  const runDocker = (args) => {
+    if (args[0] === "ps")
+      return Object.values(rows).find((row) =>
+        args.includes(
+          `label=com.docker.compose.service=${row.Config.Labels["com.docker.compose.service"]}`,
+        ),
+      ).Id;
+    if (args[0] === "network") {
+      const logical = names.find((name) => networks[name] === args[2]);
+      return JSON.stringify([
+        {
+          Name: args[2],
+          Id: "a".repeat(64),
+          Internal: true,
+          Labels: {
+            "com.docker.compose.project": projectName,
+            "com.docker.compose.network": logical,
+          },
+        },
+      ]);
+    }
+    return JSON.stringify([
+      Object.values(rows).find((row) => row.Id === args[1]),
+    ]);
+  };
+  const input = { payload, projectName, verifiedImages, runDocker };
+  assert.equal((await validateG14TelemetrySources(input)).logFiles.length, 15);
+  rows["orders-service"].Image = `sha256:${"f".repeat(64)}`;
+  await assert.rejects(
+    validateG14TelemetrySources(input),
+    /image or network invalid/u,
+  );
+  rows["orders-service"].Image = verifiedImages.find(
+    ({ service }) => service === "orders-service",
+  ).imageId;
+  rows["orders-service"].NetworkSettings.Networks[
+    networks.coffee_internal_api
+  ].NetworkID = "b".repeat(64);
+  await assert.rejects(
+    validateG14TelemetrySources(input),
+    /image or network invalid/u,
+  );
+  rows["orders-service"].NetworkSettings.Networks[
+    networks.coffee_internal_api
+  ].NetworkID = "a".repeat(64);
+  await assert.rejects(
+    validateG14TelemetrySources({
+      ...input,
+      payload: {
+        ...payload,
+        networks: { ...networks, coffee_kafka_event: "other" },
+      },
+    }),
+    /network name invalid/u,
+  );
+  await assert.rejects(
+    validateG14TelemetrySources({
+      ...input,
+      payload: { ...payload, runtimes: payload.runtimes.slice(1) },
+    }),
+    /runtime identity invalid/u,
+  );
+});

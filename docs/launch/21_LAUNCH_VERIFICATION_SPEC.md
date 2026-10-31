@@ -688,8 +688,8 @@ Customer/Pricing/auth seams не доказывают production ingress/VK/Agen
 использованные native images трёх ролей и nginx, Kafka, host profile и
 проверенную OIDC-only lineage. Повторное использование, неизвестный cleanup,
 расхождение или отсутствие PASS блокируют G14 и merge. Synthetic Orders и IdP
-допустимы только для этой transport qualification: она не доказывает
-OrderConfirm, production IdP или full-system G14.
+для transport qualification и отдельного supplemental component diagnostic G14:
+ни один из них не доказывает browser OrderConfirm, production IdP или full-system G14.
 
 G05/G10/G15 принимают outputs #4/#5/#7/#8/#9 по
 [протоколу browser recovery](26_BROWSER_COMMAND_RECOVERY.md): потерянный ответ
@@ -712,8 +712,11 @@ context, запечатанной lineage, полным browser artifact и clea
 object store и заново проверяет прямого родителя, единственный изменённый путь
 и точные config blobs. G00–G13 и все фазы G14, кроме браузерной корреляции,
 остаются привязаны к product candidate с `browserOidc: null`. По решению
-владельца от 31 октября 2026 та же OIDC-only lineage разрешена одной фазе
-browser correlation G14. Она сохраняет собственные child context, lineage,
+владельца от 31 октября 2026 та же OIDC-only lineage разрешена фазе
+browser correlation G14 и выполняемому перед ней supplemental component diagnostic.
+Diagnostic использует проверенную parent G08 preparation и пять выделенных БД во
+внешнем PostgreSQL; browser запускается только после подтверждённой очистки.
+Synthetic diagnostic сохраняется отдельно и не заменяет реальный browser proof. Она сохраняет собственные child context, lineage,
 bundle, config blobs, runtime result и cleanup в `gates/G14_OBSERVABILITY/artifacts/`;
 G15 сохраняет отдельный комплект в своём artifact directory. Parent и child
 identities и отличие единственного поля проверяются так же строго, как G15;

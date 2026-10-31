@@ -9,6 +9,7 @@ import {
   mkdir,
   readdir,
   readFile,
+  realpath,
   rm,
   stat,
   writeFile,
@@ -40,10 +41,13 @@ import {
 import {
   buildRealtimeAuthCloseInvocation,
   proveBrowser,
+  proveG14Browser,
+  validateG14BrowserEvidence,
   validateBrowserRuntimeArtifact,
 } from "./browser-proof.mjs";
 import {
   createBrowserOwnerEvidence,
+  createG14OrderEvidence,
   validateBrowserProof,
 } from "./browser-owner-evidence.mjs";
 import {
@@ -2330,6 +2334,23 @@ export function externalRecoveryMigrationCredentialRequest(
   };
 }
 
+export function retainG14AfterCollectorFailure({
+  g14Browser,
+  observability,
+  cleanupHookError,
+  options,
+  databases,
+}) {
+  if (!(g14Browser && observability && cleanupHookError)) return undefined;
+  options.keep = true;
+  return {
+    verified: false,
+    removed: [],
+    retained: databases.map(({ database }) => database.name),
+    failure: "G14_COLLECTOR_RESTORE_UNCONFIRMED",
+  };
+}
+
 export function externalRecoveryCleanupSummary({
   databases,
   attachment,
@@ -2906,6 +2927,38 @@ export async function writeScopedComposeOverride(projectName, options = {}) {
       },
     });
   }
+  if (options.g14Config) {
+    assert.ok(options.launchContextPath, "G14 config requires child context");
+    const { path: configPath, sha256 } = options.g14Config;
+    assert.match(sha256 ?? "", /^[a-f0-9]{64}$/u);
+    assert.equal(
+      await realpath(configPath),
+      configPath,
+      "G14 config path must be canonical",
+    );
+    const before = await lstat(configPath);
+    assert.ok(
+      before.isFile() &&
+        !before.isSymbolicLink() &&
+        before.uid === process.getuid() &&
+        (before.mode & 0o777) === 0o444,
+      "G14 config must be sealed and owned",
+    );
+    const bytes = await readFile(configPath);
+    const after = await lstat(configPath);
+    assert.ok(
+      before.dev === after.dev &&
+        before.ino === after.ino &&
+        before.size === after.size &&
+        before.mtimeMs === after.mtimeMs,
+      "G14 config identity changed",
+    );
+    assert.equal(
+      createHash("sha256").update(bytes).digest("hex"),
+      sha256,
+      "G14 config hash mismatch",
+    );
+  }
   if (options.launchContextPath) {
     for (const runtime of RUNTIMES) {
       const current = service(runtime);
@@ -2921,6 +2974,16 @@ export async function writeScopedComposeOverride(projectName, options = {}) {
           target: "/run/coffee-launch/context.json",
           read_only: true,
         },
+        ...(options.g14Config
+          ? [
+              {
+                type: "bind",
+                source: options.g14Config.path,
+                target: "/app/config/platform.yaml",
+                read_only: true,
+              },
+            ]
+          : []),
       ];
     }
   }
@@ -7011,6 +7074,166 @@ const bytes=await readFile(process.env.COFFEE_CONFIG_FILE);const config=load(byt
 console.log(JSON.stringify({sha256:createHash('sha256').update(bytes).digest('hex'),mutationsEnabled:config.services['aroma-convergence'].mutationsEnabled}));\n`;
 }
 
+export function validateG14ProviderBoundary({
+  projectName,
+  expectedConfigSha256,
+  mounted,
+  gateway,
+  fixture,
+  network,
+  internalNetworks,
+  fixtureImageId,
+  fixtureDirectory,
+}) {
+  assert.match(expectedConfigSha256 ?? "", /^[0-9a-f]{64}$/u);
+  assert.deepEqual(mounted, {
+    sha256: expectedConfigSha256,
+    mutationsEnabled: false,
+  });
+  const networkName = `${projectName}_coffee_provider_egress`;
+  assert.match(network.Id ?? "", /^[0-9a-f]{64}$/u);
+  assert.equal(network.Name, networkName);
+  assert.equal(network.Internal, true);
+  assert.equal(network.Labels?.["com.docker.compose.project"], projectName);
+  assert.equal(
+    network.Labels?.["com.docker.compose.network"],
+    "coffee_provider_egress",
+  );
+  for (const [container, service] of [
+    [gateway, "aroma-gateway"],
+    [fixture, "aroma-provider-fixture"],
+  ]) {
+    assert.match(container.Id ?? "", /^[0-9a-f]{64}$/u);
+    assert.equal(container.State?.Running, true);
+    assert.equal(
+      container.Config?.Labels?.["com.docker.compose.project"],
+      projectName,
+    );
+    assert.equal(
+      container.Config?.Labels?.["com.docker.compose.service"],
+      service,
+    );
+    assert.equal(
+      container.NetworkSettings?.Networks?.[networkName]?.NetworkID,
+      network.Id,
+    );
+  }
+  assert.deepEqual(Object.keys(fixture.NetworkSettings.Networks), [
+    networkName,
+  ]);
+  assert.match(fixtureImageId ?? "", /^sha256:[0-9a-f]{64}$/u);
+  assert.equal(fixture.Image, fixtureImageId);
+  assert.equal(fixture.Config.Image, CUSTOMER_TEST_IMAGE);
+  assert.deepEqual(fixture.Config.Cmd, [
+    "node",
+    "/run/aroma-proof/provider-server.mjs",
+  ]);
+  assert.ok(
+    fixture.Mounts?.some(
+      (mount) =>
+        mount.Type === "bind" &&
+        mount.Source === fixtureDirectory &&
+        mount.Destination === "/run/aroma-proof",
+    ),
+  );
+  assert.deepEqual(
+    Object.keys(gateway.NetworkSettings.Networks).sort(),
+    [
+      `${projectName}_coffee_internal_api`,
+      `${projectName}_coffee_postgres_data`,
+      networkName,
+    ].sort(),
+  );
+  assert.equal(internalNetworks.length, 2);
+  for (const name of ["coffee_internal_api", "coffee_postgres_data"]) {
+    const value = internalNetworks.find(
+      (item) => item.Name === `${projectName}_${name}`,
+    );
+    assert.equal(value?.Internal, true);
+    assert.match(value?.Id ?? "", /^[0-9a-f]{64}$/u);
+    assert.equal(value?.Labels?.["com.docker.compose.project"], projectName);
+    assert.equal(value?.Labels?.["com.docker.compose.network"], name);
+    assert.equal(
+      gateway.NetworkSettings.Networks[value.Name].NetworkID,
+      value.Id,
+    );
+  }
+  assert.ok(
+    fixture.NetworkSettings.Networks[networkName].Aliases?.includes(
+      "aromateacoffee.ru",
+    ),
+  );
+  return {
+    configSha256: expectedConfigSha256,
+    mutationsEnabled: false,
+    providerIsolated: true,
+  };
+}
+
+export function attestG14ProviderBoundary({
+  projectName,
+  secretsDir,
+  composeFile,
+  expectedConfigSha256,
+}) {
+  const rows = serviceRows(projectName, secretsDir, composeFile);
+  const row = (service) => {
+    const matches = rows.filter(
+      (value) => value.Service === service && value.State === "running",
+    );
+    assert.equal(matches.length, 1);
+    return matches[0];
+  };
+  const gateway = JSON.parse(
+    runDocker(["inspect", row("aroma-gateway").ID]),
+  )[0];
+  const fixture = JSON.parse(
+    runDocker(["inspect", row("aroma-provider-fixture").ID]),
+  )[0];
+  row("aroma-convergence");
+  const network = JSON.parse(
+    runDocker(["network", "inspect", `${projectName}_coffee_provider_egress`]),
+  )[0];
+  const internalNetworks = ["coffee_internal_api", "coffee_postgres_data"].map(
+    (name) =>
+      JSON.parse(
+        runDocker(["network", "inspect", `${projectName}_${name}`]),
+      )[0],
+  );
+  const fixtureImageId = runDocker([
+    "image",
+    "inspect",
+    "--format",
+    "{{.Id}}",
+    CUSTOMER_TEST_IMAGE,
+  ]).trim();
+  const fixtureDirectory = join(secretsDir, "aroma-cart-proof");
+  const mounted = parseFinalJsonLine(
+    runCompose(
+      projectName,
+      secretsDir,
+      ["exec", "-T", "aroma-convergence", "node", "--input-type=module"],
+      {
+        composeFile,
+        timeout: 10_000,
+        input: rollbackRuntimeConfigProofSource(),
+      },
+    ),
+    "G14_RUNTIME_CONFIG_READ_FAILED",
+  );
+  return validateG14ProviderBoundary({
+    projectName,
+    expectedConfigSha256,
+    mounted,
+    gateway,
+    fixture,
+    network,
+    internalNetworks,
+    fixtureImageId,
+    fixtureDirectory,
+  });
+}
+
 async function runRollbackOwnerHttp(
   projectName,
   secretsDir,
@@ -8602,13 +8825,39 @@ function assertAromaMutationJournal(rows, sourceGrindKeyHash) {
   return rows;
 }
 
+export async function runG14BrowserProof({
+  baseCandidateSha,
+  observability,
+  onProof,
+}) {
+  return runComposeSmoke({
+    args: ["--recovery-proof"],
+    observability,
+    g14Browser: {
+      baseCandidateSha,
+      onReady: async (context) => {
+        const proof = await proveG14Browser(context);
+        if (onProof) await onProof(proof);
+        return proof;
+      },
+      onCleanup: async () => {},
+    },
+  });
+}
+
 export async function runComposeSmoke({
   args = process.argv.slice(2),
   observability,
   browser,
+  g14Browser,
 } = {}) {
   rollbackComposeDiagnostic = undefined;
   const options = parseArguments(args);
+  assert.ok(
+    !(browser && g14Browser),
+    "G14 and G15 browser hooks are mutually exclusive",
+  );
+  const browserHook = browser ?? g14Browser;
   if (options.observabilityFixture) {
     assert.ok(
       observability !== undefined &&
@@ -8673,6 +8922,24 @@ export async function runComposeSmoke({
     assert.match(browser.baseCandidateSha ?? "", COMMIT_SHA);
     assert.equal(typeof browser.onReady, "function");
     assert.equal(typeof browser.onCleanup, "function");
+  }
+  if (g14Browser !== undefined) {
+    assert.deepEqual(Object.keys(g14Browser).sort(), [
+      "baseCandidateSha",
+      "onCleanup",
+      "onReady",
+    ]);
+    assert.ok(
+      options.recoveryProof &&
+        !options.stubSecrets &&
+        !options.noBuild &&
+        !options.keep &&
+        !options.mutationDisableRollback &&
+        !options.observabilityFixture,
+    );
+    assert.match(g14Browser.baseCandidateSha ?? "", COMMIT_SHA);
+    assert.equal(typeof g14Browser.onReady, "function");
+    assert.equal(typeof g14Browser.onCleanup, "function");
   }
   if (options.browserProof)
     assert.ok(browser, "--browser-proof requires the integrated browser hook");
@@ -8796,7 +9063,7 @@ export async function runComposeSmoke({
       },
     );
   }
-  if (browser !== undefined)
+  if (browserHook !== undefined)
     assert.ok(
       launchIdentity,
       "G15 browser hooks require a validated launch context",
@@ -8887,11 +9154,14 @@ export async function runComposeSmoke({
   let browserFixtureRoot;
   let browserContext;
   let browserOwnerEvidence;
+  let g14OrderEvidence;
+  let g14BrowserProof;
   let browserProof;
   let browserCallbackAttempted = false;
   let receipt;
   let primaryError;
   let cleanupHookError;
+  let retainG14Resources = false;
   let standardCleanupError;
   const cleanupFailures = [];
   let rollbackStage = options.mutationDisableRollback ? "bootstrap" : null;
@@ -8991,7 +9261,11 @@ export async function runComposeSmoke({
         ? {
             candidateRoot: launchIdentity.candidateRoot,
             resources: launchIdentity.context.resources,
-            expectedLineage: browser ? "G15" : observability ? "G14" : "G13",
+            expectedLineage: browserHook
+              ? "G15"
+              : observability
+                ? "G14"
+                : "G13",
           }
         : undefined;
     if (proofLaunchIdentity) {
@@ -9125,11 +9399,11 @@ export async function runComposeSmoke({
           : { [DATABASE_PROOF_RUNTIME]: databaseProofCredentials.owner },
       recoveryProofCredentials,
     });
-    if (browser) {
+    if (browserHook) {
       const lineage = await readBrowserFixtureLineage({
         root: ROOT,
         contextPath: launchContextPath,
-        baseCandidateSha: browser.baseCandidateSha,
+        baseCandidateSha: browserHook.baseCandidateSha,
       });
       browserFixture = await materializeBrowserFixture({
         root: ROOT,
@@ -9139,6 +9413,19 @@ export async function runComposeSmoke({
       });
       browserFixtureRoot = dirname(browserFixture.browser.homePath);
       const initialComposeFile = composeFile;
+      let g14Config;
+      if (g14Browser) {
+        const path = join(secretsDir, "g14-platform.yaml");
+        const bytes = await readFile(join(ROOT, "config/platform.yaml"));
+        assert.equal(
+          createHash("sha256").update(bytes).digest("hex"),
+          launchIdentity.context.baseConfigSha256,
+          "G14 child config hash mismatch",
+        );
+        await writeFile(path, bytes, { mode: 0o444, flag: "wx" });
+        await chmod(path, 0o444);
+        g14Config = { path, sha256: launchIdentity.context.baseConfigSha256 };
+      }
       composeFile = await writeScopedComposeOverride(projectName, {
         sharedPostgres: externalRecovery,
         recoveryProof: true,
@@ -9149,6 +9436,7 @@ export async function runComposeSmoke({
           : `${projectName}-edge-nginx:latest`,
         runtimeLogging: observability ? platformConfig : undefined,
         browserFixture,
+        g14Config,
         candidateRoot: launchIdentity.candidateRoot,
       });
       composeFiles.push(composeFile);
@@ -9371,7 +9659,7 @@ export async function runComposeSmoke({
         );
         recoveryDeliveryDatabase = deliveryDatabase;
         recoveryDeliveryTables = true;
-        if (browser) {
+        if (browserHook) {
           const ownedDatabaseNames = new Set(
             recoveryProofCredentials.roleMap.databases.map(
               (database) => database.name,
@@ -9392,6 +9680,12 @@ export async function runComposeSmoke({
             actorRef: "actor:g15-browser-fixture",
             runId: launchIdentity.context.runId,
           });
+          if (g14Browser)
+            g14OrderEvidence = createG14OrderEvidence({
+              connect: ownerConnections,
+              roleMap: recoveryProofCredentials.roleMap,
+              runId: launchIdentity.context.runId,
+            });
         }
         if (options.mutationDisableRollback) {
           markRollbackBootstrapSubstage("owner-seed");
@@ -9438,7 +9732,7 @@ export async function runComposeSmoke({
       );
       recoveryDeliveryDatabase = deliveryDatabase;
       recoveryDeliveryTables = true;
-      if (browser) {
+      if (browserHook) {
         const ownedDatabaseNames = new Set(
           recoveryProofCredentials.roleMap.databases.map(
             (database) => database.name,
@@ -9459,6 +9753,12 @@ export async function runComposeSmoke({
           actorRef: "actor:g15-browser-fixture",
           runId: launchIdentity.context.runId,
         });
+        if (g14Browser)
+          g14OrderEvidence = createG14OrderEvidence({
+            connect: ownerConnections,
+            roleMap: recoveryProofCredentials.roleMap,
+            runId: launchIdentity.context.runId,
+          });
       }
     }
     if (options.mutationDisableRollback) markRollbackStage("build");
@@ -9470,15 +9770,21 @@ export async function runComposeSmoke({
       browser ||
       options.mutationDisableRollback
     );
+    const imageContextPath = g14Browser
+      ? recoveryProofCredentials?.g08PreparationContextPath
+      : launchContextPath;
+    const imageIdentity = g14Browser
+      ? await validateLaunchContext(imageContextPath)
+      : launchIdentity;
     if (!options.noBuild) {
       let temporary;
       let snapshot;
       try {
-        if (launchIdentity && bindRuntimeImages) {
+        if (imageIdentity && bindRuntimeImages) {
           temporary = await mkdtemp(join(tmpdir(), "coffee-runtime-build-"));
           snapshot = await createBuildInputSnapshot({
-            candidateRoot: launchIdentity.candidateRoot,
-            candidateSha: launchIdentity.context.candidateSha,
+            candidateRoot: imageIdentity.candidateRoot,
+            candidateSha: imageIdentity.context.candidateSha,
             temporary,
           });
           await verifyBuildInputSnapshot(snapshot);
@@ -9503,7 +9809,7 @@ export async function runComposeSmoke({
     }
     if (bindRuntimeImages) {
       const verifiedImages = await readVerifiedRuntimeImages({
-        contextFile: launchContextPath,
+        contextFile: imageContextPath,
       });
       assertVerifiedRuntimeImages({
         projectName,
@@ -9589,7 +9895,7 @@ export async function runComposeSmoke({
         "Kafka runtime differs from the scanned G12 artifact",
       );
     }
-    if (browser) {
+    if (browserHook) {
       const idp = rows.get("g15-idp");
       assert.ok(idp, "G15 IdP fixture is absent from Compose ps");
       assert.equal(idp.State, "running");
@@ -9981,7 +10287,7 @@ export async function runComposeSmoke({
           actualGroups,
         });
       }
-      if (observability || browser) {
+      if (observability || browserHook) {
         const resolvedCompose = JSON.parse(
           runCompose(projectName, secretsDir, ["config", "--format", "json"], {
             composeFile,
@@ -10008,7 +10314,7 @@ export async function runComposeSmoke({
           observabilityContext = runtimeContext;
           await observability.onReady(observabilityContext);
         }
-        if (browser) {
+        if (browserHook) {
           browserContext = {
             projectName,
             runId: launchIdentity.context.runId,
@@ -10029,6 +10335,20 @@ export async function runComposeSmoke({
               ),
             nginxContainerId: rows.get("edge-nginx")?.ID,
             ownerEvidence: browserOwnerEvidence,
+            ...(g14Browser
+              ? {
+                  g14OrderEvidence,
+                  configSha256: launchIdentity.context.baseConfigSha256,
+                  attestG14Safety: () =>
+                    attestG14ProviderBoundary({
+                      projectName,
+                      secretsDir,
+                      composeFile,
+                      expectedConfigSha256:
+                        launchIdentity.context.baseConfigSha256,
+                    }),
+                }
+              : {}),
             browserFixture: {
               profile: browserFixture.profile,
               runId: browserFixture.runId,
@@ -10065,6 +10385,18 @@ export async function runComposeSmoke({
           },
         );
       }
+      if (g14Browser) {
+        throwIfRollbackTerminationRequested();
+        browserCallbackAttempted = true;
+        g14BrowserProof = validateG14BrowserEvidence(
+          await g14Browser.onReady(browserContext),
+          {
+            runId: launchIdentity.context.runId,
+            candidateSha: launchIdentity.context.candidateSha,
+            configSha256: launchIdentity.context.baseConfigSha256,
+          },
+        );
+      }
       if (options.mutationDisableRollback) {
         rollbackEvidence = await runMutationDisableRollbackProof({
           projectName,
@@ -10086,7 +10418,7 @@ export async function runComposeSmoke({
           markInitialUnknownSubstage: markRollbackInitialUnknownSubstage,
           markDisabledReconcileSubstage: markRollbackDisabledReconcileSubstage,
         });
-      } else if (options.recoveryProof && !browser) {
+      } else if (options.recoveryProof && !browserHook) {
         assert.ok(
           aromaCartProviderFixture,
           "recovery proof local provider fixture is missing",
@@ -10302,7 +10634,7 @@ export async function runComposeSmoke({
             : kafkaRetention,
       kafkaNamespaceInventory,
       recoveryProof:
-        options.recoveryProof && !browser
+        options.recoveryProof && !browserHook
           ? {
               postgres: recoveryDatabaseProof,
               postgresStorage: databaseProofStorage,
@@ -10315,6 +10647,7 @@ export async function runComposeSmoke({
         ? { externalCleanup: { verified: false, failure: "CLEANUP_PENDING" } }
         : {}),
       browserProof,
+      ...(g14Browser ? { g14BrowserProof } : {}),
       mutationDisableRollback: rollbackEvidence,
       aromaBindingProof: options.aromaBindingProof
         ? {
@@ -10357,7 +10690,7 @@ export async function runComposeSmoke({
       dbIntegrationProof:
         options.databaseProof ||
         options.customerProof ||
-        (options.recoveryProof && !browser) ||
+        (options.recoveryProof && !browserHook) ||
         options.aromaBindingProof ||
         options.aromaCartProof,
       customerIntegrationProof: options.customerProof,
@@ -10383,12 +10716,21 @@ export async function runComposeSmoke({
     if (browserFixture) {
       if (browserCallbackAttempted) {
         try {
-          await browser.onCleanup(browserContext);
+          await browserHook.onCleanup(browserContext);
         } catch (error) {
           cleanupHookError ??= error;
         }
       }
     }
+    const retainedDatabases = retainG14AfterCollectorFailure({
+      g14Browser,
+      observability,
+      cleanupHookError,
+      options,
+      databases: externalRunDatabaseResources,
+    });
+    retainG14Resources = retainedDatabases !== undefined;
+    if (retainedDatabases) externalDatabaseCleanupReceipt = retainedDatabases;
     try {
       if (
         recoveryDeliveryTables &&
@@ -10483,7 +10825,7 @@ export async function runComposeSmoke({
           );
         }
       }
-      if (browserFixture) {
+      if (browserFixture && !retainG14Resources) {
         try {
           await browserFixture.cleanup();
         } catch (error) {
@@ -10588,7 +10930,7 @@ export async function runComposeSmoke({
           }),
         );
     }
-    if (browser && !options.keep) {
+    if (browserHook && !options.keep) {
       let inventory = { containers: [], volumes: [], networks: [] };
       const failures = [];
       let verified = true;
@@ -10674,6 +11016,18 @@ export async function runComposeSmoke({
   const errors = [primaryError, standardCleanupError, cleanupHookError].filter(
     Boolean,
   );
+  const g14Retained = retainG14Resources
+    ? {
+        runId: launchIdentity?.context.runId,
+        projectName,
+        composeFile,
+        secretsDir,
+        browserFixtureRoot,
+        databases: externalRunDatabaseResources.map(
+          ({ database }) => database.name,
+        ),
+      }
+    : undefined;
   if (options.mutationDisableRollback && errors.length > 0) {
     const cause = primaryError ?? standardCleanupError ?? cleanupHookError;
     const cleanup = rollbackCleanupReceipt ?? {
@@ -10743,11 +11097,13 @@ export async function runComposeSmoke({
     );
     if (finalizedExternalCleanup)
       combined.externalCleanup = finalizedExternalCleanup;
+    if (g14Retained) combined.g14Retained = g14Retained;
     throw combined;
   }
   if (errors.length === 1) {
     if (finalizedExternalCleanup)
       errors[0].externalCleanup = finalizedExternalCleanup;
+    if (g14Retained) errors[0].g14Retained = g14Retained;
     throw errors[0];
   }
   console.log(JSON.stringify(receipt));

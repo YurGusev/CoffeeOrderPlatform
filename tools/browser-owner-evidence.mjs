@@ -655,6 +655,77 @@ export function createBrowserOwnerEvidence({
   });
 }
 
+export function createG14OrderEvidence({ connect, roleMap, runId }) {
+  assert.equal(typeof connect, "function");
+  assert.match(runId ?? "", /^[0-9]{8}T[0-9]{6}Z-[0-9a-f]{7}$/u);
+  const database = validateSchema(roleMap, runId).orders;
+  return async (input) => {
+    exactKeys(
+      input,
+      ["orderRef", "correlationId", "frameId", "ownerVersion"],
+      "G14_OWNER_INPUT_INVALID",
+    );
+    const { orderRef, correlationId, frameId, ownerVersion } = input;
+    if (
+      !REF.order.test(orderRef ?? "") ||
+      !UUID.test(correlationId ?? "") ||
+      !/^msg_[0-9A-HJKMNP-TV-Z]{26}$/u.test(frameId ?? "") ||
+      !/^[1-9]\d{0,18}$/u.test(ownerVersion ?? "")
+    )
+      fail("G14_OWNER_INPUT_INVALID");
+    return withClient(connect, database, async (client) => {
+      await client.query("BEGIN READ ONLY");
+      try {
+        const confirmed = await client.query(
+          "SELECT message_id,topic,state,correlation_id,causation_id,traceparent FROM orders.outbox_messages WHERE aggregate_ref=$1 AND message_type='OrderConfirmed.v1' AND correlation_id=$2",
+          [orderRef, correlationId],
+        );
+        if (confirmed.rows.length !== 1) fail("G14_OWNER_CHAIN_NOT_PROVEN");
+        const root = confirmed.rows[0];
+        const inbox = await client.query(
+          "SELECT state FROM orders.inbox_messages WHERE consumer_name=$1 AND message_id=$2",
+          ["orders-aroma-preparation-v1", root.message_id],
+        );
+        const realtime = await client.query(
+          "SELECT message_id,topic,state,correlation_id,causation_id,owner_version,traceparent FROM orders.outbox_messages WHERE message_id=$1 AND aggregate_ref=$2 AND message_type='RealtimeInvalidated.v1'",
+          [frameId, orderRef],
+        );
+        const event = realtime.rows[0];
+        if (
+          !/^msg_[0-9A-HJKMNP-TV-Z]{26}$/u.test(root.message_id ?? "") ||
+          root.topic !== "coffee.orders.lifecycle.v1" ||
+          root.state !== "Published" ||
+          root.correlation_id !== correlationId ||
+          root.causation_id !== null ||
+          !/^(?!ff)[0-9a-f]{2}-(?!0{32})[0-9a-f]{32}-(?!0{16})[0-9a-f]{16}-[0-9a-f]{2}$/u.test(
+            root.traceparent ?? "",
+          ) ||
+          inbox.rows.length !== 1 ||
+          inbox.rows[0].state !== "Processed" ||
+          realtime.rows.length !== 1 ||
+          event.topic !== "coffee.realtime.invalidate.v1" ||
+          event.state !== "Published" ||
+          event.correlation_id !== correlationId ||
+          event.causation_id !== root.message_id ||
+          event.traceparent !== root.traceparent ||
+          event.owner_version !== ownerVersion
+        )
+          fail("G14_OWNER_CHAIN_NOT_PROVEN");
+        return {
+          ownerMessageSha256: sha256(root.message_id),
+          realtimeMessageSha256: sha256(event.message_id),
+          ownerVersion,
+          ownerTraceparent: root.traceparent,
+          realtimeTraceparent: event.traceparent,
+          traceId: root.traceparent.slice(3, 35),
+        };
+      } finally {
+        await client.query("ROLLBACK");
+      }
+    });
+  };
+}
+
 export function validateBrowserProof(proof, { runId, candidateSha }) {
   exactKeys(
     proof,

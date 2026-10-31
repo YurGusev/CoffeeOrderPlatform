@@ -478,7 +478,7 @@ void test("smoke accepts only runtime image IDs verified by G12 before startup",
       runInNewContext(predicate, { options: {}, browser: undefined }),
       true,
     );
-    assert.ok(source.includes("if (launchIdentity && bindRuntimeImages)"));
+    assert.ok(source.includes("if (imageIdentity && bindRuntimeImages)"));
     assert.ok(binding < source.indexOf("composeAttempted = true;", binding));
   } finally {
     t.mock.restoreAll();
@@ -527,6 +527,138 @@ void test("smoke rejects mismatched or missing G12 runtime IDs before startup", 
     t.mock.restoreAll();
     syncBuiltinESMExports();
   }
+});
+
+void test("G14 retains scoped resources when collector restoration is unconfirmed", async (t) => {
+  const {
+    retainG14AfterCollectorFailure,
+    externalRecoveryCleanupSummary,
+    removeBuiltRuntimeImages,
+  } = await import("../../tools/compose-smoke.mjs");
+  const options = { keep: false, noBuild: false };
+  const databases = [{ database: { name: "coffee_verify_run_orders" } }];
+  const receipt = retainG14AfterCollectorFailure({
+    g14Browser: {},
+    observability: {},
+    cleanupHookError: new Error("IPC disconnected"),
+    options,
+    databases,
+  });
+  assert.equal(options.keep, true);
+  assert.deepEqual(receipt, {
+    verified: false,
+    removed: [],
+    retained: ["coffee_verify_run_orders"],
+    failure: "G14_COLLECTOR_RESTORE_UNCONFIRMED",
+  });
+  const calls = [];
+  t.mock.method(childProcess, "execFileSync", (...args) => calls.push(args));
+  syncBuiltinESMExports();
+  try {
+    removeBuiltRuntimeImages(["sha256:example"], options);
+    assert.deepEqual(calls, []);
+  } finally {
+    t.mock.restoreAll();
+    syncBuiltinESMExports();
+  }
+  const summary = externalRecoveryCleanupSummary({
+    databases: receipt,
+    attachment: {
+      baselineAttached: false,
+      attempted: true,
+      attached: true,
+      routeBefore: "route",
+      routeAfter: "route",
+    },
+    cleanupFailed: true,
+  });
+  assert.equal(summary.verified, false);
+  assert.equal(summary.attachment.removed, false);
+  const normal = { keep: false };
+  assert.equal(
+    retainG14AfterCollectorFailure({
+      g14Browser: undefined,
+      observability: {},
+      cleanupHookError: new Error("error"),
+      options: normal,
+      databases,
+    }),
+    undefined,
+  );
+  assert.equal(normal.keep, false);
+  assert.equal(
+    retainG14AfterCollectorFailure({
+      g14Browser: {},
+      observability: {},
+      cleanupHookError: undefined,
+      options: normal,
+      databases,
+    }),
+    undefined,
+  );
+  assert.equal(normal.keep, false);
+});
+
+void test("G14 seals the child config for every Node runtime and rejects mismatch", async (t) => {
+  const { writeScopedComposeOverride } =
+    await import("../../tools/compose-smoke.mjs");
+  const { load } = await import("js-yaml");
+  const dir = await mkdtemp(join(tmpdir(), "g14-child-config-"));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const context = join(dir, "context.json");
+  const config = join(dir, "platform.yaml");
+  await writeFile(context, "{}", { mode: 0o400 });
+  await writeFile(config, "child: true\n", { mode: 0o444 });
+  await chmod(config, 0o444);
+  const sha256 = createHash("sha256")
+    .update(await readFile(config))
+    .digest("hex");
+  const override = await writeScopedComposeOverride("coffee-g14-config", {
+    launchContextPath: context,
+    g14Config: { path: config, sha256 },
+  });
+  t.after(() => rm(override, { force: true }));
+  const services = load(await readFile(override, "utf8")).services;
+  for (const runtime of RUNTIMES) {
+    assert.equal(
+      services[runtime].environment.COFFEE_LAUNCH_CONTEXT_FILE,
+      "/run/coffee-launch/context.json",
+    );
+    assert.deepEqual(
+      services[runtime].volumes.filter(
+        ({ target }) => target === "/app/config/platform.yaml",
+      ),
+      [
+        {
+          type: "bind",
+          source: config,
+          target: "/app/config/platform.yaml",
+          read_only: true,
+        },
+      ],
+    );
+    assert.equal(
+      services[runtime].volumes.find(
+        ({ target }) => target === "/run/coffee-launch/context.json",
+      ).source,
+      context,
+    );
+  }
+  await assert.rejects(
+    writeScopedComposeOverride("coffee-g14-config", {
+      launchContextPath: context,
+      g14Config: { path: config, sha256: "a".repeat(64) },
+    }),
+    /G14 config hash mismatch/u,
+  );
+  await chmod(config, 0o644);
+  await assert.rejects(
+    writeScopedComposeOverride("coffee-g14-config", {
+      launchContextPath: context,
+      g14Config: { path: config, sha256 },
+    }),
+    /G14 config must be sealed and owned/u,
+  );
 });
 
 void test("all smoke modes isolate networks and can bind a readonly launch context", async (t) => {
@@ -5700,4 +5832,118 @@ void test("catalog slice preserves secret ownership and uses host identity and s
   assert.equal(after.uid, before.uid);
   assert.equal(after.gid, before.gid);
   assert.equal(after.mode & 0o777, 0o400);
+});
+
+void test("G14 provider boundary rejects enabled mutations and non-isolated fixture", async () => {
+  const { validateG14ProviderBoundary } =
+    await import("../../tools/compose-smoke.mjs");
+  const projectName = "coffee-g14";
+  const networkName = `${projectName}_coffee_provider_egress`;
+  const network = {
+    Name: networkName,
+    Id: "b".repeat(64),
+    Internal: true,
+    Labels: {
+      "com.docker.compose.project": projectName,
+      "com.docker.compose.network": "coffee_provider_egress",
+    },
+  };
+  const container = (service, networks) => ({
+    Id: "a".repeat(64),
+    State: { Running: true },
+    Config: {
+      Labels: {
+        "com.docker.compose.project": projectName,
+        "com.docker.compose.service": service,
+      },
+    },
+    NetworkSettings: { Networks: networks },
+  });
+  const fixture = container("aroma-provider-fixture", {
+    [networkName]: { NetworkID: network.Id, Aliases: ["aromateacoffee.ru"] },
+  });
+  fixture.Image = `sha256:${"d".repeat(64)}`;
+  fixture.Config.Image =
+    "node:26.8.1-trixie-slim@sha256:c0753125a3789977aefe869cbebccf70e3cfd7ea84ca48547458f02e4f1d7146";
+  fixture.Config.Cmd = ["node", "/run/aroma-proof/provider-server.mjs"];
+  fixture.Mounts = [
+    {
+      Type: "bind",
+      Source: "/dev/shm/fixture",
+      Destination: "/run/aroma-proof",
+    },
+  ];
+  const internalNetworks = ["coffee_internal_api", "coffee_postgres_data"].map(
+    (name, index) => ({
+      Name: `${projectName}_${name}`,
+      Id: String(index).repeat(64),
+      Internal: true,
+      Labels: {
+        "com.docker.compose.project": projectName,
+        "com.docker.compose.network": name,
+      },
+    }),
+  );
+  const gateway = container("aroma-gateway", {
+    [networkName]: { NetworkID: network.Id },
+    ...Object.fromEntries(
+      internalNetworks.map((item) => [item.Name, { NetworkID: item.Id }]),
+    ),
+  });
+  const input = {
+    projectName,
+    expectedConfigSha256: "c".repeat(64),
+    mounted: { sha256: "c".repeat(64), mutationsEnabled: false },
+    gateway,
+    fixture,
+    network,
+    internalNetworks,
+    fixtureImageId: fixture.Image,
+    fixtureDirectory: "/dev/shm/fixture",
+  };
+  assert.equal(validateG14ProviderBoundary(input).providerIsolated, true);
+  assert.throws(() =>
+    validateG14ProviderBoundary({
+      ...input,
+      mounted: { ...input.mounted, mutationsEnabled: true },
+    }),
+  );
+  assert.throws(() =>
+    validateG14ProviderBoundary({
+      ...input,
+      mounted: { ...input.mounted, sha256: "d".repeat(64) },
+    }),
+  );
+  assert.throws(() =>
+    validateG14ProviderBoundary({
+      ...input,
+      network: { ...network, Internal: false },
+    }),
+  );
+  assert.throws(() =>
+    validateG14ProviderBoundary({
+      ...input,
+      fixtureImageId: `sha256:${"e".repeat(64)}`,
+    }),
+  );
+  assert.throws(() =>
+    validateG14ProviderBoundary({
+      ...input,
+      internalNetworks: [
+        { ...internalNetworks[0], Internal: false },
+        internalNetworks[1],
+      ],
+    }),
+  );
+  assert.throws(() =>
+    validateG14ProviderBoundary({
+      ...input,
+      fixture: {
+        ...fixture,
+        NetworkSettings: {
+          Networks: { [networkName]: { NetworkID: network.Id, Aliases: [] } },
+        },
+      },
+    }),
+  );
 });
