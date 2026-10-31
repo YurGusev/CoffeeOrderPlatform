@@ -204,6 +204,26 @@ transport. Полный native TLS/Kafka capacity proof выполняется �
 100 одновременно начинающих buyer flows по10 позиций — owner-boundary тест,
 не число SSE connections и не обещание100orders/s или VK/Agent/LLM E2E.
 
+Для launch G14 отдельно создаётся одноразовый qualification packet из живого
+candidate checkout и его проверенного G12 context:
+
+```sh
+node tools/realtime-capacity.mjs --context <абсолютный-путь-к-context.json> \
+  --result-dir <абсолютный-путь-к-пустому-каталогу-в-scratch>
+```
+
+Команда выполняет прежний full driver: 512/513 prephase, затем один subscriber,
+100 ACK/s, 100 subjects и 1800000 ms измерения. В отдельные 2700 s входят
+подготовка, запуск, cleanup и sealing. Полученный `receiptPath` передаётся
+runner через `--realtime-qualification` не позднее 7200 s после завершения.
+Один packet принимается только один раз на данного пользователя сервера;
+перенос файла или повторный checkout не создаёт нового допуска. Не удаляйте
+ownership witness при неизвестном cleanup: требуется разбор оставшихся
+ресурсов. Совпадение product SHA, config, BOM, lock, G12 images, Kafka,
+host profile и проверенной OIDC-only lineage обязательно. Без настоящего PASS
+и подтверждённого cleanup G14 и merge блокируются. Synthetic Orders/IdP здесь
+доказывают ёмкость транспорта и не заменяют бизнес-проверки G14/G15.
+
 ## 7. Rollback static assets
 
 Rollback выполняется заменой **всего** immutable nginx image digest на ранее принятый

@@ -677,6 +677,20 @@ Owner-пик100 одновременно начатых потоков зака�
 на реальных Orders routes/PostgreSQL/Outbox при текущих deadlines/pool; synthetic
 Customer/Pricing/auth seams не доказывают production ingress/VK/Agent/LLM capacity.
 
+По решению владельца от 31 октября 2026 для G14 обязательна отдельная
+квалификация SSE на том же product candidate: prephase 512/513 и полный
+`operator-1` с одним subscriber, 100 ACK/s для 100 subjects и измерением
+1800000 ms. На подготовку, нагрузку, cleanup и sealing отводится отдельный
+бюджет 2700 s; бюджеты G14 1800 s и всего launch 7200 s не изменяются.
+Пакет принимается не позднее 7200 s после завершения и только один раз для
+текущего пользователя на сервере. Он связывает SHA кандидата, исходную
+конфигурацию, BOM и lock, все 15 image IDs проверенного G12, фактически
+использованные native images трёх ролей и nginx, Kafka, host profile и
+проверенную OIDC-only lineage. Повторное использование, неизвестный cleanup,
+расхождение или отсутствие PASS блокируют G14 и merge. Synthetic Orders и IdP
+допустимы только для этой transport qualification: она не доказывает
+OrderConfirm, production IdP или full-system G14.
+
 G05/G10/G15 принимают outputs #4/#5/#7/#8/#9 по
 [протоколу browser recovery](26_BROWSER_COMMAND_RECOVERY.md): потерянный ответ
 Customer/Draft/Quote, reload до resourceRef, Completed read-only replay без
@@ -724,7 +738,8 @@ Synthetic login не подтверждает production IdP; actual runtime sta
 ```sh
 node verification/launch/v1/run.mjs \
   --candidate-sha <полный-SHA-кандидата> \
-  --accepted-base-commit <принятая-develop-до-начала-работы>
+  --accepted-base-commit <принятая-develop-до-начала-работы> \
+  --realtime-qualification <абсолютный-путь-к-qualification.json>
 ```
 
 Runner создаёт отдельный пустой detached checkout указанного SHA. Зависимости

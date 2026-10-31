@@ -1,0 +1,67 @@
+issue: 228
+baseCommit: f412aaa4657a435d2bb6f6d3c45ee162dbf8ec9a
+status: ready-for-review
+stackedDependencies:
+  - commit: 5f8b07d9e436334d3ebae90d408f4abcbed941cc
+    note: Принятая develop включена отдельным локальным merge.
+  - commit: b308bb6e31595ca5927abfbb117021c687f7bf55
+    note: Полный локальный merge #222 для reuse OIDC lifecycle; принятие #222 не подтверждено и необходимо до PR и merge #228.
+outputs:
+  - artifact: config/platform.yaml
+    sha256: a1a78e59e483dcc4a28a955aaa316d297d9068d6b17c4b7b958b3ab0ec32ab0a
+    consumers: [13]
+  - artifact: config/platform.schema.json
+    sha256: c98e12946f19e81a5dae1f95514774e014f0551958e5b08965f9d5aa2bee92ee
+    consumers: [13]
+  - artifact: packages/platform-config/src/index.ts
+    sha256: d56cc399bfcf0629d230d91cec53821b2f457ac8cfd1d226a5166f18a740a5a3
+    consumers: [13]
+  - artifact: tests/config/platform-config.test.mjs
+    sha256: 75bf253eeb3936bc5532ac09bfa6c18e23b450dadceae307af8f85b99944bf8f
+    consumers: [13]
+  - artifact: docs/launch/21_LAUNCH_VERIFICATION_SPEC.md
+    sha256: f4b83a3aef8db624f8552e254614ef32116ef9f4c69d33e1d84af2331a7c8f16
+    consumers: [13]
+  - artifact: docs/launch/30_FRONTEND_OPERATOR_RUNBOOK.md
+    sha256: cf90b28468cdfb45cf50c18e4667beee6ba0d66285cce5c4d2fbff810295fb10
+    consumers: [13]
+  - artifact: tests/config/observability-bootstrap.test.mjs
+    sha256: db02716788cdc91556dac0e5e21a4a606dd1d01660df6c02c7f067c7b48693ca
+    consumers: [13]
+  - artifact: tests/realtime/fixtures/harness.test.mjs
+    sha256: 3246d676c412a6f8f868ed45e168bab1104d58ad8be88a33fc321cdb1c48cb89
+    consumers: [13]
+  - artifact: tests/realtime/fixtures/setup.mjs
+    sha256: 5572a2f2687b4480368d711d7fdeaf1e894ba2bd3e0c8b7fd62589f574a5aa9a
+    consumers: [13]
+  - artifact: tests/realtime/soak.test.mjs
+    sha256: bca125d509f8ef6747231be310c1ee7bfdb4b3a517bbc3c59e3e213e445bf842
+    consumers: [13]
+  - artifact: tools/realtime-capacity.mjs
+    sha256: 948aa9f0e6b6b4a211af47d81928058a650cd0e463107a80d5ce64c64fb68fc8
+    consumers: [13]
+  - artifact: verification/launch/v1/run.mjs
+    sha256: 07ec716860b0d3ce73661b8badbf3c250b5e826622c4ac52853518d83216f1d5
+    consumers: [13]
+  - artifact: verification/launch/v1/scenarios/browser.mjs
+    sha256: a60c68fc60378aef1a22559386a79d335a399b3aca0021f39fd92a3b7cc12f87
+    consumers: [13]
+verification:
+  - command: "node --test tests/config/platform-config.test.mjs"
+    result: "38 pass / 0 fail / 0 skip; 27.584 s; log SHA-256 b731c6e633a008ba5477a12f20d0a3d018e359fca1f160e678c7647b56b2262b"
+  - command: "node --test --test-name-pattern='browser correlation executes the child lifecycle and preserves early image failure evidence' tests/config/observability-bootstrap.test.mjs"
+    result: "1 pass / 0 fail / 0 skip; 47.222 s; log SHA-256 fba4c2c608b3c52bbea711dd8a81a8d5711e02057c7b98a0458e9c396aea4788; packet A принят другим checkout B после удаления A, копия с отдельным context C отклонена с EEXIST"
+  - command: "node --test --test-name-pattern='qualification|capacity producer|G14 refuses|G12 Kafka proof|G12 cleanup|operator-1 (CLI|manifest|admission|driver|full)|prepared operator-1|product launch' tests/realtime/fixtures/harness.test.mjs"
+    result: "16 pass / 0 fail / 0 skip; 0.826 s; log SHA-256 c5bc38772feeec00064df8b1972ecfdcf313b214f3cac52ace7c3bcbeb7e85ea"
+  - command: "pnpm exec oxlint --type-aware --deny-warnings tests/realtime/fixtures/setup.mjs tests/realtime/soak.test.mjs tests/realtime/fixtures/harness.test.mjs tests/config/observability-bootstrap.test.mjs tools/realtime-capacity.mjs verification/launch/v1/run.mjs verification/launch/v1/scenarios/browser.mjs"
+    result: "exit 0; log SHA-256 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  - command: "pnpm exec prettier --check tests/realtime/fixtures/setup.mjs tests/realtime/soak.test.mjs tests/realtime/fixtures/harness.test.mjs tests/config/observability-bootstrap.test.mjs tools/realtime-capacity.mjs verification/launch/v1/run.mjs verification/launch/v1/scenarios/browser.mjs docs/launch/21_LAUNCH_VERIFICATION_SPEC.md docs/launch/30_FRONTEND_OPERATOR_RUNBOOK.md evidence/handoffs/issue-228.yaml"
+    result: "exit 0; log SHA-256 17aa973d3f004560237d9a95171210b0671deff23d61628eecf7322ff5938f20"
+independentReview:
+  source: Существенных source findings не обнаружено; native runtime не проверялся.
+  focusedTests: "8 pass / 0 fail / 0 skip; 0.614 s; log SHA-256 f5b1a4feba17bacdaaf10139d4d295f113e1782c8aedd3284f524b3ce3996865"
+limitations:
+  - "Кандидат не принят: native images и полный 1800000 ms профиль фактически NOT_RUN; synthetic tests не являются qualification PASS."
+  - "Full-system G14, реальные OrderConfirm и production IdP не доказаны этим изменением; без отдельного актуального qualification PASS merge #13 запрещён."
+  - "Для producer нужен живой checkout и проверенный G12 context того же SHA; завершённый обычный runner удаляет checkout, поэтому операционная orchestration должна сохранить его до sealing."
+  - "Принятие и runtime proof #222, независимое ревью, финальный CI и фактическая 30-минутная нагрузка остаются обязательными."

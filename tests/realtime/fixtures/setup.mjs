@@ -10,6 +10,7 @@ import {
   rm,
   rename,
   stat,
+  mkdtemp,
 } from "node:fs/promises";
 import { join, resolve, relative, dirname } from "node:path";
 import { createRequire } from "node:module";
@@ -19,7 +20,7 @@ import {
   randomUUID,
   X509Certificate,
 } from "node:crypto";
-import { availableParallelism, totalmem, cpus } from "node:os";
+import { availableParallelism, totalmem, cpus, tmpdir } from "node:os";
 import { load as yaml, dump } from "js-yaml";
 import Ajv2020 from "ajv/dist/2020.js";
 import { deriveRuntimeKafkaTarget } from "../../../packages/platform-config/dist/index.js";
@@ -143,7 +144,39 @@ const STARTUP_SQL_STATES = new Set([
   "57P01",
   "57P03",
 ]);
-export function productArgs(role, launchPath = false) {
+export function productArgs(role, launchPath = false, native) {
+  if (native) {
+    assert.ok(
+      launchPath &&
+        ["edge-gateway", "api-public", "realtime-gateway"].includes(role) &&
+        Number.isSafeInteger(native.port) &&
+        native.port > 0 &&
+        native.port <= 65535,
+      "native product requires a scoped launch role and port",
+    );
+    return [
+      "--env",
+      "COFFEE_CONFIG_FILE=/app/config/platform.yaml",
+      "--env",
+      "COFFEE_RUNTIME_SECRETS_FILE=/run/secrets/coffee-platform.yaml",
+      "--env",
+      "COFFEE_LAUNCH_CONTEXT_FILE=/run/coffee-launch/context.json",
+      "--env",
+      `PORT=${native.port}`,
+      "--env",
+      `OTEL_SERVICE_NAME=${role}`,
+      "--env",
+      "OTEL_PROPAGATORS=tracecontext,baggage",
+      "--env",
+      "OTEL_RESOURCE_ATTRIBUTES=service.namespace=coffee-platform,deployment.environment=development",
+      "--env",
+      "OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf",
+      ...(role === "edge-gateway"
+        ? ["--env", "NODE_EXTRA_CA_CERTS=/run/g15-browser/idp-ca.crt"]
+        : []),
+      "--IMAGE--",
+    ];
+  }
   return [
     "--env",
     "COFFEE_CONFIG_FILE=/fixture/platform.yaml",
@@ -326,6 +359,32 @@ function assertFixtureLaunchConfig(config, configBytes, launchPath) {
     actorRefClaim: "actor_ref",
     permissionsClaim: "permissions",
   });
+}
+
+export async function readQualificationInputs(contextFile) {
+  const launchPath = await readFixtureLaunchPath({
+    launchContextFile: contextFile,
+  });
+  assert.ok(launchPath, "qualification requires verified child lineage");
+  assert.equal(ROOT, launchPath.parentCandidateRoot);
+  const parent = await validateLaunchContext(launchPath.parentContextPath);
+  const { readVerifiedRuntimeImages } =
+    await import("../../../tools/verified-infrastructure-image.mjs");
+  const runtimeImages = await readVerifiedRuntimeImages({
+    contextFile: launchPath.parentContextPath,
+  });
+  return {
+    launchPath,
+    qualification: {
+      candidateSha: parent.context.candidateSha,
+      baseConfigSha256: parent.context.baseConfigSha256,
+      toolchainSha256: hash(
+        await readFile(join(ROOT, "config/toolchain-versions.json")),
+      ),
+      lockfileSha256: hash(await readFile(join(ROOT, "pnpm-lock.yaml"))),
+      runtimeImages,
+    },
+  };
 }
 
 export async function readCgroupMemory(pid, reader = readFile) {
@@ -752,8 +811,25 @@ function keyset() {
 }
 
 export async function prepare(resultDir, options) {
-  const launchPath = await readFixtureLaunchPath(options.launchPath);
+  const admitted = options.qualification
+    ? await readQualificationInputs(options.launchPath?.launchContextFile)
+    : undefined;
+  const launchPath =
+    admitted?.launchPath ?? (await readFixtureLaunchPath(options.launchPath));
+  const ownerPath = Boolean(options.launchPath && !options.qualification);
   if (launchPath) assert.equal(ROOT, launchPath.parentCandidateRoot);
+  const qualification = admitted?.qualification;
+  if (options.qualification) {
+    assert.ok(
+      launchPath &&
+        options.mode === "full" &&
+        options.profile === "operator-1" &&
+        options.prepareOnly === true &&
+        options.fixtureCheck === false &&
+        /^i12-[a-f0-9]{16}$/u.test(options.runId),
+      "qualification requires the verified child and full operator-1 profile",
+    );
+  }
   // Validate the frozen G12 artifact before generating private credentials or
   // starting the comparatively expensive native runtime build. This pass is
   // read-only with respect to Docker; the later import pass repeats validation.
@@ -890,17 +966,17 @@ export async function prepare(resultDir, options) {
   const { materials, fingerprints } = await certificates(
     join(privateDir, "certs"),
     config.environment,
-    { launchPath: Boolean(options.launchPath) },
+    { launchPath: ownerPath },
   );
   const { credentials, fingerprint } = await kafkaMaterial(
     join(privateDir, "kafka"),
-    { launchPath: Boolean(options.launchPath) },
+    { launchPath: ownerPath },
   );
   const actor = keyset(),
     api = keyset(),
-    orders = options.launchPath ? keyset() : undefined,
-    internal = options.launchPath ? keyset() : undefined,
-    pricing = options.launchPath ? keyset() : undefined;
+    orders = ownerPath ? keyset() : undefined,
+    internal = ownerPath ? keyset() : undefined,
+    pricing = ownerPath ? keyset() : undefined;
   const synthetic = {
     "security.actorContextEdgeSigningPrivateKey": actor.private,
     "security.actorContextEdgeVerificationPublicKeys": actor.verification,
@@ -942,7 +1018,7 @@ export async function prepare(resultDir, options) {
       0o400,
     );
   }
-  if (options.launchPath) {
+  if (ownerPath) {
     const service = "api-internal",
       secrets = {};
     for (const ref of config.services[service].secretRefs) {
@@ -987,7 +1063,7 @@ export async function prepare(resultDir, options) {
   }))
     await writeFile(join(nginxDir, name), value, { mode: 0o644 });
   const snapshot = await sourceSnapshot(privateDir, {
-    launchPath: Boolean(options.launchPath),
+    launchPath: ownerPath,
   });
   const compilerPackage = JSON.parse(
     await readFile(
@@ -1008,7 +1084,7 @@ export async function prepare(resultDir, options) {
         "packages/platform-security",
         "packages/generated/client-v1",
       ]
-    : options.launchPath
+    : ownerPath
       ? [
           ...PRODUCT_BUILD_TARGETS,
           "packages/platform-http",
@@ -1055,7 +1131,7 @@ export async function prepare(resultDir, options) {
         }
       : {}),
   };
-  if (options.launchPath)
+  if (ownerPath)
     fixture.launchPath = {
       ordersServiceSigningPrivateKey: orders.private,
       exporterToken: options.launchPath.exporterToken ?? "synthetic-no-export",
@@ -1077,6 +1153,91 @@ export async function prepare(resultDir, options) {
     node: nodeImage,
     nginx: toolchain.nginxImage,
   };
+  if (qualification) {
+    for (const role of [
+      "edge-gateway",
+      "api-public",
+      "realtime-gateway",
+      "edge-nginx",
+    ]) {
+      const image = qualification.runtimeImages.find(
+        (entry) => entry.service === role,
+      );
+      assert.ok(image, `verified runtime image missing: ${role}`);
+      images[role] = image.imageId;
+    }
+    images.nginx = images["edge-nginx"];
+    const localImageIds = new Set(
+      (await docker("image", "ls", "--all", "--no-trunc", "--quiet"))
+        .trim()
+        .split(/\s+/u)
+        .filter(Boolean),
+    );
+    const missing = [
+      "edge-gateway",
+      "api-public",
+      "realtime-gateway",
+      "edge-nginx",
+    ].some((role) => !localImageIds.has(images[role]));
+    if (missing) {
+      const project = `${options.runId}-runtime`;
+      const roles = ["edge-gateway", "api-public", "realtime-gateway"];
+      const tags = [...roles, "edge-nginx"].map(
+        (role) => `${project}-${role}:latest`,
+      );
+      for (const tag of tags)
+        assert.equal(
+          (await docker("image", "ls", "--quiet", tag)).trim(),
+          "",
+          "qualification image tag already exists",
+        );
+      await json(
+        join(resultDir, "runtime-image-ownership.json"),
+        {
+          runId: options.runId,
+          candidateSha: qualification.candidateSha,
+          plannedTags: tags,
+        },
+        0o600,
+      );
+      const temporary = await mkdtemp(join(tmpdir(), "coffee-realtime-build-"));
+      const { createBuildInputSnapshot, verifyBuildInputSnapshot } =
+        await import("../../../tools/security-scan.mjs");
+      const { buildRuntimeImages } =
+        await import("../../../tools/compose-smoke.mjs");
+      const built = [];
+      try {
+        const snapshot = await createBuildInputSnapshot({
+          candidateRoot: ROOT,
+          candidateSha: qualification.candidateSha,
+          temporary,
+        });
+        await verifyBuildInputSnapshot(snapshot);
+        try {
+          buildRuntimeImages(project, roles, built, snapshot.contextPath);
+        } finally {
+          await verifyBuildInputSnapshot(snapshot);
+        }
+        for (const [index, role] of [...roles, "edge-nginx"].entries())
+          assert.equal(
+            (
+              await docker(
+                "image",
+                "inspect",
+                "--format",
+                "{{.Id}}",
+                tags[index],
+              )
+            ).trim(),
+            images[role],
+            `rebuilt image differs from G12: ${role}`,
+          );
+        qualification.builtTags = tags;
+      } finally {
+        await rm(temporary, { recursive: true, force: true });
+      }
+    }
+  }
   assert.equal(
     compose.services.kafka.image,
     "coffee-platform-kafka:verified-artifact-required",
@@ -1088,24 +1249,25 @@ export async function prepare(resultDir, options) {
     // The pinned Node 26 image has no Confluent prebuilt addon. Build the existing
     // canonical runtime recipe; never install into or mutate hardlinked modules.
     const tag = `${options.runId}-native`;
-    await run(
-      "pnpm",
-      [
-        "image:build",
-        "--target",
-        "runtime",
-        "--build-arg",
-        "RUNTIME=realtime-gateway",
-        "--tag",
-        tag,
-        "--load",
-        ".",
-      ],
-      { timeout: 600000 },
-    );
-    images.node = (
-      await docker("image", "inspect", "--format", "{{.Id}}", tag)
-    ).trim();
+    if (!qualification)
+      await run(
+        "pnpm",
+        [
+          "image:build",
+          "--target",
+          "runtime",
+          "--build-arg",
+          "RUNTIME=realtime-gateway",
+          "--tag",
+          tag,
+          "--load",
+          ".",
+        ],
+        { timeout: 600000 },
+      );
+    images.node = qualification
+      ? images["realtime-gateway"]
+      : (await docker("image", "inspect", "--format", "{{.Id}}", tag)).trim();
     const probe = `const {createRequire}=require('node:module');const {dirname}=require('node:path');const app=createRequire('/app/package.json');const rt=createRequire(app.resolve('@coffee-platform/runtime'));const kafka=createRequire(rt.resolve('@coffee-platform/kafka-runtime'));const n=kafka('@confluentinc/kafka-javascript');console.log(JSON.stringify({node:process.version,abi:process.versions.modules,architecture:process.arch,path:dirname(kafka.resolve('@confluentinc/kafka-javascript/package.json'))+'/build/Release/confluent-kafka-javascript.node',packageVersion:kafka('@confluentinc/kafka-javascript/package.json').version,producer:typeof n.RdKafka.Producer,librdkafka:n.RdKafka.librdkafkaVersion}));`;
     nativeAdapter = JSON.parse(
       await docker(
@@ -1195,12 +1357,31 @@ export async function prepare(resultDir, options) {
         await docker("image", "inspect", "--format", "{{.Id}}", image)
       ).trim();
     } catch (error) {
-      if (error.code !== "FIXTURE_COMMAND_FAILED") throw error;
+      if (qualification || error.code !== "FIXTURE_COMMAND_FAILED") throw error;
       await run("docker", ["pull", image], { timeout: 180000 });
       imageIds[name] = (
         await docker("image", "inspect", "--format", "{{.Id}}", image)
       ).trim();
     }
+    if (qualification)
+      assert.equal(
+        imageIds[name],
+        image,
+        `verified runtime image drift: ${name}`,
+      );
+  }
+  if (qualification) {
+    const bakedNginx = await docker(
+      "run",
+      "--rm",
+      "--network",
+      "none",
+      "--entrypoint",
+      "cat",
+      images.nginx,
+      "/etc/nginx/nginx.conf",
+    );
+    assert.equal(hash(bakedNginx), hash(nginx), "native nginx config drift");
   }
   const compiled = {};
   for (const tree of ["packages", "apps"])
@@ -1320,6 +1501,7 @@ export async function prepare(resultDir, options) {
       images,
       imageIds,
       kafkaSupplyChain: kafkaArtifact,
+      ...(qualification ? { qualification } : {}),
       ...(launchPath
         ? {
             launchContextFile: launchPath.contextPath,
@@ -1373,6 +1555,8 @@ export async function prepare(resultDir, options) {
           ? hash(configBytes)
           : hash(await readFile(join(ROOT, p)));
     await json(join(resultDir, "profile-manifest.json"), manifest);
+    if (qualification)
+      await chmod(join(resultDir, "profile-manifest.json"), 0o400);
     return {
       manifest,
       privateDir,
@@ -1440,10 +1624,20 @@ export async function verifyPrepared(resultDir, approvedSha) {
     "prepared fixture input hash drift",
   );
   let launchPath;
+  let admitted;
+  if (manifest.qualification) {
+    assert.ok(
+      manifest.launchContextFile,
+      "qualification requires verified child lineage",
+    );
+    admitted = await readQualificationInputs(manifest.launchContextFile);
+  }
   if (manifest.launchContextFile) {
-    launchPath = await readFixtureLaunchPath({
-      launchContextFile: manifest.launchContextFile,
-    });
+    launchPath =
+      admitted?.launchPath ??
+      (await readFixtureLaunchPath({
+        launchContextFile: manifest.launchContextFile,
+      }));
     assert.deepEqual(manifest.launchIdentity, launchPath.launchIdentity);
     assert.equal(
       manifest.lineageReceiptSha256,
@@ -1453,6 +1647,37 @@ export async function verifyPrepared(resultDir, approvedSha) {
       manifest.databaseOwnershipSha256,
       hash(await readFile(launchPath.databaseOwnershipFile)),
     );
+  }
+  if (manifest.qualification) {
+    assert.ok(launchPath, "qualification requires verified child lineage");
+    const { qualification } = admitted;
+    const { runtimeImages } = qualification;
+    assert.deepEqual(manifest.qualification, {
+      ...qualification,
+      ...(manifest.qualification.builtTags
+        ? {
+            builtTags: [
+              "edge-gateway",
+              "api-public",
+              "realtime-gateway",
+              "edge-nginx",
+            ].map((role) => `${manifest.runId}-runtime-${role}:latest`),
+          }
+        : {}),
+    });
+    for (const role of [
+      "edge-gateway",
+      "api-public",
+      "realtime-gateway",
+      "edge-nginx",
+    ]) {
+      const image = runtimeImages.find((entry) => entry.service === role);
+      assert.ok(image, `verified runtime image missing: ${role}`);
+      assert.equal(manifest.images?.[role], image.imageId);
+      assert.equal(manifest.imageIds?.[role], image.imageId);
+    }
+    assert.equal(manifest.images.node, manifest.images["realtime-gateway"]);
+    assert.equal(manifest.images.nginx, manifest.images["edge-nginx"]);
   }
   for (const [p, h] of Object.entries({
     ...manifest.sources,
@@ -1574,7 +1799,14 @@ export async function verifyPrepared(resultDir, approvedSha) {
       : {}),
   };
 }
-export async function erasePrivate(resultDir) {
+export async function erasePrivate(resultDir, { consumersStopped } = {}) {
+  const witnessBytes = await readFile(`${resultDir}.ownership.json`).catch(
+    (error) => {
+      if (error.code === "ENOENT") return undefined;
+      throw error;
+    },
+  );
+  let preservePrivate = witnessBytes !== undefined;
   try {
     const manifest = await readFile(
       join(resultDir, "profile-manifest.json"),
@@ -1585,6 +1817,69 @@ export async function erasePrivate(resultDir) {
         if (error.code === "ENOENT") return undefined;
         throw error;
       });
+    if (witnessBytes) {
+      const witness = JSON.parse(witnessBytes);
+      assert.ok(
+        manifest?.qualification,
+        "qualification manifest missing during cleanup",
+      );
+      assert.equal(witness.runId, manifest.runId);
+      assert.equal(
+        witness.parentCandidateSha,
+        manifest.qualification.candidateSha,
+      );
+    }
+    if (manifest?.qualification) {
+      preservePrivate = true;
+      assert.ok(witnessBytes, "qualification ownership witness required");
+      assert.equal(
+        consumersStopped,
+        true,
+        "qualification consumers must be stopped before cleanup",
+      );
+      if (manifest.qualification.builtTags) {
+        await verifyPrepared(
+          resultDir,
+          hash(await readFile(join(resultDir, "profile-manifest.json"))),
+        );
+        assert.match(manifest.runId, /^i12-[a-f0-9]{16}$/u);
+        const roles = [
+          "edge-gateway",
+          "api-public",
+          "realtime-gateway",
+          "edge-nginx",
+        ];
+        const tags = roles.map(
+          (role) => `${manifest.runId}-runtime-${role}:latest`,
+        );
+        assert.deepEqual(manifest.qualification.builtTags, tags);
+        const witness = JSON.parse(
+          await readFile(
+            join(resultDir, "runtime-image-ownership.json"),
+            "utf8",
+          ),
+        );
+        assert.deepEqual(witness, {
+          runId: manifest.runId,
+          candidateSha: manifest.qualification.candidateSha,
+          plannedTags: tags,
+        });
+        for (const [index, role] of roles.entries())
+          assert.equal(
+            (
+              await docker(
+                "image",
+                "inspect",
+                "--format",
+                "{{.Id}}",
+                tags[index],
+              )
+            ).trim(),
+            manifest.images[role],
+          );
+        for (const tag of tags) await docker("image", "rm", "--no-prune", tag);
+      }
+    }
     if (manifest?.kafkaSupplyChain) {
       const launchPath = manifest.launchContextFile
         ? await readFixtureLaunchPath({
@@ -1635,7 +1930,9 @@ export async function erasePrivate(resultDir) {
         image: { ...image, imported: manifest.kafkaSupplyChain.imported },
       });
     }
+    preservePrivate = false;
   } finally {
-    await rm(join(resultDir, "private"), { recursive: true, force: true });
+    if (!preservePrivate)
+      await rm(join(resultDir, "private"), { recursive: true, force: true });
   }
 }
