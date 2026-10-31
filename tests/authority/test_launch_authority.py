@@ -93,6 +93,12 @@ class LaunchAuthorityTests(unittest.TestCase):
     def test_positive_fixture_is_accepted(self) -> None:
         VALIDATOR.validate_root(FIXTURE_ROOT)
 
+    def test_node_network_enforcement_label_is_a_fixed_fact(self) -> None:
+        policy = fixture_doc("launch-v1-connectivity-policy.json")
+        schema = fixture_doc("launch-v1-connectivity-policy.schema.json")
+        self.assertEqual(policy["nodeNetworkEnforcement"], "global-only")
+        self.assertEqual(schema["properties"]["nodeNetworkEnforcement"]["const"], "global-only")
+
     def test_foundation_keeps_the_approved_index_and_target_platform_binding(self) -> None:
         baseline = fixture_doc("runtime-foundation-decision.json")
         VALIDATOR.validate_foundation(baseline)

@@ -143,7 +143,9 @@ Node.js 26 выбран осознанно, хотя ещё имеет стат�
   Создание нового business-кода на mutable `Date` запрещено architecture/lint rule.
 - **Permission Model:** каждый runtime имеет декларацию разрешённых network/file/
   child-process/worker ресурсов. В dev сначала запускается `--permission-audit`,
-  в integration/production — `--permission` с минимальными `--allow-*`.
+  в integration/production — `--permission` с необходимыми `--allow-*`.
+  Node 26.8.1 применяет `--allow-net` глобально; host:port в manifest —
+  инвентарь, а не сетевой фильтр. Подробности — [ADR-0041](../adr/ADR-0041-local-server-network-boundaries.md).
 - **Native TypeScript:** однофайловые repository/admin scripts без стороннего
   runtime runner могут запускаться встроенной поддержкой TypeScript. Application
   build остаётся через `tsc`; decorators/transform-dependent syntax запрещены.
