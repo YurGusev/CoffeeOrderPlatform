@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { isSpanContextValid, trace } from "@opentelemetry/api";
 import type { IdempotencyKey } from "@coffee-platform/idempotency";
 import {
   isOrderCardResponse,
@@ -486,13 +487,22 @@ function commandContext(
   c: Context,
   replayOnly: boolean,
 ): CommandContext {
+  const span =
+    c.traceparent === undefined
+      ? trace.getActiveSpan()?.spanContext()
+      : undefined;
+  const traceparent =
+    c.traceparent ??
+    (span !== undefined && isSpanContextValid(span)
+      ? `00-${span.traceId}-${span.spanId}-${span.traceFlags.toString(16).padStart(2, "0")}`
+      : undefined);
   return {
     actorRef: claims.sub,
     permissions: claims.permissions,
     identity: ident,
     correlationId: c.correlationId,
     signal: c.signal,
-    ...(c.traceparent === undefined ? {} : { traceparent: c.traceparent }),
+    ...(traceparent === undefined ? {} : { traceparent }),
     deadlineUtc: c.deadlineUtc,
     replayOnly,
   };

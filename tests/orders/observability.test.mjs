@@ -360,6 +360,8 @@ void test("Orders real HTTP route spans cover successful, rejected, and parallel
   });
   const cid = randomUUID();
   const ref = "ord_01ARZ3NDEKTSV4RRFFQ69G5FAV";
+  const commands = [];
+  let signedTraceparent = `00-${"0".repeat(32)}-${"0".repeat(16)}-00`;
   const card = {
     orderRef: ref,
     version: "1",
@@ -386,9 +388,17 @@ void test("Orders real HTTP route spans cover successful, rejected, and parallel
       aud: "orders-service",
       originalIssuer: "edge-gateway",
       sub: "actor-a",
-      permissions: ["orders:read:any", "orders:create"],
+      permissions: [
+        "orders:read:any",
+        "orders:create",
+        "orders:confirm:any",
+        "orders:reconcile:any",
+      ],
       operationId: operation,
       correlationId: cid,
+      ...(signedTraceparent === undefined
+        ? {}
+        : { traceparent: signedTraceparent }),
     }),
     signInternalDelegation: () => "signed",
     owner: {
@@ -402,6 +412,23 @@ void test("Orders real HTTP route spans cover successful, rejected, and parallel
         },
         async createDraft() {
           return { status: 201, body: card, replayed: false };
+        },
+        async confirm(command) {
+          commands.push(command);
+          return { status: 200, body: card, replayed: false };
+        },
+        async requestReconciliation(command) {
+          commands.push(command);
+          return {
+            status: 202,
+            body: {
+              orderRef: ref,
+              orderVersion: "2",
+              requestedAt: "2026-10-26T10:00:00Z",
+              aromaState: "PendingObservation",
+            },
+            replayed: false,
+          };
         },
       },
       customer: createCustomerOrderInputClient({
@@ -491,4 +518,83 @@ void test("Orders real HTTP route spans cover successful, rejected, and parallel
       routes.map(({ name, attributes }) => ({ name, attributes })),
     ).includes("canary-secret"),
   );
+
+  const invoke = (command, payload, traceparent) =>
+    app.inject({
+      method: "POST",
+      url: `/api/client-v1/orders/${ref}/commands/${command}`,
+      headers: {
+        ...headers,
+        "idempotency-key": randomUUID(),
+        ...(traceparent === undefined ? {} : { traceparent }),
+      },
+      payload,
+    });
+  for (const [command, payload, spanName, status] of [
+    ["confirm", { expectedVersion: "1" }, "orders.http.confirm", 200],
+    [
+      "request-aroma-reconciliation",
+      { expectedVersion: "1", reason: "operator-request" },
+      "orders.http.reconcile",
+      202,
+    ],
+  ]) {
+    const response = await invoke(command, payload);
+    assert.equal(response.statusCode, status, response.body);
+    const active = spans
+      .findLast((span) => span.name === spanName)
+      .spanContext();
+    assert.equal(
+      commands.at(-1).traceparent,
+      `00-${active.traceId}-${active.spanId}-${active.traceFlags.toString(16).padStart(2, "0")}`,
+    );
+  }
+  const supplied = `00-${"a".repeat(32)}-${"b".repeat(16)}-01`;
+  signedTraceparent = supplied;
+  assert.equal(
+    (await invoke("confirm", { expectedVersion: "1" }, supplied)).statusCode,
+    200,
+  );
+  assert.equal(commands.at(-1).traceparent, supplied);
+  signedTraceparent = `00-${"c".repeat(32)}-${"d".repeat(16)}-01`;
+  const beforeRejected = commands.length;
+  assert.equal(
+    (await invoke("confirm", { expectedVersion: "1" }, supplied)).statusCode,
+    403,
+  );
+  assert.equal(commands.length, beforeRejected);
+  signedTraceparent = `00-${"0".repeat(32)}-${"0".repeat(16)}-00`;
+  assert.equal(
+    (await invoke("confirm", { expectedVersion: "1" }, "invalid")).statusCode,
+    200,
+  );
+  const recovered = spans
+    .findLast((span) => span.name === "orders.http.confirm")
+    .spanContext();
+  assert.equal(
+    commands.at(-1).traceparent,
+    `00-${recovered.traceId}-${recovered.spanId}-${recovered.traceFlags.toString(16).padStart(2, "0")}`,
+  );
+  const originalActive = manager.active;
+  try {
+    manager.active = () => ROOT_CONTEXT;
+    assert.equal(
+      (await invoke("confirm", { expectedVersion: "1" })).statusCode,
+      200,
+    );
+    assert.equal(commands.at(-1).traceparent, undefined);
+    manager.active = () =>
+      trace.setSpanContext(ROOT_CONTEXT, {
+        traceId: "0".repeat(32),
+        spanId: "0".repeat(16),
+        traceFlags: 1,
+      });
+    assert.equal(
+      (await invoke("confirm", { expectedVersion: "1" })).statusCode,
+      200,
+    );
+    assert.equal(commands.at(-1).traceparent, undefined);
+  } finally {
+    manager.active = originalActive;
+  }
 });
