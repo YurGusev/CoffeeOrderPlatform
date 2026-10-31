@@ -49,6 +49,8 @@ import {
   durationMilliseconds,
   parseCollectorExpiredRetryDrops,
   observabilityGateComplete,
+  verifySyntheticAlertTransitions,
+  startSyntheticAlertWorker,
   readG14Qualification,
   persistVerificationResult,
   collectorMemorySelfTelemetry,
@@ -113,6 +115,367 @@ const syntheticNodeNotReady = {
     receivedAt: "1970-01-01T00:21:42.500Z",
   },
 };
+
+void test("synthetic alerts activate before matrix and complete only after cleanup", async (t) => {
+  const dir = await mkdtemp(path.join(tmpdir(), "alert-transitions-"));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const alertPath = path.join(dir, "episodes.jsonl");
+  await writeFile(alertPath, "");
+  const definitions = createAlertDefinitions({ config });
+  const provisioning = createGrafanaAlertProvisioning(config, {
+    notificationUrl: "http://alerts.test",
+  });
+  const synthetic = createAlertDefinitions({
+    config,
+    readinessServices: ["g14-synthetic"],
+  }).find((rule) => rule.key === "notReady");
+  const productionRule = definitions.find((rule) => rule.key === "notReady");
+  const production = structuredClone(
+    provisioning.alerts.groups[0].rules.find(
+      (rule) => rule.uid === productionRule.name,
+    ),
+  );
+  let now = Date.parse("2026-10-31T00:00:00.000Z");
+  t.mock.method(Date, "now", () => (now += 100));
+  let active = false;
+  let group;
+  let activated = false;
+  let cleaned = false;
+  let firingEvents = [];
+  t.mock.method(globalThis, "fetch", async (input, options = {}) => {
+    const url = new URL(input);
+    const method = options.method ?? "GET";
+    const reply = (value, status = 200) =>
+      new Response(value === undefined ? null : JSON.stringify(value), {
+        status,
+      });
+    if (url.hostname === "producer.test") {
+      if (url.pathname === "/test/state") {
+        const next = JSON.parse(options.body).active;
+        if (active && !next) {
+          now += 1000;
+          const resolved = firingEvents.map((event) => ({
+            ...event,
+            status: "resolved",
+            receivedAt: new Date(now).toISOString(),
+          }));
+          await writeFile(
+            alertPath,
+            [...firingEvents, ...resolved]
+              .map((event) => JSON.stringify(event))
+              .join("\n") + "\n",
+          );
+        }
+        active = next;
+      }
+      return reply({ accepted: true }, 202);
+    }
+    if (url.hostname === "prometheus.test") {
+      const expression = url.searchParams.get("query");
+      if (url.pathname.endsWith("query_range")) {
+        const end = Number(url.searchParams.get("end"));
+        return reply({
+          status: "success",
+          data: {
+            resultType: "matrix",
+            result: [
+              {
+                metric: { service_name: "g14-synthetic" },
+                values: [
+                  [
+                    end,
+                    expression.startsWith("timestamp(")
+                      ? String(end)
+                      : active
+                        ? "0"
+                        : "1",
+                  ],
+                ],
+              },
+            ],
+          },
+        });
+      }
+      const result = expression.startsWith("probe_success{")
+        ? []
+        : [{ value: [now / 1000, active ? "0" : "1"] }];
+      return reply({
+        status: "success",
+        data: { resultType: "vector", result },
+      });
+    }
+    if (url.hostname !== "grafana.test") throw new Error("unexpected host");
+    if (url.pathname.endsWith(productionRule.name)) return reply(production);
+    if (url.pathname.endsWith("/rule-groups/g14-synthetic")) {
+      if (method === "PUT") {
+        group = JSON.parse(options.body);
+        return reply({});
+      }
+      if (method === "DELETE") {
+        group = undefined;
+        cleaned = true;
+        return reply(undefined, 204);
+      }
+      return group ? reply(group) : reply({}, 404);
+    }
+    if (url.pathname.endsWith(synthetic.name))
+      return group ? reply(group.rules[0]) : reply({}, 404);
+    throw new Error(`unexpected path ${url.pathname}`);
+  });
+  const outcome = await verifySyntheticAlertTransitions({
+    config,
+    definitions,
+    provisioning,
+    baseUrls: {
+      prometheus: "http://prometheus.test",
+      grafana: "http://grafana.test",
+    },
+    authorization: "Basic test",
+    folderUid: "fixture",
+    producerUrl: "http://producer.test",
+    runId: "synthetic-run",
+    alertPath,
+    onActivated: async ({ activationMs, baseline, failed }) => {
+      assert.equal(baseline.value, 1);
+      assert.equal(failed.value, 0);
+      assert.equal(cleaned, false);
+      activated = true;
+      now = activationMs + 300_500;
+      firingEvents = [
+        ...definitions.filter(
+          (rule) => !["diskWatermark", "notReady"].includes(rule.key),
+        ),
+        synthetic,
+      ].map((rule, index) => ({
+        name: rule.name,
+        status: "firing",
+        episodeId: `${String(index + 1).repeat(16)}:${new Date(activationMs + rule.forMs).toISOString()}`,
+        receivedAt: new Date(activationMs + rule.forMs).toISOString(),
+      }));
+      await writeFile(
+        alertPath,
+        firingEvents.map((event) => JSON.stringify(event)).join("\n") + "\n",
+      );
+    },
+  });
+  assert.equal(activated, true);
+  assert.equal(cleaned, true);
+  assert.equal(outcome.syntheticNodeNotReady.cleanupVerified, true);
+  assert.equal(outcome.syntheticNodeNotReady.forMs, 300000);
+  assert.equal(outcome.alerts.length, 4);
+  await writeFile(alertPath, "");
+  firingEvents = [];
+  cleaned = false;
+  await assert.rejects(
+    verifySyntheticAlertTransitions({
+      config,
+      definitions,
+      provisioning,
+      baseUrls: {
+        prometheus: "http://prometheus.test",
+        grafana: "http://grafana.test",
+      },
+      authorization: "Basic test",
+      folderUid: "fixture",
+      producerUrl: "http://producer.test",
+      runId: "synthetic-run",
+      alertPath,
+      onActivated: async () => {
+        throw new Error("activation handoff failed");
+      },
+    }),
+    /activation handoff failed/u,
+  );
+  assert.equal(active, false);
+  assert.equal(
+    cleaned,
+    true,
+    "failed handoff must still reset fixture and remove its Grafana group",
+  );
+  await writeFile(alertPath, "");
+  cleaned = false;
+  const controller = new AbortController();
+  await assert.rejects(
+    verifySyntheticAlertTransitions({
+      config,
+      definitions,
+      provisioning,
+      baseUrls: {
+        prometheus: "http://prometheus.test",
+        grafana: "http://grafana.test",
+      },
+      authorization: "Basic test",
+      folderUid: "fixture",
+      producerUrl: "http://producer.test",
+      runId: "synthetic-run",
+      alertPath,
+      signal: controller.signal,
+      onActivated: async () => {
+        controller.abort();
+      },
+    }),
+    /synthetic alert worker interrupted/u,
+  );
+  assert.equal(active, false);
+  assert.equal(
+    cleaned,
+    true,
+    "interrupted worker must still reset and clean up",
+  );
+});
+
+void test("native collector waits for validated synthetic cleanup and fails closed", async () => {
+  const definitions = createAlertDefinitions({ config });
+  const alerts = definitions
+    .filter((rule) => !["diskWatermark", "notReady"].includes(rule.key))
+    .map((rule) => ({
+      ...rule,
+      episodeId: "episode",
+      firing: true,
+      resolved: true,
+    }));
+  for (const cleanupVerified of [true, false]) {
+    let release;
+    const pending = new Promise((resolve) => {
+      release = resolve;
+    });
+    const steps = [];
+    const worker = await startSyntheticAlertWorker({
+      root: process.cwd(),
+      config,
+      definitions,
+      runChild: async ({ onIpc }) => {
+        await onIpc({ stage: "init", payload: null });
+        await onIpc({
+          stage: "activated",
+          payload: {
+            activationMs: 1,
+            baseline: { value: 1 },
+            failed: { value: 0, timestampUs: 2000 },
+          },
+        });
+        await onIpc({ stage: "running", payload: null });
+        steps.push("matrix");
+        await pending;
+        steps.push("cleanup");
+        await onIpc({
+          stage: "cleanup",
+          payload: {
+            syntheticNodeNotReady: {
+              ...syntheticNodeNotReady,
+              cleanupVerified,
+            },
+            alerts,
+          },
+        });
+        return {};
+      },
+    });
+    const native = worker.wait().then(() => {
+      steps.push("native");
+    });
+    await Promise.resolve();
+    assert.deepEqual(steps, ["matrix"]);
+    release();
+    if (cleanupVerified) {
+      await native;
+      assert.deepEqual(steps, ["matrix", "cleanup", "native"]);
+    } else {
+      await assert.rejects(native, /synthetic alert completion invalid/u);
+      assert.deepEqual(steps, ["matrix", "cleanup"]);
+    }
+  }
+  await assert.rejects(
+    startSyntheticAlertWorker({
+      root: process.cwd(),
+      config,
+      definitions,
+      runChild: async ({ onIpc }) => {
+        await onIpc({ stage: "init", payload: null });
+        await onIpc({
+          stage: "activated",
+          payload: {
+            activationMs: 1,
+            baseline: { value: 0 },
+            failed: { value: 0, timestampUs: 2000 },
+          },
+        });
+      },
+    }),
+    /synthetic alert activation invalid/u,
+  );
+});
+
+void test("supervised alert worker continues while matrix parent blocks", async () => {
+  const { runManagedRollbackChild } =
+    await import("../../verification/launch/v1/scenarios/rollback.mjs");
+  const definitions = createAlertDefinitions({ config });
+  const alerts = definitions
+    .filter((rule) => !["diskWatermark", "notReady"].includes(rule.key))
+    .map((rule) => ({
+      ...rule,
+      episodeId: "episode",
+      firing: true,
+      resolved: true,
+    }));
+  const payload = JSON.stringify({ syntheticNodeNotReady, alerts });
+  const script = `
+const request=(stage,payload)=>new Promise((resolve,reject)=>{
+ const listener=(message)=>{if(message.stage!==stage)return;process.removeListener('message',listener);message.ok?resolve():reject(new Error('rejected'));};
+ process.on('message',listener);process.send({stage,payload});
+});
+await request('init',null);
+await request('activated',{activationMs:1,baseline:{value:1},failed:{value:0,timestampUs:2000}});
+process.send({stage:'running',payload:null});
+await new Promise(resolve=>setTimeout(resolve,40));
+const completedAt=Date.now();
+await request('cleanup',{...${payload},completedAt});
+process.disconnect();`;
+  const worker = await startSyntheticAlertWorker({
+    root: process.cwd(),
+    config,
+    definitions,
+    runChild: (options) =>
+      runManagedRollbackChild({
+        ...options,
+        args: ["--input-type=module", "--eval", script],
+      }),
+  });
+  const blocker = spawnSync(
+    process.execPath,
+    ["-e", "setTimeout(()=>{},300)"],
+    { timeout: 3000 },
+  );
+  assert.equal(blocker.status, 0);
+  const parentUnblockedAt = Date.now();
+  const receipt = await worker.wait();
+  assert.ok(
+    receipt.completedAt <= parentUnblockedAt,
+    "worker must complete while the parent event loop is blocked",
+  );
+});
+
+void test("actual alert worker failure blocks matrix activation", async () => {
+  const definitions = createAlertDefinitions({ config });
+  const provisioning = createGrafanaAlertProvisioning(config, {
+    notificationUrl: "http://alerts.test",
+  });
+  await assert.rejects(
+    startSyntheticAlertWorker({
+      root: process.cwd(),
+      config,
+      definitions,
+      provisioning,
+      baseUrls: { grafana: "not-a-url", prometheus: "not-a-url" },
+      authorization: "Basic test",
+      folderUid: "fixture",
+      producerUrl: "not-a-url",
+      runId: "synthetic-run",
+      alertPath: "/nonexistent-alert-episodes",
+    }),
+    /ROLLBACK_CHILD_(?:IPC_FAILED|FAILED)/u,
+  );
+});
 
 void test("Tempo effective config is parsed after its native status request header", () => {
   const expected = {

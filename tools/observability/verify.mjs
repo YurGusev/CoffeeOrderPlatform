@@ -4013,6 +4013,529 @@ export function durationMilliseconds(value) {
   return offset === value.length && Number.isSafeInteger(total) ? total : NaN;
 }
 
+export async function verifySyntheticAlertTransitions({
+  config,
+  definitions,
+  provisioning,
+  baseUrls,
+  authorization,
+  folderUid,
+  producerUrl,
+  runId,
+  alertPath,
+  signal,
+  onActivated,
+}) {
+  let syntheticCleanupVerified = true;
+  const syntheticWait = (predicate, options) =>
+    waitFor(async () => {
+      if (signal?.aborted)
+        throw Object.assign(new Error("synthetic alert worker interrupted"), {
+          fatal: true,
+        });
+      return predicate();
+    }, options);
+  const nonDisk = definitions.filter(
+    (rule) => rule.key !== "diskWatermark" && rule.key !== "notReady",
+  );
+  const syntheticRule = createAlertDefinitions({
+    config,
+    readinessServices: ["g14-synthetic"],
+  }).find((rule) => rule.key === "notReady");
+  const productionRule = definitions.find((rule) => rule.key === "notReady");
+  const syntheticGroup = "g14-synthetic";
+  const groupPath = `/api/v1/provisioning/folder/${encodeURIComponent(folderUid)}/rule-groups/${syntheticGroup}`;
+  const syntheticPath = `/api/v1/provisioning/alert-rules/${encodeURIComponent(syntheticRule.name)}`;
+  const productionPath = `/api/v1/provisioning/alert-rules/${encodeURIComponent(productionRule.name)}`;
+  const productionBefore = await api({
+    baseUrl: baseUrls.grafana,
+    authorization,
+    path: productionPath,
+  });
+  const readSynthetic = async (afterUs) =>
+    (
+      await readinessMetricSamples({
+        baseUrl: baseUrls.prometheus,
+        services: ["g14-synthetic"],
+        afterUs,
+      })
+    )[0].sample;
+  const query = async (expression) => {
+    const params = new URLSearchParams({ query: expression });
+    const response = await api({
+      baseUrl: baseUrls.prometheus,
+      path: `/api/v1/query?${params}`,
+    });
+    if (
+      response?.status !== "success" ||
+      response.data?.resultType !== "vector" ||
+      !Array.isArray(response.data?.result)
+    )
+      throw new Error("synthetic readiness query returned invalid data");
+    return response.data.result;
+  };
+  await fixtureRequest({
+    baseUrl: producerUrl,
+    path: "/test/state",
+    body: { active: false },
+    runId,
+  });
+  await fixtureRequest({ baseUrl: producerUrl, runId });
+  const baselineStartUs = Date.now() * 1000;
+  const baseline = await syntheticWait(
+    async () => {
+      const sample = await readSynthetic(baselineStartUs);
+      const native = await query(
+        'probe_success{service_name="otel-collector",probe_owner="edge-nginx"}',
+      );
+      const value = await query(syntheticRule.query);
+      return sample?.value === 1 &&
+        native.length === 0 &&
+        value.length === 1 &&
+        value[0]?.value?.[1] === "1"
+        ? sample
+        : false;
+    },
+    {
+      timeoutMs: 120000,
+      intervalMs: 2000,
+      description: "fresh synthetic readiness baseline without native probe",
+    },
+  );
+  await api({
+    baseUrl: baseUrls.grafana,
+    authorization,
+    path: groupPath,
+    expected: [404],
+  });
+  await api({
+    baseUrl: baseUrls.grafana,
+    authorization,
+    path: syntheticPath,
+    expected: [404],
+  });
+  const template = structuredClone(
+    provisioning.alerts.groups[0].rules.find(
+      (rule) => rule.uid === productionRule.name,
+    ),
+  );
+  template.uid = syntheticRule.name;
+  template.title = syntheticRule.name;
+  template.data.find((item) => item.refId === "A").model.expr =
+    syntheticRule.query;
+  let syntheticReceipt;
+  const firing = new Map();
+  try {
+    syntheticCleanupVerified = false;
+    await api({
+      baseUrl: baseUrls.grafana,
+      authorization,
+      path: groupPath,
+      method: "PUT",
+      body: {
+        folderUid,
+        title: syntheticGroup,
+        interval: config.telemetry.alerts.evaluationIntervalMs / 1000,
+        rules: [
+          {
+            ...template,
+            orgID: 1,
+            folderUID: folderUid,
+            ruleGroup: syntheticGroup,
+          },
+        ],
+      },
+    });
+    const installedGroup = await api({
+      baseUrl: baseUrls.grafana,
+      authorization,
+      path: groupPath,
+    });
+    const installed = await api({
+      baseUrl: baseUrls.grafana,
+      authorization,
+      path: syntheticPath,
+    });
+    if (
+      installedGroup?.interval !==
+        config.telemetry.alerts.evaluationIntervalMs / 1000 ||
+      installed?.uid !== syntheticRule.name ||
+      installed?.title !== syntheticRule.name ||
+      installed?.for !== productionBefore.for ||
+      installed?.data?.find((item) => item.refId === "A")?.model?.expr !==
+        syntheticRule.query ||
+      installed?.data?.find((item) => item.refId === "B")?.model?.expression !==
+        `$A ${syntheticRule.operator} ${syntheticRule.threshold}`
+    )
+      throw new Error(
+        "synthetic Grafana readiness rule differs from configured policy",
+      );
+    const alertRules = [...nonDisk, syntheticRule];
+    await syntheticWait(
+      async () => {
+        const events = (await readSinkEvents(alertPath)).filter((item) =>
+          alertRules.some((rule) => rule.name === item.name),
+        );
+        return events.every(
+          (item) =>
+            item.status !== "firing" ||
+            events.some(
+              (later) =>
+                later.status === "resolved" &&
+                later.episodeId === item.episodeId,
+            ),
+        );
+      },
+      {
+        timeoutMs: 420000,
+        intervalMs: 5000,
+        description: "alert episodes resolved before controlled activation",
+      },
+    );
+    const activationMs = Date.now();
+    await fixtureRequest({
+      baseUrl: producerUrl,
+      path: "/test/state",
+      body: { active: true },
+      runId,
+    });
+    await fixtureRequest({ baseUrl: producerUrl, runId });
+    const failed = await syntheticWait(
+      async () => {
+        const sample = await readSynthetic(activationMs * 1000);
+        return sample?.value === 0 ? sample : false;
+      },
+      {
+        timeoutMs: 120000,
+        intervalMs: 2000,
+        description: "fresh synthetic readiness 1 to 0",
+      },
+    );
+    await onActivated({ activationMs, baseline, failed });
+    const maxForMs = Math.max(...alertRules.map((rule) => rule.forMs));
+    await syntheticWait(
+      async () => {
+        const events = await readSinkEvents(alertPath);
+        for (const rule of alertRules) {
+          const event = events.find(
+            (item) =>
+              item.name === rule.name &&
+              item.status === "firing" &&
+              alertEpisodeStartMs(item.episodeId) >=
+                activationMs + rule.forMs &&
+              Date.parse(item.receivedAt) >=
+                alertEpisodeStartMs(item.episodeId),
+          );
+          if (event) firing.set(rule.name, event.episodeId);
+        }
+        const sample = await readSynthetic((Date.now() - 30000) * 1000);
+        const native = await query(
+          'probe_success{service_name="otel-collector",probe_owner="edge-nginx"}',
+        );
+        const value = await query(syntheticRule.query);
+        return (
+          firing.size === alertRules.length &&
+          sample?.value === 0 &&
+          native.length === 0 &&
+          value.length === 1 &&
+          value[0]?.value?.[1] === "0"
+        );
+      },
+      {
+        timeoutMs:
+          maxForMs + 5 * config.telemetry.alerts.evaluationIntervalMs + 130000,
+        intervalMs: 5000,
+        description: "synthetic Grafana alert firing episodes",
+      },
+    );
+    const recoveryMs = Date.now();
+    await fixtureRequest({
+      baseUrl: producerUrl,
+      path: "/test/state",
+      body: { active: false },
+      runId,
+    });
+    await fixtureRequest({ baseUrl: producerUrl, runId });
+    const recovered = await syntheticWait(
+      async () => {
+        const sample = await readSynthetic(recoveryMs * 1000);
+        const native = await query(
+          'probe_success{service_name="otel-collector",probe_owner="edge-nginx"}',
+        );
+        const value = await query(syntheticRule.query);
+        return sample?.value === 1 &&
+          native.length === 0 &&
+          value.length === 1 &&
+          value[0]?.value?.[1] === "1"
+          ? sample
+          : false;
+      },
+      {
+        timeoutMs: 120000,
+        intervalMs: 2000,
+        description: "fresh synthetic readiness 0 to 1",
+      },
+    );
+    const resolved = await syntheticWait(
+      async () => {
+        const events = await readSinkEvents(alertPath);
+        return alertRules.every((rule) =>
+          events.some(
+            (item) =>
+              item.name === rule.name &&
+              item.status === "resolved" &&
+              item.episodeId === firing.get(rule.name) &&
+              Date.parse(item.receivedAt) >= recoveryMs,
+          ),
+        )
+          ? events.find(
+              (item) =>
+                item.name === syntheticRule.name &&
+                item.status === "resolved" &&
+                item.episodeId === firing.get(syntheticRule.name) &&
+                Date.parse(item.receivedAt) >= recoveryMs,
+            )
+          : false;
+      },
+      {
+        timeoutMs:
+          maxForMs + 5 * config.telemetry.alerts.evaluationIntervalMs + 130000,
+        intervalMs: 5000,
+        description: "synthetic Grafana alert resolved episodes",
+      },
+    );
+    const syntheticFiring = (await readSinkEvents(alertPath)).find(
+      (item) =>
+        item.name === syntheticRule.name &&
+        item.status === "firing" &&
+        item.episodeId === firing.get(syntheticRule.name),
+    );
+    syntheticReceipt = {
+      status: "PASS",
+      service: "g14-synthetic",
+      ruleUid: syntheticRule.name,
+      forMs: syntheticRule.forMs,
+      threshold: syntheticRule.threshold,
+      nativeProbeAbsent: true,
+      activationMs,
+      recoveryMs,
+      baseline,
+      failed,
+      recovered,
+      firing: {
+        episodeId: syntheticFiring.episodeId,
+        receivedAt: syntheticFiring.receivedAt,
+      },
+      resolved: {
+        episodeId: resolved.episodeId,
+        receivedAt: resolved.receivedAt,
+      },
+    };
+  } finally {
+    let syntheticResetVerified = false;
+    try {
+      await fixtureRequest({
+        baseUrl: producerUrl,
+        path: "/test/state",
+        body: { active: false },
+        runId,
+      });
+      syntheticResetVerified = true;
+    } finally {
+      await api({
+        baseUrl: baseUrls.grafana,
+        authorization,
+        path: groupPath,
+        method: "DELETE",
+        expected: [204, 404],
+      });
+      await api({
+        baseUrl: baseUrls.grafana,
+        authorization,
+        path: groupPath,
+        expected: [404],
+      });
+      await api({
+        baseUrl: baseUrls.grafana,
+        authorization,
+        path: syntheticPath,
+        expected: [404],
+      });
+      const productionAfter = await api({
+        baseUrl: baseUrls.grafana,
+        authorization,
+        path: productionPath,
+      });
+      syntheticCleanupVerified =
+        syntheticResetVerified &&
+        productionAfter?.uid === productionBefore.uid &&
+        productionAfter?.title === productionBefore.title &&
+        productionAfter?.for === productionBefore.for &&
+        productionAfter?.condition === productionBefore.condition &&
+        productionAfter?.noDataState === productionBefore.noDataState &&
+        productionAfter?.execErrState === productionBefore.execErrState &&
+        isDeepStrictEqual(productionAfter?.data, productionBefore.data) &&
+        productionAfter?.data?.find((item) => item.refId === "A")?.model
+          ?.expr === productionRule.query;
+    }
+  }
+  if (!syntheticCleanupVerified)
+    throw new Error("synthetic readiness alert cleanup was not verified");
+  const syntheticNodeNotReady = {
+    ...syntheticReceipt,
+    cleanupVerified: true,
+    productionRuleUnchanged: true,
+  };
+  if (!syntheticNodeNotReadyComplete(syntheticNodeNotReady))
+    throw new Error("synthetic Node readiness alert evidence invalid");
+  return {
+    syntheticNodeNotReady,
+    alerts: nonDisk.map((rule) => ({
+      key: rule.key,
+      name: rule.name,
+      episodeId: firing.get(rule.name),
+      forMs: rule.forMs,
+      firing: true,
+      resolved: true,
+    })),
+  };
+}
+
+export async function startSyntheticAlertWorker({
+  root,
+  config,
+  definitions,
+  provisioning,
+  baseUrls,
+  authorization,
+  folderUid,
+  producerUrl,
+  runId,
+  alertPath,
+  runChild,
+}) {
+  const runManagedRollbackChild =
+    runChild ??
+    (await import("../../verification/launch/v1/scenarios/rollback.mjs"))
+      .runManagedRollbackChild;
+  let resolveSyntheticActivation;
+  const syntheticActivation = new Promise((resolve) => {
+    resolveSyntheticActivation = resolve;
+  });
+  let syntheticStage = "init";
+  let syntheticReceipt;
+  const syntheticScript = `import {verifySyntheticAlertTransitions} from './tools/observability/verify.mjs';
+const abort = new AbortController();
+process.once('disconnect', () => abort.abort());
+process.once('SIGTERM', () => abort.abort());
+process.once('SIGINT', () => abort.abort());
+const request=(stage,payload)=>new Promise((resolve,reject)=>{
+ const disconnected=()=>{process.removeListener('message',received);reject(new Error('ALERT_WORKER_DISCONNECTED'));};
+ const received=(message,handle)=>{if(!handle&&message?.stage!==stage)return;process.removeListener('message',received);process.removeListener('disconnect',disconnected);if(handle||!message||message.ok!==true)reject(new Error('ALERT_WORKER_REJECTED'));else resolve(message.payload);};
+ process.once('disconnect',disconnected);process.on('message',received);
+ process.send({stage,payload},error=>{if(error){process.removeListener('message',received);process.removeListener('disconnect',disconnected);reject(new Error('ALERT_WORKER_SEND_FAILED'));}});
+});
+try {
+ const input=await request('init',null);
+ const result=await verifySyntheticAlertTransitions({...input,signal:abort.signal,onActivated:async value=>{await request('activated',value);process.send({stage:'running',payload:null});}});
+ await request('cleanup',result);
+ if(process.connected)process.disconnect();
+} catch(error) { if(process.connected)process.disconnect(); throw error; }`;
+  const syntheticWorker = runManagedRollbackChild({
+    args: ["--input-type=module", "--eval", syntheticScript],
+    cwd: root,
+    env: process.env,
+    onIpc: async (message) => {
+      if (
+        Object.keys(message).sort().join(",") !== "payload,stage" ||
+        message.stage !== syntheticStage
+      )
+        throw new Error("synthetic alert worker stage invalid");
+      if (syntheticStage === "init") {
+        if (message.payload !== null)
+          throw new Error("synthetic alert worker init invalid");
+        syntheticStage = "activated";
+        return {
+          config,
+          definitions,
+          provisioning,
+          baseUrls,
+          authorization,
+          folderUid,
+          producerUrl,
+          runId,
+          alertPath,
+        };
+      }
+      if (syntheticStage === "activated") {
+        const { activationMs, baseline, failed } = message.payload ?? {};
+        if (
+          !Number.isFinite(activationMs) ||
+          baseline?.value !== 1 ||
+          failed?.value !== 0 ||
+          failed.timestampUs <= activationMs * 1000
+        )
+          throw new Error("synthetic alert activation invalid");
+        syntheticStage = "running";
+        return null;
+      }
+      if (syntheticStage === "running") {
+        if (message.payload !== null)
+          throw new Error("synthetic alert worker running invalid");
+        syntheticStage = "cleanup";
+        resolveSyntheticActivation();
+        return null;
+      }
+      const expectedAlerts = definitions.filter(
+        (rule) => rule.key !== "diskWatermark" && rule.key !== "notReady",
+      );
+      if (
+        !syntheticNodeNotReadyComplete(
+          message.payload?.syntheticNodeNotReady,
+        ) ||
+        !Array.isArray(message.payload?.alerts) ||
+        message.payload.alerts.length !== expectedAlerts.length ||
+        expectedAlerts.some(
+          (rule) =>
+            !message.payload.alerts.some(
+              (alert) =>
+                alert.key === rule.key &&
+                alert.name === rule.name &&
+                alert.forMs === rule.forMs &&
+                typeof alert.episodeId === "string" &&
+                alert.firing === true &&
+                alert.resolved === true,
+            ),
+        )
+      )
+        throw new Error("synthetic alert completion invalid");
+      syntheticReceipt = message.payload;
+      syntheticStage = "done";
+      return null;
+    },
+  }).then(
+    (result) => ({ result }),
+    (error) => ({ error }),
+  );
+  await Promise.race([
+    syntheticActivation,
+    syntheticWorker.then(({ error }) => {
+      throw (
+        error ?? new Error("synthetic alert worker ended before activation")
+      );
+    }),
+  ]);
+
+  return {
+    wait: async () => {
+      const { error } = await syntheticWorker;
+      if (error || syntheticStage !== "done" || !syntheticReceipt)
+        throw error ?? new Error("synthetic alert cleanup was not verified");
+      return syntheticReceipt;
+    },
+  };
+}
+
 export async function runObservabilityVerification({
   root = REPO_ROOT,
   run = docker,
@@ -4662,547 +5185,19 @@ export async function runObservabilityVerification({
     evidence.phases.signals = "PASS";
 
     startPhase("alerts");
-    let syntheticCleanupVerified = true;
-    try {
-      const nonDisk = definitions.filter(
-        (rule) => rule.key !== "diskWatermark" && rule.key !== "notReady",
-      );
-      const syntheticRule = createAlertDefinitions({
-        config,
-        readinessServices: ["g14-synthetic"],
-      }).find((rule) => rule.key === "notReady");
-      const productionRule = definitions.find(
-        (rule) => rule.key === "notReady",
-      );
-      const syntheticGroup = "g14-synthetic";
-      const groupPath = `/api/v1/provisioning/folder/${encodeURIComponent(folderUid)}/rule-groups/${syntheticGroup}`;
-      const syntheticPath = `/api/v1/provisioning/alert-rules/${encodeURIComponent(syntheticRule.name)}`;
-      const productionPath = `/api/v1/provisioning/alert-rules/${encodeURIComponent(productionRule.name)}`;
-      const productionBefore = await api({
-        baseUrl: baseUrls.grafana,
-        authorization,
-        path: productionPath,
-      });
-      const readSynthetic = async (afterUs) =>
-        (
-          await readinessMetricSamples({
-            baseUrl: baseUrls.prometheus,
-            services: ["g14-synthetic"],
-            afterUs,
-          })
-        )[0].sample;
-      const query = async (expression) => {
-        const params = new URLSearchParams({ query: expression });
-        const response = await api({
-          baseUrl: baseUrls.prometheus,
-          path: `/api/v1/query?${params}`,
-        });
-        if (
-          response?.status !== "success" ||
-          response.data?.resultType !== "vector" ||
-          !Array.isArray(response.data?.result)
-        )
-          throw new Error("synthetic readiness query returned invalid data");
-        return response.data.result;
-      };
-      await fixtureRequest({
-        baseUrl: producerUrl,
-        path: "/test/state",
-        body: { active: false },
-        runId,
-      });
-      await fixtureRequest({ baseUrl: producerUrl, runId });
-      const baselineStartUs = Date.now() * 1000;
-      const baseline = await waitFor(
-        async () => {
-          const sample = await readSynthetic(baselineStartUs);
-          const native = await query(
-            'probe_success{service_name="otel-collector",probe_owner="edge-nginx"}',
-          );
-          const value = await query(syntheticRule.query);
-          return sample?.value === 1 &&
-            native.length === 0 &&
-            value.length === 1 &&
-            value[0]?.value?.[1] === "1"
-            ? sample
-            : false;
-        },
-        {
-          timeoutMs: 120000,
-          intervalMs: 2000,
-          description:
-            "fresh synthetic readiness baseline without native probe",
-        },
-      );
-      await api({
-        baseUrl: baseUrls.grafana,
-        authorization,
-        path: groupPath,
-        expected: [404],
-      });
-      await api({
-        baseUrl: baseUrls.grafana,
-        authorization,
-        path: syntheticPath,
-        expected: [404],
-      });
-      const template = structuredClone(
-        provisioning.alerts.groups[0].rules.find(
-          (rule) => rule.uid === productionRule.name,
-        ),
-      );
-      template.uid = syntheticRule.name;
-      template.title = syntheticRule.name;
-      template.data.find((item) => item.refId === "A").model.expr =
-        syntheticRule.query;
-      let syntheticReceipt;
-      const firing = new Map();
-      try {
-        syntheticCleanupVerified = false;
-        await api({
-          baseUrl: baseUrls.grafana,
-          authorization,
-          path: groupPath,
-          method: "PUT",
-          body: {
-            folderUid,
-            title: syntheticGroup,
-            interval: config.telemetry.alerts.evaluationIntervalMs / 1000,
-            rules: [
-              {
-                ...template,
-                orgID: 1,
-                folderUID: folderUid,
-                ruleGroup: syntheticGroup,
-              },
-            ],
-          },
-        });
-        const installedGroup = await api({
-          baseUrl: baseUrls.grafana,
-          authorization,
-          path: groupPath,
-        });
-        const installed = await api({
-          baseUrl: baseUrls.grafana,
-          authorization,
-          path: syntheticPath,
-        });
-        if (
-          installedGroup?.interval !==
-            config.telemetry.alerts.evaluationIntervalMs / 1000 ||
-          installed?.uid !== syntheticRule.name ||
-          installed?.title !== syntheticRule.name ||
-          installed?.for !== productionBefore.for ||
-          installed?.data?.find((item) => item.refId === "A")?.model?.expr !==
-            syntheticRule.query ||
-          installed?.data?.find((item) => item.refId === "B")?.model
-            ?.expression !==
-            `$A ${syntheticRule.operator} ${syntheticRule.threshold}`
-        )
-          throw new Error(
-            "synthetic Grafana readiness rule differs from configured policy",
-          );
-        const alertRules = [...nonDisk, syntheticRule];
-        await waitFor(
-          async () => {
-            const events = (await readSinkEvents(alertPath)).filter((item) =>
-              alertRules.some((rule) => rule.name === item.name),
-            );
-            return events.every(
-              (item) =>
-                item.status !== "firing" ||
-                events.some(
-                  (later) =>
-                    later.status === "resolved" &&
-                    later.episodeId === item.episodeId,
-                ),
-            );
-          },
-          {
-            timeoutMs: 420000,
-            intervalMs: 5000,
-            description: "alert episodes resolved before controlled activation",
-          },
-        );
-        const activationMs = Date.now();
-        await fixtureRequest({
-          baseUrl: producerUrl,
-          path: "/test/state",
-          body: { active: true },
-          runId,
-        });
-        await fixtureRequest({ baseUrl: producerUrl, runId });
-        const failed = await waitFor(
-          async () => {
-            const sample = await readSynthetic(activationMs * 1000);
-            return sample?.value === 0 ? sample : false;
-          },
-          {
-            timeoutMs: 120000,
-            intervalMs: 2000,
-            description: "fresh synthetic readiness 1 to 0",
-          },
-        );
-        const maxForMs = Math.max(...alertRules.map((rule) => rule.forMs));
-        await waitFor(
-          async () => {
-            const events = await readSinkEvents(alertPath);
-            for (const rule of alertRules) {
-              const event = events.find(
-                (item) =>
-                  item.name === rule.name &&
-                  item.status === "firing" &&
-                  alertEpisodeStartMs(item.episodeId) >=
-                    activationMs + rule.forMs &&
-                  Date.parse(item.receivedAt) >=
-                    alertEpisodeStartMs(item.episodeId),
-              );
-              if (event) firing.set(rule.name, event.episodeId);
-            }
-            const sample = await readSynthetic((Date.now() - 30000) * 1000);
-            const native = await query(
-              'probe_success{service_name="otel-collector",probe_owner="edge-nginx"}',
-            );
-            const value = await query(syntheticRule.query);
-            return (
-              firing.size === alertRules.length &&
-              sample?.value === 0 &&
-              native.length === 0 &&
-              value.length === 1 &&
-              value[0]?.value?.[1] === "0"
-            );
-          },
-          {
-            timeoutMs:
-              maxForMs +
-              5 * config.telemetry.alerts.evaluationIntervalMs +
-              130000,
-            intervalMs: 5000,
-            description: "synthetic Grafana alert firing episodes",
-          },
-        );
-        const recoveryMs = Date.now();
-        await fixtureRequest({
-          baseUrl: producerUrl,
-          path: "/test/state",
-          body: { active: false },
-          runId,
-        });
-        await fixtureRequest({ baseUrl: producerUrl, runId });
-        const recovered = await waitFor(
-          async () => {
-            const sample = await readSynthetic(recoveryMs * 1000);
-            const native = await query(
-              'probe_success{service_name="otel-collector",probe_owner="edge-nginx"}',
-            );
-            const value = await query(syntheticRule.query);
-            return sample?.value === 1 &&
-              native.length === 0 &&
-              value.length === 1 &&
-              value[0]?.value?.[1] === "1"
-              ? sample
-              : false;
-          },
-          {
-            timeoutMs: 120000,
-            intervalMs: 2000,
-            description: "fresh synthetic readiness 0 to 1",
-          },
-        );
-        const resolved = await waitFor(
-          async () => {
-            const events = await readSinkEvents(alertPath);
-            return alertRules.every((rule) =>
-              events.some(
-                (item) =>
-                  item.name === rule.name &&
-                  item.status === "resolved" &&
-                  item.episodeId === firing.get(rule.name) &&
-                  Date.parse(item.receivedAt) >= recoveryMs,
-              ),
-            )
-              ? events.find(
-                  (item) =>
-                    item.name === syntheticRule.name &&
-                    item.status === "resolved" &&
-                    item.episodeId === firing.get(syntheticRule.name) &&
-                    Date.parse(item.receivedAt) >= recoveryMs,
-                )
-              : false;
-          },
-          {
-            timeoutMs:
-              maxForMs +
-              5 * config.telemetry.alerts.evaluationIntervalMs +
-              130000,
-            intervalMs: 5000,
-            description: "synthetic Grafana alert resolved episodes",
-          },
-        );
-        const syntheticFiring = (await readSinkEvents(alertPath)).find(
-          (item) =>
-            item.name === syntheticRule.name &&
-            item.status === "firing" &&
-            item.episodeId === firing.get(syntheticRule.name),
-        );
-        syntheticReceipt = {
-          status: "PASS",
-          service: "g14-synthetic",
-          ruleUid: syntheticRule.name,
-          forMs: syntheticRule.forMs,
-          threshold: syntheticRule.threshold,
-          nativeProbeAbsent: true,
-          activationMs,
-          recoveryMs,
-          baseline,
-          failed,
-          recovered,
-          firing: {
-            episodeId: syntheticFiring.episodeId,
-            receivedAt: syntheticFiring.receivedAt,
-          },
-          resolved: {
-            episodeId: resolved.episodeId,
-            receivedAt: resolved.receivedAt,
-          },
-        };
-      } finally {
-        let syntheticResetVerified = false;
-        try {
-          await fixtureRequest({
-            baseUrl: producerUrl,
-            path: "/test/state",
-            body: { active: false },
-            runId,
-          });
-          syntheticResetVerified = true;
-        } finally {
-          await api({
-            baseUrl: baseUrls.grafana,
-            authorization,
-            path: groupPath,
-            method: "DELETE",
-            expected: [204, 404],
-          });
-          await api({
-            baseUrl: baseUrls.grafana,
-            authorization,
-            path: groupPath,
-            expected: [404],
-          });
-          await api({
-            baseUrl: baseUrls.grafana,
-            authorization,
-            path: syntheticPath,
-            expected: [404],
-          });
-          const productionAfter = await api({
-            baseUrl: baseUrls.grafana,
-            authorization,
-            path: productionPath,
-          });
-          syntheticCleanupVerified =
-            syntheticResetVerified &&
-            productionAfter?.uid === productionBefore.uid &&
-            productionAfter?.title === productionBefore.title &&
-            productionAfter?.for === productionBefore.for &&
-            productionAfter?.condition === productionBefore.condition &&
-            productionAfter?.noDataState === productionBefore.noDataState &&
-            productionAfter?.execErrState === productionBefore.execErrState &&
-            isDeepStrictEqual(productionAfter?.data, productionBefore.data) &&
-            productionAfter?.data?.find((item) => item.refId === "A")?.model
-              ?.expr === productionRule.query;
-        }
-      }
-      if (!syntheticCleanupVerified)
-        throw new Error("synthetic readiness alert cleanup was not verified");
-      evidence.syntheticNodeNotReady = {
-        ...syntheticReceipt,
-        cleanupVerified: true,
-        productionRuleUnchanged: true,
-      };
-      if (!syntheticNodeNotReadyComplete(evidence.syntheticNodeNotReady))
-        throw new Error("synthetic Node readiness alert evidence invalid");
-      const diskRule = definitions.find((rule) => rule.key === "diskWatermark");
-      const diskFile = "/data/disk-watermark-fill";
-      const diskWriter = (script) =>
-        run([
-          "run",
-          "--rm",
-          "--network",
-          "none",
-          "--read-only",
-          "--user",
-          "472:472",
-          "--cap-drop",
-          "ALL",
-          "--security-opt",
-          "no-new-privileges:true",
-          "--memory",
-          "64m",
-          "--pids-limit",
-          "16",
-          "--mount",
-          `type=volume,source=${storage.grafana.volumeName},target=/data`,
-          "--entrypoint",
-          "node",
-          toolchain.nodeImage,
-          "-e",
-          script,
-          diskFile,
-        ]);
-      const priorDiskEvents = (await readSinkEvents(alertPath)).filter(
-        (item) => item.name === diskRule.name,
-      );
-      if (
-        priorDiskEvents.some(
-          (item) =>
-            item.status === "firing" &&
-            !priorDiskEvents.some(
-              (later) =>
-                later.status === "resolved" &&
-                later.episodeId === item.episodeId,
-            ),
-        )
-      )
-        throw new Error("disk alert has an unresolved episode before pressure");
-      const pressureStartedMs = Date.now();
-      diskPressureIdentity = JSON.parse(
-        diskWriter(
-          `const fs=require('node:fs'),fd=fs.openSync(process.argv[1],'wx',0o600),s=fs.fstatSync(fd);fs.closeSync(fd);process.stdout.write(JSON.stringify({dev:s.dev,ino:s.ino}));`,
-        ),
-      );
-      diskWriter(
-        `const fs=require('node:fs'),p=process.argv[1],expected=${JSON.stringify(diskPressureIdentity)},fd=fs.openSync(p,'r+'),actual=fs.fstatSync(fd);if(actual.dev!==expected.dev||actual.ino!==expected.ino)throw Error('pressure file identity changed');const s=fs.statfsSync('/data'),target=Math.floor(s.blocks*s.bsize*0.82),used=(s.blocks-s.bfree)*s.bsize,n=target-used;if(n<=0)throw Error('disk baseline already above fixture target');const buf=Buffer.alloc(1024*1024);for(let i=0;i<n;i+=buf.length)fs.writeSync(fd,buf,0,Math.min(buf.length,n-i));fs.fsyncSync(fd);fs.closeSync(fd);`,
-      );
-      await waitFor(
-        async () => {
-          const selector =
-            '{service_name="otel-collector",mountpoint="/telemetry-storage/grafana"}';
-          const [free, size] = await Promise.all(
-            ["node_filesystem_free_bytes", "node_filesystem_size_bytes"].map(
-              (name) =>
-                queryPrometheusRange({
-                  baseUrl: baseUrls.prometheus,
-                  expression: `${name}${selector}`,
-                  startTimeUs: pressureStartedMs * 1000,
-                }),
-            ),
-          );
-          return free.some(
-            (sample) =>
-              sample._timestamp > pressureStartedMs * 1000 &&
-              size.some(
-                (total) =>
-                  total._timestamp === sample._timestamp &&
-                  total.device === sample.device &&
-                  total.mountpoint === sample.mountpoint &&
-                  total.value > 0 &&
-                  (1 - sample.value / total.value) * 100 >=
-                    config.telemetry.diskWatermarkPercent,
-              ),
-          );
-        },
-        {
-          timeoutMs: 120000,
-          intervalMs: 2000,
-          description: "actual Grafana volume usage above disk watermark",
-        },
-      );
-      const diskFiring = await waitFor(
-        async () =>
-          (await readSinkEvents(alertPath)).find(
-            (item) =>
-              item.name === diskRule.name &&
-              item.status === "firing" &&
-              alertEpisodeStartMs(item.episodeId) >= pressureStartedMs &&
-              Date.parse(item.receivedAt) >=
-                alertEpisodeStartMs(item.episodeId),
-          ),
-        {
-          timeoutMs: 5 * config.telemetry.alerts.evaluationIntervalMs + 60000,
-          intervalMs: 5000,
-          description: "Grafana disk watermark firing episode",
-        },
-      );
-      diskWriter(
-        `const fs=require('node:fs'),p=process.argv[1],s=fs.lstatSync(p),expected=${JSON.stringify(diskPressureIdentity)};if(!s.isFile()||s.isSymbolicLink()||s.dev!==expected.dev||s.ino!==expected.ino)throw Error('pressure file identity changed');fs.unlinkSync(p);`,
-      );
-      diskPressureIdentity = undefined;
-      await waitFor(
-        async () =>
-          (await readSinkEvents(alertPath)).some(
-            (item) =>
-              item.name === diskRule.name &&
-              item.status === "resolved" &&
-              item.episodeId === diskFiring.episodeId,
-          ),
-        {
-          timeoutMs: 5 * config.telemetry.alerts.evaluationIntervalMs + 60000,
-          intervalMs: 5000,
-          description: "Grafana disk watermark resolved episode",
-        },
-      );
-      evidence.alerts = [
-        ...nonDisk.map((rule) => ({
-          key: rule.key,
-          name: rule.name,
-          episodeId: firing.get(rule.name),
-          forMs: rule.forMs,
-          firing: true,
-          resolved: true,
-        })),
-        {
-          key: diskRule.key,
-          name: diskRule.name,
-          episodeId: diskFiring.episodeId,
-          firing: true,
-          resolved: true,
-        },
-      ];
-      evidence.alertTransitions = "NOT_RUN";
-      evidence.phases.alerts = "PARTIAL";
-      evidence.alertReadiness = "NOT_RUN";
-    } catch (error) {
-      evidence.phases.alerts = "FAIL";
-      evidence.alertTransitions = "FAIL";
-      evidence.alertFailure = cleanError(error);
-      if (diskPressureIdentity) {
-        run([
-          "run",
-          "--rm",
-          "--network",
-          "none",
-          "--read-only",
-          "--user",
-          "472:472",
-          "--cap-drop",
-          "ALL",
-          "--security-opt",
-          "no-new-privileges:true",
-          "--memory",
-          "64m",
-          "--pids-limit",
-          "16",
-          "--mount",
-          `type=volume,source=${storage.grafana.volumeName},target=/data`,
-          "--entrypoint",
-          "node",
-          toolchain.nodeImage,
-          "-e",
-          `const fs=require('node:fs'),p='/data/disk-watermark-fill',expected=${JSON.stringify(diskPressureIdentity)},s=fs.lstatSync(p);if(!s.isFile()||s.isSymbolicLink()||s.dev!==expected.dev||s.ino!==expected.ino)throw Error('pressure file identity changed');fs.unlinkSync(p)`,
-        ]);
-        diskPressureIdentity = undefined;
-      }
-    }
+    const syntheticWorker = await startSyntheticAlertWorker({
+      root,
+      config,
+      definitions,
+      provisioning,
+      baseUrls,
+      authorization,
+      folderUid,
+      producerUrl,
+      runId,
+      alertPath,
+    });
 
-    if (!syntheticCleanupVerified)
-      throw new Error("synthetic readiness alert cleanup was not verified");
-    assertGrafanaGeneration(
-      grafanaGeneration,
-      JSON.parse(run(["inspect", containerIds.grafana]))[0],
-    );
     startPhase("runtimeMatrix");
     const { verifyRuntimeMetricMatrix } =
       await import("../../tests/observability/runtime-matrix.mjs");
@@ -5287,6 +5282,10 @@ export async function runObservabilityVerification({
             startTimeUs: family.startTimeUs,
           }),
         onRolesReady: async ({ logFiles: runtimeLogs, networks }) => {
+          const syntheticReceipt = await syntheticWorker.wait();
+          evidence.syntheticNodeNotReady =
+            syntheticReceipt.syntheticNodeNotReady;
+          evidence.alerts = [...syntheticReceipt.alerts];
           await configureCollector(runtimeLogs, Object.values(networks));
           const sinceUs = Date.now() * 1000;
           const nginx = runtimeLogs.find(
@@ -5507,14 +5506,6 @@ export async function runObservabilityVerification({
         },
       });
       evidence.phases.runtimeMatrix = "PASS";
-      if (
-        evidence.alerts.length === 6 &&
-        evidence.alertReadiness === "PASS" &&
-        syntheticNodeNotReadyComplete(evidence.syntheticNodeNotReady)
-      ) {
-        evidence.phases.alerts = "PASS";
-        evidence.alertTransitions = "PASS";
-      }
     } catch (error) {
       evidence.phases.runtimeMatrix = "FAIL";
       evidence.runtimeMetricMatrix = error.runtimeMetricMatrix ?? {
@@ -5524,6 +5515,202 @@ export async function runObservabilityVerification({
     } finally {
       if (collectorReconfigured) await configureCollector(logFiles);
     }
+
+    let syntheticReceipt;
+    try {
+      syntheticReceipt = await syntheticWorker.wait();
+    } catch (error) {
+      evidence.phases.alerts = "FAIL";
+      evidence.alertTransitions = "FAIL";
+      throw error;
+    }
+    if (!evidence.syntheticNodeNotReady) {
+      evidence.syntheticNodeNotReady = syntheticReceipt.syntheticNodeNotReady;
+      evidence.alerts = [...syntheticReceipt.alerts];
+    }
+    try {
+      const diskRule = definitions.find((rule) => rule.key === "diskWatermark");
+      const diskFile = "/data/disk-watermark-fill";
+      const diskWriter = (script) =>
+        run([
+          "run",
+          "--rm",
+          "--network",
+          "none",
+          "--read-only",
+          "--user",
+          "472:472",
+          "--cap-drop",
+          "ALL",
+          "--security-opt",
+          "no-new-privileges:true",
+          "--memory",
+          "64m",
+          "--pids-limit",
+          "16",
+          "--mount",
+          `type=volume,source=${storage.grafana.volumeName},target=/data`,
+          "--entrypoint",
+          "node",
+          toolchain.nodeImage,
+          "-e",
+          script,
+          diskFile,
+        ]);
+      const priorDiskEvents = (await readSinkEvents(alertPath)).filter(
+        (item) => item.name === diskRule.name,
+      );
+      if (
+        priorDiskEvents.some(
+          (item) =>
+            item.status === "firing" &&
+            !priorDiskEvents.some(
+              (later) =>
+                later.status === "resolved" &&
+                later.episodeId === item.episodeId,
+            ),
+        )
+      )
+        throw new Error("disk alert has an unresolved episode before pressure");
+      const pressureStartedMs = Date.now();
+      diskPressureIdentity = JSON.parse(
+        diskWriter(
+          `const fs=require('node:fs'),fd=fs.openSync(process.argv[1],'wx',0o600),s=fs.fstatSync(fd);fs.closeSync(fd);process.stdout.write(JSON.stringify({dev:s.dev,ino:s.ino}));`,
+        ),
+      );
+      diskWriter(
+        `const fs=require('node:fs'),p=process.argv[1],expected=${JSON.stringify(diskPressureIdentity)},fd=fs.openSync(p,'r+'),actual=fs.fstatSync(fd);if(actual.dev!==expected.dev||actual.ino!==expected.ino)throw Error('pressure file identity changed');const s=fs.statfsSync('/data'),target=Math.floor(s.blocks*s.bsize*0.82),used=(s.blocks-s.bfree)*s.bsize,n=target-used;if(n<=0)throw Error('disk baseline already above fixture target');const buf=Buffer.alloc(1024*1024);for(let i=0;i<n;i+=buf.length)fs.writeSync(fd,buf,0,Math.min(buf.length,n-i));fs.fsyncSync(fd);fs.closeSync(fd);`,
+      );
+      await waitFor(
+        async () => {
+          const selector =
+            '{service_name="otel-collector",mountpoint="/telemetry-storage/grafana"}';
+          const [free, size] = await Promise.all(
+            ["node_filesystem_free_bytes", "node_filesystem_size_bytes"].map(
+              (name) =>
+                queryPrometheusRange({
+                  baseUrl: baseUrls.prometheus,
+                  expression: `${name}${selector}`,
+                  startTimeUs: pressureStartedMs * 1000,
+                }),
+            ),
+          );
+          return free.some(
+            (sample) =>
+              sample._timestamp > pressureStartedMs * 1000 &&
+              size.some(
+                (total) =>
+                  total._timestamp === sample._timestamp &&
+                  total.device === sample.device &&
+                  total.mountpoint === sample.mountpoint &&
+                  total.value > 0 &&
+                  (1 - sample.value / total.value) * 100 >=
+                    config.telemetry.diskWatermarkPercent,
+              ),
+          );
+        },
+        {
+          timeoutMs: 120000,
+          intervalMs: 2000,
+          description: "actual Grafana volume usage above disk watermark",
+        },
+      );
+      const diskFiring = await waitFor(
+        async () =>
+          (await readSinkEvents(alertPath)).find(
+            (item) =>
+              item.name === diskRule.name &&
+              item.status === "firing" &&
+              alertEpisodeStartMs(item.episodeId) >= pressureStartedMs &&
+              Date.parse(item.receivedAt) >=
+                alertEpisodeStartMs(item.episodeId),
+          ),
+        {
+          timeoutMs: 5 * config.telemetry.alerts.evaluationIntervalMs + 60000,
+          intervalMs: 5000,
+          description: "Grafana disk watermark firing episode",
+        },
+      );
+      diskWriter(
+        `const fs=require('node:fs'),p=process.argv[1],s=fs.lstatSync(p),expected=${JSON.stringify(diskPressureIdentity)};if(!s.isFile()||s.isSymbolicLink()||s.dev!==expected.dev||s.ino!==expected.ino)throw Error('pressure file identity changed');fs.unlinkSync(p);`,
+      );
+      diskPressureIdentity = undefined;
+      await waitFor(
+        async () =>
+          (await readSinkEvents(alertPath)).some(
+            (item) =>
+              item.name === diskRule.name &&
+              item.status === "resolved" &&
+              item.episodeId === diskFiring.episodeId,
+          ),
+        {
+          timeoutMs: 5 * config.telemetry.alerts.evaluationIntervalMs + 60000,
+          intervalMs: 5000,
+          description: "Grafana disk watermark resolved episode",
+        },
+      );
+      const nativeAlertIndex = evidence.alerts.findIndex(
+        (item) => item.key === "notReady",
+      );
+      evidence.alerts.splice(
+        nativeAlertIndex < 0 ? evidence.alerts.length : nativeAlertIndex,
+        0,
+        {
+          key: diskRule.key,
+          name: diskRule.name,
+          episodeId: diskFiring.episodeId,
+          firing: true,
+          resolved: true,
+        },
+      );
+      evidence.alertTransitions = "NOT_RUN";
+      evidence.phases.alerts = "PARTIAL";
+      evidence.alertReadiness ??= "NOT_RUN";
+    } catch (error) {
+      evidence.phases.alerts = "FAIL";
+      evidence.alertTransitions = "FAIL";
+      evidence.alertFailure = cleanError(error);
+      if (diskPressureIdentity) {
+        run([
+          "run",
+          "--rm",
+          "--network",
+          "none",
+          "--read-only",
+          "--user",
+          "472:472",
+          "--cap-drop",
+          "ALL",
+          "--security-opt",
+          "no-new-privileges:true",
+          "--memory",
+          "64m",
+          "--pids-limit",
+          "16",
+          "--mount",
+          `type=volume,source=${storage.grafana.volumeName},target=/data`,
+          "--entrypoint",
+          "node",
+          toolchain.nodeImage,
+          "-e",
+          `const fs=require('node:fs'),p='/data/disk-watermark-fill',expected=${JSON.stringify(diskPressureIdentity)},s=fs.lstatSync(p);if(!s.isFile()||s.isSymbolicLink()||s.dev!==expected.dev||s.ino!==expected.ino)throw Error('pressure file identity changed');fs.unlinkSync(p)`,
+        ]);
+        diskPressureIdentity = undefined;
+      }
+    }
+
+    if (
+      evidence.alerts.length === 6 &&
+      evidence.alertReadiness === "PASS" &&
+      syntheticNodeNotReadyComplete(evidence.syntheticNodeNotReady)
+    ) {
+      evidence.phases.alerts = "PASS";
+      evidence.alertTransitions = "PASS";
+    }
+    assertGrafanaGeneration(
+      grafanaGeneration,
+      JSON.parse(run(["inspect", containerIds.grafana]))[0],
+    );
 
     startPhase("launchPath");
     const { runLaunchPath } =
