@@ -6261,6 +6261,79 @@ void test("multiline request and provider JSON bodies stay redacted across line 
   assert.match(output, /visible/);
 });
 
+void test(
+  "missing first stdout line terminates the child and flushes stderr",
+  { skip: process.platform !== "linux" },
+  async (t) => {
+    const directory = await mkdtemp(join(tmpdir(), "launch-stdout-guard-"));
+    t.after(() => rm(directory, { recursive: true, force: true }));
+    for (const leaderExits of [false, true]) {
+      const runDirectory = join(directory, String(leaderExits));
+      await mkdir(runDirectory);
+      const pidPath = join(runDirectory, "pid");
+      const descendantPath = join(runDirectory, "descendant-pid");
+      const stderrPath = join(runDirectory, "stderr.log");
+      let pid;
+      let stopped = false;
+      try {
+        const descendant = `process.on("SIGTERM",()=>{});require("node:fs").writeFileSync(${JSON.stringify(descendantPath)},String(process.pid));setInterval(()=>{},1000)`;
+        await assert.rejects(
+          executeArgv(
+            [
+              process.execPath,
+              "-e",
+              `require('node:fs').writeFileSync(${JSON.stringify(pidPath)}, String(process.pid));require('node:child_process').spawn(process.execPath,['-e',${JSON.stringify(descendant)}],{stdio:'ignore'});process.stderr.write('guard stderr\\n');setInterval(()=>{if(${leaderExits} && require('node:fs').existsSync(${JSON.stringify(descendantPath)}))process.exit(0)},10)`,
+            ],
+            runDirectory,
+            60_000,
+            join(runDirectory, "stdout.log"),
+            stderrPath,
+            undefined,
+            null,
+            { awaitFirstStdoutLine: true },
+          ),
+          /child stdout was not observed/,
+        );
+        pid = Number(await readFile(pidPath, "utf8"));
+        assert.ok(Number.isSafeInteger(pid) && pid > 0);
+        assert.throws(() => process.kill(pid, 0), { code: "ESRCH" });
+        const descendantPid = Number(await readFile(descendantPath, "utf8"));
+        assert.ok(Number.isSafeInteger(descendantPid) && descendantPid > 0);
+        const running = async () => {
+          const status = await readFile(
+            `/proc/${descendantPid}/stat`,
+            "utf8",
+          ).catch((error) => {
+            if (error.code === "ENOENT") return null;
+            throw error;
+          });
+          return status !== null && !/^\d+ \(.*\) Z /u.test(status);
+        };
+        const exitDeadline = Date.now() + 2_000;
+        while ((await running()) && Date.now() < exitDeadline)
+          await new Promise((resolvePromise) => setTimeout(resolvePromise, 25));
+        assert.equal(await running(), false);
+        stopped = true;
+        assert.match(await readFile(stderrPath, "utf8"), /guard stderr/);
+      } finally {
+        if (!stopped && pid === undefined) {
+          pid = Number(await readFile(pidPath, "utf8").catch(() => ""));
+        }
+        if (
+          !stopped &&
+          typeof pid === "number" &&
+          Number.isSafeInteger(pid) &&
+          pid > 0
+        ) {
+          try {
+            process.kill(-pid, "SIGKILL");
+          } catch {}
+        }
+      }
+    }
+  },
+);
+
 void test("deadline terminates the exact child process group and records peak RSS", async (t) => {
   const directory = await mkdtemp(join(tmpdir(), "launch-deadline-"));
   t.after(() => rm(directory, { recursive: true, force: true }));

@@ -793,13 +793,17 @@ export async function executeArgv(
     });
     return sampleInFlight;
   };
-  await new Promise((resolvePromise) => {
-    child.once("spawn", resolvePromise);
-    child.once("error", resolvePromise);
-  });
-  if (options.awaitFirstStdoutLine) {
-    let guard;
-    try {
+  const streams = Promise.allSettled([stdout, stderr]);
+  let guard;
+  let timer;
+  let sampler;
+  let killTimer;
+  try {
+    await new Promise((resolvePromise) => {
+      child.once("spawn", resolvePromise);
+      child.once("error", resolvePromise);
+    });
+    if (options.awaitFirstStdoutLine) {
       await Promise.race([
         firstStdoutLine,
         new Promise((_, reject) => {
@@ -809,62 +813,76 @@ export async function executeArgv(
           );
         }),
       ]);
-    } finally {
       clearTimeout(guard);
+      // Короткий timeout иначе снимает группу раньше, чем обход /proc успевает её увидеть.
+      await sample();
     }
-    // Короткий timeout иначе снимает группу раньше, чем обход /proc успевает её увидеть.
+    timer = setTimeout(() => {
+      timedOut = true;
+      signalProcessGroup(child.pid, "SIGTERM");
+      killTimer = setTimeout(() => {
+        signalProcessGroup(child.pid, "SIGKILL");
+      }, 2000);
+    }, timeoutMs);
+    timer.unref();
+    sampler = setInterval(() => void sample(), 250);
+    const exitPromise = closePromise.finally(() => {
+      clearTimeout(timer);
+      clearInterval(sampler);
+    });
     await sample();
-  }
-  let killTimer;
-  const timer = setTimeout(() => {
-    timedOut = true;
+    const exitCode = await exitPromise;
+    if (timedOut) {
+      if (killTimer) clearTimeout(killTimer);
+      signalProcessGroup(child.pid, "SIGKILL");
+    }
+    await Promise.resolve(sampleInFlight);
+    await sample();
+    const rssDiagnostic =
+      rssFailure || peakRssBytes === null
+        ? `[RSS] stage=${rssFailure?.stage ?? "no-match"} errno=${rssFailure?.errno ?? "NONE"} attempted=${rssSamples.attempted} valid=${rssSamples.valid} no-match=${rssSamples.noMatch} errors=${rssSamples.errors}\n`
+        : "";
+    stderrOutput.end(rssDiagnostic);
+    const streamResults = await streams;
+    for (const result of streamResults) {
+      if (result.status === "rejected") throw result.reason;
+      outputLimitExceeded ||= result.value.outputLimitExceeded;
+    }
+    return {
+      argv,
+      cwd,
+      startedAt,
+      endedAt: nowIso(),
+      exitCode,
+      timedOut,
+      outputLimitExceeded,
+      timeoutMs,
+      durationMs: Date.now() - start,
+      peakRssBytes: rssFailure ? null : peakRssBytes,
+      artifacts: [await hashFile(stdoutPath), await hashFile(stderrPath)],
+      ...(spawnError ? { spawnError: redactText(spawnError.message) } : {}),
+    };
+  } catch (error) {
+    clearTimeout(timer);
+    clearInterval(sampler);
+    clearTimeout(killTimer);
     signalProcessGroup(child.pid, "SIGTERM");
     killTimer = setTimeout(() => {
       signalProcessGroup(child.pid, "SIGKILL");
     }, 2000);
-  }, timeoutMs);
-  timer.unref();
-  const sampler = setInterval(() => void sample(), 250);
-  const exitPromise = closePromise.finally(() => {
+    await closePromise;
+    signalProcessGroup(child.pid, "SIGKILL");
+    throw error;
+  } finally {
+    clearTimeout(guard);
     clearTimeout(timer);
     clearInterval(sampler);
-  });
-  await sample();
-  const exitCode = await exitPromise;
-  if (timedOut) {
-    if (killTimer) clearTimeout(killTimer);
-    signalProcessGroup(child.pid, "SIGKILL");
+    clearTimeout(killTimer);
+    await Promise.resolve(sampleInFlight);
+    if (!stderrOutput.writableEnded) stderrOutput.end();
+    await streams;
+    clearTimeout(outputKillTimer);
   }
-  await Promise.resolve(sampleInFlight);
-  await sample();
-  const rssDiagnostic =
-    rssFailure || peakRssBytes === null
-      ? `[RSS] stage=${rssFailure?.stage ?? "no-match"} errno=${rssFailure?.errno ?? "NONE"} attempted=${rssSamples.attempted} valid=${rssSamples.valid} no-match=${rssSamples.noMatch} errors=${rssSamples.errors}\n`
-      : "";
-  stderrOutput.end(rssDiagnostic);
-  let streamResults;
-  try {
-    streamResults = await Promise.all([stdout, stderr]);
-  } finally {
-    if (outputKillTimer) clearTimeout(outputKillTimer);
-  }
-  outputLimitExceeded ||= streamResults.some(
-    (result) => result.outputLimitExceeded,
-  );
-  return {
-    argv,
-    cwd,
-    startedAt,
-    endedAt: nowIso(),
-    exitCode,
-    timedOut,
-    outputLimitExceeded,
-    timeoutMs,
-    durationMs: Date.now() - start,
-    peakRssBytes: rssFailure ? null : peakRssBytes,
-    artifacts: [await hashFile(stdoutPath), await hashFile(stderrPath)],
-    ...(spawnError ? { spawnError: redactText(spawnError.message) } : {}),
-  };
 }
 
 function gateRecord(gate) {

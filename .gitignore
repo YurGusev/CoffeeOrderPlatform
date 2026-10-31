@@ -12,4 +12,5 @@ evidence/observability/
 evidence/grokverify/
 evidence/web-verify/
 evidence/orders-slice-verify/
+evidence/catalog-slice-verify/
 /evidence/launch/
