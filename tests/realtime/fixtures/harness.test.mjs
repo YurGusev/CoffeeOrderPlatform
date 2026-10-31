@@ -7,6 +7,8 @@ import {
   writeFile,
   rm,
   stat,
+  lstat,
+  realpath,
   readFile,
 } from "node:fs/promises";
 import { createHash } from "node:crypto";
@@ -61,6 +63,148 @@ void test("operator-1 CLI help describes the approved profile without obsolete f
   assert.match(help, /1 subscriber.*100.*1800000ms/u);
   assert.doesNotMatch(help, /5000|isolated-5000/u);
   assert.match(help, /512\/513/u);
+});
+
+void test("capacity producer rejects invalid launch context before creating resources", async () => {
+  const { runRealtimeCapacity } =
+    await import("../../../tools/realtime-capacity.mjs");
+  const { scratchRoot } = await import("../soak.test.mjs");
+  const resultDir = join(scratchRoot(), `realtime-invalid-${process.pid}`);
+  await assert.rejects(
+    runRealtimeCapacity({
+      launchContextFile: "/missing/context.json",
+      resultDir,
+    }),
+  );
+  await assert.rejects(stat(resultDir), { code: "ENOENT" });
+  await assert.rejects(stat(`${resultDir}.ownership.json`), { code: "ENOENT" });
+});
+
+void test("G14 refuses to launch when qualification is missing", async () => {
+  const { parseArgs, runGate } =
+    await import("../../../verification/launch/v1/run.mjs");
+  assert.equal(
+    parseArgs(["--realtime-qualification", "/absolute/qualification.json"])
+      .realtimeQualificationPath,
+    "/absolute/qualification.json",
+  );
+  assert.throws(() => parseArgs(["--realtime-qualification", "relative.json"]));
+  assert.throws(() =>
+    parseArgs([
+      "--realtime-qualification",
+      "/one",
+      "--realtime-qualification",
+      "/two",
+    ]),
+  );
+  const parent = join(ROOT, "evidence/launch");
+  await mkdir(parent, { recursive: true, mode: 0o700 });
+  const evidence = await mkdtemp(join(parent, "capacity-runner-"));
+  try {
+    const gate = {
+      id: "G14_OBSERVABILITY",
+      command: "pnpm test:observability",
+      timeout: 1800,
+      predecessors: [],
+    };
+    await mkdir(join(evidence, "gates", gate.id, "artifacts"), {
+      recursive: true,
+      mode: 0o700,
+    });
+    const record = {
+      id: gate.id,
+      status: "NOT_RUN",
+      runs: [],
+      artifacts: [],
+      durationMs: 0,
+    };
+    await runGate(
+      gate,
+      record,
+      evidence,
+      ROOT,
+      "/missing",
+      [],
+      Date.now(),
+      { exceeded: false },
+      undefined,
+      undefined,
+    );
+    assert.equal(record.status, "FAIL");
+    assert.match(record.reason, /qualification receipt is required/u);
+    assert.deepEqual(record.runs, []);
+  } finally {
+    await rm(evidence, { recursive: true, force: true });
+  }
+});
+
+void test("qualification claims use one user authority across concurrent packet copies", async () => {
+  const source = await readFile(
+    new URL("../../../tools/realtime-capacity.mjs", import.meta.url),
+    "utf8",
+  );
+  const start = source.indexOf("async function claimQualification(");
+  const end = source.indexOf(
+    "\n\nexport async function admitRealtimeCapacity",
+    start,
+  );
+  assert.ok(start >= 0 && end > start);
+  const home = await mkdtemp(join(tmpdir(), "coffee-capacity-claims-"));
+  try {
+    const claim = runInNewContext(
+      `(()=>{${source.slice(start, end)};return claimQualification;})()`,
+      {
+        assert,
+        resolve,
+        join,
+        mkdir,
+        lstat,
+        realpath,
+        writeFile,
+        process,
+        userInfo: () => ({ homedir: home }),
+      },
+    );
+    const outcomes = await Promise.allSettled([
+      claim("i12-0123456789abcdef", "a".repeat(64)),
+      claim("i12-0123456789abcdef", "a".repeat(64)),
+    ]);
+    assert.equal(
+      outcomes.filter((outcome) => outcome.status === "fulfilled").length,
+      1,
+    );
+    const rejected = outcomes.find((outcome) => outcome.status === "rejected");
+    assert.equal(rejected.reason.code, "EEXIST");
+  } finally {
+    await rm(home, { recursive: true, force: true });
+  }
+});
+
+void test("prepared qualification rejects an unbound image inventory before Docker", async () => {
+  const { verifyPrepared } = await import("./setup.mjs");
+  const dir = await mkdtemp(join(tmpdir(), "coffee-realtime-unbound-"));
+  try {
+    await mkdir(join(dir, "private"));
+    const profile = "{}\n";
+    const fixture = "{}\n";
+    const digest = (value) => createHash("sha256").update(value).digest("hex");
+    const manifest = JSON.stringify({
+      mode: "full",
+      profile: "operator-1",
+      profileSha256: digest(profile),
+      fixtureSha256: digest(fixture),
+      qualification: { runtimeImages: [] },
+    });
+    await writeFile(join(dir, "profile.json"), profile);
+    await writeFile(join(dir, "private/fixture.json"), fixture);
+    await writeFile(join(dir, "profile-manifest.json"), manifest);
+    await assert.rejects(
+      verifyPrepared(dir, digest(manifest)),
+      /verified child lineage/u,
+    );
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
 });
 
 void test("product startup diagnostics keep only allowlisted error codes and real source frames", () => {
@@ -916,10 +1060,7 @@ void test("prepared operator-1 keeps ordinary budgets, 100 subjects, one shard a
     );
   }
   const fixtureStart = source.indexOf("  const fixture = {");
-  const fixtureEnd = source.indexOf(
-    "\n  if (options.launchPath)",
-    fixtureStart,
-  );
+  const fixtureEnd = source.indexOf("\n  if (ownerPath)", fixtureStart);
   assert.ok(fixtureStart >= 0 && fixtureEnd > fixtureStart);
   const driverSource = await readFile(
     new URL("./driver.mjs", import.meta.url),
@@ -1291,6 +1432,107 @@ void test("G12 Kafka proof is checked before fixture writes and frozen by immuta
   }
 });
 
+void test("qualification retains its images and private witness until all consumers stop", async () => {
+  const source = await readFile(
+    new URL("./setup.mjs", import.meta.url),
+    "utf8",
+  );
+  const start = source.indexOf("export async function erasePrivate(");
+  const end = source.indexOf("\n", source.indexOf("\n}", start) + 2);
+  const root = await mkdtemp(join(tmpdir(), "coffee-realtime-cleanup-"));
+  const runId = "i12-0123456789abcdef";
+  const candidateSha = "a".repeat(40);
+  const roles = [
+    "edge-gateway",
+    "api-public",
+    "realtime-gateway",
+    "edge-nginx",
+  ];
+  const tags = roles.map((role) => `${runId}-runtime-${role}:latest`);
+  const images = Object.fromEntries(
+    roles.map((role, i) => [role, `sha256:${String(i).repeat(64)}`]),
+  );
+  const manifest = {
+    runId,
+    qualification: { candidateSha, builtTags: tags },
+    images,
+  };
+  const calls = [];
+  try {
+    await mkdir(join(root, "private"));
+    await writeFile(
+      join(root, "profile-manifest.json"),
+      JSON.stringify(manifest),
+    );
+    await writeFile(
+      join(root, "runtime-image-ownership.json"),
+      JSON.stringify({ runId, candidateSha, plannedTags: tags }),
+    );
+    const cleanup = runInNewContext(
+      `(()=>{${source.slice(start, end).replace(/^export /u, "")};return erasePrivate;})()`,
+      {
+        assert,
+        join,
+        readFile,
+        rm,
+        hash: (value) => createHash("sha256").update(value).digest("hex"),
+        verifyPrepared: async () => calls.push("verify"),
+        docker: async (...args) => {
+          calls.push(args);
+          if (args[1] === "inspect")
+            return images[roles[tags.indexOf(args.at(-1))]];
+          return "";
+        },
+      },
+    );
+    await assert.rejects(
+      cleanup(root, { consumersStopped: true }),
+      /ownership witness required/u,
+    );
+    assert.ok((await stat(join(root, "private"))).isDirectory());
+    await writeFile(
+      `${root}.ownership.json`,
+      JSON.stringify({ runId, parentCandidateSha: candidateSha }),
+    );
+    for (const consumersStopped of [false, undefined]) {
+      await assert.rejects(
+        cleanup(root, { consumersStopped }),
+        /consumers must be stopped/u,
+      );
+      assert.deepEqual(calls, []);
+      assert.ok((await stat(join(root, "private"))).isDirectory());
+    }
+    await writeFile(
+      `${root}.ownership.json`,
+      JSON.stringify({ runId: "foreign" }),
+    );
+    await assert.rejects(cleanup(root, { consumersStopped: true }));
+    assert.deepEqual(calls, []);
+    assert.ok((await stat(join(root, "private"))).isDirectory());
+    await writeFile(
+      `${root}.ownership.json`,
+      JSON.stringify({ runId, parentCandidateSha: candidateSha }),
+    );
+    await cleanup(root, { consumersStopped: true });
+    assert.equal(calls[0], "verify");
+    assert.equal(
+      calls.filter((item) => Array.isArray(item) && item[1] === "inspect")
+        .length,
+      4,
+    );
+    assert.deepEqual(
+      calls
+        .filter((item) => Array.isArray(item) && item[1] === "rm")
+        .map((item) => item.at(-1)),
+      tags,
+    );
+    await assert.rejects(stat(join(root, "private")), { code: "ENOENT" });
+  } finally {
+    await rm(`${root}.ownership.json`, { force: true });
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 void test("G12 cleanup does not remove preexisting images or hide preparation failure", async () => {
   const source = await readFile(
     new URL("./setup.mjs", import.meta.url),
@@ -1447,6 +1689,7 @@ void test("operator-1 manifest declares the actual one-subscriber measurement an
       snapshot: { sources: {} },
       compiled: {},
       launchPath: undefined,
+      qualification: undefined,
     },
   );
   assert.equal(manifest.subjects, 100);
@@ -2923,6 +3166,38 @@ void test("product launch uses the runtime-supported configuration locators", ()
       "COFFEE_LAUNCH_CONTEXT_FILE=/fixture/launch-context.json",
     ),
   );
+  for (const [role, port] of [
+    ["edge-gateway", 4000],
+    ["api-public", 4050],
+    ["realtime-gateway", 4401],
+  ]) {
+    const args = productArgs(role, true, { port });
+    assert.deepEqual(args, [
+      "--env",
+      "COFFEE_CONFIG_FILE=/app/config/platform.yaml",
+      "--env",
+      "COFFEE_RUNTIME_SECRETS_FILE=/run/secrets/coffee-platform.yaml",
+      "--env",
+      "COFFEE_LAUNCH_CONTEXT_FILE=/run/coffee-launch/context.json",
+      "--env",
+      `PORT=${port}`,
+      "--env",
+      `OTEL_SERVICE_NAME=${role}`,
+      "--env",
+      "OTEL_PROPAGATORS=tracecontext,baggage",
+      "--env",
+      "OTEL_RESOURCE_ATTRIBUTES=service.namespace=coffee-platform,deployment.environment=development",
+      "--env",
+      "OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf",
+      ...(role === "edge-gateway"
+        ? ["--env", "NODE_EXTRA_CA_CERTS=/run/g15-browser/idp-ca.crt"]
+        : []),
+      "--IMAGE--",
+    ]);
+  }
+  assert.throws(() => productArgs("orders-service", true, { port: 4104 }));
+  assert.throws(() => productArgs("edge-gateway", false, { port: 4000 }));
+  assert.throws(() => productArgs("edge-gateway", true, { port: 0 }));
 });
 void test("G15 realtime launch path binds child identity to verified parent lineage", async () => {
   const source = await readFile(
@@ -3051,6 +3326,7 @@ void test("product launch scopes fixture mounts and proves role-local read acces
     launchPath = false,
     driverProbeInputs = {},
     component = false,
+    native = false,
   ) => {
     const calls = [],
       execCalls = [],
@@ -3079,6 +3355,7 @@ void test("product launch scopes fixture mounts and proves role-local read acces
         images: { node: "node-image" },
         manifest: {
           containerBudgets: {},
+          ...(native ? { qualification: {} } : {}),
           configSha256: driverConfigSha256,
           databaseOwnershipSha256: driverOwnershipSha256,
           supportingSources: {
@@ -3100,32 +3377,70 @@ void test("product launch scopes fixture mounts and proves role-local read acces
         if (args[0] === "inspect")
           return JSON.stringify([
             {
-              Config: { Labels: { "synthetic-label": "synthetic-run" } },
+              Config: {
+                Labels: { "synthetic-label": "synthetic-run" },
+                ...(native
+                  ? {
+                      Entrypoint: driverProbeInputs.entrypoint ?? [
+                        "node",
+                        "scripts/permission-enforce.mjs",
+                      ],
+                      Cmd: ["--entry", "dist/main.js"],
+                    }
+                  : {}),
+              },
               HostConfig: {
                 NanoCpus: 2000000000,
                 Memory: 536870912,
                 Ulimits: [{ Name: "nofile", Hard: 4096 }],
               },
               State: { Running: true },
-              Image: "sha256:synthetic",
+              Image: driverProbeInputs.image ?? "sha256:synthetic",
               Mounts: reportedMounts,
               NetworkSettings: { Networks: {} },
             },
           ]);
         if (args[0] === "exec") {
           execCalls.push(args);
-          if (component) {
+          if (component || native) {
             const reads = new Map([
-              ["/fixture/platform.yaml", driverPlatformBytes],
-              [`/fixture/${role}.yaml`, Buffer.from("scoped secret")],
+              [
+                native ? "/app/config/platform.yaml" : "/fixture/platform.yaml",
+                driverPlatformBytes,
+              ],
+              [
+                native
+                  ? "/run/secrets/coffee-platform.yaml"
+                  : `/fixture/${role}.yaml`,
+                Buffer.from("scoped secret"),
+              ],
+              ...(native
+                ? [
+                    [
+                      "/run/coffee-launch/context.json",
+                      Buffer.from("child context"),
+                    ],
+                    ...(role === "edge-gateway"
+                      ? [
+                          [
+                            "/run/g15-browser/idp-ca.crt",
+                            Buffer.from("fixture ca"),
+                          ],
+                        ]
+                      : []),
+                  ]
+                : []),
               ...(driverProbeInputs.missingOwnership
                 ? []
-                : [
-                    [
-                      "/fixture/database-ownership.json",
-                      driverProbeInputs.ownershipBytes ?? driverOwnershipBytes,
-                    ],
-                  ]),
+                : native
+                  ? []
+                  : [
+                      [
+                        "/fixture/database-ownership.json",
+                        driverProbeInputs.ownershipBytes ??
+                          driverOwnershipBytes,
+                      ],
+                    ]),
               ...(driverProbeInputs.foreignSecret
                 ? [
                     [
@@ -3255,9 +3570,15 @@ void test("product launch scopes fixture mounts and proves role-local read acces
         ? ["--IMAGE--", "node", "services.mjs", "idp"]
         : role === "driver"
           ? ["--IMAGE--", "node", "--input-type=module", "-e", "void 0"]
-          : [...productArgs(role, launchPath)];
+          : [
+              ...productArgs(
+                role,
+                launchPath,
+                native ? { port: 4000 } : undefined,
+              ),
+            ];
     await runInNewContext(
-      `(async()=>{${launchSource}\nawait launch('${role}','node-image',${JSON.stringify(launchArgs)});})()`,
+      `(async()=>{${launchSource}\nawait launch('${role}','${native ? "sha256:synthetic" : "node-image"}',${JSON.stringify(launchArgs)});})()`,
       context,
     );
     return { calls, execCalls, receipts, owned, context };
@@ -3377,6 +3698,68 @@ void test("product launch scopes fixture mounts and proves role-local read acces
       "/results/private/fixture.json",
     ])
       assert.ok(probe.includes(path));
+  }
+  for (const role of ["edge-gateway", "api-public", "realtime-gateway"]) {
+    const mounts = [
+      {
+        Type: "bind",
+        Source: "/private/platform.yaml",
+        Destination: "/app/config/platform.yaml",
+        RW: false,
+      },
+      {
+        Type: "bind",
+        Source: `/private/${role}.yaml`,
+        Destination: "/run/secrets/coffee-platform.yaml",
+        RW: false,
+      },
+      {
+        Type: "bind",
+        Source: "/evidence/context.json",
+        Destination: "/run/coffee-launch/context.json",
+        RW: false,
+      },
+      ...(role === "edge-gateway"
+        ? [
+            {
+              Type: "bind",
+              Source: "/private/certs/ca.crt",
+              Destination: "/run/g15-browser/idp-ca.crt",
+              RW: false,
+            },
+          ]
+        : []),
+    ];
+    const value = await invoke(role, mounts, true, {}, false, true);
+    assert.ok(!value.calls[0].includes("--entrypoint"));
+    assert.ok(!value.calls[0].some((arg) => arg.includes("dst=/app,readonly")));
+    assert.equal(value.calls[0].at(-1), "sha256:synthetic");
+    await assert.rejects(
+      invoke(
+        role,
+        [
+          ...mounts,
+          {
+            Type: "bind",
+            Source: "/fixture-snapshot",
+            Destination: "/app",
+            RW: false,
+          },
+        ],
+        true,
+        {},
+        false,
+        true,
+      ),
+      /fixture mount scope/u,
+    );
+    await assert.rejects(
+      invoke(role, mounts, true, { image: "sha256:foreign" }, false, true),
+      /verified image identity/u,
+    );
+    await assert.rejects(
+      invoke(role, mounts, true, { entrypoint: ["node"] }, false, true),
+    );
   }
   for (const role of [
     "edge-gateway",

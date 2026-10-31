@@ -20,7 +20,7 @@ import {
 } from "node:fs/promises";
 import { StringDecoder } from "node:string_decoder";
 import { cpus, release, tmpdir, totalmem } from "node:os";
-import { dirname, join, relative, resolve } from "node:path";
+import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { isDeepStrictEqual } from "node:util";
 import { load as parseYaml } from "js-yaml";
@@ -44,6 +44,7 @@ import {
   validateBrowserFailureReceipt,
   validateBrowserParentRuntime,
 } from "./scenarios/browser.mjs";
+import { admitRealtimeCapacity } from "../../../tools/realtime-capacity.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 const BASE = join(ROOT, "verification/launch/v1");
@@ -1792,6 +1793,7 @@ export async function runGate(
   runEpochMs,
   outputBudget,
   g08ExpectedSystemIdentifier,
+  realtimeQualificationPath,
 ) {
   if (outputBudget.exceeded && gate.id !== "G19_REPORT") {
     record.reason =
@@ -1844,6 +1846,45 @@ export async function runGate(
   record.startedAt = nowIso();
   record.reason = "";
   const started = Date.now();
+  if (gate.id === "G14_OBSERVABILITY") {
+    try {
+      if (!realtimeQualificationPath)
+        throw new Error("qualification receipt is required");
+      const admitted = await admitRealtimeCapacity({
+        receiptPath: realtimeQualificationPath,
+        contextFile: contextPath,
+      });
+      const path = join(
+        evidenceDir,
+        "gates",
+        gate.id,
+        "artifacts",
+        "realtime-capacity.json",
+      );
+      await writeFile(path, `${JSON.stringify(admitted, null, 2)}\n`, {
+        flag: "wx",
+        mode: 0o600,
+      });
+      record.artifacts.push(await hashFile(path));
+      if (Date.now() - started >= gate.timeout * 1000)
+        throw new Error("qualification admission exhausted the G14 budget");
+    } catch (error) {
+      record.status = "FAIL";
+      record.reason = `G14 realtime qualification admission failed: ${redactText(error.message)}`;
+      record.durationMs = Date.now() - started;
+      record.endedAt = nowIso();
+      await writeFile(join(evidenceDir, "gates", gate.id, "stdout.log"), "", {
+        mode: 0o600,
+      });
+      await writeFile(
+        join(evidenceDir, "gates", gate.id, "stderr.log"),
+        `${record.reason}\n`,
+        { mode: 0o600 },
+      );
+      await updateGateArtifact(evidenceDir, record);
+      return;
+    }
+  }
   if (gate.id === "G08_MIGRATIONS") {
     if (
       typeof g08ExpectedSystemIdentifier !== "string" ||
@@ -1908,7 +1949,9 @@ export async function runGate(
       Math.max(
         1,
         gate.timeout * 1000 -
-          (gate.id === "G08_MIGRATIONS" ? Date.now() - started : 0),
+          (["G08_MIGRATIONS", "G14_OBSERVABILITY"].includes(gate.id)
+            ? Date.now() - started
+            : 0),
       ),
       Math.max(1, gateBudgetMs(gate.id, remainingTotal)),
     );
@@ -2214,6 +2257,7 @@ export async function executeRun(options = {}) {
         runEpochMs,
         outputBudget,
         options.g08ExpectedSystemIdentifier,
+        options.realtimeQualificationPath,
       );
       await saveCommandsNdjson(evidenceDir, result.gates);
       await save();
@@ -2259,7 +2303,16 @@ export function parseArgs(argv) {
       options.githubSnapshotPath = resolve(argv[++index]);
     else if (argv[index] === "--accepted-base-commit")
       options.acceptedBaseCommit = argv[++index];
-    else if (argv[index] === "--g08-expected-system-identifier") {
+    else if (argv[index] === "--realtime-qualification") {
+      const path = argv[++index];
+      if (options.realtimeQualificationPath !== undefined)
+        throw new Error("--realtime-qualification may be specified only once");
+      if (typeof path !== "string" || !isAbsolute(path))
+        throw new Error(
+          "--realtime-qualification requires an absolute receipt path",
+        );
+      options.realtimeQualificationPath = path;
+    } else if (argv[index] === "--g08-expected-system-identifier") {
       const identifier = argv[++index];
       if (!/^[0-9]{1,20}$/u.test(identifier ?? ""))
         throw new Error(

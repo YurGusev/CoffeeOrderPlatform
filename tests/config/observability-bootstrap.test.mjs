@@ -7710,6 +7710,7 @@ async function writeSyntheticParentG12({
     [join(supplyChainDir, "artifacts/kafka-receipt.json"), receiptBytes],
     [join(supplyChainDir, "artifacts/kafka.oci.tar"), ociArtifact],
     [join(supplyChainDir, "artifacts/kafka-base-index.json"), indexBytes],
+    [join(supplyChainDir, "artifacts/grafana-base-index.json"), indexBytes],
   ])
     await writeFile(path, bytes, { mode: 0o600 });
   return { imageId, receiptSha256: hash(receiptBytes) };
@@ -7752,6 +7753,10 @@ void test("browser correlation executes the child lifecycle and preserves early 
   await cp(
     join(REPO_ROOT, "tests/realtime/fixtures/setup.mjs"),
     join(root, "tests/realtime/fixtures/setup.mjs"),
+  );
+  await cp(
+    join(REPO_ROOT, "tools/realtime-capacity.mjs"),
+    join(root, "tools/realtime-capacity.mjs"),
   );
   const platformPath = join(root, "config/platform.yaml");
   const config = (await readFile(platformPath, "utf8")).replace(
@@ -7826,6 +7831,7 @@ void test("browser correlation executes the child lifecycle and preserves early 
     "verification/launch/v1/scenarios/browser.mjs",
     "tools/observability/verify.mjs",
     "tests/realtime/fixtures/setup.mjs",
+    "tools/realtime-capacity.mjs",
   );
   git(
     "-c",
@@ -7846,6 +7852,7 @@ void test("browser correlation executes the child lifecycle and preserves early 
     root,
     sourceRoot,
   ]);
+  await chmod(join(sourceRoot, "evidence"), 0o700);
   execFileSync("git", [
     "-C",
     sourceRoot,
@@ -7930,9 +7937,10 @@ void test("browser correlation executes the child lifecycle and preserves early 
     context: success.context,
     indexBytes,
   });
-  const { loadVerifiedGateImage: loadFixtureKafka } = await import(
-    pathToFileURL(join(root, "tests/realtime/fixtures/setup.mjs")).href
-  );
+  const { loadVerifiedGateImage: loadFixtureKafka, readQualificationInputs } =
+    await import(
+      pathToFileURL(join(root, "tests/realtime/fixtures/setup.mjs")).href
+    );
   process.env.COFFEE_LAUNCH_CONTEXT_FILE = success.contextPath;
   assert.equal(git("status", "--porcelain=v1", "--untracked-files=all"), "");
   let observed;
@@ -7994,6 +8002,33 @@ void test("browser correlation executes the child lifecycle and preserves early 
       ),
     );
     assert.equal(image.lineageReceiptSha256, hash(lineageBytes));
+    const admitted = await readQualificationInputs(contextPath);
+    const { RUNTIME_NAMES } =
+      await import("../../packages/platform-config/src/index.ts");
+    assert.deepEqual(
+      admitted.qualification.runtimeImages,
+      [...RUNTIME_NAMES, "edge-nginx"].map((service) => ({
+        service,
+        imageId: `sha256:${hash(service)}`,
+      })),
+    );
+    assert.equal(admitted.qualification.candidateSha, sha);
+    assert.equal(
+      admitted.qualification.baseConfigSha256,
+      success.context.baseConfigSha256,
+    );
+    assert.deepEqual(admitted.launchPath.launchIdentity, image.launchIdentity);
+    const reportPath = join(
+      success.evidenceDir,
+      "gates/G12_SUPPLY_CHAIN/artifacts/supply-chain/artifacts/edge-gateway.vulnerabilities.json",
+    );
+    const reportBytes = await readFile(reportPath);
+    await writeFile(reportPath, Buffer.concat([reportBytes, Buffer.from(" ")]));
+    try {
+      await assert.rejects(readQualificationInputs(contextPath));
+    } finally {
+      await writeFile(reportPath, reportBytes);
+    }
     const componentImage = await loadFixtureKafka({
       target: "kafka",
       loadImage: false,
@@ -8143,6 +8178,347 @@ void test("browser correlation executes the child lifecycle and preserves early 
     6,
   );
 
+  const qualificationRunId = "i12-0123456789abcdef";
+  const qualificationRaw = join(directory, "capacity-raw");
+  const qualification = await runBrowserParent({
+    qualificationRunId,
+    runQualification: async (contextPath) => {
+      const admitted = await readQualificationInputs(contextPath);
+      const os = await import("node:os");
+      const roles = [
+        "kafka",
+        "idp",
+        "orders-fixture",
+        "edge-gateway",
+        "api-public",
+        "realtime-gateway",
+        "edge-nginx",
+        "driver",
+      ];
+      const images = Object.fromEntries(
+        admitted.qualification.runtimeImages.map(({ service, imageId }) => [
+          service,
+          imageId,
+        ]),
+      );
+      const manifest = {
+        runId: qualificationRunId,
+        qualification: admitted.qualification,
+        launchIdentity: admitted.launchPath.launchIdentity,
+        lineageReceiptSha256: admitted.launchPath.lineageReceiptSha256,
+        configSha256: admitted.launchPath.launchIdentity.baseConfigSha256,
+        images,
+        kafkaSupplyChain: { imageId: expectedKafka.imageId },
+        hardware: {
+          architecture: process.arch,
+          platform: process.platform,
+          availableParallelism: os.availableParallelism(),
+          cpus: os.cpus().map((cpu) => cpu.model),
+          memoryBytes: os.totalmem(),
+          node: process.version,
+          driverHostFdLimit: await readFile("/proc/self/limits", "utf8"),
+        },
+      };
+      const manifestBytes = Buffer.from(JSON.stringify(manifest));
+      const shutdown = {
+        ok: true,
+        state: { ExitCode: 0 },
+        elapsedMs: 100,
+        clients: 1,
+        liveBefore: 1,
+        gatewayLiveBefore: 1,
+        armedClients: 1,
+        armedLive: 1,
+        closedClients: 1,
+        workerErrors: 0,
+        timedOut: false,
+        forcedClientClose: false,
+        clientReceipts: [
+          {
+            client: 0,
+            connectionId: "fixture",
+            resetAt: "2026-10-12T00:00:00.000Z",
+            serverClosedAt: "2026-10-12T00:00:00.010Z",
+            elapsedMs: 10,
+          },
+        ],
+        shardReceipts: [{ shard: 0, clients: 1, live: 0 }],
+      };
+      const result = {
+        status: "PASS",
+        launchProof: true,
+        classification: "full-profile",
+        cleanupVerified: true,
+        manifestSha256: hash(manifestBytes),
+        mode: "full",
+        profile: "operator-1",
+        subjects: 100,
+        durationMs: 1800000,
+        clients: 1,
+        rate: 100,
+        published: 180000,
+        minLive: 0,
+        maxLive: 1,
+        disconnects: 1,
+        reconnects: 1,
+        eventLatencyP95Ms: 999,
+        eventLoopP95Ms: 99,
+        coverageChecks: 1,
+        protocolFrames: 1,
+        checks: Object.fromEntries(
+          [
+            "admission",
+            "slow",
+            "replay",
+            "evicted",
+            "reset",
+            "reload",
+            "headroom",
+            "cleanup",
+            "shutdown",
+            "budgets",
+            "reauth",
+          ].map((key) => [key, true]),
+        ),
+        checkDetails: {
+          shutdown,
+          admission: {
+            live: 512,
+            rejectedConnection: 513,
+            status: 503,
+            code: "REALTIME_CAPACITY_EXCEEDED",
+            beforeSseHeaders: true,
+          },
+          expectedMaximum: Object.fromEntries(
+            Array.from({ length: 100 }, (_, index) => [
+              `ord_${String(index + 1).padStart(26, "0")}`,
+              "1",
+            ]),
+          ),
+          reauth: {
+            recoveredClients: 1,
+            samples: 1,
+            unexpectedDisconnects: 0,
+            pending: 0,
+            authCloseDelta: 1,
+            finalLive: 1,
+            maxGapMs: 4500,
+            gapP95Ms: 4000,
+            retryMs: 3000,
+            readyTimeoutMs: 10000,
+            sessionRefreshes: 2,
+            sessionRefreshIntervalMs: 600000,
+          },
+        },
+      };
+      const containers = roles.map((role) => {
+        const native = [
+          "edge-gateway",
+          "api-public",
+          "realtime-gateway",
+          "edge-nginx",
+        ].includes(role);
+        const nginx = role === "edge-nginx";
+        const mounts = nginx
+          ? ["/run/secrets/edge-nginx"]
+          : [
+              "/app/config/platform.yaml",
+              "/run/secrets/coffee-platform.yaml",
+              "/run/coffee-launch/context.json",
+              ...(role === "edge-gateway"
+                ? ["/run/g15-browser/idp-ca.crt"]
+                : []),
+            ];
+        return {
+          role,
+          id: hash(`container-${role}`),
+          name: `${qualificationRunId}-${role}`,
+          image:
+            role === "kafka"
+              ? expectedKafka.imageId
+              : (images[role] ?? `sha256:${hash(role)}`),
+          ...(native
+            ? {
+                native: {
+                  entrypoint: nginx
+                    ? ["nginx"]
+                    : ["node", "scripts/permission-enforce.mjs"],
+                  command: nginx
+                    ? ["-g", "daemon off;"]
+                    : ["--entry", "dist/main.js"],
+                  mounts: mounts.map((Destination) => ({
+                    Destination,
+                    RW: false,
+                  })),
+                },
+              }
+            : {}),
+        };
+      });
+      const cleanup = {
+        verified: true,
+        syntheticPrivateMaterialRemoved: true,
+        owner: { removed: true },
+        network: {
+          name: `${qualificationRunId}-net`,
+          created: true,
+          removed: true,
+        },
+        receipts: containers.map(({ role, id }) => ({
+          role,
+          id,
+          removed: true,
+          logsCaptured: true,
+        })),
+      };
+      await mkdir(qualificationRaw, { mode: 0o700 });
+      for (const [name, bytes] of [
+        ["profile-manifest.json", manifestBytes],
+        ["result.json", Buffer.from(JSON.stringify(result))],
+        ["cleanup.json", Buffer.from(JSON.stringify(cleanup))],
+        ["containers.json", Buffer.from(JSON.stringify(containers))],
+      ])
+        await writeFile(join(qualificationRaw, name), bytes, { mode: 0o600 });
+      return { runId: qualificationRunId, resultDir: qualificationRaw };
+    },
+  });
+  assert.equal(qualification.qualificationSeal.status, "SEALED");
+  const packet = qualification.artifactsDir;
+  const receiptPath = join(packet, "qualification.json");
+  const endedAt = Date.now() - 1000;
+  const receipt = {
+    schemaVersion: 1,
+    status: "PASS",
+    runId: qualificationRunId,
+    startedAt: new Date(endedAt - 1801000).toISOString(),
+    endedAt: new Date(endedAt).toISOString(),
+    elapsedMs: 1801000,
+    candidateSha: sha,
+    baseConfigSha256: success.context.baseConfigSha256,
+    sealSha256: hash(await readFile(join(packet, "seal.json"))),
+  };
+  await writeFile(receiptPath, JSON.stringify(receipt), { mode: 0o400 });
+  const os = (await import("node:os")).default;
+  const oldUserInfo = os.userInfo;
+  const userMock = t.mock.method(os, "userInfo", () => ({
+    ...oldUserInfo(),
+    homedir: directory,
+  }));
+  syncBuiltinESMExports();
+  try {
+    const { admitRealtimeCapacity } = await import(
+      pathToFileURL(join(root, "tools/realtime-capacity.mjs")).href
+    );
+    const replace = async (path, bytes) => {
+      await chmod(path, 0o600);
+      await writeFile(path, bytes);
+      await chmod(path, 0o400);
+    };
+    for (const change of [
+      { candidateSha: "f".repeat(40) },
+      { baseConfigSha256: "f".repeat(64) },
+      { endedAt: new Date(Date.now() + 60000).toISOString() },
+      {
+        startedAt: new Date(Date.now() - 10000000).toISOString(),
+        endedAt: new Date(Date.now() - 7201000).toISOString(),
+      },
+      { elapsedMs: 2700001 },
+    ]) {
+      await replace(receiptPath, JSON.stringify({ ...receipt, ...change }));
+      await assert.rejects(
+        admitRealtimeCapacity({
+          receiptPath,
+          contextFile: success.contextPath,
+        }),
+      );
+    }
+    await replace(receiptPath, JSON.stringify(receipt));
+    const rawResultPath = join(packet, "result.json");
+    const originalResult = await readFile(rawResultPath);
+    await replace(
+      rawResultPath,
+      Buffer.concat([originalResult, Buffer.from(" ")]),
+    );
+    await assert.rejects(
+      admitRealtimeCapacity({ receiptPath, contextFile: success.contextPath }),
+    );
+    await replace(rawResultPath, originalResult);
+    const packetNames = [
+      "profile-manifest.json",
+      "result.json",
+      "cleanup.json",
+      "seal.json",
+      "qualification.json",
+    ];
+    const originals = Object.fromEntries(
+      await Promise.all(
+        packetNames.map(async (name) => [
+          name,
+          await readFile(join(packet, name)),
+        ]),
+      ),
+    );
+    for (const change of [
+      ({ manifest }) => {
+        manifest.qualification.runtimeImages[0].imageId = `sha256:${"f".repeat(64)}`;
+      },
+      ({ manifest }) => {
+        manifest.hardware.memoryBytes += 1;
+      },
+      ({ cleanup }) => {
+        cleanup.verified = false;
+      },
+    ]) {
+      const manifest = JSON.parse(originals["profile-manifest.json"]);
+      const result = JSON.parse(originals["result.json"]);
+      const cleanup = JSON.parse(originals["cleanup.json"]);
+      const seal = JSON.parse(originals["seal.json"]);
+      const alteredReceipt = JSON.parse(originals["qualification.json"]);
+      change({ manifest, cleanup });
+      const manifestBytes = Buffer.from(JSON.stringify(manifest));
+      const cleanupBytes = Buffer.from(JSON.stringify(cleanup));
+      result.manifestSha256 = hash(manifestBytes);
+      const resultBytes = Buffer.from(JSON.stringify(result));
+      seal.hashes.manifest = hash(manifestBytes);
+      seal.hashes.result = hash(resultBytes);
+      seal.hashes.cleanup = hash(cleanupBytes);
+      const sealBytes = Buffer.from(JSON.stringify(seal));
+      alteredReceipt.sealSha256 = hash(sealBytes);
+      try {
+        for (const [name, bytes] of [
+          ["profile-manifest.json", manifestBytes],
+          ["result.json", resultBytes],
+          ["cleanup.json", cleanupBytes],
+          ["seal.json", sealBytes],
+          ["qualification.json", Buffer.from(JSON.stringify(alteredReceipt))],
+        ])
+          await replace(join(packet, name), bytes);
+        await assert.rejects(
+          admitRealtimeCapacity({
+            receiptPath,
+            contextFile: success.contextPath,
+          }),
+        );
+      } finally {
+        for (const name of packetNames)
+          await replace(join(packet, name), originals[name]);
+      }
+    }
+    const lineagePath = join(packet, "browser-lineage.json");
+    const originalLineage = await readFile(lineagePath);
+    await replace(
+      lineagePath,
+      Buffer.concat([originalLineage, Buffer.from(" ")]),
+    );
+    await assert.rejects(
+      admitRealtimeCapacity({ receiptPath, contextFile: success.contextPath }),
+    );
+    await replace(lineagePath, originalLineage);
+  } finally {
+    userMock.mock.restore();
+    syncBuiltinESMExports();
+  }
+
   const failure = await makeContext("20261030T120001Z");
   process.env.COFFEE_LAUNCH_CONTEXT_FILE = failure.contextPath;
   let failedChild;
@@ -8280,10 +8656,136 @@ void test("browser correlation executes the child lifecycle and preserves early 
     await stat(join(malformed.artifacts, "observability")).catch(() => null),
     null,
   );
+
+  const currentRoot = join(directory, "current-candidate");
+  const currentSource = join(directory, "current-source");
+  execReal("git", ["clone", "--quiet", "--no-local", root, currentRoot]);
+  execReal("git", [
+    "-C",
+    currentRoot,
+    "remote",
+    "set-url",
+    "origin",
+    "https://github.com/YurGusev/CoffeeOrderPlatform",
+  ]);
+  for (const file of [
+    "config/platform.yaml",
+    "config/toolchain-versions.json",
+    "pnpm-lock.yaml",
+  ])
+    await chmod(join(currentRoot, file), 0o644);
+  execReal("git", [
+    "clone",
+    "--quiet",
+    "--shared",
+    "--no-hardlinks",
+    currentRoot,
+    currentSource,
+  ]);
+  execReal("git", [
+    "-C",
+    currentSource,
+    "remote",
+    "set-url",
+    "origin",
+    "https://github.com/YurGusev/CoffeeOrderPlatform",
+  ]);
+  await writeFile(
+    join(currentRoot, ".git/info/exclude"),
+    "node_modules\ndist\n",
+    {
+      flag: "a",
+    },
+  );
+  await symlink(
+    join(REPO_ROOT, "node_modules"),
+    join(currentRoot, "node_modules"),
+    "dir",
+  );
+  for (const group of ["apps", "packages"]) {
+    for (const name of await readdir(join(currentRoot, group))) {
+      for (const path of ["node_modules", "dist"]) {
+        const source = join(REPO_ROOT, group, name, path);
+        if (await stat(source).catch(() => null))
+          await symlink(source, join(currentRoot, group, name, path), "dir");
+      }
+    }
+  }
+  const current = await makeContext(
+    "20261030T120005Z",
+    currentRoot,
+    currentSource,
+  );
+  const replay = await makeContext(
+    "20261030T120006Z",
+    currentRoot,
+    currentRoot,
+  );
+  for (const run of [current, replay])
+    await writeSyntheticParentG12({
+      candidateRoot: currentRoot,
+      evidenceDir: run.evidenceDir,
+      context: run.context,
+      indexBytes,
+    });
+  assert.notEqual(current.context.runId, success.context.runId);
+  assert.notEqual(
+    current.context.sourceRepoRoot,
+    success.context.sourceRepoRoot,
+  );
+  assert.notEqual(
+    replay.context.sourceRepoRoot,
+    current.context.sourceRepoRoot,
+  );
+  assert.equal(current.context.candidateSha, success.context.candidateSha);
+  assert.equal(
+    current.context.baseConfigSha256,
+    success.context.baseConfigSha256,
+  );
+  const currentPacket = join(
+    currentSource,
+    "evidence/launch/qualifications",
+    qualificationRunId,
+  );
+  const replayPacket = join(
+    currentRoot,
+    "evidence/launch/qualifications",
+    qualificationRunId,
+  );
+  await mkdir(dirname(currentPacket), { recursive: true, mode: 0o700 });
+  await mkdir(dirname(replayPacket), { recursive: true, mode: 0o700 });
+  await cp(packet, currentPacket, { recursive: true });
+  await cp(packet, replayPacket, { recursive: true });
   process.chdir(originalCwd);
   await rm(root, { recursive: true, force: true });
+  assert.equal(await stat(root).catch(() => null), null);
   for (const name of savedNames)
     assert.ok((await stat(join(saved, name))).isFile());
+  const currentUserMock = t.mock.method(os, "userInfo", () => ({
+    ...oldUserInfo(),
+    homedir: directory,
+  }));
+  syncBuiltinESMExports();
+  try {
+    const { admitRealtimeCapacity: admitCurrent } = await import(
+      pathToFileURL(join(currentRoot, "tools/realtime-capacity.mjs")).href
+    );
+    const accepted = await admitCurrent({
+      receiptPath: join(currentPacket, "qualification.json"),
+      contextFile: current.contextPath,
+    });
+    assert.equal(accepted.receipt.runId, qualificationRunId);
+    await assert.rejects(
+      admitCurrent({
+        receiptPath: join(replayPacket, "qualification.json"),
+        contextFile: replay.contextPath,
+      }),
+      { code: "EEXIST" },
+    );
+  } finally {
+    currentUserMock.mock.restore();
+    syncBuiltinESMExports();
+  }
 });
 
 void test("browser correlation admission verifies the sealed child bundle and scoped cleanup", async (t) => {
