@@ -596,12 +596,12 @@ void test("startup diagnostics bound and redact container state, health output a
           Running: true,
           ExitCode: 0,
           OOMKilled: false,
-          Error: `failed ${secret}`,
+          Error: `failed ${secret} Authorization: Bearer state-unknown body password=body-private url=https://example.invalid/?token=url-private`,
           Health: {
             Status: "unhealthy",
             Log: Array.from({ length: 4 }, (_, index) => ({
               ExitCode: index,
-              Output: `failed ${secret} Bearer opaque-token password=unknown-password ${"x".repeat(1100)}`,
+              Output: `failed ${secret} Authorization: Bearer health-unknown Bearer opaque-token password=unknown-password ${"x".repeat(1100)}`,
             })),
           },
           Config: { Env: ["SHOULD_NOT_BE_REPORTED"] },
@@ -609,9 +609,11 @@ void test("startup diagnostics bound and redact container state, health output a
       };
     return {
       status: 0,
-      stdout: `error ${secret} Bearer opaque-token\n${Array(14)
+      stdout: `error ${secret} Authorization: Bearer error-unknown Bearer opaque-token header authorization=header-private\n${Array(
+        14,
+      )
         .fill(
-          `INFO starting SQLite migration ${secret} Bearer opaque-token ${"x".repeat(350)}`,
+          `INFO starting SQLite migration ${secret} Authorization: Bearer startup-unknown Bearer opaque-token ${"x".repeat(350)}`,
         )
         .join("\n")}\n`,
       stderr: "",
@@ -638,6 +640,13 @@ void test("startup diagnostics bound and redact container state, health output a
     secret,
     "opaque-token",
     "unknown-password",
+    "state-unknown",
+    "health-unknown",
+    "error-unknown",
+    "startup-unknown",
+    "body-private",
+    "url-private",
+    "header-private",
     "SHOULD_NOT_BE_REPORTED",
   ])
     assert.doesNotMatch(JSON.stringify(diagnostics), new RegExp(value, "u"));
