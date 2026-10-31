@@ -3490,7 +3490,9 @@ void test("G15 child credentials reuse the unchanged parent G08 receipt only thr
     databaseIsolation: true,
   });
   const { roleNames } = await writeMigrationPreparationArtifact(parent);
-  const child = await createBrowserChildMigrationLaunchFixture(parent);
+  const child = await createBrowserChildMigrationLaunchFixture(parent, {
+    nested: true,
+  });
   const childBundlePath = join(
     child.root,
     "secrets/platform.secrets.sops.yaml",
@@ -3642,6 +3644,85 @@ void test("G15 child credentials reuse the unchanged parent G08 receipt only thr
     connectionsBeforeDirtyParent,
     "a dirty G15 parent checkout must be rejected before PostgreSQL access",
   );
+
+  const trackedParent = join(parent.fixture.root, "config/platform.yaml");
+  const trackedBytes = await readFile(trackedParent);
+  await chmod(trackedParent, 0o644);
+  await writeFile(
+    trackedParent,
+    Buffer.concat([trackedBytes, Buffer.from("\n# dirty\n")]),
+  );
+  try {
+    await assert.rejects(
+      readPreparedPostgresIdentity({
+        root: child.root,
+        contextPath: child.contextPath,
+        preparationContextPath: parent.contextPath,
+        env: parent.fixture.env,
+      }),
+      { ruleId: "CONFIG-G08-G15-LINEAGE" },
+    );
+  } finally {
+    await writeFile(trackedParent, trackedBytes);
+    await chmod(trackedParent, 0o400);
+  }
+  execFileSync("git", [
+    "-C",
+    parent.fixture.root,
+    "update-index",
+    "--assume-unchanged",
+    "config/platform.yaml",
+  ]);
+  try {
+    await assert.rejects(
+      readPreparedPostgresIdentity({
+        root: child.root,
+        contextPath: child.contextPath,
+        preparationContextPath: parent.contextPath,
+        env: parent.fixture.env,
+      }),
+      { ruleId: "CONFIG-G08-G15-LINEAGE" },
+    );
+  } finally {
+    execFileSync("git", [
+      "-C",
+      parent.fixture.root,
+      "update-index",
+      "--no-assume-unchanged",
+      "config/platform.yaml",
+    ]);
+  }
+  const sibling = join(parent.fixture.root, ".g15-browser-child-fake");
+  await mkdir(sibling, { mode: 0o700 });
+  await writeFile(join(sibling, "unexpected"), "untracked\n");
+  try {
+    await assert.rejects(
+      readPreparedPostgresIdentity({
+        root: child.root,
+        contextPath: child.contextPath,
+        preparationContextPath: parent.contextPath,
+        env: parent.fixture.env,
+      }),
+      { ruleId: "CONFIG-G08-G15-LINEAGE" },
+    );
+  } finally {
+    await rm(sibling, { recursive: true, force: true });
+  }
+  await chmod(child.root, 0o755);
+  try {
+    await assert.rejects(
+      readPreparedPostgresIdentity({
+        root: child.root,
+        contextPath: child.contextPath,
+        preparationContextPath: parent.contextPath,
+        env: parent.fixture.env,
+      }),
+      { ruleId: "CONFIG-G08-G15-LINEAGE" },
+    );
+  } finally {
+    await chmod(child.root, 0o700);
+  }
+  assert.equal(connectCalls.length, connectionsBeforeDirtyParent);
 
   const connectionsBeforeParentRace = connectCalls.length;
   const queriesBeforeParentRace = queryCalls.length;
@@ -6254,10 +6335,12 @@ async function createBrowserLaunchFixture({
 
 async function createBrowserChildMigrationLaunchFixture(
   parent,
-  { mutateConfig, skipLineageValidation = false } = {},
+  { mutateConfig, skipLineageValidation = false, nested = false } = {},
 ) {
   const childRoot = await mkdtemp(
-    "/dev/shm/coffee-observability-g15-child-fixture-",
+    nested
+      ? join(parent.fixture.root, ".g15-browser-child-")
+      : "/dev/shm/coffee-observability-g15-child-fixture-",
   );
   const timestamp = new Date()
     .toISOString()
@@ -7762,6 +7845,12 @@ void test("browser correlation executes the child lifecycle and preserves early 
     join(REPO_ROOT, "tools/realtime-capacity.mjs"),
     join(root, "tools/realtime-capacity.mjs"),
   );
+  for (const file of [
+    "verification/launch/v1/scenarios/rollback.mjs",
+    "tools/config-bootstrap/index.mjs",
+  ]) {
+    await cp(join(REPO_ROOT, file), join(root, file));
+  }
   const platformPath = join(root, "config/platform.yaml");
   const config = (await readFile(platformPath, "utf8")).replace(
     "    enabled: false\n  kafkaNamespaceIsolation: false",
@@ -7837,6 +7926,8 @@ void test("browser correlation executes the child lifecycle and preserves early 
     "tools/browser-proof.mjs",
     "tests/realtime/fixtures/setup.mjs",
     "tools/realtime-capacity.mjs",
+    "verification/launch/v1/scenarios/rollback.mjs",
+    "tools/config-bootstrap/index.mjs",
   );
   git(
     "-c",
@@ -7946,6 +8037,35 @@ void test("browser correlation executes the child lifecycle and preserves early 
       pathToFileURL(join(root, "tests/realtime/fixtures/setup.mjs")).href
     );
   process.env.COFFEE_LAUNCH_CONTEXT_FILE = success.contextPath;
+  const verifierSource = await readFile(
+    join(REPO_ROOT, "tools/observability/verify.mjs"),
+    "utf8",
+  );
+  const callbackStart = verifierSource.indexOf(
+    "runCorrelation: async (contextPath) => {",
+  );
+  const componentStart = verifierSource.indexOf(
+    "await executeLaunchPath(contextPath)",
+    callbackStart,
+  );
+  const componentCleanup = verifierSource.indexOf(
+    "validateG14ComponentCleanup(",
+    componentStart,
+  );
+  const browserStart = verifierSource.indexOf(
+    "await runManagedRollbackChild({",
+    componentCleanup,
+  );
+  assert.ok(
+    callbackStart >= 0 &&
+      componentStart > callbackStart &&
+      componentCleanup > componentStart &&
+      browserStart > componentCleanup,
+  );
+  assert.equal(
+    (verifierSource.match(/await executeLaunchPath\(/gu) ?? []).length,
+    1,
+  );
   assert.equal(git("status", "--porcelain=v1", "--untracked-files=all"), "");
   let observed;
   const synthetic = join(directory, "synthetic-callback");
@@ -8006,6 +8126,33 @@ void test("browser correlation executes the child lifecycle and preserves early 
       ),
     );
     assert.equal(image.lineageReceiptSha256, hash(lineageBytes));
+    const { fixture: ordersFixture } = await import(
+      pathToFileURL(join(root, "tests/observability/orders-fixture.mjs")).href
+    );
+    let postgresConnects = 0;
+    const pgMock = t.mock.method(Client.prototype, "connect", async () => {
+      postgresConnects++;
+      throw new Error("unexpected PostgreSQL");
+    });
+    try {
+      await assert.rejects(
+        ordersFixture(async () => assert.fail("unprepared G08"), {
+          launchIdentity: image.launchIdentity,
+          launchContextFile: contextPath,
+        }),
+        (error) =>
+          [
+            "CONFIG-G08-ADMIN-SECRET",
+            "CONFIG-G08-BUNDLE",
+            "CONFIG-G08-CONTEXT",
+            "CONFIG-G08-PREPARATION",
+          ].includes(error.ruleId),
+      );
+      assert.equal(postgresConnects, 0);
+    } finally {
+      pgMock.mock.restore();
+    }
+
     const admitted = await readQualificationInputs(contextPath);
     const { RUNTIME_NAMES } =
       await import("../../packages/platform-config/src/index.ts");

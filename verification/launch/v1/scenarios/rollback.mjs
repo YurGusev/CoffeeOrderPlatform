@@ -121,7 +121,7 @@ function assertNoHiddenIndexFlags(root) {
   }
 }
 
-async function inspectCheckout(path, expectedSha) {
+async function inspectCheckout(path, expectedSha, { ownedChildRoot } = {}) {
   if (typeof path !== "string" || !path || !SHA.test(expectedSha ?? ""))
     fail("ROLLBACK_CHECKOUT_INPUT_INVALID");
   const absolute = resolve(path);
@@ -160,16 +160,30 @@ async function inspectCheckout(path, expectedSha) {
       throw error;
     fail("ROLLBACK_CONFIG_WORKTREE_INVALID");
   }
-  if (
-    git(
-      canonical,
-      "status",
-      "--porcelain=v1",
-      "--untracked-files=all",
-      "--no-renames",
-    ).length !== 0
-  )
-    fail("ROLLBACK_CHECKOUT_DIRTY");
+  const status = git(
+    canonical,
+    "status",
+    "--porcelain=v1",
+    "--untracked-files=all",
+    "--no-renames",
+    "-z",
+  );
+  if (ownedChildRoot !== undefined) {
+    const name = ownedChildRoot.slice(canonical.length + 1);
+    const info = await lstat(ownedChildRoot).catch(() => null);
+    if (
+      dirname(ownedChildRoot) !== canonical ||
+      !/^\.g15-browser-child-[A-Za-z0-9]+$/u.test(name) ||
+      !info?.isDirectory() ||
+      info.isSymbolicLink() ||
+      info.uid !== process.getuid() ||
+      (info.mode & 0o077) !== 0 ||
+      (await realpath(ownedChildRoot)) !== ownedChildRoot ||
+      git(canonical, "ls-files", "--", name).length !== 0 ||
+      !status.equals(Buffer.from(`?? ${name}/\0`))
+    )
+      fail("ROLLBACK_CHECKOUT_DIRTY");
+  } else if (status.length !== 0) fail("ROLLBACK_CHECKOUT_DIRTY");
   const commit = gitText(
     canonical,
     "show",

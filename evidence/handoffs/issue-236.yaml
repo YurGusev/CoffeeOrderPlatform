@@ -21,7 +21,7 @@ outputs:
     sha256: a55af16c43b753f8f1f9debea4eeee3395334a9b5f0d73882b0739eb0a86c4c2
     consumers: [13]
   - artifact: tools/observability/verify.mjs
-    sha256: a1d8d28916d8db6e3970c37a83afb472271289b6ad6a8568c2641e75318c9f17
+    sha256: d9378c7dad54d8f44f45a32eb3eb07993b291066f190ced1afe57d73f386f774
     consumers: [13]
   - artifact: verification/launch/v1/scenarios/browser.mjs
     sha256: d20460c2302ba7fce02ee1cee8d08bad2004bbf078e597071557428b7e05bb77
@@ -36,7 +36,7 @@ outputs:
     sha256: f8716bd4915ab17793127728fb0b42bf427f42fdc2c1c888fb8c90409bf47435
     consumers: [13]
   - artifact: tests/config/observability-bootstrap.test.mjs
-    sha256: 0948941fe3ef7e7c30a7c5a75fa033a096eb816317dcb90cd0360baa9e363df9
+    sha256: f493060c960506ec5bd2a27cdbbef09212c7e33a5049168b37b323fcd29f8357
     consumers: [13]
   - artifact: tests/compose/topology.test.mjs
     sha256: e53244fbe8aa1f585d3e102813ccbd1bd6cb534749d67e65b209584012b316b7
@@ -45,10 +45,19 @@ outputs:
     sha256: 2b7e2a3c3340387b246243ffeeece09f54ec24b975eab88801c196aa06aba5b2
     consumers: [13]
   - artifact: verification/launch/v1/scenarios/rollback.mjs
-    sha256: d5967a2e31846025b1489d00a85073a4ac631b60bde2865211904db58f54d85f
+    sha256: e56981d8975e2716178882bce77c9ba86e62577d6ea54b04bdebe5c0b52ca08b
     consumers: [13]
   - artifact: verification/launch/v1/runner.test.mjs
     sha256: 55c7e4d4999aea666b9dcc9b27b5a2846ac892a666ca4122f6490550775204df
+    consumers: [13]
+  - artifact: tests/observability/alerts.test.mjs
+    sha256: e827db9a717306afcde7c0933a3a456961ba4591c566c981b771d33de00a4fca
+    consumers: [13]
+  - artifact: tools/config-bootstrap/index.mjs
+    sha256: 1fdf095beea6ba31fc9d9866ebf2c0e0cab6fdce62effc0fc78b92732f492123
+    consumers: [13]
+  - artifact: docs/launch/21_LAUNCH_VERIFICATION_SPEC.md
+    sha256: da509e7e57de9e5905faa287b266ee020f2642a261630d656857578a10511eae
     consumers: [13]
 verification:
   - command: pnpm install --offline --frozen-lockfile --ignore-scripts
@@ -221,7 +230,90 @@ ipcVerification:
     exitCode: 1
     log: /home/yurgusev/.cache/coffee-launch-delivery/issue-236-ipc/lint-third.log
     logSha256: e2c18ed924f5dd879f83cea7d678769e95b495b57ce9e300bf05f1e131992f50
+telemetrySubproofVerification:
+  - command: "umask 077 && node --test --test-name-pattern='G04 requires an owned read-only context' verification/launch/v1/runner.test.mjs"
+    result: "passed: 1 test"
+    exitCode: 0
+    log: /home/yurgusev/.cache/coffee-launch-delivery/issue-236-subproof/guard-final.log
+    logSha256: d07c6140a3fc5989885356c289e03d35e2963a663d3339001b56ad7a2e8bb5bb
+  - command: "umask 077 && node --test --test-name-pattern='G15 child credentials reuse|G15 child G08 credential admission' tests/config/observability-bootstrap.test.mjs"
+    result: "passed: 2 tests"
+    exitCode: 0
+    log: /home/yurgusev/.cache/coffee-launch-delivery/issue-236-subproof/nested-g08-final2.log
+    logSha256: 9a1acd04fbaf4179e3f2fa676be33f63d1160b5d37f062d9e6b31151d1940734
+  - command: "umask 077 && node --test --test-name-pattern='browser correlation (executes|admission)' tests/config/observability-bootstrap.test.mjs"
+    result: "passed: 2 tests"
+    exitCode: 0
+    log: /home/yurgusev/.cache/coffee-launch-delivery/issue-236-subproof/child-lifecycle-final2.log
+    logSha256: 1cf1191078a68e0b1aa75b6a9ae83095c2ca53043fb7828b4d31b396d33c7409
+  - command: "umask 077 && node --test --test-name-pattern='G14 component requires|G14 queries actual child telemetry|Grafana backend queries require fresh owner samples' tests/observability/alerts.test.mjs"
+    result: "passed: 3 tests"
+    exitCode: 0
+    log: /home/yurgusev/.cache/coffee-launch-delivery/issue-236-subproof/component-final.log
+    logSha256: 2362b0f31634c58356a2f948f950dbc9031fc970a3666622c10be93378aa5832
+  - command: "umask 077 && pnpm exec oxlint --type-aware --deny-warnings tools/config-bootstrap/index.mjs verification/launch/v1/scenarios/rollback.mjs tools/observability/verify.mjs tests/observability/alerts.test.mjs tests/config/observability-bootstrap.test.mjs"
+    result: "passed"
+    exitCode: 0
+    log: /home/yurgusev/.cache/coffee-launch-delivery/issue-236-subproof/final-lint.log
+    logSha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+  - command: "umask 077 && pnpm exec prettier --check tools/config-bootstrap/index.mjs verification/launch/v1/scenarios/rollback.mjs tools/observability/verify.mjs tests/observability/alerts.test.mjs tests/config/observability-bootstrap.test.mjs docs/launch/21_LAUNCH_VERIFICATION_SPEC.md"
+    result: "passed"
+    exitCode: 0
+    log: /home/yurgusev/.cache/coffee-launch-delivery/issue-236-subproof/final-format.log
+    logSha256: 17aa973d3f004560237d9a95171210b0671deff23d61628eecf7322ff5938f20
+  - command: "umask 077 && node --test --test-name-pattern='G14 queries actual child telemetry|observability query helpers' tests/observability/alerts.test.mjs"
+    result: "passed: 1 test"
+    exitCode: 0
+    log: /home/yurgusev/.cache/coffee-launch-delivery/issue-236-subproof/telemetry-delivery.log
+    logSha256: 6069dc8e9ee712b46a218cf12c0577a1e1826fbc46cd835f31c5eb99cbd2a867
+  - command: "umask 077 && node --test --test-name-pattern='G14 queries actual child telemetry' tests/observability/alerts.test.mjs"
+    result: "passed: 1 test"
+    exitCode: 0
+    log: /home/yurgusev/.cache/coffee-launch-delivery/issue-236-subproof/telemetry-final4.log
+    logSha256: c00de6af5f2273bd029f6bbed4a0b0ddebc63f33a5d23a0390c0665e5776134f
+  - command: "umask 077 && node --test --test-name-pattern='Grafana backend queries require fresh owner samples' tests/observability/alerts.test.mjs"
+    result: "passed: 1 test"
+    exitCode: 0
+    log: /home/yurgusev/.cache/coffee-launch-delivery/issue-236-subproof/existing-query.log
+    logSha256: 1619e54dbb4731091267a2564c3534792a5461f5e448b77002ad5f3cad63fb72
+  - command: "umask 077 && pnpm exec tsc -b apps/aroma-convergence --pretty false"
+    result: "passed"
+    exitCode: 0
+    log: /home/yurgusev/.cache/coffee-launch-delivery/issue-236-subproof/tsc.log
+    logSha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+  - command: "umask 077 && pnpm exec oxlint --type-aware --deny-warnings tools/observability/verify.mjs tests/observability/alerts.test.mjs"
+    result: "passed"
+    exitCode: 0
+    log: /home/yurgusev/.cache/coffee-launch-delivery/issue-236-subproof/lint-delivery.log
+    logSha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+  - command: "umask 077 && pnpm exec prettier --check tools/observability/verify.mjs tests/observability/alerts.test.mjs"
+    result: "passed"
+    exitCode: 0
+    log: /home/yurgusev/.cache/coffee-launch-delivery/issue-236-subproof/format-delivery.log
+    logSha256: 17aa973d3f004560237d9a95171210b0671deff23d61628eecf7322ff5938f20
+  - command: "umask 077 && git diff --check"
+    result: "passed"
+    exitCode: 0
+    log: /home/yurgusev/.cache/coffee-launch-delivery/issue-236-subproof/diff-delivery.log
+    logSha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+  - command: "umask 077 && node --test --test-name-pattern='G14 queries actual child telemetry' tests/observability/alerts.test.mjs"
+    result: "failed: missing aroma-convergence dist before scoped tsc"
+    exitCode: 1
+    log: /home/yurgusev/.cache/coffee-launch-delivery/issue-236-subproof/telemetry-initial.log
+    logSha256: 1bfaa18214423cd1b4ef0e0af0d1eb18d12b1df8f6baf1e6c7879070c5c350ce
+  - command: "umask 077 && node --test --test-name-pattern='G14 queries actual child telemetry' tests/observability/alerts.test.mjs"
+    result: "failed: test fixture referenced undefined line; corrected"
+    exitCode: 1
+    log: /home/yurgusev/.cache/coffee-launch-delivery/issue-236-subproof/telemetry-final3.log
+    logSha256: 3481d033328697069773059747e38e6981267889fb235eeeaa74ce623849f1bf
 limitations:
+  - >-
+    Владелец 31 октября 2026 разрешил supplemental component diagnostic внутри
+    существующего OIDC-only child перед actual browser: G15 lineage, parent G08 и
+    внешние пять БД, с подтверждённой очисткой до browser. Синтетическое evidence
+    сохраняется отдельно и не доказывает browser chain. Nested child исключается
+    из parent status только после проверки lineage и точной identity; остальные
+    dirty/hidden-index случаи отклоняются. Runtime подтверждение R236-4 NOT_RUN.
   - >-
     G14 IPC и fail-closed retention проверены изолированными Node-тестами;
     реальный Collector, аварийный disconnect и очистка child runtime не запускались.

@@ -2657,21 +2657,6 @@ async function readMigrationPreparationSource(
       "G15 parent context changed during validation",
     );
 
-  let inspectLaunchCheckout;
-  try {
-    ({ inspectLaunchCheckout } =
-      await import("../../verification/launch/v1/scenarios/rollback.mjs"));
-    await inspectLaunchCheckout(
-      resources.g15ParentCheckoutRoot,
-      sourceContext.candidateSha,
-    );
-  } catch {
-    fail(
-      "CONFIG-G08-G15-LINEAGE",
-      "G15 parent checkout is not clean and bound to its context",
-    );
-  }
-
   let lineage;
   try {
     const { readBrowserFixtureLineage } = await import("./browser-fixture.mjs");
@@ -2693,6 +2678,24 @@ async function readMigrationPreparationSource(
     lineage.configSha256 !== target.context.baseConfigSha256
   )
     fail("CONFIG-G08-G15-LINEAGE", "G15 config lineage does not match");
+
+  let inspectLaunchCheckout;
+  try {
+    ({ inspectLaunchCheckout } =
+      await import("../../verification/launch/v1/scenarios/rollback.mjs"));
+    await inspectLaunchCheckout(
+      resources.g15ParentCheckoutRoot,
+      sourceContext.candidateSha,
+      dirname(target.context.checkoutDir) === resources.g15ParentCheckoutRoot
+        ? { ownedChildRoot: target.context.checkoutDir }
+        : undefined,
+    );
+  } catch {
+    fail(
+      "CONFIG-G08-G15-LINEAGE",
+      "G15 parent checkout is not clean and bound to its context",
+    );
+  }
 
   let configBytes;
   try {

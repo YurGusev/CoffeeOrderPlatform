@@ -1797,9 +1797,22 @@ export async function waitForSameTraceSpans({
   timeoutMs = 60000,
   intervalMs = 2000,
   onObservation,
+  inspectSpan,
 }) {
   if (!/^[0-9a-f]{32}$/u.test(traceId))
     throw new TypeError("traceId must be 32 lowercase hexadecimal characters");
+  if (
+    !expectedSpanNames ||
+    Object.keys(expectedSpanNames).length === 0 ||
+    Object.entries(expectedSpanNames).some(
+      ([role, names]) =>
+        !role ||
+        !Array.isArray(names) ||
+        names.length === 0 ||
+        names.some((name) => typeof name !== "string" || name.length === 0),
+    )
+  )
+    throw new TypeError("expectedSpanNames must contain nonempty role spans");
   let lastSuccessful = null;
   return waitFor(
     async () => {
@@ -1862,6 +1875,7 @@ export async function waitForSameTraceSpans({
               : Buffer.from(span.traceId ?? "", "base64").toString("hex");
             if (spanTrace !== traceId)
               throw new Error("Tempo returned a span from a different trace");
+            inspectSpan?.(span, group.resource);
             found.push({
               service_name: service,
               operation_name: span.name,
@@ -1905,6 +1919,173 @@ export async function waitForSameTraceSpans({
       description: "all expected same-trace runtime spans in Tempo",
     },
   );
+}
+
+export function validateG14ComponentCleanup(component, runId) {
+  if (!/^[0-9]{8}T[0-9]{6}Z-[0-9a-f]{7}$/u.test(runId ?? ""))
+    throw new Error("G14 component child identity invalid");
+  const expected = ["customer", "catalog", "pricing", "orders", "integration"]
+    .map(
+      (owner) =>
+        `coffee_verify_${runId.toLowerCase().replace("-", "_")}_${owner}`,
+    )
+    .sort();
+  if (
+    component?.cleanupVerified !== true ||
+    component.cleanup?.verified !== true ||
+    component.cleanup.databases?.verified !== true ||
+    !isDeepStrictEqual(component.cleanup.databases.removed, expected) ||
+    !isDeepStrictEqual(component.cleanup.databases.retained, []) ||
+    component.cleanup.attachment?.routePreserved !== true
+  )
+    throw new Error("G14 component diagnostic cleanup is unverified");
+  return component.cleanup;
+}
+
+const G14_DURABLE_SPANS = {
+  "orders-service": ["Outbox.relay", "Kafka.produce"],
+  "orders-aroma-preparation": [
+    "Kafka.consume",
+    "Inbox.consumeOnce",
+    "Outbox.relay",
+    "Kafka.produce",
+  ],
+  "realtime-gateway": ["Kafka.consume"],
+};
+
+export async function collectG14BrowserTelemetry({
+  proof,
+  startTimeUs,
+  lokiUrl,
+  tempoUrl,
+  secrets = [],
+  fetchImpl = fetch,
+  timeoutMs = 55000,
+  intervalMs = 2000,
+}) {
+  if (
+    !Number.isFinite(timeoutMs) ||
+    timeoutMs <= 0 ||
+    timeoutMs > 55000 ||
+    !Number.isFinite(intervalMs) ||
+    intervalMs <= 0 ||
+    !Number.isFinite(startTimeUs) ||
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(
+      proof?.correlationId ?? "",
+    ) ||
+    !/^[0-9a-f]{32}$/u.test(proof?.traceId ?? "") ||
+    !/^[0-9]{8}T[0-9]{6}Z-[0-9a-f]{7}$/u.test(proof?.runId ?? "") ||
+    !/^[0-9a-f]{40}$/u.test(proof?.candidateSha ?? "") ||
+    !/^[0-9a-f]{64}$/u.test(proof?.configSha256 ?? "")
+  )
+    throw new TypeError("G14 telemetry proof input invalid");
+  const failure = (reason) => ({
+    status: "NOT_PROVEN",
+    reason,
+    runId: proof.runId,
+    candidateSha: proof.candidateSha,
+    configSha256: proof.configSha256,
+  });
+  const sensitive = (value) =>
+    secrets.some(
+      (secret) =>
+        typeof secret === "string" &&
+        secret.length > 0 &&
+        (JSON.stringify(value) ?? "").includes(secret),
+    );
+  const rejectPrivacy = () => {
+    const error = new Error("G14_TELEMETRY_PRIVACY");
+    error.fatal = true;
+    throw error;
+  };
+  const requiredLogs = ["edge-nginx", "orders-service"];
+  const deadline = AbortSignal.timeout(Math.ceil(timeoutMs));
+  const boundedFetch = (url, options) =>
+    fetchImpl(url, {
+      ...options,
+      signal: AbortSignal.any([options.signal, deadline]),
+    });
+  const logsPromise = waitFor(
+    async () => {
+      const rows = await queryLokiLogs({
+        baseUrl: lokiUrl,
+        runId: proof.correlationId,
+        startTimeUs,
+        fetchImpl: boundedFetch,
+      });
+      if (rows.some((row) => containsSensitiveField(row) || sensitive(row)))
+        rejectPrivacy();
+      const matched = rows.filter((row) =>
+        row.service_name === "edge-nginx"
+          ? row.correlation_id === proof.correlationId
+          : row.service_name === "orders-service" &&
+            (row.correlationId === proof.correlationId ||
+              row.req?.correlationId === proof.correlationId),
+      );
+      const counts = Object.fromEntries(
+        requiredLogs.map((role) => [
+          role,
+          matched.filter((row) => row.service_name === role).length,
+        ]),
+      );
+      return requiredLogs.every((role) => counts[role] > 0) ? counts : false;
+    },
+    { timeoutMs, intervalMs, description: "G14 browser CID logs" },
+  );
+  const tracePromise = waitForSameTraceSpans({
+    baseUrl: tempoUrl,
+    traceId: proof.traceId,
+    expectedSpanNames: G14_DURABLE_SPANS,
+    fetchImpl: boundedFetch,
+    timeoutMs,
+    intervalMs,
+    inspectSpan: (span, resource) => {
+      const attributes = [
+        ...(span.attributes ?? []),
+        ...(resource?.attributes ?? []),
+      ];
+      if (
+        attributes.some(({ key }) =>
+          /authorization|password|secret|token|cookie|session|email|phone|address|payload|request[._-]?body/iu.test(
+            key ?? "",
+          ),
+        ) ||
+        sensitive(span) ||
+        sensitive(resource)
+      )
+        rejectPrivacy();
+    },
+  });
+  const [logs, trace] = await Promise.allSettled([logsPromise, tracePromise]);
+  if (logs.status !== "fulfilled" || trace.status !== "fulfilled") {
+    const errors = [logs, trace].filter(
+      (result) => result.status === "rejected",
+    );
+    return failure(
+      errors.some(({ reason }) => reason?.message === "G14_TELEMETRY_PRIVACY")
+        ? "PRIVACY_REJECTED"
+        : "MISSING_OR_QUERY_FAILED",
+    );
+  }
+  if (trace.value.traceRows.length === 0)
+    return failure("MISSING_OR_QUERY_FAILED");
+  const spans = Object.fromEntries(
+    Object.entries(G14_DURABLE_SPANS).map(([role, names]) => [
+      role,
+      names.filter((name) => trace.value.spanInventory[role]?.includes(name)),
+    ]),
+  );
+  return {
+    status: "OBSERVED",
+    runId: proof.runId,
+    candidateSha: proof.candidateSha,
+    configSha256: proof.configSha256,
+    correlationId: proof.correlationId,
+    traceId: proof.traceId,
+    logCounts: logs.value,
+    spans,
+    spanCount: trace.value.traceRows.length,
+  };
 }
 
 export async function queryLokiLogs({
@@ -4845,31 +5026,41 @@ export async function runObservabilityVerification({
             };
           },
         });
-      // This fixture remains a component diagnostic; its synthetic ingress is
-      // never admitted as the browser's correlation or trace evidence.
-      try {
-        const component = await executeLaunchPath();
-        if (
-          component.cleanupVerified !== true ||
-          evidence.launchPathOutage?.status !== "PASS"
-        )
-          throw new Error(
-            "launch component diagnostic cleanup or outage proof failed",
-          );
-        evidence.launchPathComponent = evidence.launchPathProof;
-      } finally {
-        delete evidence.launchPathProof;
-        evidence.launchPathCorrelation = "NOT_PROVEN";
-      }
       if (!config.verification.databaseIsolation.enabled)
         throw new Error(
           "G14 browser correlation requires isolated launch databases",
         );
       const { runBrowserParent } =
         await import("../../verification/launch/v1/scenarios/browser.mjs");
+      let browserTelemetry;
       const child = await runBrowserParent({
         runCorrelation: async (contextPath) => {
           const identity = await validateLaunchContext(contextPath);
+          // This synthetic diagnostic remains separate from the actual browser proof.
+          try {
+            const component = await executeLaunchPath(contextPath);
+            const externalCleanup = validateG14ComponentCleanup(
+              component,
+              identity.context.runId,
+            );
+            if (evidence.launchPathOutage?.status !== "PASS")
+              throw new Error(
+                "launch component diagnostic outage proof failed",
+              );
+            evidence.launchPathComponent = {
+              ...evidence.launchPathProof,
+              purpose: "SYNTHETIC_COMPONENT_DIAGNOSTIC",
+              parentRunId: validatedLaunch.context.runId,
+              parentCandidateSha: validatedLaunch.context.candidateSha,
+              childRunId: identity.context.runId,
+              childCandidateSha: identity.context.candidateSha,
+              childConfigSha256: identity.context.baseConfigSha256,
+              externalCleanup,
+            };
+          } finally {
+            delete evidence.launchPathProof;
+            evidence.launchPathCorrelation = "NOT_PROVEN";
+          }
           const { runManagedRollbackChild } =
             await import("../../verification/launch/v1/scenarios/rollback.mjs");
           const { validateG14BrowserEvidence } =
@@ -4885,6 +5076,7 @@ export async function runObservabilityVerification({
             throw new Error("G14 child project identity invalid");
           let stage = "init";
           let observedProof;
+          let browserTelemetryStartedAtUs;
           let childEnded = false;
           let collectorNeedsRestore = false;
           let collectorTasks = Promise.resolve();
@@ -4966,6 +5158,7 @@ try {
                     });
                   if (childEnded) throw new Error("G14 child already ended");
                   await changeCollector(childLogs, networks);
+                  browserTelemetryStartedAtUs = Date.now() * 1000;
                   stage = "browser-proof";
                   return null;
                 }
@@ -4974,6 +5167,13 @@ try {
                     runId: identity.context.runId,
                     candidateSha: identity.context.candidateSha,
                     configSha256: identity.context.baseConfigSha256,
+                  });
+                  browserTelemetry = await collectG14BrowserTelemetry({
+                    proof: observedProof,
+                    startTimeUs: browserTelemetryStartedAtUs,
+                    lokiUrl: baseUrls.loki,
+                    tempoUrl: baseUrls.tempo,
+                    secrets,
                   });
                   stage = "cleanup";
                   return null;
@@ -5052,6 +5252,7 @@ try {
         correlationId: child.browserChild.proof.correlationId,
         browserRefetchMatched: true,
         ownerCausation: true,
+        telemetrySubproof: browserTelemetry,
         traceStatus: "NOT_PROVEN",
       };
       evidence.limitations.push(

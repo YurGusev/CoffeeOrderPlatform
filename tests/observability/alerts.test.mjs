@@ -36,6 +36,8 @@ import {
   queryLokiLogs,
   waitForOwnedMetricFamilySamples,
   waitForSameTraceSpans,
+  collectG14BrowserTelemetry,
+  validateG14ComponentCleanup,
   waitForConvergenceMetricSamples,
   readSinkEvents,
   durationMilliseconds,
@@ -2351,6 +2353,221 @@ void test("Grafana backend queries require fresh owner samples and exact traces"
     }),
     /did not complete/u,
   );
+});
+
+void test("G14 component requires five child database removals before browser", () => {
+  const runId = "20261030T120000Z-abcdef0";
+  const names = ["customer", "catalog", "pricing", "orders", "integration"]
+    .map(
+      (owner) =>
+        `coffee_verify_${runId.toLowerCase().replace("-", "_")}_${owner}`,
+    )
+    .sort();
+  const cleanup = {
+    verified: true,
+    databases: { verified: true, removed: names, retained: [] },
+    attachment: { routePreserved: true },
+  };
+  const component = { cleanupVerified: true, cleanup };
+  assert.equal(validateG14ComponentCleanup(component, runId), cleanup);
+  for (const altered of [
+    { ...component, cleanupVerified: false },
+    { ...component, cleanup: { ...cleanup, verified: false } },
+    {
+      ...component,
+      cleanup: {
+        ...cleanup,
+        databases: { ...cleanup.databases, removed: names.slice(1) },
+      },
+    },
+    {
+      ...component,
+      cleanup: {
+        ...cleanup,
+        databases: { ...cleanup.databases, retained: [names[0]] },
+      },
+    },
+    {
+      ...component,
+      cleanup: { ...cleanup, attachment: { routePreserved: false } },
+    },
+  ])
+    assert.throws(
+      () => validateG14ComponentCleanup(altered, runId),
+      /cleanup is unverified/u,
+    );
+});
+
+void test("G14 queries actual child telemetry before cleanup and fails closed on missing or private data", async () => {
+  const { runManagedRollbackChild } =
+    await import("../../verification/launch/v1/scenarios/rollback.mjs");
+  const traceId = "a".repeat(32);
+  const cid = "8f53d687-fd3b-47be-b32b-2081d08bc55a";
+  const proof = {
+    correlationId: cid,
+    traceId,
+    runId: "20261030T120000Z-abcdef0",
+    candidateSha: "abcdef0" + "0".repeat(33),
+    configSha256: "c".repeat(64),
+  };
+  const required = {
+    "orders-service": ["Outbox.relay", "Kafka.produce"],
+    "orders-aroma-preparation": [
+      "Kafka.consume",
+      "Inbox.consumeOnce",
+      "Outbox.relay",
+      "Kafka.produce",
+    ],
+    "realtime-gateway": ["Kafka.consume"],
+  };
+  const nowMs = Date.now();
+  const startTimeUs = (nowMs - 1000) * 1000;
+  const events = [];
+  const responses =
+    ({
+      wrongCid = false,
+      empty = false,
+      wrongTrace = false,
+      privateLog = false,
+      privateSpan = false,
+    } = {}) =>
+    async (url) => {
+      if (url.pathname === "/loki/api/v1/query_range") {
+        events.push("loki");
+        const correlation = wrongCid
+          ? "8f53d687-fd3b-47be-b32b-2081d08bc55b"
+          : cid;
+        return new Response(
+          JSON.stringify({
+            status: "success",
+            data: {
+              resultType: "streams",
+              result: ["edge-nginx", "orders-service"].map((role) => ({
+                stream: { service_name: role },
+                values: [
+                  [
+                    String(BigInt(nowMs) * 1000000n),
+                    JSON.stringify({
+                      ...(role === "edge-nginx"
+                        ? { correlation_id: correlation }
+                        : { correlationId: correlation }),
+                      ...(wrongCid ? { unrelated: cid } : {}),
+                      ...(privateLog ? { password: "canary-secret" } : {}),
+                    }),
+                  ],
+                ],
+              })),
+            },
+          }),
+        );
+      }
+      events.push("tempo");
+      return new Response(
+        JSON.stringify({
+          resourceSpans: empty
+            ? []
+            : Object.entries(required).map(([role, names]) => ({
+                resource: {
+                  attributes: [
+                    { key: "service.name", value: { stringValue: role } },
+                  ],
+                },
+                scopeSpans: [
+                  {
+                    spans: names.map((name) => ({
+                      traceId: wrongTrace ? "b".repeat(32) : traceId,
+                      name,
+                      ...(privateSpan
+                        ? {
+                            attributes: [
+                              {
+                                key: "http.request.body",
+                                value: { stringValue: "sensitive" },
+                              },
+                            ],
+                          }
+                        : {}),
+                    })),
+                  },
+                ],
+              })),
+        }),
+      );
+    };
+  const collect = (fetchImpl) =>
+    collectG14BrowserTelemetry({
+      proof,
+      startTimeUs,
+      lokiUrl: "http://loki:3100",
+      tempoUrl: "http://tempo:3200",
+      fetchImpl,
+      timeoutMs: 30,
+      intervalMs: 1,
+      secrets: ["canary-secret"],
+    });
+  const source = `const request=stage=>new Promise((resolve,reject)=>{process.once('message',m=>m.ok?resolve():reject(Error('nack')));process.send({stage});}); await request('init');await request('roles-ready');await request('browser-proof');await request('cleanup');process.disconnect();`;
+  let result;
+  await runManagedRollbackChild({
+    args: ["--input-type=module", "-e", source],
+    cwd: process.cwd(),
+    env: process.env,
+    timeoutMs: 5000,
+    onIpc: async ({ stage }) => {
+      if (stage === "browser-proof") {
+        result = await collect(responses());
+        events.push("proof-ack");
+      }
+      if (stage === "cleanup") events.push("cleanup");
+      return null;
+    },
+  });
+  await assert.rejects(
+    waitForSameTraceSpans({
+      baseUrl: "http://tempo:3200",
+      traceId,
+      expectedSpanNames: {},
+      fetchImpl: responses(),
+      timeoutMs: 30,
+      intervalMs: 1,
+    }),
+    /nonempty role spans/u,
+  );
+  assert.equal(result.status, "OBSERVED");
+  assert.ok(
+    events.indexOf("loki") < events.indexOf("proof-ack") &&
+      events.indexOf("tempo") < events.indexOf("proof-ack") &&
+      events.indexOf("proof-ack") < events.indexOf("cleanup"),
+  );
+  assert.equal(JSON.stringify(result).includes("canary-secret"), false);
+  assert.deepEqual(result.logCounts, { "edge-nginx": 1, "orders-service": 1 });
+  events.length = 0;
+  await runManagedRollbackChild({
+    args: ["--input-type=module", "-e", source],
+    cwd: process.cwd(),
+    env: process.env,
+    timeoutMs: 5000,
+    onIpc: async ({ stage }) => {
+      if (stage === "browser-proof") {
+        result = await collect(responses({ wrongCid: true }));
+        events.push("proof-ack");
+      }
+      if (stage === "cleanup") events.push("cleanup");
+      return null;
+    },
+  });
+  assert.equal(result.status, "NOT_PROVEN");
+  assert.ok(events.indexOf("proof-ack") < events.indexOf("cleanup"));
+  for (const change of [
+    { wrongCid: true },
+    { empty: true },
+    { wrongTrace: true },
+  ])
+    assert.equal((await collect(responses(change))).status, "NOT_PROVEN");
+  for (const change of [{ privateLog: true }, { privateSpan: true }]) {
+    const failure = await collect(responses(change));
+    assert.equal(failure.reason, "PRIVACY_REJECTED");
+    assert.equal(JSON.stringify(failure).includes("canary-secret"), false);
+  }
 });
 
 void test("convergence proof accepts both actual recovery metric values and rejects another owner", async () => {
