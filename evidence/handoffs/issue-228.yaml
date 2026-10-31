@@ -6,6 +6,8 @@ stackedDependencies:
     note: Принятая develop включена отдельным локальным merge.
   - commit: b308bb6e31595ca5927abfbb117021c687f7bf55
     note: Полный локальный merge #222 для reuse OIDC lifecycle; принятие #222 не подтверждено и необходимо до PR и merge #228.
+  - commit: e8426e1f8ba5749ff184c23c25dae5f2de771cc9
+    note: Обновление #222 с develop 70224f3; принятие #222 и runtime proof остаются обязательными.
 outputs:
   - artifact: config/platform.yaml
     sha256: a1a78e59e483dcc4a28a955aaa316d297d9068d6b17c4b7b958b3ab0ec32ab0a
@@ -23,10 +25,10 @@ outputs:
     sha256: f4b83a3aef8db624f8552e254614ef32116ef9f4c69d33e1d84af2331a7c8f16
     consumers: [13]
   - artifact: docs/launch/30_FRONTEND_OPERATOR_RUNBOOK.md
-    sha256: cf90b28468cdfb45cf50c18e4667beee6ba0d66285cce5c4d2fbff810295fb10
+    sha256: abbc1f6b4ee1f4abcba5157750ff7335bd3500b420899fe960f51faca3a45bfd
     consumers: [13]
   - artifact: tests/config/observability-bootstrap.test.mjs
-    sha256: db02716788cdc91556dac0e5e21a4a606dd1d01660df6c02c7f067c7b48693ca
+    sha256: 3bfb56e2d3201ea75274de5058c978188847ea05c9a8eb9c978038b13bad734b
     consumers: [13]
   - artifact: tests/realtime/fixtures/harness.test.mjs
     sha256: 3246d676c412a6f8f868ed45e168bab1104d58ad8be88a33fc321cdb1c48cb89
@@ -44,8 +46,9 @@ outputs:
     sha256: 07ec716860b0d3ce73661b8badbf3c250b5e826622c4ac52853518d83216f1d5
     consumers: [13]
   - artifact: verification/launch/v1/scenarios/browser.mjs
-    sha256: a60c68fc60378aef1a22559386a79d335a399b3aca0021f39fd92a3b7cc12f87
+    sha256: 5b1c2e8b3e03d202f0a71db1c616553625d3601f1e0e30d9b09bdbe849ace464
     consumers: [13]
+verificationBasis: Локальные результаты до включения e842 относятся к дереву 4696a4c; повторные интеграционные проверки фиксируются отдельно.
 verification:
   - command: "node --test tests/config/platform-config.test.mjs"
     result: "38 pass / 0 fail / 0 skip; 27.584 s; log SHA-256 b731c6e633a008ba5477a12f20d0a3d018e359fca1f160e678c7647b56b2262b"
@@ -60,6 +63,19 @@ verification:
 independentReview:
   source: Существенных source findings не обнаружено; native runtime не проверялся.
   focusedTests: "8 pass / 0 fail / 0 skip; 0.614 s; log SHA-256 f5b1a4feba17bacdaaf10139d4d295f113e1782c8aedd3284f524b3ce3996865"
+integrationVerification:
+  candidateCommit: aecaf1f
+  checks:
+    - command: "node --test --test-name-pattern='realtime qualification policy' tests/config/platform-config.test.mjs"
+      result: "1 pass / 0 fail / 0 skip; 2.330 s; log SHA-256 b43da965815b1d1671120bfc937710254f53fe45c6ead343db418226df696015"
+    - command: "node --test --test-name-pattern='browser correlation executes the child lifecycle|browser correlation admission verifies' tests/config/observability-bootstrap.test.mjs"
+      result: "2 pass / 0 fail / 0 skip; 77.323 s; log SHA-256 95da479178aa862f71f717a83803883dcd8e5d70aed9e9f0c3cd7939302bcef0"
+    - command: "pnpm exec tsc -b packages/platform-migrations --pretty false"
+      result: "exit 0; log SHA-256 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    - command: "pnpm exec tsc -b packages/platform-http apps/aroma-gateway apps/orders-service --pretty false"
+      result: "exit 0; log SHA-256 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    - command: "node --test --test-name-pattern='external recovery projection accepts canonical mapping|catalog slice preserves secret ownership' tests/compose/topology.test.mjs"
+      result: "2 pass / 0 fail / 0 skip; 0.995 s; log SHA-256 b5cf8c4dd61e3f07c8c4b9d88b7b6c0aa77d60e97ab02ad9bedfbaa8b3dc9fe5"
 limitations:
   - "Кандидат не принят: native images и полный 1800000 ms профиль фактически NOT_RUN; synthetic tests не являются qualification PASS."
   - "Full-system G14, реальные OrderConfirm и production IdP не доказаны этим изменением; без отдельного актуального qualification PASS merge #13 запрещён."
