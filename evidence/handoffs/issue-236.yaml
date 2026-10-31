@@ -6,6 +6,10 @@ inputs:
     acceptedMergeCommit: d3b5a29fb0fcfff22d167e368c65566dc382af8d
     artifact: evidence/handoffs/issue-9.yaml
     sha256: f68636a4b7f4e1daee73f5f5334e421b44c431cfdce25d92a233b5f17b0ad96e
+pendingDependencies:
+  - issue: 222
+    localCommit: e8426e1f8ba5749ff184c23c25dae5f2de771cc9
+    status: awaiting-acceptance
 outputs:
   - artifact: tools/browser-proof.mjs
     sha256: 03e51c8e63dbff60181279e6a66ebb6ddf5ce966635c1f9045dc4212cb3fd0ee
@@ -14,28 +18,28 @@ outputs:
     sha256: 3e07d1e210327054329ff57580e0ce901bc6646fbb97a9e57e27b9d1295effc0
     consumers: [13]
   - artifact: tools/compose-smoke.mjs
-    sha256: 63512e5508386eb4445a051677b75f3e0956bc2ed613fa4738aff4c081a1c7fb
+    sha256: 4a910ee422c31d48ab9bbdfc63138b0dc31b44fe7c1d0b655a78086f5afb8cc4
     consumers: [13]
   - artifact: tools/observability/verify.mjs
     sha256: cc23ec8f5aed86c2142d356235673c977d335980c2b6d2f1fa62e61691aa8cc1
     consumers: [13]
   - artifact: verification/launch/v1/scenarios/browser.mjs
-    sha256: 21d2951b1785fb7943caaa049c3693982b332cb7966e28bc14d4ebecdab31f26
+    sha256: d20460c2302ba7fce02ee1cee8d08bad2004bbf078e597071557428b7e05bb77
     consumers: [13]
   - artifact: verification/launch/v1/run.mjs
     sha256: 077581063a136f622ed5ebc245fabea0c6e0566b301bec30fa01836894f096dc
     consumers: [13]
   - artifact: tests/tools/browser-proof.test.mjs
-    sha256: 26be0356912f29872fa67c20f45835fa53a5ce065559f4ba3a8f2f9c1f9c6a42
+    sha256: 045dd3bc6acc24f491e0836b72a95067afcf5532d880d7c206aeaad88743b63d
     consumers: [13]
   - artifact: tests/tools/browser-owner-evidence.test.mjs
     sha256: 2ad5fe7e81710f0a271ae018653e6ad784933bbf1e0f23db89d2642bb90d38d6
     consumers: [13]
   - artifact: tests/config/observability-bootstrap.test.mjs
-    sha256: b5016f3df64e8b1a267d8576fe8528534934d48d1064e7bbab538438b1be552d
+    sha256: c1f0dc74bcaba8b3fb8f92be1b01619d39ffc6b31f6c787a069781b6f4ac096c
     consumers: [13]
   - artifact: tests/compose/topology.test.mjs
-    sha256: b2729e61a25c380d39f89e453cca306dfa75e88834f208269f3a665574337900
+    sha256: 558860bdf8965c1ea2ce680e7b41f8380551be182e41b82af9643929aa50f9aa
     consumers: [13]
   - artifact: docs/operations/observability.md
     sha256: 2b7e2a3c3340387b246243ffeeece09f54ec24b975eab88801c196aa06aba5b2
@@ -98,6 +102,47 @@ reviewVerification:
     result: "passed"
     exitCode: 0
     log: /home/yurgusev/.cache/coffee-launch-delivery/issue-236-review/diff-check-final.log
+    logSha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+baselineVerification:
+  - command: "umask 077 && node --test tests/tools/browser-proof.test.mjs tests/tools/browser-owner-evidence.test.mjs"
+    result: "passed: 37 tests"
+    exitCode: 0
+    log: /home/yurgusev/.cache/coffee-launch-delivery/issue-236-baseline/browser.log
+    logSha256: 143e2e4692f1112793b58d464cc47006ad48a193d77ea96dc2d4a34d2fc398f5
+  - command: "umask 077 && node --test --test-name-pattern='browser correlation (executes|admission)' tests/config/observability-bootstrap.test.mjs"
+    result: "passed: 2 tests"
+    exitCode: 0
+    log: /home/yurgusev/.cache/coffee-launch-delivery/issue-236-baseline/lifecycle.log
+    logSha256: ac12354d3bf65d9c7ffd833ea20b95b54242332be783989024cd0f7ddc4b75c5
+  - command: "umask 077 && node --test --test-name-pattern='G14 seals the child config|G14 provider boundary|external recovery projection|external PostgreSQL preflight' tests/compose/topology.test.mjs"
+    result: "passed: 4 tests"
+    exitCode: 0
+    log: /home/yurgusev/.cache/coffee-launch-delivery/issue-236-baseline/topology.log
+    logSha256: b39d4ee52ab7f175fdd2cb9ebd238d994bf32c7f512b63d7b156ec7cc7a64400
+  - command: "umask 077 && node --test --test-name-pattern='external PostgreSQL attachment cleanup' tests/compose/topology.test.mjs"
+    result: "passed: 1 test"
+    exitCode: 0
+    log: /home/yurgusev/.cache/coffee-launch-delivery/issue-236-baseline/attachment.log
+    logSha256: 66ac8eca009eff9b304ef93b00a9874b9e8dd817c9e731502857794dd636512b
+  - command: "umask 077 && pnpm exec oxlint --type-aware --deny-warnings verification/launch/v1/scenarios/browser.mjs tests/tools/browser-proof.test.mjs tests/config/observability-bootstrap.test.mjs tests/compose/topology.test.mjs"
+    result: "passed"
+    exitCode: 0
+    log: /home/yurgusev/.cache/coffee-launch-delivery/issue-236-baseline/lint.log
+    logSha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+  - command: "umask 077 && pnpm exec prettier --check verification/launch/v1/scenarios/browser.mjs tests/tools/browser-proof.test.mjs tests/config/observability-bootstrap.test.mjs tests/compose/topology.test.mjs"
+    result: "passed"
+    exitCode: 0
+    log: /home/yurgusev/.cache/coffee-launch-delivery/issue-236-baseline/format.log
+    logSha256: 17aa973d3f004560237d9a95171210b0671deff23d61628eecf7322ff5938f20
+  - command: "umask 077 && pnpm exec tsc -b apps/web --pretty false"
+    result: "passed"
+    exitCode: 0
+    log: /home/yurgusev/.cache/coffee-launch-delivery/issue-236-baseline/tsc.log
+    logSha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+  - command: "umask 077 && git diff --check"
+    result: "passed"
+    exitCode: 0
+    log: /home/yurgusev/.cache/coffee-launch-delivery/issue-236-baseline/diff.log
     logSha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
 limitations:
   - >-

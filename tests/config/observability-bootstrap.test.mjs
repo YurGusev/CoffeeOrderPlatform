@@ -8157,9 +8157,9 @@ void test("browser correlation executes the child lifecycle and preserves early 
           verified: true,
           databases: { verified: true, removed: databases, retained: [] },
           attachment: {
-            baselineAttached: false,
-            attempted: true,
-            removed: true,
+            baselineAttached: true,
+            attempted: false,
+            removed: false,
             routePreserved: true,
           },
         },
@@ -8190,6 +8190,12 @@ void test("browser correlation executes the child lifecycle and preserves early 
   };
   const result = await runBrowserParent({ runCorrelation: callback });
   assert.equal(result.browserChild.childCandidateSha, observed.candidateSha);
+  assert.deepEqual(result.browserChild.cleanup.attachment, {
+    baselineAttached: true,
+    attempted: false,
+    removed: false,
+    routePreserved: true,
+  });
   assert.equal(await stat(observed.checkoutDir).catch(() => null), null);
   assert.equal(await stat(observed.evidenceDir).catch(() => null), null);
   assert.equal(await stat(synthetic).catch(() => null), null);

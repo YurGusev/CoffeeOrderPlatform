@@ -324,7 +324,12 @@ void test("G14 evidence and cleanup reject extra fields, stale version and unkno
     externalCleanup: {
       verified: true,
       databases: { verified: true, removed: names, retained: [] },
-      attachment: { attempted: true, removed: true, routePreserved: true },
+      attachment: {
+        baselineAttached: false,
+        attempted: true,
+        removed: true,
+        routePreserved: true,
+      },
     },
   };
   assert.equal(
@@ -337,13 +342,53 @@ void test("G14 evidence and cleanup reject extra fields, stale version and unkno
       { runId: RUN_ID },
     ),
   );
+  for (const baselineAttached of [false, true]) {
+    for (const attempted of [false, true]) {
+      for (const removed of [false, true]) {
+        const externalCleanup = {
+          ...cleanup.externalCleanup,
+          attachment: {
+            baselineAttached,
+            attempted,
+            removed,
+            routePreserved: true,
+          },
+        };
+        const candidate = { ...cleanup, externalCleanup };
+        if (attempted === !baselineAttached && removed === !baselineAttached)
+          assert.equal(
+            validateG14ChildCleanup(candidate, { runId: RUN_ID }),
+            externalCleanup,
+          );
+        else
+          assert.throws(() =>
+            validateG14ChildCleanup(candidate, { runId: RUN_ID }),
+          );
+      }
+    }
+  }
   assert.throws(() =>
     validateG14ChildCleanup(
       {
         ...cleanup,
         externalCleanup: {
           ...cleanup.externalCleanup,
-          attachment: { attempted: true, removed: false, routePreserved: true },
+          attachment: { attempted: true, removed: true, routePreserved: true },
+        },
+      },
+      { runId: RUN_ID },
+    ),
+  );
+  assert.throws(() =>
+    validateG14ChildCleanup(
+      {
+        ...cleanup,
+        externalCleanup: {
+          ...cleanup.externalCleanup,
+          attachment: {
+            ...cleanup.externalCleanup.attachment,
+            routePreserved: false,
+          },
         },
       },
       { runId: RUN_ID },

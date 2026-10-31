@@ -1086,8 +1086,14 @@ export function validateG14ChildCleanup(result, childContext) {
     external.databases?.verified !== true ||
     !isDeepStrictEqual(external.databases.removed, names) ||
     !isDeepStrictEqual(external.databases.retained, []) ||
-    external.attachment?.attempted !== true ||
-    external.attachment.removed !== true ||
+    !(
+      (external.attachment?.baselineAttached === false &&
+        external.attachment.attempted === true &&
+        external.attachment.removed === true) ||
+      (external.attachment?.baselineAttached === true &&
+        external.attachment.attempted === false &&
+        external.attachment.removed === false)
+    ) ||
     external.attachment.routePreserved !== true
   )
     fail("G14_BROWSER_CORRELATION_CLEANUP_INVALID");
