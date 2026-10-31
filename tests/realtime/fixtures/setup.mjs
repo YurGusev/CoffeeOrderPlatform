@@ -33,10 +33,24 @@ const validateLaunchContext = async (...args) =>
   (
     await import("../../../verification/launch/v1/report.mjs")
   ).validateLaunchContext(...args);
-const loadVerifiedGateImage = async (...args) =>
-  (
+export const loadVerifiedGateImage = async ({ contextFile, ...options }) => {
+  const launchPath = contextFile
+    ? await readFixtureLaunchPath({ launchContextFile: contextFile })
+    : undefined;
+  const image = await (
     await import("../../../tools/verified-infrastructure-image.mjs")
-  ).loadVerifiedGateImage(...args);
+  ).loadVerifiedGateImage({
+    ...options,
+    ...(launchPath ? { contextFile: launchPath.parentContextPath } : {}),
+  });
+  return launchPath
+    ? Object.freeze({
+        ...image,
+        launchIdentity: launchPath.launchIdentity,
+        lineageReceiptSha256: launchPath.lineageReceiptSha256,
+      })
+    : image;
+};
 const removeVerifiedGateImage = async (...args) =>
   (
     await import("../../../tools/verified-infrastructure-image.mjs")
@@ -250,6 +264,15 @@ async function readFixtureLaunchPath(launchPath) {
     contextPath,
     baseCandidateSha: resources.g15ParentCandidateSha,
   });
+  const parentContextPath = resolve(resources.g08PreparationContextPath);
+  const parent = await validateLaunchContext(parentContextPath);
+  const parentInfo = await stat(parentContextPath);
+  assert.equal(parentInfo.uid, process.getuid());
+  assert.equal(parentInfo.mode & 0o777, 0o400);
+  assert.equal(parent.candidateRoot, active.sourceRoot);
+  assert.equal(parent.context.runId, resources.g15ParentRunId);
+  assert.equal(parent.context.candidateSha, resources.g15ParentCandidateSha);
+  assert.equal(parent.context.baseConfigSha256, lineage.baseConfigSha256);
   const launchIdentity = {
     schemaVersion: active.context.schemaVersion,
     runId: active.context.runId,
@@ -267,6 +290,7 @@ async function readFixtureLaunchPath(launchPath) {
   );
   return {
     contextPath,
+    parentContextPath,
     candidateRoot: active.candidateRoot,
     parentCandidateRoot: resources.g15ParentCheckoutRoot,
     databaseOwnershipFile: join(

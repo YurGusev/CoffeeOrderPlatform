@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import fsPromises from "node:fs/promises";
+import childProcess from "node:child_process";
 import { execFileSync, spawnSync } from "node:child_process";
 import {
   createHash,
@@ -27,7 +28,7 @@ import { readFileSync } from "node:fs";
 import { syncBuiltinESMExports } from "node:module";
 import https from "node:https";
 import { tmpdir } from "node:os";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { dirname, join, resolve } from "node:path";
 import test from "node:test";
 import { dump as dumpYaml, load as parseYaml } from "js-yaml";
@@ -82,7 +83,10 @@ import {
   validateBrowserFixtureGitLineage,
   validateBrowserFixtureLineage,
 } from "../../tools/config-bootstrap/browser-fixture.mjs";
-import { verifyBrowserChildBundle } from "../../verification/launch/v1/scenarios/browser.mjs";
+import {
+  validateBrowserCorrelation,
+  verifyBrowserChildBundle,
+} from "../../verification/launch/v1/scenarios/browser.mjs";
 import { runMigrationStage } from "../../verification/launch/v1/scenarios/migrations.mjs";
 import { validateLaunchContext } from "../../verification/launch/v1/report.mjs";
 import { assertScopedSecrets } from "../../packages/platform-runtime/dist/index.js";
@@ -138,12 +142,37 @@ const sample = {
     logging: { maxSizeMiB: 8, maxFiles: 3 },
     diskWatermarkPercent: 80,
     externalReportingEnabled: false,
-    alerts: {evaluationIntervalMs: 60000, diskUsage: {forMs: 0}, sinkMemoryMiB: 128},
-    grafana: {endpoint: "http://grafana:3000", memoryLimitMiB: 512, maxDiskBytes: 1073741824},
-    loki: {endpoint: "http://loki:3100", memoryLimitMiB: 512, maxDiskBytes: 1073741824, retentionDays: 3},
-    prometheus: {endpoint: "http://prometheus:9090", memoryLimitMiB: 512, maxDiskBytes: 1073741824, retentionDays: 3, outOfOrderWindowMs: 1800000},
-    tempo: {endpoint: "http://tempo:3200", otlpEndpoint: "http://tempo:4318", memoryLimitMiB: 768, maxDiskBytes: 1073741824, retentionDays: 3, finishOnShutdownTimeoutMs: 10000},
-
+    alerts: {
+      evaluationIntervalMs: 60000,
+      diskUsage: { forMs: 0 },
+      sinkMemoryMiB: 128,
+    },
+    grafana: {
+      endpoint: "http://grafana:3000",
+      memoryLimitMiB: 512,
+      maxDiskBytes: 1073741824,
+    },
+    loki: {
+      endpoint: "http://loki:3100",
+      memoryLimitMiB: 512,
+      maxDiskBytes: 1073741824,
+      retentionDays: 3,
+    },
+    prometheus: {
+      endpoint: "http://prometheus:9090",
+      memoryLimitMiB: 512,
+      maxDiskBytes: 1073741824,
+      retentionDays: 3,
+      outOfOrderWindowMs: 1800000,
+    },
+    tempo: {
+      endpoint: "http://tempo:3200",
+      otlpEndpoint: "http://tempo:4318",
+      memoryLimitMiB: 768,
+      maxDiskBytes: 1073741824,
+      retentionDays: 3,
+      finishOnShutdownTimeoutMs: 10000,
+    },
   },
 };
 const logs = [
@@ -162,31 +191,61 @@ const logs = [
 void test("infrastructure scopes separate Collector and Grafana credentials", async () => {
   const catalog = await loadServiceCatalog(REPO_ROOT);
   assert.deepEqual(catalog.infrastructureSecretScopes, {
-    "otel-collector": [{name: "exporterToken", ref: "telemetry.exporterToken"}],
-    "grafana-bootstrap": [{name: "admin-secret", ref: "telemetry.grafanaAdmin"}],
+    "otel-collector": [
+      { name: "exporterToken", ref: "telemetry.exporterToken" },
+    ],
+    "grafana-bootstrap": [
+      { name: "admin-secret", ref: "telemetry.grafanaAdmin" },
+    ],
   });
-  assert.deepEqual(await infrastructureSecretEntries("grafana-bootstrap", {root: REPO_ROOT}), [["admin-secret", "telemetry.grafanaAdmin"]]);
+  assert.deepEqual(
+    await infrastructureSecretEntries("grafana-bootstrap", { root: REPO_ROOT }),
+    [["admin-secret", "telemetry.grafanaAdmin"]],
+  );
   const root = await mkdtemp("/dev/shm/coffee-observability-catalog-");
   try {
-    await mkdir(`${root}/config`, {recursive: true});
-    await cp(`${REPO_ROOT}/config/service-catalog.schema.json`, `${root}/config/service-catalog.schema.json`);
-    catalog.infrastructureSecretScopes["otel-collector"].push({name: "admin-secret", ref: "telemetry.grafanaAdmin"});
-    await writeFile(`${root}/config/service-catalog.json`, JSON.stringify(catalog));
+    await mkdir(`${root}/config`, { recursive: true });
+    await cp(
+      `${REPO_ROOT}/config/service-catalog.schema.json`,
+      `${root}/config/service-catalog.schema.json`,
+    );
+    catalog.infrastructureSecretScopes["otel-collector"].push({
+      name: "admin-secret",
+      ref: "telemetry.grafanaAdmin",
+    });
+    await writeFile(
+      `${root}/config/service-catalog.json`,
+      JSON.stringify(catalog),
+    );
     await assert.rejects(loadServiceCatalog(root), /CONFIG-SCHEMA/u);
-  } finally { await rm(root, {recursive: true, force: true}); }
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });
 
 void test("backend configs replace readonly files on a second generation", async () => {
   const dir = await mkdtemp("/dev/shm/coffee-observability-config-");
   try {
-    const first = await writeBackendConfigs(dir, {loki: {retention: "old"}, alerts: {version: 1}});
+    const first = await writeBackendConfigs(dir, {
+      loki: { retention: "old" },
+      alerts: { version: 1 },
+    });
     assert.equal((await stat(first.loki)).mode & 0o777, 0o444);
-    const second = await writeBackendConfigs(dir, {loki: {retention: "new"}, alerts: {version: 2}});
+    const second = await writeBackendConfigs(dir, {
+      loki: { retention: "new" },
+      alerts: { version: 2 },
+    });
     assert.deepEqual(first, second);
-    assert.deepEqual(parseYaml(await readFile(second.loki, "utf8")), {retention: "new"});
-    assert.deepEqual(parseYaml(await readFile(second.alerts, "utf8")), {version: 2});
+    assert.deepEqual(parseYaml(await readFile(second.loki, "utf8")), {
+      retention: "new",
+    });
+    assert.deepEqual(parseYaml(await readFile(second.alerts, "utf8")), {
+      version: 2,
+    });
     assert.equal((await stat(second.loki)).mode & 0o777, 0o444);
-  } finally { await rm(dir, {recursive: true, force: true}); }
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
 });
 
 void test("bootstrap probe is an executable matching the BOM SHA-256", async () => {
@@ -205,13 +264,41 @@ void test("bootstrap probe is an executable matching the BOM SHA-256", async () 
 
 void test("observability health probes all services with the configured timeout", async () => {
   const urls = [];
-  const results = await checkObservabilityHealth({config: sample, collectorProbe: () => true, fetchImpl: async (url, options) => {
-    assert.ok(url instanceof URL); urls.push(url.href); assert.ok(options.signal); return {ok: true, status: 200};
-  }});
-  assert.deepEqual(results.map(result => result.name), ["otel-collector", "grafana", "loki", "prometheus", "tempo"]);
-  assert.deepEqual(urls, ["http://grafana:3000/api/health", "http://loki:3100/ready", "http://prometheus:9090/-/ready", "http://tempo:3200/ready"]);
-  await assert.rejects(checkObservabilityHealth({config: sample, fetchImpl: async () => ({ok: true, status: 200})}), /loopback probe is required/u);
-  await assert.rejects(checkObservabilityHealth({config: sample, collectorProbe: () => false, fetchImpl: async () => ({ok: true, status: 200})}), /loopback probe failed/u);
+  const results = await checkObservabilityHealth({
+    config: sample,
+    collectorProbe: () => true,
+    fetchImpl: async (url, options) => {
+      assert.ok(url instanceof URL);
+      urls.push(url.href);
+      assert.ok(options.signal);
+      return { ok: true, status: 200 };
+    },
+  });
+  assert.deepEqual(
+    results.map((result) => result.name),
+    ["otel-collector", "grafana", "loki", "prometheus", "tempo"],
+  );
+  assert.deepEqual(urls, [
+    "http://grafana:3000/api/health",
+    "http://loki:3100/ready",
+    "http://prometheus:9090/-/ready",
+    "http://tempo:3200/ready",
+  ]);
+  await assert.rejects(
+    checkObservabilityHealth({
+      config: sample,
+      fetchImpl: async () => ({ ok: true, status: 200 }),
+    }),
+    /loopback probe is required/u,
+  );
+  await assert.rejects(
+    checkObservabilityHealth({
+      config: sample,
+      collectorProbe: () => false,
+      fetchImpl: async () => ({ ok: true, status: 200 }),
+    }),
+    /loopback probe failed/u,
+  );
 });
 
 void test("Collector config ownership is changed only by pinned Node with CAP_CHOWN and retains mode 0400", () => {
@@ -231,7 +318,14 @@ void test("Collector config ownership is changed only by pinned Node with CAP_CH
     mode: "0400",
     verified: true,
   });
-  ensureCollectorConfigOwnership({collectorConfigPath: "/dev/shm/config", nodeImage: "sha256:" + "a".repeat(64), runDocker: args => { assert.ok(args.includes("sha256:" + "a".repeat(64))); return '{"uid":0,"gid":0,"mode":"0400"}'; }});
+  ensureCollectorConfigOwnership({
+    collectorConfigPath: "/dev/shm/config",
+    nodeImage: "sha256:" + "a".repeat(64),
+    runDocker: (args) => {
+      assert.ok(args.includes("sha256:" + "a".repeat(64)));
+      return '{"uid":0,"gid":0,"mode":"0400"}';
+    },
+  });
   assert.equal(calls[0].timeout, 10000);
   assert.ok(
     calls[0].args.includes("--network") && calls[0].args.includes("none"),
@@ -303,34 +397,120 @@ void test("observability generator rejects a symlink output directory without ch
 });
 
 void test("observability provenance includes all pinned images, bounded storage and no credentials", async () => {
-  const imageRefs = Object.fromEntries(["otelCollectorImage", "grafanaImage", "lokiImage", "prometheusImage", "tempoImage", "nodeImage"].map(name => [name, `fixture@sha256:${"a".repeat(64)}`]));
+  const imageRefs = Object.fromEntries(
+    [
+      "otelCollectorImage",
+      "grafanaImage",
+      "lokiImage",
+      "prometheusImage",
+      "tempoImage",
+      "nodeImage",
+    ].map((name) => [name, `fixture@sha256:${"a".repeat(64)}`]),
+  );
   imageRefs.bootstrapProbeSha256 = "b".repeat(64);
-  const storageVolumes = Object.fromEntries(["grafana", "loki", "prometheus", "tempo"].map(name => [name, `coffee-test-${name}-data`]));
-  const alertSinkImage = {imageId: `sha256:${"d".repeat(64)}`, receiptSha256: "e".repeat(64), candidateSha: "f".repeat(40), runId: "fixture"};
-  const grafanaImage = {imageId: `sha256:${"1".repeat(64)}`, receiptSha256: "2".repeat(64), candidateSha: "3".repeat(40), runId: "fixture"};
-  const provenance = await createObservabilityProvenance({root: REPO_ROOT, config: sample, imageRefs, grafanaImage, alertSinkImage, logFiles: logs, storageVolumes, collectorConfigSha256: "c".repeat(64)});
+  const storageVolumes = Object.fromEntries(
+    ["grafana", "loki", "prometheus", "tempo"].map((name) => [
+      name,
+      `coffee-test-${name}-data`,
+    ]),
+  );
+  const alertSinkImage = {
+    imageId: `sha256:${"d".repeat(64)}`,
+    receiptSha256: "e".repeat(64),
+    candidateSha: "f".repeat(40),
+    runId: "fixture",
+  };
+  const grafanaImage = {
+    imageId: `sha256:${"1".repeat(64)}`,
+    receiptSha256: "2".repeat(64),
+    candidateSha: "3".repeat(40),
+    runId: "fixture",
+  };
+  const provenance = await createObservabilityProvenance({
+    root: REPO_ROOT,
+    config: sample,
+    imageRefs,
+    grafanaImage,
+    alertSinkImage,
+    logFiles: logs,
+    storageVolumes,
+    collectorConfigSha256: "c".repeat(64),
+  });
   assert.deepEqual(provenance.storageVolumes, storageVolumes);
-  assert.deepEqual(Object.keys(provenance.images), ["otelCollector", "grafanaBase", "loki", "prometheus", "tempo", "nodeHelper"]);
+  assert.deepEqual(Object.keys(provenance.images), [
+    "otelCollector",
+    "grafanaBase",
+    "loki",
+    "prometheus",
+    "tempo",
+    "nodeHelper",
+  ]);
   assert.equal(provenance.images.grafanaBase, imageRefs.grafanaImage);
-  const admitted = await createObservabilityProvenance({root: REPO_ROOT, config: sample, imageRefs, grafanaImage, alertSinkImage, logFiles: logs, storageVolumes, collectorConfigSha256: "c".repeat(64), nodeHelperImage: alertSinkImage.imageId});
+  const admitted = await createObservabilityProvenance({
+    root: REPO_ROOT,
+    config: sample,
+    imageRefs,
+    grafanaImage,
+    alertSinkImage,
+    logFiles: logs,
+    storageVolumes,
+    collectorConfigSha256: "c".repeat(64),
+    nodeHelperImage: alertSinkImage.imageId,
+  });
   assert.equal(admitted.images.nodeHelper, alertSinkImage.imageId);
   assert.deepEqual(provenance.grafanaImage, grafanaImage);
   assert.deepEqual(provenance.alertSinkImage, alertSinkImage);
   assert.equal(provenance.limits.loki.maxDiskBytes, 1073741824);
-  assert.doesNotMatch(JSON.stringify(provenance), /producer-token|admin-secret/u);
+  assert.doesNotMatch(
+    JSON.stringify(provenance),
+    /producer-token|admin-secret/u,
+  );
 });
 
 void test("backend ownership helper refuses foreign volumes before changing ownership", () => {
-  const storageVolumes = Object.fromEntries(["grafana", "loki", "prometheus", "tempo"].map(name => [name, `coffee-test-${name}-data`]));
+  const storageVolumes = Object.fromEntries(
+    ["grafana", "loki", "prometheus", "tempo"].map((name) => [
+      name,
+      `coffee-test-${name}-data`,
+    ]),
+  );
   const calls = [];
   const nodeImage = `node:fixture@sha256:${"a".repeat(64)}`;
-  const runDocker = args => {
+  const runDocker = (args) => {
     calls.push(args);
-    if (args[0] === "volume") return JSON.stringify([{Driver: "local", Labels: {"coffee.owner": args[2].includes("tempo") ? "foreign" : "operations", "coffee.lifecycle": "fixture"}, Options: {type: "ext4", o: "nodev,nosuid,noexec", device: "/dev/loop1"}}]);
+    if (args[0] === "volume")
+      return JSON.stringify([
+        {
+          Driver: "local",
+          Labels: {
+            "coffee.owner": args[2].includes("tempo")
+              ? "foreign"
+              : "operations",
+            "coffee.lifecycle": "fixture",
+          },
+          Options: {
+            type: "ext4",
+            o: "nodev,nosuid,noexec",
+            device: "/dev/loop1",
+          },
+        },
+      ]);
     throw new Error("unexpected mutation");
   };
-  assert.throws(() => ensureBackendOwnership({storageVolumes, grafanaAdminSecretPath: "/tmp/admin-secret", nodeImage, runDocker}), /unrelated telemetry volume/u);
-  assert.equal(calls.some(args => args[0] === "run"), false);
+  assert.throws(
+    () =>
+      ensureBackendOwnership({
+        storageVolumes,
+        grafanaAdminSecretPath: "/tmp/admin-secret",
+        nodeImage,
+        runDocker,
+      }),
+    /unrelated telemetry volume/u,
+  );
+  assert.equal(
+    calls.some((args) => args[0] === "run"),
+    false,
+  );
 });
 
 void test("Collector config accepts only exact selected log files and bounds export", () => {
@@ -476,18 +656,41 @@ void test("Collector config accepts only exact selected log files and bounds exp
   assert.equal(minimalConfig.receivers.nginx, undefined);
   assert.equal(minimalConfig.processors["transform/nginx_resource"], undefined);
   assert.equal(minimalConfig.service.pipelines["metrics/nginx"], undefined);
-  const emptyConfig = createCollectorConfig({config: sample, logFiles: [], exporterToken: "producer-token"});
+  const emptyConfig = createCollectorConfig({
+    config: sample,
+    logFiles: [],
+    exporterToken: "producer-token",
+  });
   assert.equal(emptyConfig.receivers.filelog, undefined);
   assert.equal(emptyConfig.receivers.nginx, undefined);
   assert.equal(emptyConfig.service.pipelines.logs, undefined);
   assert.equal(emptyConfig.extensions.file_storage, undefined);
-  assert.equal(emptyConfig.receivers.otlp.protocols.http.auth.authenticator, "bearertokenauth/server");
-  assert.deepEqual(Object.keys(emptyConfig.service.pipelines).sort(), ["metrics", "traces"]);
-  const emptyAlloy = createAlloyConfig({config: sample, logFiles: [], exporterToken: "producer-token"});
-  assert.doesNotMatch(emptyAlloy, /otelcol\.receiver\.filelog|otelcol\.storage\.file|otelcol\.processor\.transform "logs"|otelcol\.exporter\.otlphttp "logs"|otelcol\.receiver\.nginx/u);
+  assert.equal(
+    emptyConfig.receivers.otlp.protocols.http.auth.authenticator,
+    "bearertokenauth/server",
+  );
+  assert.deepEqual(Object.keys(emptyConfig.service.pipelines).sort(), [
+    "metrics",
+    "traces",
+  ]);
+  const emptyAlloy = createAlloyConfig({
+    config: sample,
+    logFiles: [],
+    exporterToken: "producer-token",
+  });
+  assert.doesNotMatch(
+    emptyAlloy,
+    /otelcol\.receiver\.filelog|otelcol\.storage\.file|otelcol\.processor\.transform "logs"|otelcol\.exporter\.otlphttp "logs"|otelcol\.receiver\.nginx/u,
+  );
   assert.match(emptyAlloy, /auth = otelcol\.auth\.bearer\.producer\.handler/u);
-  assert.match(emptyAlloy, /metrics = \[otelcol\.processor\.memory_limiter\.main\.input\]/u);
-  assert.match(emptyAlloy, /traces = \[otelcol\.processor\.memory_limiter\.main\.input\]/u);
+  assert.match(
+    emptyAlloy,
+    /metrics = \[otelcol\.processor\.memory_limiter\.main\.input\]/u,
+  );
+  assert.match(
+    emptyAlloy,
+    /traces = \[otelcol\.processor\.memory_limiter\.main\.input\]/u,
+  );
   assert.deepEqual(
     config.processors["transform/metric_names"].metric_statements[0],
     {
@@ -530,107 +733,291 @@ void test("Collector config accepts only exact selected log files and bounds exp
   );
 });
 
-
 void test("generated Collector and backend configs preserve bounded delivery and isolate each store", async () => {
-  const collector = createCollectorConfig({config: sample, logFiles: logs, exporterToken: "producer-token"});
-  assert.equal(collector.exporters["otlp_http/logs"].endpoint, "http://loki:3100/otlp");
-  assert.equal(collector.exporters["otlp_http/metrics"].endpoint, "http://prometheus:9090/api/v1/otlp");
-  assert.equal(collector.exporters["otlp_http/traces"].endpoint, "http://tempo:4318");
+  const collector = createCollectorConfig({
+    config: sample,
+    logFiles: logs,
+    exporterToken: "producer-token",
+  });
+  assert.equal(
+    collector.exporters["otlp_http/logs"].endpoint,
+    "http://loki:3100/otlp",
+  );
+  assert.equal(
+    collector.exporters["otlp_http/metrics"].endpoint,
+    "http://prometheus:9090/api/v1/otlp",
+  );
+  assert.equal(
+    collector.exporters["otlp_http/traces"].endpoint,
+    "http://tempo:4318",
+  );
   assert.equal(collector.receivers.filelog.storage, "file_storage");
-  for (const signal of ["logs", "metrics", "traces"]) assert.equal(collector.exporters[`otlp_http/${signal}`].sending_queue.queue_size, 2048);
-  const alloy = createAlloyConfig({config: sample, logFiles: logs, exporterToken: "producer-token"});
+  for (const signal of ["logs", "metrics", "traces"])
+    assert.equal(
+      collector.exporters[`otlp_http/${signal}`].sending_queue.queue_size,
+      2048,
+    );
+  const alloy = createAlloyConfig({
+    config: sample,
+    logFiles: logs,
+    exporterToken: "producer-token",
+  });
   assert.match(alloy, /auth = otelcol.auth.bearer.producer.handler/u);
   assert.match(alloy, /endpoint = "0.0.0.0:4318"/u);
   assert.match(alloy, /operators = /u);
-  assert.match(alloy, /logs = \[otelcol.processor.memory_limiter.main.input\]/u);
+  assert.match(
+    alloy,
+    /logs = \[otelcol.processor.memory_limiter.main.input\]/u,
+  );
   assert.match(alloy, /prometheus.exporter.unix "storage"/u);
-  assert.match(alloy, /\/telemetry-storage\/\(grafana\|loki\|prometheus\|tempo\)/u);
+  assert.match(
+    alloy,
+    /\/telemetry-storage\/\(grafana\|loki\|prometheus\|tempo\)/u,
+  );
   assert.match(alloy, /prometheus.exporter.blackbox "health"/u);
   assert.match(alloy, /probe_owner = "edge-nginx"/u);
   assert.match(alloy, /otelcol.receiver.nginx "edge"/u);
   const backend = createBackendConfigs(sample);
-  assert.equal(backend.prometheus.storage.tsdb.out_of_order_time_window, "1800000ms");
+  assert.equal(
+    backend.prometheus.storage.tsdb.out_of_order_time_window,
+    "1800000ms",
+  );
   assert.equal(backend.loki.analytics.reporting_enabled, false);
   assert.equal(backend.tempo.usage_report.reporting_enabled, false);
   assert.equal(backend.loki.ingester.wal.disk_full_threshold, 0.8);
   assert.equal(backend.loki.limits_config.retention_period, "72h");
   assert.equal(backend.tempo.backend_worker.compaction.block_retention, "72h");
-  assert.equal(backend.tempo.backend_worker.finish_on_shutdown_timeout, "10000ms");
-  assert.deepEqual(backend.datasources.datasources.map(source => source.uid), ["loki", "prometheus", "tempo"]);
-  const images = Object.fromEntries(["otelCollectorImage", "grafanaImage", "lokiImage", "prometheusImage", "tempoImage", "nodeImage"].map(name => [name, `fixture@sha256:${"a".repeat(64)}`]));
+  assert.equal(
+    backend.tempo.backend_worker.finish_on_shutdown_timeout,
+    "10000ms",
+  );
+  assert.deepEqual(
+    backend.datasources.datasources.map((source) => source.uid),
+    ["loki", "prometheus", "tempo"],
+  );
+  const images = Object.fromEntries(
+    [
+      "otelCollectorImage",
+      "grafanaImage",
+      "lokiImage",
+      "prometheusImage",
+      "tempoImage",
+      "nodeImage",
+    ].map((name) => [name, `fixture@sha256:${"a".repeat(64)}`]),
+  );
   images.bootstrapProbeSha256 = "a".repeat(64);
   const names = ["grafana", "loki", "prometheus", "tempo"];
-  const storageVolumes = Object.fromEntries(names.map(name => [name, `coffee-test-${name}-data`]));
-  const backendConfigPaths = Object.fromEntries([...names, "datasources", "alerts", "contacts"].map(name => [name, `/tmp/${name}.yaml`]));
+  const storageVolumes = Object.fromEntries(
+    names.map((name) => [name, `coffee-test-${name}-data`]),
+  );
+  const backendConfigPaths = Object.fromEntries(
+    [...names, "datasources", "alerts", "contacts"].map((name) => [
+      name,
+      `/tmp/${name}.yaml`,
+    ]),
+  );
   const alertSinkImage = `sha256:${"b".repeat(64)}`;
   const grafanaImage = `sha256:${"c".repeat(64)}`;
-  const compose = createComposeOverride({config: sample, imageRefs: images, grafanaImage, alertSinkImage, logFiles: logs, collectorConfigPath: "/tmp/collector.yaml", storageVolumes, backendConfigPaths, grafanaAdminSecretPath: "/tmp/admin-secret"});
+  const compose = createComposeOverride({
+    config: sample,
+    imageRefs: images,
+    grafanaImage,
+    alertSinkImage,
+    logFiles: logs,
+    collectorConfigPath: "/tmp/collector.yaml",
+    storageVolumes,
+    backendConfigPaths,
+    grafanaAdminSecretPath: "/tmp/admin-secret",
+  });
   for (const name of names) {
     assert.equal(compose.volumes[`${name}_data`].name, storageVolumes[name]);
     assert.deepEqual(compose.services[name].networks, ["coffee_observability"]);
     assert.equal(compose.services[name].ports, undefined);
   }
   assert.equal(compose.services.grafana.mem_limit, "512m");
-  assert.equal(compose.services.grafana.environment.GF_PLUGINS_PREINSTALL_DISABLED, "true");
+  assert.equal(
+    compose.services.grafana.environment.GF_PLUGINS_PREINSTALL_DISABLED,
+    "true",
+  );
   assert.equal(compose.services.grafana.image, grafanaImage);
   assert.notEqual(compose.services.grafana.image, images.grafanaImage);
-  assert.ok(compose.services.grafana.volumes.some(volume => volume.target === "/var/lib/grafana"));
-  assert.ok(compose.services.grafana.volumes.every(volume => !"/opt/grafana/plugins".startsWith(`${volume.target}/`) && volume.target !== "/opt/grafana/plugins"));
-  assert.match(compose.services.prometheus.command.join(" "), /--web.enable-otlp-receiver/u);
+  assert.ok(
+    compose.services.grafana.volumes.some(
+      (volume) => volume.target === "/var/lib/grafana",
+    ),
+  );
+  assert.ok(
+    compose.services.grafana.volumes.every(
+      (volume) =>
+        !"/opt/grafana/plugins".startsWith(`${volume.target}/`) &&
+        volume.target !== "/opt/grafana/plugins",
+    ),
+  );
+  assert.match(
+    compose.services.prometheus.command.join(" "),
+    /--web.enable-otlp-receiver/u,
+  );
   assert.deepEqual(compose.services["otel-collector"].expose, ["4318"]);
-  assert.equal(compose.services["otel-collector"].healthcheck.test.at(-1), "http://127.0.0.1:13133/-/ready");
-  assert.ok(compose.services["otel-collector"].command.includes("--server.http.listen-addr=127.0.0.1:13133"));
-  assert.deepEqual(compose.services["otel-collector"].volumes.find(volume => volume.target === "/var/lib/alloy"), {type: "volume", source: "collector_checkpoints", target: "/var/lib/alloy", volume: {nocopy: true}});
-  assert.equal(compose.services["otel-collector"].volumes.filter(volume => volume.target.startsWith("/telemetry-storage/") && volume.read_only).length, 4);
-  assert.deepEqual(compose.services["alert-sink"].tmpfs, ["/run/alerts:rw,noexec,nosuid,nodev,uid=1000,gid=1000,size=32m"]);
+  assert.equal(
+    compose.services["otel-collector"].healthcheck.test.at(-1),
+    "http://127.0.0.1:13133/-/ready",
+  );
+  assert.ok(
+    compose.services["otel-collector"].command.includes(
+      "--server.http.listen-addr=127.0.0.1:13133",
+    ),
+  );
+  assert.deepEqual(
+    compose.services["otel-collector"].volumes.find(
+      (volume) => volume.target === "/var/lib/alloy",
+    ),
+    {
+      type: "volume",
+      source: "collector_checkpoints",
+      target: "/var/lib/alloy",
+      volume: { nocopy: true },
+    },
+  );
+  assert.equal(
+    compose.services["otel-collector"].volumes.filter(
+      (volume) =>
+        volume.target.startsWith("/telemetry-storage/") && volume.read_only,
+    ).length,
+    4,
+  );
+  assert.deepEqual(compose.services["alert-sink"].tmpfs, [
+    "/run/alerts:rw,noexec,nosuid,nodev,uid=1000,gid=1000,size=32m",
+  ]);
   assert.equal(compose.services["alert-sink"].image, alertSinkImage);
   assert.notEqual(compose.services["alert-sink"].image, images.nodeImage);
   const evidenceDir = await mkdtemp("/dev/shm/coffee-alert-evidence-");
   const link = `${evidenceDir}-link`;
-  const args = {config: sample, imageRefs: images, grafanaImage, alertSinkImage, logFiles: logs, collectorConfigPath: "/tmp/collector.yaml", storageVolumes, backendConfigPaths, grafanaAdminSecretPath: "/tmp/admin-secret"};
-  const withoutRuntimes = createComposeOverride({...args, logFiles: []});
-  assert.deepEqual(withoutRuntimes.services["otel-collector"].networks, ["coffee_observability"]);
-  assert.equal(withoutRuntimes.services["otel-collector"].volumes.some(volume => volume.target.startsWith("/var/lib/docker/containers/")), false);
-  for (const invalid of [undefined, images.grafanaImage, "sha256:bad"]) assert.throws(() => createComposeOverride({...args, grafanaImage: invalid}), /verified grafanaImage ID is required/u);
-  for (const invalid of [undefined, images.nodeImage, "sha256:bad"]) assert.throws(() => createComposeOverride({...args, alertSinkImage: invalid}), /verified alertSinkImage ID is required/u);
+  const args = {
+    config: sample,
+    imageRefs: images,
+    grafanaImage,
+    alertSinkImage,
+    logFiles: logs,
+    collectorConfigPath: "/tmp/collector.yaml",
+    storageVolumes,
+    backendConfigPaths,
+    grafanaAdminSecretPath: "/tmp/admin-secret",
+  };
+  const withoutRuntimes = createComposeOverride({ ...args, logFiles: [] });
+  assert.deepEqual(withoutRuntimes.services["otel-collector"].networks, [
+    "coffee_observability",
+  ]);
+  assert.equal(
+    withoutRuntimes.services["otel-collector"].volumes.some((volume) =>
+      volume.target.startsWith("/var/lib/docker/containers/"),
+    ),
+    false,
+  );
+  for (const invalid of [undefined, images.grafanaImage, "sha256:bad"])
+    assert.throws(
+      () => createComposeOverride({ ...args, grafanaImage: invalid }),
+      /verified grafanaImage ID is required/u,
+    );
+  for (const invalid of [undefined, images.nodeImage, "sha256:bad"])
+    assert.throws(
+      () => createComposeOverride({ ...args, alertSinkImage: invalid }),
+      /verified alertSinkImage ID is required/u,
+    );
   try {
     if (process.getuid() !== 1000) {
-      assert.throws(() => createComposeOverride({...args, alertEvidenceDir: evidenceDir}), /owned by UID 1000/u);
+      assert.throws(
+        () => createComposeOverride({ ...args, alertEvidenceDir: evidenceDir }),
+        /owned by UID 1000/u,
+      );
       return;
     }
-    const isolated = createComposeOverride({...args, alertEvidenceDir: evidenceDir, observabilityNetworkName: "coffee-observability-network"});
-    assert.deepEqual(isolated.networks.coffee_observability, {name: "coffee-observability-network", internal: true});
-    assert.ok(isolated.services["otel-collector"].networks.includes("coffee_observability"));
+    const isolated = createComposeOverride({
+      ...args,
+      alertEvidenceDir: evidenceDir,
+      observabilityNetworkName: "coffee-observability-network",
+    });
+    assert.deepEqual(isolated.networks.coffee_observability, {
+      name: "coffee-observability-network",
+      internal: true,
+    });
+    assert.ok(
+      isolated.services["otel-collector"].networks.includes(
+        "coffee_observability",
+      ),
+    );
     assert.equal(isolated.services["alert-sink"].tmpfs, undefined);
-    assert.deepEqual(isolated.services["alert-sink"].volumes.at(-1), {type: "bind", source: evidenceDir, target: "/run/alerts"});
+    assert.deepEqual(isolated.services["alert-sink"].volumes.at(-1), {
+      type: "bind",
+      source: evidenceDir,
+      target: "/run/alerts",
+    });
     await symlink(evidenceDir, link, "dir");
-    assert.throws(() => createComposeOverride({...args, alertEvidenceDir: link}), /real mode 0700/u);
+    assert.throws(
+      () => createComposeOverride({ ...args, alertEvidenceDir: link }),
+      /real mode 0700/u,
+    );
     await chmod(evidenceDir, 0o755);
-    assert.throws(() => createComposeOverride({...args, alertEvidenceDir: evidenceDir}), /real mode 0700/u);
-    for (const name of ["coffee/production", null]) assert.throws(() => createComposeOverride({...args, observabilityNetworkName: name}), /invalid observability network/u);
+    assert.throws(
+      () => createComposeOverride({ ...args, alertEvidenceDir: evidenceDir }),
+      /real mode 0700/u,
+    );
+    for (const name of ["coffee/production", null])
+      assert.throws(
+        () =>
+          createComposeOverride({ ...args, observabilityNetworkName: name }),
+        /invalid observability network/u,
+      );
   } finally {
-    await rm(link, {force: true});
-    await rm(evidenceDir, {recursive: true, force: true});
+    await rm(link, { force: true });
+    await rm(evidenceDir, { recursive: true, force: true });
   }
 });
 
 void test("normal discovery uses only owned telemetry networks", () => {
   const inspected = [];
   let foreign = false;
-  const runDocker = args => {
+  const runDocker = (args) => {
     const name = args[2];
     inspected.push(name);
-    if (name === "coffee_observability") throw Object.assign(new Error("missing"), {stderr: "No such network: coffee_observability"});
-    return JSON.stringify([{Name: name, Driver: "bridge", Internal: true,
-      Labels: {"com.docker.compose.project": foreign ? "foreign" : "coffee-platform", "com.docker.compose.network": name}}]);
+    if (name === "coffee_observability")
+      throw Object.assign(new Error("missing"), {
+        stderr: "No such network: coffee_observability",
+      });
+    return JSON.stringify([
+      {
+        Name: name,
+        Driver: "bridge",
+        Internal: true,
+        Labels: {
+          "com.docker.compose.project": foreign ? "foreign" : "coffee-platform",
+          "com.docker.compose.network": name,
+        },
+      },
+    ]);
   };
-  assertTelemetryNetworks({projectName: "coffee-platform", logFiles: [], runDocker});
+  assertTelemetryNetworks({
+    projectName: "coffee-platform",
+    logFiles: [],
+    runDocker,
+  });
   assert.deepEqual(inspected, ["coffee_observability"]);
   inspected.length = 0;
-  assertTelemetryNetworks({projectName: "coffee-platform", logFiles: [logs[0]], runDocker});
+  assertTelemetryNetworks({
+    projectName: "coffee-platform",
+    logFiles: [logs[0]],
+    runDocker,
+  });
   assert.equal(inspected.length, 5);
   foreign = true;
-  assert.throws(() => assertTelemetryNetworks({projectName: "coffee-platform", logFiles: [logs[0]], runDocker}), /network does not belong/u);
+  assert.throws(
+    () =>
+      assertTelemetryNetworks({
+        projectName: "coffee-platform",
+        logFiles: [logs[0]],
+        runDocker,
+      }),
+    /network does not belong/u,
+  );
 });
 
 void test("log discovery selects exactly one running container by project and runtime labels", async () => {
@@ -668,12 +1055,43 @@ void test("log discovery selects exactly one running container by project and ru
   assert.ok(calls[0].includes("label=com.docker.compose.project=coffee-proof"));
   assert.ok(calls[0].includes("label=com.docker.compose.service=edge-gateway"));
   assert.ok(calls[0].includes("--no-trunc"));
-  assert.deepEqual(await discoverContainerLogs({projectName: "coffee-proof", runtimes: ["edge-nginx"], allowMissing: true, runDocker: () => ""}), []);
-  await assert.rejects(discoverContainerLogs({projectName: "coffee-proof", runtimes: ["edge-nginx"], runDocker: () => ""}), /exactly one running container/u);
-  const partial = await discoverContainerLogs({projectName: "coffee-proof", runtimes: ["edge-nginx", "edge-gateway"], allowMissing: true,
-    runDocker: args => args[0] === "ps" && args.includes("label=com.docker.compose.service=edge-nginx") ? "" : runDocker(args)});
+  assert.deepEqual(
+    await discoverContainerLogs({
+      projectName: "coffee-proof",
+      runtimes: ["edge-nginx"],
+      allowMissing: true,
+      runDocker: () => "",
+    }),
+    [],
+  );
+  await assert.rejects(
+    discoverContainerLogs({
+      projectName: "coffee-proof",
+      runtimes: ["edge-nginx"],
+      runDocker: () => "",
+    }),
+    /exactly one running container/u,
+  );
+  const partial = await discoverContainerLogs({
+    projectName: "coffee-proof",
+    runtimes: ["edge-nginx", "edge-gateway"],
+    allowMissing: true,
+    runDocker: (args) =>
+      args[0] === "ps" &&
+      args.includes("label=com.docker.compose.service=edge-nginx")
+        ? ""
+        : runDocker(args),
+  });
   assert.deepEqual(partial, found);
-  await assert.rejects(discoverContainerLogs({projectName: "coffee-proof", runtimes: ["edge-gateway"], allowMissing: true, runDocker: () => `${id}\n${id}\n`}), /exactly one running container/u);
+  await assert.rejects(
+    discoverContainerLogs({
+      projectName: "coffee-proof",
+      runtimes: ["edge-gateway"],
+      allowMissing: true,
+      runDocker: () => `${id}\n${id}\n`,
+    }),
+    /exactly one running container/u,
+  );
   await assert.rejects(
     discoverContainerLogs({
       projectName: "coffee-proof",
@@ -786,8 +1204,12 @@ if (args[0] === "set") {
 } else if (args[0] === "--decrypt") process.stdout.write(fs.readFileSync(plainPath));
 else process.exit(1);
 `;
-    await writeFile(join(fixture.bin, "sops"), source, {mode: 0o700});
-    const first = await provisionDevelopmentGrafanaAdmin({root: fixture.root, outputDir, env: fixture.env});
+    await writeFile(join(fixture.bin, "sops"), source, { mode: 0o700 });
+    const first = await provisionDevelopmentGrafanaAdmin({
+      root: fixture.root,
+      outputDir,
+      env: fixture.env,
+    });
     assert.equal(first.created, true);
     assert.equal((await stat(secretPath)).mode & 0o777, 0o600);
     assert.equal((await stat(first.path)).mode & 0o777, 0o400);
@@ -800,7 +1222,11 @@ else process.exit(1);
     delete after.environments.development.telemetry.grafanaAdmin;
     assert.deepEqual(after.environments, encrypted.environments);
     const ciphertextBeforeRepeat = await readFile(secretPath, "utf8");
-    const second = await provisionDevelopmentGrafanaAdmin({root: fixture.root, outputDir, env: fixture.env});
+    const second = await provisionDevelopmentGrafanaAdmin({
+      root: fixture.root,
+      outputDir,
+      env: fixture.env,
+    });
     assert.equal(second.created, false);
     assert.equal(await readFile(secretPath, "utf8"), ciphertextBeforeRepeat);
     assert.equal((await readFile(second.path, "utf8")).trim(), credential);
@@ -809,12 +1235,19 @@ else process.exit(1);
     config.environment = "staging";
     config.telemetry.releaseDigest = `sha256:${"a".repeat(64)}`;
     await writeFile(configPath, dumpYaml(config));
-    await assert.rejects(provisionDevelopmentGrafanaAdmin({root: fixture.root, outputDir, env: fixture.env}), /restricted to development/u);
+    await assert.rejects(
+      provisionDevelopmentGrafanaAdmin({
+        root: fixture.root,
+        outputDir,
+        env: fixture.env,
+      }),
+      /restricted to development/u,
+    );
     assert.equal(await readFile(secretPath, "utf8"), ciphertextBeforeRepeat);
   } finally {
-    await rm(outputDir, {recursive: true, force: true});
-    await rm(fixture.root, {recursive: true, force: true});
-    await rm(fixture.bin, {recursive: true, force: true});
+    await rm(outputDir, { recursive: true, force: true });
+    await rm(fixture.root, { recursive: true, force: true });
+    await rm(fixture.bin, { recursive: true, force: true });
   }
 });
 
@@ -935,7 +1368,7 @@ void test("collector/admin materializers atomically replace owned files with mod
     });
 
     const collector = JSON.parse(await readFile(collectorPath, "utf8"));
-    assert.deepEqual(collector, {exporterToken: "fixture-secret-value"});
+    assert.deepEqual(collector, { exporterToken: "fixture-secret-value" });
     assert.equal(await readFile(adminPath, "utf8"), "fixture-secret-value\n");
     for (const [path, oldMetadata] of [
       [collectorPath, oldCollector],
@@ -6946,6 +7379,1207 @@ void test("G15 parent admission restores and verifies the child bundle after che
       childConfigBytes,
     }),
     { code: "G15_BUNDLE_FETCH_FAILED" },
+  );
+});
+
+async function writeSyntheticParentG12({
+  candidateRoot,
+  evidenceDir,
+  context,
+  indexBytes,
+}) {
+  const { RUNTIME_NAMES } =
+    await import("../../packages/platform-config/src/index.ts");
+  const hash = (bytes) => createHash("sha256").update(bytes).digest("hex");
+  const { runId, candidateSha } = context;
+  const supplyChainDir = join(
+    evidenceDir,
+    "gates/G12_SUPPLY_CHAIN/artifacts/supply-chain",
+  );
+  await mkdir(join(supplyChainDir, "artifacts"), {
+    recursive: true,
+    mode: 0o700,
+  });
+  const toolchainBytes = await readFile(
+    join(candidateRoot, "config/toolchain-versions.json"),
+  );
+  const toolchain = JSON.parse(toolchainBytes);
+  const approvedFixed = parseYaml(
+    await readFile(join(candidateRoot, "config/platform.yaml"), "utf8"),
+  ).verification.securityScan.approvedFixed;
+  const lockfileBytes = await readFile(join(candidateRoot, "pnpm-lock.yaml"));
+  const imageId = `sha256:${"2".repeat(64)}`;
+  const manifestDigest = `sha256:${"3".repeat(64)}`;
+  const platformManifestDigest = `sha256:${"4".repeat(64)}`;
+  const pins = toolchain.grafanaPlugins;
+  const grafanaImage = toolchain.grafanaImage;
+  const environment = {
+    runId,
+    candidateSha,
+    candidatePath: candidateRoot,
+    dirty: false,
+    configSha256: context.baseConfigSha256,
+    treeSha: "5".repeat(40),
+    toolchainVersionsSha256: hash(toolchainBytes),
+    lockfileSha256: hash(lockfileBytes),
+  };
+  await writeFile(
+    join(evidenceDir, "environment.json"),
+    JSON.stringify(environment),
+    { mode: 0o600 },
+  );
+  const ociArtifact = Buffer.from("mock OCI artifact bytes");
+  const baseMaterial = {
+    sourceRef: `apache/kafka:4.3.2@sha256:${hash(indexBytes)}`,
+    platformManifestDigest,
+    indexArtifact: {
+      path: "artifacts/kafka-base-index.json",
+      sha256: hash(indexBytes),
+      sizeBytes: indexBytes.length,
+    },
+  };
+  const receipt = {
+    schemaVersion: 1,
+    gate: "G12_SUPPLY_CHAIN",
+    status: "PASS",
+    runId,
+    candidateSha,
+    treeSha: environment.treeSha,
+    configSha256: context.baseConfigSha256,
+    toolchainVersionsSha256: environment.toolchainVersionsSha256,
+    lockfileSha256: environment.lockfileSha256,
+    target: "kafka",
+    importTag: `coffee-g12-${hash(Buffer.from(runId)).slice(0, 12)}-kafka:latest`,
+    baseImage: baseMaterial.sourceRef,
+    imageId,
+    manifestDigest,
+    platformManifestDigest,
+    provenanceStatus: "INCOMPLETE_LOCAL_CONTEXT",
+    provenanceSha256: "6".repeat(64),
+    attestationSha256: "7".repeat(64),
+    buildInputBinding: {
+      status: "OBSERVED",
+      sourceCommit: candidateSha,
+      sourceTreeSha: environment.treeSha,
+      archiveSha256: "8".repeat(64),
+      archiveSizeBytes: 123,
+      extractedTreeSha256: "9".repeat(64),
+      extractedBytes: 123,
+      sourceKind: "git-archive-local-context",
+      buildkitMaterialsCompleteness: "INCOMPLETE_LOCAL_CONTEXT",
+      invocation: {
+        entryPoint: "docker buildx build",
+        builder: "coffee-platform-mtu",
+        target: "kafka",
+        platform: "linux/amd64",
+        provenance: "mode=min",
+        output: "oci-layout-directory",
+      },
+    },
+    ociArtifact: {
+      path: "artifacts/kafka.oci.tar",
+      sha256: hash(ociArtifact),
+      sizeBytes: ociArtifact.length,
+      layoutTreeSha256: "a".repeat(64),
+      layoutBytes: 123,
+    },
+    baseMaterial,
+  };
+  const receiptBytes = Buffer.from(JSON.stringify(receipt));
+  const result = {
+    gate: "G12_SUPPLY_CHAIN",
+    status: "PASS",
+    code: "G12_SCAN_CLEAN",
+    runId,
+    candidateSha,
+    kafka: {
+      path: "artifacts/kafka-receipt.json",
+      receiptSha256: hash(receiptBytes),
+      imageId,
+      importTag: receipt.importTag,
+      manifestDigest,
+      ociArtifactPath: "artifacts/kafka.oci.tar",
+      ociArtifactSha256: hash(ociArtifact),
+    },
+    provenance: {
+      status: "PASS",
+      sourceRevision: candidateSha,
+      treeSha: environment.treeSha,
+      configSha256: context.baseConfigSha256,
+      toolchainVersionsSha256: environment.toolchainVersionsSha256,
+      lockfileSha256: environment.lockfileSha256,
+      images: [
+        {
+          service: "kafka",
+          imageId,
+          manifestDigest,
+          platformManifestDigest,
+          provenanceStatus: "PASS",
+          metadataSha256: receipt.provenanceSha256,
+          attestationSha256: receipt.attestationSha256,
+          baseMaterial,
+        },
+      ],
+    },
+  };
+  const grafanaId = `sha256:${hash("grafana-image")}`;
+  const grafanaBase = {
+    sourceRef: grafanaImage,
+    platformManifestDigest,
+    indexArtifact: {
+      path: "artifacts/grafana-base-index.json",
+      sha256: hash(indexBytes),
+      sizeBytes: indexBytes.length,
+    },
+  };
+  const vendorPlugins = {
+    treeSha256: hash("plugins"),
+    treeBytes: 1,
+    signingKeySourceSha256: toolchain.grafanaSigningKeySourceSha256,
+    signingKeyFingerprint: toolchain.grafanaSigningKeyFingerprint,
+    plugins: pins,
+    effectiveFiles: Object.fromEntries(
+      Object.keys(pins).map((name) => [
+        name,
+        {
+          path: `/opt/grafana/plugins/${name}/gpx_grafana-${name}-datasource_linux_amd64`,
+          sha256: pins[name].binarySha256,
+          sizeBytes: 1,
+          layerDigest: platformManifestDigest,
+        },
+      ]),
+    ),
+  };
+  const grafanaReceipt = {
+    ...receipt,
+    target: "grafana",
+    importTag: `coffee-g12-${hash(Buffer.from(runId)).slice(0, 12)}-grafana:latest`,
+    baseImage: grafanaImage,
+    imageId: grafanaId,
+    baseMaterial: grafanaBase,
+    buildInputBinding: {
+      ...receipt.buildInputBinding,
+      sourceKind: "git-archive-plus-verified-plugins",
+      invocation: {
+        ...receipt.buildInputBinding.invocation,
+        target: "grafana",
+      },
+      vendorPlugins,
+    },
+    ociArtifact: { ...receipt.ociArtifact, path: "artifacts/grafana.oci.tar" },
+  };
+  const grafanaReceiptBytes = Buffer.from(JSON.stringify(grafanaReceipt));
+  result.grafana = {
+    path: "artifacts/grafana-receipt.json",
+    receiptSha256: hash(grafanaReceiptBytes),
+    imageId: grafanaId,
+    importTag: grafanaReceipt.importTag,
+    manifestDigest,
+    ociArtifactPath: grafanaReceipt.ociArtifact.path,
+    ociArtifactSha256: grafanaReceipt.ociArtifact.sha256,
+  };
+  result.provenance.images.push({
+    service: "grafana",
+    imageId: grafanaId,
+    manifestDigest,
+    platformManifestDigest,
+    provenanceStatus: "PASS",
+    metadataSha256: grafanaReceipt.provenanceSha256,
+    attestationSha256: grafanaReceipt.attestationSha256,
+    baseMaterial: grafanaBase,
+  });
+  const services = [
+    ...RUNTIME_NAMES,
+    "grafana",
+    "storage-helper",
+    "edge-nginx",
+    "kafka",
+    "otel-collector",
+    "loki",
+    "prometheus",
+    "tempo",
+    "lockfile",
+  ];
+  result.reports = [];
+  for (const service of services) {
+    const existing = result.provenance.images.find(
+      (entry) => entry.service === service,
+    );
+    const scannedImageId = existing?.imageId ?? `sha256:${hash(service)}`;
+    if (!existing && service !== "lockfile") {
+      const upstream = [
+        "otel-collector",
+        "loki",
+        "prometheus",
+        "tempo",
+      ].includes(service);
+      result.provenance.images.push(
+        upstream
+          ? {
+              service,
+              imageId: scannedImageId,
+              manifestDigest,
+              sourceReference: `${service}:fixture@${manifestDigest}`,
+              identityStatus: "PINNED_DIGEST_VERIFIED",
+            }
+          : {
+              service,
+              imageId: scannedImageId,
+              manifestDigest,
+              platformManifestDigest,
+              provenanceStatus: "PASS",
+              metadataSha256: hash(`${service}-metadata`),
+              attestationSha256: hash(`${service}-attestation`),
+            },
+      );
+    }
+    for (const suffix of ["sbom.cdx.json", "vulnerabilities.json"]) {
+      const name = `${service}.${suffix}`;
+      const contents = Buffer.from(
+        JSON.stringify(
+          suffix === "vulnerabilities.json"
+            ? {
+                Results: [],
+                Metadata:
+                  service === "lockfile" ? {} : { ImageID: scannedImageId },
+              }
+            : {
+                bomFormat: "CycloneDX",
+                specVersion: "1.6",
+                version: 1,
+                components: [],
+              },
+        ),
+      );
+      await writeFile(join(supplyChainDir, "artifacts", name), contents, {
+        mode: 0o600,
+      });
+      result.reports.push({
+        path: name,
+        sha256: hash(contents),
+        findings: { high: 0, critical: 0 },
+      });
+    }
+  }
+  result.findings = { high: 0, critical: 0 };
+  result.evaluation = {
+    rawHigh: 0,
+    resolvedFixed: 0,
+    unresolvedHigh: 0,
+    critical: 0,
+  };
+  const decision = {
+    schemaVersion: 1,
+    gate: "G12_SUPPLY_CHAIN",
+    runId,
+    candidateSha,
+    treeSha: environment.treeSha,
+    configSha256: context.baseConfigSha256,
+    toolchainVersionsSha256: environment.toolchainVersionsSha256,
+    lockfileSha256: environment.lockfileSha256,
+    imageId: grafanaId,
+    manifestDigest,
+    platformManifestDigest,
+    rawReportSha256: result.reports.find(
+      (entry) => entry.path === "grafana.vulnerabilities.json",
+    ).sha256,
+    approvedFixed,
+    vendorPlugins,
+    module: toolchain.grafanaTempoModule,
+    decisions: [],
+    evaluatedAt: "2026-10-30T00:00:00.000Z",
+    openVex: null,
+  };
+  const decisionBytes = Buffer.from(JSON.stringify(decision));
+  result.adjudication = {
+    path: "artifacts/grafana-adjudication.json",
+    sha256: hash(decisionBytes),
+  };
+  await writeFile(
+    join(supplyChainDir, "artifacts/grafana-receipt.json"),
+    grafanaReceiptBytes,
+    { mode: 0o600 },
+  );
+  await writeFile(
+    join(supplyChainDir, "artifacts/grafana-adjudication.json"),
+    decisionBytes,
+    { mode: 0o600 },
+  );
+  for (const [path, bytes] of [
+    [join(supplyChainDir, "result.json"), Buffer.from(JSON.stringify(result))],
+    [join(supplyChainDir, "artifacts/kafka-receipt.json"), receiptBytes],
+    [join(supplyChainDir, "artifacts/kafka.oci.tar"), ociArtifact],
+    [join(supplyChainDir, "artifacts/kafka-base-index.json"), indexBytes],
+  ])
+    await writeFile(path, bytes, { mode: 0o600 });
+  return { imageId, receiptSha256: hash(receiptBytes) };
+}
+
+void test("browser correlation executes the child lifecycle and preserves early image failure evidence", async (t) => {
+  const directory = await mkdtemp(
+    join(tmpdir(), "coffee-correlation-lifecycle-"),
+  );
+  const root = join(directory, "candidate");
+  const originalCwd = process.cwd();
+  const oldContext = process.env.COFFEE_LAUNCH_CONTEXT_FILE;
+  let mock;
+  t.after(async () => {
+    if (mock) {
+      mock.mock.restore();
+      syncBuiltinESMExports();
+    }
+    process.chdir(originalCwd);
+    if (oldContext === undefined) delete process.env.COFFEE_LAUNCH_CONTEXT_FILE;
+    else process.env.COFFEE_LAUNCH_CONTEXT_FILE = oldContext;
+    await rm(directory, { recursive: true, force: true });
+  });
+  execFileSync("git", [
+    "clone",
+    "--quiet",
+    "--shared",
+    "--no-hardlinks",
+    REPO_ROOT,
+    root,
+  ]);
+  await cp(
+    join(REPO_ROOT, "verification/launch/v1/scenarios/browser.mjs"),
+    join(root, "verification/launch/v1/scenarios/browser.mjs"),
+  );
+  await cp(
+    join(REPO_ROOT, "tools/observability/verify.mjs"),
+    join(root, "tools/observability/verify.mjs"),
+  );
+  await cp(
+    join(REPO_ROOT, "tests/realtime/fixtures/setup.mjs"),
+    join(root, "tests/realtime/fixtures/setup.mjs"),
+  );
+  const platformPath = join(root, "config/platform.yaml");
+  const config = (await readFile(platformPath, "utf8")).replace(
+    "    enabled: false\n  kafkaNamespaceIsolation: false",
+    "    enabled: true\n  kafkaNamespaceIsolation: true",
+  );
+  assert.match(
+    config,
+    /databaseIsolation:\n    enabled: true\n  kafkaNamespaceIsolation: true/u,
+  );
+  await writeFile(platformPath, config);
+  const probePath = join(directory, "probe");
+  await writeFile(probePath, "synthetic executable\n", { mode: 0o755 });
+  const bomPath = join(root, "config/toolchain-versions.json");
+  const bom = JSON.parse(await readFile(bomPath, "utf8"));
+  bom.bootstrapProbeSha256 = createHash("sha256")
+    .update(await readFile(probePath))
+    .digest("hex");
+  const hash = (bytes) => createHash("sha256").update(bytes).digest("hex");
+  const platformManifestDigest = `sha256:${"4".repeat(64)}`;
+  const indexBytes = Buffer.from(
+    JSON.stringify({
+      schemaVersion: 2,
+      mediaType: "application/vnd.oci.image.index.v1+json",
+      manifests: [
+        {
+          mediaType: "application/vnd.oci.image.manifest.v1+json",
+          digest: platformManifestDigest,
+          size: 123,
+          platform: { os: "linux", architecture: "amd64" },
+        },
+      ],
+    }),
+  );
+  bom.kafkaImage = `apache/kafka:4.3.2@sha256:${hash(indexBytes)}`;
+  bom.grafanaImage = `grafana:fixture@sha256:${hash(indexBytes)}`;
+  bom.grafanaPlugins = Object.fromEntries(
+    ["loki", "tempo", "prometheus"].map((name) => [
+      name,
+      {
+        version: "1.0.0",
+        zipSha256: hash(`${name}-zip`),
+        manifestSha256: hash(`${name}-manifest`),
+        binarySha256: hash(`${name}-binary`),
+      },
+    ]),
+  );
+  bom.grafanaSigningKeySourceSha256 = hash("key");
+  bom.grafanaSigningKeyFingerprint = "A".repeat(40);
+  bom.grafanaTempoModule = {
+    version: "fixture",
+    h1: "fixture",
+    revision: "a".repeat(40),
+    fixCommits: ["b".repeat(40), "c".repeat(40)],
+    replacement: null,
+  };
+  await writeFile(bomPath, JSON.stringify(bom, null, 2));
+  for (const file of [platformPath, bomPath, join(root, "pnpm-lock.yaml")])
+    await chmod(file, 0o644);
+  const git = (...args) =>
+    execFileSync("git", ["-C", root, ...args], { encoding: "utf8" }).trim();
+  git(
+    "remote",
+    "set-url",
+    "origin",
+    "https://github.com/YurGusev/CoffeeOrderPlatform",
+  );
+  git(
+    "add",
+    "config/platform.yaml",
+    "config/toolchain-versions.json",
+    "verification/launch/v1/scenarios/browser.mjs",
+    "tools/observability/verify.mjs",
+    "tests/realtime/fixtures/setup.mjs",
+  );
+  git(
+    "-c",
+    "user.name=Fixture",
+    "-c",
+    "user.email=fixture@example.invalid",
+    "commit",
+    "-qm",
+    "Fixture candidate",
+  );
+  const sha = git("rev-parse", "HEAD");
+  const sourceRoot = join(directory, "source");
+  execFileSync("git", [
+    "clone",
+    "--quiet",
+    "--shared",
+    "--no-hardlinks",
+    root,
+    sourceRoot,
+  ]);
+  execFileSync("git", [
+    "-C",
+    sourceRoot,
+    "remote",
+    "set-url",
+    "origin",
+    "https://github.com/YurGusev/CoffeeOrderPlatform",
+  ]);
+  await writeFile(join(root, ".git/info/exclude"), "node_modules\ndist\n", {
+    flag: "a",
+  });
+  await symlink(
+    join(REPO_ROOT, "node_modules"),
+    join(root, "node_modules"),
+    "dir",
+  );
+  for (const group of ["apps", "packages"]) {
+    for (const name of await readdir(join(root, group))) {
+      const source = join(REPO_ROOT, group, name, "node_modules");
+      if (await stat(source).catch(() => null))
+        await symlink(source, join(root, group, name, "node_modules"), "dir");
+      const dist = join(REPO_ROOT, group, name, "dist");
+      if (await stat(dist).catch(() => null))
+        await symlink(dist, join(root, group, name, "dist"), "dir");
+    }
+  }
+  const configHash = createHash("sha256")
+    .update(await readFile(platformPath))
+    .digest("hex");
+  async function makeContext(
+    stamp,
+    candidateRoot = root,
+    contextSourceRoot = sourceRoot,
+  ) {
+    const runId = `${stamp}-${sha.slice(0, 7)}`;
+    const evidenceDir = join(contextSourceRoot, "evidence/launch", runId);
+    const artifacts = join(evidenceDir, "gates/G14_OBSERVABILITY/artifacts");
+    await mkdir(artifacts, { recursive: true, mode: 0o700 });
+    const context = {
+      schemaVersion: 1,
+      runId,
+      candidateSha: sha,
+      baseConfigSha256: configHash,
+      checkoutDir: candidateRoot,
+      sourceRepoRoot: contextSourceRoot,
+      evidenceDir,
+      acceptedBaseCommit: sha,
+      startedAtUtc: new Date().toISOString(),
+      githubSnapshotPath: null,
+      resources: {
+        composeProject: `coffee-launch-${runId.toLowerCase()}`,
+        kafkaPrefix: runId,
+      },
+    };
+    const contextPath = join(evidenceDir, "context.json");
+    await writeFile(contextPath, JSON.stringify(context), { mode: 0o400 });
+    return { context, contextPath, evidenceDir, artifacts };
+  }
+  const execReal = childProcess.execFileSync;
+  mock = t.mock.method(
+    childProcess,
+    "execFileSync",
+    (command, args, options) => {
+      if (command === "docker")
+        throw new Error("Docker is forbidden in this test");
+      if (command === "pnpm" || command === process.execPath)
+        return Buffer.alloc(0);
+      return execReal(command, args, options);
+    },
+  );
+  syncBuiltinESMExports();
+  process.chdir(root);
+  const { runBrowserParent, validateBrowserCorrelation: validateCorrelation } =
+    await import(
+      pathToFileURL(join(root, "verification/launch/v1/scenarios/browser.mjs"))
+        .href
+    );
+  const success = await makeContext("20261030T120000Z");
+  const expectedKafka = await writeSyntheticParentG12({
+    candidateRoot: root,
+    evidenceDir: success.evidenceDir,
+    context: success.context,
+    indexBytes,
+  });
+  const { loadVerifiedGateImage: loadFixtureKafka } = await import(
+    pathToFileURL(join(root, "tests/realtime/fixtures/setup.mjs")).href
+  );
+  process.env.COFFEE_LAUNCH_CONTEXT_FILE = success.contextPath;
+  assert.equal(git("status", "--porcelain=v1", "--untracked-files=all"), "");
+  let observed;
+  const synthetic = join(directory, "synthetic-callback");
+  const callback = async (contextPath) => {
+    const info = await stat(contextPath);
+    assert.equal(info.mode & 0o777, 0o400);
+    const child = JSON.parse(await readFile(contextPath, "utf8"));
+    assert.equal(child.resources.g15ParentCandidateSha, sha);
+    assert.equal(child.resources.g15ParentRunId, success.context.runId);
+    assert.equal(
+      child.resources.g08PreparationContextPath,
+      success.contextPath,
+    );
+    const childParent = execReal(
+      "git",
+      ["-C", child.checkoutDir, "rev-parse", "HEAD^"],
+      { encoding: "utf8" },
+    ).trim();
+    assert.equal(childParent, sha);
+    assert.equal(
+      execReal(
+        "git",
+        ["-C", child.checkoutDir, "diff", "--name-only", `${sha}..HEAD`],
+        { encoding: "utf8" },
+      ).trim(),
+      "config/platform.yaml",
+    );
+    const base = parseYaml(config),
+      variant = parseYaml(
+        await readFile(join(child.checkoutDir, "config/platform.yaml"), "utf8"),
+      );
+    assert.ok(variant.browserOidc);
+    variant.browserOidc = base.browserOidc;
+    assert.deepEqual(variant, base);
+    assert.equal(
+      await stat(join(child.evidenceDir, "environment.json")).catch(() => null),
+      null,
+    );
+    const image = await loadFixtureKafka({
+      target: "kafka",
+      contextFile: contextPath,
+      loadImage: false,
+    });
+    assert.equal(image.imageId, expectedKafka.imageId);
+    assert.equal(image.receiptSha256, expectedKafka.receiptSha256);
+    assert.equal(image.candidateSha, sha);
+    assert.equal(image.runId, success.context.runId);
+    assert.deepEqual(image.launchIdentity, {
+      schemaVersion: 1,
+      runId: child.runId,
+      candidateSha: child.candidateSha,
+      baseConfigSha256: child.baseConfigSha256,
+    });
+    const lineageBytes = await readFile(
+      join(
+        child.evidenceDir,
+        "gates/G15_BROWSER/artifacts/oidc-fixture-lineage.json",
+      ),
+    );
+    assert.equal(image.lineageReceiptSha256, hash(lineageBytes));
+    const componentImage = await loadFixtureKafka({
+      target: "kafka",
+      loadImage: false,
+    });
+    assert.equal(componentImage.candidateSha, sha);
+    assert.equal(componentImage.launchIdentity, undefined);
+    const dockerCalls = [];
+    const importedImage = await loadFixtureKafka({
+      target: "kafka",
+      contextFile: contextPath,
+      run: (args) => {
+        dockerCalls.push(args);
+        if (args.at(-1) === "coffee-platform-kafka:verified-artifact-required")
+          throw new Error(`No such image: ${args.at(-1)}`);
+        return `${expectedKafka.imageId}|${JSON.stringify([image.importTag])}`;
+      },
+    });
+    assert.equal(dockerCalls.length, 3);
+    assert.equal(importedImage.imageId, image.imageId);
+    assert.deepEqual(importedImage.launchIdentity, image.launchIdentity);
+    assert.equal(
+      importedImage.lineageReceiptSha256,
+      image.lineageReceiptSha256,
+    );
+    const contextBytes = await readFile(contextPath);
+    const rejectChild = async (changed) => {
+      await chmod(contextPath, 0o600);
+      await writeFile(contextPath, JSON.stringify(changed));
+      await chmod(contextPath, 0o400);
+      try {
+        await assert.rejects(
+          loadFixtureKafka({
+            target: "kafka",
+            contextFile: contextPath,
+            loadImage: false,
+          }),
+        );
+      } finally {
+        await chmod(contextPath, 0o600);
+        await writeFile(contextPath, contextBytes);
+        await chmod(contextPath, 0o400);
+      }
+    };
+    await rejectChild({
+      ...child,
+      resources: {
+        ...child.resources,
+        g15ParentRunId: "20261030T120001Z-1234567",
+      },
+    });
+    await rejectChild({ ...child, candidateSha: "f".repeat(40) });
+    const childConfigPath = join(child.checkoutDir, "config/platform.yaml");
+    const childConfigBytes = await readFile(childConfigPath);
+    await writeFile(
+      childConfigPath,
+      Buffer.concat([childConfigBytes, Buffer.from("\n")]),
+    );
+    try {
+      await assert.rejects(
+        loadFixtureKafka({
+          target: "kafka",
+          contextFile: contextPath,
+          loadImage: false,
+        }),
+      );
+    } finally {
+      await writeFile(childConfigPath, childConfigBytes);
+    }
+    const parentConfigBytes = await readFile(platformPath);
+    await writeFile(
+      platformPath,
+      Buffer.concat([parentConfigBytes, Buffer.from("\n")]),
+    );
+    try {
+      await assert.rejects(
+        loadFixtureKafka({
+          target: "kafka",
+          contextFile: contextPath,
+          loadImage: false,
+        }),
+      );
+    } finally {
+      await writeFile(platformPath, parentConfigBytes);
+    }
+    assert.equal(
+      (
+        await loadFixtureKafka({
+          target: "kafka",
+          contextFile: contextPath,
+          loadImage: false,
+        })
+      ).imageId,
+      expectedKafka.imageId,
+    );
+    observed = child;
+    await mkdir(synthetic);
+    try {
+      const databases = [
+        "customer",
+        "catalog",
+        "pricing",
+        "orders",
+        "integration",
+      ]
+        .map(
+          (owner) =>
+            `coffee_verify_${child.runId.toLowerCase().replace("-", "_")}_${owner}`,
+        )
+        .sort();
+      return {
+        cleanupVerified: true,
+        cleanup: {
+          verified: true,
+          databases: { verified: true, removed: databases, retained: [] },
+          attachment: {
+            baselineAttached: false,
+            attempted: true,
+            removed: true,
+            routePreserved: true,
+          },
+        },
+        launchPath: {
+          verified: true,
+          correlationId: "8f53d687-fd3b-47be-b32b-2081d08bc55a",
+          traceId: "00bf08bba3714e52b26d23c08e06ce16",
+          refetchReceipt: { matched: true },
+          sseFrameMatched: true,
+          projectionReceipt: { causationMatched: true },
+        },
+      };
+    } finally {
+      await rm(synthetic, { recursive: true });
+    }
+  };
+  const result = await runBrowserParent({ runCorrelation: callback });
+  assert.equal(result.browserChild.childCandidateSha, observed.candidateSha);
+  assert.equal(await stat(observed.checkoutDir).catch(() => null), null);
+  assert.equal(await stat(observed.evidenceDir).catch(() => null), null);
+  assert.equal(await stat(synthetic).catch(() => null), null);
+  assert.equal(
+    (
+      await validateCorrelation({
+        evidenceDir: success.evidenceDir,
+        parentContext: success.context,
+      })
+    ).files.length,
+    6,
+  );
+
+  const failure = await makeContext("20261030T120001Z");
+  process.env.COFFEE_LAUNCH_CONTEXT_FILE = failure.contextPath;
+  let failedChild;
+  await assert.rejects(
+    runBrowserParent({
+      runCorrelation: async (contextPath) => {
+        failedChild = JSON.parse(await readFile(contextPath, "utf8"));
+        await mkdir(synthetic);
+        try {
+          throw new Error("synthetic callback failure");
+        } finally {
+          await rm(synthetic, { recursive: true });
+        }
+      },
+    }),
+    /synthetic callback failure/u,
+  );
+  assert.ok((await stat(failedChild.checkoutDir)).isDirectory());
+  assert.ok((await stat(failedChild.evidenceDir)).isDirectory());
+  assert.equal(await stat(synthetic).catch(() => null), null);
+  assert.equal(
+    await stat(join(failure.artifacts, "browser-correlation.json")).catch(
+      () => null,
+    ),
+    null,
+  );
+  assert.equal(
+    await stat(join(failure.artifacts, "browser-source.bundle")).catch(
+      () => null,
+    ),
+    null,
+  );
+
+  const imageFailure = await makeContext("20261030T120002Z");
+  process.env.COFFEE_LAUNCH_CONTEXT_FILE = imageFailure.contextPath;
+  const { runObservabilityVerification } = await import(
+    pathToFileURL(join(root, "tools/observability/verify.mjs")).href
+  );
+  await assert.rejects(
+    runObservabilityVerification({
+      root,
+      probePath,
+      run: () => {
+        throw new Error("unexpected Docker");
+      },
+    }),
+    (error) =>
+      error.evidence?.status === "FAIL" &&
+      /G12_KAFKA_EVIDENCE_PATH_INVALID/u.test(error.evidence.failure),
+  );
+  const saved = join(imageFailure.artifacts, "observability");
+  const savedNames = [
+    "alert-transitions.json",
+    "correlation-proof.json",
+    "redaction-scan.json",
+    "queue-loss-counters.json",
+    "retention-result.json",
+    "runtime-health-matrix.json",
+    "result.json",
+  ];
+  for (const name of savedNames)
+    assert.ok((await stat(join(saved, name))).isFile());
+  const savedResult = JSON.parse(
+    await readFile(join(saved, "result.json"), "utf8"),
+  );
+  assert.equal(savedResult.status, "FAIL");
+  assert.match(savedResult.failure, /G12_KAFKA_EVIDENCE_PATH_INVALID/u);
+
+  const foreignRoot = join(directory, "foreign");
+  execReal("git", [
+    "clone",
+    "--quiet",
+    "--shared",
+    "--no-hardlinks",
+    root,
+    foreignRoot,
+  ]);
+  execReal("git", [
+    "-C",
+    foreignRoot,
+    "remote",
+    "set-url",
+    "origin",
+    "https://github.com/YurGusev/CoffeeOrderPlatform",
+  ]);
+  const foreign = await makeContext("20261030T120003Z", foreignRoot, root);
+  process.env.COFFEE_LAUNCH_CONTEXT_FILE = foreign.contextPath;
+  const foreignLocalEvidence = join(foreignRoot, "evidence/observability");
+  const foreignEvidenceBefore = (await readdir(foreignLocalEvidence)).sort();
+  await assert.rejects(
+    runObservabilityVerification({
+      root: foreignRoot,
+      probePath,
+      run: () => {
+        throw new Error("unexpected Docker");
+      },
+    }),
+    /candidate root differs from verifier root/u,
+  );
+  await assert.rejects(
+    runObservabilityVerification({
+      root,
+      probePath,
+      run: () => {
+        throw new Error("unexpected Docker");
+      },
+    }),
+    (error) =>
+      error.evidence?.status === "FAIL" &&
+      /candidate root differs from verifier root/u.test(error.evidence.failure),
+  );
+  assert.deepEqual(
+    (await readdir(foreignLocalEvidence)).sort(),
+    foreignEvidenceBefore,
+  );
+  assert.equal(
+    await stat(join(foreign.artifacts, "observability")).catch(() => null),
+    null,
+  );
+  const malformed = await makeContext("20261030T120004Z");
+  await chmod(malformed.contextPath, 0o600);
+  await writeFile(malformed.contextPath, "{");
+  process.env.COFFEE_LAUNCH_CONTEXT_FILE = malformed.contextPath;
+  await assert.rejects(
+    runObservabilityVerification({
+      root,
+      probePath,
+      run: () => {
+        throw new Error("unexpected Docker");
+      },
+    }),
+    (error) => error.evidence?.status === "FAIL",
+  );
+  assert.equal(
+    await stat(join(malformed.artifacts, "observability")).catch(() => null),
+    null,
+  );
+  process.chdir(originalCwd);
+  await rm(root, { recursive: true, force: true });
+  for (const name of savedNames)
+    assert.ok((await stat(join(saved, name))).isFile());
+});
+
+void test("browser correlation admission verifies the sealed child bundle and scoped cleanup", async (t) => {
+  const parent = await createMigrationLaunchFixture({
+    databaseIsolation: true,
+    alignedRunId: true,
+  });
+  const child = await createBrowserChildMigrationLaunchFixture(parent);
+  t.after(async () => {
+    await rm(child.evidenceDir, { recursive: true, force: true });
+    await rm(child.root, { recursive: true, force: true });
+    await rm(parent.evidenceDir, { recursive: true, force: true });
+    await rm(parent.fixture.root, { recursive: true, force: true });
+    await rm(parent.fixture.bin, { recursive: true, force: true });
+  });
+  const parentContext = JSON.parse(await readFile(parent.contextPath, "utf8"));
+  parentContext.acceptedBaseCommit = parent.candidateSha;
+  parentContext.evidenceDir = join(
+    parent.fixture.root,
+    "evidence/launch",
+    parent.runId,
+  );
+  const context = JSON.parse(await readFile(child.contextPath, "utf8"));
+  context.sourceRepoRoot = parent.fixture.root;
+  context.evidenceDir = join(
+    parent.fixture.root,
+    "evidence/launch",
+    child.runId,
+  );
+  context.checkoutDir = join(parent.fixture.root, ".g15-browser-child-removed");
+  context.acceptedBaseCommit = parentContext.acceptedBaseCommit;
+  context.resources.g08PreparationContextPath = join(
+    parentContext.evidenceDir,
+    "context.json",
+  );
+  const lineage = await readFile(
+    join(
+      child.evidenceDir,
+      "gates/G15_BROWSER/artifacts/oidc-fixture-lineage.json",
+    ),
+  );
+  const baseConfig = await readFile(
+    join(parent.fixture.root, "config/platform.yaml"),
+  );
+  const childConfig = await readFile(join(child.root, "config/platform.yaml"));
+  const directory = join(
+    parentContext.evidenceDir,
+    "gates/G14_OBSERVABILITY/artifacts",
+  );
+  await mkdir(directory, { recursive: true, mode: 0o700 });
+  const bundle = join(directory, "browser-source.bundle");
+  execFileSync(
+    "git",
+    ["update-ref", "refs/heads/g15-browser-child", child.candidateSha],
+    { cwd: child.root },
+  );
+  execFileSync(
+    "git",
+    [
+      "bundle",
+      "create",
+      bundle,
+      "refs/heads/g15-browser-child",
+      `^${parent.candidateSha}`,
+    ],
+    { cwd: child.root },
+  );
+  await chmod(bundle, 0o400);
+  const childContext = Buffer.from(JSON.stringify(context));
+  for (const [name, bytes] of [
+    ["browser-context.json", childContext],
+    ["browser-lineage.json", lineage],
+    ["browser-base.yaml", baseConfig],
+    ["browser-config.yaml", childConfig],
+  ])
+    await writeFile(join(directory, name), bytes, { mode: 0o400 });
+  const digest = (bytes) => createHash("sha256").update(bytes).digest("hex");
+  const databases = ["customer", "catalog", "pricing", "orders", "integration"]
+    .map(
+      (owner) =>
+        `coffee_verify_${child.runId.toLowerCase().replace("-", "_")}_${owner}`,
+    )
+    .sort();
+  const receipt = {
+    schemaVersion: 1,
+    status: "PASS",
+    runId: parent.runId,
+    candidateSha: parent.candidateSha,
+    baseConfigSha256: digest(baseConfig),
+    childRunId: child.runId,
+    childCandidateSha: child.candidateSha,
+    childContextSha256: digest(childContext),
+    lineageSha256: digest(lineage),
+    bundleSha256: digest(await readFile(bundle)),
+    baseConfigArtifactSha256: digest(baseConfig),
+    childConfigArtifactSha256: digest(childConfig),
+    checkoutRemoved: true,
+    evidenceRemoved: true,
+    proof: {
+      verified: true,
+      correlationId: "8f53d687-fd3b-47be-b32b-2081d08bc55a",
+      traceId: "00bf08bba3714e52b26d23c08e06ce16",
+      browserRefetchMatched: true,
+      sseFrameMatched: true,
+      ownerCausation: true,
+    },
+    cleanup: {
+      verified: true,
+      databases: { verified: true, removed: [...databases], retained: [] },
+      attachment: {
+        baselineAttached: false,
+        attempted: true,
+        removed: true,
+        routePreserved: true,
+      },
+    },
+  };
+  const receiptPath = join(directory, "browser-correlation.json");
+  await writeFile(receiptPath, JSON.stringify(receipt), { mode: 0o600 });
+  await rm(child.root, { recursive: true, force: true });
+  assert.equal(
+    (
+      await validateBrowserCorrelation({
+        evidenceDir: parentContext.evidenceDir,
+        parentContext,
+      })
+    ).files.length,
+    6,
+  );
+  receipt.cleanup.attachment = {
+    baselineAttached: true,
+    attempted: false,
+    removed: false,
+    routePreserved: true,
+  };
+  await writeFile(receiptPath, JSON.stringify(receipt));
+  assert.equal(
+    (
+      await validateBrowserCorrelation({
+        evidenceDir: parentContext.evidenceDir,
+        parentContext,
+      })
+    ).files.length,
+    6,
+  );
+  for (const attachment of [
+    {
+      baselineAttached: true,
+      attempted: true,
+      removed: false,
+      routePreserved: true,
+    },
+    {
+      baselineAttached: true,
+      attempted: false,
+      removed: true,
+      routePreserved: true,
+    },
+    {
+      baselineAttached: false,
+      attempted: false,
+      removed: false,
+      routePreserved: true,
+    },
+    { attempted: true, removed: true, routePreserved: true },
+  ]) {
+    receipt.cleanup.attachment = attachment;
+    await writeFile(receiptPath, JSON.stringify(receipt));
+    await assert.rejects(
+      validateBrowserCorrelation({
+        evidenceDir: parentContext.evidenceDir,
+        parentContext,
+      }),
+      { code: "G14_BROWSER_CORRELATION_RECEIPT_INVALID" },
+    );
+  }
+  receipt.cleanup.attachment = {
+    baselineAttached: false,
+    attempted: true,
+    removed: true,
+    routePreserved: true,
+  };
+  await writeFile(receiptPath, JSON.stringify(receipt));
+  const observations = join(directory, "observability");
+  await mkdir(observations, { mode: 0o700 });
+  const observationRun = "00bf08bb-a371-4e52-b26d-23c08e06ce16";
+  const names = [
+    "alert-transitions.json",
+    "correlation-proof.json",
+    "redaction-scan.json",
+    "queue-loss-counters.json",
+    "retention-result.json",
+    "runtime-health-matrix.json",
+    "result.json",
+  ];
+  for (const name of names) {
+    const data = { status: "PASS", runId: observationRun };
+    if (name === "correlation-proof.json")
+      data.launchPath = {
+        correlationId: receipt.proof.correlationId,
+        traceId: receipt.proof.traceId,
+        browserRefetchMatched: true,
+        ownerCausation: true,
+      };
+    if (name === "result.json")
+      Object.assign(data, {
+        browserCorrelationChild: receipt,
+        provenance: {
+          sourceHashStable: true,
+          start: {
+            baseSha: parent.candidateSha,
+            configSha256: parentContext.baseConfigSha256,
+            sourceFiles: { status: "PASS" },
+          },
+        },
+        runtimeMetricMatrix: {
+          composeReceipt: {
+            postgres: { externalPostgres: true },
+            externalCleanup: { verified: true },
+          },
+        },
+        cleanupErrors: [],
+        fullSystemG14: { status: "NOT_RUN" },
+      });
+    await writeFile(join(observations, name), JSON.stringify(data), {
+      mode: 0o600,
+    });
+  }
+  await writeFile(
+    join(parentContext.evidenceDir, "context.json"),
+    JSON.stringify(parentContext),
+    { mode: 0o600 },
+  );
+  const { verifyGateArtifacts } =
+    await import("../../verification/launch/v1/run.mjs");
+  const wrongCommand = {
+    runs: [
+      {
+        argv: ["true"],
+        exitCode: 0,
+        timedOut: false,
+        outputLimitExceeded: false,
+      },
+    ],
+    artifacts: [],
+  };
+  assert.match(
+    await verifyGateArtifacts(
+      { id: "G14_OBSERVABILITY", command: "pnpm test:observability" },
+      wrongCommand,
+      parentContext.evidenceDir,
+    ),
+    /browser correlation child lineage or cleanup is invalid/u,
+  );
+  const record = {
+    runs: [
+      {
+        argv: ["pnpm", "test:observability"],
+        exitCode: 0,
+        timedOut: false,
+        outputLimitExceeded: false,
+      },
+    ],
+    artifacts: [],
+  };
+  assert.match(
+    await verifyGateArtifacts(
+      { id: "G14_OBSERVABILITY", command: "pnpm test:observability" },
+      record,
+      parentContext.evidenceDir,
+    ),
+    /full-system SLO, chaos and capacity proof is not complete/u,
+  );
+  assert.equal(
+    record.artifacts.length,
+    13,
+    "valid child and observability files remain recorded on denial",
+  );
+  receipt.cleanup.databases.removed[0] = "coffeeorderdb";
+  await writeFile(receiptPath, JSON.stringify(receipt));
+  await assert.rejects(
+    validateBrowserCorrelation({
+      evidenceDir: parentContext.evidenceDir,
+      parentContext,
+    }),
+    { code: "G14_BROWSER_CORRELATION_RECEIPT_INVALID" },
+  );
+  receipt.cleanup.databases.removed = databases;
+  receipt.proof.browserRefetchMatched = false;
+  await writeFile(receiptPath, JSON.stringify(receipt));
+  await assert.rejects(
+    validateBrowserCorrelation({
+      evidenceDir: parentContext.evidenceDir,
+      parentContext,
+    }),
+    { code: "G14_BROWSER_CORRELATION_RECEIPT_INVALID" },
   );
 });
 
