@@ -1284,26 +1284,60 @@ async function forbiddenRuntimePackages() {
   return [...new Set([...TOOLING_NAMES, ...ROOT_TOOLING_PACKAGES])].sort();
 }
 
-function summarizeComposeReceipt(receipt, projectName) {
+export function summarizeComposeReceipt(receipt, projectName, external) {
   const expectedHealth = ["/health/live", "/health/ready", "/metrics"];
   const postgresStorage = receipt?.recoveryProof?.postgresStorage;
+  const postgres = receipt?.recoveryProof?.postgres;
+  const cleanup = receipt?.externalCleanup;
+  const expectedDatabases = [
+    "customer",
+    "catalog",
+    "pricing",
+    "orders",
+    "integration",
+  ]
+    .map(
+      (owner) =>
+        `coffee_verify_${projectName.slice("coffee-launch-".length).replace("-", "_")}_${owner}`,
+    )
+    .sort();
+  const postgresProof = external
+    ? receipt?.proofKind === "observability-external" &&
+      receipt?.credentialSource ===
+        "canonical-runtime-plus-local-kafka-fixture" &&
+      postgres?.externalPostgres === true &&
+      postgres.runtimeRoleCount === 10 &&
+      Array.isArray(postgres.databases) &&
+      JSON.stringify([...postgres.databases].sort()) ===
+        JSON.stringify(expectedDatabases) &&
+      cleanup?.verified === true &&
+      cleanup.databases?.verified === true &&
+      Array.isArray(cleanup.databases.removed) &&
+      JSON.stringify([...cleanup.databases.removed].sort()) ===
+        JSON.stringify(expectedDatabases) &&
+      Array.isArray(cleanup.databases.retained) &&
+      cleanup.databases.retained.length === 0 &&
+      cleanup.attachment?.attempted === true &&
+      cleanup.attachment.removed === true &&
+      cleanup.attachment.routePreserved === true
+    : receipt?.proofKind === "observability-fixture" &&
+      receipt?.credentialSource === "local-fixture" &&
+      postgresStorage?.type === "tmpfs" &&
+      postgresStorage.destination === "/var/lib/postgresql/data" &&
+      postgresStorage.sizeMiB === 512 &&
+      postgresStorage.durability === "ephemeral";
   if (
-    receipt?.proofKind !== "observability-fixture" ||
+    !postgresProof ||
     receipt?.project !== projectName ||
     receipt.runtimes !== 14 ||
     receipt.nativeIngress !== "edge-nginx" ||
     receipt.kafka !== true ||
     receipt.ephemeralKafkaBroker !== true ||
-    receipt.credentialSource !== "local-fixture" ||
     receipt.telemetry !== true ||
     receipt.dbIntegrationProof !== true ||
     receipt.gracefulShutdown !== true ||
     receipt.recoveryProof === null ||
     typeof receipt.recoveryProof !== "object" ||
-    postgresStorage?.type !== "tmpfs" ||
-    postgresStorage.destination !== "/var/lib/postgresql/data" ||
-    postgresStorage.sizeMiB !== 512 ||
-    postgresStorage.durability !== "ephemeral" ||
     !Array.isArray(receipt.healthEndpoints) ||
     expectedHealth.some((path) => !receipt.healthEndpoints.includes(path))
   ) {
@@ -1315,13 +1349,22 @@ function summarizeComposeReceipt(receipt, projectName) {
     nativeIngress: "edge-nginx",
     kafka: true,
     ephemeralKafkaBroker: true,
-    credentialSource: "local-fixture",
+    credentialSource: receipt.credentialSource,
     telemetry: true,
     dbIntegrationProof: true,
     gracefulShutdown: true,
     healthEndpoints: expectedHealth,
     recoveryProofPresent: true,
-    postgresStorage,
+    ...(external
+      ? {
+          postgres: {
+            externalPostgres: true,
+            databaseCount: 5,
+            runtimeRoleCount: 10,
+          },
+          externalCleanup: cleanup,
+        }
+      : { postgresStorage }),
   };
 }
 
@@ -1382,6 +1425,9 @@ export async function verifyRuntimeMetricMatrix({
     !/^\d+\.\d+\.\d+$/u.test(nginxVersion ?? "")
   )
     fail("runtime matrix inputs invalid");
+  const external = config?.verification?.databaseIsolation?.enabled === true;
+  if (external !== (config?.verification?.kafkaNamespaceIsolation === true))
+    fail("runtime matrix isolation policies must agree");
   const projectSuffix = projectName.slice("coffee-launch-".length);
   const [source, forbiddenPackages] = await Promise.all([
     sourceEvidence(sourceIdentity),
@@ -1548,7 +1594,7 @@ export async function verifyRuntimeMetricMatrix({
     smoke = await runComposeSmoke({
       args: [
         "--recovery-proof",
-        "--observability-fixture",
+        ...(external ? [] : ["--observability-fixture"]),
         "--project-name",
         projectName,
       ],
@@ -1571,7 +1617,7 @@ export async function verifyRuntimeMetricMatrix({
   }
   if (!readyCalled || !cleanupCalled)
     fail("runtime matrix Compose hooks incomplete");
-  const composeReceipt = summarizeComposeReceipt(smoke, projectName);
+  const composeReceipt = summarizeComposeReceipt(smoke, projectName, external);
   assertProjectCleanup(runDocker, projectName);
   if (
     Object.values(capturedNetworks).some((name) =>

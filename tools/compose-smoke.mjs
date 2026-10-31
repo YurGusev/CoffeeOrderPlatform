@@ -2127,7 +2127,7 @@ export async function readExternalRecoveryProofCredentials(
     "external recovery launch metadata has a closed shape",
   );
   assert.ok(
-    ["G13", "G15"].includes(launchMetadata.expectedLineage),
+    ["G13", "G14", "G15"].includes(launchMetadata.expectedLineage),
     "external recovery launch lineage is invalid",
   );
   assert.equal(typeof launchMetadata.candidateRoot, "string");
@@ -2165,18 +2165,18 @@ export async function readExternalRecoveryProofCredentials(
       (key) => Object.hasOwn(resources, key),
     );
   if (
-    launchMetadata.expectedLineage === "G13" &&
+    ["G13", "G14"].includes(launchMetadata.expectedLineage) &&
     (hasPreparationContextPath || hasBrowserParentMetadata)
   )
     throw new Error(
-      "external recovery lineage metadata cannot downgrade to G13",
+      "external recovery lineage metadata cannot downgrade to G13/G14",
     );
   if (
     launchMetadata.expectedLineage === "G15" &&
     (!hasPreparationContextPath || !hasAllBrowserParentMetadata)
   )
     throw new Error("G15 G08 parent preparation reference is missing");
-  const configRoot = ROOT;
+  const configRoot = launchMetadata.candidateRoot;
   const preparationSource = hasPreparationContextPath
     ? { preparationContextPath: browserPreparationContextPath }
     : {};
@@ -2208,9 +2208,11 @@ export async function readExternalRecoveryProofCredentials(
     "external recovery proof target differs from the approved PostgreSQL system identifier",
   );
   const ownership = await readJson(
-    join(ROOT, "config/database-ownership.json"),
+    join(configRoot, "config/database-ownership.json"),
   );
-  const roleMap = await readJson(join(ROOT, "config/database-role-map.json"));
+  const roleMap = await readJson(
+    join(configRoot, "config/database-role-map.json"),
+  );
   const projected = projectLaunchDatabaseTargets({
     ownership,
     roleMap,
@@ -2279,6 +2281,7 @@ export async function readExternalRecoveryProofCredentials(
     roleMap: projected.roleMap,
     ownership: projected.ownership,
     launchIdentity,
+    candidateRoot: configRoot,
     postgres,
     g08PreparationContextPath: browserPreparationContextPath,
     admin,
@@ -2316,7 +2319,7 @@ export function externalRecoveryMigrationCredentialRequest(
   owner,
 ) {
   return {
-    root: ROOT,
+    root: credentials.candidateRoot ?? ROOT,
     contextPath,
     owner,
     kind: "migrator",
@@ -3086,7 +3089,7 @@ function assertApprovedExternalPostgresDockerState({ attached }) {
   return { container, dataNetwork, legacyNetwork };
 }
 
-function prepareApprovedExternalPostgresAttachment() {
+export function prepareApprovedExternalPostgresAttachment() {
   const before = assertApprovedExternalPostgresDockerState({ attached: false });
   const routeBefore = externalPostgresRoute(
     APPROVED_EXTERNAL_POSTGRES.containerId,
@@ -3995,7 +3998,19 @@ export async function applyExternalRecoveryMigrations(
   };
 }
 
-async function cleanupExternalRecoveryDatabases(credentials, resources) {
+export async function cleanupExternalRecoveryDatabases(
+  credentials,
+  resources,
+  consumersStopped,
+) {
+  if (consumersStopped !== true) {
+    return {
+      verified: false,
+      removed: [],
+      retained: resources.map(({ database }) => database.name),
+      failure: "COMPOSE_CONSUMERS_NOT_STOPPED",
+    };
+  }
   const admin = await externalAdminClient(credentials, credentials.postgres);
   try {
     return await cleanupMigrationDatabases(resources, async (database) => {
@@ -8922,7 +8937,7 @@ export async function runComposeSmoke({
         ? {
             candidateRoot: launchIdentity.candidateRoot,
             resources: launchIdentity.context.resources,
-            expectedLineage: browser ? "G15" : "G13",
+            expectedLineage: browser ? "G15" : observability ? "G14" : "G13",
           }
         : undefined;
     if (proofLaunchIdentity) {
@@ -9346,7 +9361,7 @@ export async function runComposeSmoke({
     if (externalRecovery) {
       recoveryDatabaseProof = await applyExternalRecoveryMigrations(
         recoveryProofCredentials,
-        recoveryPlatformConfig,
+        platformConfig,
         launchContextPath,
         externalRunDatabaseResources,
       );
@@ -10183,8 +10198,12 @@ export async function runComposeSmoke({
       assertStopped(projectName, secretsDir, composeFile);
     }
     receipt = {
-      ...(options.observabilityFixture
-        ? { proofKind: "observability-fixture" }
+      ...(observability
+        ? {
+            proofKind: options.observabilityFixture
+              ? "observability-fixture"
+              : "observability-external",
+          }
         : {}),
       project: projectName,
       runtimes:
@@ -10372,6 +10391,7 @@ export async function runComposeSmoke({
               await cleanupExternalRecoveryDatabases(
                 recoveryProofCredentials,
                 externalRunDatabaseResources,
+                composeDownComplete,
               );
             if (!externalDatabaseCleanupReceipt.verified)
               cleanupHookError ??= new Error(

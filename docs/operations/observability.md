@@ -96,7 +96,7 @@ Loki WAL использует native `disk_full_threshold: 0.8`; отдельн�
 
 Пять правил ограничены `deployment_environment`, `service_namespace` и `service_version`: not-ready, consumer lag и Outbox age используют окно 5m; UnknownOutcome — 2m; SSE drop rate — 5m с порогом 5%. `notReady` учитывает Node `runtime_ready` и native nginx `probe_success`, включая отсутствие обязательной серии. Шестое правило проверяет заполнение каждого telemetry volume с `alerts.diskUsage.forMs`. Ошибка query не считается resolved. Firing и resolved должны относиться к одному episode; локальный sink хранит ограниченные ротируемые записи.
 
-`pnpm test:observability` запускает disposable run-id proof и сохраняет результаты в `evidence/observability/<run-id>/`: `alert-transitions.json`, `correlation-proof.json`, `redaction-scan.json`, `queue-loss-counters.json`, `retention-result.json`, `runtime-health-matrix.json` и `result.json`. Любой обязательный FAIL/NOT_RUN блокирует G14. Проверяются три сигнала и same-trace correlation, redaction, шесть alert episodes, outage/loss, memory/retry/stop, права и сети, persistence и восстановление после disk pressure. Проверка TTL в bounded fixture profile не доказывает истечение реальных 72 часов; сохранность после restart/recreate/checkpointed crash и restore требуют собственного evidence.
+`pnpm test:observability` запускает disposable run-id proof и сохраняет результаты в `evidence/observability/<run-id>/`; формальный запуск также сохраняет их в `evidence/launch/<run-id>/gates/G14_OBSERVABILITY/artifacts/observability/`. Файлы: `alert-transitions.json`, `correlation-proof.json`, `redaction-scan.json`, `queue-loss-counters.json`, `retention-result.json`, `runtime-health-matrix.json` и `result.json`. Любой обязательный FAIL/NOT_RUN блокирует G14. Проверяются три сигнала и same-trace correlation, redaction, шесть alert episodes, outage/loss, memory/retry/stop, права и сети, persistence и восстановление после disk pressure. Проверка TTL в bounded fixture profile не доказывает истечение реальных 72 часов; сохранность после restart/recreate/checkpointed crash и restore требуют собственного evidence.
 
 Loki retention fixture сохраняет включённый embedded chunk cache и сокращает только его TTL до 30 секунд вместе с остальными тестовыми интервалами. Стандартный часовой TTL мог возвращать удалённый chunk из кеша дольше шестиминутного proof; парные native опыты подтвердили отсутствие старого маркера при сохранности свежего с TTL 30 секунд. Effective настройки проверяются до нагрузки и после восстановления исходного профиля; production retention и cache TTL не меняются. При timeout сохраняются последние наблюдения compactor и old/current controls.
 
@@ -108,18 +108,22 @@ G12 имеет установленный scope 22 images + lockfile / 46 report
 
 Runtime metric matrix охватывает 14 Node runtime и native nginx до штатного cleanup: self-mTLS live/ready/text metrics и ожидаемые 4xx, OTLP HTTP/error и producer metrics, 10 DB-waiting, lag двух durable Kafka consumers с committed offsets и пять scoped Outbox-age series. Cold `realtime-gateway` до consume/commit имеет неизвестный lag (`-1`), отмеченный `ACTIVITY_DEPENDENT / NOT_ASSERTED_WITHOUT_ACTIVITY`; launch-фаза проверяет его после реальной активности. Событийные и транзакционные samples требуют активности шести owner roles и SQL-backed convergence helper, который не заменяет постоянный runtime. Сканируются 15 final images по фактическим IDs.
 
-G14 выбирает `--observability-fixture` через programmatic hooks: отдельный
-PostgreSQL с PGDATA в tmpfs 512 MiB, временный Kafka и локальный simulated
-provider. Проверенный G12 context остаётся у host verifier; fixture runtime
-его не получает. Этот режим не читает G08 credentials и не подтверждает
-изоляцию существующей business БД. Обычный recovery-proof сохраняет свои
-launch guards. Отдельный launch-path использует тот же pinned PostgreSQL
-fixture image и ограниченный tmpfs.
+Формальный G14 использует подготовленный G08 PostgreSQL и пять баз, имена
+которых выведены из launch run ID и владельцев `customer`, `catalog`, `pricing`,
+`orders`, `integration`. Используются существующие scoped роли; удаление этих
+баз допускается только после подтверждённой остановки потребителей. При
+неподтверждённой очистке базы и receipt сохраняются для разбора. Временные Kafka
+и simulated provider остаются частью проверки.
 
-Component Orders owners получают canonical `config/database-ownership.json`
-через read-only mount с проверкой hash и role-local доступа. Это не создаёт launch
-identity; G15 context монтируется только при подтверждённой identity. Launch-path
-продолжает использовать собственный PostgreSQL fixture.
+Для согласованной браузерной корреляции G14 и для G15 используется отдельный
+OIDC-only child с подтверждённой связью с parent candidate; Kafka image допускается
+по проверенному G12 parent. В компонентном диагностическом режиме
+`--observability-fixture` по-прежнему использует отдельный PostgreSQL с PGDATA в
+tmpfs 512 MiB и не подтверждает изоляцию существующей business БД. Компонентные
+Orders owners получают canonical `config/database-ownership.json` через
+read-only mount с проверкой hash и role-local доступа. Этот режим не создаёт
+launch identity. Формальные full-system SLO, chaos и capacity остаются
+`NOT_RUN` до отдельного подтверждения.
 
 Convergence helper удерживает periodic exporter до подтверждения в Prometheus: `unknown_outcomes_current=1` перед recovery, затем `unknown_outcomes_current=0` и `recovered_applied=1` перед остановкой. Каждая фаза подтверждается run-scoped checkpoint в `/results`; локальные значения и `forceFlush` не доказывают доставку. Истечение bounded ожидания завершает proof с FAIL и cleanup.
 

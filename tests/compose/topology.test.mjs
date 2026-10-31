@@ -4940,6 +4940,17 @@ void test("G13/G15 external PostgreSQL attachment is exact and keeps the shared 
       preparationContextPath: "/parent/evidence/launch/run/context.json",
     },
   );
+  assert.equal(
+    externalRecoveryMigrationCredentialRequest(
+      {
+        candidateRoot: "/validated-child",
+        postgres: { systemIdentifier: "7613370342949990434" },
+      },
+      "/child/context.json",
+      "orders",
+    ).root,
+    "/validated-child",
+  );
   assert.deepEqual(
     externalRecoveryMigrationCredentialRequest(
       { postgres: { systemIdentifier: "7613370342949990434" } },
@@ -5010,7 +5021,7 @@ void test("G13/G15 external PostgreSQL attachment is exact and keeps the shared 
   }
 });
 
-void test("G13 uses its current G08 context while malformed G15 lineage fails before PostgreSQL", async (t) => {
+void test("G13/G14 use current G08 context while malformed browser lineage fails before PostgreSQL", async (t) => {
   const { readExternalRecoveryProofCredentials } =
     await import("../../tools/compose-smoke.mjs");
   const launchIdentity = {
@@ -5037,6 +5048,15 @@ void test("G13 uses its current G08 context while malformed G15 lineage fails be
     (error) =>
       ["CONFIG-G08-BUNDLE", "CONFIG-G08-CONTEXT"].includes(error?.ruleId),
     "ordinary G13 must enter the current-context G08 reader",
+  );
+
+  await assert.rejects(
+    readExternalRecoveryProofCredentials(launchIdentity, "/", {
+      candidateRoot: REPO_ROOT,
+      expectedLineage: "G14",
+      resources: { g08PreparationContextPath: "/foreign/context.json" },
+    }),
+    /cannot downgrade to G13\/G14/u,
   );
 
   for (const resources of [
@@ -5237,6 +5257,99 @@ void test("external PostgreSQL attachment cleanup requires acknowledged ownershi
   }
 });
 
+void test("external PostgreSQL cleanup retains run databases until consumers are confirmed stopped", async (t) => {
+  const { cleanupExternalRecoveryDatabases } =
+    await import("../../tools/compose-smoke.mjs");
+  const owners = ["customer", "catalog", "pricing", "orders", "integration"];
+  const databases = owners.map((owner) => ({
+    name: `coffee_verify_20261030t120000z_123abcd_${owner}`,
+    migratorRole: `coffee_${owner}_migrator`,
+  }));
+  const resources = databases.map((database) => ({
+    database,
+    state: "created-acknowledged",
+  }));
+  const credentials = {
+    postgres: {
+      host: "coffee_postgres",
+      port: 5432,
+      systemIdentifier: "7613370342949990434",
+    },
+    admin: { username: "coffeeuser", password: "fixture-only" },
+  };
+  const remaining = new Map(
+    databases.map((database) => [database.name, database.migratorRole]),
+  );
+  const queries = [];
+  let connections = 0;
+  t.mock.method(pg.Client.prototype, "connect", async function () {
+    connections += 1;
+  });
+  t.mock.method(pg.Client.prototype, "end", async function () {});
+  t.mock.method(pg.Client.prototype, "query", async function (sql, args) {
+    queries.push(sql);
+    if (sql.includes("system_identifier"))
+      return {
+        rows: [
+          {
+            current_database: "postgres",
+            current_user: "coffeeuser",
+            server_version: "17.11",
+            system_identifier: "7613370342949990434",
+            is_superuser: true,
+          },
+        ],
+      };
+    if (sql.includes("pg_stat_activity")) return { rows: [] };
+    if (sql.includes("pg_get_userbyid"))
+      return {
+        rows: remaining.has(args[0]) ? [{ owner: remaining.get(args[0]) }] : [],
+      };
+    const match = /^DROP DATABASE "([a-z0-9_]+)"$/u.exec(sql);
+    if (match) {
+      assert.ok(remaining.delete(match[1]));
+      return { rows: [] };
+    }
+    throw new Error("unexpected fake PostgreSQL query");
+  });
+  try {
+    for (const stopped of [false, undefined]) {
+      const receipt = await cleanupExternalRecoveryDatabases(
+        credentials,
+        resources,
+        stopped,
+      );
+      assert.deepEqual(receipt, {
+        verified: false,
+        removed: [],
+        retained: databases.map(({ name }) => name),
+        failure: "COMPOSE_CONSUMERS_NOT_STOPPED",
+      });
+    }
+    assert.equal(
+      connections,
+      0,
+      "no activity probe or DROP is allowed without consumer cleanup proof",
+    );
+    assert.deepEqual(queries, []);
+    const receipt = await cleanupExternalRecoveryDatabases(
+      credentials,
+      resources,
+      true,
+    );
+    assert.equal(receipt.verified, true);
+    assert.deepEqual(receipt.removed, databases.map(({ name }) => name).sort());
+    assert.deepEqual(receipt.retained, []);
+    assert.equal(
+      queries.filter((sql) => /^DROP DATABASE/u.test(sql)).length,
+      5,
+    );
+    assert.equal(remaining.size, 0);
+  } finally {
+    t.mock.restoreAll();
+  }
+});
+
 void test("external PostgreSQL preflight closes admin clients once and never creates on failure", async (t) => {
   const { applyExternalRecoveryMigrations } =
     await import("../../tools/compose-smoke.mjs");
@@ -5370,4 +5483,45 @@ void test("external PostgreSQL preflight closes admin clients once and never cre
   });
   assert.equal(failedCleanup.verified, false);
   assert.equal(failedCleanup.failure, "POSTGRES_ATTACHMENT_RETAINED");
+});
+
+void test("external recovery projection accepts canonical mapping once and rejects re-projection", async () => {
+  const { projectRecoveryPlatformConfig } =
+    await import("../../tools/compose-smoke.mjs");
+  const { load: parseYaml } = await import("js-yaml");
+  const { projectLaunchDatabaseTargets } =
+    await import("../../scripts/db-bootstrap.mjs");
+  const config = parseYaml(
+    await readFile(join(REPO_ROOT, "config/platform.yaml"), "utf8"),
+  );
+  const ownership = JSON.parse(
+    await readFile(join(REPO_ROOT, "config/database-ownership.json"), "utf8"),
+  );
+  const roleMap = JSON.parse(
+    await readFile(join(REPO_ROOT, "config/database-role-map.json"), "utf8"),
+  );
+  const launchIdentity = {
+    schemaVersion: 1,
+    runId: "20261024T120000Z-a12bc34",
+    candidateSha: `a12bc34${"0".repeat(33)}`,
+    baseConfigSha256: "a".repeat(64),
+  };
+  const projected = projectLaunchDatabaseTargets({
+    ownership,
+    roleMap,
+    launchIdentity,
+  });
+  const result = projectRecoveryPlatformConfig(config, projected.ownership);
+  assert.equal(
+    result.services["orders-service"].database,
+    "coffee_verify_20261024t120000z_a12bc34_orders",
+  );
+  assert.equal(
+    config.services["orders-service"].database,
+    "coffee_platform_orders",
+  );
+  assert.throws(
+    () => projectRecoveryPlatformConfig(result, projected.ownership),
+    /canonical platform config database differs/u,
+  );
 });

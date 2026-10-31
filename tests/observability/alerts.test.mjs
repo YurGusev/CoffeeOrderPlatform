@@ -2,8 +2,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { runInNewContext } from "node:vm";
 import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
+import { load as parseYaml } from "js-yaml";
 import path from "node:path";
 import {
+  mkdir,
   mkdtemp,
   readFile,
   readdir,
@@ -50,8 +53,10 @@ import {
   runtimeMetricFamilies,
   sanitizeRuntimeMatrixFailure,
   sanitizeRuntimeMetricMatches,
+  summarizeComposeReceipt,
   verifyRuntimeMetricMatrix,
 } from "./runtime-matrix.mjs";
+import { resolveConvergenceTargets } from "./convergence-metrics-proof.mjs";
 import {
   NODE_RUNTIME_ROLES,
   summarizeRuntimeProbeOutput,
@@ -1742,6 +1747,169 @@ void test("runtime metric matrix requires a source identity callback before any 
   assert.equal(dockerCalls, 0);
 });
 
+void test("external runtime matrix requires exact five database targets and confirmed cleanup", () => {
+  const project = "coffee-launch-20261024t120000z-a12bc34";
+  const databases = ["customer", "catalog", "pricing", "orders", "integration"]
+    .map((owner) => `coffee_verify_20261024t120000z_a12bc34_${owner}`)
+    .sort();
+  const receipt = {
+    proofKind: "observability-external",
+    project,
+    runtimes: 14,
+    nativeIngress: "edge-nginx",
+    kafka: true,
+    ephemeralKafkaBroker: true,
+    credentialSource: "canonical-runtime-plus-local-kafka-fixture",
+    telemetry: true,
+    dbIntegrationProof: true,
+    gracefulShutdown: true,
+    healthEndpoints: ["/health/live", "/health/ready", "/metrics"],
+    recoveryProof: {
+      postgres: { externalPostgres: true, runtimeRoleCount: 10, databases },
+    },
+    externalCleanup: {
+      verified: true,
+      databases: { verified: true, removed: databases, retained: [] },
+      attachment: { attempted: true, removed: true, routePreserved: true },
+    },
+  };
+  assert.equal(
+    summarizeComposeReceipt(receipt, project, true).postgres.databaseCount,
+    5,
+  );
+  for (const invalid of [
+    { ...receipt, proofKind: "observability-fixture" },
+    {
+      ...receipt,
+      recoveryProof: {
+        postgres: {
+          ...receipt.recoveryProof.postgres,
+          databases: [...databases.slice(0, 4), "coffeeorderdb"],
+        },
+      },
+    },
+    {
+      ...receipt,
+      externalCleanup: { ...receipt.externalCleanup, verified: false },
+    },
+    {
+      ...receipt,
+      externalCleanup: {
+        ...receipt.externalCleanup,
+        attachment: { attempted: true, removed: false, routePreserved: true },
+      },
+    },
+  ])
+    assert.throws(
+      () => summarizeComposeReceipt(invalid, project, true),
+      /receipt assertion failed/u,
+    );
+});
+
+void test("runtime matrix reads isolation policies from the validated platform config shape", async () => {
+  const config = parseYaml(
+    await readFile(
+      new URL("../../config/platform.yaml", import.meta.url),
+      "utf8",
+    ),
+  );
+  config.verification.databaseIsolation.enabled = true;
+  config.verification.kafkaNamespaceIsolation = false;
+  let calls = 0;
+  await assert.rejects(
+    verifyRuntimeMetricMatrix({
+      config,
+      projectName: "coffee-launch-20261024t120000z-a12bc34",
+      exporterToken: "fixture-token",
+      nodeVersion: "1.2.3",
+      nginxVersion: "1.2.3",
+      sourceIdentity: async () => {
+        calls += 1;
+      },
+      onRolesReady: async () => {},
+      onCleanup: async () => {},
+      verifyMetricFamily: async () => {},
+    }),
+    /runtime matrix isolation policies must agree/u,
+  );
+  assert.equal(calls, 0);
+});
+
+void test("convergence proof derives run-scoped DB and Kafka names before accessing them", async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), "coffee-convergence-target-"));
+  try {
+    const config = parseYaml(
+      await readFile(
+        new URL("../../config/platform.yaml", import.meta.url),
+        "utf8",
+      ),
+    );
+    config.verification.databaseIsolation.enabled = true;
+    config.verification.kafkaNamespaceIsolation = true;
+    const configBytes = Buffer.from(JSON.stringify(config));
+    const contextPath = path.join(dir, "context.json");
+    const runId = "20261024T120000Z-a12bc34";
+    await writeFile(
+      contextPath,
+      JSON.stringify({
+        schemaVersion: 1,
+        runId,
+        candidateSha: `a12bc34${"0".repeat(33)}`,
+        baseConfigSha256: createHash("sha256")
+          .update(configBytes)
+          .digest("hex"),
+      }),
+      { mode: 0o400 },
+    );
+    const targets = await resolveConvergenceTargets({
+      configBytes,
+      contextPath,
+      ownershipPath: fileURLToPath(
+        new URL("../../config/database-ownership.json", import.meta.url),
+      ),
+    });
+    assert.equal(
+      targets.databaseTarget.database,
+      "coffee_verify_20261024t120000z_a12bc34_orders",
+    );
+    assert.equal(
+      targets.databaseTarget.allowedDatabase,
+      targets.databaseTarget.database,
+    );
+    assert.equal(
+      targets.physicalTargets.groups["aroma-convergence-v1"],
+      `${runId}.aroma-convergence-v1`,
+    );
+    assert.equal(
+      targets.physicalTargets.topics["coffee.aroma.cart.commands.v1"],
+      `${runId}.coffee.aroma.cart.commands.v1`,
+    );
+    await assert.rejects(
+      resolveConvergenceTargets({ configBytes }),
+      /matching launch isolation/u,
+    );
+    await assert.rejects(
+      resolveConvergenceTargets({
+        configBytes: Buffer.from(`${configBytes} `),
+        contextPath,
+        ownershipPath: fileURLToPath(
+          new URL("../../config/database-ownership.json", import.meta.url),
+        ),
+      }),
+    );
+    config.verification.kafkaNamespaceIsolation = false;
+    await assert.rejects(
+      resolveConvergenceTargets({
+        configBytes: Buffer.from(JSON.stringify(config)),
+        contextPath,
+      }),
+      /matching Kafka isolation/u,
+    );
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 void test("verification provenance hashes the non-ignored source tree and compiled runtime packages", async () => {
   const identity = await sourceIdentity(
     new URL("../..", import.meta.url).pathname,
@@ -2979,6 +3147,98 @@ void test("G14 cannot pass when required evidence cannot be written", async () =
   assert.equal(evidence.status, "FAIL");
   assert.equal(evidence.failure, "cannot persist evidence: disk full");
   assert.equal(evidence.evidenceDirectory, undefined);
+});
+
+void test("launch observability artifacts survive removal of the temporary candidate", async () => {
+  const parent = await mkdtemp(
+    path.join(tmpdir(), "coffee-observability-evidence-"),
+  );
+  const root = path.join(parent, "candidate"),
+    evidenceDir = path.join(parent, "launch");
+  try {
+    await mkdir(path.join(root, "config"), { recursive: true });
+    for (const name of ["platform-runtime", "platform-observability"]) {
+      const directory = path.join(root, "packages", name, "dist");
+      await mkdir(directory, { recursive: true });
+      await writeFile(path.join(directory, "index.js"), "export {};\n");
+    }
+    await writeFile(
+      path.join(root, "config/platform.yaml"),
+      "environment: development\n",
+    );
+    await writeFile(path.join(root, "config/toolchain-versions.json"), "{}\n");
+    assert.equal(spawnSync("git", ["init", "-q", root]).status, 0);
+    assert.equal(spawnSync("git", ["-C", root, "add", "config"]).status, 0);
+    await mkdir(path.join(evidenceDir, "gates/G14_OBSERVABILITY/artifacts"), {
+      recursive: true,
+    });
+    const retained = [
+      "customer",
+      "catalog",
+      "pricing",
+      "orders",
+      "integration",
+    ].map((owner) => `coffee_verify_20261030t120000z_123abcd_${owner}`);
+    const launchPathExternalCleanup = {
+      verified: false,
+      databases: {
+        verified: false,
+        removed: [],
+        retained,
+        failure: "COMPOSE_CONSUMERS_NOT_STOPPED",
+      },
+      attachment: { attempted: true, removed: false, routePreserved: false },
+      failure: "COMPOSE_CONSUMERS_NOT_STOPPED",
+    };
+    const evidence = {
+      runId: "00bf08bb-a371-4e52-b26d-23c08e06ce16",
+      status: "FAIL",
+      limitations: [],
+      phases: {},
+      launchPathExternalCleanup,
+    };
+    await persistVerificationResult({
+      root,
+      evidence,
+      secrets: [],
+      launchEvidenceDir: evidenceDir,
+    });
+    const saved = evidence.evidenceDirectory;
+    const names = [
+      "alert-transitions.json",
+      "correlation-proof.json",
+      "redaction-scan.json",
+      "queue-loss-counters.json",
+      "retention-result.json",
+      "runtime-health-matrix.json",
+      "result.json",
+    ];
+    const hashes = await Promise.all(
+      names.map(async (name) =>
+        createHash("sha256")
+          .update(await readFile(path.join(saved, name)))
+          .digest("hex"),
+      ),
+    );
+    await rm(root, { recursive: true, force: true });
+    assert.deepEqual(
+      JSON.parse(await readFile(path.join(saved, "result.json"), "utf8"))
+        .launchPathExternalCleanup,
+      launchPathExternalCleanup,
+    );
+    for (let i = 0; i < names.length; i++) {
+      const file = path.join(saved, names[i]);
+      assert.equal((await stat(file)).mode & 0o777, 0o600);
+      assert.equal(
+        createHash("sha256")
+          .update(await readFile(file))
+          .digest("hex"),
+        hashes[i],
+      );
+    }
+  } finally {
+    await rm(parent, { recursive: true, force: true });
+  }
 });
 
 void test("Alloy native logfmt retry expiry reports the exact dropped_items field", () => {

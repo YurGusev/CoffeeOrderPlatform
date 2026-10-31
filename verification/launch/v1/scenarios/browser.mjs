@@ -44,6 +44,14 @@ const ARTIFACTS = Object.freeze({
   parentRuntime: "browser-parent.json",
   parentFailure: "browser-parent-failure.json",
 });
+const CORRELATION_ARTIFACTS = Object.freeze({
+  childContext: "browser-context.json",
+  lineage: "browser-lineage.json",
+  bundle: "browser-source.bundle",
+  baseConfig: "browser-base.yaml",
+  childConfig: "browser-config.yaml",
+  receipt: "browser-correlation.json",
+});
 const PARENT_KEYS = Object.freeze([
   "schemaVersion",
   "gateId",
@@ -917,7 +925,106 @@ export async function validateBrowserParentRuntime({
   };
 }
 
-export async function runBrowserParent() {
+export async function validateBrowserCorrelation({
+  evidenceDir,
+  parentContext,
+}) {
+  const directory = join(evidenceDir, "gates/G14_OBSERVABILITY/artifacts");
+  const bytes = {};
+  for (const [key, mode, limit] of [
+    ["receipt", 0o600, 64 * 1024],
+    ["childContext", 0o400, 16 * 1024],
+    ["lineage", 0o400, 16 * 1024],
+    ["bundle", 0o400, MAX_BUNDLE_BYTES],
+    ["baseConfig", 0o400, 1024 * 1024],
+    ["childConfig", 0o400, 1024 * 1024],
+  ])
+    bytes[key] = await assertPrivateFile(
+      join(directory, CORRELATION_ARTIFACTS[key]),
+      mode,
+      limit,
+    );
+  const receipt = JSON.parse(bytes.receipt);
+  const childContext = JSON.parse(bytes.childContext);
+  const lineage = JSON.parse(bytes.lineage);
+  validateBrowserChildContext(
+    childContext,
+    parentContext,
+    resolve(parentContext.checkoutDir),
+  );
+  const expectedNames = [
+    "customer",
+    "catalog",
+    "pricing",
+    "orders",
+    "integration",
+  ]
+    .map(
+      (owner) =>
+        `coffee_verify_${childContext.runId.toLowerCase().replace("-", "_")}_${owner}`,
+    )
+    .sort();
+  if (
+    receipt.schemaVersion !== 1 ||
+    receipt.status !== "PASS" ||
+    receipt.runId !== parentContext.runId ||
+    receipt.candidateSha !== parentContext.candidateSha ||
+    receipt.baseConfigSha256 !== parentContext.baseConfigSha256 ||
+    receipt.childRunId !== childContext.runId ||
+    receipt.childCandidateSha !== childContext.candidateSha ||
+    receipt.childContextSha256 !== sha256(bytes.childContext) ||
+    receipt.lineageSha256 !== sha256(bytes.lineage) ||
+    receipt.bundleSha256 !== sha256(bytes.bundle) ||
+    receipt.baseConfigArtifactSha256 !== sha256(bytes.baseConfig) ||
+    receipt.childConfigArtifactSha256 !== sha256(bytes.childConfig) ||
+    receipt.baseConfigArtifactSha256 !== parentContext.baseConfigSha256 ||
+    receipt.childConfigArtifactSha256 !== childContext.baseConfigSha256 ||
+    receipt.checkoutRemoved !== true ||
+    receipt.evidenceRemoved !== true ||
+    receipt.proof?.verified !== true ||
+    !/^[0-9a-f-]{36}$/u.test(receipt.proof.correlationId ?? "") ||
+    !/^[0-9a-f]{32}$/u.test(receipt.proof.traceId ?? "") ||
+    receipt.proof.browserRefetchMatched !== true ||
+    receipt.proof.sseFrameMatched !== true ||
+    receipt.proof.ownerCausation !== true ||
+    receipt.cleanup?.verified !== true ||
+    receipt.cleanup.databases?.verified !== true ||
+    !isDeepStrictEqual(receipt.cleanup.databases.removed, expectedNames) ||
+    !isDeepStrictEqual(receipt.cleanup.databases.retained, []) ||
+    receipt.cleanup.attachment?.attempted !== true ||
+    receipt.cleanup.attachment.removed !== true ||
+    receipt.cleanup.attachment.routePreserved !== true ||
+    dirname(childContext.checkoutDir) !== resolve(parentContext.checkoutDir) ||
+    !childContext.checkoutDir.startsWith(
+      join(resolve(parentContext.checkoutDir), ".g15-browser-child-"),
+    )
+  )
+    fail("G14_BROWSER_CORRELATION_RECEIPT_INVALID");
+  for (const path of [childContext.checkoutDir, childContext.evidenceDir]) {
+    try {
+      await lstat(path);
+      fail("G14_BROWSER_CHILD_RETAINED");
+    } catch (error) {
+      if (error?.code !== "ENOENT") throw error;
+    }
+  }
+  await verifyBrowserChildBundle({
+    bundlePath: join(directory, CORRELATION_ARTIFACTS.bundle),
+    baseCandidateSha: parentContext.candidateSha,
+    childContext,
+    lineageReceipt: lineage,
+    baseConfigBytes: bytes.baseConfig,
+    childConfigBytes: bytes.childConfig,
+  });
+  return {
+    receipt,
+    files: Object.values(CORRELATION_ARTIFACTS).map((name) =>
+      join(directory, name),
+    ),
+  };
+}
+
+export async function runBrowserParent({ runCorrelation } = {}) {
   const contextPath = process.env.COFFEE_LAUNCH_CONTEXT_FILE;
   if (!contextPath) fail("G15_LAUNCH_CONTEXT_REQUIRED");
   const launch = await validateLaunchContext(contextPath);
@@ -1035,28 +1142,106 @@ export async function runBrowserParent() {
       contextPath: contextRecord.path,
       baseCandidateSha: parentContext.candidateSha,
     });
-    const artifactsDir = join(evidenceDir, "gates/G15_BROWSER/artifacts");
+    const artifactsDir = join(
+      evidenceDir,
+      runCorrelation
+        ? "gates/G14_OBSERVABILITY/artifacts"
+        : "gates/G15_BROWSER/artifacts",
+    );
+    const artifacts = runCorrelation ? CORRELATION_ARTIFACTS : ARTIFACTS;
     const lineageBytes = await readFile(lineage.receiptPath);
     await writePrivateFile(
-      join(artifactsDir, ARTIFACTS.lineage),
+      join(artifactsDir, artifacts.lineage),
       lineageBytes,
       0o400,
     );
     await writePrivateFile(
-      join(artifactsDir, ARTIFACTS.childContext),
+      join(artifactsDir, artifacts.childContext),
       await readFile(contextRecord.path),
       0o400,
     );
     await writePrivateFile(
-      join(artifactsDir, ARTIFACTS.baseConfig),
+      join(artifactsDir, artifacts.baseConfig),
       baseConfigBytes,
       0o400,
     );
     await writePrivateFile(
-      join(artifactsDir, ARTIFACTS.childConfig),
+      join(artifactsDir, artifacts.childConfig),
       variantBytes,
       0o400,
     );
+
+    if (runCorrelation) {
+      const result = await runCorrelation(contextRecord.path);
+      if (
+        result?.cleanupVerified !== true ||
+        result?.launchPath?.verified !== true ||
+        result?.cleanup?.verified !== true
+      )
+        fail("G14_BROWSER_CORRELATION_CLEANUP_INVALID");
+      git(childRoot, "update-ref", CHILD_REF, childContext.candidateSha);
+      const bundlePath = join(artifactsDir, artifacts.bundle);
+      execFileSync(
+        "git",
+        [
+          "-C",
+          childRoot,
+          "bundle",
+          "create",
+          bundlePath,
+          CHILD_REF,
+          `^${parentContext.candidateSha}`,
+        ],
+        { stdio: "ignore", timeout: 120_000 },
+      );
+      await chmod(bundlePath, 0o400);
+      if ((await stat(bundlePath)).size > MAX_BUNDLE_BYTES)
+        fail("G15_BUNDLE_SIZE_LIMIT");
+      const contextBytes = await readFile(contextRecord.path);
+      const bundleBytes = await readFile(bundlePath);
+      const childReceipt = {
+        schemaVersion: 1,
+        status: "PASS",
+        runId: parentContext.runId,
+        candidateSha: parentContext.candidateSha,
+        baseConfigSha256: parentContext.baseConfigSha256,
+        childRunId,
+        childCandidateSha: childSha,
+        childContextSha256: sha256(contextBytes),
+        lineageSha256: sha256(lineageBytes),
+        bundleSha256: sha256(bundleBytes),
+        baseConfigArtifactSha256: sha256(baseConfigBytes),
+        childConfigArtifactSha256: sha256(variantBytes),
+        checkoutRemoved: true,
+        evidenceRemoved: true,
+        cleanup: result.cleanup,
+        proof: {
+          verified: result.launchPath.verified,
+          correlationId: result.launchPath.correlationId,
+          traceId: result.launchPath.traceId,
+          browserRefetchMatched: result.launchPath.refetchReceipt?.matched,
+          sseFrameMatched: result.launchPath.sseFrameMatched,
+          ownerCausation: result.launchPath.projectionReceipt?.causationMatched,
+        },
+      };
+      await rm(childRoot, { recursive: true, force: false });
+      await rm(childEvidenceDir, { recursive: true, force: false });
+      successfulChild = true;
+      await verifyBrowserChildBundle({
+        bundlePath,
+        baseCandidateSha: parentContext.candidateSha,
+        childContext,
+        lineageReceipt: JSON.parse(lineageBytes),
+        baseConfigBytes,
+        childConfigBytes: variantBytes,
+      });
+      await writePrivateFile(
+        join(artifactsDir, artifacts.receipt),
+        Buffer.from(`${JSON.stringify(childReceipt, null, 2)}\n`),
+        0o600,
+      );
+      return { result, browserChild: childReceipt };
+    }
 
     childProcessResult = await runManagedRollbackChild({
       args: [join(childRoot, "tools/compose-smoke.mjs"), "--browser-proof"],
@@ -1194,7 +1379,7 @@ export async function runBrowserParent() {
   } catch (error) {
     if (successfulChild) throw error;
     // Retain an uncertain child checkout and its evidence as a failure witness.
-    if (childContext && childRunId && childSha) {
+    if (!runCorrelation && childContext && childRunId && childSha) {
       try {
         await persistBrowserFailureFromChild({
           error,

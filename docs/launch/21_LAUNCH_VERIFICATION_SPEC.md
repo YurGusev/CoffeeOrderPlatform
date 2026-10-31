@@ -39,6 +39,14 @@ Trivy 0.76.1 с exact image digest и verification budgets; потоковый a
 supplement accepted handoffs. Исторические blobs не меняются, прежний runtime
 PASS не выводится. Эти исключения не означают успешную проверку gates.
 
+По прямому решению владельца от 31 октября 2026 браузерная фаза G14 может
+использовать тот же ограниченный OIDC-only дочерний commit, что и G15.
+[Точные границы решения](../../evidence/launch-preparation/2026-10-31/observability-correlation.md)
+сохраняют product candidate для остальных фаз G14, внешний PostgreSQL,
+таймаут 1800 секунд и прежние проверки. Различие SHA этой фазы отражается
+явно и принимается только после проверки parent/child lineage; оно не даёт
+права подменять SHA остальных gates или добавлять постоянный IdP.
+
 ## 1. Решение о допуске
 
 Результат имеет только два значения:
@@ -417,6 +425,11 @@ Compose cleanup все 15 final images сканируются по фактич�
 - OpenMetrics endpoint: request duration/count/errors, DB/Kafka pool/lag,
   Outbox/Inbox backlog, Attempt/UnknownOutcome, SSE connections/drops;
 - один browser correlation id проходит edge→api-public→owner→DB log→Outbox→Kafka→projection worker→Realtime→edge→browser→owner refetch;
+  только эта фаза G14 вправе использовать согласованный OIDC-only child по
+  разделу 16: прямой parent — product candidate, единственное изменение —
+  `browserOidc`, отдельные child run/DB/Kafka/evidence, sealed lineage и Git
+  bundle. Остальные фазы G14 остаются на product candidate. Runner требует
+  доказанную связь child с parent и cleanup; G13/G15 artifacts не перезаписываются;
 - W3C traceparent сохраняется; network/DB spans не содержат body/secrets/PII;
 - alerts: существующий `notReady` 5m охватывает Node `runtime_ready` и native
   nginx `httpcheck.status` класса `2xx`. При здоровых 14 Node остановить native
@@ -683,8 +696,17 @@ synthetic профиль. Дочерний checkout запускает `node too
 context, запечатанной lineage, полным browser artifact и cleanup; после
 удаления child checkout восстанавливает его bounded Git bundle во временный
 object store и заново проверяет прямого родителя, единственный изменённый путь
-и точные config blobs. Глобальные G00–G14 остаются привязаны к product candidate
-с `browserOidc: null`. Mock-сценарии UI остаются в `pnpm test:web-operator`.
+и точные config blobs. G00–G13 и все фазы G14, кроме браузерной корреляции,
+остаются привязаны к product candidate с `browserOidc: null`. По решению
+владельца от 31 октября 2026 та же OIDC-only lineage разрешена одной фазе
+browser correlation G14. Она сохраняет собственные child context, lineage,
+bundle, config blobs, runtime result и cleanup в `gates/G14_OBSERVABILITY/artifacts/`;
+G15 сохраняет отдельный комплект в своём artifact directory. Parent и child
+identities и отличие единственного поля проверяются так же строго, как G15;
+чужой gate, другой parent, дополнительные изменения и отсутствующий cleanup
+прекращают проверку. Ни один из этих synthetic IdP не является постоянной
+установкой или доказательством production IdP. Mock-сценарии UI остаются
+в `pnpm test:web-operator`.
 
 G15 сохраняет child context, lineage receipt, полный browser runtime artifact,
 оба config blob, Git bundle и parent receipt в

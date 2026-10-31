@@ -2712,7 +2712,12 @@ function diskPressureComplete(evidence) {
   );
 }
 
-async function persistEvidence({ root, evidence, secrets = [] }) {
+async function persistEvidence({
+  root,
+  evidence,
+  secrets = [],
+  launchEvidenceDir,
+}) {
   const dir = join(root, "evidence/observability", evidence.runId);
   const sanitize = (value) =>
     secrets.reduce(
@@ -2883,8 +2888,21 @@ async function persistEvidence({ root, evidence, secrets = [] }) {
   };
   const resultBytes = `${JSON.stringify(result, null, 2)}\n`;
   await writeFile(join(dir, "result.json"), resultBytes, { mode: 0o600 });
+  let directory = dir;
+  if (launchEvidenceDir) {
+    directory = join(
+      launchEvidenceDir,
+      "gates/G14_OBSERVABILITY/artifacts/observability",
+    );
+    await mkdir(directory, { mode: 0o700 });
+    for (const name of [...Object.keys(documents), "result.json"])
+      await writeFile(join(directory, name), await readFile(join(dir, name)), {
+        flag: "wx",
+        mode: 0o600,
+      });
+  }
   return {
-    directory: dir,
+    directory,
     resultSha256: createHash("sha256").update(resultBytes).digest("hex"),
   };
 }
@@ -2893,11 +2911,17 @@ export async function persistVerificationResult({
   root,
   evidence,
   secrets,
+  launchEvidenceDir,
   persist = persistEvidence,
   cleanError = (error) => String(error?.message ?? error),
 }) {
   try {
-    const persisted = await persist({ root, evidence, secrets });
+    const persisted = await persist({
+      root,
+      evidence,
+      secrets,
+      launchEvidenceDir,
+    });
     evidence.evidenceDirectory = persisted.directory;
     evidence.resultSha256 = persisted.resultSha256;
   } catch (error) {
@@ -3006,6 +3030,10 @@ export async function runObservabilityVerification({
   run = docker,
   probePath = "/usr/bin/busybox",
 } = {}) {
+  if (resolve(root) !== REPO_ROOT)
+    throw new Error(
+      "G14 launch context candidate root differs from verifier root",
+    );
   const runId = newRunId();
   const project = `coffee-observability-${runId}`;
   const provenanceStart = await sourceIdentity(root);
@@ -3050,6 +3078,7 @@ export async function runObservabilityVerification({
     toolchain,
     storageHelper,
     verifiedGrafana,
+    launchEvidenceDir,
     activePhase = "startup",
     producerCreated = false,
     producerNetworkCreated = false,
@@ -3074,6 +3103,15 @@ export async function runObservabilityVerification({
   };
   try {
     config = await loadPlatformConfig(root);
+    const validatedLaunch = await validateLaunchContext(
+      process.env.COFFEE_LAUNCH_CONTEXT_FILE,
+    );
+    if (validatedLaunch.candidateRoot !== REPO_ROOT)
+      throw new Error(
+        "G14 launch context candidate root differs from verifier root",
+      );
+    if (config.verification.databaseIsolation.enabled)
+      launchEvidenceDir = validatedLaunch.evidenceDir;
     toolchain = JSON.parse(
       await readFile(join(root, "config/toolchain-versions.json"), "utf8"),
     );
@@ -3111,13 +3149,6 @@ export async function runObservabilityVerification({
       candidateSha: verifiedGrafana.candidateSha,
       runId: verifiedGrafana.runId,
     };
-    const validatedLaunch = await validateLaunchContext(
-      process.env.COFFEE_LAUNCH_CONTEXT_FILE,
-    );
-    if (validatedLaunch.candidateRoot !== resolve(root))
-      throw new Error(
-        "G14 launch context candidate root differs from verifier root",
-      );
     const producerToken = randomBytes(32).toString("base64url");
     const adminPassword = randomBytes(32).toString("base64url");
     const redactionCanary = `g14-secret-${randomBytes(24).toString("hex")}`;
@@ -4241,499 +4272,533 @@ export async function runObservabilityVerification({
     const previousTmpDir = process.env.TMPDIR;
     process.env.TMPDIR = workDir;
     try {
-      const launchResult = await runLaunchPath({
-        telemetry: {
-          config: config.telemetry,
-          endpoint: config.telemetry.collector.otlpEndpoint,
-          exporterToken: producerToken,
-        },
-        resultDir: join(workDir, "launch-path"),
-        onNetwork: async ({ networkName }) => {
-          launchNetwork = networkName;
-          const targets = ["grafana", "loki", "prometheus", "tempo"].flatMap(
-            (name) => [config.telemetry[name].endpoint, baseUrls[name]],
-          );
-          const blocked = JSON.parse(
-            run([
-              "run",
-              "--rm",
-              "--network",
-              networkName,
-              "--read-only",
-              "--tmpfs",
-              "/tmp:rw,noexec,nosuid,nodev,size=8m",
-              "--cap-drop",
-              "ALL",
-              "--security-opt",
-              "no-new-privileges:true",
-              "--memory",
-              "64m",
-              "--pids-limit",
-              "16",
-              "--entrypoint",
-              "node",
-              toolchain.nodeImage,
-              "-e",
-              "Promise.all(process.argv.slice(1).map(async u=>{try{await fetch(u,{signal:AbortSignal.timeout(1500)});return false}catch{return true}})).then(x=>process.stdout.write(JSON.stringify(x)))",
-              ...targets,
-            ]),
-          );
-          if (
-            !Array.isArray(blocked) ||
-            blocked.length !== targets.length ||
-            blocked.some((value) => value !== true)
-          )
-            throw new Error(
-              "launch-path application network can reach an isolated backend",
+      const executeLaunchPath = (launchContextFile) =>
+        runLaunchPath({
+          ...(launchContextFile ? { launchContextFile } : {}),
+          telemetry: {
+            config: config.telemetry,
+            endpoint: config.telemetry.collector.otlpEndpoint,
+            exporterToken: producerToken,
+          },
+          resultDir: join(workDir, "launch-path"),
+          onNetwork: async ({ networkName }) => {
+            launchNetwork = networkName;
+            const targets = ["grafana", "loki", "prometheus", "tempo"].flatMap(
+              (name) => [config.telemetry[name].endpoint, baseUrls[name]],
             );
-          evidence.networkIsolation.launchPathNetworkStatus = "PASS";
-          run([
-            "network",
-            "connect",
-            "--alias",
-            "otel-collector",
-            networkName,
-            containerIds["otel-collector"],
-          ]);
-        },
-        onNetworkCleanup: async () => {
-          if (!launchNetwork) return;
-          const attached = JSON.parse(
-            run([
-              "inspect",
-              "--format",
-              "{{json .NetworkSettings.Networks}}",
-              containerIds["otel-collector"],
-            ]),
-          );
-          if (attached?.[launchNetwork])
+            const blocked = JSON.parse(
+              run([
+                "run",
+                "--rm",
+                "--network",
+                networkName,
+                "--read-only",
+                "--tmpfs",
+                "/tmp:rw,noexec,nosuid,nodev,size=8m",
+                "--cap-drop",
+                "ALL",
+                "--security-opt",
+                "no-new-privileges:true",
+                "--memory",
+                "64m",
+                "--pids-limit",
+                "16",
+                "--entrypoint",
+                "node",
+                toolchain.nodeImage,
+                "-e",
+                "Promise.all(process.argv.slice(1).map(async u=>{try{await fetch(u,{signal:AbortSignal.timeout(1500)});return false}catch{return true}})).then(x=>process.stdout.write(JSON.stringify(x)))",
+                ...targets,
+              ]),
+            );
+            if (
+              !Array.isArray(blocked) ||
+              blocked.length !== targets.length ||
+              blocked.some((value) => value !== true)
+            )
+              throw new Error(
+                "launch-path application network can reach an isolated backend",
+              );
+            evidence.networkIsolation.launchPathNetworkStatus = "PASS";
             run([
               "network",
-              "disconnect",
-              "--force",
-              launchNetwork,
+              "connect",
+              "--alias",
+              "otel-collector",
+              networkName,
               containerIds["otel-collector"],
             ]);
-          launchNetwork = undefined;
-        },
-        onRolesReady: async ({ logFiles: launchLogs }) => {
-          if (
-            !Array.isArray(launchLogs) ||
-            !launchLogs.some((item) => item.service === "edge-nginx")
-          )
-            throw new Error("launch path lacks real nginx log source");
-          await configureCollector(launchLogs, [launchNetwork]);
-          evidence.telemetryHealth.launchPathCollectorConfig = "PASS";
-          const stopped = stopContainerGracefully({
-            run,
-            name: containerIds["otel-collector"],
-            graceMs: config.platform.shutdownGraceMs,
-          });
-          if (stopped.status !== "PASS")
-            throw new Error("Alloy failed graceful stop for launch outage");
-          launchCollectorStopped = true;
-        },
-        observeBaseline: async (baseline, { probeNativeAccess }) => {
-          const requiredRoles = [
-            "kafka",
-            "orders-service",
-            "orders-aroma-preparation",
-            "api-internal",
-            "api-public",
-            "realtime-gateway",
-            "edge-gateway",
-            "edge-nginx",
-          ];
-          const nodes = [
-            "edge-gateway",
-            "api-public",
-            "api-internal",
-            "orders-service",
-            "orders-aroma-preparation",
-            "realtime-gateway",
-          ];
-          if (
-            !launchCollectorStopped ||
-            baseline?.verified !== true ||
-            baseline.sourceEvents < 2 ||
-            baseline.sourceBrokerAckCount !== baseline.sourceEvents ||
-            baseline.sourceInboxCommitted !== true ||
-            baseline.projectionPresent !== true ||
-            baseline.realtimeOutboxPersisted !== true ||
-            baseline.sseReady !== true ||
-            baseline.ownerRefetch?.status !== 200 ||
-            baseline.ownerRefetch?.requestAndResponseCorrelationMatched !==
-              true ||
-            baseline.ownerRefetch?.requestAndResponseTraceparentMatched !==
-              true ||
-            nodes.some((role) => baseline.nodeReadiness?.[role] !== 200) ||
-            requiredRoles.some(
-              (role) =>
-                !baseline.roles?.some(
-                  (item) => item.role === role && item.running === true,
-                ),
+          },
+          onNetworkCleanup: async () => {
+            if (!launchNetwork) return;
+            const attached = JSON.parse(
+              run([
+                "inspect",
+                "--format",
+                "{{json .NetworkSettings.Networks}}",
+                containerIds["otel-collector"],
+              ]),
+            );
+            if (attached?.[launchNetwork])
+              run([
+                "network",
+                "disconnect",
+                "--force",
+                launchNetwork,
+                containerIds["otel-collector"],
+              ]);
+            launchNetwork = undefined;
+          },
+          onRolesReady: async ({ logFiles: launchLogs }) => {
+            if (
+              !Array.isArray(launchLogs) ||
+              !launchLogs.some((item) => item.service === "edge-nginx")
             )
-          )
-            throw new Error(
-              "business owner path did not remain healthy during Alloy outage",
-            );
-          run(["start", containerIds["otel-collector"]]);
-          launchCollectorStopped = false;
-          await waitHealth("otel-collector");
-          const native = await probeNativeAccess();
-          const nativeLogs = await waitFor(
-            async () => {
-              const found = await queryLokiLogs({
-                baseUrl: baseUrls.loki,
-                runId: native.correlationId,
-                startTimeUs: launchStartedAtUs,
-              });
-              return found.some(
-                (record) =>
-                  record.service_name === "edge-nginx" &&
-                  hasExactValue(record, native.correlationId),
-              )
-                ? found
-                : false;
-            },
-            {
-              timeoutMs: 120000,
-              intervalMs: 2000,
-              description: "real nginx correlated log after Alloy restart",
-            },
-          );
-          evidence.telemetryHealth.launchPathOutageStatus = "PASS";
-          evidence.launchPathOutage = {
-            status: "PASS",
-            sourceEvents: baseline.sourceEvents,
-            ownerRefetchStatus: baseline.ownerRefetch.status,
-            nativeAccessRows: nativeLogs.length,
-            collectorStopped: true,
-            collectorRestarted: true,
-          };
-        },
-        onConvergenceMetrics: async ({ barrierId, phase, expectedMetrics }) => {
-          if (
-            !["unknown-current", "recovered-terminal"].includes(phase) ||
-            !validConvergenceMetricContract(expectedMetrics, phase)
-          )
-            throw new Error(
-              "convergence barrier differs from required metric contract",
-            );
-          const observations = await waitForConvergenceMetricSamples({
-            baseUrl: baseUrls.prometheus,
-            expectedMetrics,
-            startTimeUs: launchStartedAtUs,
-          });
-          evidence.convergenceBarriers ??= {};
-          evidence.convergenceBarriers[phase] = {
-            status: "PASS",
-            barrierId,
-            observations,
-          };
-          return { status: "PASS" };
-        },
-        observeProof: async (proof) => {
-          if (
-            proof?.verified !== true ||
-            !/^[0-9a-f-]{36}$/iu.test(proof.correlationId ?? "") ||
-            !/^[0-9a-f]{32}$/iu.test(proof.traceId ?? "")
-          )
-            throw new Error("launch fixture correlation proof invalid");
-          const expectedTelemetry = proof.expectedTelemetry;
-          const ownerMessageSha256 = proof.ownerBrokerReceipt?.messageIdSha256;
-          const wakeMessageSha256 = proof.wakeReceipt?.messageIdSha256;
-          const convergenceWake = proof.convergenceMetricReceipt?.wakeReceipt;
-          const resultRelay =
-            proof.convergenceMetricReceipt?.resultRelayReceipt;
-          const resultMessages = resultRelay?.resultMessages;
-          const projection = proof.projectionReceipt;
-          const hasHash = (value) =>
-            typeof value === "string" && /^[a-f0-9]{64}$/u.test(value);
-          const causalProofValid =
-            proof.command?.status === 202 &&
-            proof.command?.ownerOutboxMatched === true &&
-            proof.command?.traceparentMatched === true &&
-            proof.command?.rootCausation === true &&
-            hasHash(ownerMessageSha256) &&
-            proof.ownerMessageSha256 === ownerMessageSha256 &&
-            proof.ownerBrokerReceipt?.state === "Published" &&
-            proof.wakeReceipt?.messageType === "AromaConvergenceRequested.v1" &&
-            proof.wakeReceipt?.state === "Published" &&
-            proof.wakeReceipt?.causationMatched === true &&
-            proof.wakeReceipt?.causationMessageSha256 === ownerMessageSha256 &&
-            hasHash(wakeMessageSha256) &&
-            convergenceWake?.messageIdSha256 === wakeMessageSha256 &&
-            convergenceWake?.rootCausationSha256 === ownerMessageSha256 &&
-            convergenceWake?.outboxState === "Published" &&
-            convergenceWake?.inboxState === "Processed" &&
-            convergenceWake?.correlationMatched === true &&
-            convergenceWake?.traceparentMatched === true &&
-            resultRelay?.wakeMessageIdSha256 === wakeMessageSha256 &&
-            resultRelay?.allSelectedMessagesPublished === true &&
-            Array.isArray(resultMessages) &&
-            resultMessages.length > 0 &&
-            resultRelay.selectedOutboxPublishedCount ===
-              resultMessages.length &&
-            resultMessages.every(
-              (message) =>
-                message?.state === "Published" &&
-                message.causationIdSha256 === wakeMessageSha256 &&
-                message.correlationMatched === true &&
-                message.traceparentMatched === true &&
-                hasHash(message.messageIdSha256),
-            ) &&
-            hasHash(projection?.resultMessageSha256) &&
-            resultMessages.some(
-              (message) =>
-                message?.messageIdSha256 === projection.resultMessageSha256,
-            ) &&
-            projection?.resultCausationMatched === true &&
-            projection?.resultCausationMessageSha256 === wakeMessageSha256 &&
-            projection?.inboxState === "Processed" &&
-            projection?.outboxState === "Published" &&
-            projection?.causationMatched === true &&
-            projection?.causationMessageSha256 ===
-              projection?.resultMessageSha256 &&
-            hasHash(projection?.realtimeMessageSha256) &&
-            projection?.realtimeMessageSha256 === proof.realtimeMessageSha256 &&
-            proof.refetchReceipt?.status === 200 &&
-            proof.refetchReceipt?.matched === true &&
-            proof.refetchReceipt?.frameMessageSha256 ===
-              projection?.realtimeMessageSha256 &&
-            proof.sseReceipt?.frameMatched === true &&
-            proof.sseReceipt?.correlationId === proof.correlationId &&
-            proof.transport?.realAromaConvergenceConsumer === true;
-          if (
-            !causalProofValid ||
-            proof.projectionReceipt?.inboxState !== "Processed" ||
-            proof.projectionReceipt?.outboxState !== "Published" ||
-            proof.projectionReceipt?.traceparentMatched !== true ||
-            proof.projectionReceipt?.causationMatched !== true ||
-            proof.command?.rootCausation !== true ||
-            proof.sseReceipt?.frameMatched !== true ||
-            proof.sseReceipt?.correlationId !== proof.correlationId ||
-            proof.refetchReceipt?.matched !== true ||
-            proof.refetchReceipt?.requestAndResponseCorrelationMatched !==
-              true ||
-            proof.refetchReceipt?.correlationId !== proof.correlationId ||
-            proof.refetchReceipt?.traceparentSha256 !==
-              proof.traceparentSha256 ||
-            proof.transport?.realKafka !== true ||
-            proof.transport?.realOrdersService !== true ||
-            proof.transport?.realOrdersAromaPreparation !== true ||
-            proof.transport?.edge !== "nginx -> Edge -> api-public" ||
-            !expectedTelemetry ||
-            !Array.isArray(expectedTelemetry.nativeLogRoles) ||
-            !expectedTelemetry.nativeLogRoles.includes("edge-nginx") ||
-            !expectedTelemetry.traceSpanNames ||
-            !Array.isArray(expectedTelemetry.separateRealtimeSpanNames) ||
-            !proof.roles?.some((role) => role.role === "edge-nginx") ||
-            proof.convergenceMetricReceipt?.verified !== true ||
-            proof.convergenceMetricReceipt.owner !== "aroma-convergence" ||
-            proof.convergenceMetricReceipt.unknownOutcomeCounter !== 1 ||
-            proof.convergenceMetricReceipt.unknownOutcomesCurrent?.join(",") !==
-              "1,0" ||
-            proof.convergenceMetricReceipt.recoveredAppliedCounter !== 1 ||
-            proof.convergenceMetricReceipt.attemptStates?.join(",") !==
-              "UnknownOutcome,NoOpInSync" ||
-            !validConvergenceMetricContract(expectedTelemetry.ownerMetrics)
-          )
-            throw new Error(
-              "launch-path fixture receipts did not prove the actual Kafka, owner, projection, SSE and refetch boundaries",
-            );
-
-          const logs = await waitFor(
-            async () => {
-              const found = await queryLokiLogs({
-                baseUrl: baseUrls.loki,
-                runId: proof.correlationId,
-                startTimeUs: launchStartedAtUs,
-              });
-              return found.some((row) =>
-                hasExactValue(row, proof.correlationId),
-              ) &&
-                found.some(
-                  (row) =>
-                    row.service_name === "edge-nginx" &&
-                    hasExactValue(row, proof.correlationId),
-                )
-                ? found
-                : false;
-            },
-            {
-              timeoutMs: 120000,
-              intervalMs: 2000,
-              description: "real owner and native nginx correlation in Loki",
-            },
-          );
-          const trace = await waitForSameTraceSpans({
-            baseUrl: baseUrls.tempo,
-            traceId: proof.traceId,
-            expectedSpanNames: expectedTelemetry.traceSpanNames,
-            timeoutMs: 120000,
-          });
-          const separate = {};
-          for (const spanName of expectedTelemetry.separateRealtimeSpanNames) {
-            const query = new URLSearchParams({
-              q: `{resource.service.name="realtime-gateway" && name=${JSON.stringify(spanName)}}`,
-              start: String(Math.floor(launchStartedAtUs / 1e6)),
-              end: String(Math.ceil(Date.now() / 1000)),
-              limit: "100",
+              throw new Error("launch path lacks real nginx log source");
+            await configureCollector(launchLogs, [launchNetwork]);
+            evidence.telemetryHealth.launchPathCollectorConfig = "PASS";
+            const stopped = stopContainerGracefully({
+              run,
+              name: containerIds["otel-collector"],
+              graceMs: config.platform.shutdownGraceMs,
             });
-            separate[spanName] = await waitFor(
+            if (stopped.status !== "PASS")
+              throw new Error("Alloy failed graceful stop for launch outage");
+            launchCollectorStopped = true;
+          },
+          observeBaseline: async (baseline, { probeNativeAccess }) => {
+            const requiredRoles = [
+              "kafka",
+              "orders-service",
+              "orders-aroma-preparation",
+              "api-internal",
+              "api-public",
+              "realtime-gateway",
+              "edge-gateway",
+              "edge-nginx",
+            ];
+            const nodes = [
+              "edge-gateway",
+              "api-public",
+              "api-internal",
+              "orders-service",
+              "orders-aroma-preparation",
+              "realtime-gateway",
+            ];
+            if (
+              !launchCollectorStopped ||
+              baseline?.verified !== true ||
+              baseline.sourceEvents < 2 ||
+              baseline.sourceBrokerAckCount !== baseline.sourceEvents ||
+              baseline.sourceInboxCommitted !== true ||
+              baseline.projectionPresent !== true ||
+              baseline.realtimeOutboxPersisted !== true ||
+              baseline.sseReady !== true ||
+              baseline.ownerRefetch?.status !== 200 ||
+              baseline.ownerRefetch?.requestAndResponseCorrelationMatched !==
+                true ||
+              baseline.ownerRefetch?.requestAndResponseTraceparentMatched !==
+                true ||
+              nodes.some((role) => baseline.nodeReadiness?.[role] !== 200) ||
+              requiredRoles.some(
+                (role) =>
+                  !baseline.roles?.some(
+                    (item) => item.role === role && item.running === true,
+                  ),
+              )
+            )
+              throw new Error(
+                "business owner path did not remain healthy during Alloy outage",
+              );
+            run(["start", containerIds["otel-collector"]]);
+            launchCollectorStopped = false;
+            await waitHealth("otel-collector");
+            const native = await probeNativeAccess();
+            const nativeLogs = await waitFor(
               async () => {
-                const result = await api({
-                  baseUrl: baseUrls.tempo,
-                  path: `/api/search?${query}`,
+                const found = await queryLokiLogs({
+                  baseUrl: baseUrls.loki,
+                  runId: native.correlationId,
+                  startTimeUs: launchStartedAtUs,
                 });
-                if (!Array.isArray(result?.traces))
-                  throw new Error(
-                    "Tempo search returned invalid trace inventory",
-                  );
-                for (const row of result.traces) {
-                  const candidate = row.traceID ?? row.traceId;
-                  if (!/^[a-f0-9]{32}$/u.test(candidate ?? "")) continue;
-                  try {
-                    await waitForSameTraceSpans({
-                      baseUrl: baseUrls.tempo,
-                      traceId: candidate,
-                      expectedSpanNames: { "realtime-gateway": [spanName] },
-                      timeoutMs: 2000,
-                      intervalMs: 250,
-                    });
-                    return candidate;
-                  } catch {}
-                }
-                return false;
+                return found.some(
+                  (record) =>
+                    record.service_name === "edge-nginx" &&
+                    hasExactValue(record, native.correlationId),
+                )
+                  ? found
+                  : false;
               },
               {
                 timeoutMs: 120000,
                 intervalMs: 2000,
-                description: `actual separate SSE span ${spanName}`,
+                description: "real nginx correlated log after Alloy restart",
               },
             );
-          }
-          const families = [
-            {
-              name: "db.client.connection.checkout_wait",
-              owners: [
-                "orders-service",
-                "orders-aroma-preparation",
-                "aroma-convergence",
-              ],
-              components: ["_count", "_sum", "_bucket"],
-            },
-            {
-              name: "db.client.connection.waiting",
-              owners: ["orders-service"],
-              components: [""],
-            },
-            {
-              name: "messaging.kafka.consumer.lag",
-              owners: ["orders-aroma-preparation", "realtime-gateway"],
-              components: [""],
-            },
-            {
-              name: "messaging.kafka.event.age",
-              owners: [
-                "orders-aroma-preparation",
-                "realtime-gateway",
-                "aroma-convergence",
-              ],
-              components: ["_count", "_sum", "_bucket"],
-            },
-            {
-              name: "messaging.outbox.oldest_unpublished.age",
-              owners: ["orders-service", "orders-aroma-preparation"],
-              components: [""],
-            },
-            {
-              name: "messaging.inbox.received.age",
-              owners: ["orders-aroma-preparation", "aroma-convergence"],
-              components: ["_count", "_sum", "_bucket"],
-            },
-            ...[
-              "coffee_realtime_invalidation_attempts_total",
-              "coffee_realtime_invalidation_dropped_total",
-              "coffee_realtime_connections",
-              "coffee_realtime_queue_records",
-              "coffee_realtime_queue_bytes",
-            ].map((name) => ({
-              name,
-              owners: ["realtime-gateway"],
-              components: [""],
-            })),
-            {
-              name: "runtime_http_requests_total",
-              owners: ["api-public", "orders-service"],
-              components: [""],
-            },
-            {
-              name: "runtime_http_request_duration_ms",
-              owners: ["api-public", "orders-service"],
-              components: ["_count", "_sum", "_bucket"],
-            },
-            ...[
-              "coffee_aroma_attempt_results_total",
-              "coffee_aroma_unknown_outcomes_total",
-              "coffee_aroma_unknown_outcomes_current",
-              "coffee_aroma_recovery_results_total",
-            ].map((name) => ({
-              name,
-              owners: ["aroma-convergence"],
-              components: [""],
-            })),
-          ];
-          const applicability = {};
-          for (const family of families)
-            applicability[family.name] = await waitForOwnedMetricFamilySamples({
+            evidence.telemetryHealth.launchPathOutageStatus = "PASS";
+            evidence.launchPathOutage = {
+              status: "PASS",
+              sourceEvents: baseline.sourceEvents,
+              ownerRefetchStatus: baseline.ownerRefetch.status,
+              nativeAccessRows: nativeLogs.length,
+              collectorStopped: true,
+              collectorRestarted: true,
+            };
+          },
+          onConvergenceMetrics: async ({
+            barrierId,
+            phase,
+            expectedMetrics,
+          }) => {
+            if (
+              !["unknown-current", "recovered-terminal"].includes(phase) ||
+              !validConvergenceMetricContract(expectedMetrics, phase)
+            )
+              throw new Error(
+                "convergence barrier differs from required metric contract",
+              );
+            const observations = await waitForConvergenceMetricSamples({
               baseUrl: baseUrls.prometheus,
-              family,
+              expectedMetrics,
               startTimeUs: launchStartedAtUs,
             });
-          const serialized = JSON.stringify({
-            logs,
-            traceRows: trace.traceRows,
-          });
-          if (
-            secrets.some((secret) => serialized.includes(secret)) ||
-            /"(?:payload|request_body)"\s*:/iu.test(serialized)
-          )
-            throw new Error("launch telemetry exposed secret or raw payload");
-          if (
-            !["unknown-current", "recovered-terminal"].every(
-              (phase) =>
-                evidence.convergenceBarriers?.[phase]?.status === "PASS",
+            evidence.convergenceBarriers ??= {};
+            evidence.convergenceBarriers[phase] = {
+              status: "PASS",
+              barrierId,
+              observations,
+            };
+            return { status: "PASS" };
+          },
+          observeProof: async (proof) => {
+            if (
+              proof?.verified !== true ||
+              !/^[0-9a-f-]{36}$/iu.test(proof.correlationId ?? "") ||
+              !/^[0-9a-f]{32}$/iu.test(proof.traceId ?? "")
             )
-          )
-            throw new Error(
-              "both real convergence metric barriers are required",
+              throw new Error("launch fixture correlation proof invalid");
+            const expectedTelemetry = proof.expectedTelemetry;
+            const ownerMessageSha256 =
+              proof.ownerBrokerReceipt?.messageIdSha256;
+            const wakeMessageSha256 = proof.wakeReceipt?.messageIdSha256;
+            const convergenceWake = proof.convergenceMetricReceipt?.wakeReceipt;
+            const resultRelay =
+              proof.convergenceMetricReceipt?.resultRelayReceipt;
+            const resultMessages = resultRelay?.resultMessages;
+            const projection = proof.projectionReceipt;
+            const hasHash = (value) =>
+              typeof value === "string" && /^[a-f0-9]{64}$/u.test(value);
+            const causalProofValid =
+              proof.command?.status === 202 &&
+              proof.command?.ownerOutboxMatched === true &&
+              proof.command?.traceparentMatched === true &&
+              proof.command?.rootCausation === true &&
+              hasHash(ownerMessageSha256) &&
+              proof.ownerMessageSha256 === ownerMessageSha256 &&
+              proof.ownerBrokerReceipt?.state === "Published" &&
+              proof.wakeReceipt?.messageType ===
+                "AromaConvergenceRequested.v1" &&
+              proof.wakeReceipt?.state === "Published" &&
+              proof.wakeReceipt?.causationMatched === true &&
+              proof.wakeReceipt?.causationMessageSha256 ===
+                ownerMessageSha256 &&
+              hasHash(wakeMessageSha256) &&
+              convergenceWake?.messageIdSha256 === wakeMessageSha256 &&
+              convergenceWake?.rootCausationSha256 === ownerMessageSha256 &&
+              convergenceWake?.outboxState === "Published" &&
+              convergenceWake?.inboxState === "Processed" &&
+              convergenceWake?.correlationMatched === true &&
+              convergenceWake?.traceparentMatched === true &&
+              resultRelay?.wakeMessageIdSha256 === wakeMessageSha256 &&
+              resultRelay?.allSelectedMessagesPublished === true &&
+              Array.isArray(resultMessages) &&
+              resultMessages.length > 0 &&
+              resultRelay.selectedOutboxPublishedCount ===
+                resultMessages.length &&
+              resultMessages.every(
+                (message) =>
+                  message?.state === "Published" &&
+                  message.causationIdSha256 === wakeMessageSha256 &&
+                  message.correlationMatched === true &&
+                  message.traceparentMatched === true &&
+                  hasHash(message.messageIdSha256),
+              ) &&
+              hasHash(projection?.resultMessageSha256) &&
+              resultMessages.some(
+                (message) =>
+                  message?.messageIdSha256 === projection.resultMessageSha256,
+              ) &&
+              projection?.resultCausationMatched === true &&
+              projection?.resultCausationMessageSha256 === wakeMessageSha256 &&
+              projection?.inboxState === "Processed" &&
+              projection?.outboxState === "Published" &&
+              projection?.causationMatched === true &&
+              projection?.causationMessageSha256 ===
+                projection?.resultMessageSha256 &&
+              hasHash(projection?.realtimeMessageSha256) &&
+              projection?.realtimeMessageSha256 ===
+                proof.realtimeMessageSha256 &&
+              proof.refetchReceipt?.status === 200 &&
+              proof.refetchReceipt?.matched === true &&
+              proof.refetchReceipt?.frameMessageSha256 ===
+                projection?.realtimeMessageSha256 &&
+              proof.sseReceipt?.frameMatched === true &&
+              proof.sseReceipt?.correlationId === proof.correlationId &&
+              proof.transport?.realAromaConvergenceConsumer === true;
+            if (
+              !causalProofValid ||
+              proof.projectionReceipt?.inboxState !== "Processed" ||
+              proof.projectionReceipt?.outboxState !== "Published" ||
+              proof.projectionReceipt?.traceparentMatched !== true ||
+              proof.projectionReceipt?.causationMatched !== true ||
+              proof.command?.rootCausation !== true ||
+              proof.sseReceipt?.frameMatched !== true ||
+              proof.sseReceipt?.correlationId !== proof.correlationId ||
+              proof.refetchReceipt?.matched !== true ||
+              proof.refetchReceipt?.requestAndResponseCorrelationMatched !==
+                true ||
+              proof.refetchReceipt?.correlationId !== proof.correlationId ||
+              proof.refetchReceipt?.traceparentSha256 !==
+                proof.traceparentSha256 ||
+              proof.transport?.realKafka !== true ||
+              proof.transport?.realOrdersService !== true ||
+              proof.transport?.realOrdersAromaPreparation !== true ||
+              proof.transport?.edge !== "nginx -> Edge -> api-public" ||
+              !expectedTelemetry ||
+              !Array.isArray(expectedTelemetry.nativeLogRoles) ||
+              !expectedTelemetry.nativeLogRoles.includes("edge-nginx") ||
+              !expectedTelemetry.traceSpanNames ||
+              !Array.isArray(expectedTelemetry.separateRealtimeSpanNames) ||
+              !proof.roles?.some((role) => role.role === "edge-nginx") ||
+              proof.convergenceMetricReceipt?.verified !== true ||
+              proof.convergenceMetricReceipt.owner !== "aroma-convergence" ||
+              proof.convergenceMetricReceipt.unknownOutcomeCounter !== 1 ||
+              proof.convergenceMetricReceipt.unknownOutcomesCurrent?.join(
+                ",",
+              ) !== "1,0" ||
+              proof.convergenceMetricReceipt.recoveredAppliedCounter !== 1 ||
+              proof.convergenceMetricReceipt.attemptStates?.join(",") !==
+                "UnknownOutcome,NoOpInSync" ||
+              !validConvergenceMetricContract(expectedTelemetry.ownerMetrics)
+            )
+              throw new Error(
+                "launch-path fixture receipts did not prove the actual Kafka, owner, projection, SSE and refetch boundaries",
+              );
+
+            const logs = await waitFor(
+              async () => {
+                const found = await queryLokiLogs({
+                  baseUrl: baseUrls.loki,
+                  runId: proof.correlationId,
+                  startTimeUs: launchStartedAtUs,
+                });
+                return found.some((row) =>
+                  hasExactValue(row, proof.correlationId),
+                ) &&
+                  found.some(
+                    (row) =>
+                      row.service_name === "edge-nginx" &&
+                      hasExactValue(row, proof.correlationId),
+                  )
+                  ? found
+                  : false;
+              },
+              {
+                timeoutMs: 120000,
+                intervalMs: 2000,
+                description: "real owner and native nginx correlation in Loki",
+              },
             );
-          evidence.metricApplicability = {
-            ...applicability,
-            aromaConvergenceProof: evidence.convergenceBarriers,
-          };
-          evidence.launchPathCorrelation = "PASS";
-          evidence.launchPathProof = {
-            verified: true,
-            correlationId: proof.correlationId,
-            traceId: proof.traceId,
-            roles: proof.roles.map(({ role, containerId, imageId }) => ({
-              role,
-              containerId,
-              imageId,
-            })),
-            traceInventory: trace.spanInventory,
-            separateRealtimeTraces: separate,
-            nativeLogCount: logs.filter(
-              (row) => row.service_name === "edge-nginx",
-            ).length,
-            ownerCausation: proof.projectionReceipt.causationMatched,
-            browserRefetchMatched: proof.refetchReceipt.matched,
-          };
-        },
-      });
+            const trace = await waitForSameTraceSpans({
+              baseUrl: baseUrls.tempo,
+              traceId: proof.traceId,
+              expectedSpanNames: expectedTelemetry.traceSpanNames,
+              timeoutMs: 120000,
+            });
+            const separate = {};
+            for (const spanName of expectedTelemetry.separateRealtimeSpanNames) {
+              const query = new URLSearchParams({
+                q: `{resource.service.name="realtime-gateway" && name=${JSON.stringify(spanName)}}`,
+                start: String(Math.floor(launchStartedAtUs / 1e6)),
+                end: String(Math.ceil(Date.now() / 1000)),
+                limit: "100",
+              });
+              separate[spanName] = await waitFor(
+                async () => {
+                  const result = await api({
+                    baseUrl: baseUrls.tempo,
+                    path: `/api/search?${query}`,
+                  });
+                  if (!Array.isArray(result?.traces))
+                    throw new Error(
+                      "Tempo search returned invalid trace inventory",
+                    );
+                  for (const row of result.traces) {
+                    const candidate = row.traceID ?? row.traceId;
+                    if (!/^[a-f0-9]{32}$/u.test(candidate ?? "")) continue;
+                    try {
+                      await waitForSameTraceSpans({
+                        baseUrl: baseUrls.tempo,
+                        traceId: candidate,
+                        expectedSpanNames: { "realtime-gateway": [spanName] },
+                        timeoutMs: 2000,
+                        intervalMs: 250,
+                      });
+                      return candidate;
+                    } catch {}
+                  }
+                  return false;
+                },
+                {
+                  timeoutMs: 120000,
+                  intervalMs: 2000,
+                  description: `actual separate SSE span ${spanName}`,
+                },
+              );
+            }
+            const families = [
+              {
+                name: "db.client.connection.checkout_wait",
+                owners: [
+                  "orders-service",
+                  "orders-aroma-preparation",
+                  "aroma-convergence",
+                ],
+                components: ["_count", "_sum", "_bucket"],
+              },
+              {
+                name: "db.client.connection.waiting",
+                owners: ["orders-service"],
+                components: [""],
+              },
+              {
+                name: "messaging.kafka.consumer.lag",
+                owners: ["orders-aroma-preparation", "realtime-gateway"],
+                components: [""],
+              },
+              {
+                name: "messaging.kafka.event.age",
+                owners: [
+                  "orders-aroma-preparation",
+                  "realtime-gateway",
+                  "aroma-convergence",
+                ],
+                components: ["_count", "_sum", "_bucket"],
+              },
+              {
+                name: "messaging.outbox.oldest_unpublished.age",
+                owners: ["orders-service", "orders-aroma-preparation"],
+                components: [""],
+              },
+              {
+                name: "messaging.inbox.received.age",
+                owners: ["orders-aroma-preparation", "aroma-convergence"],
+                components: ["_count", "_sum", "_bucket"],
+              },
+              ...[
+                "coffee_realtime_invalidation_attempts_total",
+                "coffee_realtime_invalidation_dropped_total",
+                "coffee_realtime_connections",
+                "coffee_realtime_queue_records",
+                "coffee_realtime_queue_bytes",
+              ].map((name) => ({
+                name,
+                owners: ["realtime-gateway"],
+                components: [""],
+              })),
+              {
+                name: "runtime_http_requests_total",
+                owners: ["api-public", "orders-service"],
+                components: [""],
+              },
+              {
+                name: "runtime_http_request_duration_ms",
+                owners: ["api-public", "orders-service"],
+                components: ["_count", "_sum", "_bucket"],
+              },
+              ...[
+                "coffee_aroma_attempt_results_total",
+                "coffee_aroma_unknown_outcomes_total",
+                "coffee_aroma_unknown_outcomes_current",
+                "coffee_aroma_recovery_results_total",
+              ].map((name) => ({
+                name,
+                owners: ["aroma-convergence"],
+                components: [""],
+              })),
+            ];
+            const applicability = {};
+            for (const family of families)
+              applicability[family.name] =
+                await waitForOwnedMetricFamilySamples({
+                  baseUrl: baseUrls.prometheus,
+                  family,
+                  startTimeUs: launchStartedAtUs,
+                });
+            const serialized = JSON.stringify({
+              logs,
+              traceRows: trace.traceRows,
+            });
+            if (
+              secrets.some((secret) => serialized.includes(secret)) ||
+              /"(?:payload|request_body)"\s*:/iu.test(serialized)
+            )
+              throw new Error("launch telemetry exposed secret or raw payload");
+            if (
+              !["unknown-current", "recovered-terminal"].every(
+                (phase) =>
+                  evidence.convergenceBarriers?.[phase]?.status === "PASS",
+              )
+            )
+              throw new Error(
+                "both real convergence metric barriers are required",
+              );
+            evidence.metricApplicability = {
+              ...applicability,
+              aromaConvergenceProof: evidence.convergenceBarriers,
+            };
+            evidence.launchPathCorrelation = "PASS";
+            evidence.launchPathProof = {
+              verified: true,
+              correlationId: proof.correlationId,
+              traceId: proof.traceId,
+              roles: proof.roles.map(({ role, containerId, imageId }) => ({
+                role,
+                containerId,
+                imageId,
+              })),
+              traceInventory: trace.spanInventory,
+              separateRealtimeTraces: separate,
+              nativeLogCount: logs.filter(
+                (row) => row.service_name === "edge-nginx",
+              ).length,
+              ownerCausation: proof.projectionReceipt.causationMatched,
+              browserRefetchMatched: proof.refetchReceipt.matched,
+            };
+          },
+        });
+      let launchResult;
+      if (config.verification.databaseIsolation.enabled) {
+        const { runBrowserParent } =
+          await import("../../verification/launch/v1/scenarios/browser.mjs");
+        const child = await runBrowserParent({
+          runCorrelation: executeLaunchPath,
+        });
+        launchResult = child.result;
+        evidence.browserCorrelationChild = child.browserChild;
+        if (
+          child.browserChild.proof.correlationId !==
+            evidence.launchPathProof?.correlationId ||
+          child.browserChild.proof.traceId !==
+            evidence.launchPathProof?.traceId ||
+          child.browserChild.proof.browserRefetchMatched !== true ||
+          child.browserChild.proof.sseFrameMatched !== true ||
+          child.browserChild.proof.ownerCausation !== true
+        )
+          throw new Error(
+            "browser child and observed trace/correlation proof differ",
+          );
+      } else launchResult = await executeLaunchPath();
       if (
         launchResult.cleanupVerified !== true ||
         evidence.launchPathCorrelation !== "PASS" ||
@@ -4746,6 +4811,8 @@ export async function runObservabilityVerification({
     } catch (error) {
       evidence.phases.launchPath = "FAIL";
       evidence.launchPathFailure = cleanError(error);
+      if (error.externalCleanup)
+        evidence.launchPathExternalCleanup = error.externalCleanup;
     } finally {
       if (launchCollectorStopped) {
         run(["start", containerIds["otel-collector"]]);
@@ -7370,7 +7437,13 @@ export async function runObservabilityVerification({
       delete evidence.failure;
     }
     evidence.completedAt = new Date().toISOString();
-    await persistVerificationResult({ root, evidence, secrets, cleanError });
+    await persistVerificationResult({
+      root,
+      evidence,
+      secrets,
+      launchEvidenceDir,
+      cleanError,
+    });
   }
   if (evidence.status !== "PASS")
     throw Object.assign(

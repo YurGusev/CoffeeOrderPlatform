@@ -6586,3 +6586,36 @@ void test(
     }
   },
 );
+
+void test("G14 cannot pass without sealed browser correlation lineage", async () => {
+  const evidenceDir = await mkdtemp(
+    join(tmpdir(), "coffee-browser-correlation-"),
+  );
+  try {
+    await mkdir(join(evidenceDir, "gates/G14_OBSERVABILITY/artifacts"), {
+      recursive: true,
+    });
+    await writeFile(join(evidenceDir, "context.json"), "{}\n", { mode: 0o600 });
+    const failure = await verifyGateArtifacts(
+      { id: "G14_OBSERVABILITY", command: "pnpm test:observability" },
+      {
+        runs: [
+          {
+            argv: ["pnpm", "test:observability"],
+            exitCode: 0,
+            timedOut: false,
+            outputLimitExceeded: false,
+          },
+        ],
+        artifacts: [],
+      },
+      evidenceDir,
+    );
+    assert.match(
+      failure,
+      /browser correlation child lineage or cleanup is invalid/u,
+    );
+  } finally {
+    await rm(evidenceDir, { recursive: true, force: true });
+  }
+});

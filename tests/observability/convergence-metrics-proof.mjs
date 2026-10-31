@@ -16,6 +16,12 @@ import { createKafkaRuntime } from "../../packages/platform-kafka-runtime/dist/i
 import { decodeAromaConvergenceEnvelope } from "../../apps/aroma-convergence/dist/application/messages.js";
 import { AromaConvergenceTelemetry } from "../../apps/aroma-convergence/dist/observability.js";
 import { createAromaConvergenceStore } from "../../apps/aroma-convergence/dist/infrastructure/convergence-store.js";
+import {
+  deriveRuntimeDatabaseTarget,
+  deriveRuntimeKafkaTarget,
+  verifyLaunchConfigBytes,
+} from "../../packages/platform-config/dist/index.js";
+import { readLaunchDatabaseIdentity } from "../../packages/platform-runtime/dist/index.js";
 
 const PROOF_FILE = "/fixture/aroma-convergence-proof.yaml";
 const CONFIG_FILE = "/fixture/platform.yaml";
@@ -204,6 +210,58 @@ async function waitForMetric(
   assert.fail(`owner metric ${name} did not reach expected fixture value`);
 }
 
+export async function resolveConvergenceTargets({
+  configBytes,
+  contextPath,
+  ownershipPath = "/fixture/database-ownership.json",
+}) {
+  const config = yaml(configBytes.toString("utf8"), { json: true });
+  const service = config.services["aroma-convergence"];
+  const isolation = config.verification?.databaseIsolation?.enabled === true;
+  assert.equal(
+    isolation,
+    Boolean(contextPath),
+    "convergence proof requires matching launch isolation and context",
+  );
+  assert.equal(
+    isolation,
+    config.verification?.kafkaNamespaceIsolation === true,
+    "convergence proof requires matching Kafka isolation",
+  );
+  const launchIdentity = contextPath
+    ? await readLaunchDatabaseIdentity(contextPath)
+    : undefined;
+  if (launchIdentity)
+    verifyLaunchConfigBytes({
+      actualConfigBytes: configBytes,
+      baseConfigSha256: launchIdentity.baseConfigSha256,
+      runtime: "aroma-convergence",
+      environment: config.environment,
+      databaseIsolationEnabled: isolation,
+      mutationsEnabled: service.mutationsEnabled,
+    });
+  const databaseTarget = launchIdentity
+    ? deriveRuntimeDatabaseTarget({
+        config: {
+          environment: config.environment,
+          databaseIsolation: config.verification?.databaseIsolation,
+          services: config.services,
+        },
+        runtime: "aroma-convergence",
+        ownership: JSON.parse(await readFile(ownershipPath, "utf8")),
+        launchIdentity,
+      })
+    : { database: service.database, allowedDatabase: service.database };
+  const physicalTargets = deriveRuntimeKafkaTarget({
+    config: config.kafka,
+    service: service.kafka,
+    enabled: isolation,
+    environment: config.environment,
+    ...(launchIdentity ? { launchIdentity } : {}),
+  });
+  return { config, service, databaseTarget, physicalTargets };
+}
+
 export async function runConvergenceMetricsProof({
   proofFile = PROOF_FILE,
   configFile = CONFIG_FILE,
@@ -211,8 +269,11 @@ export async function runConvergenceMetricsProof({
 } = {}) {
   let phase = "scoped-input";
   const proof = JSON.parse(await readFile(proofFile, "utf8"));
-  const config = yaml(await readFile(configFile, "utf8"), { json: true });
-  const service = config.services["aroma-convergence"];
+  const { config, service, databaseTarget, physicalTargets } =
+    await resolveConvergenceTargets({
+      configBytes: await readFile(configFile),
+      contextPath: process.env.COFFEE_LAUNCH_CONTEXT_FILE,
+    });
   assert.equal(proof.schemaVersion, 1);
   assert.equal(proof.runtime, "aroma-convergence");
   assert.equal(proof.environment, config.environment);
@@ -257,8 +318,8 @@ export async function runConvergenceMetricsProof({
 
   const database = createDatabase({
     owner: "aroma-convergence",
-    database: service.database,
-    allowedDatabase: service.database,
+    database: databaseTarget.database,
+    allowedDatabase: databaseTarget.allowedDatabase,
     host: config.postgres.host,
     port: config.postgres.port,
     user: credential.username,
@@ -283,6 +344,7 @@ export async function runConvergenceMetricsProof({
     runtime: "aroma-convergence",
     config: config.kafka,
     service: service.kafka,
+    physicalTargets,
     credentials: {
       username: kafkaCredential.username,
       password: kafkaCredential.password,
