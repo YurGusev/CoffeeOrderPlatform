@@ -1,0 +1,23 @@
+{
+  "id": "G01_INSTALL",
+  "status": "NOT_RUN",
+  "expectedCommand": "pnpm install --frozen-lockfile",
+  "startedAt": null,
+  "endedAt": "2026-10-31T00:57:35.685Z",
+  "durationMs": 0,
+  "timeoutSeconds": 900,
+  "reason": "NOT_RUN: predecessor не PASS: G00_PREFLIGHT",
+  "runs": [],
+  "artifacts": [
+    {
+      "path": "/home/yurgusev/.codex/worktrees/preserve-non-openobserve/CoffeeOrderPlatform/evidence/launch/20261031T005704Z-a6cceea/gates/G01_INSTALL/stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "sizeBytes": 0
+    },
+    {
+      "path": "/home/yurgusev/.codex/worktrees/preserve-non-openobserve/CoffeeOrderPlatform/evidence/launch/20261031T005704Z-a6cceea/gates/G01_INSTALL/stderr.log",
+      "sha256": "9d8c998cd9ddc886edcc28d9ca1ec4855971d3fbfb5eeb93683ed414db5f0a73",
+      "sizeBytes": 46
+    }
+  ]
+}

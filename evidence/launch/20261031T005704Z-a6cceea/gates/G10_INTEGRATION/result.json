@@ -1,0 +1,23 @@
+{
+  "id": "G10_INTEGRATION",
+  "status": "NOT_RUN",
+  "expectedCommand": "pnpm test:integration",
+  "startedAt": null,
+  "endedAt": "2026-10-31T00:57:35.742Z",
+  "durationMs": 0,
+  "timeoutSeconds": 1800,
+  "reason": "NOT_RUN: predecessor не PASS: G09_DB_BOUNDARIES, G12_SUPPLY_CHAIN",
+  "runs": [],
+  "artifacts": [
+    {
+      "path": "/home/yurgusev/.codex/worktrees/preserve-non-openobserve/CoffeeOrderPlatform/evidence/launch/20261031T005704Z-a6cceea/gates/G10_INTEGRATION/stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "sizeBytes": 0
+    },
+    {
+      "path": "/home/yurgusev/.codex/worktrees/preserve-non-openobserve/CoffeeOrderPlatform/evidence/launch/20261031T005704Z-a6cceea/gates/G10_INTEGRATION/stderr.log",
+      "sha256": "345698d1f51ab7e6364447e4808422f1ca562651668f77ab556b5b31f7977d36",
+      "sizeBytes": 68
+    }
+  ]
+}

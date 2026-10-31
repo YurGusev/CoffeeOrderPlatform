@@ -1,0 +1,23 @@
+{
+  "id": "G11_RECOVERY",
+  "status": "NOT_RUN",
+  "expectedCommand": "pnpm test:recovery",
+  "startedAt": null,
+  "endedAt": "2026-10-31T00:57:35.747Z",
+  "durationMs": 0,
+  "timeoutSeconds": 1800,
+  "reason": "NOT_RUN: predecessor не PASS: G10_INTEGRATION",
+  "runs": [],
+  "artifacts": [
+    {
+      "path": "/home/yurgusev/.codex/worktrees/preserve-non-openobserve/CoffeeOrderPlatform/evidence/launch/20261031T005704Z-a6cceea/gates/G11_RECOVERY/stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "sizeBytes": 0
+    },
+    {
+      "path": "/home/yurgusev/.codex/worktrees/preserve-non-openobserve/CoffeeOrderPlatform/evidence/launch/20261031T005704Z-a6cceea/gates/G11_RECOVERY/stderr.log",
+      "sha256": "1efffa8475f07e45d3d8bdbf4f3fdf6b9eef5793a8eeb6c0685846d1b1c1fc8e",
+      "sizeBytes": 48
+    }
+  ]
+}

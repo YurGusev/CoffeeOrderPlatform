@@ -1,0 +1,23 @@
+{
+  "id": "G17_BACKUP_RESTORE",
+  "status": "NOT_RUN",
+  "expectedCommand": "pnpm test:backup-restore",
+  "startedAt": null,
+  "endedAt": "2026-10-31T00:57:35.775Z",
+  "durationMs": 0,
+  "timeoutSeconds": 1800,
+  "reason": "NOT_RUN: predecessor не PASS: G16_AROMA_SANDBOX",
+  "runs": [],
+  "artifacts": [
+    {
+      "path": "/home/yurgusev/.codex/worktrees/preserve-non-openobserve/CoffeeOrderPlatform/evidence/launch/20261031T005704Z-a6cceea/gates/G17_BACKUP_RESTORE/stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "sizeBytes": 0
+    },
+    {
+      "path": "/home/yurgusev/.codex/worktrees/preserve-non-openobserve/CoffeeOrderPlatform/evidence/launch/20261031T005704Z-a6cceea/gates/G17_BACKUP_RESTORE/stderr.log",
+      "sha256": "6f55ecba6926c885a8967f836812085019412eca0dc1cae358a1852fbbcf42b0",
+      "sizeBytes": 50
+    }
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "id": "G03_STATIC",
+  "status": "NOT_RUN",
+  "expectedCommand": "pnpm format:check && pnpm lint && pnpm typecheck",
+  "startedAt": null,
+  "endedAt": "2026-10-31T00:57:35.699Z",
+  "durationMs": 0,
+  "timeoutSeconds": 900,
+  "reason": "NOT_RUN: predecessor не PASS: G02_GENERATED",
+  "runs": [],
+  "artifacts": [
+    {
+      "path": "/home/yurgusev/.codex/worktrees/preserve-non-openobserve/CoffeeOrderPlatform/evidence/launch/20261031T005704Z-a6cceea/gates/G03_STATIC/stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "sizeBytes": 0
+    },
+    {
+      "path": "/home/yurgusev/.codex/worktrees/preserve-non-openobserve/CoffeeOrderPlatform/evidence/launch/20261031T005704Z-a6cceea/gates/G03_STATIC/stderr.log",
+      "sha256": "1633130b8c32ecfab73be9d897f8187ed03fcd3ebc5de25e2b5b3461403f8b18",
+      "sizeBytes": 46
+    }
+  ]
+}

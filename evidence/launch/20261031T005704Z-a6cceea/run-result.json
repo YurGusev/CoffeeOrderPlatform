@@ -1,0 +1,606 @@
+{
+  "schemaVersion": 1,
+  "runId": "20261031T005704Z-a6cceea",
+  "candidateSha": "a6cceeaa822f9641c678b5dcae521c282391dd3d",
+  "sourceSha": "a6cceeaa822f9641c678b5dcae521c282391dd3d",
+  "startedAt": "2026-10-31T00:57:04.807Z",
+  "endedAt": "2026-10-31T00:57:37.178Z",
+  "environment": {
+    "runId": "20261031T005704Z-a6cceea",
+    "dirty": false,
+    "platform": "linux",
+    "osRelease": "6.8.0-147-generic",
+    "arch": "x64",
+    "cpuCount": 8,
+    "memoryBytes": 14645903360,
+    "node": "v26.8.1",
+    "pnpm": "11.24.0",
+    "nodeImageDigest": null,
+    "timezone": "Asia/Yekaterinburg",
+    "candidatePath": "/home/yurgusev/.cache/coffee-launch-delivery/tmp/coffee-launch-private-qC0rSu/checkout",
+    "toolVersions": {
+      "docker": "Docker version 29.7.2, build a7dcaa6",
+      "compose": "5.4.0",
+      "postgres": null,
+      "kafka": null,
+      "browser": "Chromium 156.0.8078.47 snap"
+    },
+    "treeSha": "aa9675d862d6f97e44ae015249450d0bb6c51b24",
+    "configSha256": "891e5a82ffd3ebf647226c07313aca4be426d4ed25b28b7afdf91296db631a8e",
+    "encryptedSecretsSha256": "1adc96a403e7046c7aecb584534ee130b4217acc8f845b4ca30fc78cd8399aab",
+    "toolchainVersionsSha256": "1727e18260772b686080b0893d74550dfde89fa551b8940add34d2434fb79ead",
+    "lockfileSha256": "703d4cbc66c12cd4d98d02f955ff24a9e84be7bb891db3a9620ef088d9e8c6f2",
+    "imageDigests": null,
+    "resources": {
+      "composeProject": {
+        "name": "coffee-launch-20261031t005704z-a6cceea",
+        "created": false
+      },
+      "databases": [
+        {
+          "name": "coffee_verify_20261031t005704z_a6cceea_customer",
+          "created": false
+        },
+        {
+          "name": "coffee_verify_20261031t005704z_a6cceea_catalog",
+          "created": false
+        },
+        {
+          "name": "coffee_verify_20261031t005704z_a6cceea_pricing",
+          "created": false
+        },
+        {
+          "name": "coffee_verify_20261031t005704z_a6cceea_orders",
+          "created": false
+        },
+        {
+          "name": "coffee_verify_20261031t005704z_a6cceea_integration",
+          "created": false
+        }
+      ],
+      "kafkaPrefix": {
+        "name": "20261031T005704Z-a6cceea",
+        "created": false
+      }
+    }
+  },
+  "gates": [
+    {
+      "id": "G00_PREFLIGHT",
+      "status": "FAIL",
+      "expectedCommand": "pnpm launch:verify:preflight",
+      "startedAt": "2026-10-31T00:57:06.082Z",
+      "endedAt": "2026-10-31T00:57:35.676Z",
+      "durationMs": 29594,
+      "timeoutSeconds": 900,
+      "reason": "Команда завершилась с кодом 1; G00 preflight result is FAIL or does not identify this run/candidate",
+      "runs": [
+        {
+          "argv": [
+            "pnpm",
+            "launch:verify:preflight"
+          ],
+          "cwd": "/home/yurgusev/.cache/coffee-launch-delivery/tmp/coffee-launch-private-qC0rSu/checkout",
+          "startedAt": "2026-10-31T00:57:06.083Z",
+          "endedAt": "2026-10-31T00:57:35.673Z",
+          "exitCode": 1,
+          "timedOut": false,
+          "outputLimitExceeded": false,
+          "timeoutMs": 900000,
+          "durationMs": 29590,
+          "peakRssBytes": 298655744,
+          "artifacts": [
+            {
+              "path": "/home/yurgusev/.codex/worktrees/preserve-non-openobserve/CoffeeOrderPlatform/evidence/launch/20261031T005704Z-a6cceea/gates/G00_PREFLIGHT/stdout.log",
+              "sha256": "c36e08fd73e4a4acc198d60c981a8a8e1b20ec391d8008f6855cfcea58c04bc5",
+              "sizeBytes": 241
+            },
+            {
+              "path": "/home/yurgusev/.codex/worktrees/preserve-non-openobserve/CoffeeOrderPlatform/evidence/launch/20261031T005704Z-a6cceea/gates/G00_PREFLIGHT/stderr.log",
+              "sha256": "948f850e69df00b765d674dc3c33ff6fa90adf212f1bd301dd1c316d36594f65",
+              "sizeBytes": 54
+            }
+          ]
+        }
+      ],
+      "artifacts": [
+        {
+          "path": "/home/yurgusev/.codex/worktrees/preserve-non-openobserve/CoffeeOrderPlatform/evidence/launch/20261031T005704Z-a6cceea/gates/G00_PREFLIGHT/stdout.log",
+          "sha256": "c36e08fd73e4a4acc198d60c981a8a8e1b20ec391d8008f6855cfcea58c04bc5",
+          "sizeBytes": 241
+        },
+        {
+          "path": "/home/yurgusev/.codex/worktrees/preserve-non-openobserve/CoffeeOrderPlatform/evidence/launch/20261031T005704Z-a6cceea/gates/G00_PREFLIGHT/stderr.log",
+          "sha256": "948f850e69df00b765d674dc3c33ff6fa90adf212f1bd301dd1c316d36594f65",
+          "sizeBytes": 54
+        },
+        {
+          "path": "/home/yurgusev/.codex/worktrees/preserve-non-openobserve/CoffeeOrderPlatform/evidence/launch/20261031T005704Z-a6cceea/gates/G00_PREFLIGHT/stdout.log",
+          "sha256": "c36e08fd73e4a4acc198d60c981a8a8e1b20ec391d8008f6855cfcea58c04bc5",
+          "sizeBytes": 241
+        },
+        {
+          "path": "/home/yurgusev/.codex/worktrees/preserve-non-openobserve/CoffeeOrderPlatform/evidence/launch/20261031T005704Z-a6cceea/gates/G00_PREFLIGHT/stderr.log",
+          "sha256": "948f850e69df00b765d674dc3c33ff6fa90adf212f1bd301dd1c316d36594f65",
+          "sizeBytes": 54
+        }
+      ]
+    },
+    {
+      "id": "G01_INSTALL",
+      "status": "NOT_RUN",
+      "expectedCommand": "pnpm install --frozen-lockfile",
+      "startedAt": null,
+      "endedAt": "2026-10-31T00:57:35.685Z",
+      "durationMs": 0,
+      "timeoutSeconds": 900,
+      "reason": "NOT_RUN: predecessor не PASS: G00_PREFLIGHT",
+      "runs": [],
+      "artifacts": [
+        {
+          "path": "/home/yurgusev/.codex/worktrees/preserve-non-openobserve/CoffeeOrderPlatform/evidence/launch/20261031T005704Z-a6cceea/gates/G01_INSTALL/stdout.log",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "sizeBytes": 0
+        },
+        {
+          "path": "/home/yurgusev/.codex/worktrees/preserve-non-openobserve/CoffeeOrderPlatform/evidence/launch/20261031T005704Z-a6cceea/gates/G01_INSTALL/stderr.log",
+          "sha256": "9d8c998cd9ddc886edcc28d9ca1ec4855971d3fbfb5eeb93683ed414db5f0a73",
+          "sizeBytes": 46
+        }
+      ]
+    },
+    {
+      "id": "G02_GENERATED",
+      "status": "NOT_RUN",
+      "expectedCommand": "pnpm contracts:check-generated",
+      "startedAt": null,
+      "endedAt": "2026-10-31T00:57:35.692Z",
+      "durationMs": 0,
+      "timeoutSeconds": 900,
+      "reason": "NOT_RUN: predecessor не PASS: G01_INSTALL",
+      "runs": [],
+      "artifacts": [
+        {
+          "path": "/home/yurgusev/.codex/worktrees/preserve-non-openobserve/CoffeeOrderPlatform/evidence/launch/20261031T005704Z-a6cceea/gates/G02_GENERATED/stdout.log",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "sizeBytes": 0
+        },
+        {
+          "path": "/home/yurgusev/.codex/worktrees/preserve-non-openobserve/CoffeeOrderPlatform/evidence/launch/20261031T005704Z-a6cceea/gates/G02_GENERATED/stderr.log",
+          "sha256": "4be9626096cf5a85095fe44760e465202b304c004f9fb2cd7280a61267cb9556",
+          "sizeBytes": 44
+        }
+      ]
+    },
+    {
+      "id": "G03_STATIC",
+      "status": "NOT_RUN",
+      "expectedCommand": "pnpm format:check && pnpm lint && pnpm typecheck",
+      "startedAt": null,
+      "endedAt": "2026-10-31T00:57:35.699Z",
+      "durationMs": 0,
+      "timeoutSeconds": 900,
+      "reason": "NOT_RUN: predecessor не PASS: G02_GENERATED",
+      "runs": [],
+      "artifacts": [
+        {
+          "path": "/home/yurgusev/.codex/worktrees/preserve-non-openobserve/CoffeeOrderPlatform/evidence/launch/20261031T005704Z-a6cceea/gates/G03_STATIC/stdout.log",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "sizeBytes": 0
+        },
+        {
+          "path": "/home/yurgusev/.codex/worktrees/preserve-non-openobserve/CoffeeOrderPlatform/evidence/launch/20261031T005704Z-a6cceea/gates/G03_STATIC/stderr.log",
+          "sha256": "1633130b8c32ecfab73be9d897f8187ed03fcd3ebc5de25e2b5b3461403f8b18",
+          "sizeBytes": 46
+        }
+      ]
+    },
+    {
+      "id": "G04_UNIT",
+      "status": "NOT_RUN",
+      "expectedCommand": "pnpm test:unit -- --coverage",
+      "startedAt": null,
+      "endedAt": "2026-10-31T00:57:35.705Z",
+      "durationMs": 0,
+      "timeoutSeconds": 900,
+      "reason": "NOT_RUN: predecessor не PASS: G03_STATIC",
+      "runs": [],
+      "artifacts": [
+        {
+          "path": "/home/yurgusev/.codex/worktrees/preserve-non-openobserve/CoffeeOrderPlatform/evidence/launch/20261031T005704Z-a6cceea/gates/G04_UNIT/stdout.log",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "sizeBytes": 0
+        },
+        {
+          "path": "/home/yurgusev/.codex/worktrees/preserve-non-openobserve/CoffeeOrderPlatform/evidence/launch/20261031T005704Z-a6cceea/gates/G04_UNIT/stderr.log",
+          "sha256": "e9a690969c875a116caf069e2408cc46de0f170dd3dfe81908633e63e78f3e72",
+          "sizeBytes": 43
+        }
+      ]
+    },
+    {
+      "id": "G05_CONTRACTS",
+      "status": "NOT_RUN",
+      "expectedCommand": "pnpm contracts:check-generated && pnpm contracts:breaking && pnpm contracts:test",
+      "startedAt": null,
+      "endedAt": "2026-10-31T00:57:35.710Z",
+      "durationMs": 0,
+      "timeoutSeconds": 900,
+      "reason": "NOT_RUN: predecessor не PASS: G03_STATIC",
+      "runs": [],
+      "artifacts": [
+        {
+          "path": "/home/yurgusev/.codex/worktrees/preserve-non-openobserve/CoffeeOrderPlatform/evidence/launch/20261031T005704Z-a6cceea/gates/G05_CONTRACTS/stdout.log",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "sizeBytes": 0
+        },
+        {
+          "path": "/home/yurgusev/.codex/worktrees/preserve-non-openobserve/CoffeeOrderPlatform/evidence/launch/20261031T005704Z-a6cceea/gates/G05_CONTRACTS/stderr.log",
+          "sha256": "e9a690969c875a116caf069e2408cc46de0f170dd3dfe81908633e63e78f3e72",
+          "sizeBytes": 43
+        }
+      ]
+    },
+    {
+      "id": "G06_ARCHITECTURE",
+      "status": "NOT_RUN",
+      "expectedCommand": "pnpm architecture:check",
+      "startedAt": null,
+      "endedAt": "2026-10-31T00:57:35.716Z",
+      "durationMs": 0,
+      "timeoutSeconds": 900,
+      "reason": "NOT_RUN: predecessor не PASS: G05_CONTRACTS",
+      "runs": [],
+      "artifacts": [
+        {
+          "path": "/home/yurgusev/.codex/worktrees/preserve-non-openobserve/CoffeeOrderPlatform/evidence/launch/20261031T005704Z-a6cceea/gates/G06_ARCHITECTURE/stdout.log",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "sizeBytes": 0
+        },
+        {
+          "path": "/home/yurgusev/.codex/worktrees/preserve-non-openobserve/CoffeeOrderPlatform/evidence/launch/20261031T005704Z-a6cceea/gates/G06_ARCHITECTURE/stderr.log",
+          "sha256": "e08dc0cebf92c103d5dc35c78bdc9e81085a319ff4041664dc1d48690fd8fa64",
+          "sizeBytes": 46
+        }
+      ]
+    },
+    {
+      "id": "G07_CONFIG_SECURITY",
+      "status": "NOT_RUN",
+      "expectedCommand": "pnpm versions:check && pnpm config:check && pnpm security:secrets",
+      "startedAt": null,
+      "endedAt": "2026-10-31T00:57:35.721Z",
+      "durationMs": 0,
+      "timeoutSeconds": 900,
+      "reason": "NOT_RUN: predecessor не PASS: G05_CONTRACTS",
+      "runs": [],
+      "artifacts": [
+        {
+          "path": "/home/yurgusev/.codex/worktrees/preserve-non-openobserve/CoffeeOrderPlatform/evidence/launch/20261031T005704Z-a6cceea/gates/G07_CONFIG_SECURITY/stdout.log",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "sizeBytes": 0
+        },
+        {
+          "path": "/home/yurgusev/.codex/worktrees/preserve-non-openobserve/CoffeeOrderPlatform/evidence/launch/20261031T005704Z-a6cceea/gates/G07_CONFIG_SECURITY/stderr.log",
+          "sha256": "e08dc0cebf92c103d5dc35c78bdc9e81085a319ff4041664dc1d48690fd8fa64",
+          "sizeBytes": 46
+        }
+      ]
+    },
+    {
+      "id": "G12_SUPPLY_CHAIN",
+      "status": "NOT_RUN",
+      "expectedCommand": "pnpm security:scan",
+      "startedAt": null,
+      "endedAt": "2026-10-31T00:57:35.727Z",
+      "durationMs": 0,
+      "timeoutSeconds": 1800,
+      "reason": "NOT_RUN: predecessor не PASS: G07_CONFIG_SECURITY",
+      "runs": [],
+      "artifacts": [
+        {
+          "path": "/home/yurgusev/.codex/worktrees/preserve-non-openobserve/CoffeeOrderPlatform/evidence/launch/20261031T005704Z-a6cceea/gates/G12_SUPPLY_CHAIN/stdout.log",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "sizeBytes": 0
+        },
+        {
+          "path": "/home/yurgusev/.codex/worktrees/preserve-non-openobserve/CoffeeOrderPlatform/evidence/launch/20261031T005704Z-a6cceea/gates/G12_SUPPLY_CHAIN/stderr.log",
+          "sha256": "6b337dfec0c0005790f0bdc574c0430f2ab77687b4c1572929b63b354723e66d",
+          "sizeBytes": 52
+        }
+      ]
+    },
+    {
+      "id": "G08_MIGRATIONS",
+      "status": "NOT_RUN",
+      "expectedCommand": "pnpm test:migrations:clean && pnpm test:migrations:forward",
+      "startedAt": null,
+      "endedAt": "2026-10-31T00:57:35.732Z",
+      "durationMs": 0,
+      "timeoutSeconds": 1800,
+      "reason": "NOT_RUN: predecessor не PASS: G07_CONFIG_SECURITY",
+      "runs": [],
+      "artifacts": [
+        {
+          "path": "/home/yurgusev/.codex/worktrees/preserve-non-openobserve/CoffeeOrderPlatform/evidence/launch/20261031T005704Z-a6cceea/gates/G08_MIGRATIONS/stdout.log",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "sizeBytes": 0
+        },
+        {
+          "path": "/home/yurgusev/.codex/worktrees/preserve-non-openobserve/CoffeeOrderPlatform/evidence/launch/20261031T005704Z-a6cceea/gates/G08_MIGRATIONS/stderr.log",
+          "sha256": "6b337dfec0c0005790f0bdc574c0430f2ab77687b4c1572929b63b354723e66d",
+          "sizeBytes": 52
+        }
+      ]
+    },
+    {
+      "id": "G09_DB_BOUNDARIES",
+      "status": "NOT_RUN",
+      "expectedCommand": "pnpm db:smoke",
+      "startedAt": null,
+      "endedAt": "2026-10-31T00:57:35.737Z",
+      "durationMs": 0,
+      "timeoutSeconds": 1800,
+      "reason": "NOT_RUN: predecessor не PASS: G08_MIGRATIONS",
+      "runs": [],
+      "artifacts": [
+        {
+          "path": "/home/yurgusev/.codex/worktrees/preserve-non-openobserve/CoffeeOrderPlatform/evidence/launch/20261031T005704Z-a6cceea/gates/G09_DB_BOUNDARIES/stdout.log",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "sizeBytes": 0
+        },
+        {
+          "path": "/home/yurgusev/.codex/worktrees/preserve-non-openobserve/CoffeeOrderPlatform/evidence/launch/20261031T005704Z-a6cceea/gates/G09_DB_BOUNDARIES/stderr.log",
+          "sha256": "5fc457932577039e4eae9039aa792a67cb729db81664facbc5fc0759652a7afb",
+          "sizeBytes": 47
+        }
+      ]
+    },
+    {
+      "id": "G10_INTEGRATION",
+      "status": "NOT_RUN",
+      "expectedCommand": "pnpm test:integration",
+      "startedAt": null,
+      "endedAt": "2026-10-31T00:57:35.742Z",
+      "durationMs": 0,
+      "timeoutSeconds": 1800,
+      "reason": "NOT_RUN: predecessor не PASS: G09_DB_BOUNDARIES, G12_SUPPLY_CHAIN",
+      "runs": [],
+      "artifacts": [
+        {
+          "path": "/home/yurgusev/.codex/worktrees/preserve-non-openobserve/CoffeeOrderPlatform/evidence/launch/20261031T005704Z-a6cceea/gates/G10_INTEGRATION/stdout.log",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "sizeBytes": 0
+        },
+        {
+          "path": "/home/yurgusev/.codex/worktrees/preserve-non-openobserve/CoffeeOrderPlatform/evidence/launch/20261031T005704Z-a6cceea/gates/G10_INTEGRATION/stderr.log",
+          "sha256": "345698d1f51ab7e6364447e4808422f1ca562651668f77ab556b5b31f7977d36",
+          "sizeBytes": 68
+        }
+      ]
+    },
+    {
+      "id": "G11_RECOVERY",
+      "status": "NOT_RUN",
+      "expectedCommand": "pnpm test:recovery",
+      "startedAt": null,
+      "endedAt": "2026-10-31T00:57:35.747Z",
+      "durationMs": 0,
+      "timeoutSeconds": 1800,
+      "reason": "NOT_RUN: predecessor не PASS: G10_INTEGRATION",
+      "runs": [],
+      "artifacts": [
+        {
+          "path": "/home/yurgusev/.codex/worktrees/preserve-non-openobserve/CoffeeOrderPlatform/evidence/launch/20261031T005704Z-a6cceea/gates/G11_RECOVERY/stdout.log",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "sizeBytes": 0
+        },
+        {
+          "path": "/home/yurgusev/.codex/worktrees/preserve-non-openobserve/CoffeeOrderPlatform/evidence/launch/20261031T005704Z-a6cceea/gates/G11_RECOVERY/stderr.log",
+          "sha256": "1efffa8475f07e45d3d8bdbf4f3fdf6b9eef5793a8eeb6c0685846d1b1c1fc8e",
+          "sizeBytes": 48
+        }
+      ]
+    },
+    {
+      "id": "G13_COMPOSE",
+      "status": "NOT_RUN",
+      "expectedCommand": "pnpm test:compose-smoke",
+      "startedAt": null,
+      "endedAt": "2026-10-31T00:57:35.753Z",
+      "durationMs": 0,
+      "timeoutSeconds": 1800,
+      "reason": "NOT_RUN: predecessor не PASS: G11_RECOVERY, G12_SUPPLY_CHAIN",
+      "runs": [],
+      "artifacts": [
+        {
+          "path": "/home/yurgusev/.codex/worktrees/preserve-non-openobserve/CoffeeOrderPlatform/evidence/launch/20261031T005704Z-a6cceea/gates/G13_COMPOSE/stdout.log",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "sizeBytes": 0
+        },
+        {
+          "path": "/home/yurgusev/.codex/worktrees/preserve-non-openobserve/CoffeeOrderPlatform/evidence/launch/20261031T005704Z-a6cceea/gates/G13_COMPOSE/stderr.log",
+          "sha256": "a1d9444aaa82138e9a892bb2a827c1c332d7f9d9f806aa56c023f7e847c4bf70",
+          "sizeBytes": 63
+        }
+      ]
+    },
+    {
+      "id": "G14_OBSERVABILITY",
+      "status": "NOT_RUN",
+      "expectedCommand": "pnpm test:observability",
+      "startedAt": null,
+      "endedAt": "2026-10-31T00:57:35.758Z",
+      "durationMs": 0,
+      "timeoutSeconds": 1800,
+      "reason": "NOT_RUN: predecessor не PASS: G13_COMPOSE",
+      "runs": [],
+      "artifacts": [
+        {
+          "path": "/home/yurgusev/.codex/worktrees/preserve-non-openobserve/CoffeeOrderPlatform/evidence/launch/20261031T005704Z-a6cceea/gates/G14_OBSERVABILITY/stdout.log",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "sizeBytes": 0
+        },
+        {
+          "path": "/home/yurgusev/.codex/worktrees/preserve-non-openobserve/CoffeeOrderPlatform/evidence/launch/20261031T005704Z-a6cceea/gates/G14_OBSERVABILITY/stderr.log",
+          "sha256": "b7910f852bac7c26458c1eea3a9a9e37ea10b872e65b454efc4d0d7159bc1952",
+          "sizeBytes": 44
+        }
+      ]
+    },
+    {
+      "id": "G15_BROWSER",
+      "status": "NOT_RUN",
+      "expectedCommand": "pnpm test:playwright",
+      "startedAt": null,
+      "endedAt": "2026-10-31T00:57:35.763Z",
+      "durationMs": 0,
+      "timeoutSeconds": 1800,
+      "reason": "NOT_RUN: predecessor не PASS: G14_OBSERVABILITY",
+      "runs": [],
+      "artifacts": [
+        {
+          "path": "/home/yurgusev/.codex/worktrees/preserve-non-openobserve/CoffeeOrderPlatform/evidence/launch/20261031T005704Z-a6cceea/gates/G15_BROWSER/stdout.log",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "sizeBytes": 0
+        },
+        {
+          "path": "/home/yurgusev/.codex/worktrees/preserve-non-openobserve/CoffeeOrderPlatform/evidence/launch/20261031T005704Z-a6cceea/gates/G15_BROWSER/stderr.log",
+          "sha256": "d6a6b9bf0c8176320c8f913d29fbd77bb11b5f3e9bab5a47832eec76a67e3bf5",
+          "sizeBytes": 50
+        }
+      ]
+    },
+    {
+      "id": "G16_AROMA_SANDBOX",
+      "status": "NOT_RUN",
+      "expectedCommand": "pnpm test:aroma-sandbox -- --approval-file \"$AROMA_SANDBOX_APPROVAL_FILE\"",
+      "startedAt": null,
+      "endedAt": "2026-10-31T00:57:35.769Z",
+      "durationMs": 0,
+      "timeoutSeconds": 1800,
+      "reason": "NOT_RUN: predecessor не PASS: G15_BROWSER",
+      "runs": [],
+      "artifacts": [
+        {
+          "path": "/home/yurgusev/.codex/worktrees/preserve-non-openobserve/CoffeeOrderPlatform/evidence/launch/20261031T005704Z-a6cceea/gates/G16_AROMA_SANDBOX/stdout.log",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "sizeBytes": 0
+        },
+        {
+          "path": "/home/yurgusev/.codex/worktrees/preserve-non-openobserve/CoffeeOrderPlatform/evidence/launch/20261031T005704Z-a6cceea/gates/G16_AROMA_SANDBOX/stderr.log",
+          "sha256": "f19f762c73ba3412349f0ea692460a724db7b2e870f5c56db75de6fbb774d76b",
+          "sizeBytes": 44
+        }
+      ]
+    },
+    {
+      "id": "G17_BACKUP_RESTORE",
+      "status": "NOT_RUN",
+      "expectedCommand": "pnpm test:backup-restore",
+      "startedAt": null,
+      "endedAt": "2026-10-31T00:57:35.775Z",
+      "durationMs": 0,
+      "timeoutSeconds": 1800,
+      "reason": "NOT_RUN: predecessor не PASS: G16_AROMA_SANDBOX",
+      "runs": [],
+      "artifacts": [
+        {
+          "path": "/home/yurgusev/.codex/worktrees/preserve-non-openobserve/CoffeeOrderPlatform/evidence/launch/20261031T005704Z-a6cceea/gates/G17_BACKUP_RESTORE/stdout.log",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "sizeBytes": 0
+        },
+        {
+          "path": "/home/yurgusev/.codex/worktrees/preserve-non-openobserve/CoffeeOrderPlatform/evidence/launch/20261031T005704Z-a6cceea/gates/G17_BACKUP_RESTORE/stderr.log",
+          "sha256": "6f55ecba6926c885a8967f836812085019412eca0dc1cae358a1852fbbcf42b0",
+          "sizeBytes": 50
+        }
+      ]
+    },
+    {
+      "id": "G18_ROLLBACK",
+      "status": "NOT_RUN",
+      "expectedCommand": "pnpm test:mutation-disable-rollback",
+      "startedAt": null,
+      "endedAt": "2026-10-31T00:57:35.782Z",
+      "durationMs": 0,
+      "timeoutSeconds": 1800,
+      "reason": "NOT_RUN: predecessor не PASS: G17_BACKUP_RESTORE",
+      "runs": [],
+      "artifacts": [
+        {
+          "path": "/home/yurgusev/.codex/worktrees/preserve-non-openobserve/CoffeeOrderPlatform/evidence/launch/20261031T005704Z-a6cceea/gates/G18_ROLLBACK/stdout.log",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "sizeBytes": 0
+        },
+        {
+          "path": "/home/yurgusev/.codex/worktrees/preserve-non-openobserve/CoffeeOrderPlatform/evidence/launch/20261031T005704Z-a6cceea/gates/G18_ROLLBACK/stderr.log",
+          "sha256": "2080f843eca6fd5f66bb9dcda3a3851ca6ed14cbb154e672dd66f038168ddfec",
+          "sizeBytes": 51
+        }
+      ]
+    },
+    {
+      "id": "G19_REPORT",
+      "status": "PASS",
+      "expectedCommand": "pnpm launch:verify:report",
+      "startedAt": "2026-10-31T00:57:35.796Z",
+      "endedAt": "2026-10-31T00:57:37.168Z",
+      "durationMs": 1372,
+      "timeoutSeconds": 900,
+      "reason": "",
+      "runs": [
+        {
+          "argv": [
+            "pnpm",
+            "launch:verify:report"
+          ],
+          "cwd": "/home/yurgusev/.cache/coffee-launch-delivery/tmp/coffee-launch-private-qC0rSu/checkout",
+          "startedAt": "2026-10-31T00:57:35.797Z",
+          "endedAt": "2026-10-31T00:57:37.098Z",
+          "exitCode": 0,
+          "timedOut": false,
+          "outputLimitExceeded": false,
+          "timeoutMs": 900000,
+          "durationMs": 1301,
+          "peakRssBytes": 230195200,
+          "artifacts": [
+            {
+              "path": "/home/yurgusev/.codex/worktrees/preserve-non-openobserve/CoffeeOrderPlatform/evidence/launch/20261031T005704Z-a6cceea/gates/G19_REPORT/stdout.log",
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+              "sizeBytes": 0
+            },
+            {
+              "path": "/home/yurgusev/.codex/worktrees/preserve-non-openobserve/CoffeeOrderPlatform/evidence/launch/20261031T005704Z-a6cceea/gates/G19_REPORT/stderr.log",
+              "sha256": "b12c9faebbb5d6c759afd3a578224b3c44bbcd8f9dd4134b9f9548c3a382a822",
+              "sizeBytes": 41
+            }
+          ]
+        }
+      ],
+      "artifacts": [
+        {
+          "path": "/home/yurgusev/.codex/worktrees/preserve-non-openobserve/CoffeeOrderPlatform/evidence/launch/20261031T005704Z-a6cceea/gates/G19_REPORT/stdout.log",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "sizeBytes": 0
+        },
+        {
+          "path": "/home/yurgusev/.codex/worktrees/preserve-non-openobserve/CoffeeOrderPlatform/evidence/launch/20261031T005704Z-a6cceea/gates/G19_REPORT/stderr.log",
+          "sha256": "b12c9faebbb5d6c759afd3a578224b3c44bbcd8f9dd4134b9f9548c3a382a822",
+          "sizeBytes": 41
+        },
+        {
+          "path": "/home/yurgusev/.codex/worktrees/preserve-non-openobserve/CoffeeOrderPlatform/evidence/launch/20261031T005704Z-a6cceea/gates/G19_REPORT/stdout.log",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "sizeBytes": 0
+        },
+        {
+          "path": "/home/yurgusev/.codex/worktrees/preserve-non-openobserve/CoffeeOrderPlatform/evidence/launch/20261031T005704Z-a6cceea/gates/G19_REPORT/stderr.log",
+          "sha256": "b12c9faebbb5d6c759afd3a578224b3c44bbcd8f9dd4134b9f9548c3a382a822",
+          "sizeBytes": 41
+        }
+      ]
+    }
+  ],
+  "decision": "НЕ ДОПУСТИТЬ"
+}

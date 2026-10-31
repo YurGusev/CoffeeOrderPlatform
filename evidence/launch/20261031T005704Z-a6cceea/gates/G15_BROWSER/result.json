@@ -1,0 +1,23 @@
+{
+  "id": "G15_BROWSER",
+  "status": "NOT_RUN",
+  "expectedCommand": "pnpm test:playwright",
+  "startedAt": null,
+  "endedAt": "2026-10-31T00:57:35.763Z",
+  "durationMs": 0,
+  "timeoutSeconds": 1800,
+  "reason": "NOT_RUN: predecessor не PASS: G14_OBSERVABILITY",
+  "runs": [],
+  "artifacts": [
+    {
+      "path": "/home/yurgusev/.codex/worktrees/preserve-non-openobserve/CoffeeOrderPlatform/evidence/launch/20261031T005704Z-a6cceea/gates/G15_BROWSER/stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "sizeBytes": 0
+    },
+    {
+      "path": "/home/yurgusev/.codex/worktrees/preserve-non-openobserve/CoffeeOrderPlatform/evidence/launch/20261031T005704Z-a6cceea/gates/G15_BROWSER/stderr.log",
+      "sha256": "d6a6b9bf0c8176320c8f913d29fbd77bb11b5f3e9bab5a47832eec76a67e3bf5",
+      "sizeBytes": 50
+    }
+  ]
+}

@@ -1,0 +1,62 @@
+{
+  "runId": "20261031T005704Z-a6cceea",
+  "dirty": false,
+  "sourceSha": "a6cceeaa822f9641c678b5dcae521c282391dd3d",
+  "candidateSha": "a6cceeaa822f9641c678b5dcae521c282391dd3d",
+  "capturedAt": "2026-10-31T00:57:04.807Z",
+  "timezone": "Asia/Yekaterinburg",
+  "platform": "linux",
+  "arch": "x64",
+  "osRelease": "6.8.0-147-generic",
+  "cpuCount": 8,
+  "memoryBytes": 14645903360,
+  "node": "v26.8.1",
+  "pnpm": "11.24.0",
+  "treeSha": "aa9675d862d6f97e44ae015249450d0bb6c51b24",
+  "nodeImageDigest": null,
+  "toolVersions": {
+    "docker": "Docker version 29.7.2, build a7dcaa6",
+    "compose": "5.4.0",
+    "postgres": null,
+    "kafka": null,
+    "browser": "Chromium 156.0.8078.47 snap"
+  },
+  "configSha256": "891e5a82ffd3ebf647226c07313aca4be426d4ed25b28b7afdf91296db631a8e",
+  "encryptedSecretsSha256": "1adc96a403e7046c7aecb584534ee130b4217acc8f845b4ca30fc78cd8399aab",
+  "toolchainVersionsSha256": "1727e18260772b686080b0893d74550dfde89fa551b8940add34d2434fb79ead",
+  "lockfileSha256": "703d4cbc66c12cd4d98d02f955ff24a9e84be7bb891db3a9620ef088d9e8c6f2",
+  "imageDigests": null,
+  "resources": {
+    "composeProject": {
+      "name": "coffee-launch-20261031t005704z-a6cceea",
+      "created": false
+    },
+    "databases": [
+      {
+        "name": "coffee_verify_20261031t005704z_a6cceea_customer",
+        "created": false
+      },
+      {
+        "name": "coffee_verify_20261031t005704z_a6cceea_catalog",
+        "created": false
+      },
+      {
+        "name": "coffee_verify_20261031t005704z_a6cceea_pricing",
+        "created": false
+      },
+      {
+        "name": "coffee_verify_20261031t005704z_a6cceea_orders",
+        "created": false
+      },
+      {
+        "name": "coffee_verify_20261031t005704z_a6cceea_integration",
+        "created": false
+      }
+    ],
+    "kafkaPrefix": {
+      "name": "20261031T005704Z-a6cceea",
+      "created": false
+    }
+  },
+  "candidatePath": "/home/yurgusev/.cache/coffee-launch-delivery/tmp/coffee-launch-private-qC0rSu/checkout"
+}

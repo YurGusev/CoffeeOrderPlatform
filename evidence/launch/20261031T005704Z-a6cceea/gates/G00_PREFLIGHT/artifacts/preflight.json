@@ -1,0 +1,983 @@
+{
+  "schemaVersion": 1,
+  "gateId": "G00_PREFLIGHT",
+  "runId": "20261031T005704Z-a6cceea",
+  "candidateSha": "a6cceeaa822f9641c678b5dcae521c282391dd3d",
+  "status": "FAIL",
+  "checks": [
+    {
+      "id": "CONTEXT",
+      "status": "PASS",
+      "facts": {
+        "schemaVersion": 1,
+        "acceptedBaseCommitPresent": true
+      }
+    },
+    {
+      "id": "CANDIDATE_CHECKOUT",
+      "status": "PASS",
+      "facts": {
+        "candidateShaMatchesHead": true,
+        "checkoutIsCwd": true,
+        "trackedAndUntrackedClean": true,
+        "ignoredBuildArtifactsAbsent": true
+      }
+    },
+    {
+      "id": "REPOSITORY_AUTHORITY",
+      "status": "PASS",
+      "facts": {
+        "originCanonical": true,
+        "ghRepositoryCanonical": true
+      }
+    },
+    {
+      "id": "ACCEPTED_BASE",
+      "status": "PASS",
+      "facts": {
+        "acceptedBaseCommitPresent": true,
+        "ancestorOfCandidate": true
+      }
+    },
+    {
+      "id": "EXACT_GATE_SCRIPTS",
+      "status": "PASS",
+      "facts": {
+        "canonicalGateCatalogAvailable": true,
+        "requiredScriptNames": [
+          "architecture:check",
+          "config:check",
+          "contracts:breaking",
+          "contracts:check-generated",
+          "contracts:test",
+          "db:smoke",
+          "format:check",
+          "launch:verify:preflight",
+          "launch:verify:report",
+          "lint",
+          "security:scan",
+          "security:secrets",
+          "test:aroma-sandbox",
+          "test:backup-restore",
+          "test:compose-smoke",
+          "test:integration",
+          "test:migrations:clean",
+          "test:migrations:forward",
+          "test:mutation-disable-rollback",
+          "test:observability",
+          "test:playwright",
+          "test:recovery",
+          "test:unit",
+          "typecheck",
+          "versions:check"
+        ],
+        "missingScriptNames": []
+      }
+    },
+    {
+      "id": "SOURCE_TOOLING_BOOTSTRAP",
+      "status": "PASS",
+      "facts": {
+        "sourceRootMatchesCandidate": true,
+        "sourceCheckoutCleanOutsideRunEvidence": true,
+        "currentRunEvidenceUntrackedEntries": 0,
+        "unrelatedOrTrackedSourceChanges": 0,
+        "sourceOriginCanonical": true,
+        "yamlParser": "js-yaml",
+        "yamlParserVersion": "4.3.2",
+        "yamlParserSource": "sourceRepoRoot/node_modules"
+      }
+    },
+    {
+      "id": "KAFKA_NAMESPACE_PLAN",
+      "status": "FAIL",
+      "facts": {
+        "committedFlagEnabled": false,
+        "baseConfigShaMatchesContext": true,
+        "baseConfigSha256": "891e5a82ffd3ebf647226c07313aca4be426d4ed25b28b7afdf91296db631a8e",
+        "candidateContextValid": true,
+        "expectedPhysical": null
+      }
+    },
+    {
+      "id": "CONFIG_AND_ISOLATION",
+      "status": "FAIL",
+      "facts": {
+        "runScopedResourceNames": true,
+        "composeProjectSyntaxValid": true,
+        "evidenceDirectoryBoundToRun": true,
+        "legacyDatabaseTargetAbsent": true,
+        "fullConfigParsedFromCanonicalPath": false,
+        "allRuntimeDatabaseTargetsRunScoped": false,
+        "baseConfigShaMatchesContext": true,
+        "databaseIsolationPolicyEnabled": false,
+        "databaseTargetPlanValid": false,
+        "databaseTargetEvidence": [],
+        "contextContainsNoDatabaseInputs": true,
+        "postgresComposeServiceAbsent": true,
+        "businessDatabaseOverridesAbsent": true,
+        "preinstallArtifactsAbsent": true,
+        "postgresServiceStarted": false
+      }
+    },
+    {
+      "id": "GITHUB_PREDECESSORS",
+      "status": "PASS",
+      "facts": {
+        "requiredIssueCount": 24,
+        "fetchedIssueCount": 24,
+        "closedWithDevelopMergeAncestorCount": 24,
+        "failures": []
+      }
+    },
+    {
+      "id": "ACCEPTED_HANDOFF_SUPPLEMENT",
+      "status": "PASS",
+      "facts": {
+        "path": "verification/launch/v1/accepted-handoff-supplement.json",
+        "issueScope": [
+          2,
+          3,
+          10,
+          14,
+          19,
+          162
+        ],
+        "closedSchema": true,
+        "authorization": "explicit-user-approval-in-current-task"
+      }
+    },
+    {
+      "id": "HANDOFF_2",
+      "status": "PASS",
+      "facts": {
+        "acceptedMergeCommit": "327638d4494269a151ee7c0ac945ac0053c3e0d4",
+        "acceptanceSource": "GitHub PR #21 merged into develop",
+        "artifactCount": 11,
+        "failures": [],
+        "historicalRuntimeProof": "not-inferred",
+        "supplementAuthorization": "explicit-user-approval-in-current-task"
+      }
+    },
+    {
+      "id": "HANDOFF_3",
+      "status": "PASS",
+      "facts": {
+        "acceptedMergeCommit": "91c6ed927029604c82a25b2208371a98c4b62237",
+        "acceptanceSource": "GitHub PR #22 merged into develop",
+        "artifactCount": 5,
+        "failures": [],
+        "historicalRuntimeProof": "not-inferred",
+        "supplementAuthorization": "explicit-user-approval-in-current-task"
+      }
+    },
+    {
+      "id": "HANDOFF_4",
+      "status": "PASS",
+      "facts": {
+        "acceptedMergeCommit": "eb34befd76c0654e75d82637251dc4d12d0e0213",
+        "inputCount": 3,
+        "outputCount": 26,
+        "consumersValidated": true,
+        "failures": []
+      }
+    },
+    {
+      "id": "HANDOFF_5",
+      "status": "PASS",
+      "facts": {
+        "acceptedMergeCommit": "7db7bc97b41962c0592b82853ebd7dc9bc43c290",
+        "inputCount": 3,
+        "outputCount": 81,
+        "consumersValidated": true,
+        "failures": []
+      }
+    },
+    {
+      "id": "HANDOFF_6",
+      "status": "PASS",
+      "facts": {
+        "acceptedMergeCommit": "76c2d580c86bbd2b272369859cbecf97815e2b8e",
+        "inputCount": 3,
+        "outputCount": 39,
+        "consumersValidated": true,
+        "failures": []
+      }
+    },
+    {
+      "id": "HANDOFF_7",
+      "status": "PASS",
+      "facts": {
+        "acceptedMergeCommit": "c88c62c91e5a6833d26c8368e3f45e78948f051c",
+        "inputCount": 6,
+        "outputCount": 24,
+        "consumersValidated": true,
+        "failures": []
+      }
+    },
+    {
+      "id": "HANDOFF_8",
+      "status": "PASS",
+      "facts": {
+        "acceptedMergeCommit": "e278aeb10e57d37485542f8668f078456074b038",
+        "inputCount": 8,
+        "outputCount": 76,
+        "consumersValidated": true,
+        "failures": []
+      }
+    },
+    {
+      "id": "HANDOFF_9",
+      "status": "PASS",
+      "facts": {
+        "acceptedMergeCommit": "d3b5a29fb0fcfff22d167e368c65566dc382af8d",
+        "inputCount": 9,
+        "outputCount": 59,
+        "consumersValidated": true,
+        "failures": []
+      }
+    },
+    {
+      "id": "HANDOFF_10",
+      "status": "PASS",
+      "facts": {
+        "acceptedMergeCommit": "4b2cad1dab30af66ad0b2fe64da280222e506574",
+        "acceptanceSource": "GitHub PR #143 merged into develop",
+        "artifactCount": 34,
+        "failures": [],
+        "historicalRuntimeProof": "not-inferred",
+        "supplementAuthorization": "explicit-user-approval-in-current-task"
+      }
+    },
+    {
+      "id": "HANDOFF_11",
+      "status": "PASS",
+      "facts": {
+        "acceptedMergeCommit": "2191b82ea114db8f9b1c4839773ef7ca51a204b9",
+        "inputCount": 5,
+        "outputCount": 139,
+        "consumersValidated": true,
+        "failures": []
+      }
+    },
+    {
+      "id": "HANDOFF_12",
+      "status": "PASS",
+      "facts": {
+        "acceptedMergeCommit": "d6d860af092e3874f58d31506d473fe75dfc3d2f",
+        "inputCount": 7,
+        "outputCount": 92,
+        "consumersValidated": true,
+        "failures": []
+      }
+    },
+    {
+      "id": "HANDOFF_14",
+      "status": "PASS",
+      "facts": {
+        "acceptedMergeCommit": "9b5a320b936cecafcb74de2d6a1253e3d0a155ce",
+        "acceptanceSource": "GitHub PR #15 merged into develop",
+        "artifactCount": 6,
+        "failures": [],
+        "historicalRuntimeProof": "not-inferred",
+        "supplementAuthorization": "explicit-user-approval-in-current-task",
+        "coverage": "accepted #19 design artifacts only; no #14 runtime handoff"
+      }
+    },
+    {
+      "id": "HANDOFF_16",
+      "status": "PASS",
+      "facts": {
+        "acceptedMergeCommit": "63be432f2a452d4159abc32183678ca91819c013",
+        "inputCount": 3,
+        "outputCount": 32,
+        "consumersValidated": true,
+        "failures": []
+      }
+    },
+    {
+      "id": "HANDOFF_17",
+      "status": "PASS",
+      "facts": {
+        "acceptedMergeCommit": "972e480fff560d2a8c1aed0af7c419322fe1eba4",
+        "inputCount": 2,
+        "outputCount": 42,
+        "consumersValidated": true,
+        "failures": []
+      }
+    },
+    {
+      "id": "HANDOFF_18",
+      "status": "PASS",
+      "facts": {
+        "acceptedMergeCommit": "cd8cb2d8122622fd385b25944ebe9701f90f56e2",
+        "inputCount": 6,
+        "outputCount": 13,
+        "consumersValidated": true,
+        "failures": []
+      }
+    },
+    {
+      "id": "HANDOFF_19",
+      "status": "PASS",
+      "facts": {
+        "acceptedMergeCommit": "81aa403e682478ebdf3fb6b555ebcc969d4273f0",
+        "acceptanceSource": "GitHub PR #20 merged into develop",
+        "artifactCount": 11,
+        "failures": [],
+        "historicalRuntimeProof": "not-inferred",
+        "supplementAuthorization": "explicit-user-approval-in-current-task"
+      }
+    },
+    {
+      "id": "HANDOFF_60",
+      "status": "PASS",
+      "facts": {
+        "acceptedMergeCommit": "69cc341b6d9507f27c5e115aef519d0b96923bfc",
+        "inputCount": 2,
+        "outputCount": 26,
+        "consumersValidated": true,
+        "failures": []
+      }
+    },
+    {
+      "id": "HANDOFF_61",
+      "status": "PASS",
+      "facts": {
+        "acceptedMergeCommit": "d1f462838da15b25049842a241f4e3f6f75a6b4f",
+        "inputCount": 2,
+        "outputCount": 5,
+        "consumersValidated": true,
+        "failures": []
+      }
+    },
+    {
+      "id": "HANDOFF_62",
+      "status": "PASS",
+      "facts": {
+        "acceptedMergeCommit": "56b0e99275573b6bdc2461703b3221c5c678cfa6",
+        "inputCount": 3,
+        "outputCount": 27,
+        "consumersValidated": true,
+        "failures": []
+      }
+    },
+    {
+      "id": "HANDOFF_63",
+      "status": "PASS",
+      "facts": {
+        "acceptedMergeCommit": "d16b41dd58db4494a1fb743fa741010249d7afa7",
+        "inputCount": 4,
+        "outputCount": 36,
+        "consumersValidated": true,
+        "failures": []
+      }
+    },
+    {
+      "id": "HANDOFF_64",
+      "status": "PASS",
+      "facts": {
+        "acceptedMergeCommit": "e6439599be85a5fc8b83d99293064e877a2ff012",
+        "inputCount": 8,
+        "outputCount": 115,
+        "consumersValidated": true,
+        "failures": []
+      }
+    },
+    {
+      "id": "HANDOFF_119",
+      "status": "PASS",
+      "facts": {
+        "acceptedMergeCommit": "53753257b22021023f887050669fc964a7998909",
+        "inputCount": 3,
+        "outputCount": 18,
+        "consumersValidated": true,
+        "failures": []
+      }
+    },
+    {
+      "id": "HANDOFF_162",
+      "status": "PASS",
+      "facts": {
+        "acceptedMergeCommit": "327474d917e1f3f1dfd9d12da8a1273775f8591f",
+        "acceptanceSource": "GitHub PR #168 merged into develop",
+        "artifactCount": 19,
+        "failures": [],
+        "historicalRuntimeProof": "not-inferred",
+        "supplementAuthorization": "explicit-user-approval-in-current-task"
+      }
+    },
+    {
+      "id": "HANDOFF_210",
+      "status": "PASS",
+      "facts": {
+        "acceptedMergeCommit": "a6cceeaa822f9641c678b5dcae521c282391dd3d",
+        "inputCount": 1,
+        "outputCount": 41,
+        "consumersValidated": true,
+        "failures": []
+      }
+    },
+    {
+      "id": "NATIVE_CAPACITY_SCOPE",
+      "status": "PASS",
+      "facts": {
+        "cpuCount": 8,
+        "memoryBytes": 14645903360,
+        "avx": false,
+        "aes": false,
+        "capacityEvidenceAccepted": false
+      }
+    },
+    {
+      "id": "NATIVE_IMAGE_RUNTIME_IDENTITY",
+      "status": "PASS",
+      "facts": {
+        "declaredBomImages": {
+          "node": "node:26.8.1-alpine@sha256:2d984a15c9b54fd0aeb608b8e0d0d83529eb34d2966db27a1fb4f1edc3d298a3",
+          "nativeNginx": "nginx:1.31.6-trixie@sha256:908dc23e643a1447dbfb2e189ed268bfde6a51a5bf9a34d3dd3440a24f58ccf7"
+        },
+        "declaredBomIndexDigest": "sha256:908dc23e643a1447dbfb2e189ed268bfde6a51a5bf9a34d3dd3440a24f58ccf7",
+        "declaredBomPinned": true,
+        "actualRuntimeProof": {
+          "endpointKind": "local-unix-only",
+          "daemon": {
+            "os": "linux",
+            "architecture": "amd64"
+          },
+          "node": {
+            "status": "PASS",
+            "imageId": "sha256:89824ea3fb69002f51789e1e40a2f389aeb70dc4b9349ac2b467c5ba11d506cb",
+            "repoDigest": "node@sha256:2d984a15c9b54fd0aeb608b8e0d0d83529eb34d2966db27a1fb4f1edc3d298a3",
+            "os": "linux",
+            "architecture": "amd64",
+            "version": "26.8.1",
+            "cleanupSucceeded": true,
+            "failure": null
+          },
+          "nativeNginx": {
+            "status": "PASS",
+            "imageId": "sha256:e9567a94eddcc1f293d083044d4c988b853fe17c2a462f343704bcb1ea01c9a6",
+            "repoDigest": "nginx@sha256:908dc23e643a1447dbfb2e189ed268bfde6a51a5bf9a34d3dd3440a24f58ccf7",
+            "os": "linux",
+            "architecture": "amd64",
+            "version": "1.31.6",
+            "cleanupSucceeded": true,
+            "failure": null
+          }
+        },
+        "runtimeImageIds": {
+          "node": "sha256:89824ea3fb69002f51789e1e40a2f389aeb70dc4b9349ac2b467c5ba11d506cb",
+          "nativeNginx": "sha256:e9567a94eddcc1f293d083044d4c988b853fe17c2a462f343704bcb1ea01c9a6"
+        },
+        "scope": "pinned Node and nginx base-image digest, image ID, linux/amd64 metadata and runtime version only; no application-image, capacity or deployment proof"
+      }
+    }
+  ],
+  "limitations": [
+    "G00 проверяет read-only GitHub, Git и локальные config/evidence; Docker запускает только локальные pinned Node/nginx base images с версиями, без PostgreSQL/SQL, Compose, provider, сети, mount, secret или port.",
+    "Native base-image proof не покрывает application images и capacity; пропуск этих проверок остаётся отдельным launch blocker.",
+    "Native host: 8 CPU, 14645903360 bytes RAM, AVX=false, AES=false; capacity evidence не принимается, QEMU capacity не подменяет native."
+  ],
+  "githubSnapshot": {
+    "repository": "YurGusev/CoffeeOrderPlatform",
+    "fetchedAtUtc": "2026-10-31T00:57:08.034Z",
+    "sha256": "068da02424ef8536980642fc091961f8c4343c9d88ffde7c946961095bf1d765",
+    "issues": [
+      {
+        "number": 2,
+        "state": "CLOSED",
+        "pullRequests": [
+          {
+            "number": 21,
+            "merged": true,
+            "mergeCommit": {
+              "oid": "327638d4494269a151ee7c0ac945ac0053c3e0d4"
+            },
+            "baseRefName": "develop",
+            "ancestors": []
+          }
+        ],
+        "acceptedMergeCommit": "327638d4494269a151ee7c0ac945ac0053c3e0d4",
+        "ambiguousAcceptedMerges": []
+      },
+      {
+        "number": 3,
+        "state": "CLOSED",
+        "pullRequests": [
+          {
+            "number": 22,
+            "merged": true,
+            "mergeCommit": {
+              "oid": "91c6ed927029604c82a25b2208371a98c4b62237"
+            },
+            "baseRefName": "develop",
+            "ancestors": []
+          }
+        ],
+        "acceptedMergeCommit": "91c6ed927029604c82a25b2208371a98c4b62237",
+        "ambiguousAcceptedMerges": []
+      },
+      {
+        "number": 4,
+        "state": "CLOSED",
+        "pullRequests": [
+          {
+            "number": 128,
+            "merged": true,
+            "mergeCommit": {
+              "oid": "eb34befd76c0654e75d82637251dc4d12d0e0213"
+            },
+            "baseRefName": "develop",
+            "ancestors": []
+          }
+        ],
+        "acceptedMergeCommit": "eb34befd76c0654e75d82637251dc4d12d0e0213",
+        "ambiguousAcceptedMerges": []
+      },
+      {
+        "number": 5,
+        "state": "CLOSED",
+        "pullRequests": [
+          {
+            "number": 129,
+            "merged": true,
+            "mergeCommit": {
+              "oid": "7db7bc97b41962c0592b82853ebd7dc9bc43c290"
+            },
+            "baseRefName": "develop",
+            "ancestors": []
+          }
+        ],
+        "acceptedMergeCommit": "7db7bc97b41962c0592b82853ebd7dc9bc43c290",
+        "ambiguousAcceptedMerges": []
+      },
+      {
+        "number": 6,
+        "state": "CLOSED",
+        "pullRequests": [
+          {
+            "number": 145,
+            "merged": true,
+            "mergeCommit": {
+              "oid": "76c2d580c86bbd2b272369859cbecf97815e2b8e"
+            },
+            "baseRefName": "develop",
+            "ancestors": []
+          }
+        ],
+        "acceptedMergeCommit": "76c2d580c86bbd2b272369859cbecf97815e2b8e",
+        "ambiguousAcceptedMerges": []
+      },
+      {
+        "number": 7,
+        "state": "CLOSED",
+        "pullRequests": [
+          {
+            "number": 169,
+            "merged": true,
+            "mergeCommit": {
+              "oid": "c88c62c91e5a6833d26c8368e3f45e78948f051c"
+            },
+            "baseRefName": "develop",
+            "ancestors": []
+          }
+        ],
+        "acceptedMergeCommit": "c88c62c91e5a6833d26c8368e3f45e78948f051c",
+        "ambiguousAcceptedMerges": []
+      },
+      {
+        "number": 8,
+        "state": "CLOSED",
+        "pullRequests": [
+          {
+            "number": 170,
+            "merged": true,
+            "mergeCommit": {
+              "oid": "e278aeb10e57d37485542f8668f078456074b038"
+            },
+            "baseRefName": "develop",
+            "ancestors": []
+          }
+        ],
+        "acceptedMergeCommit": "e278aeb10e57d37485542f8668f078456074b038",
+        "ambiguousAcceptedMerges": []
+      },
+      {
+        "number": 9,
+        "state": "CLOSED",
+        "pullRequests": [
+          {
+            "number": 172,
+            "merged": true,
+            "mergeCommit": {
+              "oid": "d3b5a29fb0fcfff22d167e368c65566dc382af8d"
+            },
+            "baseRefName": "develop",
+            "ancestors": []
+          }
+        ],
+        "acceptedMergeCommit": "d3b5a29fb0fcfff22d167e368c65566dc382af8d",
+        "ambiguousAcceptedMerges": []
+      },
+      {
+        "number": 10,
+        "state": "CLOSED",
+        "pullRequests": [
+          {
+            "number": 143,
+            "merged": true,
+            "mergeCommit": {
+              "oid": "4b2cad1dab30af66ad0b2fe64da280222e506574"
+            },
+            "baseRefName": "develop",
+            "ancestors": []
+          }
+        ],
+        "acceptedMergeCommit": "4b2cad1dab30af66ad0b2fe64da280222e506574",
+        "ambiguousAcceptedMerges": []
+      },
+      {
+        "number": 11,
+        "state": "CLOSED",
+        "pullRequests": [
+          {
+            "number": 171,
+            "merged": true,
+            "mergeCommit": {
+              "oid": "2191b82ea114db8f9b1c4839773ef7ca51a204b9"
+            },
+            "baseRefName": "develop",
+            "ancestors": []
+          }
+        ],
+        "acceptedMergeCommit": "2191b82ea114db8f9b1c4839773ef7ca51a204b9",
+        "ambiguousAcceptedMerges": []
+      },
+      {
+        "number": 12,
+        "state": "CLOSED",
+        "pullRequests": [
+          {
+            "number": 176,
+            "merged": true,
+            "mergeCommit": {
+              "oid": "94afe09d0c8ec3157f20b5a0161c9e5384dc612f"
+            },
+            "baseRefName": "develop",
+            "ancestors": [
+              "d6d860af092e3874f58d31506d473fe75dfc3d2f"
+            ]
+          },
+          {
+            "number": 178,
+            "merged": true,
+            "mergeCommit": {
+              "oid": "d6d860af092e3874f58d31506d473fe75dfc3d2f"
+            },
+            "baseRefName": "develop",
+            "ancestors": []
+          }
+        ],
+        "acceptedMergeCommit": "d6d860af092e3874f58d31506d473fe75dfc3d2f",
+        "ambiguousAcceptedMerges": []
+      },
+      {
+        "number": 14,
+        "state": "CLOSED",
+        "pullRequests": [
+          {
+            "number": 15,
+            "merged": true,
+            "mergeCommit": {
+              "oid": "9b5a320b936cecafcb74de2d6a1253e3d0a155ce"
+            },
+            "baseRefName": "develop",
+            "ancestors": []
+          }
+        ],
+        "acceptedMergeCommit": "9b5a320b936cecafcb74de2d6a1253e3d0a155ce",
+        "ambiguousAcceptedMerges": []
+      },
+      {
+        "number": 16,
+        "state": "CLOSED",
+        "pullRequests": [
+          {
+            "number": 147,
+            "merged": true,
+            "mergeCommit": {
+              "oid": "63be432f2a452d4159abc32183678ca91819c013"
+            },
+            "baseRefName": "develop",
+            "ancestors": []
+          }
+        ],
+        "acceptedMergeCommit": "63be432f2a452d4159abc32183678ca91819c013",
+        "ambiguousAcceptedMerges": []
+      },
+      {
+        "number": 17,
+        "state": "CLOSED",
+        "pullRequests": [
+          {
+            "number": 152,
+            "merged": true,
+            "mergeCommit": {
+              "oid": "972e480fff560d2a8c1aed0af7c419322fe1eba4"
+            },
+            "baseRefName": "develop",
+            "ancestors": []
+          }
+        ],
+        "acceptedMergeCommit": "972e480fff560d2a8c1aed0af7c419322fe1eba4",
+        "ambiguousAcceptedMerges": []
+      },
+      {
+        "number": 18,
+        "state": "CLOSED",
+        "pullRequests": [
+          {
+            "number": 158,
+            "merged": true,
+            "mergeCommit": {
+              "oid": "cd8cb2d8122622fd385b25944ebe9701f90f56e2"
+            },
+            "baseRefName": "develop",
+            "ancestors": []
+          }
+        ],
+        "acceptedMergeCommit": "cd8cb2d8122622fd385b25944ebe9701f90f56e2",
+        "ambiguousAcceptedMerges": []
+      },
+      {
+        "number": 19,
+        "state": "CLOSED",
+        "pullRequests": [
+          {
+            "number": 20,
+            "merged": true,
+            "mergeCommit": {
+              "oid": "81aa403e682478ebdf3fb6b555ebcc969d4273f0"
+            },
+            "baseRefName": "develop",
+            "ancestors": []
+          }
+        ],
+        "acceptedMergeCommit": "81aa403e682478ebdf3fb6b555ebcc969d4273f0",
+        "ambiguousAcceptedMerges": []
+      },
+      {
+        "number": 60,
+        "state": "CLOSED",
+        "pullRequests": [
+          {
+            "number": 65,
+            "merged": true,
+            "mergeCommit": {
+              "oid": "69cc341b6d9507f27c5e115aef519d0b96923bfc"
+            },
+            "baseRefName": "develop",
+            "ancestors": []
+          }
+        ],
+        "acceptedMergeCommit": "69cc341b6d9507f27c5e115aef519d0b96923bfc",
+        "ambiguousAcceptedMerges": []
+      },
+      {
+        "number": 61,
+        "state": "CLOSED",
+        "pullRequests": [
+          {
+            "number": 74,
+            "merged": true,
+            "mergeCommit": {
+              "oid": "d1f462838da15b25049842a241f4e3f6f75a6b4f"
+            },
+            "baseRefName": "develop",
+            "ancestors": []
+          }
+        ],
+        "acceptedMergeCommit": "d1f462838da15b25049842a241f4e3f6f75a6b4f",
+        "ambiguousAcceptedMerges": []
+      },
+      {
+        "number": 62,
+        "state": "CLOSED",
+        "pullRequests": [
+          {
+            "number": 126,
+            "merged": true,
+            "mergeCommit": {
+              "oid": "56b0e99275573b6bdc2461703b3221c5c678cfa6"
+            },
+            "baseRefName": "develop",
+            "ancestors": []
+          }
+        ],
+        "acceptedMergeCommit": "56b0e99275573b6bdc2461703b3221c5c678cfa6",
+        "ambiguousAcceptedMerges": []
+      },
+      {
+        "number": 63,
+        "state": "CLOSED",
+        "pullRequests": [
+          {
+            "number": 127,
+            "merged": true,
+            "mergeCommit": {
+              "oid": "d16b41dd58db4494a1fb743fa741010249d7afa7"
+            },
+            "baseRefName": "develop",
+            "ancestors": []
+          }
+        ],
+        "acceptedMergeCommit": "d16b41dd58db4494a1fb743fa741010249d7afa7",
+        "ambiguousAcceptedMerges": []
+      },
+      {
+        "number": 64,
+        "state": "CLOSED",
+        "pullRequests": [
+          {
+            "number": 179,
+            "merged": true,
+            "mergeCommit": {
+              "oid": "e6439599be85a5fc8b83d99293064e877a2ff012"
+            },
+            "baseRefName": "develop",
+            "ancestors": []
+          }
+        ],
+        "acceptedMergeCommit": "e6439599be85a5fc8b83d99293064e877a2ff012",
+        "ambiguousAcceptedMerges": []
+      },
+      {
+        "number": 119,
+        "state": "CLOSED",
+        "pullRequests": [
+          {
+            "number": 125,
+            "merged": true,
+            "mergeCommit": {
+              "oid": "53753257b22021023f887050669fc964a7998909"
+            },
+            "baseRefName": "develop",
+            "ancestors": []
+          }
+        ],
+        "acceptedMergeCommit": "53753257b22021023f887050669fc964a7998909",
+        "ambiguousAcceptedMerges": []
+      },
+      {
+        "number": 162,
+        "state": "CLOSED",
+        "pullRequests": [
+          {
+            "number": 168,
+            "merged": true,
+            "mergeCommit": {
+              "oid": "327474d917e1f3f1dfd9d12da8a1273775f8591f"
+            },
+            "baseRefName": "develop",
+            "ancestors": []
+          }
+        ],
+        "acceptedMergeCommit": "327474d917e1f3f1dfd9d12da8a1273775f8591f",
+        "ambiguousAcceptedMerges": []
+      },
+      {
+        "number": 210,
+        "state": "CLOSED",
+        "pullRequests": [
+          {
+            "number": 211,
+            "merged": true,
+            "mergeCommit": {
+              "oid": "a6cceeaa822f9641c678b5dcae521c282391dd3d"
+            },
+            "baseRefName": "develop",
+            "ancestors": []
+          }
+        ],
+        "acceptedMergeCommit": "a6cceeaa822f9641c678b5dcae521c282391dd3d",
+        "ambiguousAcceptedMerges": []
+      },
+      {
+        "number": 49,
+        "state": "CLOSED",
+        "pullRequests": [
+          {
+            "number": 59,
+            "merged": true,
+            "mergeCommit": {
+              "oid": "2f13f4ef06e6cb8e8221a9f92ecdc38b5541725c"
+            },
+            "baseRefName": "develop"
+          }
+        ],
+        "supplementalHandoffInput": true
+      },
+      {
+        "number": 137,
+        "state": "CLOSED",
+        "pullRequests": [
+          {
+            "number": 142,
+            "merged": true,
+            "mergeCommit": {
+              "oid": "15ff4cb294b68e98cbe7f8b3212381baee7f96a4"
+            },
+            "baseRefName": "develop"
+          }
+        ],
+        "supplementalHandoffInput": true
+      },
+      {
+        "number": 153,
+        "state": "CLOSED",
+        "pullRequests": [
+          {
+            "number": 154,
+            "merged": true,
+            "mergeCommit": {
+              "oid": "94a43c1a7d6184b6df3983c32ec06c28d2d99ea2"
+            },
+            "baseRefName": "develop"
+          }
+        ],
+        "supplementalHandoffInput": true
+      },
+      {
+        "number": 155,
+        "state": "CLOSED",
+        "pullRequests": [
+          {
+            "number": 156,
+            "merged": true,
+            "mergeCommit": {
+              "oid": "5e19c949b3ab72e1d390687564f34161f922ca68"
+            },
+            "baseRefName": "develop"
+          }
+        ],
+        "supplementalHandoffInput": true
+      },
+      {
+        "number": 160,
+        "state": "CLOSED",
+        "pullRequests": [
+          {
+            "number": 167,
+            "merged": true,
+            "mergeCommit": {
+              "oid": "deffca7b60c4588c8a3843a75c284963fb1c8324"
+            },
+            "baseRefName": "develop"
+          }
+        ],
+        "supplementalHandoffInput": true
+      }
+    ]
+  }
+}

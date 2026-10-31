@@ -1,0 +1,61 @@
+{
+  "id": "G00_PREFLIGHT",
+  "status": "FAIL",
+  "expectedCommand": "pnpm launch:verify:preflight",
+  "startedAt": "2026-10-31T00:57:06.082Z",
+  "endedAt": "2026-10-31T00:57:35.676Z",
+  "durationMs": 29594,
+  "timeoutSeconds": 900,
+  "reason": "Команда завершилась с кодом 1; G00 preflight result is FAIL or does not identify this run/candidate",
+  "runs": [
+    {
+      "argv": [
+        "pnpm",
+        "launch:verify:preflight"
+      ],
+      "cwd": "/home/yurgusev/.cache/coffee-launch-delivery/tmp/coffee-launch-private-qC0rSu/checkout",
+      "startedAt": "2026-10-31T00:57:06.083Z",
+      "endedAt": "2026-10-31T00:57:35.673Z",
+      "exitCode": 1,
+      "timedOut": false,
+      "outputLimitExceeded": false,
+      "timeoutMs": 900000,
+      "durationMs": 29590,
+      "peakRssBytes": 298655744,
+      "artifacts": [
+        {
+          "path": "/home/yurgusev/.codex/worktrees/preserve-non-openobserve/CoffeeOrderPlatform/evidence/launch/20261031T005704Z-a6cceea/gates/G00_PREFLIGHT/stdout.log",
+          "sha256": "c36e08fd73e4a4acc198d60c981a8a8e1b20ec391d8008f6855cfcea58c04bc5",
+          "sizeBytes": 241
+        },
+        {
+          "path": "/home/yurgusev/.codex/worktrees/preserve-non-openobserve/CoffeeOrderPlatform/evidence/launch/20261031T005704Z-a6cceea/gates/G00_PREFLIGHT/stderr.log",
+          "sha256": "948f850e69df00b765d674dc3c33ff6fa90adf212f1bd301dd1c316d36594f65",
+          "sizeBytes": 54
+        }
+      ]
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "/home/yurgusev/.codex/worktrees/preserve-non-openobserve/CoffeeOrderPlatform/evidence/launch/20261031T005704Z-a6cceea/gates/G00_PREFLIGHT/stdout.log",
+      "sha256": "c36e08fd73e4a4acc198d60c981a8a8e1b20ec391d8008f6855cfcea58c04bc5",
+      "sizeBytes": 241
+    },
+    {
+      "path": "/home/yurgusev/.codex/worktrees/preserve-non-openobserve/CoffeeOrderPlatform/evidence/launch/20261031T005704Z-a6cceea/gates/G00_PREFLIGHT/stderr.log",
+      "sha256": "948f850e69df00b765d674dc3c33ff6fa90adf212f1bd301dd1c316d36594f65",
+      "sizeBytes": 54
+    },
+    {
+      "path": "/home/yurgusev/.codex/worktrees/preserve-non-openobserve/CoffeeOrderPlatform/evidence/launch/20261031T005704Z-a6cceea/gates/G00_PREFLIGHT/stdout.log",
+      "sha256": "c36e08fd73e4a4acc198d60c981a8a8e1b20ec391d8008f6855cfcea58c04bc5",
+      "sizeBytes": 241
+    },
+    {
+      "path": "/home/yurgusev/.codex/worktrees/preserve-non-openobserve/CoffeeOrderPlatform/evidence/launch/20261031T005704Z-a6cceea/gates/G00_PREFLIGHT/stderr.log",
+      "sha256": "948f850e69df00b765d674dc3c33ff6fa90adf212f1bd301dd1c316d36594f65",
+      "sizeBytes": 54
+    }
+  ]
+}
