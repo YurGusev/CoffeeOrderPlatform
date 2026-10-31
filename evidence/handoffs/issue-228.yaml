@@ -63,6 +63,19 @@ verification:
 independentReview:
   source: Существенных source findings не обнаружено; native runtime не проверялся.
   focusedTests: "8 pass / 0 fail / 0 skip; 0.614 s; log SHA-256 f5b1a4feba17bacdaaf10139d4d295f113e1782c8aedd3284f524b3ce3996865"
+integrationVerification:
+  candidateCommit: aecaf1f
+  checks:
+    - command: "node --test --test-name-pattern='realtime qualification policy' tests/config/platform-config.test.mjs"
+      result: "1 pass / 0 fail / 0 skip; 2.330 s; log SHA-256 b43da965815b1d1671120bfc937710254f53fe45c6ead343db418226df696015"
+    - command: "node --test --test-name-pattern='browser correlation executes the child lifecycle|browser correlation admission verifies' tests/config/observability-bootstrap.test.mjs"
+      result: "2 pass / 0 fail / 0 skip; 77.323 s; log SHA-256 95da479178aa862f71f717a83803883dcd8e5d70aed9e9f0c3cd7939302bcef0"
+    - command: "pnpm exec tsc -b packages/platform-migrations --pretty false"
+      result: "exit 0; log SHA-256 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    - command: "pnpm exec tsc -b packages/platform-http apps/aroma-gateway apps/orders-service --pretty false"
+      result: "exit 0; log SHA-256 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    - command: "node --test --test-name-pattern='external recovery projection accepts canonical mapping|catalog slice preserves secret ownership' tests/compose/topology.test.mjs"
+      result: "2 pass / 0 fail / 0 skip; 0.995 s; log SHA-256 b5cf8c4dd61e3f07c8c4b9d88b7b6c0aa77d60e97ab02ad9bedfbaa8b3dc9fe5"
 limitations:
   - "Кандидат не принят: native images и полный 1800000 ms профиль фактически NOT_RUN; synthetic tests не являются qualification PASS."
   - "Full-system G14, реальные OrderConfirm и production IdP не доказаны этим изменением; без отдельного актуального qualification PASS merge #13 запрещён."
