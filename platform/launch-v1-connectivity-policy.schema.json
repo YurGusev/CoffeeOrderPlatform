@@ -8,6 +8,7 @@
     "$schema",
     "schemaVersion",
     "authorityRef",
+    "nodeNetworkEnforcement",
     "logicalZones",
     "dockerNetworks",
     "forbiddenNetworks",
@@ -19,6 +20,10 @@
     "schemaVersion": { "const": 1 },
     "authorityRef": {
       "const": "docs/launch/23_RUNTIME_CONFIGURATION_MATRIX.md"
+    },
+    "nodeNetworkEnforcement": {
+      "description": "Факт о Node 26, не настройка и не выбор режима.",
+      "const": "global-only"
     },
     "logicalZones": {
       "type": "array",
@@ -50,8 +55,9 @@
     },
     "globalDenyAssertions": {
       "type": "array",
-      "minItems": 7,
-      "maxItems": 7,
+      "description": "Декларативные проверки policy, не результат сетевого runtime probe.",
+      "minItems": 4,
+      "maxItems": 4,
       "uniqueItems": true,
       "items": { "type": "string", "minLength": 1 }
     }
@@ -118,6 +124,7 @@
         },
         "hostPortPolicy": {
           "type": "object",
+          "description": "Политика опубликованных портов хоста, не исходящих соединений.",
           "additionalProperties": false,
           "required": ["default", "allowedPublishedHostPorts"],
           "properties": {
@@ -131,6 +138,7 @@
         },
         "allowedHostPorts": {
           "type": "array",
+          "description": "Инвентарь ожидаемых соединений, не фильтр TCP host:port.",
           "uniqueItems": true,
           "items": {
             "type": "string",
@@ -139,6 +147,7 @@
         },
         "allowedExternalEgress": {
           "type": "array",
+          "description": "Инвентарь provider egress, не фильтр произвольных сокетов.",
           "uniqueItems": true,
           "items": {
             "type": "string",
@@ -147,6 +156,7 @@
         },
         "denyAssertions": {
           "type": "array",
+          "description": "Намерения policy; фактическая граница определяется topology, авторизацией и тестами.",
           "minItems": 3,
           "uniqueItems": true,
           "items": { "type": "string", "minLength": 1 }

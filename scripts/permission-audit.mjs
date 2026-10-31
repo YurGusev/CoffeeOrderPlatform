@@ -235,12 +235,8 @@ export function permissionFlags(
 ) {
   if (mode !== "audit" && mode !== "enforce") fail(`unknown mode ${mode}`);
   const flags = [mode === "audit" ? "--permission-audit" : "--permission"];
-  const allowNet = [
-    ...manifest.allowNet,
-    ...(telemetryEndpoint ? [telemetryEndpoint] : []),
-    ...(listenPort ? [`0.0.0.0:${listenPort}`] : []),
-  ];
-  if (allowNet.length) flags.push(`--allow-net=${allowNet.join(",")}`);
+  if (manifest.allowNet.length || telemetryEndpoint || listenPort)
+    flags.push("--allow-net");
   for (const path of manifest.allowFsRead)
     flags.push(`--allow-fs-read=${localizeReadPath(path, root)}`);
   for (const path of manifest.allowFsWrite)

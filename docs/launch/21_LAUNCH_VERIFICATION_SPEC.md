@@ -174,6 +174,10 @@ Inventory G04 включает 60 существующих unit/property suites;
 | `G18_ROLLBACK`        | Operations              | `pnpm test:mutation-disable-rollback`                                              | mutation off, observer/Orders/recovery remain healthy, no state loss                                                         |
 | `G19_REPORT`          | Release owner           | `pnpm launch:verify:report`                                                        | Russian report, checksums, defects and deterministic decision valid                                                          |
 
+G07 проверяет конфигурацию и секреты своей командой; его PASS не доказывает
+per-host TCP isolation или выполнение runtime network probes. Сетевые границы
+локального сервера описаны в [ADR-0041](../adr/ADR-0041-local-server-network-boundaries.md).
+
 ### G08: canonical PostgreSQL и oracle миграций
 
 G08 работает только с PostgreSQL `coffee_postgres:5432` и служебной БД `postgres`;

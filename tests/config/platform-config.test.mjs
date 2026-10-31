@@ -1459,7 +1459,7 @@ void test("RED: non-null browser OIDC requires the exact explicit claims and RS2
   }
 });
 
-void test("GREEN: launch inventory is 14 Node runtimes plus native nginx with Edge egress denied", async () => {
+void test("GREEN: launch inventory is 14 Node runtimes plus native nginx with empty Edge egress inventory", async () => {
   const platform = parseYaml(
     await readFile(join(REPO_ROOT, "config/platform.yaml"), "utf8"),
     { json: true },

@@ -252,6 +252,38 @@
     }
   },
   {
+    "id": "node-network-enforcement-missing",
+    "manifest": "launch-v1-connectivity-policy.json",
+    "path": ["nodeNetworkEnforcement"],
+    "operation": "remove",
+    "expected": {
+      "ruleId": "NODE_NETWORK_ENFORCEMENT",
+      "message": "nodeNetworkEnforcement"
+    }
+  },
+  {
+    "id": "node-network-enforcement-scoped-claim",
+    "manifest": "launch-v1-connectivity-policy.json",
+    "path": ["nodeNetworkEnforcement"],
+    "operation": "replace",
+    "value": "per-host-port",
+    "expected": {
+      "ruleId": "NODE_NETWORK_ENFORCEMENT",
+      "message": "nodeNetworkEnforcement"
+    }
+  },
+  {
+    "id": "network-deny-assertion-overclaims-host-filter",
+    "manifest": "launch-v1-connectivity-policy.json",
+    "path": ["globalDenyAssertions", 2],
+    "operation": "replace",
+    "value": "unknown-host-port-denied",
+    "expected": {
+      "ruleId": "NETWORK_DENY_ASSERTIONS",
+      "message": "connectivity.globalDenyAssertions"
+    }
+  },
+  {
     "id": "provider-policy-not-gateway",
     "manifest": "launch-v1-connectivity-policy.json",
     "path": ["runtimePolicies", 11, "allowedExternalEgress"],

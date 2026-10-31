@@ -217,7 +217,7 @@ def validate_schema_artifacts(platform: Path) -> None:
     schemas = {
         "runtime-foundation-decision.schema.json": {"$schema", "schemaVersion", "decisionId", "decisionRef", "runtime", "productionImage", "registryVerification", "toolchainDecision", "prohibitions", "materializationOwner"},
         "launch-v1-runtime-profile.schema.json": {"$schema", "schemaVersion", "authority", "exactDeployableRuntimeCount", "runtimes", "specialRoles", "routeMounts", "surfaceIsolation", "internalOperationAllowlist", "delegation", "transportIdentity", "catalogIdentity", "ordersAuthority"},
-        "launch-v1-connectivity-policy.schema.json": {"$schema", "schemaVersion", "authorityRef", "logicalZones", "dockerNetworks", "forbiddenNetworks", "runtimePolicies", "globalDenyAssertions"},
+        "launch-v1-connectivity-policy.schema.json": {"$schema", "schemaVersion", "authorityRef", "nodeNetworkEnforcement", "logicalZones", "dockerNetworks", "forbiddenNetworks", "runtimePolicies", "globalDenyAssertions"},
         "target-layout.schema.json": {"$schema", "schemaVersion", "authorityRef", "workspaceMaterializationOwner", "runtimeRoots", "plannedRoots", "technicalRoots", "forbiddenRoots", "filesystemCreationAuthorized"},
     }
     for filename, expected_required in schemas.items():
@@ -457,9 +457,10 @@ def validate_domain_contracts(catalog: Any, orders: Any) -> None:
 
 
 def validate_connectivity(policy: dict[str, Any]) -> None:
-    required_keys(policy, {"$schema", "schemaVersion", "authorityRef", "logicalZones", "dockerNetworks", "forbiddenNetworks", "runtimePolicies", "globalDenyAssertions"}, "connectivity")
+    required_keys(policy, {"$schema", "schemaVersion", "authorityRef", "nodeNetworkEnforcement", "logicalZones", "dockerNetworks", "forbiddenNetworks", "runtimePolicies", "globalDenyAssertions"}, "connectivity")
     require(policy["$schema"] == "./launch-v1-connectivity-policy.schema.json", "connectivity.$schema: wrong companion schema")
     require(policy["schemaVersion"] == 1 and policy["authorityRef"] == "docs/launch/23_RUNTIME_CONFIGURATION_MATRIX.md", "connectivity: authority reference changed")
+    require(policy["nodeNetworkEnforcement"] == "global-only", "connectivity.nodeNetworkEnforcement: Node network permission is global-only")
     exact_list(policy["logicalZones"], ["public-ingress", "private-edge-backend", "public-api-backend", "internal-api", "provider-egress"], "connectivity.logicalZones")
     require(policy["forbiddenNetworks"] == ["coffee_network"], "connectivity.forbiddenNetworks: legacy coffee_network must remain forbidden")
     expected_networks = {
@@ -519,7 +520,7 @@ def validate_connectivity(policy: dict[str, Any]) -> None:
             require(item["allowedExternalEgress"] == [], f"connectivity.runtimePolicies.{name}: provider egress is Gateway-only")
         require(len(item["denyAssertions"]) >= 3, f"connectivity.runtimePolicies.{name}.denyAssertions: negative boundary assertions required")
     globals_ = policy["globalDenyAssertions"]
-    require(isinstance(globals_, list) and {"unknown-runtime-denied", "unknown-network-denied", "unknown-host-port-denied", "dns-and-resolved-ip-must-match-allowlist", "docker-network-does-not-grant-application-egress", "no-launch-runtime-on-coffee_network", "provider-origin-only-from-aroma-gateway"} <= set(globals_), "connectivity.globalDenyAssertions: fail-closed rules missing")
+    exact_list(globals_, ["unknown-runtime-denied", "unknown-network-denied", "no-launch-runtime-on-coffee_network", "declared-provider-egress-gateway-only"], "connectivity.globalDenyAssertions")
 
 
 def validate_target_layout(layout: dict[str, Any]) -> None:

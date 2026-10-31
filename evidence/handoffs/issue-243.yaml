@@ -1,0 +1,108 @@
+issue: 243
+baseCommit: d42d42ee825909bd0bbdacd8eafc1bd9c0bca833
+status: implemented-awaiting-ci
+inputs:
+  - issue: 19
+    acceptedMergeCommit: 81aa403e682478ebdf3fb6b555ebcc969d4273f0
+    artifact: evidence/handoffs/issue-19.yaml
+    sha256: 9e5b43b80792a95417a3ef8db56243cadc9e0879e7a03243564700ddcde49c3d
+  - issue: 210
+    acceptedMergeCommit: a6cceeaa822f9641c678b5dcae521c282391dd3d
+    artifact: evidence/handoffs/issue-210.yaml
+    sha256: 93dccd8c0c978977e4e6cae852d4801415e849b595ef233a95ad2936ba10d20f
+outputs:
+  - artifact: docs/adr/ADR-0030-wave2-runtime-topology.md
+    sha256: efaefad74988c2fdd76331645d2b12096072fd5d6836ab1920a97aa9d9e8a9b9
+    consumers:
+      - 13
+  - artifact: docs/adr/ADR-0041-local-server-network-boundaries.md
+    sha256: 67032821066aa3ac85237f85c3a075c5bd7ada3d924b7bcb429489b706acf907
+    consumers:
+      - 13
+  - artifact: docs/launch/01_RUNTIME_ARCHITECTURE.md
+    sha256: 4ba229d4f1280a6eaa7e4c995229549b183e9d4db11a3030b55611398d48ae10
+    consumers:
+      - 13
+  - artifact: docs/launch/09_EXISTING_DATABASE_AND_VERSIONS.md
+    sha256: 15e8103627d17e695307e32a89b79347eabec0087d9f588969770c07615d646c
+    consumers:
+      - 13
+  - artifact: docs/launch/21_LAUNCH_VERIFICATION_SPEC.md
+    sha256: 71253ed0d93d12a1333a1d9b0f0be53c361068e4e39f68958564edc1fa1bf999
+    consumers:
+      - 13
+  - artifact: docs/launch/23_RUNTIME_CONFIGURATION_MATRIX.md
+    sha256: 7fef26b30646e69abbbe34daef5aa2c312e51873a655d819aaac1f73e6bac313
+    consumers:
+      - 13
+  - artifact: docs/wave-2/02_RUNTIME_TOPOLOGY.md
+    sha256: 7461fee38aa811c9ddf5057dde7340b2582c2e5473e50db75d2b0ead5c4a1c93
+    consumers:
+      - 13
+  - artifact: platform/launch-v1-connectivity-policy.json
+    sha256: 6c10b42c12edc5da3d575f441031e50eae67a66e163258bec8f9a0aff68025e3
+    consumers:
+      - 13
+  - artifact: platform/launch-v1-connectivity-policy.schema.json
+    sha256: 4a9ac13dc0bdc8034292d1b27def22ae98d0c13fc1f6ed708ccc9f1776c23202
+    consumers:
+      - 13
+  - artifact: scripts/permission-audit.mjs
+    sha256: 58168349b1d67afb31551e95b869703ae863abac1bbf12ef647391a0368355e0
+    consumers:
+      - 13
+  - artifact: scripts/validate-launch-authority.py
+    sha256: 1f07614477b1c84180b0efbb1e7dcf01b2e8833e0b6535ec5fa7cd8a6bfc3d14
+    consumers:
+      - 13
+  - artifact: tests/authority/fixtures/negative/cases.json
+    sha256: 34e2ce2c46a95bb512da25aaa1ac8024b8d8ef5936cb2d71327519519feaeb8c
+    consumers:
+      - 13
+  - artifact: tests/authority/test_launch_authority.py
+    sha256: 969c1e5cef888e7da1dd8bef1d7acad61ecb397c752bd1493b7f61a1d7ab183f
+    consumers:
+      - 13
+  - artifact: tests/config/platform-config.test.mjs
+    sha256: 0963f1ef66966906fab20f1e705491735268017e04e3b08c8ce5c9758c1f148f
+    consumers:
+      - 13
+  - artifact: tests/runtime/permissions.test.mjs
+    sha256: d8be23f58144ba3b8ab3d1c5deb2ee21e1d3b1a9c425ccd3420e936595d054ad
+    consumers:
+      - 13
+decisions:
+  networkEnforcement: Node 26 предоставляет глобальный allow-net; host:port остаются инвентарём связей.
+  ownerConsent:
+    "31.10.2026: один доверенный оператор; внутренние Docker planes, mTLS/caller authorization,
+    PostgreSQL roles и provider origin/redirect restrictions."
+  excluded:
+    Kernel controller, новые зависимости, изменения топологии, pins, API и secret ownership не
+    добавлены.
+checks:
+  - command: node --test tests/runtime/permissions.test.mjs
+    result: "PASS: 5/5, 0 skipped"
+    logSha256: e0d6be521ee076c25fc7aa63c8a1201b209f617b61d33dc5792d99c3b4afc822
+  - command: python3 -m unittest discover -s tests/authority -p 'test_*.py'
+    result: "PASS: 10/10"
+    logSha256: e3dce95826cd15428e9e5425e4da8a5ee61eb168e4974221fbf5309285cc0e0c
+  - command: python3 scripts/validate-launch-authority.py
+    result: PASS
+  - command: "node --test --test-name-pattern='GREEN: launch inventory is 14 Node runtimes' tests/config/platform-config.test.mjs"
+    result: "PASS: 1/1, 0 skipped"
+  - command: node scripts/check-toolchain-versions.mjs
+    result: PASS
+  - command: node_modules/.bin/oxlint --type-aware --deny-warnings scripts/permission-audit.mjs tests/runtime/permissions.test.mjs
+    result: PASS
+additionalEvidence:
+  record: /home/yurgusev/.cache/coffee-launch-delivery/tester243-checks.txt
+  sha256: b9141ed876ddf6d16de6b190f68d322b34b4e7150159d40319c0370a36303e24
+  includes: Точные команды JSON Schema, scoped format, версии, длительности и SHA256 журналов.
+  review: "Независимое review изменённых 15 файлов: замечаний нет."
+limitations:
+  - "Полный node scripts/format.mjs отклоняет неизменённый baseline .cursor/skills/catalog-slice-verify/run.mjs;
+    blob HEAD и parent одинаков: 6600cbbe436ff063301e0c9b5bd170eba772d557. Команда не входит в pnpm check;
+    scoped проверки изменённых файлов проходят."
+  - "Текущие runtime mTLS/PG/provider boundaries, G07 и G00–G19 не проверялись; consumer #13 должен подтвердить
+    их отдельно."
+  - CI должен пройти на финальном head PR; локальные проверки не объявляются CI PASS.
