@@ -1,7 +1,7 @@
 issue: 13
-baseCommit: a6cceeaa822f9641c678b5dcae521c282391dd3d
+baseCommit: a37789c2bb13775f96f5590fb74b6e9a8f51aca2
 status: source-descriptor-before-formal-verification
-asOfUtc: "2026-10-31T20:17:11.551746+00:00"
+asOfUtc: "2026-10-31T20:31:54.670325+00:00"
 inputs:
   - issue: 2
     acceptedMergeCommit: 327638d4494269a151ee7c0ac945ac0053c3e0d4
@@ -115,6 +115,10 @@ inputs:
     acceptedMergeCommit: e15ba1b67014ff392c6b28aec712eb772aa46177
     artifact: evidence/handoffs/issue-244.yaml
     sha256: d127ff4a6cca06d14edd37de22f68a37ec38511858d814bf83ad3be8f9841247
+  - issue: 247
+    acceptedMergeCommit: a37789c2bb13775f96f5590fb74b6e9a8f51aca2
+    artifact: evidence/handoffs/issue-247.yaml
+    sha256: 8dae367419436121f0dce2dce9935382f57f722a05957ea1d56c4f8436256b30
 historicalAcceptance:
   issue: 14
   acceptedMergeCommit: 9b5a320b936cecafcb74de2d6a1253e3d0a155ce
@@ -238,15 +242,20 @@ verification:
     logSha256: 2e60ed0da2fbfaa96d7b2dc390cd1b3424b810439ada22bbf899c780969d08af
   - command: pnpm check
     result:
-      "PASS на27067f4: основной suite1544tests/1465pass/0fail/0cancelled/79skip,496.306s; не formal
-      admission"
+      "PASS на 27067f4: основной suite 1544 tests / 1465 pass / 0 fail / 0 cancelled / 79 skipped,
+      496.306 s; не formal admission"
     logSha256: 4a2aca55cd9548e92153f57b2b10adc08977335132d745b6254e48238d212981
   - command: runner targeted G00/G12 metadata hydration tests
-    result: PASS2/2,1.310s; actual atomic persist/rollback/deadline, неверныеG00/G12tuples отклонены
+    result: PASS 2/2, 1.310 s; atomic persist/rollback/deadline, неверные G00/G12 tuples отклонены
     logSha256: 0b2ac078bdd89802d8623e52dbfd37fee9329aa93c7ffca7e2552fb4c2e59bb1
   - command: existing synthetic G12/child lifecycle test
-    result: PASS1/1,56.028s; strict actual15image reader, чужиеSHA/run иmissingrole отклонены
+    result: PASS 1/1, 56.028 s; actual strict 15-image reader, чужие SHA/run и missing role отклонены
     logSha256: 1074045e37c106bbaac50662f005a57fb04b4bb8ff2f15b525008f430baeca15
+  - command: "PR #248 CI 41237794738 на 31b951d"
+    result:
+      "PASS: основной suite 1530 tests / 1451 pass / 0 fail / 79 skipped, 272.119 s; отдельный formatter
+      PASS 662 files"
+    logSha256: 6c0942c42b71bbe5c1d7fdd64d55d4f6f45c49364ac0ebeb92909e256c56ba6a
 consumerContract:
   consumer: 1
   admission:
@@ -271,11 +280,13 @@ consumerContract:
       - Obsidian
     note: Фактические файлы и их хэши публикуются после запуска без изменения source SHA.
 limitations:
-  - "После успешного pnpm check27067f4 обнаружены дополнительные обязательные blockers: остаточный formatterG03
-    исправляется в отдельном #247; actualG00/G12facts теперь передаются в environment. Полная проверка объединённого
-    состояния после этих изменений ещё NOT_RUN."
+  - "Остаточное форматирование G03 принято через #247 / PR #248; CI 41237794738 PASS. Передача фактов G00/G12
+    в environment исправлена. Полная проверка объединённого состояния после этих изменений ещё NOT_RUN."
   - Итоговые G12, обязательная SSE qualification и полный G00–G19 на окончательном SHA ещё NOT_RUN. Component
     cffe147 и прежние qualification не переносятся.
   - Фактические runtime results и hashes появятся после выполнения; согласованная публикация двух артефактов
     не является доказательством PASS до полного запуска.
   - Отрицательный G00 a6cceea сохранён без изменения статуса, он не считается финальным PASS.
+  - "Обнаружено противоречие: G14 требует canonical mutationsEnabled=false, G16/G18 требуют true. Изолированные
+    config-only child для G16/G18 предложены владельцу; до решения новые исключения не реализованы, критерии
+    не ослаблены."
