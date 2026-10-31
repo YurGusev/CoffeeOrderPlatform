@@ -72,7 +72,10 @@ import {
   dropDeliveryTables,
 } from "../scripts/db-live-proof.mjs";
 import { createRuntimeLoggingOverride } from "./observability/generate.mjs";
-import { createBuildInputSnapshot, verifyBuildInputSnapshot } from "./security-scan.mjs";
+import {
+  createBuildInputSnapshot,
+  verifyBuildInputSnapshot,
+} from "./security-scan.mjs";
 import { validateLaunchContext } from "../verification/launch/v1/report.mjs";
 import {
   loadVerifiedGateImage,
@@ -1253,8 +1256,9 @@ const COMPOSE_NETWORKS = [
   "coffee_kafka_event",
   "coffee_provider_egress",
 ];
-const DATABASE_PROOF_IMAGE =
-  JSON.parse(readFileSync(join(ROOT, "config/toolchain-versions.json"), "utf8")).postgresFixtureImage;
+const DATABASE_PROOF_IMAGE = JSON.parse(
+  readFileSync(join(ROOT, "config/toolchain-versions.json"), "utf8"),
+).postgresFixtureImage;
 const CUSTOMER_TEST_IMAGE =
   "node:26.8.1-trixie-slim@sha256:c0753125a3789977aefe869cbebccf70e3cfd7ea84ca48547458f02e4f1d7146";
 const RUNTIMES = [
@@ -1373,7 +1377,8 @@ function parseArguments(argv) {
     else if (argument === "--database-proof") options.databaseProof = true;
     else if (argument === "--customer-proof") options.customerProof = true;
     else if (argument === "--recovery-proof") options.recoveryProof = true;
-    else if (argument === "--observability-fixture") options.observabilityFixture = true;
+    else if (argument === "--observability-fixture")
+      options.observabilityFixture = true;
     else if (argument === "--browser-proof") options.browserProof = true;
     else if (argument === "--mutation-disable-rollback")
       options.mutationDisableRollback = true;
@@ -1435,7 +1440,9 @@ function parseArguments(argv) {
       "--database-proof, --customer-proof, --recovery-proof, --aroma-binding-proof and --aroma-cart-proof are mutually exclusive",
     );
   if (options.observabilityFixture && !options.recoveryProof)
-    throw new Error("--observability-fixture requires programmatic observability hooks and isolated --recovery-proof");
+    throw new Error(
+      "--observability-fixture requires programmatic observability hooks and isolated --recovery-proof",
+    );
   if (options.recoveryProof && options.stubSecrets)
     throw new Error(
       "--recovery-proof requires generated fixture credentials, not --stub-secrets",
@@ -1645,16 +1652,37 @@ export function removeBuiltRuntimeImages(images, options) {
   }
 }
 
-export function assertVerifiedRuntimeImages({ projectName, verifiedImages, noBuild = false }) {
-  const images = new Map(verifiedImages.map(({ service, imageId }) => [service, imageId]));
+export function assertVerifiedRuntimeImages({
+  projectName,
+  verifiedImages,
+  noBuild = false,
+}) {
+  const images = new Map(
+    verifiedImages.map(({ service, imageId }) => [service, imageId]),
+  );
   for (const service of [...RUNTIMES, "edge-nginx"]) {
     const expected = images.get(service);
-    assert.match(expected ?? "", /^sha256:[a-f0-9]{64}$/u, `G12 image ID missing for ${service}`);
-    const reference = service === "edge-nginx" && noBuild
-      ? "coffee-platform-edge-nginx:local"
-      : `${projectName}-${service}:latest`;
-    const actual = runDocker(["image", "inspect", "--format", "{{.Id}}", reference]).trim();
-    assert.equal(actual, expected, `${service} image differs from the scanned G12 artifact`);
+    assert.match(
+      expected ?? "",
+      /^sha256:[a-f0-9]{64}$/u,
+      `G12 image ID missing for ${service}`,
+    );
+    const reference =
+      service === "edge-nginx" && noBuild
+        ? "coffee-platform-edge-nginx:local"
+        : `${projectName}-${service}:latest`;
+    const actual = runDocker([
+      "image",
+      "inspect",
+      "--format",
+      "{{.Id}}",
+      reference,
+    ]).trim();
+    assert.equal(
+      actual,
+      expected,
+      `${service} image differs from the scanned G12 artifact`,
+    );
   }
 }
 
@@ -2099,7 +2127,7 @@ export async function readExternalRecoveryProofCredentials(
     "external recovery launch metadata has a closed shape",
   );
   assert.ok(
-    ["G13", "G15"].includes(launchMetadata.expectedLineage),
+    ["G13", "G14", "G15"].includes(launchMetadata.expectedLineage),
     "external recovery launch lineage is invalid",
   );
   assert.equal(typeof launchMetadata.candidateRoot, "string");
@@ -2137,18 +2165,18 @@ export async function readExternalRecoveryProofCredentials(
       (key) => Object.hasOwn(resources, key),
     );
   if (
-    launchMetadata.expectedLineage === "G13" &&
+    ["G13", "G14"].includes(launchMetadata.expectedLineage) &&
     (hasPreparationContextPath || hasBrowserParentMetadata)
   )
     throw new Error(
-      "external recovery lineage metadata cannot downgrade to G13",
+      "external recovery lineage metadata cannot downgrade to G13/G14",
     );
   if (
     launchMetadata.expectedLineage === "G15" &&
     (!hasPreparationContextPath || !hasAllBrowserParentMetadata)
   )
     throw new Error("G15 G08 parent preparation reference is missing");
-  const configRoot = ROOT;
+  const configRoot = launchMetadata.candidateRoot;
   const preparationSource = hasPreparationContextPath
     ? { preparationContextPath: browserPreparationContextPath }
     : {};
@@ -2180,9 +2208,11 @@ export async function readExternalRecoveryProofCredentials(
     "external recovery proof target differs from the approved PostgreSQL system identifier",
   );
   const ownership = await readJson(
-    join(ROOT, "config/database-ownership.json"),
+    join(configRoot, "config/database-ownership.json"),
   );
-  const roleMap = await readJson(join(ROOT, "config/database-role-map.json"));
+  const roleMap = await readJson(
+    join(configRoot, "config/database-role-map.json"),
+  );
   const projected = projectLaunchDatabaseTargets({
     ownership,
     roleMap,
@@ -2251,6 +2281,7 @@ export async function readExternalRecoveryProofCredentials(
     roleMap: projected.roleMap,
     ownership: projected.ownership,
     launchIdentity,
+    candidateRoot: configRoot,
     postgres,
     g08PreparationContextPath: browserPreparationContextPath,
     admin,
@@ -2288,7 +2319,7 @@ export function externalRecoveryMigrationCredentialRequest(
   owner,
 ) {
   return {
-    root: ROOT,
+    root: credentials.candidateRoot ?? ROOT,
     contextPath,
     owner,
     kind: "migrator",
@@ -2985,7 +3016,9 @@ const APPROVED_EXTERNAL_POSTGRES = Object.freeze({
 
 export function isExternalRecoveryProof(options) {
   return (
-    options.recoveryProof === true && options.mutationDisableRollback !== true && options.observabilityFixture !== true
+    options.recoveryProof === true &&
+    options.mutationDisableRollback !== true &&
+    options.observabilityFixture !== true
   );
 }
 
@@ -3056,7 +3089,7 @@ function assertApprovedExternalPostgresDockerState({ attached }) {
   return { container, dataNetwork, legacyNetwork };
 }
 
-function prepareApprovedExternalPostgresAttachment() {
+export function prepareApprovedExternalPostgresAttachment() {
   const before = assertApprovedExternalPostgresDockerState({ attached: false });
   const routeBefore = externalPostgresRoute(
     APPROVED_EXTERNAL_POSTGRES.containerId,
@@ -3190,7 +3223,11 @@ function startDatabaseProofContainer(
   ];
   const createdId = runDocker(args).trim();
   if (fixtureRunId) {
-    assert.match(createdId, /^[a-f0-9]{64}$/u, "fixture PostgreSQL ID unavailable");
+    assert.match(
+      createdId,
+      /^[a-f0-9]{64}$/u,
+      "fixture PostgreSQL ID unavailable",
+    );
     onFixtureCreated(createdId);
   }
   if (publishHost) {
@@ -3208,20 +3245,50 @@ function startDatabaseProofContainer(
   return fixtureRunId ? createdId : container;
 }
 
-export function assertObservabilityPostgresIdentity({id, projectName, networkName, fixtureRunId, allowIncompleteNetwork = false, run = runDocker}) {
+export function assertObservabilityPostgresIdentity({
+  id,
+  projectName,
+  networkName,
+  fixtureRunId,
+  allowIncompleteNetwork = false,
+  run = runDocker,
+}) {
   assert.match(id ?? "", /^[a-f0-9]{64}$/u);
   const info = JSON.parse(run(["inspect", id]))[0];
   assert.equal(info?.Id, id, "fixture PostgreSQL ID changed");
-  assert.equal(info?.Name, `/${projectName}-postgres-proof`, "fixture PostgreSQL name changed");
-  assert.equal(info?.Config?.Labels?.["coffee.g14.fixture"], fixtureRunId, "fixture PostgreSQL owner changed");
-  assert.equal(info?.Config?.Image, DATABASE_PROOF_IMAGE, "fixture PostgreSQL image changed");
+  assert.equal(
+    info?.Name,
+    `/${projectName}-postgres-proof`,
+    "fixture PostgreSQL name changed",
+  );
+  assert.equal(
+    info?.Config?.Labels?.["coffee.g14.fixture"],
+    fixtureRunId,
+    "fixture PostgreSQL owner changed",
+  );
+  assert.equal(
+    info?.Config?.Image,
+    DATABASE_PROOF_IMAGE,
+    "fixture PostgreSQL image changed",
+  );
   const networks = Object.keys(info?.NetworkSettings?.Networks ?? {}).sort();
-  const expectedNetworks = ["bridge", networkName].sort();
-  assert.ok(JSON.stringify(networks) === JSON.stringify(expectedNetworks) ||
-    (allowIncompleteNetwork && JSON.stringify(networks) === JSON.stringify(["bridge"])), "fixture PostgreSQL network mismatch");
+  const expectedNetworks = ["bridge", networkName].sort((left, right) =>
+    String(left) < String(right) ? -1 : String(left) > String(right) ? 1 : 0,
+  );
+  assert.ok(
+    JSON.stringify(networks) === JSON.stringify(expectedNetworks) ||
+      (allowIncompleteNetwork &&
+        JSON.stringify(networks) === JSON.stringify(["bridge"])),
+    "fixture PostgreSQL network mismatch",
+  );
   const bindings = info?.NetworkSettings?.Ports?.["5432/tcp"];
-  assert.ok(Array.isArray(bindings) && bindings.length === 1 && bindings[0].HostIp === "127.0.0.1" && /^[1-9][0-9]*$/u.test(bindings[0].HostPort),
-    "fixture PostgreSQL must publish exactly one loopback port");
+  assert.ok(
+    Array.isArray(bindings) &&
+      bindings.length === 1 &&
+      bindings[0].HostIp === "127.0.0.1" &&
+      /^[1-9][0-9]*$/u.test(bindings[0].HostPort),
+    "fixture PostgreSQL must publish exactly one loopback port",
+  );
 }
 
 function assertEphemeralDatabaseProofStorage(container) {
@@ -3933,7 +4000,19 @@ export async function applyExternalRecoveryMigrations(
   };
 }
 
-async function cleanupExternalRecoveryDatabases(credentials, resources) {
+export async function cleanupExternalRecoveryDatabases(
+  credentials,
+  resources,
+  consumersStopped,
+) {
+  if (consumersStopped !== true) {
+    return {
+      verified: false,
+      removed: [],
+      retained: resources.map(({ database }) => database.name),
+      failure: "COMPOSE_CONSUMERS_NOT_STOPPED",
+    };
+  }
   const admin = await externalAdminClient(credentials, credentials.postgres);
   try {
     return await cleanupMigrationDatabases(resources, async (database) => {
@@ -8479,9 +8558,17 @@ export async function runComposeSmoke({
   rollbackComposeDiagnostic = undefined;
   const options = parseArguments(args);
   if (options.observabilityFixture) {
-    assert.ok(observability !== undefined && options.recoveryProof && !options.stubSecrets && !options.noBuild && !options.keep &&
-      !options.browserProof && !options.mutationDisableRollback && !options.provisionNetwork,
-      "--observability-fixture requires programmatic observability hooks and isolated --recovery-proof");
+    assert.ok(
+      observability !== undefined &&
+        options.recoveryProof &&
+        !options.stubSecrets &&
+        !options.noBuild &&
+        !options.keep &&
+        !options.browserProof &&
+        !options.mutationDisableRollback &&
+        !options.provisionNetwork,
+      "--observability-fixture requires programmatic observability hooks and isolated --recovery-proof",
+    );
   }
   const externalRecovery = isExternalRecoveryProof(options);
   if (observability !== undefined) {
@@ -8595,9 +8682,21 @@ export async function runComposeSmoke({
           await readFile(join(ROOT, "config/database-ownership.json"), "utf8"),
         );
         if (options.observabilityFixture) {
-          assert.equal(config.environment, "development", "G14 fixture requires the development environment");
-          assert.equal(config.verification?.databaseIsolation?.enabled, false, "G14 fixture requires canonical database isolation disabled");
-          assert.equal(config.verification?.kafkaNamespaceIsolation, false, "G14 fixture requires canonical Kafka namespace isolation disabled");
+          assert.equal(
+            config.environment,
+            "development",
+            "G14 fixture requires the development environment",
+          );
+          assert.equal(
+            config.verification?.databaseIsolation?.enabled,
+            false,
+            "G14 fixture requires canonical database isolation disabled",
+          );
+          assert.equal(
+            config.verification?.kafkaNamespaceIsolation,
+            false,
+            "G14 fixture requires canonical Kafka namespace isolation disabled",
+          );
         } else {
           const targetConfig = {
             environment: config.environment,
@@ -8651,7 +8750,10 @@ export async function runComposeSmoke({
       "G15 browser hooks require a validated launch context",
     );
   if (options.observabilityFixture)
-    assert.ok(launchIdentity, "G14 fixture requires a validated G12 launch context");
+    assert.ok(
+      launchIdentity,
+      "G14 fixture requires a validated G12 launch context",
+    );
   const projectName =
     options.projectName ??
     launchIdentity?.context.resources.composeProject ??
@@ -8702,7 +8804,9 @@ export async function runComposeSmoke({
   let composeAttempted = false;
   const builtImages = [];
   let databaseProofContainer;
-  const fixturePostgresRunId = options.observabilityFixture ? randomUUID() : undefined;
+  const fixturePostgresRunId = options.observabilityFixture
+    ? randomUUID()
+    : undefined;
   let databaseProofStorage;
   let recoveryDatabaseProof;
   let recoveryProofCredentials;
@@ -8835,7 +8939,7 @@ export async function runComposeSmoke({
         ? {
             candidateRoot: launchIdentity.candidateRoot,
             resources: launchIdentity.context.resources,
-            expectedLineage: browser ? "G15" : "G13",
+            expectedLineage: browser ? "G15" : observability ? "G14" : "G13",
           }
         : undefined;
     if (proofLaunchIdentity) {
@@ -8924,7 +9028,9 @@ export async function runComposeSmoke({
       aromaBindingProof: options.aromaBindingProof,
       aromaCartProof: options.aromaCartProof,
       recoveryProof: options.recoveryProof,
-      launchContextPath: options.observabilityFixture ? undefined : launchContextPath,
+      launchContextPath: options.observabilityFixture
+        ? undefined
+        : launchContextPath,
       kafkaImage: verifiedKafka?.imageId,
       edgeNginxImage: options.noBuild
         ? undefined
@@ -9078,10 +9184,23 @@ export async function runComposeSmoke({
             options.aromaBindingProof ||
             options.aromaCartProof,
           ephemeralPgData: observability !== undefined,
-          ...(options.observabilityFixture ? {fixtureRunId: fixturePostgresRunId, onFixtureCreated: id => { databaseProofContainer = id; }} : {}),
+          ...(options.observabilityFixture
+            ? {
+                fixtureRunId: fixturePostgresRunId,
+                onFixtureCreated: (id) => {
+                  databaseProofContainer = id;
+                },
+              }
+            : {}),
         },
       );
-      if (options.observabilityFixture) assertObservabilityPostgresIdentity({id: databaseProofContainer, projectName, networkName: databaseProofNetwork, fixtureRunId: fixturePostgresRunId});
+      if (options.observabilityFixture)
+        assertObservabilityPostgresIdentity({
+          id: databaseProofContainer,
+          projectName,
+          networkName: databaseProofNetwork,
+          fixtureRunId: fixturePostgresRunId,
+        });
       if (observability !== undefined) {
         databaseProofStorage = assertEphemeralDatabaseProofStorage(
           databaseProofContainer,
@@ -9244,7 +9363,7 @@ export async function runComposeSmoke({
     if (externalRecovery) {
       recoveryDatabaseProof = await applyExternalRecoveryMigrations(
         recoveryProofCredentials,
-        recoveryPlatformConfig,
+        platformConfig,
         launchContextPath,
         externalRunDatabaseResources,
       );
@@ -9291,7 +9410,14 @@ export async function runComposeSmoke({
       }
     }
     if (options.mutationDisableRollback) markRollbackStage("build");
-    const bindRuntimeImages = !(options.databaseProof || options.customerProof || options.aromaBindingProof || options.aromaCartProof || browser || options.mutationDisableRollback);
+    const bindRuntimeImages = !(
+      options.databaseProof ||
+      options.customerProof ||
+      options.aromaBindingProof ||
+      options.aromaCartProof ||
+      browser ||
+      options.mutationDisableRollback
+    );
     if (!options.noBuild) {
       let temporary;
       let snapshot;
@@ -9324,8 +9450,14 @@ export async function runComposeSmoke({
       }
     }
     if (bindRuntimeImages) {
-      const verifiedImages = await readVerifiedRuntimeImages({contextFile: launchContextPath});
-      assertVerifiedRuntimeImages({projectName, verifiedImages, noBuild: options.noBuild});
+      const verifiedImages = await readVerifiedRuntimeImages({
+        contextFile: launchContextPath,
+      });
+      assertVerifiedRuntimeImages({
+        projectName,
+        verifiedImages,
+        noBuild: options.noBuild,
+      });
     }
     throwIfRollbackTerminationRequested();
     if (options.customerProof)
@@ -10068,7 +10200,13 @@ export async function runComposeSmoke({
       assertStopped(projectName, secretsDir, composeFile);
     }
     receipt = {
-      ...(options.observabilityFixture ? { proofKind: "observability-fixture" } : {}),
+      ...(observability
+        ? {
+            proofKind: options.observabilityFixture
+              ? "observability-fixture"
+              : "observability-external",
+          }
+        : {}),
       project: projectName,
       runtimes:
         options.aromaBindingProof || options.aromaCartProof
@@ -10240,7 +10378,11 @@ export async function runComposeSmoke({
         } catch (error) {
           if (options.mutationDisableRollback)
             cleanupFailures.push("compose-down");
-          else if (browserFixture || externalRecovery || options.observabilityFixture)
+          else if (
+            browserFixture ||
+            externalRecovery ||
+            options.observabilityFixture
+          )
             cleanupHookError ??= error;
         }
       } else if (!composeAttempted && !options.keep) composeDownComplete = true;
@@ -10251,6 +10393,7 @@ export async function runComposeSmoke({
               await cleanupExternalRecoveryDatabases(
                 recoveryProofCredentials,
                 externalRunDatabaseResources,
+                composeDownComplete,
               );
             if (!externalDatabaseCleanupReceipt.verified)
               cleanupHookError ??= new Error(
@@ -10297,7 +10440,14 @@ export async function runComposeSmoke({
       }
       if (databaseProofContainer && !options.keep) {
         try {
-          if (options.observabilityFixture) assertObservabilityPostgresIdentity({id: databaseProofContainer, projectName, networkName: databaseProofNetwork, fixtureRunId: fixturePostgresRunId, allowIncompleteNetwork: true});
+          if (options.observabilityFixture)
+            assertObservabilityPostgresIdentity({
+              id: databaseProofContainer,
+              projectName,
+              networkName: databaseProofNetwork,
+              fixtureRunId: fixturePostgresRunId,
+              allowIncompleteNetwork: true,
+            });
           runDocker(["rm", "--force", "--volumes", databaseProofContainer]);
         } catch (error) {
           if (options.mutationDisableRollback)

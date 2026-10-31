@@ -40,6 +40,7 @@ import {
 import { validateRoleMap } from "../../../scripts/db-bootstrap.mjs";
 import {
   validateBrowserChildContext,
+  validateBrowserCorrelation,
   validateBrowserFailureReceipt,
   validateBrowserParentRuntime,
 } from "./scenarios/browser.mjs";
@@ -1410,6 +1411,90 @@ export async function verifyGateArtifacts(gate, record, evidenceDir) {
     )
       return "G08 migration oracle receipt does not match the validated context or cleanup contract";
     additions.push(await hashFile(path));
+  }
+  if (gate.id === "G14_OBSERVABILITY") {
+    const failure =
+      "G14 browser correlation child lineage or cleanup is invalid";
+    if (
+      gate.command !== "pnpm test:observability" ||
+      record.runs?.length !== 1 ||
+      !isDeepStrictEqual(record.runs[0]?.argv, [
+        "pnpm",
+        "test:observability",
+      ]) ||
+      record.runs[0]?.exitCode !== 0 ||
+      record.runs[0]?.timedOut ||
+      record.runs[0]?.outputLimitExceeded
+    )
+      return failure;
+    try {
+      const child = await validateBrowserCorrelation({
+        evidenceDir,
+        parentContext: context,
+      });
+      const names = [
+        "alert-transitions.json",
+        "correlation-proof.json",
+        "redaction-scan.json",
+        "queue-loss-counters.json",
+        "retention-result.json",
+        "runtime-health-matrix.json",
+        "result.json",
+      ];
+      const documents = {};
+      for (const name of names) {
+        const path = join(gateDir, "artifacts/observability", name);
+        await assertNoSymlinkPath(evidenceDir, path);
+        const info = await lstat(path);
+        if (
+          !info.isFile() ||
+          info.isSymbolicLink() ||
+          info.uid !== process.getuid() ||
+          (info.mode & 0o777) !== 0o600 ||
+          info.size > 4 * 1024 * 1024
+        )
+          return failure;
+        documents[name] = JSON.parse(await readFile(path, "utf8"));
+        additions.push(await hashFile(path));
+      }
+      const result = documents["result.json"];
+      const correlation = documents["correlation-proof.json"];
+      if (
+        result.status !== "PASS" ||
+        !/^[0-9a-f-]{36}$/u.test(result.runId ?? "") ||
+        !names.every(
+          (name) =>
+            documents[name].status === "PASS" &&
+            documents[name].runId === result.runId,
+        ) ||
+        result.provenance?.sourceHashStable !== true ||
+        result.provenance.start?.baseSha !== context.candidateSha ||
+        result.provenance.start?.configSha256 !== context.baseConfigSha256 ||
+        result.provenance.start?.sourceFiles?.status !== "PASS" ||
+        !isDeepStrictEqual(result.browserCorrelationChild, child.receipt) ||
+        correlation.launchPath?.correlationId !==
+          child.receipt.proof.correlationId ||
+        correlation.launchPath?.traceId !== child.receipt.proof.traceId ||
+        correlation.launchPath?.browserRefetchMatched !== true ||
+        correlation.launchPath?.ownerCausation !== true ||
+        result.runtimeMetricMatrix?.composeReceipt?.postgres
+          ?.externalPostgres !== true ||
+        result.runtimeMetricMatrix?.composeReceipt?.externalCleanup
+          ?.verified !== true ||
+        !isDeepStrictEqual(result.cleanupErrors, [])
+      )
+        return failure;
+      for (const path of child.files) {
+        await assertNoSymlinkPath(evidenceDir, path);
+        additions.push(await hashFile(path));
+      }
+      if (result.fullSystemG14?.status !== "PASS") {
+        record.artifacts.push(...additions);
+        return "G14 full-system SLO, chaos and capacity proof is not complete";
+      }
+    } catch {
+      return failure;
+    }
   }
   if (gate.id === "G15_BROWSER") {
     const failure =
