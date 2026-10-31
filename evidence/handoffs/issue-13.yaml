@@ -1,7 +1,7 @@
 issue: 13
 baseCommit: a6cceeaa822f9641c678b5dcae521c282391dd3d
 status: source-descriptor-before-formal-verification
-asOfUtc: "2026-10-31T15:11:46.039270+00:00"
+asOfUtc: "2026-10-31T15:32:16.602422+00:00"
 inputs:
   - issue: 2
     acceptedMergeCommit: 327638d4494269a151ee7c0ac945ac0053c3e0d4
@@ -164,7 +164,7 @@ outputs:
     consumers:
       - 1
   - artifact: tests/observability/alerts.test.mjs
-    sha256: 372091599fc020fcab67a87fc7c1914d58795f75134059273b4ff7c7d9394fc7
+    sha256: c097c2307b225106a0f830c5fad339f7b157eaa40da4dafce1f551102166c41e
     consumers:
       - 1
   - artifact: tests/observability/runtime-matrix.mjs
@@ -220,6 +220,11 @@ verification:
       node --test --test-name-pattern='runner passes image ownership only when explicitly selected'
       verification/launch/v1/runner.test.mjs
     result: "PASS: 1/1, 0 skipped; именованные поля fixture, без изменения правил CI"
+  - command:
+      node --test --test-name-pattern='restoration|retention|synthetic alerts activate before matrix|native
+      collector waits for validated synthetic cleanup' tests/observability/alerts.test.mjs
+    result: "PASS: 8/8, 0 skipped; исправлены source anchors без удаления сценариев"
+    logSha256: 2cd89ab85304ef2522ddaec0c53f38ef97f574ce5ecdd6f60f0db8e40be5ee3e
 consumerContract:
   consumer: 1
   admission:
@@ -233,9 +238,10 @@ consumerContract:
     Фиксирует реальные inputs/outputs и проверки на момент подготовки. Не является runtime
     допуском или обещанием будущего PASS.
 limitations:
-  - "Общий pnpm check на da13c92 остановился на строгом lint нового fixture: 84.029 s, log SHA256 285779670ae90f07fedd969bdef1a36cb133d75d837e635b4317396188fb3ef1.
-    Данные fixture переписаны в именованные поля, scoped lint и существующий тест 1/1 PASS; повтор полного
-    check ещё NOT_RUN."
+  - "Общий pnpm check на ce9e10f прерван guard через311.290s: builder free опустился ниже1ГиБ, завершение
+    -15. Помимо отмен воспроизведён устаревший source-slicing test восстановления; его привязки обновлены
+    к действующему coordinator, все4комбинации сохранены и targeted8/8PASS. Полный check после исправления
+    ещё NOT_RUN."
   - Итоговые G12, обязательная SSE qualification и полный G00–G19 на окончательном SHA ещё NOT_RUN. Component
     cffe147 и прежние qualification не переносятся.
   - Фактические runtime results и hashes появятся после выполнения; принятие derived handoff вместе с frozen

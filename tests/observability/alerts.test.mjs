@@ -3814,21 +3814,6 @@ void test("restoration preserves proof failure and reports both failures without
       variable: "backupRestorationError",
       first: "fixtureCompose.volumes = originalVolumes;",
     },
-    {
-      name: "Loki retention",
-      variable: "lokiRestorationError",
-      first: "await writeLokiConfig(originalLokiConfig);",
-    },
-    {
-      name: "Prometheus retention",
-      variable: "prometheusRestorationError",
-      first: "services.prometheus.command = originalPrometheusCommand;",
-    },
-    {
-      name: "Tempo retention",
-      variable: "tempoRestorationError",
-      first: "await writeTempoConfig(originalTempoConfig);",
-    },
   ];
   for (const { name, variable, first } of restorations) {
     const position = source.indexOf(first);
@@ -3861,30 +3846,6 @@ void test("restoration preserves proof failure and reports both failures without
         fixtureCompose,
         originalVolumes: {},
         backendStopStarted: false,
-        writeLokiConfig: restore,
-        writeTempoConfig: restore,
-        originalLokiConfig: {},
-        originalTempoConfig: {},
-        recreateBackend() {},
-        readLokiKnobs: () => ({}),
-        readTempoKnobs: () => ({}),
-        originalLokiKnobs: {},
-        originalTempoKnobs: {},
-        originalLokiHash: "same",
-        originalTempoHash: "same",
-        createHash: () => ({ update: () => ({ digest: () => "same" }) }),
-        readFile: async () => "",
-        backendConfigPaths: {},
-        services: { prometheus: {} },
-        originalPrometheusCommand: [],
-        saveCompose: restore,
-        api: async () => ({ data: {} }),
-        baseUrls: {},
-        loadYaml: () => ({ services: { prometheus: { command: [] } } }),
-        composeFile: "",
-        profileFlagNames: [],
-        originalFlags: {},
-        profileHash: () => "same",
       };
       const execute = runInNewContext(
         `(async () => { let ${variable}; try { await proof(); ${source.slice(start, end)} })`,
@@ -3909,17 +3870,20 @@ void test("restoration preserves proof failure and reports both failures without
     }
   }
   const cleanupStart = source.indexOf(
-    "        let syntheticResetVerified = false;",
+    "    let syntheticResetVerified = false;",
   );
   const cleanupEnd = source.indexOf(
-    "\n      }\n      if (!syntheticCleanupVerified)",
+    "\n  }\n  if (!syntheticCleanupVerified)",
     cleanupStart,
   );
   const guardStart = source.indexOf(
-    "\n    if (!syntheticCleanupVerified)",
+    "\n  if (!syntheticCleanupVerified)",
     cleanupEnd,
   );
-  const guardEnd = source.indexOf("\n    assertGrafanaGeneration(", guardStart);
+  const guardEnd = source.indexOf(
+    "\n  const syntheticNodeNotReady =",
+    guardStart,
+  );
   assert.ok(
     cleanupStart >= 0 &&
       cleanupEnd > cleanupStart &&
@@ -5047,12 +5011,17 @@ void test("retention observers settle before all independent restore attempts", 
     "const results = await Promise.allSettled(retentionObservers);",
     "if (\n        Object.keys(expectedEffective)",
   );
-  for (const failObserver of [false, true]) {
+  for (const [failObserver, restoreFails] of [
+    [false, false],
+    [true, false],
+    [false, true],
+    [true, true],
+  ]) {
     const events = [];
     const evidence = { retention: {} };
-    const failure = (name) => async () => {
+    const restore = (name) => async () => {
       events.push(`restore-${name}`);
-      throw new Error(`${name} restore failed`);
+      if (restoreFails) throw new Error(`${name} restore failed`);
     };
     const context = {
       evidence,
@@ -5060,13 +5029,30 @@ void test("retention observers settle before all independent restore attempts", 
       failObserver,
       cleanupErrors: [],
       cleanError: (error) => error.message,
-      writeLokiConfig: failure("loki"),
+      writeLokiConfig: restore("loki"),
       originalLokiConfig: {},
       services: { prometheus: {} },
       originalPrometheusCommand: [],
-      saveCompose: failure("prometheus"),
-      writeTempoConfig: failure("tempo"),
+      saveCompose: restore("prometheus"),
+      writeTempoConfig: restore("tempo"),
       originalTempoConfig: {},
+      recreateBackend: async () => {},
+      readLokiKnobs: async () => ({}),
+      readTempoKnobs: async () => ({}),
+      originalLokiKnobs: {},
+      originalTempoKnobs: {},
+      originalLokiHash: "same",
+      originalTempoHash: "same",
+      createHash: () => ({ update: () => ({ digest: () => "same" }) }),
+      readFile: async () => "",
+      backendConfigPaths: {},
+      api: async () => ({ data: {} }),
+      baseUrls: {},
+      loadYaml: () => ({ services: { prometheus: { command: [] } } }),
+      composeFile: "",
+      profileFlagNames: [],
+      originalFlags: {},
+      profileHash: () => "same",
       setImmediate,
       readEffective: async () => {
         events.push("readback");
@@ -5086,10 +5072,12 @@ void test("retention observers settle before all independent restore attempts", 
       ${finish} })()`,
       context,
     );
-    await assert.rejects(
-      run,
-      failObserver ? /observation failed/u : /retention restoration failed/u,
-    );
+    if (failObserver || restoreFails)
+      await assert.rejects(
+        run,
+        failObserver ? /observation failed/u : /retention restoration failed/u,
+      );
+    else await run;
     assert.deepEqual(events.slice(0, 3), [
       "start-loki",
       "start-prometheus",
@@ -5102,7 +5090,21 @@ void test("retention observers settle before all independent restore attempts", 
       "restore-tempo",
       "readback",
     ]);
-    assert.equal(context.cleanupErrors.length, 3);
+    assert.deepEqual(
+      context.cleanupErrors,
+      restoreFails
+        ? [
+            "Loki retention restore: loki restore failed",
+            "Prometheus retention restore: prometheus restore failed",
+            "Tempo retention restore: tempo restore failed",
+          ]
+        : [],
+    );
+    if (restoreFails)
+      assert.equal(
+        observabilityGateComplete({ cleanupErrors: context.cleanupErrors }),
+        false,
+      );
     assert.deepEqual(
       Object.keys(evidence.retention).sort(),
       failObserver
