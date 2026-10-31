@@ -2502,7 +2502,7 @@ void test("polling timeout reports the latest observation and preserves fatal er
     new URL("../../tools/observability/verify.mjs", import.meta.url),
     "utf8",
   );
-  const start = source.indexOf("async function waitFor(predicate,");
+  const start = source.indexOf("async function waitFor(");
   const end = source.indexOf("\nfunction requireRunning(", start);
   assert.ok(start >= 0 && end > start);
   const run = async (steps) => {

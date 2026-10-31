@@ -452,7 +452,9 @@ void test("smoke accepts only runtime image IDs verified by G12 before startup",
     assert.ok(
       source.indexOf("verifyBuildInputSnapshot(snapshot)", build) < binding,
     );
-    const predicate = source.match(/const bindRuntimeImages = ([^\n]+);/u)?.[1];
+    const predicate = source.match(
+      /const bindRuntimeImages =\s*([^;]+);/u,
+    )?.[1];
     assert.ok(predicate);
     for (const flag of [
       "databaseProof",
