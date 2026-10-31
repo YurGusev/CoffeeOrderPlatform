@@ -198,9 +198,13 @@ void test("runner passes image ownership only when explicitly selected", async (
   const directory = await mkdtemp(join(tmpdir(), "launch-image-env-"));
   t.after(() => rm(directory, { recursive: true, force: true }));
   const marker = join(directory, "ownership.json");
-  for (const [name, options, expected] of [
-    ["normal", {}, ""],
-    ["owned", { imageOwnershipPath: marker }, marker],
+  for (const { name, options, expected } of [
+    { name: "normal", options: {}, expected: "" },
+    {
+      name: "owned",
+      options: { imageOwnershipPath: marker },
+      expected: marker,
+    },
   ]) {
     const stdout = join(directory, `${name}.out`);
     const result = await executeArgv(

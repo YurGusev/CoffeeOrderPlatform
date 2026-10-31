@@ -1,7 +1,7 @@
 issue: 13
 baseCommit: a6cceeaa822f9641c678b5dcae521c282391dd3d
 status: source-descriptor-before-formal-verification
-asOfUtc: "2026-10-31T15:04:11.083309+00:00"
+asOfUtc: "2026-10-31T15:11:46.039270+00:00"
 inputs:
   - issue: 2
     acceptedMergeCommit: 327638d4494269a151ee7c0ac945ac0053c3e0d4
@@ -192,7 +192,7 @@ outputs:
     consumers:
       - 1
   - artifact: verification/launch/v1/runner.test.mjs
-    sha256: 78aa0fa7908104d13480a34b15442915ea44804bc3a04248ad2b56a40d23937c
+    sha256: cb21d12e3031e5b55756b7c0873bf02c397669fda3fe440560edee583c22b718
     consumers:
       - 1
 verification:
@@ -216,6 +216,10 @@ verification:
       report and owner suites accept only|checksum manifest requires the exact complete' verification/launch/v1/runner.test.mjs
     result: "PASS: 3/3, 0 skipped; 5.891 s"
     logSha256: ff43faf75dcc91cc69c0f634b68bc7317168db9db99536e7a1662480f407f501
+  - command:
+      node --test --test-name-pattern='runner passes image ownership only when explicitly selected'
+      verification/launch/v1/runner.test.mjs
+    result: "PASS: 1/1, 0 skipped; именованные поля fixture, без изменения правил CI"
 consumerContract:
   consumer: 1
   admission:
@@ -229,8 +233,9 @@ consumerContract:
     Фиксирует реальные inputs/outputs и проверки на момент подготовки. Не является runtime
     допуском или обещанием будущего PASS.
 limitations:
-  - "Полный повторный pnpm check на объединённом состоянии ещё не выполнялся: guard остановил запуск до
-    install из-за builder reserve."
+  - "Общий pnpm check на da13c92 остановился на строгом lint нового fixture: 84.029 s, log SHA256 285779670ae90f07fedd969bdef1a36cb133d75d837e635b4317396188fb3ef1.
+    Данные fixture переписаны в именованные поля, scoped lint и существующий тест 1/1 PASS; повтор полного
+    check ещё NOT_RUN."
   - Итоговые G12, обязательная SSE qualification и полный G00–G19 на окончательном SHA ещё NOT_RUN. Component
     cffe147 и прежние qualification не переносятся.
   - Фактические runtime results и hashes появятся после выполнения; принятие derived handoff вместе с frozen
