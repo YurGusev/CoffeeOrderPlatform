@@ -1,0 +1,598 @@
+{
+  "schemaVersion": 1,
+  "scope": "launch-context runtime matrix component",
+  "formalLaunchAdmission": false,
+  "featureSource": "e8426e1f8ba5749ff184c23c25dae5f2de771cc9",
+  "testedCandidate": "cffe147d36caff3fd8b6a4cb1f106e61fe86ac46",
+  "verificationDelta": "only committed databaseIsolation.enabled/kafkaNamespaceIsolation false->true",
+  "runId": "20261031T095545Z-cffe147",
+  "attemptId": "94071c13-4a2a-4480-b570-f8d73708a435",
+  "source": {
+    "baseSha": "cffe147d36caff3fd8b6a4cb1f106e61fe86ac46",
+    "configSha256": "66cfd5f9c55fff0610c00711626b6f68472b1236ddf574da2ce226cda6443643",
+    "bomSha256": "1727e18260772b686080b0893d74550dfde89fa551b8940add34d2434fb79ead",
+    "imageRefs": {
+      "otelCollectorImage": "grafana/alloy:v1.21.3@sha256:8ab871206bd2d8f89277f53abffee5f452a293980788d52f85fa183a87a505a4",
+      "grafanaImage": "grafana/grafana:13.3.0-slim@sha256:a66f098dd9b2e1b5a19287ff176db02d895122488c6e39b3dfcd3fb897039225",
+      "lokiImage": "grafana/loki:3.7.9@sha256:0db216b630ae1f348a1584c67f3cead8b4c1fc839169a39501db664744158e28",
+      "prometheusImage": "prom/prometheus:v3.15.1@sha256:fa3302279710be2f21a8301ec17a8b4f2301fd829bd113839b3b6b02b6f191a2",
+      "tempoImage": "grafana/tempo:main-a0826bc-2302-1@sha256:80ecf3e356e96c0914332ab100099fad780adff977e4a5178168b6eb01ebac14",
+      "nodeImage": "node:26.8.1-alpine@sha256:2d984a15c9b54fd0aeb608b8e0d0d83529eb34d2966db27a1fb4f1edc3d298a3",
+      "kafkaImage": "apache/kafka:4.3.2@sha256:852a0d49fc4e656b022e7f23785411802c9a088c78a7c5e39f33969de9c227a7",
+      "nginxImage": "nginx:1.31.6-trixie@sha256:908dc23e643a1447dbfb2e189ed268bfde6a51a5bf9a34d3dd3440a24f58ccf7"
+    },
+    "sourceFiles": {
+      "status": "PASS",
+      "fileCount": 1737,
+      "missingFileCount": 0,
+      "sha256": "b282c36d4fb7b890e6b6913d9024b78533753049f62258b25683d44949e51020"
+    },
+    "runtimeArtifacts": {
+      "packages/platform-runtime/dist": {
+        "status": "PASS",
+        "fileCount": 4,
+        "sha256": "20c89b6c2f54ae1d1734c1582d56f9a275bc1c82ba24c3a15ec5057a696a66c4"
+      },
+      "packages/platform-observability/dist": {
+        "status": "PASS",
+        "fileCount": 2,
+        "sha256": "7e82c50b2ce46e77998bd553f8b8ae901982482bf984acb13c083e379e46fe41"
+      }
+    },
+    "identityHash": "ec86d75fa39b4e444ef4a96bf3984460e81a02edc6d89bd51ac5500df794fb60"
+  },
+  "componentSupplyChain": {
+    "status": "PASS",
+    "seconds": 1532.184626,
+    "targets": 23,
+    "reports": 46,
+    "images": 22,
+    "rawHigh": 2,
+    "approvedFixedHigh": 2,
+    "unresolvedHigh": 0,
+    "critical": 0,
+    "resultSha256": "0b6e05afc74b58aff9546ee46317a48d972094582eb767720ee88ee17d8fca9a"
+  },
+  "runtime": {
+    "status": "PASS",
+    "imageCount": 15,
+    "images": [
+      {
+        "role": "edge-nginx",
+        "imageId": "sha256:6f269e40b3b65429e278a264fee7bb89a6d13b5f8194b1eb3e8e7d1f1dc3e4bc",
+        "status": "PASS"
+      },
+      {
+        "role": "edge-gateway",
+        "imageId": "sha256:24b70e949de945eb836c451e36769b2e01d573cf00294311d15486c1372d79a1",
+        "status": "PASS"
+      },
+      {
+        "role": "api-public",
+        "imageId": "sha256:96b179d2d5ed93793cd16cd189dd5f6fc3609e469b093a33ef9ec72fafb14873",
+        "status": "PASS"
+      },
+      {
+        "role": "api-internal",
+        "imageId": "sha256:7918391ebed18ecad0b55038ac2322793ca9ae4e2957359476099e2495efd3b7",
+        "status": "PASS"
+      },
+      {
+        "role": "customer-service",
+        "imageId": "sha256:7ba39bacc078a4b1eda191e6c536f110459e228f63995f215c972c65d2a08c85",
+        "status": "PASS"
+      },
+      {
+        "role": "catalog-service",
+        "imageId": "sha256:f4fa0e7a92fb6f48c43f9600facc720d0bee8271e0d689eacb64b1e6f3ddbf62",
+        "status": "PASS"
+      },
+      {
+        "role": "catalog-supplier-sync",
+        "imageId": "sha256:67d97f6becd41266cdaade27923874e435d54672b55e4b8d39454496a71803fc",
+        "status": "PASS"
+      },
+      {
+        "role": "catalog-activation-worker",
+        "imageId": "sha256:e078abc3ef67103e5636b3bdc8a265aa4446aebd005d6b5f9c4b79ba16cd0134",
+        "status": "PASS"
+      },
+      {
+        "role": "pricing-service",
+        "imageId": "sha256:113f866ec7737d095dfc9ad2e6d9bf323d6f42474802a3af319d5c37fabe376e",
+        "status": "PASS"
+      },
+      {
+        "role": "orders-service",
+        "imageId": "sha256:83ec8988211d6d53aa0106e529e1c5e32e9cda8154098f872ebce5946fd92f47",
+        "status": "PASS"
+      },
+      {
+        "role": "orders-aroma-preparation",
+        "imageId": "sha256:3435669b0c6de4c6738f6c7c4c75ba17a4bff4e3a4ec854efedd8e6d1833077b",
+        "status": "PASS"
+      },
+      {
+        "role": "aroma-observer",
+        "imageId": "sha256:2f96f20aade762285d2ec99f72b7c18c2b5fcbbd680f95d19b7e1311ca1312b6",
+        "status": "PASS"
+      },
+      {
+        "role": "aroma-convergence",
+        "imageId": "sha256:86441dd3fd0652ed14754b077053d40d9fc3feb95fe06c47cc12d54036fca131",
+        "status": "PASS"
+      },
+      {
+        "role": "aroma-gateway",
+        "imageId": "sha256:767b106be68430da01d59f26ccd49ec33b43df9847c24e341474b7477d30d178",
+        "status": "PASS"
+      },
+      {
+        "role": "realtime-gateway",
+        "imageId": "sha256:a0b71ffc6c22942e5b25d25590280c9d3bd06b1e9b0271f60d642c8e1d7838fe",
+        "status": "PASS"
+      }
+    ],
+    "healthyReadiness": [
+      {
+        "role": "edge-gateway",
+        "http": {
+          "live": 200,
+          "ready": 200,
+          "metrics": 200,
+          "unknown": 404
+        },
+        "status": "PASS"
+      },
+      {
+        "role": "api-public",
+        "http": {
+          "live": 200,
+          "ready": 200,
+          "metrics": 200,
+          "unknown": 404
+        },
+        "status": "PASS"
+      },
+      {
+        "role": "api-internal",
+        "http": {
+          "live": 200,
+          "ready": 200,
+          "metrics": 200,
+          "unknown": 404
+        },
+        "status": "PASS"
+      },
+      {
+        "role": "customer-service",
+        "http": {
+          "live": 200,
+          "ready": 200,
+          "metrics": 200,
+          "unknown": 404
+        },
+        "status": "PASS"
+      },
+      {
+        "role": "catalog-service",
+        "http": {
+          "live": 200,
+          "ready": 200,
+          "metrics": 200,
+          "unknown": 404
+        },
+        "status": "PASS"
+      },
+      {
+        "role": "catalog-supplier-sync",
+        "http": {
+          "live": 200,
+          "ready": 200,
+          "metrics": 200,
+          "unknown": 404
+        },
+        "status": "PASS"
+      },
+      {
+        "role": "catalog-activation-worker",
+        "http": {
+          "live": 200,
+          "ready": 200,
+          "metrics": 200,
+          "unknown": 404
+        },
+        "status": "PASS"
+      },
+      {
+        "role": "pricing-service",
+        "http": {
+          "live": 200,
+          "ready": 200,
+          "metrics": 200,
+          "unknown": 404
+        },
+        "status": "PASS"
+      },
+      {
+        "role": "orders-service",
+        "http": {
+          "live": 200,
+          "ready": 200,
+          "metrics": 200,
+          "unknown": 404
+        },
+        "status": "PASS"
+      },
+      {
+        "role": "orders-aroma-preparation",
+        "http": {
+          "live": 200,
+          "ready": 200,
+          "metrics": 200,
+          "unknown": 404
+        },
+        "status": "PASS"
+      },
+      {
+        "role": "aroma-observer",
+        "http": {
+          "live": 200,
+          "ready": 200,
+          "metrics": 200,
+          "unknown": 404
+        },
+        "status": "PASS"
+      },
+      {
+        "role": "aroma-convergence",
+        "http": {
+          "live": 200,
+          "ready": 200,
+          "metrics": 200,
+          "unknown": 404
+        },
+        "status": "PASS"
+      },
+      {
+        "role": "aroma-gateway",
+        "http": {
+          "live": 200,
+          "ready": 200,
+          "metrics": 200,
+          "unknown": 404
+        },
+        "status": "PASS"
+      },
+      {
+        "role": "realtime-gateway",
+        "http": {
+          "live": 200,
+          "ready": 200,
+          "metrics": 200,
+          "unknown": 404
+        },
+        "status": "PASS"
+      }
+    ],
+    "metricFamilies": [
+      {
+        "name": "runtime_http_requests_total",
+        "status": "PASS",
+        "owners": [
+          "edge-gateway",
+          "api-public",
+          "api-internal",
+          "customer-service",
+          "catalog-service",
+          "catalog-supplier-sync",
+          "catalog-activation-worker",
+          "pricing-service",
+          "orders-service",
+          "orders-aroma-preparation",
+          "aroma-observer",
+          "aroma-convergence",
+          "aroma-gateway",
+          "realtime-gateway"
+        ]
+      },
+      {
+        "name": "runtime_http_request_duration_ms",
+        "status": "PASS",
+        "owners": [
+          "edge-gateway",
+          "api-public",
+          "api-internal",
+          "customer-service",
+          "catalog-service",
+          "catalog-supplier-sync",
+          "catalog-activation-worker",
+          "pricing-service",
+          "orders-service",
+          "orders-aroma-preparation",
+          "aroma-observer",
+          "aroma-convergence",
+          "aroma-gateway",
+          "realtime-gateway"
+        ]
+      },
+      {
+        "name": "telemetry_log_records_dropped_total",
+        "status": "PASS",
+        "owners": [
+          "edge-gateway",
+          "api-public",
+          "api-internal",
+          "customer-service",
+          "catalog-service",
+          "catalog-supplier-sync",
+          "catalog-activation-worker",
+          "pricing-service",
+          "orders-service",
+          "orders-aroma-preparation",
+          "aroma-observer",
+          "aroma-convergence",
+          "aroma-gateway",
+          "realtime-gateway"
+        ]
+      },
+      {
+        "name": "telemetry_records_dropped_total",
+        "status": "PASS",
+        "owners": [
+          "edge-gateway",
+          "api-public",
+          "api-internal",
+          "customer-service",
+          "catalog-service",
+          "catalog-supplier-sync",
+          "catalog-activation-worker",
+          "pricing-service",
+          "orders-service",
+          "orders-aroma-preparation",
+          "aroma-observer",
+          "aroma-convergence",
+          "aroma-gateway",
+          "realtime-gateway"
+        ]
+      },
+      {
+        "name": "telemetry_export_failures_total",
+        "status": "PASS",
+        "owners": [
+          "edge-gateway",
+          "api-public",
+          "api-internal",
+          "customer-service",
+          "catalog-service",
+          "catalog-supplier-sync",
+          "catalog-activation-worker",
+          "pricing-service",
+          "orders-service",
+          "orders-aroma-preparation",
+          "aroma-observer",
+          "aroma-convergence",
+          "aroma-gateway",
+          "realtime-gateway"
+        ]
+      },
+      {
+        "name": "telemetry_serialization_rejections_total",
+        "status": "PASS",
+        "owners": [
+          "edge-gateway",
+          "api-public",
+          "api-internal",
+          "customer-service",
+          "catalog-service",
+          "catalog-supplier-sync",
+          "catalog-activation-worker",
+          "pricing-service",
+          "orders-service",
+          "orders-aroma-preparation",
+          "aroma-observer",
+          "aroma-convergence",
+          "aroma-gateway",
+          "realtime-gateway"
+        ]
+      },
+      {
+        "name": "telemetry_queue_overflows_total",
+        "status": "PASS",
+        "owners": [
+          "edge-gateway",
+          "api-public",
+          "api-internal",
+          "customer-service",
+          "catalog-service",
+          "catalog-supplier-sync",
+          "catalog-activation-worker",
+          "pricing-service",
+          "orders-service",
+          "orders-aroma-preparation",
+          "aroma-observer",
+          "aroma-convergence",
+          "aroma-gateway",
+          "realtime-gateway"
+        ]
+      },
+      {
+        "name": "telemetry_shutdown_losses_total",
+        "status": "PASS",
+        "owners": [
+          "edge-gateway",
+          "api-public",
+          "api-internal",
+          "customer-service",
+          "catalog-service",
+          "catalog-supplier-sync",
+          "catalog-activation-worker",
+          "pricing-service",
+          "orders-service",
+          "orders-aroma-preparation",
+          "aroma-observer",
+          "aroma-convergence",
+          "aroma-gateway",
+          "realtime-gateway"
+        ]
+      },
+      {
+        "name": "runtime_process_start_time_seconds",
+        "status": "PASS",
+        "owners": [
+          "edge-gateway",
+          "api-public",
+          "api-internal",
+          "customer-service",
+          "catalog-service",
+          "catalog-supplier-sync",
+          "catalog-activation-worker",
+          "pricing-service",
+          "orders-service",
+          "orders-aroma-preparation",
+          "aroma-observer",
+          "aroma-convergence",
+          "aroma-gateway",
+          "realtime-gateway"
+        ]
+      },
+      {
+        "name": "db.client.connection.waiting",
+        "status": "PASS",
+        "owners": [
+          "customer-service",
+          "catalog-service",
+          "catalog-supplier-sync",
+          "catalog-activation-worker",
+          "pricing-service",
+          "orders-service",
+          "orders-aroma-preparation",
+          "aroma-observer",
+          "aroma-convergence",
+          "aroma-gateway"
+        ]
+      },
+      {
+        "name": "messaging.kafka.consumer.lag",
+        "status": "PASS",
+        "owners": [
+          "orders-aroma-preparation",
+          "aroma-convergence"
+        ]
+      },
+      {
+        "name": "messaging.outbox.oldest_unpublished.age",
+        "status": "PASS",
+        "owners": [
+          "catalog-activation-worker",
+          "orders-service",
+          "orders-aroma-preparation",
+          "aroma-observer",
+          "aroma-convergence"
+        ]
+      },
+      {
+        "name": "nginx_connections_current",
+        "status": "PASS",
+        "owners": [
+          "edge-nginx"
+        ]
+      },
+      {
+        "name": "probe_success",
+        "status": "PASS",
+        "owners": [
+          "edge-nginx"
+        ]
+      }
+    ],
+    "loggingPolicy": "PASS",
+    "cleanupVerified": true
+  },
+  "postgres": {
+    "externalPostgres": true,
+    "databaseCount": 5,
+    "runtimeRoleCount": 10
+  },
+  "externalCleanup": {
+    "verified": true,
+    "databases": {
+      "verified": true,
+      "removed": [
+        "coffee_verify_20261031t095545z_cffe147_catalog",
+        "coffee_verify_20261031t095545z_cffe147_customer",
+        "coffee_verify_20261031t095545z_cffe147_integration",
+        "coffee_verify_20261031t095545z_cffe147_orders",
+        "coffee_verify_20261031t095545z_cffe147_pricing"
+      ],
+      "retained": []
+    },
+    "attachment": {
+      "baselineAttached": true,
+      "attempted": false,
+      "removed": false,
+      "routePreserved": true
+    }
+  },
+  "nativeNginxAlert": {
+    "status": "PASS",
+    "episodeId": "b054d3b14bb24e53:2026-10-31T11:08:40Z",
+    "forMs": 300000,
+    "stoppedAtMs": 1793444569805,
+    "restartedAtMs": 1793444928985,
+    "sequence": [
+      1,
+      0,
+      1
+    ],
+    "nodeOwners": 14
+  },
+  "gracefulShutdown": true,
+  "timing": {
+    "operatorSeconds": 1522.196,
+    "startedAt": "2026-10-31T10:49:56.311684+00:00",
+    "completedAt": "2026-10-31T11:15:18.509560+00:00",
+    "budgetSeconds": 1800,
+    "stoppedForBudget": false,
+    "stoppedForDisk": false,
+    "minimumRootFreeBytes": 37386665984
+  },
+  "cleanup": {
+    "status": "PASS",
+    "backend": "PASS",
+    "matrix": "PASS",
+    "errors": []
+  },
+  "privateEvidenceHashes": {
+    "witness": "e8f62daeff0cc7e921e48ff9b490eca28519d1995050b9bab0c031aebb374498",
+    "executionLog": "9af712c04afbde3ac9b47def57a42af47d954d9c6eea4cd03eb798db9705e920",
+    "operator": "d32b821ca616f1efc2bf863f621ac92370e755fb0fd7cf971590c30af89a83b3",
+    "stockNativeCallback": "e0d1e1a115a464d1eebcbed8419262b1838103a4bd36bb2482204fd4cfb94289",
+    "preloader": "d439b7a117f4ed64e9fb15d99addbaca365295101a2f200c5e12bae7f3b034bf"
+  },
+  "limitations": [
+    "Это проверка launch-context runtime-matrix, не полный G14/G00–G19 и не формальный G12 admission.",
+    "Healthy readiness всех14 не доказывает503 при отказах зависимостей; этот пробел остаётся за #13.",
+    "Browser/OIDC component diagnostic и trace/full-system/capacity допускаются только отдельными фактическими proofs.",
+    "NET-1: per-host default-deny Node26 не подтверждён; отдельное решение владельца по ADR0019/G07 ожидается. TCP probe не доказывает обход mTLS/API/data.",
+    "Private operator/evidence хранятся локально; опубликована санитизированная выборка с hashes.",
+    "Прежние FAIL attempts сохранены; причина конкретного прежнего runtime-readiness failure не установлена. Лишний private Compose --wait удалён до успешного запуска; NTFS единственной причиной не доказан."
+  ],
+  "narrowChecks": {
+    "argv": [
+      "/home/yurgusev/.local/lib/nodejs/node-v26.8.1-linux-x64/bin/node",
+      "--test",
+      "--test-reporter=tap",
+      "--test-name-pattern=G13/G15 external PostgreSQL attachment|external PostgreSQL attachment cleanup|external PostgreSQL cleanup retains|external runtime matrix requires exact|browser correlation executes the child lifecycle|browser correlation admission verifies",
+      "tests/compose/topology.test.mjs",
+      "tests/observability/alerts.test.mjs",
+      "tests/config/observability-bootstrap.test.mjs"
+    ],
+    "exitCode": 0,
+    "pass": 6,
+    "fail": 0,
+    "skip": 0,
+    "seconds": 49.343,
+    "rawLogSha256": "928cc274de21eca8f1b8eff85890655390e22a41ea8c660dab962d824816518d"
+  }
+}

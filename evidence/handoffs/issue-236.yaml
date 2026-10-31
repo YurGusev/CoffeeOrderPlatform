@@ -6,71 +6,95 @@ inputs:
     acceptedMergeCommit: d3b5a29fb0fcfff22d167e368c65566dc382af8d
     artifact: evidence/handoffs/issue-9.yaml
     sha256: f68636a4b7f4e1daee73f5f5334e421b44c431cfdce25d92a233b5f17b0ad96e
-pendingDependencies:
   - issue: 222
-    localCommit: e8426e1f8ba5749ff184c23c25dae5f2de771cc9
+    acceptedMergeCommit: bdeb74080880e25285ad99794c97a1ae63622cb6
+    artifact: evidence/handoffs/issue-222.yaml
+    sha256: 8e48fd09cb6a3afaf3faa20d310fa3b24c5c57eebbd52a5cecfdb058acba9ea6
+pendingDependencies:
+  - issue: 228
+    localCommit: 10b6e56
     status: awaiting-acceptance
 outputs:
   - artifact: tools/browser-proof.mjs
     sha256: 3dccbef2dd50d073616d478de43ff49a0d6493e4574f6323f8ea1a2533b32a14
-    consumers: [13]
+    consumers:
+      - 13
   - artifact: tools/browser-owner-evidence.mjs
     sha256: 058f3eb8bf3470301536fe8ad6b32981d80ef4392e1e5c17aa23b3737b328ad3
-    consumers: [13]
+    consumers:
+      - 13
   - artifact: tools/compose-smoke.mjs
     sha256: a55af16c43b753f8f1f9debea4eeee3395334a9b5f0d73882b0739eb0a86c4c2
-    consumers: [13]
+    consumers:
+      - 13
   - artifact: tools/observability/verify.mjs
-    sha256: bdc820b08e06ff9b639a76d79e75ca5ac4c16eb63fda98f46bb7b6acdbcdfd0a
-    consumers: [13]
+    sha256: 44d4a63c58175a6a234128622d5077414df9614b13e4a7f8d0ca4d0193a10897
+    consumers:
+      - 13
   - artifact: verification/launch/v1/scenarios/browser.mjs
     sha256: d20460c2302ba7fce02ee1cee8d08bad2004bbf078e597071557428b7e05bb77
-    consumers: [13]
+    consumers:
+      - 13
   - artifact: verification/launch/v1/run.mjs
     sha256: ff639b8a42143859690a0051766c4b007c856413580c45d303cb0e06239add20
-    consumers: [13]
+    consumers:
+      - 13
   - artifact: tests/tools/browser-proof.test.mjs
     sha256: 888374438222abd307c64c24470b2fd6b52a66decfcd5a2897b0887b7ee3c697
-    consumers: [13]
+    consumers:
+      - 13
   - artifact: tests/tools/browser-owner-evidence.test.mjs
     sha256: f8716bd4915ab17793127728fb0b42bf427f42fdc2c1c888fb8c90409bf47435
-    consumers: [13]
+    consumers:
+      - 13
   - artifact: tests/config/observability-bootstrap.test.mjs
-    sha256: f493060c960506ec5bd2a27cdbbef09212c7e33a5049168b37b323fcd29f8357
-    consumers: [13]
+    sha256: cb577ac99dc5b614464f91f87b3fd4d0a5c35e8fc15cd0d9c847a9e3db27ede6
+    consumers:
+      - 13
   - artifact: tests/compose/topology.test.mjs
-    sha256: e53244fbe8aa1f585d3e102813ccbd1bd6cb534749d67e65b209584012b316b7
-    consumers: [13]
+    sha256: 6044781c5c9cc34c90c4e86204ec46c9d37cc823c435d045a0096193cbb32b18
+    consumers:
+      - 13
   - artifact: docs/operations/observability.md
     sha256: 2b7e2a3c3340387b246243ffeeece09f54ec24b975eab88801c196aa06aba5b2
-    consumers: [13]
+    consumers:
+      - 13
   - artifact: verification/launch/v1/scenarios/rollback.mjs
     sha256: e56981d8975e2716178882bce77c9ba86e62577d6ea54b04bdebe5c0b52ca08b
-    consumers: [13]
+    consumers:
+      - 13
   - artifact: verification/launch/v1/runner.test.mjs
     sha256: 55c7e4d4999aea666b9dcc9b27b5a2846ac892a666ca4122f6490550775204df
-    consumers: [13]
+    consumers:
+      - 13
   - artifact: tests/observability/alerts.test.mjs
-    sha256: 8e97bbf72bb657a6be4938652b4a910e8df802a74260333941915ffd3ccafa89
-    consumers: [13]
+    sha256: 387fc314e0a29fdb059d9410567454ffea537c87133bd79e8d3c539afd7d6fb7
+    consumers:
+      - 13
   - artifact: tools/nginx/generate.mjs
     sha256: 2c7c0d12615f71a24edf58da3ba11d1406c6bc880aca9bb2c59f35c9dedfeda4
-    consumers: [13]
+    consumers:
+      - 13
   - artifact: tools/nginx/check-config.mjs
     sha256: 9c2cec69034dd25d8ee38e2df5ad58b3a1c47fd18d6ab1745758ac82f3c0a718
-    consumers: [13]
+    consumers:
+      - 13
   - artifact: tests/nginx/image.test.mjs
     sha256: 5957e028161f7c8d9a6e8759a3bfe750d2b4583cd45a137ef41ad1ac6850fcac
-    consumers: [13]
+    consumers:
+      - 13
   - artifact: docs/launch/29_NGINX_TRANSPORT_AND_AUTH.md
     sha256: 76831afd6f5dc4ad33f3e3fab3100af8f4808d6870e4002283a2fc2cde629b8e
-    consumers: [13]
+    consumers:
+      - 13
   - artifact: tools/config-bootstrap/index.mjs
     sha256: 1fdf095beea6ba31fc9d9866ebf2c0e0cab6fdce62effc0fc78b92732f492123
-    consumers: [13]
+    consumers:
+      - 13
   - artifact: docs/launch/21_LAUNCH_VERIFICATION_SPEC.md
     sha256: da509e7e57de9e5905faa287b266ee020f2642a261630d656857578a10511eae
-    consumers: [13]
+    consumers:
+      - 13
 verification:
   - command: pnpm install --offline --frozen-lockfile --ignore-scripts
     result: passed
@@ -99,140 +123,142 @@ verification:
   - command: git diff --check
     result: passed
     exitCode: 0
+  - command: '["/home/yurgusev/.local/lib/nodejs/node-v26.8.1-linux-x64/bin/node","--test","--test-reporter=tap","--test-name-pattern=^smoke accepts only runtime image IDs verified by G12 before startup$|^browser correlation executes the child lifecycle and preserves early image failure evidence$","tests/compose/topology.test.mjs","tests/config/observability-bootstrap.test.mjs"]'
+    result: Child umask002;2pass/0fail/0skip;74.013s; rawSHA8c8a00710140d333da9d4e9cc547604ef3c784d20d17ce7ff5e5b82fd0aa4c52; exact argv записан в private browser-ci-regression.json
 reviewVerification:
-  - command: "node --test tests/tools/browser-proof.test.mjs tests/tools/browser-owner-evidence.test.mjs"
+  - command: node --test tests/tools/browser-proof.test.mjs tests/tools/browser-owner-evidence.test.mjs
     result: "passed: 37 tests"
     exitCode: 0
     log: /home/yurgusev/.cache/coffee-launch-delivery/issue-236-review/browser-tests-final.log
     logSha256: a0bfe1a65a689e5c00566c3b519ab4c18b07e633242c81c18c36e45554ec2752
-  - command: "node --test --test-name-pattern='G14 seals the child config|G14 provider boundary' tests/compose/topology.test.mjs"
+  - command: node --test --test-name-pattern='G14 seals the child config|G14 provider boundary' tests/compose/topology.test.mjs
     result: "passed: 2 tests"
     exitCode: 0
     log: /home/yurgusev/.cache/coffee-launch-delivery/issue-236-review/topology-tests.log
     logSha256: bcfe2feef0c0e2a8ba2e01f960e5cef93f789fc24e1d04c37e290961c6e4765e
-  - command: "umask 077 && node --test --test-name-pattern='browser correlation admission' tests/config/observability-bootstrap.test.mjs"
+  - command: umask 077 && node --test --test-name-pattern='browser correlation admission' tests/config/observability-bootstrap.test.mjs
     result: "passed: 1 test"
     exitCode: 0
     log: /home/yurgusev/.cache/coffee-launch-delivery/issue-236-review/admission-tests-final2.log
     logSha256: 683724825b4cf5e43ca57e3c57da93fa6c23bbdb1ae0af2c2cf1bdad9d42a83a
-  - command: "pnpm exec oxlint --type-aware --deny-warnings tools/compose-smoke.mjs tools/browser-proof.mjs verification/launch/v1/run.mjs tests/tools/browser-proof.test.mjs tests/config/observability-bootstrap.test.mjs tests/compose/topology.test.mjs"
-    result: "passed"
+  - command: pnpm exec oxlint --type-aware --deny-warnings tools/compose-smoke.mjs tools/browser-proof.mjs verification/launch/v1/run.mjs tests/tools/browser-proof.test.mjs tests/config/observability-bootstrap.test.mjs tests/compose/topology.test.mjs
+    result: passed
     exitCode: 0
     log: /home/yurgusev/.cache/coffee-launch-delivery/issue-236-review/lint-final2.log
     logSha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
-  - command: "pnpm exec prettier --check tools/compose-smoke.mjs tools/browser-proof.mjs verification/launch/v1/run.mjs tests/tools/browser-proof.test.mjs tests/config/observability-bootstrap.test.mjs tests/compose/topology.test.mjs"
-    result: "passed"
+  - command: pnpm exec prettier --check tools/compose-smoke.mjs tools/browser-proof.mjs verification/launch/v1/run.mjs tests/tools/browser-proof.test.mjs tests/config/observability-bootstrap.test.mjs tests/compose/topology.test.mjs
+    result: passed
     exitCode: 0
     log: /home/yurgusev/.cache/coffee-launch-delivery/issue-236-review/format-final2.log
     logSha256: 17aa973d3f004560237d9a95171210b0671deff23d61628eecf7322ff5938f20
-  - command: "git diff --check"
-    result: "passed"
+  - command: git diff --check
+    result: passed
     exitCode: 0
     log: /home/yurgusev/.cache/coffee-launch-delivery/issue-236-review/diff-check-final.log
     logSha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
 baselineVerification:
-  - command: "umask 077 && node --test tests/tools/browser-proof.test.mjs tests/tools/browser-owner-evidence.test.mjs"
+  - command: umask 077 && node --test tests/tools/browser-proof.test.mjs tests/tools/browser-owner-evidence.test.mjs
     result: "passed: 37 tests"
     exitCode: 0
     log: /home/yurgusev/.cache/coffee-launch-delivery/issue-236-baseline/browser.log
     logSha256: 143e2e4692f1112793b58d464cc47006ad48a193d77ea96dc2d4a34d2fc398f5
-  - command: "umask 077 && node --test --test-name-pattern='browser correlation (executes|admission)' tests/config/observability-bootstrap.test.mjs"
+  - command: umask 077 && node --test --test-name-pattern='browser correlation (executes|admission)' tests/config/observability-bootstrap.test.mjs
     result: "passed: 2 tests"
     exitCode: 0
     log: /home/yurgusev/.cache/coffee-launch-delivery/issue-236-baseline/lifecycle.log
     logSha256: ac12354d3bf65d9c7ffd833ea20b95b54242332be783989024cd0f7ddc4b75c5
-  - command: "umask 077 && node --test --test-name-pattern='G14 seals the child config|G14 provider boundary|external recovery projection|external PostgreSQL preflight' tests/compose/topology.test.mjs"
+  - command: umask 077 && node --test --test-name-pattern='G14 seals the child config|G14 provider boundary|external recovery projection|external PostgreSQL preflight' tests/compose/topology.test.mjs
     result: "passed: 4 tests"
     exitCode: 0
     log: /home/yurgusev/.cache/coffee-launch-delivery/issue-236-baseline/topology.log
     logSha256: b39d4ee52ab7f175fdd2cb9ebd238d994bf32c7f512b63d7b156ec7cc7a64400
-  - command: "umask 077 && node --test --test-name-pattern='external PostgreSQL attachment cleanup' tests/compose/topology.test.mjs"
+  - command: umask 077 && node --test --test-name-pattern='external PostgreSQL attachment cleanup' tests/compose/topology.test.mjs
     result: "passed: 1 test"
     exitCode: 0
     log: /home/yurgusev/.cache/coffee-launch-delivery/issue-236-baseline/attachment.log
     logSha256: 66ac8eca009eff9b304ef93b00a9874b9e8dd817c9e731502857794dd636512b
-  - command: "umask 077 && pnpm exec oxlint --type-aware --deny-warnings verification/launch/v1/scenarios/browser.mjs tests/tools/browser-proof.test.mjs tests/config/observability-bootstrap.test.mjs tests/compose/topology.test.mjs"
-    result: "passed"
+  - command: umask 077 && pnpm exec oxlint --type-aware --deny-warnings verification/launch/v1/scenarios/browser.mjs tests/tools/browser-proof.test.mjs tests/config/observability-bootstrap.test.mjs tests/compose/topology.test.mjs
+    result: passed
     exitCode: 0
     log: /home/yurgusev/.cache/coffee-launch-delivery/issue-236-baseline/lint.log
     logSha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
-  - command: "umask 077 && pnpm exec prettier --check verification/launch/v1/scenarios/browser.mjs tests/tools/browser-proof.test.mjs tests/config/observability-bootstrap.test.mjs tests/compose/topology.test.mjs"
-    result: "passed"
+  - command: umask 077 && pnpm exec prettier --check verification/launch/v1/scenarios/browser.mjs tests/tools/browser-proof.test.mjs tests/config/observability-bootstrap.test.mjs tests/compose/topology.test.mjs
+    result: passed
     exitCode: 0
     log: /home/yurgusev/.cache/coffee-launch-delivery/issue-236-baseline/format.log
     logSha256: 17aa973d3f004560237d9a95171210b0671deff23d61628eecf7322ff5938f20
-  - command: "umask 077 && pnpm exec tsc -b apps/web --pretty false"
-    result: "passed"
+  - command: umask 077 && pnpm exec tsc -b apps/web --pretty false
+    result: passed
     exitCode: 0
     log: /home/yurgusev/.cache/coffee-launch-delivery/issue-236-baseline/tsc.log
     logSha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
-  - command: "umask 077 && git diff --check"
-    result: "passed"
+  - command: umask 077 && git diff --check
+    result: passed
     exitCode: 0
     log: /home/yurgusev/.cache/coffee-launch-delivery/issue-236-baseline/diff.log
     logSha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
 ipcVerification:
-  - command: "umask 077 && node --test tests/tools/browser-proof.test.mjs tests/tools/browser-owner-evidence.test.mjs"
+  - command: umask 077 && node --test tests/tools/browser-proof.test.mjs tests/tools/browser-owner-evidence.test.mjs
     result: "passed: 37 tests"
     exitCode: 0
     log: /home/yurgusev/.cache/coffee-launch-delivery/issue-236-ipc/unit-final.log
     logSha256: 3b6f3ed3a0857b2fd234a034ba6f8ebc2fbf91737dce8e588ec6d26d30ba52e4
-  - command: "umask 077 && node --test --test-name-pattern='browser correlation (executes|admission)|G14 telemetry sources' tests/config/observability-bootstrap.test.mjs"
+  - command: umask 077 && node --test --test-name-pattern='browser correlation (executes|admission)|G14 telemetry sources' tests/config/observability-bootstrap.test.mjs
     result: "passed: 3 tests"
     exitCode: 0
     log: /home/yurgusev/.cache/coffee-launch-delivery/issue-236-ipc/lifecycle-final.log
     logSha256: 449772772cb309fcf4083e804a182fa116d0a1fb1f60812687e8a42bb6d9cf2e
-  - command: "umask 077 && node --test --test-name-pattern='G14 retains scoped resources|G14 seals the child config|G14 provider boundary|external PostgreSQL attachment cleanup' tests/compose/topology.test.mjs"
+  - command: umask 077 && node --test --test-name-pattern='G14 retains scoped resources|G14 seals the child config|G14 provider boundary|external PostgreSQL attachment cleanup' tests/compose/topology.test.mjs
     result: "passed: 4 tests"
     exitCode: 0
     log: /home/yurgusev/.cache/coffee-launch-delivery/issue-236-ipc/retention-final.log
     logSha256: 187ab2830bf2fcb1ca77a2309f957d032c10fd7c7d55339f0e588a8389072b9e
-  - command: "umask 077 && node --test --test-name-pattern='managed G14 child IPC' verification/launch/v1/runner.test.mjs"
+  - command: umask 077 && node --test --test-name-pattern='managed G14 child IPC' verification/launch/v1/runner.test.mjs
     result: "passed: 1 test"
     exitCode: 0
     log: /home/yurgusev/.cache/coffee-launch-delivery/issue-236-ipc/ipc-final2.log
     logSha256: cb00244f2aab44fa9c5ea331b330a4393289d4ed720d297a9f9c3ebe3d0e1375
-  - command: "umask 077 && pnpm exec tsc -b apps/catalog-activation-worker --pretty false"
-    result: "passed"
+  - command: umask 077 && pnpm exec tsc -b apps/catalog-activation-worker --pretty false
+    result: passed
     exitCode: 0
     log: /home/yurgusev/.cache/coffee-launch-delivery/issue-236-ipc/tsc-catalog.log
     logSha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
-  - command: "umask 077 && pnpm exec tsc -b apps/catalog-supplier-sync --pretty false"
-    result: "passed"
+  - command: umask 077 && pnpm exec tsc -b apps/catalog-supplier-sync --pretty false
+    result: passed
     exitCode: 0
     log: /home/yurgusev/.cache/coffee-launch-delivery/issue-236-ipc/tsc-supplier.log
     logSha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
-  - command: "umask 077 && pnpm exec tsc -b apps/orders-aroma-preparation --pretty false"
-    result: "passed"
+  - command: umask 077 && pnpm exec tsc -b apps/orders-aroma-preparation --pretty false
+    result: passed
     exitCode: 0
     log: /home/yurgusev/.cache/coffee-launch-delivery/issue-236-ipc/tsc-preparation.log
     logSha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
-  - command: "umask 077 && pnpm exec oxlint --type-aware --deny-warnings tools/compose-smoke.mjs tools/browser-owner-evidence.mjs tools/browser-proof.mjs tools/observability/verify.mjs verification/launch/v1/scenarios/rollback.mjs verification/launch/v1/runner.test.mjs verification/launch/v1/run.mjs tests/tools/browser-owner-evidence.test.mjs tests/tools/browser-proof.test.mjs tests/config/observability-bootstrap.test.mjs tests/compose/topology.test.mjs"
-    result: "passed"
+  - command: umask 077 && pnpm exec oxlint --type-aware --deny-warnings tools/compose-smoke.mjs tools/browser-owner-evidence.mjs tools/browser-proof.mjs tools/observability/verify.mjs verification/launch/v1/scenarios/rollback.mjs verification/launch/v1/runner.test.mjs verification/launch/v1/run.mjs tests/tools/browser-owner-evidence.test.mjs tests/tools/browser-proof.test.mjs tests/config/observability-bootstrap.test.mjs tests/compose/topology.test.mjs
+    result: passed
     exitCode: 0
     log: /home/yurgusev/.cache/coffee-launch-delivery/issue-236-ipc/lint-final2.log
     logSha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
-  - command: "umask 077 && pnpm exec prettier --check tools/compose-smoke.mjs tools/browser-owner-evidence.mjs tools/browser-proof.mjs tools/observability/verify.mjs verification/launch/v1/scenarios/rollback.mjs verification/launch/v1/runner.test.mjs verification/launch/v1/run.mjs tests/tools/browser-owner-evidence.test.mjs tests/tools/browser-proof.test.mjs tests/config/observability-bootstrap.test.mjs tests/compose/topology.test.mjs"
-    result: "passed"
+  - command: umask 077 && pnpm exec prettier --check tools/compose-smoke.mjs tools/browser-owner-evidence.mjs tools/browser-proof.mjs tools/observability/verify.mjs verification/launch/v1/scenarios/rollback.mjs verification/launch/v1/runner.test.mjs verification/launch/v1/run.mjs tests/tools/browser-owner-evidence.test.mjs tests/tools/browser-proof.test.mjs tests/config/observability-bootstrap.test.mjs tests/compose/topology.test.mjs
+    result: passed
     exitCode: 0
     log: /home/yurgusev/.cache/coffee-launch-delivery/issue-236-ipc/format-final2.log
     logSha256: 17aa973d3f004560237d9a95171210b0671deff23d61628eecf7322ff5938f20
-  - command: "umask 077 && git diff --check"
-    result: "passed"
+  - command: umask 077 && git diff --check
+    result: passed
     exitCode: 0
     log: /home/yurgusev/.cache/coffee-launch-delivery/issue-236-ipc/diff-final.log
     logSha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
-  - command: "umask 077 && node --test --test-name-pattern='managed G14 child IPC' verification/launch/v1/runner.test.mjs"
+  - command: umask 077 && node --test --test-name-pattern='managed G14 child IPC' verification/launch/v1/runner.test.mjs
     result: "failed: missing catalog-activation-worker dist before scoped tsc"
     exitCode: 1
     log: /home/yurgusev/.cache/coffee-launch-delivery/issue-236-ipc/ipc-initial.log
     logSha256: 0f197ae763bb9809dafb1cf48f566e248053ef1114eb9ffe803de4d3c62a0be0
-  - command: "umask 077 && node --test --test-name-pattern='managed G14 child IPC' verification/launch/v1/runner.test.mjs"
+  - command: umask 077 && node --test --test-name-pattern='managed G14 child IPC' verification/launch/v1/runner.test.mjs
     result: "failed: missing catalog-supplier-sync dist before scoped tsc"
     exitCode: 1
     log: /home/yurgusev/.cache/coffee-launch-delivery/issue-236-ipc/ipc-second.log
     logSha256: b8c7b49b795195abf748b331b44f06934b2861b948b8d143ff8a1ade0a6cba1c
-  - command: "umask 077 && node --test --test-name-pattern='managed G14 child IPC' verification/launch/v1/runner.test.mjs"
+  - command: umask 077 && node --test --test-name-pattern='managed G14 child IPC' verification/launch/v1/runner.test.mjs
     result: "failed: missing orders-aroma-preparation dist before scoped tsc"
     exitCode: 1
     log: /home/yurgusev/.cache/coffee-launch-delivery/issue-236-ipc/ipc-third.log
@@ -243,122 +269,101 @@ ipcVerification:
     log: /home/yurgusev/.cache/coffee-launch-delivery/issue-236-ipc/lint-third.log
     logSha256: e2c18ed924f5dd879f83cea7d678769e95b495b57ce9e300bf05f1e131992f50
 telemetrySubproofVerification:
-  - command: "umask 077 && node --test --test-name-pattern='G04 requires an owned read-only context' verification/launch/v1/runner.test.mjs"
+  - command: umask 077 && node --test --test-name-pattern='G04 requires an owned read-only context' verification/launch/v1/runner.test.mjs
     result: "passed: 1 test"
     exitCode: 0
     log: /home/yurgusev/.cache/coffee-launch-delivery/issue-236-subproof/guard-final.log
     logSha256: d07c6140a3fc5989885356c289e03d35e2963a663d3339001b56ad7a2e8bb5bb
-  - command: "umask 077 && node --test --test-name-pattern='G15 child credentials reuse|G15 child G08 credential admission' tests/config/observability-bootstrap.test.mjs"
+  - command: umask 077 && node --test --test-name-pattern='G15 child credentials reuse|G15 child G08 credential admission' tests/config/observability-bootstrap.test.mjs
     result: "passed: 2 tests"
     exitCode: 0
     log: /home/yurgusev/.cache/coffee-launch-delivery/issue-236-subproof/nested-g08-final2.log
     logSha256: 9a1acd04fbaf4179e3f2fa676be33f63d1160b5d37f062d9e6b31151d1940734
-  - command: "umask 077 && node --test --test-name-pattern='browser correlation (executes|admission)' tests/config/observability-bootstrap.test.mjs"
+  - command: umask 077 && node --test --test-name-pattern='browser correlation (executes|admission)' tests/config/observability-bootstrap.test.mjs
     result: "passed: 2 tests"
     exitCode: 0
     log: /home/yurgusev/.cache/coffee-launch-delivery/issue-236-subproof/child-lifecycle-final2.log
     logSha256: 1cf1191078a68e0b1aa75b6a9ae83095c2ca53043fb7828b4d31b396d33c7409
-  - command: "umask 077 && node --test --test-name-pattern='G14 component requires|G14 queries actual child telemetry|Grafana backend queries require fresh owner samples' tests/observability/alerts.test.mjs"
+  - command: umask 077 && node --test --test-name-pattern='G14 component requires|G14 queries actual child telemetry|Grafana backend queries require fresh owner samples' tests/observability/alerts.test.mjs
     result: "passed: 3 tests"
     exitCode: 0
     log: /home/yurgusev/.cache/coffee-launch-delivery/issue-236-subproof/component-final.log
     logSha256: 2362b0f31634c58356a2f948f950dbc9031fc970a3666622c10be93378aa5832
-  - command: "umask 077 && pnpm exec oxlint --type-aware --deny-warnings tools/config-bootstrap/index.mjs verification/launch/v1/scenarios/rollback.mjs tools/observability/verify.mjs tests/observability/alerts.test.mjs tests/config/observability-bootstrap.test.mjs"
-    result: "passed"
+  - command: umask 077 && pnpm exec oxlint --type-aware --deny-warnings tools/config-bootstrap/index.mjs verification/launch/v1/scenarios/rollback.mjs tools/observability/verify.mjs tests/observability/alerts.test.mjs tests/config/observability-bootstrap.test.mjs
+    result: passed
     exitCode: 0
     log: /home/yurgusev/.cache/coffee-launch-delivery/issue-236-subproof/final-lint.log
     logSha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
-  - command: "umask 077 && pnpm exec prettier --check tools/config-bootstrap/index.mjs verification/launch/v1/scenarios/rollback.mjs tools/observability/verify.mjs tests/observability/alerts.test.mjs tests/config/observability-bootstrap.test.mjs docs/launch/21_LAUNCH_VERIFICATION_SPEC.md"
-    result: "passed"
+  - command: umask 077 && pnpm exec prettier --check tools/config-bootstrap/index.mjs verification/launch/v1/scenarios/rollback.mjs tools/observability/verify.mjs tests/observability/alerts.test.mjs tests/config/observability-bootstrap.test.mjs docs/launch/21_LAUNCH_VERIFICATION_SPEC.md
+    result: passed
     exitCode: 0
     log: /home/yurgusev/.cache/coffee-launch-delivery/issue-236-subproof/final-format.log
     logSha256: 17aa973d3f004560237d9a95171210b0671deff23d61628eecf7322ff5938f20
-  - command: "umask 077 && node --test --test-name-pattern='G14 queries actual child telemetry|observability query helpers' tests/observability/alerts.test.mjs"
+  - command: umask 077 && node --test --test-name-pattern='G14 queries actual child telemetry|observability query helpers' tests/observability/alerts.test.mjs
     result: "passed: 1 test"
     exitCode: 0
     log: /home/yurgusev/.cache/coffee-launch-delivery/issue-236-subproof/telemetry-delivery.log
     logSha256: 6069dc8e9ee712b46a218cf12c0577a1e1826fbc46cd835f31c5eb99cbd2a867
-  - command: "umask 077 && node --test --test-name-pattern='G14 queries actual child telemetry' tests/observability/alerts.test.mjs"
+  - command: umask 077 && node --test --test-name-pattern='G14 queries actual child telemetry' tests/observability/alerts.test.mjs
     result: "passed: 1 test"
     exitCode: 0
     log: /home/yurgusev/.cache/coffee-launch-delivery/issue-236-subproof/telemetry-final4.log
     logSha256: c00de6af5f2273bd029f6bbed4a0b0ddebc63f33a5d23a0390c0665e5776134f
-  - command: "umask 077 && node --test --test-name-pattern='Grafana backend queries require fresh owner samples' tests/observability/alerts.test.mjs"
+  - command: umask 077 && node --test --test-name-pattern='Grafana backend queries require fresh owner samples' tests/observability/alerts.test.mjs
     result: "passed: 1 test"
     exitCode: 0
     log: /home/yurgusev/.cache/coffee-launch-delivery/issue-236-subproof/existing-query.log
     logSha256: 1619e54dbb4731091267a2564c3534792a5461f5e448b77002ad5f3cad63fb72
-  - command: "umask 077 && pnpm exec tsc -b apps/aroma-convergence --pretty false"
-    result: "passed"
+  - command: umask 077 && pnpm exec tsc -b apps/aroma-convergence --pretty false
+    result: passed
     exitCode: 0
     log: /home/yurgusev/.cache/coffee-launch-delivery/issue-236-subproof/tsc.log
     logSha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
-  - command: "umask 077 && pnpm exec oxlint --type-aware --deny-warnings tools/observability/verify.mjs tests/observability/alerts.test.mjs"
-    result: "passed"
+  - command: umask 077 && pnpm exec oxlint --type-aware --deny-warnings tools/observability/verify.mjs tests/observability/alerts.test.mjs
+    result: passed
     exitCode: 0
     log: /home/yurgusev/.cache/coffee-launch-delivery/issue-236-subproof/lint-delivery.log
     logSha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
-  - command: "umask 077 && pnpm exec prettier --check tools/observability/verify.mjs tests/observability/alerts.test.mjs"
-    result: "passed"
+  - command: umask 077 && pnpm exec prettier --check tools/observability/verify.mjs tests/observability/alerts.test.mjs
+    result: passed
     exitCode: 0
     log: /home/yurgusev/.cache/coffee-launch-delivery/issue-236-subproof/format-delivery.log
     logSha256: 17aa973d3f004560237d9a95171210b0671deff23d61628eecf7322ff5938f20
-  - command: "umask 077 && git diff --check"
-    result: "passed"
+  - command: umask 077 && git diff --check
+    result: passed
     exitCode: 0
     log: /home/yurgusev/.cache/coffee-launch-delivery/issue-236-subproof/diff-delivery.log
     logSha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
-  - command: "umask 077 && node --test --test-name-pattern='G14 queries actual child telemetry' tests/observability/alerts.test.mjs"
+  - command: umask 077 && node --test --test-name-pattern='G14 queries actual child telemetry' tests/observability/alerts.test.mjs
     result: "failed: missing aroma-convergence dist before scoped tsc"
     exitCode: 1
     log: /home/yurgusev/.cache/coffee-launch-delivery/issue-236-subproof/telemetry-initial.log
     logSha256: 1bfaa18214423cd1b4ef0e0af0d1eb18d12b1df8f6baf1e6c7879070c5c350ce
-  - command: "umask 077 && node --test --test-name-pattern='G14 queries actual child telemetry' tests/observability/alerts.test.mjs"
+  - command: umask 077 && node --test --test-name-pattern='G14 queries actual child telemetry' tests/observability/alerts.test.mjs
     result: "failed: test fixture referenced undefined line; corrected"
     exitCode: 1
     log: /home/yurgusev/.cache/coffee-launch-delivery/issue-236-subproof/telemetry-final3.log
     logSha256: 3481d033328697069773059747e38e6981267889fb235eeeaa74ce623849f1bf
 measurementVerification:
-  - command: "node --test --test-name-pattern='G14 queries actual child telemetry|G14 component requires|Grafana backend queries require fresh owner samples' tests/observability/alerts.test.mjs"
-    result: "3 pass / 0 fail / 0 skip; 1.567 s"
+  - command: node --test --test-name-pattern='G14 queries actual child telemetry|G14 component requires|Grafana backend queries require fresh owner samples' tests/observability/alerts.test.mjs
+    result: 3 pass / 0 fail / 0 skip; 1.567 s
     log: /home/yurgusev/.cache/coffee-launch-delivery/browser236-identity-regression.log
     logSha256: db61ae78daf57069f38a18e177c03b40bc31465c6baa04a5f2085478e0568e49
-  - command: "pnpm exec oxlint --type-aware --deny-warnings tools/observability/verify.mjs tests/observability/alerts.test.mjs tools/nginx/generate.mjs tests/nginx/image.test.mjs"
-    result: "exit 0"
+  - command: pnpm exec oxlint --type-aware --deny-warnings tools/observability/verify.mjs tests/observability/alerts.test.mjs tools/nginx/generate.mjs tests/nginx/image.test.mjs
+    result: exit 0
     log: /home/yurgusev/.cache/coffee-launch-delivery/browser236-identity-lint.log
     logSha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
-  - command: "node --input-type=module -e"
-    script: >-
-      import assert from "node:assert/strict"; import {readFile} from "node:fs/promises"; import {load} from "js-yaml"; import {render,readRoutes} from "./tools/nginx/generate.mjs"; const config=load(await readFile("config/platform.yaml","utf8")); const spec=load(await readFile("contracts/openapi/client-v1.yaml","utf8")); const output=render(config.nginxTransport,readRoutes(spec),config.telemetry.nginxStatusEndpoint); assert.match(output,/"request_completion":"\$request_completion"/u); assert.match(output,/"duration_seconds":\$request_time/u); console.log("native nginx generated format: PASS");
-    result: "exit 0; проверка генератора без Docker"
+  - command: node --input-type=module -e
+    script: "import assert from \"node:assert/strict\"; import {readFile} from \"node:fs/promises\"; import {load} from \"js-yaml\"; import {render,readRoutes} from \"./tools/nginx/generate.mjs\"; const config=load(await readFile(\"config/platform.yaml\",\"utf8\")); const spec=load(await readFile(\"contracts/openapi/client-v1.yaml\",\"utf8\")); const output=render(config.nginxTransport,readRoutes(spec),config.telemetry.nginxStatusEndpoint); assert.match(output,/\"request_completion\":\"\\$request_completion\"/u); assert.match(output,/\"duration_seconds\":\\$request_time/u); console.log(\"native nginx generated format: PASS\");"
+    result: exit 0; проверка генератора без Docker
     log: /home/yurgusev/.cache/coffee-launch-delivery/browser236-nginx-format-test.log
     logSha256: 57fdc38c58611ccc82eecd289e92e26216b19b236de05ffd0f3310ccdf453aae
 limitations:
-  - >-
-    Измерение ordinary API и проверка privacy событий/связей выполнены только
-    на синтетических входах; native nginx, Loki и browser runtime NOT_RUN.
-    Статистика относится к CID cohort и не атрибутирует длительность отдельному
-    Confirm или causal refetch; численного порога и latency PASS нет.
-  - >-
-    Владелец 31 октября 2026 разрешил supplemental component diagnostic внутри
-    существующего OIDC-only child перед actual browser: G15 lineage, parent G08 и
-    внешние пять БД, с подтверждённой очисткой до browser. Синтетическое evidence
-    сохраняется отдельно и не доказывает browser chain. Nested child исключается
-    из parent status только после проверки lineage и точной identity; остальные
-    dirty/hidden-index случаи отклоняются. Runtime подтверждение R236-4 NOT_RUN.
-  - >-
-    G14 IPC и fail-closed retention проверены изолированными Node-тестами;
-    реальный Collector, аварийный disconnect и очистка child runtime не запускались.
-  - >-
-    #222, #228 и #229 включены локальными merge как stacked dependencies; их принятие
-    и соответствующие accepted handoffs необходимы до merge #236 и здесь не заявляются.
-  - >-
-    Реальный browser component proof, Docker, provider network, production runtime, CI и full-system G14
-    не запускались. Путь и cleanup требуют проверки на source-bound G12 images после принятия зависимостей.
-  - >-
-    W3C trace NOT_PROVEN; synthetic component ingress не подтверждает browser chain.
-    Периодический Recovery может опередить Kafka consumer, и такой запуск не принимается.
-  - >-
-    Исходный tsc до сборки platform-http и первый browser unit до сборки local dist завершились ошибкой;
-    первый lifecycle test при umask 0002 отклонил group-writable fixture. Повтор с umask 077 прошёл,
-    security guard не ослаблен. Логи команд не сохранялись отдельно.
+  - Измерение ordinary API и проверка privacy событий/связей выполнены только на синтетических входах; native nginx, Loki и browser runtime NOT_RUN. Статистика относится к CID cohort и не атрибутирует длительность отдельному Confirm или causal refetch; численного порога и latency PASS нет.
+  - "Владелец 31 октября 2026 разрешил supplemental component diagnostic внутри существующего OIDC-only child перед actual browser: G15 lineage, parent G08 и внешние пять БД, с подтверждённой очисткой до browser. Синтетическое evidence сохраняется отдельно и не доказывает browser chain. Nested child исключается из parent status только после проверки lineage и точной identity; остальные dirty/hidden-index случаи отклоняются. Runtime подтверждение R236-4 NOT_RUN."
+  - G14 IPC и fail-closed retention проверены изолированными Node-тестами; реальный Collector, аварийный disconnect и очистка child runtime не запускались.
+  - "#222, #228 и #229 включены локальными merge как stacked dependencies; их принятие и соответствующие accepted handoffs необходимы до merge #236 и здесь не заявляются."
+  - Реальный browser component proof, Docker, provider network, production runtime, CI и full-system G14 не запускались. Путь и cleanup требуют проверки на source-bound G12 images после принятия зависимостей.
+  - W3C trace NOT_PROVEN; synthetic component ingress не подтверждает browser chain. Периодический Recovery может опередить Kafka consumer, и такой запуск не принимается.
+  - Исходный tsc до сборки platform-http и первый browser unit до сборки local dist завершились ошибкой; первый lifecycle test при umask 0002 отклонил group-writable fixture. Повтор с umask 077 прошёл, security guard не ослаблен. Логи команд не сохранялись отдельно.
+  - "CI41194737052:1528tests/1447pass/2fail/79skip сохранён. Устаревшая assertion переименована в imageIdentity; inherited #228 temp fixture evidence0700 исправлена, production guard/CI workflow/tests selection не ослаблены. Новый CI ожидается."
