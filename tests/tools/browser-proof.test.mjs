@@ -19,6 +19,8 @@ import { load } from "js-yaml";
 import {
   BROWSER_REQUIRED_CHECKS,
   createBrowserNetworkMonitor,
+  createG14BrowserNetworkMonitor,
+  matchG14BrowserChain,
   buildRealtimeAuthCloseInvocation,
   proveNaturalSseReauthentication,
   expectedBrowserCompletedResponse,
@@ -46,6 +48,34 @@ const CANDIDATE_SHA = "a".repeat(40);
 const REPO_ROOT = fileURLToPath(new URL("../..", import.meta.url));
 const ORDER_REF = "ord_01ARZ3NDEKTSV4RRFFQ69G5FAV";
 const ITEM_REF = "itm_01ARZ3NDEKTSV4RRFFQ69G5FAV";
+
+void test("G14 binds a real SSE stream and later owner read to exactly one Confirm", async () => {
+  const cdp = new EventEmitter();
+  cdp.send = async () => ({ body: JSON.stringify({ orderRef: ORDER_REF, projectionVersion: "5" }), base64Encoded: false });
+  const monitor = createG14BrowserNetworkMonitor(cdp);
+  const correlationId = "00000000-0000-4000-8000-000000000015";
+  const frameId = "msg_01ARZ3NDEKTSV4RRFFQ69G5FAV";
+  const request = (requestId, url, method = "GET", headers = {}) => cdp.emit("Network.requestWillBeSent", { requestId, request: { url: `https://localhost:8443${url}`, method, headers } });
+  request("stream", "/events");
+  cdp.emit("Network.responseReceived", { requestId: "stream", response: { status: 200 } });
+  request("confirm", `/api/client-v1/orders/${ORDER_REF}/commands/confirm`, "POST", { "X-Correlation-ID": correlationId });
+  const frame = { eventName: "resource-invalidated.v1", eventId: frameId, data: JSON.stringify({ subjectType: "order", subjectRef: ORDER_REF, ownerVersion: "5", reason: "AromaStateChanged", correlationId }) };
+  cdp.emit("Network.eventSourceMessageReceived", { ...frame, requestId: "foreign" });
+  assert.equal(monitor.frames.length, 0);
+  cdp.emit("Network.eventSourceMessageReceived", { ...frame, requestId: "stream" });
+  request("read", `/api/client-v1/orders/${ORDER_REF}`, "GET", { "x-correlation-id": correlationId });
+  cdp.emit("Network.responseReceived", { requestId: "read", response: { status: 200 } });
+  cdp.emit("Network.loadingFinished", { requestId: "read" });
+  await new Promise((resolve) => setImmediate(resolve));
+  const telemetry = [{ name: "ui.query.result", correlationId, endpoint: "/api/client-v1/orders/:ref", result: "http:200" }];
+  assert.equal(matchG14BrowserChain(monitor, ORDER_REF, telemetry)?.frame.frameId, frameId);
+  assert.equal(matchG14BrowserChain(monitor, ORDER_REF, [{ ...telemetry[0], correlationId: keyForWrongCorrelation() }]), undefined);
+  assert.equal(matchG14BrowserChain({ ...monitor, reads: [{ ...monitor.reads[0], projectionVersion: "4" }] }, ORDER_REF, telemetry), undefined);
+  assert.equal(matchG14BrowserChain({ ...monitor, frames: [{ ...monitor.frames[0], correlationId: keyForWrongCorrelation() }] }, ORDER_REF, telemetry), undefined);
+  assert.equal(matchG14BrowserChain({ ...monitor, commands: [...monitor.commands, { ...monitor.commands[0], kind: "request-aroma-reconciliation" }] }, ORDER_REF, telemetry), undefined);
+});
+
+function keyForWrongCorrelation() { return "00000000-0000-4000-8000-000000000016"; }
 
 function validEvidence() {
   const hash = "b".repeat(64);

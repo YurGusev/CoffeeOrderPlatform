@@ -988,6 +988,146 @@ export function createBrowserNetworkMonitor(cdp, page) {
   return monitor;
 }
 
+export function createG14BrowserNetworkMonitor(cdp) {
+  const streams = new Map();
+  const requests = new Map();
+  const result = { sequence: 0, commands: [], frames: [], reads: [] };
+  cdp.on("Network.requestWillBeSent", (event) => {
+    let url;
+    try { url = new URL(event.request.url); } catch { return; }
+    if (url.origin !== IDENTITY.origin || url.search || url.hash) return;
+    const sequence = ++result.sequence;
+    if (url.pathname === "/events" && event.request.method === "GET") {
+      streams.set(event.requestId, { status: null });
+      return;
+    }
+    const command = /^\/api\/client-v1\/orders\/(ord_[0-9A-HJKMNP-TV-Z]{26})\/commands\/(confirm|request-aroma-reconciliation)$/u.exec(url.pathname);
+    if (command) {
+      result.commands.push({ orderRef: command[1], kind: command[2], method: event.request.method, correlationId: headerValue(event.request.headers, "x-correlation-id"), sequence });
+      return;
+    }
+    const order = /^\/api\/client-v1\/orders\/(ord_[0-9A-HJKMNP-TV-Z]{26})$/u.exec(url.pathname);
+    if (order && event.request.method === "GET") requests.set(event.requestId, { orderRef: order[1], correlationId: headerValue(event.request.headers, "x-correlation-id"), sequence, status: null });
+  });
+  cdp.on("Network.responseReceived", (event) => {
+    const stream = streams.get(event.requestId);
+    if (stream) stream.status = event.response.status;
+    const request = requests.get(event.requestId);
+    if (request) request.status = event.response.status;
+  });
+  cdp.on("Network.eventSourceMessageReceived", (event) => {
+    if (streams.get(event.requestId)?.status !== 200 || event.eventName !== "resource-invalidated.v1" || !/^msg_[0-9A-HJKMNP-TV-Z]{26}$/u.test(event.eventId ?? "")) return;
+    try {
+      const data = JSON.parse(event.data);
+      exactKeys(data, ["subjectType", "subjectRef", "ownerVersion", "reason", "correlationId"], "G14_FRAME_INVALID");
+      if (data.subjectType !== "order" || !REF.order.test(data.subjectRef ?? "") || !/^[1-9]\d{0,18}$/u.test(data.ownerVersion ?? "") || !["OrderChanged", "AromaStateChanged"].includes(data.reason) || !UUID.test(data.correlationId ?? "")) return;
+      result.frames.push({ orderRef: data.subjectRef, ownerVersion: data.ownerVersion, correlationId: data.correlationId, frameId: event.eventId, sequence: ++result.sequence });
+    } catch { /* Invalid frames cannot prove the chain. */ }
+  });
+  cdp.on("Network.loadingFinished", (event) => {
+    const request = requests.get(event.requestId);
+    if (!request) return;
+    requests.delete(event.requestId);
+    void cdp.send("Network.getResponseBody", { requestId: event.requestId }).then(({ body, base64Encoded }) => {
+      const data = JSON.parse(base64Encoded ? Buffer.from(body, "base64").toString("utf8") : body);
+      if (data.orderRef === request.orderRef && /^[1-9]\d{0,18}$/u.test(data.projectionVersion ?? "")) result.reads.push({ ...request, projectionVersion: data.projectionVersion });
+    }).catch(() => {});
+  });
+  return result;
+}
+
+export function matchG14BrowserChain(monitor, orderRef, telemetry) {
+  if (!REF.order.test(orderRef ?? "") || monitor.commands.length !== 1) return undefined;
+  const command = monitor.commands[0];
+  if (command.orderRef !== orderRef || command.kind !== "confirm" || command.method !== "POST" || !UUID.test(command.correlationId ?? "")) return undefined;
+  for (const frame of monitor.frames) {
+    if (frame.orderRef !== orderRef || frame.correlationId !== command.correlationId || frame.sequence <= command.sequence) continue;
+    const read = monitor.reads.find((item) => item.orderRef === orderRef && item.correlationId === command.correlationId && item.sequence > frame.sequence && item.status === 200 && BigInt(item.projectionVersion) >= BigInt(frame.ownerVersion));
+    if (read && telemetry.some((item) => item.name === "ui.query.result" && item.correlationId === command.correlationId && item.endpoint === "/api/client-v1/orders/:ref" && item.result === "http:200")) return { command, frame, read };
+  }
+  return undefined;
+}
+
+export function validateG14BrowserEvidence(evidence, { runId, candidateSha, configSha256 }) {
+  exactKeys(evidence, ["schemaVersion", "purpose", "runId", "candidateSha", "configSha256", "status", "correlationId", "ownerMessageSha256", "realtimeMessageSha256", "ownerVersion", "acceptedVersion", "confirmCount", "reconcileCount", "providerIsolated", "mutationsEnabled", "traceStatus", "browserCleanup"], "G14_BROWSER_EVIDENCE_SCHEMA_INVALID");
+  if (evidence.schemaVersion !== 1 || evidence.purpose !== "G14_BROWSER_CORRELATION" || evidence.runId !== runId || evidence.candidateSha !== candidateSha || evidence.configSha256 !== configSha256 || evidence.status !== "PASS" || !UUID.test(evidence.correlationId ?? "") || !/^[0-9a-f]{64}$/u.test(evidence.ownerMessageSha256 ?? "") || !/^[0-9a-f]{64}$/u.test(evidence.realtimeMessageSha256 ?? "") || !/^[1-9]\d{0,18}$/u.test(evidence.ownerVersion ?? "") || !/^[1-9]\d{0,18}$/u.test(evidence.acceptedVersion ?? "") || BigInt(evidence.acceptedVersion) < BigInt(evidence.ownerVersion) || evidence.confirmCount !== 1 || evidence.reconcileCount !== 0 || evidence.providerIsolated !== true || evidence.mutationsEnabled !== false || evidence.traceStatus !== "NOT_PROVEN" || evidence.browserCleanup !== "EXACT_OWNED_CONTAINER_REMOVED") fail("G14_BROWSER_EVIDENCE_INVALID");
+  return evidence;
+}
+
+export async function proveG14Browser(runtimeContext) {
+  if (!runtimeContext || typeof runtimeContext.attestG14Safety !== "function" || typeof runtimeContext.g14OrderEvidence !== "function" || typeof runtimeContext.throwIfStopRequested !== "function" || !/^[0-9a-f]{40}$/u.test(runtimeContext.candidateSha ?? "") || !/^[0-9]{8}T[0-9]{6}Z-[0-9a-f]{7}$/u.test(runtimeContext.runId ?? "") || !/^[0-9a-f]{64}$/u.test(runtimeContext.configSha256 ?? "")) fail("G14_BROWSER_CONTEXT_INVALID");
+  const driver = await startBrowser(runtimeContext);
+  let context;
+  let cdp;
+  let cleanup;
+  let evidence;
+  try {
+    context = await driver.browser.newContext({ viewport: { width: 1280, height: 900 } });
+    await context.addInitScript(() => {
+      const events = [];
+      Object.defineProperty(window, "__g14Telemetry", { value: events });
+      window.addEventListener("coffee:browser-telemetry", (event) => events.push(event.detail));
+    });
+    const page = await context.newPage();
+    cdp = await context.newCDPSession(page);
+    await cdp.send("Network.enable");
+    const monitor = createG14BrowserNetworkMonitor(cdp);
+    const login = page.waitForResponse((response) => responseMatches(response, "/auth/session", "GET") && response.status() === 200, { timeout: 30000 });
+    await page.goto(`${IDENTITY.origin}/auth/login?returnTo=${encodeURIComponent("/app/customers")}`, { waitUntil: "domcontentloaded" });
+    await login;
+    await page.getByText(IDENTITY.actorRef, { exact: true }).waitFor();
+    const { dialog } = await createCustomerForm(page, randomUUID().slice(0, 12));
+    await dialog.getByRole("button", { name: "Создать и выбрать" }).click();
+    await page.getByRole("button", { name: "Создать черновик" }).click();
+    await page.waitForURL(/\/app\/orders\/ord_[0-9A-HJKMNP-TV-Z]{26}$/u);
+    const orderRef = new URL(page.url()).pathname.split("/").at(-1);
+    if (!REF.order.test(orderRef ?? "")) fail("G14_BROWSER_ORDER_INVALID");
+    await page.getByRole("link", { name: "Открыть каталог" }).click();
+    await page.getByRole("textbox", { name: "Название товара" }).fill("Капучино");
+    await page.getByRole("button", { name: "Найти" }).click();
+    const product = page.locator("article.product-card").filter({ has: page.getByRole("heading", { name: "Капучино", exact: true }) });
+    await product.getByRole("textbox", { name: "Количество для Капучино" }).fill("2");
+    await product.getByRole("button", { name: "Добавить" }).click();
+    await page.getByRole("link", { name: "К заказу" }).click();
+    await page.getByRole("button", { name: "Подтвердить заказ" }).click();
+    runtimeContext.throwIfStopRequested();
+    const safety = await runtimeContext.attestG14Safety();
+    assert.deepEqual(safety, { configSha256: runtimeContext.configSha256, mutationsEnabled: false, providerIsolated: true });
+    const confirmation = page.waitForResponse((response) => responseMatches(response, `/api/client-v1/orders/${orderRef}/commands/confirm`, "POST"), { timeout: 30000 });
+    await page.getByRole("dialog", { name: "Подтвердить заказ?" }).getByRole("button", { name: "Подтвердить", exact: true }).click();
+    assert.equal((await confirmation).status(), 200);
+    const deadline = Date.now() + 30000;
+    let matched;
+    let owner;
+    while (Date.now() < deadline && !owner) {
+      runtimeContext.throwIfStopRequested();
+      const telemetry = await page.evaluate(() => window.__g14Telemetry);
+      matched = matchG14BrowserChain(monitor, orderRef, telemetry);
+      if (matched) {
+        try {
+          owner = await runtimeContext.g14OrderEvidence({ orderRef, correlationId: matched.command.correlationId, frameId: matched.frame.frameId, ownerVersion: matched.frame.ownerVersion });
+        } catch (error) {
+          if (error?.message !== "G14_OWNER_CHAIN_NOT_PROVEN") throw error;
+        }
+      }
+      if (!owner) await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    if (!matched || !owner) fail("G14_BROWSER_CHAIN_NOT_PROVEN");
+    const acceptedVersion = await visibleOrderProjectionVersion(page, orderRef);
+    if (BigInt(acceptedVersion) < BigInt(matched.read.projectionVersion)) fail("G14_BROWSER_VERSION_NOT_ACCEPTED");
+    if (monitor.commands.length !== 1) fail("G14_BROWSER_EXTRA_COMMAND");
+    evidence = { schemaVersion: 1, purpose: "G14_BROWSER_CORRELATION", runId: runtimeContext.runId, candidateSha: runtimeContext.candidateSha, configSha256: safety.configSha256, status: "PASS", correlationId: matched.command.correlationId, ...owner, acceptedVersion, confirmCount: 1, reconcileCount: 0, providerIsolated: true, mutationsEnabled: false, traceStatus: "NOT_PROVEN", browserCleanup: null };
+  } finally {
+    let cleanupError;
+    try { await cdp?.detach(); } catch { cleanupError = true; }
+    try { await context?.close(); } catch { cleanupError = true; }
+    try { cleanup = await driver.close(); } catch { cleanupError = true; }
+    if (cleanupError || cleanup !== "EXACT_OWNED_CONTAINER_REMOVED") fail("G14_BROWSER_CLEANUP_UNCONFIRMED");
+  }
+  evidence.browserCleanup = cleanup;
+  return validateG14BrowserEvidence(evidence, { runId: runtimeContext.runId, candidateSha: runtimeContext.candidateSha, configSha256: runtimeContext.configSha256 });
+}
+
 function waitFor(predicate, code, timeoutMs = 20000) {
   const started = Date.now();
   return new Promise((resolve, reject) => {

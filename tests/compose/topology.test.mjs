@@ -5587,3 +5587,21 @@ void test("external recovery projection accepts canonical mapping once and rejec
     /canonical platform config database differs/u,
   );
 });
+
+void test("G14 provider boundary rejects enabled mutations and non-isolated fixture", async () => {
+  const { validateG14ProviderBoundary } = await import("../../tools/compose-smoke.mjs");
+  const projectName = "coffee-g14";
+  const networkName = `${projectName}_coffee_provider_egress`;
+  const network = { Name: networkName, Id: "b".repeat(64), Internal: true, Labels: { "com.docker.compose.project": projectName, "com.docker.compose.network": "coffee_provider_egress" } };
+  const container = (service, networks) => ({ Id: "a".repeat(64), State: { Running: true }, Config: { Labels: { "com.docker.compose.project": projectName, "com.docker.compose.service": service } }, NetworkSettings: { Networks: networks } });
+  const fixture = container("aroma-provider-fixture", { [networkName]: { NetworkID: network.Id, Aliases: ["aromateacoffee.ru"] } });
+  const internalNetworks = ["coffee_internal_api", "coffee_postgres_data"].map((name, index) => ({ Name: `${projectName}_${name}`, Id: String(index).repeat(64), Internal: true, Labels: { "com.docker.compose.project": projectName, "com.docker.compose.network": name } }));
+  const gateway = container("aroma-gateway", { [networkName]: { NetworkID: network.Id }, ...Object.fromEntries(internalNetworks.map((item) => [item.Name, { NetworkID: item.Id }])) });
+  const input = { projectName, expectedConfigSha256: "c".repeat(64), mounted: { sha256: "c".repeat(64), mutationsEnabled: false }, gateway, fixture, network, internalNetworks };
+  assert.equal(validateG14ProviderBoundary(input).providerIsolated, true);
+  assert.throws(() => validateG14ProviderBoundary({ ...input, mounted: { ...input.mounted, mutationsEnabled: true } }));
+  assert.throws(() => validateG14ProviderBoundary({ ...input, mounted: { ...input.mounted, sha256: "d".repeat(64) } }));
+  assert.throws(() => validateG14ProviderBoundary({ ...input, network: { ...network, Internal: false } }));
+  assert.throws(() => validateG14ProviderBoundary({ ...input, internalNetworks: [{ ...internalNetworks[0], Internal: false }, internalNetworks[1]] }));
+  assert.throws(() => validateG14ProviderBoundary({ ...input, fixture: { ...fixture, NetworkSettings: { Networks: { [networkName]: { NetworkID: network.Id, Aliases: [] } } } } }));
+});
