@@ -1,0 +1,24 @@
+{
+  "candidateSha": "0b7a95b2d7ef210ce2547087aa51d472eae770f6",
+  "scope": "normal zero-owner component; not formal launch admission",
+  "status": "PASS",
+  "runId": "20261031T033022Z-0b7a95b",
+  "durationSeconds": 1506.183,
+  "imageCount": 22,
+  "reportCount": 46,
+  "evaluation": {
+    "rawHigh": 2,
+    "resolvedFixed": 2,
+    "unresolvedHigh": 0,
+    "critical": 0
+  },
+  "cleanupFailures": [],
+  "rawResultSha256": "7c4950388229ce73bf75436dc28b21bb50570123b94fdef0c52d3e2297b3a47c",
+  "rawWrapperReceiptSha256": "62cc1b7d84655f2161aa949ddc464bdee95acd17e15cfd441e10d351468fc976",
+  "formalGateAdmission": false,
+  "alloyConfigValidation": {
+    "exitCode": 0,
+    "validationOnly": true,
+    "rawReceiptSha256": "c94020440c10644fa90338dad4b66a7035773199cfa2f500a15882dca14225a3"
+  }
+}

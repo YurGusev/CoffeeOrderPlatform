@@ -1,6 +1,6 @@
 import {createHash} from 'node:crypto';
 import {execFileSync} from 'node:child_process';
-import {lstat, readFile, writeFile, chmod} from 'node:fs/promises';
+import {lstat, readFile, chmod} from 'node:fs/promises';
 import {lstatSync, realpathSync} from 'node:fs';
 import {dirname, isAbsolute, join, resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -16,7 +16,7 @@ export const OBSERVABILITY_TARGETS = [
   'pricing-service', 'orders-service', 'orders-aroma-preparation', 'aroma-observer',
   'aroma-convergence', 'aroma-gateway', 'realtime-gateway',
 ];
-const TELEMETRY_NETWORKS = [
+export const TELEMETRY_NETWORKS = [
   'coffee_observability', 'coffee_edge_backend', 'coffee_public_api_backend',
   'coffee_internal_api', 'coffee_kafka_event',
 ];
@@ -55,7 +55,7 @@ function docker(args, runDocker) {
 }
 
 export function ensureCollectorConfigOwnership({collectorConfigPath, nodeImage, runDocker = (args, timeout = 10000) => execFileSync('docker', args, {encoding: 'utf8', timeout})} = {}) {
-  if (!/@sha256:[a-f0-9]{64}$/u.test(nodeImage ?? '')) throw new Error('nodeImage BOM digest is required for Collector config ownership');
+  if (!/^(?:sha256:[a-f0-9]{64}|.+@sha256:[a-f0-9]{64})$/u.test(nodeImage ?? '')) throw new Error('nodeImage BOM digest is required for Collector config ownership');
   const helper = [
     'run', '--rm', '--network', 'none', '--read-only', '--user', '0:0', '--cap-drop', 'ALL', '--cap-add', 'CHOWN',
     '--security-opt', 'no-new-privileges:true', '--memory', '64m', '--pids-limit', '16',
@@ -70,7 +70,7 @@ export function ensureCollectorConfigOwnership({collectorConfigPath, nodeImage, 
 }
 
 export function ensureBackendOwnership({storageVolumes, grafanaAdminSecretPath, nodeImage, runDocker = (args, timeout = 10000) => execFileSync('docker', args, {encoding: 'utf8', timeout})} = {}) {
-  if (!/@sha256:[a-f0-9]{64}$/u.test(nodeImage ?? '')) throw new Error('nodeImage BOM digest is required for backend ownership');
+  if (!/^(?:sha256:[a-f0-9]{64}|.+@sha256:[a-f0-9]{64})$/u.test(nodeImage ?? '')) throw new Error('nodeImage BOM digest is required for backend ownership');
   const owners = {grafana: 472, loki: 10001, prometheus: 65534, tempo: 10001};
   for (const name of Object.keys(owners)) {
     const volume = requireValue(storageVolumes?.[name], `${name} storage volume`);
@@ -92,7 +92,7 @@ function hasExactDockerLogPath({containerId, logPath}) {
     dirname(logPath).endsWith(`/${containerId}`) && logPath.endsWith(`/${containerId}-json.log`);
 }
 
-export async function createObservabilityProvenance({root = REPO_ROOT, config, imageRefs, grafanaImage, alertSinkImage, logFiles, storageVolumes, collectorConfigSha256} = {}) {
+export async function createObservabilityProvenance({root = REPO_ROOT, config, imageRefs, grafanaImage, alertSinkImage, logFiles, storageVolumes, collectorConfigSha256, nodeHelperImage = imageRefs.nodeImage} = {}) {
   const sources = {
     platformConfig: 'config/platform.yaml',
     platformSchema: 'config/platform.schema.json',
@@ -109,7 +109,7 @@ export async function createObservabilityProvenance({root = REPO_ROOT, config, i
     schemaVersion: 1,
     generatedAt: new Date().toISOString(),
     sourceSha256,
-    images: {otelCollector: imageRefs.otelCollectorImage, grafanaBase: imageRefs.grafanaImage, loki: imageRefs.lokiImage, prometheus: imageRefs.prometheusImage, tempo: imageRefs.tempoImage, nodeHelper: imageRefs.nodeImage},
+    images: {otelCollector: imageRefs.otelCollectorImage, grafanaBase: imageRefs.grafanaImage, loki: imageRefs.lokiImage, prometheus: imageRefs.prometheusImage, tempo: imageRefs.tempoImage, nodeHelper: nodeHelperImage},
     grafanaImage: {imageId: grafanaImage.imageId, receiptSha256: grafanaImage.receiptSha256, candidateSha: grafanaImage.candidateSha, runId: grafanaImage.runId},
     alertSinkImage: {imageId: alertSinkImage.imageId, receiptSha256: alertSinkImage.receiptSha256, candidateSha: alertSinkImage.candidateSha, runId: alertSinkImage.runId},
     bootstrapProbeSha256: imageRefs.bootstrapProbeSha256,
@@ -147,7 +147,7 @@ export async function createObservabilityProvenance({root = REPO_ROOT, config, i
   };
 }
 
-export async function discoverContainerLogs({projectName, runtimes = OBSERVABILITY_TARGETS, runDocker = (args) => execFileSync('docker', args, {encoding: 'utf8'})} = {}) {
+export async function discoverContainerLogs({projectName, runtimes = OBSERVABILITY_TARGETS, allowMissing = false, runDocker = (args) => execFileSync('docker', args, {encoding: 'utf8'})} = {}) {
   if (!/^[a-z0-9][a-z0-9_-]*$/u.test(projectName ?? '')) throw new Error('projectName must be a lowercase Compose project name');
   const discovered = [];
   for (const service of runtimes) {
@@ -155,6 +155,7 @@ export async function discoverContainerLogs({projectName, runtimes = OBSERVABILI
       'ps', '--quiet', '--no-trunc', '--filter', 'status=running', '--filter', `label=com.docker.compose.project=${projectName}`,
       '--filter', `label=com.docker.compose.service=${service}`,
     ], runDocker).trim().split(/\s+/u).filter(Boolean);
+    if (ids.length === 0 && allowMissing) continue;
     if (ids.length !== 1) throw new Error(`${service}: expected exactly one running container in Compose project ${projectName}`);
     const inspected = JSON.parse(docker(['inspect', ids[0]], runDocker))[0];
     if (inspected?.Id !== ids[0] || inspected?.State?.Running !== true ||
@@ -171,13 +172,30 @@ export async function discoverContainerLogs({projectName, runtimes = OBSERVABILI
   return discovered;
 }
 
+export function assertTelemetryNetworks({projectName, logFiles, observabilityNetworkName = 'coffee_observability', runDocker = (args) => execFileSync('docker', args, {encoding: 'utf8'})} = {}) {
+  const networks = logFiles.length ? TELEMETRY_NETWORKS : ['coffee_observability'];
+  for (const logicalName of networks) {
+    const name = logicalName === 'coffee_observability' ? observabilityNetworkName : logicalName;
+    let rows;
+    try { rows = JSON.parse(runDocker(['network', 'inspect', name])); }
+    catch (error) {
+      if (/no such network|network [^\n]+ not found/iu.test(String(error.stderr ?? error.message))) continue;
+      throw error;
+    }
+    const network = rows[0];
+    if (rows.length !== 1 || network?.Name !== name || network.Driver !== 'bridge' || network.Internal !== true ||
+        network.Labels?.['com.docker.compose.project'] !== projectName || network.Labels['com.docker.compose.network'] !== logicalName)
+      throw new Error(`${name}: telemetry network does not belong to this installation`);
+  }
+}
+
 export function createCollectorConfig({config, logFiles, exporterToken} = {}) {
   const collector = requireValue(config?.telemetry?.collector, 'telemetry.collector');
   const nginxStatusEndpoint = requireValue(config?.telemetry?.nginxStatusEndpoint, 'telemetry.nginxStatusEndpoint');
   if (!/^http:\/\/edge-nginx:[1-9][0-9]{0,4}\/nginx_status$/u.test(nginxStatusEndpoint) || Number(new URL(nginxStatusEndpoint).port) > 65535)
     throw new Error('telemetry.nginxStatusEndpoint must be the private edge-nginx stub_status endpoint');
   requireValue(exporterToken, 'telemetry.exporterToken');
-  if (!Array.isArray(logFiles) || logFiles.length === 0 ||
+  if (!Array.isArray(logFiles) ||
       new Set(logFiles.map(({service}) => service)).size !== logFiles.length ||
       logFiles.some((entry) => !OBSERVABILITY_TARGETS.includes(entry.service) || !hasExactDockerLogPath(entry))) {
     throw new Error('logFiles must contain unique exact Docker json-file paths for selected runtimes');
@@ -200,7 +218,7 @@ export function createCollectorConfig({config, logFiles, exporterToken} = {}) {
     `set(resource.attributes["deployment.environment"], ${JSON.stringify(config.environment)})`,
   ];
   const pipelines = {};
-  for (const signal of ['logs', 'traces', 'metrics']) {
+  for (const signal of [...(logFiles.length ? ['logs'] : []), 'traces', 'metrics']) {
     pipelines[signal] = {
       receivers: signal === 'logs' ? ['filelog'] : ['otlp'],
       processors: ['memory_limiter', ...(signal === 'logs' ? ['transform/records'] : signal === 'metrics' ? ['transform/metric_names'] : []), 'batch'],
@@ -216,7 +234,7 @@ export function createCollectorConfig({config, logFiles, exporterToken} = {}) {
   }
   return {
     extensions: {
-      file_storage: {directory: '/var/lib/alloy/file_storage', fsync: true},
+      ...(logFiles.length ? {file_storage: {directory: '/var/lib/alloy/file_storage', fsync: true}} : {}),
       'bearertokenauth/server': {scheme: 'Bearer', token: exporterToken},
     },
     receivers: {
@@ -228,7 +246,7 @@ export function createCollectorConfig({config, logFiles, exporterToken} = {}) {
           },
         },
       },
-      filelog: {
+      ...(logFiles.length ? {filelog: {
         include,
         include_file_path: true,
         start_at: 'beginning',
@@ -277,7 +295,7 @@ export function createCollectorConfig({config, logFiles, exporterToken} = {}) {
             on_error: 'drop_quiet',
           },
         ],
-      },
+      }} : {}),
       ...(includeNginxMetrics ? {
         nginx: {
           endpoint: nginxStatusEndpoint,
@@ -324,7 +342,7 @@ export function createCollectorConfig({config, logFiles, exporterToken} = {}) {
       } : {}),
 
     },
-    exporters: Object.fromEntries(['logs', 'traces', 'metrics'].map((signal) => [
+    exporters: Object.fromEntries([...(logFiles.length ? ['logs'] : []), 'traces', 'metrics'].map((signal) => [
       `otlp_http/${signal}`,
       {
         endpoint: signal === 'logs' ? `${config.telemetry.loki.endpoint}/otlp` : signal === 'metrics' ? `${config.telemetry.prometheus.endpoint}/api/v1/otlp` : config.telemetry.tempo.otlpEndpoint,
@@ -346,7 +364,7 @@ export function createCollectorConfig({config, logFiles, exporterToken} = {}) {
       },
     ])),
     service: {
-      extensions: ['file_storage', 'bearertokenauth/server'],
+      extensions: [...(logFiles.length ? ['file_storage'] : []), 'bearertokenauth/server'],
       pipelines,
     },
   };
@@ -374,7 +392,7 @@ export function createAlloyConfig({config, logFiles, exporterToken} = {}) {
     `set(resource.attributes["service.version"], ${JSON.stringify(config.telemetry.releaseDigest)})`,
     `set(resource.attributes["deployment.environment"], ${JSON.stringify(config.environment)})`,
   ];
-  const exporters = ['logs', 'metrics', 'traces'].map(signal => {
+  const exporters = [...(filelog ? ['logs'] : []), 'metrics', 'traces'].map(signal => {
     const exporter = ir.exporters[`otlp_http/${signal}`];
     return `otelcol.exporter.otlphttp ${value(signal)} {
   client {
@@ -416,12 +434,13 @@ otelcol.processor.transform "nginx_resource" {
   output { metrics = [otelcol.processor.transform.metrics.input] }
 }
 ` : '';
-  const rendered = `otelcol.storage.file "checkpoints" {
+  const storage = filelog ? `otelcol.storage.file "checkpoints" {
   directory = "/var/lib/alloy/file_storage"
   create_directory = true
   fsync = true
 }
-otelcol.auth.bearer "producer" { token = ${value(exporterToken)} }
+` : '';
+  const rendered = `${storage}otelcol.auth.bearer "producer" { token = ${value(exporterToken)} }
 otelcol.receiver.otlp "producer" {
   http {
     endpoint = ${value(`0.0.0.0:${endpointPort(collector.otlpEndpoint, 'telemetry.collector.otlpEndpoint')}`)}
@@ -432,7 +451,7 @@ otelcol.receiver.otlp "producer" {
     traces = [otelcol.processor.memory_limiter.main.input]
   }
 }
-otelcol.receiver.filelog "runtime" {
+${filelog ? `otelcol.receiver.filelog "runtime" {
   include = ${value(filelog.include)}
   include_file_path = true
   start_at = "beginning"
@@ -447,12 +466,11 @@ otelcol.receiver.filelog "runtime" {
   }
   output { logs = [otelcol.processor.memory_limiter.main.input] }
 }
-otelcol.processor.memory_limiter "main" {
+` : ''}otelcol.processor.memory_limiter "main" {
   ${limit}
   output {
     metrics = [otelcol.processor.transform.metrics.input]
-    logs = [otelcol.processor.transform.logs.input]
-    traces = [otelcol.processor.batch.main.input]
+    ${filelog ? 'logs = [otelcol.processor.transform.logs.input]\n    ' : ''}traces = [otelcol.processor.batch.main.input]
   }
 }
 otelcol.processor.transform "metrics" {
@@ -463,7 +481,7 @@ otelcol.processor.transform "metrics" {
   }
   output { metrics = [otelcol.processor.batch.main.input] }
 }
-otelcol.processor.transform "logs" {
+${filelog ? `otelcol.processor.transform "logs" {
   error_mode = "propagate"
   log_statements {
     context = "log"
@@ -471,14 +489,13 @@ otelcol.processor.transform "logs" {
   }
   output { logs = [otelcol.processor.batch.main.input] }
 }
-otelcol.processor.batch "main" {
+` : ''}otelcol.processor.batch "main" {
   timeout = ${value(`${collector.batchTimeoutMs}ms`)}
   send_batch_size = ${collector.batchSize}
   send_batch_max_size = ${collector.batchSize}
   output {
     metrics = [otelcol.exporter.otlphttp.metrics.input]
-    logs = [otelcol.exporter.otlphttp.logs.input]
-    traces = [otelcol.exporter.otlphttp.traces.input]
+    ${filelog ? 'logs = [otelcol.exporter.otlphttp.logs.input]\n    ' : ''}traces = [otelcol.exporter.otlphttp.traces.input]
   }
 }
 ${exporters}
@@ -638,7 +655,7 @@ export function createComposeOverride({config, imageRefs, grafanaImage, alertSin
       'otel-collector': {
         image: imageRefs.otelCollectorImage, command: ['run', '--storage.path=/var/lib/alloy', `--server.http.listen-addr=127.0.0.1:${endpointPort(config.telemetry.collector.healthEndpoint, 'telemetry.collector.healthEndpoint')}`, '--server.http.enable-pprof=false', '--server.http.disable-support-bundle=true', '--disable-reporting', '--stability.level=experimental', '/etc/alloy/config.alloy'], restart: 'unless-stopped', stop_grace_period: `${config.platform.shutdownGraceMs}ms`, init: true, read_only: true, user: '0:0', security_opt: ['no-new-privileges:true'], cap_drop: ['ALL'], cpus: 1, mem_limit: `${config.telemetry.collector.containerMemoryMiB}m`, pids_limit: 128, tmpfs: ['/tmp:rw,noexec,nosuid,nodev,size=8m'],
         volumes: [{type: 'bind', source: collectorConfigPath, target: '/etc/alloy/config.alloy', read_only: true}, probeMount, {type: 'volume', source: 'collector_checkpoints', target: '/var/lib/alloy', volume: {nocopy: true}}, ...['grafana', 'loki', 'prometheus', 'tempo'].map(name => ({type: 'volume', source: `${name}_data`, target: `/telemetry-storage/${name}`, read_only: true})), ...logVolumes],
-        expose: [String(endpointPort(config.telemetry.collector.otlpEndpoint, 'telemetry.collector.otlpEndpoint'))], networks: TELEMETRY_NETWORKS,
+        expose: [String(endpointPort(config.telemetry.collector.otlpEndpoint, 'telemetry.collector.otlpEndpoint'))], networks: logFiles.length ? TELEMETRY_NETWORKS : ['coffee_observability'],
         depends_on: Object.fromEntries(['loki', 'prometheus', 'tempo'].map((name) => [name, {condition: 'service_healthy'}])),
         healthcheck: healthcheck(`http://127.0.0.1:${endpointPort(config.telemetry.collector.healthEndpoint, 'telemetry.collector.healthEndpoint')}/-/ready`), logging,
       }, grafana, loki, prometheus, tempo,
@@ -683,13 +700,28 @@ export async function generateRuntimeLoggingOverride({root = REPO_ROOT, outputDi
   return {path};
 }
 
+export async function writeBackendConfigs(outputDir, backendConfigs) {
+  await ensurePrivateSecretDirectory(outputDir);
+  const paths = {};
+  for (const [name, value] of Object.entries(backendConfigs)) {
+    const filename = name === 'alerts' || name === 'contacts' ? `grafana-${name}.yaml` : `${name}.yaml`;
+    const path = join(outputDir, filename);
+    await writePrivateSecret(path, dumpYaml(value, {noRefs: true, lineWidth: 120}));
+    await chmod(path, 0o444);
+    paths[name] = path;
+  }
+  return paths;
+}
+
 export async function generate({root = REPO_ROOT, projectName, outputDir = '/dev/shm/coffee-platform-observability', secretsPath = '/dev/shm/coffee-platform-observability-secrets/collector.json', grafanaAdminSecretPath = '/dev/shm/coffee-platform-grafana-bootstrap/admin-secret', probePath = '/usr/bin/busybox', storageVolumes, alertEvidenceDir, observabilityNetworkName, runDocker} = {}) {
   const config = await loadPlatformConfig(root);
   const imageRefs = JSON.parse(await readFile(join(root, 'config/toolchain-versions.json'), 'utf8'));
   await verifyBootstrapProbe({probePath, expectedSha256: imageRefs.bootstrapProbeSha256});
-  const alertSinkImage = await loadVerifiedGateImage({target: 'storage-helper'});
-  const grafanaImage = await loadVerifiedGateImage({target: 'grafana'});
-  const logFiles = await discoverContainerLogs({projectName, runDocker});
+  const alertSinkImage = await loadVerifiedGateImage({target: 'storage-helper', loadImage: false});
+  const grafanaImage = await loadVerifiedGateImage({target: 'grafana', loadImage: false});
+  const run = (args, timeout = 10000) => (runDocker ?? ((command, limit) => execFileSync('docker', command, {encoding: 'utf8', timeout: limit})))(args[0] === 'run' ? ['run', '--pull=never', ...args.slice(1)] : args, timeout);
+  const logFiles = await discoverContainerLogs({projectName, allowMissing: true, runDocker: run});
+  assertTelemetryNetworks({projectName, logFiles, observabilityNetworkName, runDocker: run});
   for (const [path, label] of [[secretsPath, 'collector'], [grafanaAdminSecretPath, 'grafana admin']]) {
     const info = await lstat(path);
     if (!info.isFile() || info.isSymbolicLink() || (info.mode & 0o777) !== 0o400) throw new Error(`${label} scoped secret file must be regular and mode 0400`);
@@ -704,20 +736,15 @@ export async function generate({root = REPO_ROOT, projectName, outputDir = '/dev
   const {createGrafanaAlertProvisioning} = await import('./alerts.mjs');
   const provisioning = createGrafanaAlertProvisioning(config, {notificationUrl: config.telemetry.alerts.notificationEndpoint});
   const backendConfigs = {...createBackendConfigs(config), ...provisioning};
-  const backendConfigPaths = {};
-  for (const [name, value] of Object.entries(backendConfigs)) {
-    const filename = name === 'alerts' || name === 'contacts' ? `grafana-${name}.yaml` : `${name}.yaml`;
-    const path = join(outputDir, filename);
-    await writeFile(path, dumpYaml(value, {noRefs: true, lineWidth: 120}), {mode: 0o444});
-    await chmod(path, 0o444);
-    backendConfigPaths[name] = path;
-  }
-  const composeYaml = dumpYaml(createComposeOverride({config, imageRefs, grafanaImage: grafanaImage.imageId, alertSinkImage: alertSinkImage.imageId, logFiles, collectorConfigPath, probePath, storageVolumes, backendConfigPaths, grafanaAdminSecretPath, alertSinkPath: join(root, 'tools/observability/alert-sink.mjs'), alertEvidenceDir, observabilityNetworkName}), {noRefs: true, lineWidth: 120});
+  const backendConfigPaths = await writeBackendConfigs(outputDir, backendConfigs);
+  const composeOverride = createComposeOverride({config, imageRefs, grafanaImage: grafanaImage.imageId, alertSinkImage: alertSinkImage.imageId, logFiles, collectorConfigPath, probePath, storageVolumes, backendConfigPaths, grafanaAdminSecretPath, alertSinkPath: join(root, 'tools/observability/alert-sink.mjs'), alertEvidenceDir, observabilityNetworkName});
+  for (const name of ['grafana', 'loki', 'prometheus', 'tempo', 'otel-collector', 'alert-sink']) composeOverride.services[name].restart = 'on-failure';
+  const composeYaml = dumpYaml(composeOverride, {noRefs: true, lineWidth: 120});
   await writePrivateSecret(composeOverridePath, composeYaml);
-  const provenance = await createObservabilityProvenance({root, config, imageRefs, grafanaImage, alertSinkImage, logFiles, storageVolumes, collectorConfigSha256: createHash('sha256').update(collectorYaml).digest('hex')});
+  const provenance = await createObservabilityProvenance({root, config, imageRefs, grafanaImage, alertSinkImage, logFiles, storageVolumes, collectorConfigSha256: createHash('sha256').update(collectorYaml).digest('hex'), nodeHelperImage: alertSinkImage.imageId});
   await writePrivateSecret(provenancePath, `${JSON.stringify(provenance, null, 2)}\n`);
-  const collectorConfigOwnership = ensureCollectorConfigOwnership({collectorConfigPath, nodeImage: imageRefs.nodeImage, runDocker});
-  const backendOwnership = ensureBackendOwnership({storageVolumes, grafanaAdminSecretPath, nodeImage: imageRefs.nodeImage, runDocker});
+  const collectorConfigOwnership = ensureCollectorConfigOwnership({collectorConfigPath, nodeImage: alertSinkImage.imageId, runDocker: run});
+  const backendOwnership = ensureBackendOwnership({storageVolumes, grafanaAdminSecretPath, nodeImage: alertSinkImage.imageId, runDocker: run});
   return {collectorConfigPath, composeOverridePath, provenancePath, backendConfigPaths, logFiles, collectorConfigOwnership, backendOwnership};
 }
 
