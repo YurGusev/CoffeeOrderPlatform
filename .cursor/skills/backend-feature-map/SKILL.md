@@ -6,8 +6,9 @@ description: Карта операций и событий бэкенда apps �
 # Карта фич бэкенда
 
 Это указатель, а не прогон. Сервисы он не поднимает. Живой срез customer остаётся в
-[customer-slice-verify](../customer-slice-verify/SKILL.md). Карта экранов `apps/web`
-остаётся в [verify-web](../verify-web/SKILL.md).
+[customer-slice-verify](../customer-slice-verify/SKILL.md). Живой срез catalog-service
+остаётся в [catalog-slice-verify](../catalog-slice-verify/SKILL.md). Карта экранов
+`apps/web` остаётся в [verify-web](../verify-web/SKILL.md).
 
 Состав сервисов и строки покрытия лежат в [README.md](README.md). У каждого
 сервиса свой файл в `features/`.
