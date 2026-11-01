@@ -9,9 +9,11 @@ import {
 import {
   access,
   chmod,
+  cp,
   mkdir,
   mkdtemp,
   readFile,
+  readdir,
   rename,
   rm,
   stat,
@@ -25,7 +27,7 @@ import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { Readable } from "node:stream";
-import { pathToFileURL } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import test from "node:test";
 import {
   captureKafkaNamespaceArtifact,
@@ -84,6 +86,7 @@ import {
   createAromaMutationGrant,
   createG16Checkout,
   buildG16ChildConfig,
+  handleControlledG16ChildFailure,
   readApprovedG16Policy,
   createAromaProviderMutationGuard,
   inspectAromaProfile,
@@ -95,6 +98,7 @@ import {
   safeAromaDiagnostic,
   safeAromaFailureCode,
   safeAromaPhaseFailureEvidence,
+  sanitizeControlledG16Recovery,
   startAcknowledgementDropProxy,
   validateAromaPackingWireProof,
   validateControlledG16Result,
@@ -159,6 +163,98 @@ import {
   writeUnitEvidenceArtifacts,
 } from "./scenarios/unit.mjs";
 import { selectFormatPaths } from "../../../scripts/format.mjs";
+
+void test("launch controller reaches evidence preflight without compiled services", async (t) => {
+  const source = fileURLToPath(new URL("../../..", import.meta.url));
+  const temporary = await mkdtemp(join(tmpdir(), "launch-controller-test-"));
+  t.after(() => rm(temporary, { recursive: true, force: true }));
+  const controller = join(temporary, "controller");
+  const outside = join(temporary, "outside");
+  await mkdir(controller);
+  await mkdir(outside);
+  const archive = execFileSync("git", ["archive", "--format=tar", "HEAD"], {
+    cwd: source,
+    maxBuffer: 128 * 1024 * 1024,
+  });
+  execFileSync("tar", ["-x", "-C", controller], { input: archive });
+  for (const path of [
+    "tools/compose-smoke.mjs",
+    "tools/runtime-image-inventory.mjs",
+    "verification/launch/v1/run.mjs",
+  ])
+    await cp(join(source, path), join(controller, path));
+  await rm(join(controller, "evidence/launch"), {
+    recursive: true,
+    force: true,
+  });
+  const git = (...args) =>
+    execFileSync("git", args, { cwd: controller, stdio: "ignore" });
+  git("init", "-q");
+  git("add", "-A");
+  git(
+    "-c",
+    "user.name=Test",
+    "-c",
+    "user.email=test@example.invalid",
+    "-c",
+    "core.hooksPath=/dev/null",
+    "commit",
+    "-qm",
+    "isolated controller fixture",
+  );
+  await symlink(join(source, "node_modules"), join(controller, "node_modules"));
+  await symlink(
+    join(source, "apps/web/node_modules"),
+    join(controller, "apps/web/node_modules"),
+  );
+  await cp(
+    join(source, "packages/platform-config/dist"),
+    join(controller, "packages/platform-config/dist"),
+    { recursive: true },
+  );
+  const directories = [join(controller, "apps"), join(controller, "packages")];
+  while (directories.length) {
+    const parent = directories.pop();
+    assert.ok(parent);
+    for (const entry of await readdir(parent, { withFileTypes: true })) {
+      if (!entry.isDirectory() || entry.name === "node_modules") continue;
+      const path = join(parent, entry.name);
+      if (entry.name === "dist")
+        assert.equal(path, join(controller, "packages/platform-config/dist"));
+      else directories.push(path);
+    }
+  }
+  await writeFile(
+    join(controller, ".git/info/exclude"),
+    "/evidence/launch\n/node_modules\n/apps/web/node_modules\n",
+    { flag: "a" },
+  );
+  await symlink(outside, join(controller, "evidence/launch"));
+  assert.equal(
+    execFileSync("git", ["status", "--porcelain=v1", "--untracked-files=all"], {
+      cwd: controller,
+      encoding: "utf8",
+    }),
+    "",
+  );
+  const result = spawnSync(
+    process.execPath,
+    ["verification/launch/v1/run.mjs"],
+    {
+      cwd: controller,
+      env: { ...process.env, TMPDIR: temporary },
+      encoding: "utf8",
+      timeout: 60_000,
+    },
+  );
+  assert.equal(result.status, 1, result.stderr);
+  assert.match(
+    result.stderr,
+    /Evidence parent не является обычным каталогом: evidence\/launch/u,
+  );
+  assert.doesNotMatch(result.stderr, /ERR_MODULE_NOT_FOUND/u);
+  assert.deepEqual(await readdir(outside), []);
+});
 
 void test("launch data temporary directory is private, canonical and gate scoped", async (t) => {
   const directory = await mkdtemp(join(tmpdir(), "launch-data-temp-test-"));
@@ -3121,6 +3217,180 @@ void test("G16 controlled result requires bound phases, restore and owned cleanu
     assert.throws(
       () => validateControlledG16Result(altered, context, policy, image),
       /G16_CHILD_RESULT_INVALID/u,
+    );
+  }
+});
+
+void test("G16 parent persists sanitized recovery from a failed managed child", async (t) => {
+  const root = fileURLToPath(new URL("../../..", import.meta.url));
+  const parent = {
+    runId: "20261031T120000Z-1234567",
+    candidateSha: execFileSync("git", ["rev-parse", "HEAD"], {
+      cwd: root,
+      encoding: "utf8",
+    }).trim(),
+  };
+  const childContext = {
+    runId: "20261031T123456Z-abcdef0",
+    candidateSha: `abcdef0${"1".repeat(33)}`,
+  };
+  const policy = await readApprovedG16Policy(root, parent.candidateSha);
+  const image = JSON.parse(
+    await readFile(join(root, "config/toolchain-versions.json"), "utf8"),
+  ).postgresImage;
+  const names = aromaSandboxResourceNames(childContext.runId);
+  const outcome = {
+    gate: "G16_AROMA_SANDBOX",
+    status: "FAIL",
+    code: "RECOVERY_REQUIRED",
+    ...childContext,
+    mode: policy.mode,
+    origin: policy.origin,
+    accountFingerprint: policy.accountFingerprint,
+    secret: "NO_LEAK_SENTINEL",
+    recovery: {
+      runId: childContext.runId,
+      stage: "phases",
+      failureCode: "AROMA_RESTART_RECOVERY_FAILED",
+      diagnostic: { substage: "selection", ownerCode: "NO_LEAK_SENTINEL" },
+      cartState: "UNRESOLVED_OR_NONBASELINE",
+      mutationsDisabled: true,
+      requiredAction: "CONTROLLED_G16_RECOVERY_BEFORE_RESOURCE_CLEANUP",
+      cleanup: { removed: false, retained: true },
+      resourceIDs: {
+        runId: childContext.runId,
+        image,
+        imageId: `sha256:${"4".repeat(64)}`,
+        container: {
+          name: names.container,
+          id: "5".repeat(64),
+          label: "coffee.g16.run-id",
+        },
+        network: {
+          name: names.network,
+          id: "6".repeat(64),
+          label: "coffee.g16.run-id",
+        },
+        databaseSystemIdentifier: "7613370342949990434",
+      },
+    },
+    failureEvidence: {
+      partialPhaseEvidence: [
+        {
+          phase: "baseline-read",
+          status: "PASS",
+          capturedAtUtc: "2026-10-31T12:00:00Z",
+        },
+        {
+          phase: "single-mutation",
+          status: "FAIL",
+          capturedAtUtc: "2026-10-31T12:01:00Z",
+        },
+      ],
+      convergenceEvidence: {
+        latestAttempt: {
+          state: "UnknownOutcome",
+          failureCode: "AROMA_OPERATION_UNKNOWN_OUTCOME",
+          blockerCodes: [],
+          selectedAction: "SetQuantity",
+          selectedOfferMatches: true,
+        },
+        reservationStateCounts: [{ state: "UnknownOutcome", count: 1 }],
+        gatewayJournalStateCounts: [],
+      },
+    },
+  };
+  const directory = await mkdtemp(join(tmpdir(), "coffee-g16-failure-test-"));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  for (const [name, line, signerApproved, expected] of [
+    ["valid", JSON.stringify(outcome), true, "RECOVERY_REQUIRED"],
+    ["malformed", "{NO_LEAK_SENTINEL", true, "G16_CHILD_FAILURE_UNVERIFIED"],
+    [
+      "unapproved",
+      JSON.stringify(outcome),
+      false,
+      "G16_CHILD_FAILURE_UNVERIFIED",
+    ],
+    [
+      "foreign",
+      JSON.stringify({ ...outcome, candidateSha: "0".repeat(40) }),
+      true,
+      "G16_CHILD_FAILURE_UNVERIFIED",
+    ],
+  ]) {
+    const artifacts = join(directory, name);
+    await mkdir(artifacts, { mode: 0o700 });
+    const source = `process.stdout.write(${JSON.stringify(`${line}\n`)});process.stderr.write('NO_LEAK_SENTINEL');process.exitCode=1`;
+    let failure;
+    try {
+      await runManagedRollbackChild({
+        args: ["--input-type=module", "-e", source],
+        cwd: root,
+        env: process.env,
+      }).catch((error) =>
+        handleControlledG16ChildFailure({
+          error,
+          parent,
+          childContext,
+          candidateRoot: root,
+          signerApproved,
+          approvalRequests: 1,
+          artifacts,
+        }),
+      );
+      assert.fail("failed child must reject");
+    } catch (error) {
+      failure = error;
+    }
+    assert.equal(failure.message, expected);
+    assert.equal(safeAromaFailureCode(failure), expected);
+    const path = join(artifacts, "controlled-child-failure.json");
+    const bytes = await readFile(path);
+    const receipt = JSON.parse(bytes);
+    assert.equal((await stat(path)).mode & 0o777, 0o600);
+    assert.equal(
+      createHash("sha256").update(bytes).digest("hex"),
+      failure.safeDetails.failureReceipt.sha256,
+    );
+    assert.equal(receipt.status, "FAIL");
+    assert.equal(receipt.code, expected);
+    assert.equal(receipt.childFailure, "ROLLBACK_CHILD_FAILED");
+    assert.equal(bytes.includes("NO_LEAK_SENTINEL"), false);
+    assert.equal(
+      JSON.stringify(failure.safeDetails).includes("NO_LEAK_SENTINEL"),
+      false,
+    );
+    if (name === "valid") {
+      assert.equal(receipt.recovery.resourceIDs.container.id, "5".repeat(64));
+      assert.equal(receipt.failureEvidence.partialPhaseEvidence.length, 2);
+      assert.deepEqual(failure.safeDetails.recovery, receipt.recovery);
+    } else assert.equal(receipt.recovery, undefined);
+  }
+  for (const mutate of [
+    (value) => {
+      value.runId = "foreign";
+    },
+    (value) => {
+      value.candidateSha = "0".repeat(40);
+    },
+    (value) => {
+      value.accountFingerprint = "foreign";
+    },
+    (value) => {
+      value.recovery.resourceIDs.network.id = "foreign";
+    },
+    (value) => {
+      value.recovery.cleanup.retained = false;
+    },
+    (value) => {
+      value.failureEvidence.partialPhaseEvidence.at(-1).status = "PASS";
+    },
+  ]) {
+    const altered = structuredClone(outcome);
+    mutate(altered);
+    assert.equal(
+      sanitizeControlledG16Recovery(altered, childContext, policy, image),
+      null,
     );
   }
 });

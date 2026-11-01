@@ -1173,6 +1173,8 @@ const SAFE_FAILURE_CODES = new Set([
   "AROMA_PACKING_WIRE_PROOF_NOT_PROVEN",
   "AROMA_CATALOG_STAGE_FAILED",
   "AROMA_SANDBOX_CATALOG_CHECK_FAILED",
+  "RECOVERY_REQUIRED",
+  "G16_CHILD_FAILURE_UNVERIFIED",
 ]);
 
 export function safeAromaFailureCode(error) {
@@ -3074,6 +3076,7 @@ async function runAromaSandbox({ approvalFile, env = process.env } = {}) {
   const databases = {};
   let gateway;
   let baseline;
+  let verifiedAccountFingerprint;
   let mutationsAuthorized = false;
   let preserveResources = false;
   const cleanupEvidence = { removed: false, retained: false };
@@ -3165,6 +3168,7 @@ async function runAromaSandbox({ approvalFile, env = process.env } = {}) {
       policy,
       signal,
     });
+    verifiedAccountFingerprint = profile.accountFingerprint;
     currentStage = "baseline";
     baseline = await gateway.reader.read(signal);
     demand(
@@ -3371,6 +3375,7 @@ async function runAromaSandbox({ approvalFile, env = process.env } = {}) {
         return {
           status: "FAIL",
           code: "RECOVERY_REQUIRED",
+          accountFingerprint: verifiedAccountFingerprint,
           recovery: {
             runId,
             stage: checkedStage(currentStage),
@@ -3431,6 +3436,120 @@ const G16_PHASES = [
   "final-read",
 ];
 const digest = (bytes) => createHash("sha256").update(bytes).digest("hex");
+
+export function sanitizeControlledG16Recovery(outcome, context, policy, image) {
+  const recovery = outcome?.recovery;
+  const ids = recovery?.resourceIDs;
+  const names = aromaSandboxResourceNames(context.runId);
+  if (
+    outcome?.gate !== "G16_AROMA_SANDBOX" ||
+    outcome.status !== "FAIL" ||
+    outcome.code !== "RECOVERY_REQUIRED" ||
+    outcome.runId !== context.runId ||
+    outcome.candidateSha !== context.candidateSha ||
+    outcome.mode !== policy.mode ||
+    outcome.origin !== policy.origin ||
+    outcome.accountFingerprint !== policy.accountFingerprint ||
+    recovery?.runId !== context.runId ||
+    !SANDBOX_STAGES.includes(recovery.stage) ||
+    recovery.cartState !== "UNRESOLVED_OR_NONBASELINE" ||
+    recovery.mutationsDisabled !== true ||
+    recovery.requiredAction !==
+      "CONTROLLED_G16_RECOVERY_BEFORE_RESOURCE_CLEANUP" ||
+    recovery.cleanup?.removed !== false ||
+    recovery.cleanup?.retained !== true ||
+    recovery.cleanup?.failed ||
+    ids?.runId !== context.runId ||
+    ids.image !== image ||
+    !/^sha256:[a-f0-9]{64}$/u.test(ids.imageId ?? "") ||
+    ids.container?.name !== names.container ||
+    ids.network?.name !== names.network ||
+    ids.container?.label !== "coffee.g16.run-id" ||
+    ids.network?.label !== "coffee.g16.run-id" ||
+    !/^[a-f0-9]{64}$/u.test(ids.container?.id ?? "") ||
+    !/^[a-f0-9]{64}$/u.test(ids.network?.id ?? "") ||
+    !/^[0-9]{1,20}$/u.test(ids.databaseSystemIdentifier ?? "")
+  )
+    return null;
+  const partial = outcome.failureEvidence?.partialPhaseEvidence;
+  let failureEvidence;
+  if (partial !== undefined) {
+    if (!Array.isArray(partial) || partial.length === 0) return null;
+    const last = partial.at(-1);
+    if (last?.status !== "FAIL") return null;
+    const convergence = outcome.failureEvidence.convergenceEvidence;
+    const latest = convergence?.latestAttempt;
+    failureEvidence = safeAromaPhaseFailureEvidence({
+      completedPhases: partial.slice(0, -1),
+      failedPhase: last.phase,
+      failedAtUtc: last.capturedAtUtc,
+      convergenceEvidence: convergence && {
+        latestAttempt: latest && {
+          state: latest.state,
+          failure_code: latest.failureCode,
+          blocker_codes: latest.blockerCodes,
+          selected_action: latest.selectedAction,
+          selected_offer_matches: latest.selectedOfferMatches,
+        },
+        reservationStateCounts: convergence.reservationStateCounts,
+        gatewayJournalStateCounts: convergence.gatewayJournalStateCounts,
+      },
+    });
+    if (!failureEvidence) return null;
+  }
+  const checkedDiagnostic = safeAromaDiagnostic({
+    safeDiagnostic: recovery.diagnostic,
+  });
+  const diagnostic = checkedDiagnostic && {
+    substage: checkedDiagnostic.substage,
+    ...(SAFE_FAILURE_CODES.has(checkedDiagnostic.ownerCode)
+      ? { ownerCode: checkedDiagnostic.ownerCode }
+      : {}),
+    ...(SAFE_FAILURE_CODES.has(checkedDiagnostic.causeCode)
+      ? { causeCode: checkedDiagnostic.causeCode }
+      : {}),
+    ...(checkedDiagnostic.sqlState
+      ? { sqlState: checkedDiagnostic.sqlState }
+      : {}),
+  };
+  return {
+    gate: "G16_AROMA_SANDBOX",
+    status: "FAIL",
+    code: "RECOVERY_REQUIRED",
+    runId: context.runId,
+    candidateSha: context.candidateSha,
+    mode: policy.mode,
+    origin: policy.origin,
+    accountFingerprint: policy.accountFingerprint,
+    recovery: {
+      runId: context.runId,
+      stage: recovery.stage,
+      failureCode: safeAromaFailureCode(new Error(recovery.failureCode)),
+      ...(diagnostic ? { diagnostic } : {}),
+      cartState: "UNRESOLVED_OR_NONBASELINE",
+      mutationsDisabled: true,
+      resourceIDs: {
+        runId: context.runId,
+        image,
+        imageId: ids.imageId,
+        container: {
+          name: names.container,
+          id: ids.container.id,
+          label: "coffee.g16.run-id",
+        },
+        network: {
+          name: names.network,
+          id: ids.network.id,
+          label: "coffee.g16.run-id",
+        },
+        databaseSystemIdentifier: ids.databaseSystemIdentifier,
+      },
+      requiredAction: "CONTROLLED_G16_RECOVERY_BEFORE_RESOURCE_CLEANUP",
+      cleanup: { removed: false, retained: true },
+    },
+    ...(failureEvidence ? { failureEvidence } : {}),
+  };
+}
 
 async function prepareG16Age({ candidateRoot, context }, env) {
   const locator = env.SOPS_AGE_KEY_FILE;
@@ -3794,6 +3913,96 @@ export async function verifyControlledG16Evidence({
   return receipt;
 }
 
+export async function handleControlledG16ChildFailure({
+  error,
+  parent,
+  childContext,
+  candidateRoot,
+  signerApproved,
+  approvalRequests,
+  artifacts,
+}) {
+  let recovery = null;
+  if (
+    signerApproved &&
+    approvalRequests === 1 &&
+    error?.result?.joined === true &&
+    error.result.code !== 0
+  ) {
+    try {
+      const last = error.result.stdout.split(/\r?\n/u).filter(Boolean).at(-1);
+      const outcome = JSON.parse(last);
+      const policy = await readApprovedG16Policy(
+        candidateRoot,
+        parent.candidateSha,
+      );
+      const toolchain = JSON.parse(
+        (
+          await readRegular(
+            join(candidateRoot, "config/toolchain-versions.json"),
+            1024 * 1024,
+          )
+        ).toString("utf8"),
+      );
+      recovery = sanitizeControlledG16Recovery(
+        outcome,
+        childContext,
+        policy,
+        toolchain.postgresImage,
+      );
+    } catch {
+      /* Untrusted or incomplete child output cannot establish recovery facts. */
+    }
+  }
+  const failure = {
+    schemaVersion: 1,
+    parentRunId: parent.runId,
+    parentCandidateSha: parent.candidateSha,
+    childRunId: childContext.runId,
+    childCandidateSha: childContext.candidateSha,
+    status: "FAIL",
+    code: recovery ? "RECOVERY_REQUIRED" : "G16_CHILD_FAILURE_UNVERIFIED",
+    childFailure: [
+      "ROLLBACK_CHILD_FAILED",
+      "ROLLBACK_CHILD_TIMEOUT",
+      "ROLLBACK_CHILD_INTERRUPTED_SIGINT",
+      "ROLLBACK_CHILD_INTERRUPTED_SIGTERM",
+      "ROLLBACK_CHILD_OUTPUT_LIMIT",
+      "ROLLBACK_CHILD_IPC_FAILED",
+    ].includes(error?.message)
+      ? error.message
+      : "ROLLBACK_CHILD_FAILED",
+    ...(recovery
+      ? {
+          mode: recovery.mode,
+          origin: recovery.origin,
+          accountFingerprint: recovery.accountFingerprint,
+          recovery: recovery.recovery,
+          ...(recovery.failureEvidence
+            ? { failureEvidence: recovery.failureEvidence }
+            : {}),
+        }
+      : {}),
+  };
+  const bytes = Buffer.from(`${JSON.stringify(failure, null, 2)}\n`);
+  const path = join(artifacts, "controlled-child-failure.json");
+  await writeFile(path, bytes, { flag: "wx", mode: 0o600 });
+  const failureError = new Error(failure.code);
+  failureError.safeDetails = {
+    failureReceipt: { path, sha256: digest(bytes) },
+    childFailure: failure.childFailure,
+    ...(recovery
+      ? {
+          recovery: recovery.recovery,
+          ...(recovery.failureEvidence
+            ? { failureEvidence: recovery.failureEvidence }
+            : {}),
+        }
+      : {}),
+  };
+  throw failureError;
+}
+
 export async function runControlledG16Parent({
   parentIdentity,
   parentContextPath,
@@ -3905,6 +4114,7 @@ export async function runControlledG16Parent({
     };
     delete env.COFFEE_G16_SIGNER_PATH;
     let signed;
+    let signerApproved = false;
     let approvalRequests = 0;
     childStarted = true;
     const execution = await runManagedRollbackChild({
@@ -3962,8 +4172,19 @@ export async function runControlledG16Parent({
           signed.offerRef !== message.selected.offerRef
         )
           throw new Error("G16_SIGNER_RESPONSE_INVALID");
+        signerApproved = true;
         return {};
       },
+    }).catch(async (error) => {
+      return handleControlledG16ChildFailure({
+        error,
+        parent,
+        childContext: child.context,
+        candidateRoot,
+        signerApproved,
+        approvalRequests,
+        artifacts,
+      });
     });
     if (!signed || approvalRequests !== 1)
       throw new Error("G16_APPROVAL_MISSING");
@@ -4177,6 +4398,9 @@ export async function main(args = process.argv.slice(2)) {
         : outcome.status === "FAIL"
           ? {
               ...outcome.runMetadata,
+              ...(outcome.accountFingerprint
+                ? { accountFingerprint: outcome.accountFingerprint }
+                : {}),
               ...(outcome.stage ? { stage: outcome.stage } : {}),
               ...(outcome.diagnostic ? { diagnostic: outcome.diagnostic } : {}),
               ...(outcome.recovery ? { recovery: outcome.recovery } : {}),

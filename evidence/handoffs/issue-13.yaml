@@ -1,7 +1,7 @@
 issue: 13
 baseCommit: e06c5d478123d6dc2908739882171fbf5c06fa3a
 status: source-descriptor-before-formal-verification
-asOfUtc: "2026-11-01T11:29:25.208766+00:00"
+asOfUtc: "2026-11-01T12:03:45.602687+00:00"
 inputs:
   - issue: 2
     acceptedMergeCommit: 327638d4494269a151ee7c0ac945ac0053c3e0d4
@@ -196,7 +196,7 @@ outputs:
     consumers:
       - 1
   - artifact: tools/compose-smoke.mjs
-    sha256: 31a0ab08de78117eca8696f4a4a7240b09bca359dddece5f9584e79af0319194
+    sha256: c784388b1ff5a9f618b58197494a12d25c2c889a6b9a7fcf8a7259fcc28ab1a5
     consumers:
       - 1
   - artifact: tools/observability/verify.mjs
@@ -208,11 +208,11 @@ outputs:
     consumers:
       - 1
   - artifact: verification/launch/v1/run.mjs
-    sha256: b84fcade6463ffa4105466e76212686f85bff3169dbd874a52811baf52fd73d4
+    sha256: 5f19d5e302c7233676f6b0002a8471f39fd776bafd2fced2ad183a058402ee18
     consumers:
       - 1
   - artifact: verification/launch/v1/runner.test.mjs
-    sha256: 9425cf88222eccf1d0be30690b7e18ecb1e5b68d2a101f75b96965e6cae4c722
+    sha256: f94a0aead7bed89b75141459f4b787730581a916cf0f1f1b0cf95da5a5d6cc32
     consumers:
       - 1
   - artifact: docs/adr/ADR-0034-g16-existing-account-verification.md
@@ -226,7 +226,7 @@ outputs:
   - artifact: verification/launch/v1/scenarios/browser.mjs
     sha256: e04ff0d9725ba4734bb50f286f59fb3469bd48654e5e32ecc54fb36a06351a61
   - artifact: verification/launch/v1/scenarios/aroma-sandbox.mjs
-    sha256: 226fd8ea311577d90c953be14de80ed8bd99284535c26f3251ae8e1d9f25f7e2
+    sha256: 5667cdb9c0cc1244b58ad610536c28de8aed517622796a7d2dc518a77675a6d9
   - artifact: verification/launch/v1/scenarios/aroma-sandbox-resources.mjs
     sha256: d583229f493a23d582a37e4e020415333943207d2475a57ddc53ba433cd64304
   - artifact: verification/launch/v1/scenarios/rollback.mjs
@@ -269,6 +269,14 @@ outputs:
       - 1
   - artifact: evidence/launch-preparation/2026-11-01/driver-mounts.md
     sha256: 05e51fe611474585634a1576d6b9f42208645c578e8f194e8db1c29fbecda6fd
+    consumers:
+      - 1
+  - artifact: tools/runtime-image-inventory.mjs
+    sha256: e880bbe0c7560fe44758d5c921d5f40b654c5dd27135b70883a10381c57cc0f1
+    consumers:
+      - 1
+  - artifact: evidence/launch-preparation/2026-11-01/controller-readiness.md
+    sha256: 0e0469450aa8a79b82a98f36ec07956e4f844d4cc3be343beef1344b7b8eb4e5
     consumers:
       - 1
 verification:
@@ -427,6 +435,12 @@ verification:
     result: "PASS; пять actual mounts, readonly/nonroot/identity/hash и own cleanup; parent 883 с двумя локальными WIP файлами, не SSE qualification"
     artifact: evidence/launch-preparation/2026-11-01/driver-mounts.md
     logSha256: a2dfd73f000895539dc59bbf96e0cef5316a3c533669be8e2a135ac7bbd2286b
+  - command: "node --test verification/launch/v1/runner.test.mjs"
+    result: "PASS 91/91, fail/cancel/skip 0; wall 116.859 s, Node test duration 116.775 s. Parent 5cb6e89 с пятью локальными WIP файлами; CLI startup без service dist, image ownership и failure receipt G16."
+    logSha256: 4c781681c8047bceb921c9862954cf918376fd062e2382b97bd77e36102237d5
+  - command: standalone G12 5cb6e89 run114056
+    result: "FAIL/INTERRUPTED по запросу владельца через 326.036 s, 10 частичных отчётов, guard не сработал, cleanup failures отсутствуют; не G12 PASS."
+    artifact: evidence/launch-preparation/2026-11-01/controller-readiness.md
 consumerContract:
   consumer: 1
   admission:
@@ -455,6 +469,7 @@ consumerContract:
     policy/key/flag child и G18 baseline flag child с проверенной lineage. Лимиты и provider scope сохранены;
     exact parent G12 product images, отдельная BOM/image-ID проверка fixture PostgreSQL."
 limitations:
+  - "Компонентный G12 5cb6e89 прерван по запросу владельца; отдельный G16 stub и CLI startup не являются runtime admission. Будущему замороженному Source нужны собственные CI, G12, SSE qualification и полный G00–G19."
   - "Source 883 standalone G12 PASS; qualification FAIL до нагрузки с сохранённым отрицательным результатом. Синтетический Docker-пробник WIP не является qualification или полным admission; окончательному Source нужны собственные CI, G12, SSE и G00–G19."
   - "Принятый #252 содержит парное подтверждение edge-gateway на Source 8009671; это не полный G12, SSE qualification или G00–G19 issue13 на новом окончательном Source."
   - "477 G12 component PASS не является SSE/full admission: qualification до измерения обнаружила реальные different COPY layers. Source context возвращён в originaltmpdir; новый frozen SHA требует собственные CI/G12/exact4IDs/qualification/G00–G19. Никакие thresholds/image bindings не ослаблены."

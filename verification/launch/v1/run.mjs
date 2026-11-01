@@ -54,7 +54,7 @@ import {
   captureRuntimeImageBaseline,
   inspectLaunchRuntimeImages,
   validateRuntimeImageOwnership,
-} from "../../../tools/compose-smoke.mjs";
+} from "../../../tools/runtime-image-inventory.mjs";
 import { validateDependencyReadiness } from "../../../tests/observability/runtime-matrix.mjs";
 import { loadPlatformConfig } from "../../../scripts/config-lib.mjs";
 import {
