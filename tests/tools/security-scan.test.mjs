@@ -33,6 +33,7 @@ import {
   parseKafkaBaseIndex,
   runCommand,
   runSecurityScan,
+  securityScanTempRoot,
   trivyArgs,
   trivyScanCommand,
   validateDatabaseMetadata,
@@ -42,6 +43,7 @@ import {
   verifySlsaStatement,
   verifyKafkaBaseMaterialStatement,
 } from "../../tools/security-scan.mjs";
+
 import { RUNTIME_NAMES } from "../../packages/platform-config/src/index.ts";
 import {
   loadVerifiedGateImage,
@@ -86,6 +88,52 @@ function buildMetadata() {
     },
   };
 }
+
+void test("G12 temporary root validates a private owned canonical directory", async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), "g12-data-temp-test-"));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const privateDir = join(directory, "data");
+  await mkdir(privateDir, { mode: 0o700 });
+  assert.equal(await securityScanTempRoot(privateDir), privateDir);
+  for (const bad of [
+    null,
+    "",
+    "relative",
+    `${privateDir}/../data`,
+    join(directory, "missing"),
+  ])
+    await assert.rejects(securityScanTempRoot(bad), {
+      code: "SCAN_TEMP_DIRECTORY_INVALID",
+    });
+  const link = join(directory, "link");
+  await symlink(privateDir, link);
+  await assert.rejects(securityScanTempRoot(link), {
+    code: "SCAN_TEMP_DIRECTORY_INVALID",
+  });
+  await mkdir(join(privateDir, "nested"), { mode: 0o700 });
+  await assert.rejects(securityScanTempRoot(join(link, "nested")), {
+    code: "SCAN_TEMP_DIRECTORY_INVALID",
+  });
+  await chmod(privateDir, 0o755);
+  await assert.rejects(securityScanTempRoot(privateDir), {
+    code: "SCAN_TEMP_DIRECTORY_INVALID",
+  });
+  await chmod(privateDir, 0o700);
+  const uid = process.getuid();
+  t.mock.method(process, "getuid", () => uid + 1);
+  await assert.rejects(securityScanTempRoot(privateDir), {
+    code: "SCAN_TEMP_DIRECTORY_INVALID",
+  });
+  t.mock.restoreAll();
+  const prior = process.env.COFFEE_LAUNCH_DATA_TEMP_DIR;
+  delete process.env.COFFEE_LAUNCH_DATA_TEMP_DIR;
+  try {
+    assert.equal(await securityScanTempRoot(), tmpdir());
+  } finally {
+    if (prior === undefined) delete process.env.COFFEE_LAUNCH_DATA_TEMP_DIR;
+    else process.env.COFFEE_LAUNCH_DATA_TEMP_DIR = prior;
+  }
+});
 
 void test("build snapshot retains committed modes, omits ignored files and detects tampering", async (t) => {
   const temporary = await mkdtemp(join(tmpdir(), "coffee-build-context-test-"));
@@ -1676,6 +1724,40 @@ void test("G12 builds product images, records pinned upstream identity, and fail
     assert.equal(Object.hasOwn(loaded, "environment"), false);
     return { context: loaded, candidateRoot, evidenceDir };
   };
+  const selectedTempRoot = join(temp, "selected-data-temp");
+  const distinctLock = join(temp, "scanner-placement.lock");
+  await mkdir(selectedTempRoot, { mode: 0o700 });
+  const priorDataTemp = process.env.COFFEE_LAUNCH_DATA_TEMP_DIR;
+  process.env.COFFEE_LAUNCH_DATA_TEMP_DIR = selectedTempRoot;
+  try {
+    let observedScratch = false;
+    const placement = await runSecurityScan({
+      contextFile: contextPath,
+      outputDir: join(gateArtifactsDir, "supply-chain-placement"),
+      validateContext: validateSyntheticContext,
+      lockPath: distinctLock,
+      run: async (_command, _args, options) => {
+        assert.ok(
+          options.dockerConfig.startsWith(
+            `${selectedTempRoot}/coffee-image-scan-`,
+          ),
+        );
+        assert.equal((await lstat(distinctLock)).isFile(), true);
+        observedScratch = true;
+        throw Object.assign(new Error("synthetic stop"), {
+          code: "SYNTHETIC_STOP",
+        });
+      },
+    });
+    assert.equal(observedScratch, true);
+    assert.equal(placement.code, "BUILD_BUILDER_UNAVAILABLE");
+    assert.deepEqual(await readdir(selectedTempRoot), []);
+    await assert.rejects(lstat(distinctLock), { code: "ENOENT" });
+  } finally {
+    if (priorDataTemp === undefined)
+      delete process.env.COFFEE_LAUNCH_DATA_TEMP_DIR;
+    else process.env.COFFEE_LAUNCH_DATA_TEMP_DIR = priorDataTemp;
+  }
   const validCompose = await readFile(join(candidateRoot, "compose.yaml"));
   const commitCompose = async (bytes) => {
     await writeFile(join(candidateRoot, "compose.yaml"), bytes);

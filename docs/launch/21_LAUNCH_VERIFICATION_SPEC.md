@@ -71,6 +71,17 @@ G18 — отдельный baseline `B` с единственным измене
 risk вместо обязательного gate запрещены. После исправления defect весь
 затронутый gate и downstream gates запускаются заново на новом SHA.
 
+Операционный locator `--data-temp-dir /absolute/private/directory` разделяет
+исполняемые checkout и объёмные временные данные. Runner принимает только
+существующий canonical directory текущего UID с режимом `0700`, без symlink,
+до создания checkout/evidence. G12 получает отдельный внутренний locator
+только для большого scratch; его исходные `TMPDIR` и scanner lock сохраняются.
+G14 получает внешний `TMPDIR` для storage/backup, сохраняя существующее
+размещение browser child внутри candidate checkout. Parent, qualification
+и остальные gates используют прежние пути. Gate argv, DTO, config/BOM/image
+bindings, cleanup и лимиты сохраняются. Фактический outer runner argv с locator
+сохраняется вместе с operator evidence.
+
 ## 2. Файлы результата
 
 ```text

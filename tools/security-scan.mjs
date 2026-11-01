@@ -76,6 +76,28 @@ const APPROVED_CVES = Object.freeze(["CVE-2026-21728", "CVE-2026-28377"]);
 function fail(code) {
   throw Object.assign(new Error(code), { code });
 }
+
+export async function securityScanTempRoot(
+  value = process.env.COFFEE_LAUNCH_DATA_TEMP_DIR,
+) {
+  if (value === undefined) return tmpdir();
+  if (
+    typeof value !== "string" ||
+    !isAbsolute(value) ||
+    resolve(value) !== value
+  )
+    fail("SCAN_TEMP_DIRECTORY_INVALID");
+  const info = await lstat(value).catch(() => null);
+  if (
+    !info?.isDirectory() ||
+    info.isSymbolicLink() ||
+    info.uid !== process.getuid() ||
+    (info.mode & 0o7777) !== 0o700 ||
+    (await realpath(value).catch(() => null)) !== value
+  )
+    fail("SCAN_TEMP_DIRECTORY_INVALID");
+  return value;
+}
 function sha256(bytes) {
   return createHash("sha256").update(bytes).digest("hex");
 }
@@ -2913,6 +2935,7 @@ export async function runSecurityScan({
     result.runId = identity.context.runId;
     result.candidateSha = identity.context.candidateSha;
     if (stopped) fail("INTERRUPTED");
+    const tempRoot = await securityScanTempRoot();
     stage = "lock-acquisition";
     lockHandle = await open(
       lockPath,
@@ -2925,7 +2948,7 @@ export async function runSecurityScan({
     if (!lockHandle) fail("SCANNER_ALREADY_RUNNING");
     await lockHandle.writeFile(`${process.pid} ${identity.context.runId}\n`);
     await lockHandle.sync();
-    temporary = await mkdtemp(join(tmpdir(), "coffee-image-scan-"));
+    temporary = await mkdtemp(join(tempRoot, "coffee-image-scan-"));
     await chmod(temporary, 0o700);
     const cacheDir = join(temporary, "cache");
     const inputDir = join(temporary, "manifests");

@@ -31,6 +31,7 @@ import {
   captureKafkaNamespaceArtifact,
   applyLaunchImageEvidence,
   executeArgv,
+  executeRun,
   finishRuntimeImageOwnership,
   gateBudgetMs,
   loadMatrix,
@@ -40,6 +41,7 @@ import {
   runGate,
   splitCommand,
   validateRunResult,
+  validateLaunchDataTempDir,
   verifyGateArtifacts,
   writeRedactedStream,
 } from "./run.mjs";
@@ -157,6 +159,83 @@ import {
   writeUnitEvidenceArtifacts,
 } from "./scenarios/unit.mjs";
 import { selectFormatPaths } from "../../../scripts/format.mjs";
+
+void test("launch data temporary directory is private, canonical and gate scoped", async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), "launch-data-temp-test-"));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const privateDir = join(directory, "data");
+  await mkdir(privateDir, { mode: 0o700 });
+  assert.deepEqual(parseLaunchArguments(["--data-temp-dir", privateDir]), {
+    dataTempDir: privateDir,
+  });
+  for (const args of [
+    ["--data-temp-dir"],
+    ["--data-temp-dir", "relative"],
+    ["--data-temp-dir", `${privateDir}/../data`],
+    ["--data-temp-dir", privateDir, "--data-temp-dir", privateDir],
+  ])
+    assert.throws(() => parseLaunchArguments(args), /data-temp-dir/u);
+  assert.equal(await validateLaunchDataTempDir(privateDir), privateDir);
+  await assert.rejects(validateLaunchDataTempDir(join(directory, "missing")));
+  await assert.rejects(
+    executeRun({ dataTempDir: "relative" }),
+    /data-temp-dir/u,
+  );
+  const link = join(directory, "link");
+  await symlink(privateDir, link);
+  await assert.rejects(validateLaunchDataTempDir(link));
+  await mkdir(join(privateDir, "nested"), { mode: 0o700 });
+  await assert.rejects(validateLaunchDataTempDir(join(link, "nested")));
+  await chmod(privateDir, 0o755);
+  await assert.rejects(validateLaunchDataTempDir(privateDir), /private owned/u);
+  await chmod(privateDir, 0o700);
+  const uid = process.getuid();
+  t.mock.method(process, "getuid", () => uid + 1);
+  await assert.rejects(validateLaunchDataTempDir(privateDir), /private owned/u);
+  t.mock.restoreAll();
+
+  const prior = {
+    TMPDIR: process.env.TMPDIR,
+    COFFEE_LAUNCH_DATA_TEMP_DIR: process.env.COFFEE_LAUNCH_DATA_TEMP_DIR,
+  };
+  process.env.TMPDIR = "/tmp/launch-original-temp";
+  process.env.COFFEE_LAUNCH_DATA_TEMP_DIR = "/tmp/untrusted-inherited";
+  try {
+    for (const [index, [gateId, expectedTmp, expectedData, configured]] of [
+      ["G12_SUPPLY_CHAIN", "/tmp/launch-original-temp", privateDir, true],
+      ["G14_OBSERVABILITY", privateDir, null, true],
+      ["G10_INTEGRATION", "/tmp/launch-original-temp", null, true],
+      ["G12_SUPPLY_CHAIN", "/tmp/launch-original-temp", null, false],
+    ].entries()) {
+      const stdout = join(directory, `${gateId}-${index}.out`);
+      const stderr = join(directory, `${gateId}-${index}.err`);
+      const run = await executeArgv(
+        [
+          process.execPath,
+          "-e",
+          "process.stdout.write(JSON.stringify({tmp:process.env.TMPDIR,data:process.env.COFFEE_LAUNCH_DATA_TEMP_DIR??null}))",
+        ],
+        directory,
+        10_000,
+        stdout,
+        stderr,
+        undefined,
+        null,
+        { gateId, dataTempDir: configured ? privateDir : undefined },
+      );
+      assert.equal(run.exitCode, 0);
+      assert.deepEqual(JSON.parse(await readFile(stdout, "utf8")), {
+        tmp: expectedTmp,
+        data: expectedData,
+      });
+    }
+  } finally {
+    for (const [key, value] of Object.entries(prior)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
+});
 
 void test("image cleanup completes before ownership can pass; unknown cleanup fails the gate", () => {
   const ownership = {

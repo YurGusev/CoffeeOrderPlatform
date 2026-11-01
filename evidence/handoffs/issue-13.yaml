@@ -1,7 +1,7 @@
 issue: 13
 baseCommit: ad72338496f49241e83956aadfc12d17a6dedc2a
 status: source-descriptor-before-formal-verification
-asOfUtc: "2026-11-01T05:54:09.496955+00:00"
+asOfUtc: "2026-11-01T06:49:32.900Z"
 inputs:
   - issue: 2
     acceptedMergeCommit: 327638d4494269a151ee7c0ac945ac0053c3e0d4
@@ -144,7 +144,7 @@ outputs:
     consumers:
       - 1
   - artifact: docs/launch/21_LAUNCH_VERIFICATION_SPEC.md
-    sha256: d232c94e1ca8131546d423671e5cf979da721f1b1d609942120e1a33f991de3f
+    sha256: 845fe42ceae4e1e4a3dee63a1840423589709d171dfaaa53ec56a11b873f5f52
     consumers:
       - 1
   - artifact: docs/operations/observability.md
@@ -204,11 +204,11 @@ outputs:
     consumers:
       - 1
   - artifact: verification/launch/v1/run.mjs
-    sha256: 1597641a60efc15af750c25b186ec7e47e315594ccd076197dbe882c3d38fce0
+    sha256: b84fcade6463ffa4105466e76212686f85bff3169dbd874a52811baf52fd73d4
     consumers:
       - 1
   - artifact: verification/launch/v1/runner.test.mjs
-    sha256: eaa907ba3658fc78a18327d6ed7ba3fcba5200b26d6e4c62ab54e6873dab50d8
+    sha256: 9425cf88222eccf1d0be30690b7e18ecb1e5b68d2a101f75b96965e6cae4c722
     consumers:
       - 1
   - artifact: docs/adr/ADR-0034-g16-existing-account-verification.md
@@ -228,15 +228,19 @@ outputs:
   - artifact: verification/launch/v1/scenarios/rollback.mjs
     sha256: 9e0b665e9b1f294e67362e9d98aa11d181456dc1f809b10cb0d84e9c20a06360
   - artifact: tools/security-scan.mjs
-    sha256: ab46df648f4f524ffad7e60d1e3679c9efa84f3152a79c2cbebbf3c56e7eb77d
+    sha256: d64804c5d2030637f4674725957a7e614dbad95cfe63da9b13485b33b4a98997
     consumers:
       - 1
   - artifact: tests/tools/security-scan.test.mjs
-    sha256: bb0c8d3755cc9205e0f6daebf886f317d68b9d61282d6b5698c52fda0ac94bed
+    sha256: 5b28322822f5fb2542ca22cba188b0a72f877c9c798897e18d43eadc6acf07d2
     consumers:
       - 1
   - artifact: evidence/launch-preparation/2026-11-01/security-database-integrity.md
     sha256: 91cb54628e153f5e14e46d0be16923cbaeee3e4b67b0efe88b5008e28c96ae0e
+    consumers:
+      - 1
+  - artifact: evidence/launch-preparation/2026-11-01/temporary-data-placement.md
+    sha256: 30623ad8f486b9cc00e5d04a3c7a10a7ba179ee2cb878b1fc061bb25370c3a18
     consumers:
       - 1
 verification:
@@ -344,6 +348,18 @@ verification:
   - command: pinned Trivy Kafka readonly database compatibility
     result: "PASS: 15.010 s, один Java result /109 Maven packages; live readonly mounts и оба FD, unchanged DB/metadata SHA, own cleanup; не G12 admission"
     artifact: evidence/launch-preparation/2026-11-01/security-database-integrity.md
+  - command: "PR #249 CI 41279016913 на db30ffa"
+    result: "PASS: 1554 tests /1475 pass /0 fail /79 skipped,306.328 s; до scratch placement"
+    logSha256: 97299a50525f0c9db01675cbc506371502b951588f5cc3e8bdb15d9685430866
+  - command: standalone G12 db30ffa run055907
+    result: "FAIL/INTERRUPTED by root reserve+512MiB,1724.208 s,38/46reports; oldsource frozen,cleanup verified; NOTbudgetFAIL/NOTadmission"
+    logSha256: fccd7b957d839892ca80cc91e759391887a7eb7e67b27505ba25c600e0e3d7a2
+  - command: "node --test --test-name-pattern='launch data temporary directory is private' verification/launch/v1/runner.test.mjs"
+    result: "PASS1/1,1.79s;CLI/private canonical root and actualselectedchildenv, Parent/othergates unchanged"
+    logSha256: 0863bb65a8ec4e5dcf03481f62ec6ccd6669a1551d8c31d07447551dd415b408
+  - command: "node --test --test-name-pattern='G12 temporary root validates|G12 builds product images, records pinned upstream identity' tests/tools/security-scan.test.mjs"
+    result: "PASS2/2,32.28s; bigscratch moved, originalscannerlock and cleanup preserved; mockedDocker"
+    logSha256: 9cfb6816ebc93135d8dbe078bd9031da0c0273f76db811cf507b0b5b651f3c56
 consumerContract:
   consumer: 1
   admission:
@@ -373,7 +389,7 @@ consumerContract:
     exact parent G12 product images, отдельная BOM/image-ID проверка fixture PostgreSQL."
 limitations:
   - "Общий локальный check aae20ab: pnpm check FAIL на прежнем 2 s readiness fixture; отдельное исправление #250 принято через PR #251.
-    CI объединённого c4b38ce PASS. Новый source с оптимизацией DB integrity требует собственный CI, G12, qualification и ordered runtime;
+    CI c4b38ce и db30ffa PASS. Новый source с раздельным размещением scratch требует собственный CI, G12, qualification и ordered runtime;
     прежние результаты не переносятся."
   - "C4 component run050241: FAIL/INTERRUPTED по builder floor1GiB после1766.202 s,26частичныхотчётов; это не превышение1800 s и не PASS.
     Отдельный run031919 остановлен из-за operator umask0077. Оба negative сохранены; thresholds не изменены."

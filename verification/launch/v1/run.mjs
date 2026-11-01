@@ -356,6 +356,22 @@ async function assertNoSymlinkPath(root, target, allowMissing = false) {
       throw new Error(`Symlink запрещён: ${relative(root, current)}`);
   }
 }
+
+export async function validateLaunchDataTempDir(path) {
+  if (typeof path !== "string" || !isAbsolute(path) || resolve(path) !== path)
+    throw new Error("--data-temp-dir requires an absolute canonical directory");
+  await assertNoSymlinkPath(resolve("/"), path);
+  const info = await lstat(path);
+  if (
+    !info.isDirectory() ||
+    info.isSymbolicLink() ||
+    info.uid !== process.getuid() ||
+    (info.mode & 0o7777) !== 0o700 ||
+    (await realpath(path)) !== path
+  )
+    throw new Error("--data-temp-dir requires a private owned directory");
+  return path;
+}
 async function ensureDirectoryTree(root, target) {
   root = resolve(root);
   target = resolve(target);
@@ -713,6 +729,11 @@ export async function executeArgv(
   const startedAt = nowIso();
   const start = Date.now();
   const childEnv = { ...process.env };
+  delete childEnv.COFFEE_LAUNCH_DATA_TEMP_DIR;
+  if (options.dataTempDir && options.gateId === "G12_SUPPLY_CHAIN")
+    childEnv.COFFEE_LAUNCH_DATA_TEMP_DIR = options.dataTempDir;
+  if (options.dataTempDir && options.gateId === "G14_OBSERVABILITY")
+    childEnv.TMPDIR = options.dataTempDir;
   delete childEnv.COFFEE_LAUNCH_IMAGE_OWNERSHIP;
   delete childEnv.COFFEE_G16_SIGNER_PATH;
   if (options.g16SignerPath)
@@ -1963,6 +1984,7 @@ export async function runGate(
   realtimeQualificationPath,
   imageOwnershipPath,
   g16SignerPath,
+  dataTempDir,
 ) {
   if (outputBudget.exceeded && gate.id !== "G19_REPORT") {
     record.reason =
@@ -2139,6 +2161,8 @@ export async function runGate(
         outputBudget,
         {
           imageOwnershipPath,
+          gateId: gate.id,
+          dataTempDir,
           g16SignerPath:
             gate.id === "G16_AROMA_SANDBOX" ? g16SignerPath : undefined,
         },
@@ -2380,6 +2404,10 @@ export async function applyLaunchImageEvidence({
 // Hold each source directory open so a renamed or replaced path cannot redirect copying.
 export async function executeRun(options = {}) {
   const runnerStartedAt = Date.now();
+  const dataTempDir =
+    options.dataTempDir === undefined
+      ? undefined
+      : await validateLaunchDataTempDir(options.dataTempDir);
   const matrix = await loadMatrix();
   const state = await sourceState();
   if (state.status)
@@ -2657,6 +2685,7 @@ export async function executeRun(options = {}) {
           ? imageOwnershipPath
           : undefined,
         options.g16SignerPath,
+        dataTempDir,
       );
       if (gate.id === "G12_SUPPLY_CHAIN" && record.status === "PASS") {
         await applyLaunchImageEvidence({
@@ -2762,6 +2791,16 @@ export function parseArgs(argv) {
       )
         throw new Error("--g16-signer requires one absolute path");
       options.g16SignerPath = resolve(path);
+    } else if (argv[index] === "--data-temp-dir") {
+      const path = argv[++index];
+      if (
+        options.dataTempDir !== undefined ||
+        typeof path !== "string" ||
+        !isAbsolute(path) ||
+        resolve(path) !== path
+      )
+        throw new Error("--data-temp-dir requires one absolute canonical path");
+      options.dataTempDir = path;
     } else if (argv[index] === "--realtime-qualification") {
       const path = argv[++index];
       if (options.realtimeQualificationPath !== undefined)
