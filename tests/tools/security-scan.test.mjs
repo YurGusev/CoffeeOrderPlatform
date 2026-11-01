@@ -2112,6 +2112,11 @@ void test("G12 builds product images, records pinned upstream identity, and fail
             args[args.indexOf("--platform") + 1] === "linux/amd64",
         );
         assert.equal(args.filter((value) => value === "--output").length, 1);
+        assert.match(
+          args[args.indexOf("--output") + 1],
+          /,source-date-epoch=0,rewrite-timestamp=true$/u,
+        );
+        assert.ok(!args.some((value) => value.includes("SOURCE_DATE_EPOCH")));
         const tag = args[args.indexOf("-t") + 1];
         const service = tag
           .replace(/^coffee-g12-[0-9a-f]{12}-/u, "")
@@ -2212,7 +2217,8 @@ void test("G12 builds product images, records pinned upstream identity, and fail
         const metadataPath = args[args.indexOf("--metadata-file") + 1];
         const ociLayout = args
           .find((value) => value.startsWith("type=oci,tar=false,dest="))
-          .slice("type=oci,tar=false,dest=".length);
+          .slice("type=oci,tar=false,dest=".length)
+          .split(",")[0];
         if (checkTempPlacement)
           assert.ok(ociLayout.startsWith(`${selectedTempRoot}/`));
         lastProductLayoutPath = ociLayout;

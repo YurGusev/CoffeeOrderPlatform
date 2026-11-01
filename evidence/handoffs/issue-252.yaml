@@ -1,0 +1,74 @@
+issue: 252
+baseCommit: ad72338496f49241e83956aadfc12d17a6dedc2a
+status: verified-runtime
+inputs:
+  - issue: 61
+    acceptedMergeCommit: d1f462838da15b25049842a241f4e3f6f75a6b4f
+    artifact: evidence/handoffs/issue-61.yaml
+    sha256: 3c83d9e42870a35baeb2f12c7dfb62901b316bab536a54a3dadd099ca172459b
+  - issue: 210
+    acceptedMergeCommit: a6cceeaa822f9641c678b5dcae521c282391dd3d
+    artifact: evidence/handoffs/issue-210.yaml
+    sha256: 93dccd8c0c978977e4e6cae852d4801415e849b595ef233a95ad2936ba10d20f
+outputs:
+  - artifact: Dockerfile
+    sha256: 8e298a1b0881638dd1e90a62047bb64ab898185dedfdca207818b98cc5295eb3
+    consumers:
+      - 13
+  - artifact: tools/docker-build.mjs
+    sha256: efb11bf802f3f934b3c409710f07802da94be1eeef418128e5718fec0e0bdb9a
+    consumers:
+      - 13
+  - artifact: tools/security-scan.mjs
+    sha256: 8e85ee30c9f9c50bac1d67b96e29cfa5ecfcbbdf1201400abe8a8c5d8a4e3e40
+    consumers:
+      - 13
+  - artifact: tests/compose/topology.test.mjs
+    sha256: 50c52f97c67dca0d4c517f2693f101232439cce9ef73615a51d3bfebb2944aea
+    consumers:
+      - 13
+  - artifact: tests/tools/security-scan.test.mjs
+    sha256: b347e7b6a55300a7c4e603e227628a6b9ab3c176c632c9d2cd919f1ef2aed63e
+    consumers:
+      - 13
+  - artifact: docs/operations/runtime-images.md
+    sha256: f5739a8911b00e8a53d334ca1af3497ce317fb1a453c975f944af7eb93b00d85
+    consumers:
+      - 13
+  - artifact: evidence/runtime-images/2026-11-01/identity.json
+    sha256: ac4ba15459d212294fabce6fec52e788ed066bd4d003eaf010ad15b24fcc300f
+    consumers:
+      - 13
+behavior:
+  - Production deploy исключает изменяемое состояние установщика pnpm .modules.yaml до final COPY; production
+    dependencies и native-addon probe сохранены.
+  - G12 OCI и canonical Docker --load без custom output используют exporter-only source-date-epoch=0/rewrite-timestamp=true.
+  - Ambient SOURCE_DATE_EPOCH исключается только из копии canonical build child environment; custom/non-load
+    outputs и parent environment сохранены.
+  - Exact image IDs, OCI provenance/attestation, HIGH/CRITICAL policy, pins и thresholds не ослаблены.
+  - Issue 13 обязан повторить G12, SSE qualification и G00–G19 на окончательном Source; прежний PASS не переносится.
+verification:
+  - command: pnpm install --offline --frozen-lockfile --ignore-scripts
+    result: PASS под shared heavy lease; native addon на host не собирался.
+  - command: pnpm exec tsc -b packages/platform-idempotency --pretty false
+    result: PASS под shared heavy lease.
+  - command:
+      node --test --test-concurrency=1 --test-name-pattern='canonical image loads normalize|Node production
+      image is exact|Confluent Node 26 addon|G12 builds product images' tests/compose/topology.test.mjs tests/tools/security-scan.test.mjs
+    result: PASS4/4,27.812s; реальный CLI с fake Docker и synthetic G12, не runtime image identity.
+    logSha256: 7abd9b34fcdc99cb50d43c7b563cbc0f18ffe0da69cf253cb14ccbee7eeb0ae1
+  - command: scoped Prettier/Oxlint/node --check + git diff --check
+    result: PASS по пяти code/test файлам.
+    logSha256: 64baf1a3ca4d99ba54374861757fe3bb15b3e9a57bb691bc7b52db1f1584615d
+  - command: Парные OCI и Docker load, затем native probe; фактические argv с явными подстановками путей сохранены в identity.json.
+    result: PASS для edge-gateway на Source 8009671d5a68313e30748c6e0abe294683a20ff4; image ID и 11 diff IDs совпали, native probe завершился с кодом 0.
+    reportSha256: cf9dd5526db30369a71cd3cebb81670db31c94c07d57bfaf4ba96befcf937315
+    logSha256: b38d15fd05aea018129d42e8941895bd5ca8dc03656cc8190bf0db1677863217
+  - command: GitHub Actions check, run 41295013831, Source 8009671d5a68313e30748c6e0abe294683a20ff4
+    result: PASS; проверка metadata-only HEAD будет выполнена в PR.
+    logSha256: 6150c87b88199d294c4cf6f8756ce093fe7b654900edba3daea86a0a06c139c6
+limitations:
+  - Реальный парный экспорт проверен только для edge-gateway на Source 8009671d5a68313e30748c6e0abe294683a20ff4, не на последующем metadata-only HEAD; evidence исключён из Docker build context.
+  - CI metadata-only HEAD ещё не выполнен и должен пройти в PR до merge.
+  - Проверка не заявляет cold-build identity при изменении OS repository contents.
+  - Этот product fix не заменяет G12/SSE/G00–G19 issue13 на его окончательном SHA.

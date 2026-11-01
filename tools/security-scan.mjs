@@ -2207,7 +2207,7 @@ function imageBuildArgs({
     metadataFile,
     "--provenance=mode=min",
     "--output",
-    `type=oci,tar=false,dest=${ociArchive}`,
+    `type=oci,tar=false,dest=${ociArchive},source-date-epoch=0,rewrite-timestamp=true`,
     "-t",
     tag,
   ];

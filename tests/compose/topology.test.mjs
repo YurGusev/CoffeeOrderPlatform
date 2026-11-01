@@ -820,6 +820,86 @@ void test("run-owned runtime image reuse rejects collisions and cleans only veri
   );
 });
 
+void test("canonical image loads normalize exporter timestamps without altering the caller environment", async (t) => {
+  const dir = await mkdtemp(join(tmpdir(), "coffee-image-wrapper-"));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const capture = join(dir, "capture.json");
+  const fakeDocker = `#!${process.execPath}
+const fs = require('node:fs');
+const args = process.argv.slice(2);
+if (args[0] === 'network' && args[1] === 'inspect') {
+  console.log(JSON.stringify([{Options: {'com.docker.network.driver.mtu': '1280'}}]));
+} else if (args[0] === 'buildx' && args[1] === 'build') {
+  fs.writeFileSync(process.env.COFFEE_WRAPPER_CAPTURE, JSON.stringify({args, epoch: process.env.SOURCE_DATE_EPOCH ?? null}));
+}
+`;
+  await writeFile(join(dir, "docker"), fakeDocker, { mode: 0o755 });
+  await writeFile(join(dir, "getent"), "#!/bin/sh\nexit 1\n", { mode: 0o755 });
+  await writeFile(join(dir, "pnpm"), "#!/bin/sh\nexit 0\n", { mode: 0o755 });
+  const previous = process.env.SOURCE_DATE_EPOCH;
+  process.env.SOURCE_DATE_EPOCH = "123";
+  t.after(() => {
+    if (previous === undefined) delete process.env.SOURCE_DATE_EPOCH;
+    else process.env.SOURCE_DATE_EPOCH = previous;
+  });
+  for (const { args, normalized } of [
+    {
+      args: [
+        "--target",
+        "runtime",
+        "--build-arg",
+        "RUNTIME=edge-gateway",
+        "--load",
+        ".",
+      ],
+      normalized: true,
+    },
+    { args: ["--target", "edge-nginx", "--load", "."], normalized: true },
+    {
+      args: ["--target", "runtime", "--output", "type=oci,dest=custom", "."],
+      normalized: false,
+    },
+    {
+      args: [
+        "--target",
+        "runtime",
+        "--load",
+        "--output=type=oci,dest=custom",
+        ".",
+      ],
+      normalized: false,
+    },
+  ]) {
+    const result = spawnSync(
+      process.execPath,
+      [join(REPO_ROOT, "tools/docker-build.mjs"), ...args],
+      {
+        cwd: REPO_ROOT,
+        env: {
+          ...process.env,
+          PATH: `${dir}:${process.env.PATH}`,
+          COFFEE_WRAPPER_CAPTURE: capture,
+        },
+        encoding: "utf8",
+      },
+    );
+    assert.equal(result.status, 0, result.stderr);
+    const actual = JSON.parse(await readFile(capture, "utf8"));
+    assert.equal(actual.epoch, normalized ? null : "123");
+    assert.equal(process.env.SOURCE_DATE_EPOCH, "123");
+    assert.equal(
+      actual.args.includes(
+        "type=docker,source-date-epoch=0,rewrite-timestamp=true",
+      ),
+      normalized,
+    );
+    assert.equal(actual.args.includes("--load"), args.includes("--load"));
+    assert.ok(
+      !actual.args.some((value) => value.startsWith("SOURCE_DATE_EPOCH=")),
+    );
+  }
+});
+
 void test("smoke accepts only runtime image IDs verified by G12 before startup", async (t) => {
   const { assertVerifiedRuntimeImages } =
     await import("../../tools/compose-smoke.mjs");
@@ -1915,6 +1995,22 @@ void test("Node production image is exact, non-root, and keeps build tooling out
   assert.match(dockerfile, /FROM \$\{NODE_IMAGE\} AS build/);
   assert.match(dockerfile, /FROM \$\{NODE_IMAGE\} AS runtime/);
   assert.match(dockerfile, /pnpm --filter .* deploy --prod/);
+  const deploy = dockerfile.indexOf(
+    'pnpm --filter "@coffee-platform/${RUNTIME}" deploy',
+  );
+  const removeInstallerState = dockerfile.indexOf(
+    "rm -f /runtime/node_modules/.modules.yaml",
+  );
+  const nativeProbe = dockerfile.indexOf(
+    "Deployed Kafka native addon is missing",
+  );
+  const runtimeCopy = dockerfile.indexOf("COPY --from=build /runtime");
+  assert.ok(
+    deploy >= 0 &&
+      deploy < removeInstallerState &&
+      removeInstallerState < nativeProbe &&
+      nativeProbe < runtimeCopy,
+  );
   assert.match(dockerfile, /USER node/);
   assert.match(dockerfile, /COPY --from=build \/runtime/);
   const runtimeStage = dockerfile.slice(

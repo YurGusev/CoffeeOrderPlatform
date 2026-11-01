@@ -1,7 +1,7 @@
 issue: 13
-baseCommit: ad72338496f49241e83956aadfc12d17a6dedc2a
+baseCommit: e06c5d478123d6dc2908739882171fbf5c06fa3a
 status: source-descriptor-before-formal-verification
-asOfUtc: "2026-11-01T08:46:14.111851+00:00"
+asOfUtc: "2026-11-01T10:24:26.853725+00:00"
 inputs:
   - issue: 2
     acceptedMergeCommit: 327638d4494269a151ee7c0ac945ac0053c3e0d4
@@ -123,6 +123,10 @@ inputs:
     acceptedMergeCommit: ad72338496f49241e83956aadfc12d17a6dedc2a
     artifact: evidence/handoffs/issue-250.yaml
     sha256: eec1b9898db579ca566fbc537930e9df91396016e0df7270f4de22549e16fb47
+  - issue: 252
+    acceptedMergeCommit: e06c5d478123d6dc2908739882171fbf5c06fa3a
+    artifact: evidence/handoffs/issue-252.yaml
+    sha256: 8825748ec8290b175c1cadb52a63cefa400a0e1e7914e92f7d8e33de1cfa3222
 historicalAcceptance:
   issue: 14
   acceptedMergeCommit: 9b5a320b936cecafcb74de2d6a1253e3d0a155ce
@@ -172,7 +176,7 @@ outputs:
     consumers:
       - 1
   - artifact: tests/compose/topology.test.mjs
-    sha256: eb96356a7ebfd8d6b99572e31f0cf56061837027b164514989dc796fd8e65098
+    sha256: a59a6eacfff45118725d41c6c5ac8a2a31c1bf545960f4f3b26bdbae66fe59c9
     consumers:
       - 1
   - artifact: tests/config/observability-bootstrap.test.mjs
@@ -228,11 +232,11 @@ outputs:
   - artifact: verification/launch/v1/scenarios/rollback.mjs
     sha256: 9e0b665e9b1f294e67362e9d98aa11d181456dc1f809b10cb0d84e9c20a06360
   - artifact: tools/security-scan.mjs
-    sha256: f563779fbae759f4e12abd71beb4befa2b49594d88ab633fe1560fdb8970e058
+    sha256: b44e8bb849423da25f4e0f92d6a59fab5f44c3d49a9a14e5db55732483c21894
     consumers:
       - 1
   - artifact: tests/tools/security-scan.test.mjs
-    sha256: d283d24f4b0f37c51f1884c9314633e4862d680156573180941b8041e46c4eff
+    sha256: 9192d2d7950db0614031f523f235a6cb3bf1639ef47e2ab8d00db114c7aaae96
     consumers:
       - 1
   - artifact: evidence/launch-preparation/2026-11-01/security-database-integrity.md
@@ -260,6 +264,9 @@ outputs:
     consumers:
       - 1
 verification:
+  - command: node --test --test-concurrency=1 tests/compose/topology.test.mjs tests/tools/security-scan.test.mjs
+    result: PASS 65/65, fail/cancel/skip 0, 44.591 s, Node 26.8.1; после объединения принятого #252, до freeze нового candidate.
+    logSha256: a6b576b6f8ed4db7ee726598641bc21c574f22d4594faf9ed881ec622fce449c
   - command:
       node --test --test-name-pattern='G14 queries actual child telemetry|full G14 coverage requires
       bound readiness' tests/observability/alerts.test.mjs
@@ -428,6 +435,7 @@ consumerContract:
     policy/key/flag child и G18 baseline flag child с проверенной lineage. Лимиты и provider scope сохранены;
     exact parent G12 product images, отдельная BOM/image-ID проверка fixture PostgreSQL."
 limitations:
+  - "Принятый #252 содержит парное подтверждение edge-gateway на Source 8009671; это не полный G12, SSE qualification или G00–G19 issue13 на новом окончательном Source."
   - "477 G12 component PASS не является SSE/full admission: qualification до измерения обнаружила реальные different COPY layers. Source context возвращён в originaltmpdir; новый frozen SHA требует собственные CI/G12/exact4IDs/qualification/G00–G19. Никакие thresholds/image bindings не ослаблены."
   - "Standalone G12 1e95d5c PASS за1462.207s не переносится на новый source. SSE qualification прежнего SHA не началась: отрицательные operator preflights и nested fixture false positive сохранены; own cleanup выполнен отдельно. Новый Source требует собственные CI/G12/qualification/G00–G19."
   - "Общий локальный check aae20ab: pnpm check FAIL на прежнем 2 s readiness fixture; отдельное исправление #250 принято через PR #251.
