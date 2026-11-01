@@ -97,13 +97,14 @@ async function assertLiveOwnedResources(
   const toolchain = JSON.parse(
     await readFile(join(root, "config/toolchain-versions.json"), "utf8"),
   );
-  if (ids.image !== `postgres:${toolchain.postgresql}-alpine`)
+  if (ids.image !== toolchain.postgresImage)
     fail("POSTGRES_IMAGE_PIN_MISMATCH");
   if (
     container?.Id !== ids.container.id ||
     container.Config?.Labels?.[LABEL_RUN] !== runId ||
     container.Config?.Labels?.[LABEL_OWNER] !== OWNER_LABEL ||
     container.Config?.Image !== ids.image ||
+    container.Image !== ids.imageId ||
     container.State?.Running !== true
   )
     fail("CONTAINER_OWNERSHIP_MISMATCH");
@@ -376,16 +377,21 @@ export async function prepareAromaSandboxResources({
     !/^\d+\.\d+(?:\.\d+)?$/.test(toolchain.postgresql)
   )
     fail("POSTGRES_VERSION_PIN_INVALID");
-  const image = `postgres:${toolchain.postgresql}-alpine`;
-  const imageInspect = await docker([
-    "image",
-    "inspect",
-    image,
-    "--format",
-    "{{.Id}}",
-  ]);
+  const image = toolchain.postgresImage;
+  if (
+    typeof image !== "string" ||
+    !image.startsWith(`postgres:${toolchain.postgresql}-alpine@sha256:`) ||
+    !/^postgres:[0-9.]+-alpine@sha256:[a-f0-9]{64}$/.test(image)
+  )
+    fail("POSTGRES_IMAGE_PIN_INVALID");
+  const inspectedImage = JSON.parse(
+    await docker(["image", "inspect", image, "--format", "{{json .}}"]),
+  );
+  const imageInspect = inspectedImage.Id;
   if (!/^sha256:[a-f0-9]{64}$/.test(imageInspect))
     fail("POSTGRES_IMAGE_ID_INVALID");
+  if (!inspectedImage.RepoDigests?.includes(`postgres@${image.split("@")[1]}`))
+    fail("POSTGRES_IMAGE_DIGEST_INVALID");
   await assertTmpfs();
   if (
     (await inspectExact("container", names.container)) ||
@@ -533,7 +539,8 @@ export async function prepareAromaSandboxResources({
       !container ||
       container.Config?.Labels?.[LABEL_RUN] !== runId ||
       container.Config?.Labels?.[LABEL_OWNER] !== OWNER_LABEL ||
-      container.Config?.Image !== image
+      container.Config?.Image !== image ||
+      container.Image !== imageInspect
     )
       fail("CONTAINER_OWNERSHIP_INVALID");
     const started = Date.now();
@@ -568,6 +575,7 @@ export async function prepareAromaSandboxResources({
       readyContainer.Config?.Labels?.[LABEL_RUN] !== runId ||
       readyContainer.Config?.Labels?.[LABEL_OWNER] !== OWNER_LABEL ||
       readyContainer.Config?.Image !== image ||
+      readyContainer.Image !== imageInspect ||
       readyContainer.State?.Running !== true ||
       readyContainer.HostConfig?.NetworkMode !== names.network
     )

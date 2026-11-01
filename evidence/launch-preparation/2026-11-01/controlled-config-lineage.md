@@ -49,6 +49,12 @@ hash и parent Git blob; runtime получает только итоговый 
 `config/platform.yaml`. Исторический config hash и commit сохраняют происхождение
 policy, а недоступный через GitHub commit не требуется для нового checkout.
 
+Подписанный approval не копируется в evidence открытым текстом. Только age
+ciphertext approval/signature с отдельными hashes сохраняет возможность
+повторной проверки исходной подписи через существующий operator identity G17.
+Plaintext допускается только в RAM/private tmpfs; wire format и срок approval
+не меняются, новая система ключей не добавляется.
+
 Нормативные связи: [спецификация запуска](../../../docs/launch/21_LAUNCH_VERIFICATION_SPEC.md),
 [AROMA admission](../../../docs/adr/ADR-0034-g16-existing-account-verification.md),
 [rollback lineage](../../../docs/adr/ADR-0035-launch-rollback-config-lineage.md).

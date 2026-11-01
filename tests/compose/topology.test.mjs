@@ -630,6 +630,17 @@ void test("smoke removes only project-scoped images built by this run", async (t
       "/private/g14-child-C",
     );
     assert.equal(calls[0][1].at(-1), "/private/g14-child-C");
+    calls.length = 0;
+    const selective = [];
+    buildRuntimeImages(
+      "coffee-cleanup-proof",
+      ["first"],
+      selective,
+      REPO_ROOT,
+      false,
+    );
+    assert.deepEqual(selective, ["coffee-cleanup-proof-first:latest"]);
+    assert.equal(calls.length, 1);
   } finally {
     t.mock.restoreAll();
     syncBuiltinESMExports();
@@ -639,9 +650,10 @@ void test("smoke removes only project-scoped images built by this run", async (t
 void test("run-owned runtime image reuse rejects collisions and cleans only verified references", async () => {
   const {
     inspectLaunchRuntimeImages,
-    launchRuntimeImageMode,
-    ownedLaunchRuntimeImageMode,
     cleanupLaunchRuntimeImages,
+    captureRuntimeImageBaseline,
+    validateRuntimeImageOwnership,
+    runtimeImageBuildTargets,
   } = await import("../../tools/compose-smoke.mjs");
   const catalog = JSON.parse(
     await readFile(join(REPO_ROOT, "config/service-catalog.json"), "utf8"),
@@ -690,36 +702,15 @@ void test("run-owned runtime image reuse rejects collisions and cleans only veri
       }),
     /image inventory unavailable/,
   );
-  assert.equal(launchRuntimeImageMode(inspect(), true), "build");
-  assert.equal(ownedLaunchRuntimeImageMode(inspect(), "baseline"), "build");
-  assert.throws(() => ownedLaunchRuntimeImageMode(inspect(), "ready"));
-  refs.set("preexisting:latest", images[0].imageId);
-  assert.equal(launchRuntimeImageMode(inspect(), true), "disabled");
-  assert.throws(
-    () => ownedLaunchRuntimeImageMode(inspect(), "baseline"),
-    /appeared after ownership baseline/,
-  );
-  refs.delete("preexisting:latest");
   refs.set("<none>:<none>", images[0].imageId);
-  assert.equal(launchRuntimeImageMode(inspect(), true), "disabled");
   assert.throws(
     () => cleanupLaunchRuntimeImages(project, images, run),
     /unowned dangling image/,
   );
   refs.delete("<none>:<none>");
-  refs.set(`${project}-${images[0].service}:latest`, images[0].imageId);
-  assert.throws(
-    () => launchRuntimeImageMode(inspect(), true),
-    /already exists/,
-  );
-  assert.throws(() => launchRuntimeImageMode(inspect()), /incomplete/);
   for (const { service, imageId } of images)
     refs.set(`${project}-${service}:latest`, imageId);
-  assert.equal(launchRuntimeImageMode(inspect()), "reuse");
-  assert.equal(ownedLaunchRuntimeImageMode(inspect(), "ready"), "reuse");
-  assert.throws(() => ownedLaunchRuntimeImageMode(inspect(), "baseline"));
   refs.set(`${project}-${images[0].service}:latest`, foreign);
-  assert.throws(() => launchRuntimeImageMode(inspect()), /unexpected ID/);
   assert.throws(
     () => cleanupLaunchRuntimeImages(project, images, run),
     /ownership is unknown/,
@@ -746,6 +737,84 @@ void test("run-owned runtime image reuse rejects collisions and cleans only veri
   );
   cleanupLaunchRuntimeImages(project, images, run);
   assert.deepEqual([...refs], [["foreign:latest", foreign]]);
+  const emptyBaseline = captureRuntimeImageBaseline(inspect());
+  assert.deepEqual(emptyBaseline, []);
+  assert.equal(
+    validateRuntimeImageOwnership(inspect(), emptyBaseline, "baseline").pending
+      .length,
+    15,
+  );
+  refs.set("original:stable", images[0].imageId);
+  refs.set("<none>:<none>", images[1].imageId);
+  const baseline = captureRuntimeImageBaseline(inspect());
+  assert.deepEqual(
+    new Set(baseline.map(({ imageId }) => imageId)),
+    new Set([images[0].imageId, images[1].imageId]),
+  );
+  const { owned } = validateRuntimeImageOwnership(
+    inspect(),
+    baseline,
+    "baseline",
+  );
+  assert.equal(owned.length, 13);
+  assert.deepEqual(runtimeImageBuildTargets(project, owned, true), {
+    runtimes: ["customer-service"],
+    nginx: true,
+  });
+  for (const [reference, imageId] of owned.filter(
+    ([reference]) =>
+      reference === `${project}-customer-service:latest` ||
+      reference === `${project}-edge-nginx:latest`,
+  ))
+    refs.set(reference, imageId);
+  const pending = validateRuntimeImageOwnership(
+    inspect(),
+    baseline,
+    "baseline",
+  ).pending;
+  assert.equal(pending.length, 11);
+  assert.equal(runtimeImageBuildTargets(project, pending, false).nginx, false);
+  assert.ok(
+    !runtimeImageBuildTargets(project, pending, false).runtimes.includes(
+      "customer-service",
+    ),
+  );
+  for (const [reference, imageId] of pending) refs.set(reference, imageId);
+  assert.equal(
+    validateRuntimeImageOwnership(inspect(), baseline, "ready").owned.length,
+    13,
+  );
+  const missingReference = owned[2];
+  refs.delete(missingReference[0]);
+  assert.throws(
+    () => validateRuntimeImageOwnership(inspect(), baseline, "ready"),
+    /incomplete/u,
+  );
+  refs.set(missingReference[0], missingReference[1]);
+  refs.delete("original:stable");
+  assert.throws(
+    () => cleanupLaunchRuntimeImages(project, images, run, baseline),
+    /pre-existing image reference changed/u,
+  );
+  assert.ok(refs.has(owned[0][0]));
+  refs.set("original:stable", images[0].imageId);
+  cleanupLaunchRuntimeImages(project, images, run, baseline);
+  assert.equal(refs.get("original:stable"), images[0].imageId);
+  assert.equal(refs.get("<none>:<none>"), images[1].imageId);
+  assert.equal(refs.get("foreign:latest"), foreign);
+  assert.equal(refs.size, 3);
+  refs.clear();
+  for (const { service, imageId } of images)
+    refs.set(`other-${service}:latest`, imageId);
+  const completeBaseline = captureRuntimeImageBaseline(inspect());
+  assert.equal(completeBaseline.length, 15);
+  assert.equal(
+    validateRuntimeImageOwnership(inspect(), completeBaseline, "ready").pending
+      .length,
+    0,
+  );
+  cleanupLaunchRuntimeImages(project, images, run, completeBaseline);
+  assert.equal(refs.size, 15);
   assert.throws(() =>
     inspectLaunchRuntimeImages(project, images.slice(1), run),
   );
@@ -800,6 +869,19 @@ void test("smoke accepts only runtime image IDs verified by G12 before startup",
       }),
     );
     assert.equal(calls.at(-1)[1].at(-1), "coffee-platform-edge-nginx:local");
+    for (const { imageId } of verifiedImages) expected.set(imageId, imageId);
+    calls.length = 0;
+    assert.doesNotThrow(() =>
+      assertVerifiedRuntimeImages({
+        projectName: "coffee-test",
+        verifiedImages,
+        directImageIds: true,
+      }),
+    );
+    assert.deepEqual(
+      calls.map((call) => call[1].at(-1)),
+      verifiedImages.map(({ imageId }) => imageId),
+    );
     const source = await readFile(
       join(REPO_ROOT, "tools/compose-smoke.mjs"),
       "utf8",
@@ -842,7 +924,10 @@ void test("smoke accepts only runtime image IDs verified by G12 before startup",
       runInNewContext(predicate, { options: {}, browser: undefined }),
       true,
     );
-    assert.ok(source.includes("if (imageIdentity && bindRuntimeImages)"));
+    assert.match(
+      source,
+      /if\s*\(\s*imageMode === "build"\s*&&\s*imageIdentity\s*&&\s*bindRuntimeImages\s*\)/u,
+    );
     assert.ok(binding < source.indexOf("composeAttempted = true;", binding));
   } finally {
     t.mock.restoreAll();
@@ -877,6 +962,17 @@ void test("smoke rejects mismatched or missing G12 runtime IDs before startup", 
     );
     assert.equal(calls.length, 1);
     assert.deepEqual(calls[0][1].slice(0, 2), ["image", "inspect"]);
+    calls.length = 0;
+    assert.throws(
+      () =>
+        assertVerifiedRuntimeImages({
+          projectName: "coffee-test",
+          verifiedImages,
+          directImageIds: true,
+        }),
+      /differs from the scanned G12 artifact/u,
+    );
+    assert.equal(calls[0][1].at(-1), verifiedImages[0].imageId);
     calls.length = 0;
     assert.throws(
       () =>
@@ -1008,6 +1104,33 @@ void test("G14 seals the child config for every Node runtime and rejects mismatc
       context,
     );
   }
+  const runtimeImages = [...RUNTIMES, "edge-nginx"].map((service) => ({
+    service,
+    imageId: `sha256:${createHash("sha256").update(service).digest("hex")}`,
+  }));
+  const bound = await writeScopedComposeOverride("coffee-controlled-config", {
+    launchContextPath: context,
+    g14Config: { path: config, sha256 },
+    runtimeImages,
+  });
+  t.after(() => rm(bound, { force: true }));
+  const boundServices = load(await readFile(bound, "utf8")).services;
+  for (const { service, imageId } of runtimeImages) {
+    assert.equal(boundServices[service].image, imageId);
+    assert.equal(boundServices[service].pull_policy, "never");
+  }
+  await assert.rejects(
+    writeScopedComposeOverride("coffee-controlled-config", {
+      runtimeImages: runtimeImages.slice(1),
+    }),
+    /runtime image inventory/u,
+  );
+  await assert.rejects(
+    writeScopedComposeOverride("coffee-controlled-config", {
+      runtimeImages: [...runtimeImages.slice(0, -1), runtimeImages[0]],
+    }),
+    /runtime image inventory/u,
+  );
   await assert.rejects(
     writeScopedComposeOverride("coffee-g14-config", {
       launchContextPath: context,

@@ -23,7 +23,7 @@ import fsPromises from "node:fs/promises";
 import { syncBuiltinESMExports } from "node:module";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { Readable } from "node:stream";
 import { pathToFileURL } from "node:url";
 import test from "node:test";
@@ -80,25 +80,33 @@ import {
   captureAromaPhaseFailureFacts,
   computeExistingAccountFingerprint,
   createAromaMutationGrant,
+  createG16Checkout,
+  buildG16ChildConfig,
+  readApprovedG16Policy,
   createAromaProviderMutationGuard,
   inspectAromaProfile,
   loadAromaPackingWireProof,
   normalizeCleanupFailureOutcome,
   parseArguments as parseAromaArguments,
+  runControlledG16Parent,
   safeAromaConvergenceEvidence,
   safeAromaDiagnostic,
   safeAromaFailureCode,
   safeAromaPhaseFailureEvidence,
   startAcknowledgementDropProxy,
   validateAromaPackingWireProof,
+  validateControlledG16Result,
+  verifyControlledG16Evidence,
   waitForAromaRestartEligibility,
 } from "./scenarios/aroma-sandbox.mjs";
 import {
   parseTapSummary,
   tapSummaryPassed,
 } from "./scenarios/owner-suites.mjs";
+import { aromaSandboxResourceNames } from "./scenarios/aroma-sandbox-resources.mjs";
 import {
   attachRollbackDisabledReconcileSubstage,
+  createRollbackBaseline,
   createRollbackCheckouts,
   createRollbackFailureReceipt,
   inspectLaunchCheckout,
@@ -107,6 +115,7 @@ import {
   runManagedRollbackChild,
   ROLLBACK_DISABLED_RECONCILE_SUBSTAGES,
   validateRollbackLineage,
+  validateRollbackBaseline,
   validateRollbackFailureArtifact,
   validateRollbackRuntimeArtifact,
   writeRollbackRuntimeArtifact,
@@ -175,6 +184,37 @@ void test("image cleanup completes before ownership can pass; unknown cleanup fa
     true,
   );
   assert.equal(ownership.phase, "cleaned");
+  ownership.phase = "ready";
+  ownership.baseline = [
+    { imageId: `sha256:${"a".repeat(64)}`, references: ["foreign:latest"] },
+  ];
+  ownership.baselineSha256 = "0".repeat(64);
+  gate.status = "PASS";
+  let called = false;
+  assert.equal(
+    finishRuntimeImageOwnership(ownership, gate, () => {
+      called = true;
+    }),
+    false,
+  );
+  assert.equal(called, false);
+  assert.equal(gate.status, "FAIL");
+  assert.match(gate.reason, /baseline hash mismatch/u);
+  ownership.phase = "ready";
+  ownership.baselineSha256 = createHash("sha256")
+    .update(JSON.stringify(ownership.baseline))
+    .digest("hex");
+  gate.status = "PASS";
+  assert.equal(
+    finishRuntimeImageOwnership(
+      ownership,
+      gate,
+      (_project, _images, _run, baseline) => {
+        assert.deepEqual(baseline, ownership.baseline);
+      },
+    ),
+    true,
+  );
 });
 
 void test("G19 runs image cleanup before writing the final decision", async () => {
@@ -453,6 +493,46 @@ void test("owner-suite TAP summary rejects empty or omitted integration/recovery
   ]) {
     assert.equal(tapSummaryPassed(parseTapSummary(summary)), false, summary);
   }
+});
+
+void test("G18 baseline child changes only the approved parent mutation flag", async (t) => {
+  const fixture = await rollbackGitFixture(t);
+  const base = await createRollbackBaseline({
+    candidateRoot: fixture.roots.disabled,
+    candidateSha: fixture.disabledSha,
+  });
+  t.after(() => rm(base.directory, { recursive: true, force: true }));
+  assert.equal(base.lineage.parent.commitSha, fixture.disabledSha);
+  assert.equal(base.lineage.baseline.commitSha, base.baselineSha);
+  await assert.rejects(
+    validateRollbackBaseline({
+      parentRoot: fixture.roots.disabled,
+      parentSha: fixture.disabledSha,
+      baselineRoot: base.baselineRoot,
+      baselineSha: "0".repeat(40),
+    }),
+    /ROLLBACK_CHECKOUT_HEAD_MISMATCH/u,
+  );
+  await assert.rejects(
+    createRollbackBaseline({
+      candidateRoot: fixture.roots.candidate,
+      candidateSha: fixture.candidateSha,
+    }),
+    /ROLLBACK_BASELINE_PARENT_FLAG_INVALID/u,
+  );
+  await writeFile(
+    join(base.baselineRoot, "config/platform.yaml"),
+    "services: {}\n",
+  );
+  await assert.rejects(
+    validateRollbackBaseline({
+      parentRoot: fixture.roots.disabled,
+      parentSha: fixture.disabledSha,
+      baselineRoot: base.baselineRoot,
+      baselineSha: base.baselineSha,
+    }),
+    /ROLLBACK_CONFIG_WORKTREE_MISMATCH/u,
+  );
 });
 
 void test("G18 validates only a clean config-only B→D→R lineage", async (t) => {
@@ -2839,6 +2919,659 @@ void test("G15 failed gate records only a matching child failure receipt", async
   );
   assert.deepEqual(wrongIdentity.artifacts, []);
   assert.equal(wrongIdentity.status, "FAIL");
+});
+
+function syntheticControlledG16Result(context, policy, image) {
+  const names = aromaSandboxResourceNames(context.runId);
+  const phase = (name, fields = {}) => ({
+    phase: name,
+    status: "PASS",
+    ...fields,
+  });
+  return {
+    gate: "G16_AROMA_SANDBOX",
+    status: "PASS",
+    code: "CONTROLLED_LIVE_SCENARIO_COMPLETE",
+    ...context,
+    accountFingerprint: policy.accountFingerprint,
+    selected: { offerRef: "offer" },
+    cleanup: { removed: true, retained: false },
+    resourceIDs: {
+      runId: context.runId,
+      image,
+      imageId: `sha256:${"4".repeat(64)}`,
+      container: { name: names.container, id: "5".repeat(64) },
+      network: { name: names.network, id: "6".repeat(64) },
+      databaseSystemIdentifier: "123",
+    },
+    baselineFingerprint: "baseline",
+    finalFingerprint: "baseline",
+    mutationJournalRows: 3,
+    unknownOperationRef: "unknown",
+    phases: [
+      phase("baseline-read", {
+        cartFingerprint: "baseline",
+        lineCount: 0,
+        capturedAtUtc: "2026-10-31T12:35:00.000Z",
+      }),
+      phase("noop", {
+        workDirty: false,
+        observedLineCount: 0,
+        gatewayJournalRows: 0,
+      }),
+      phase("single-mutation", {
+        workDirty: false,
+        gateway: { operationKind: "SetLineQuantity", state: "Acknowledged" },
+        observedLines: [{ offerRef: "offer", quantityMilli: "1000" }],
+      }),
+      phase("lost-response", {
+        workDirty: true,
+        reservation: {
+          state: "UnknownOutcome",
+          resolved: false,
+          operationRef: "unknown",
+        },
+        gateway: { state: "Acknowledged" },
+        droppedAcknowledgementCount: 1,
+      }),
+      phase("restart-reconcile", {
+        workDirty: false,
+        reservation: { resolved: true, operationRef: "unknown" },
+        oldOperationJournalRows: 1,
+      }),
+      phase("restore", {
+        workDirty: false,
+        gateway: { operationKind: "RemoveLine", state: "Acknowledged" },
+        observedLineCount: 0,
+      }),
+      phase("final-read", {
+        cartFingerprint: "baseline",
+        matchesBaseline: true,
+        lineCount: 0,
+      }),
+    ],
+  };
+}
+
+void test("G16 controlled result requires bound phases, restore and owned cleanup", () => {
+  const context = {
+    runId: "20261031T123456Z-abcdef0",
+    candidateSha: `abcdef0${"1".repeat(33)}`,
+  };
+  const policy = { accountFingerprint: `sha256:${"2".repeat(64)}` };
+  const image = `postgres:17.11-alpine@sha256:${"3".repeat(64)}`;
+  const value = syntheticControlledG16Result(context, policy, image);
+  assert.equal(
+    validateControlledG16Result(value, context, policy, image),
+    value,
+  );
+  for (const mutate of [
+    (v) => {
+      v.candidateSha = "f".repeat(40);
+    },
+    (v) => {
+      v.resourceIDs.image = "postgres:17.11-alpine";
+    },
+    (v) => {
+      v.resourceIDs.imageId = "";
+    },
+    (v) => {
+      v.cleanup.removed = false;
+    },
+    (v) => {
+      v.cleanup.retained = true;
+    },
+    (v) => {
+      v.phases[3].reservation.resolved = true;
+    },
+    (v) => {
+      v.phases[4].oldOperationJournalRows = 2;
+    },
+    (v) => {
+      v.phases[5].status = "FAIL";
+    },
+    (v) => {
+      v.finalFingerprint = "different";
+    },
+    (v) => {
+      v.phases.pop();
+    },
+  ]) {
+    const altered = structuredClone(value);
+    mutate(altered);
+    assert.throws(
+      () => validateControlledG16Result(altered, context, policy, image),
+      /G16_CHILD_RESULT_INVALID/u,
+    );
+  }
+});
+
+void test("G16 signer locator requires a single absolute path", () => {
+  assert.deepEqual(
+    parseLaunchArguments(["--g16-signer", "/tmp/g16-operator.mjs"]),
+    { g16SignerPath: "/tmp/g16-operator.mjs" },
+  );
+  for (const args of [
+    ["--g16-signer"],
+    ["--g16-signer", "relative"],
+    ["--g16-signer", "/a", "--g16-signer", "/b"],
+  ])
+    assert.throws(() => parseLaunchArguments(args), /g16-signer/u);
+});
+
+void test("G16 parent joins a refused signer without touching foreign tmpfs", async () => {
+  const root = await mkdtemp(join(tmpdir(), "coffee-g16-refusal-test-"));
+  const foreign = await mkdtemp("/dev/shm/coffee-g16-operator-");
+  try {
+    const signer = join(root, "signer.mjs");
+    const joined = join(root, "signer-joined");
+    const child = join(root, "child-must-not-exist");
+    const foreignMarker = join(foreign, "foreign-resource");
+    await writeFile(foreignMarker, "preserve");
+    await writeFile(
+      signer,
+      `import { writeFileSync } from "node:fs";
+process.on("SIGTERM", () => { writeFileSync(${JSON.stringify(joined)}, "joined"); process.exit(0); });
+process.stdout.write(JSON.stringify({ mode: "INVALID", approvalFile: ${JSON.stringify(join(foreign, "approval.json"))}, approver: "g16-operator" }) + "\\n");
+setInterval(() => {}, 1000);
+`,
+    );
+    await assert.rejects(
+      runControlledG16Parent({
+        parentIdentity: {
+          context: {},
+          sourceRoot: root,
+          candidateRoot: child,
+          evidenceDir: root,
+        },
+        parentContextPath: join(root, "missing-context"),
+        signerPath: signer,
+      }),
+      /G16_SIGNER_READY_INVALID/u,
+    );
+    assert.equal(await readFile(joined, "utf8"), "joined");
+    assert.equal(await readFile(foreignMarker, "utf8"), "preserve");
+    await assert.rejects(access(child), { code: "ENOENT" });
+    await assert.rejects(access(join(root, "gates")), { code: "ENOENT" });
+  } finally {
+    await rm(root, { recursive: true, force: true });
+    await rm(foreign, { recursive: true, force: true });
+  }
+});
+
+void test("G16 controlled evidence rejects unknown cleanup and altered child context", async () => {
+  const root = await mkdtemp(join(tmpdir(), "coffee-g16-parent-test-"));
+  try {
+    const artifacts = join(root, "gates/G16_AROMA_SANDBOX/artifacts");
+    await mkdir(artifacts, { recursive: true });
+    const parentIdentity = {
+      evidenceDir: root,
+      sourceRoot: root,
+      candidateRoot: root,
+      context: {
+        runId: "20261031T123456Z-abcdef0",
+        candidateSha: `abcdef0${"1".repeat(33)}`,
+      },
+    };
+    const receipt = {
+      schemaVersion: 1,
+      ...parentIdentity.context,
+      signerSha256: "a".repeat(64),
+      cleanup: {
+        checkoutRemoved: true,
+        evidenceRemoved: true,
+        signerRemoved: false,
+      },
+    };
+    const path = join(artifacts, "controlled-parent.json");
+    await writeFile(path, JSON.stringify(receipt));
+    await assert.rejects(
+      verifyControlledG16Evidence({
+        parentIdentity,
+        parentContextPath: "/parent",
+      }),
+      /G16_PARENT_RECEIPT_INVALID/u,
+    );
+    receipt.cleanup.signerRemoved = true;
+    receipt.childContextSha256 = "b".repeat(64);
+    await writeFile(path, JSON.stringify(receipt));
+    await writeFile(join(artifacts, "controlled-child-context.json"), "{}");
+    await assert.rejects(
+      verifyControlledG16Evidence({
+        parentIdentity,
+        parentContextPath: "/parent",
+      }),
+      /G16_PARENT_ARTIFACT_HASH_INVALID/u,
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+void test("G16 controlled evidence verifies signed child bundle and rejects altered binding", async () => {
+  const temporary = await mkdtemp(join(tmpdir(), "coffee-g16-evidence-test-"));
+  let child;
+  let parentEvidenceDir;
+  const previousAgeKey = process.env.SOPS_AGE_KEY_FILE;
+  try {
+    const candidateRoot = join(temporary, "parent");
+    execFileSync(
+      "git",
+      [
+        "clone",
+        "--quiet",
+        "--shared",
+        "--no-hardlinks",
+        process.cwd(),
+        candidateRoot,
+      ],
+      { stdio: "ignore" },
+    );
+    const git = (...args) =>
+      execFileSync("git", args, {
+        cwd: candidateRoot,
+        encoding: "utf8",
+      }).trim();
+    git(
+      "remote",
+      "set-url",
+      "origin",
+      "https://github.com/YurGusev/CoffeeOrderPlatform",
+    );
+    const ageKey = join(temporary, "synthetic-age-key");
+    execFileSync("age-keygen", ["-o", ageKey], { stdio: "ignore" });
+    await chmod(ageKey, 0o600);
+    const recipient = execFileSync("age-keygen", ["-y", ageKey], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim();
+    await writeFile(
+      join(candidateRoot, ".sops.yaml"),
+      `creation_rules:\n  - path_regex: secrets/platform\\.secrets\\.sops\\.yaml$\n    age:\n      - ${recipient}\n`,
+    );
+    git("add", "--", ".sops.yaml");
+    git(
+      "-c",
+      "user.name=G16 synthetic test",
+      "-c",
+      "user.email=fixture@example.invalid",
+      "commit",
+      "--quiet",
+      "-m",
+      "synthetic recipient",
+    );
+    const candidateSha = git("rev-parse", "HEAD");
+    git("checkout", "--quiet", "--detach", candidateSha);
+    const keys = generateKeyPairSync("ed25519");
+    const publicKeyPem = keys.publicKey
+      .export({ type: "spki", format: "pem" })
+      .toString();
+    const keyId = `g16-${createHash("sha256")
+      .update(keys.publicKey.export({ type: "spki", format: "der" }))
+      .digest("hex")
+      .slice(0, 20)}`;
+    const signer = { publicKeyPem, keyId, approver: "g16-operator" };
+    child = await createG16Checkout({ candidateRoot, candidateSha, ...signer });
+    const hash = (bytes) => createHash("sha256").update(bytes).digest("hex");
+    const sourceRoot = await fsPromises.realpath(process.cwd());
+    const parentRunId = `20261031T123400Z-${candidateSha.slice(0, 7)}`;
+    const evidenceDir = join(sourceRoot, "evidence/launch", parentRunId);
+    const parentContextPath = join(evidenceDir, "context.json");
+    await mkdir(evidenceDir, { mode: 0o700 });
+    parentEvidenceDir = evidenceDir;
+    const parent = {
+      schemaVersion: 1,
+      runId: parentRunId,
+      candidateSha,
+      acceptedBaseCommit: candidateSha,
+      checkoutDir: candidateRoot,
+      sourceRepoRoot: sourceRoot,
+      evidenceDir,
+      baseConfigSha256: hash(
+        await readFile(join(candidateRoot, "config/platform.yaml")),
+      ),
+    };
+    await writeFile(parentContextPath, JSON.stringify(parent), { mode: 0o400 });
+    const runId = `20261031T123456Z-${child.baselineSha.slice(0, 7)}`;
+    const context = {
+      runId,
+      candidateSha: child.baselineSha,
+      sourceRepoRoot: sourceRoot,
+      acceptedBaseCommit: candidateSha,
+      baseConfigSha256: hash(
+        await readFile(join(child.baselineRoot, "config/platform.yaml")),
+      ),
+      evidenceDir: join(sourceRoot, "evidence/launch", runId),
+      resources: {
+        composeProject: `coffee-launch-${runId.toLowerCase()}`,
+        kafkaPrefix: runId,
+        controlledScope: "G16",
+        controlledParentContextPath: parentContextPath,
+        controlledParentCandidateSha: candidateSha,
+        controlledParentRunId: parent.runId,
+      },
+    };
+    const policy = await readApprovedG16Policy(candidateRoot, candidateSha);
+    const toolchain = JSON.parse(
+      await readFile(
+        join(candidateRoot, "config/toolchain-versions.json"),
+        "utf8",
+      ),
+    );
+    const outcome = syntheticControlledG16Result(
+      context,
+      policy,
+      toolchain.postgresImage,
+    );
+    const approval = {
+      schemaVersion: 1,
+      runId,
+      candidateSha: child.baselineSha,
+      mode: policy.mode,
+      origin: policy.origin,
+      exceptionAuthority: "user-2026-10-23",
+      accountFingerprint: policy.accountFingerprint,
+      offerRef: "offer",
+      maximumQuantity: "2",
+      approver: signer.approver,
+      keyId,
+      issuedAtUtc: "2026-10-31T12:34:00.000Z",
+      expiresAtUtc: "2026-10-31T13:34:00.000Z",
+    };
+    const approvalBytes = Buffer.from(JSON.stringify(approval));
+    const signature = Buffer.from(
+      sign(null, approvalBytes, keys.privateKey).toString("base64"),
+    );
+    const bundle = await writeRollbackLineageBundle({
+      candidateSha,
+      restoredRoot: child.baselineRoot,
+      restoredSha: child.baselineSha,
+      evidenceDir,
+      scope: "G16",
+    });
+    const artifacts = join(evidenceDir, "gates/G16_AROMA_SANDBOX/artifacts");
+    const encrypt = (bytes) =>
+      execFileSync("age", ["--recipient", recipient], {
+        input: bytes,
+        stdio: ["pipe", "pipe", "pipe"],
+      });
+    const approvalCiphertext = encrypt(approvalBytes);
+    const signatureCiphertext = encrypt(signature);
+    const files = [
+      ["controlled-child-context.json", Buffer.from(JSON.stringify(context))],
+      ["controlled-child-result.json", Buffer.from(JSON.stringify(outcome))],
+      ["controlled-approval.json.age", approvalCiphertext],
+      ["controlled-approval.sig.age", signatureCiphertext],
+    ];
+    for (const [name, bytes] of files)
+      await writeFile(join(artifacts, name), bytes, { mode: 0o600 });
+    const receipt = {
+      schemaVersion: 1,
+      ...parent,
+      childRunId: runId,
+      childSha: child.baselineSha,
+      signer,
+      signerSha256: "a".repeat(64),
+      bundleSha256: bundle.sha256,
+      childContextSha256: hash(files[0][1]),
+      childResultSha256: hash(files[1][1]),
+      approvalSha256: hash(approvalBytes),
+      signatureSha256: hash(signature),
+      approvalCiphertextSha256: hash(approvalCiphertext),
+      signatureCiphertextSha256: hash(signatureCiphertext),
+      cleanup: {
+        checkoutRemoved: true,
+        evidenceRemoved: true,
+        signerRemoved: true,
+      },
+    };
+    const receiptPath = join(artifacts, "controlled-parent.json");
+    await writeFile(receiptPath, JSON.stringify(receipt));
+    const parentIdentity = {
+      candidateRoot,
+      sourceRoot,
+      evidenceDir,
+      context: parent,
+    };
+    const verifyEvidence = (key = ageKey) =>
+      verifyControlledG16Evidence({
+        parentIdentity,
+        parentContextPath,
+        env: { ...process.env, SOPS_AGE_KEY_FILE: key },
+      });
+    assert.equal(
+      await access(join(artifacts, "controlled-approval.json")).then(
+        () => true,
+        () => false,
+      ),
+      false,
+    );
+    assert.equal(
+      await access(join(artifacts, "controlled-approval.sig")).then(
+        () => true,
+        () => false,
+      ),
+      false,
+    );
+    assert.equal(approvalCiphertext.includes(approvalBytes), false);
+    assert.equal(signatureCiphertext.includes(signature), false);
+    assert.equal((await verifyEvidence()).childSha, child.baselineSha);
+    process.env.SOPS_AGE_KEY_FILE = ageKey;
+    const gate = { id: "G16_AROMA_SANDBOX" };
+    const pendingRecord = () => ({
+      status: "NOT_RUN",
+      runs: [],
+      artifacts: [],
+    });
+    const accepted = pendingRecord();
+    assert.equal(await verifyGateArtifacts(gate, accepted, evidenceDir), null);
+    assert.equal(accepted.artifacts.length, 7);
+    const ciphertextPath = join(artifacts, "controlled-approval.json.age");
+    await unlink(ciphertextPath);
+    const missing = pendingRecord();
+    assert.match(
+      await verifyGateArtifacts(gate, missing, evidenceDir),
+      /G16 controlled child failed/u,
+    );
+    assert.deepEqual(missing.artifacts, []);
+    await writeFile(ciphertextPath, approvalCiphertext, { mode: 0o600 });
+    delete receipt.cleanup.signerRemoved;
+    await writeFile(receiptPath, JSON.stringify(receipt));
+    const missingCleanup = pendingRecord();
+    assert.match(
+      await verifyGateArtifacts(gate, missingCleanup, evidenceDir),
+      /G16 controlled child failed/u,
+    );
+    assert.deepEqual(missingCleanup.artifacts, []);
+    receipt.cleanup.signerRemoved = false;
+    await writeFile(receiptPath, JSON.stringify(receipt));
+    const forgedCleanup = pendingRecord();
+    assert.match(
+      await verifyGateArtifacts(gate, forgedCleanup, evidenceDir),
+      /G16 controlled child failed/u,
+    );
+    assert.deepEqual(forgedCleanup.artifacts, []);
+    receipt.cleanup.signerRemoved = true;
+    await writeFile(receiptPath, JSON.stringify(receipt));
+    await chmod(join(artifacts, "controlled-approval.json.age"), 0o644);
+    await assert.rejects(
+      verifyEvidence(),
+      /G16_APPROVAL_CIPHERTEXT_MODE_INVALID/u,
+    );
+    await chmod(join(artifacts, "controlled-approval.json.age"), 0o600);
+    for (const name of await fsPromises.readdir(artifacts)) {
+      const persisted = await readFile(join(artifacts, name));
+      assert.equal(persisted.includes(approvalBytes), false, name);
+      assert.equal(persisted.includes(signature), false, name);
+    }
+    context.resources.controlledParentRunId = "foreign";
+    files[0][1] = Buffer.from(JSON.stringify(context));
+    await writeFile(join(artifacts, files[0][0]), files[0][1]);
+    receipt.childContextSha256 = hash(files[0][1]);
+    await writeFile(receiptPath, JSON.stringify(receipt));
+    await assert.rejects(verifyEvidence(), /G16_CHILD_CONTEXT_INVALID/u);
+    context.resources.controlledParentRunId = parent.runId;
+    files[0][1] = Buffer.from(JSON.stringify(context));
+    await writeFile(join(artifacts, files[0][0]), files[0][1]);
+    receipt.childContextSha256 = hash(files[0][1]);
+    approval.offerRef = "other";
+    const forged = Buffer.from(JSON.stringify(approval));
+    const forgedCiphertext = encrypt(forged);
+    await writeFile(
+      join(artifacts, "controlled-approval.json.age"),
+      forgedCiphertext,
+    );
+    receipt.approvalSha256 = hash(forged);
+    receipt.approvalCiphertextSha256 = hash(forgedCiphertext);
+    await writeFile(receiptPath, JSON.stringify(receipt));
+    await assert.rejects(verifyEvidence(), /G16_APPROVAL_PROOF_INVALID/u);
+    await writeFile(
+      join(artifacts, "controlled-approval.json.age"),
+      approvalCiphertext,
+    );
+    receipt.approvalSha256 = hash(approvalBytes);
+    receipt.approvalCiphertextSha256 = hash(approvalCiphertext);
+    const otherKey = generateKeyPairSync("ed25519").privateKey;
+    const forgedSignature = Buffer.from(
+      sign(null, approvalBytes, otherKey).toString("base64"),
+    );
+    const forgedSignatureCiphertext = encrypt(forgedSignature);
+    await writeFile(
+      join(artifacts, "controlled-approval.sig.age"),
+      forgedSignatureCiphertext,
+    );
+    receipt.signatureSha256 = hash(forgedSignature);
+    receipt.signatureCiphertextSha256 = hash(forgedSignatureCiphertext);
+    await writeFile(receiptPath, JSON.stringify(receipt));
+    await assert.rejects(verifyEvidence(), /G16_APPROVAL_PROOF_INVALID/u);
+    await writeFile(
+      join(artifacts, "controlled-approval.sig.age"),
+      signatureCiphertext,
+    );
+    receipt.signatureSha256 = hash(signature);
+    receipt.signatureCiphertextSha256 = hash(signatureCiphertext);
+    const wrongKey = join(temporary, "synthetic-wrong-key");
+    execFileSync("age-keygen", ["-o", wrongKey], { stdio: "ignore" });
+    await chmod(wrongKey, 0o600);
+    await writeFile(receiptPath, JSON.stringify(receipt));
+    await assert.rejects(verifyEvidence(wrongKey), /G16_AGE_PREFLIGHT_FAILED/u);
+    const damaged = Buffer.from(approvalCiphertext);
+    damaged[damaged.length - 1] ^= 1;
+    await writeFile(join(artifacts, "controlled-approval.json.age"), damaged);
+    await assert.rejects(verifyEvidence(), /G16_PARENT_ARTIFACT_HASH_INVALID/u);
+    receipt.approvalCiphertextSha256 = hash(damaged);
+    await writeFile(receiptPath, JSON.stringify(receipt));
+    await assert.rejects(verifyEvidence(), /G16_AGE_OPERATION_FAILED/u);
+  } finally {
+    if (previousAgeKey === undefined) delete process.env.SOPS_AGE_KEY_FILE;
+    else process.env.SOPS_AGE_KEY_FILE = previousAgeKey;
+    if (child) await rm(child.directory, { recursive: true, force: true });
+    if (parentEvidenceDir)
+      await rm(parentEvidenceDir, { recursive: true, force: true });
+    await rm(temporary, { recursive: true, force: true });
+  }
+});
+
+void test("G16 child config preserves parent except approved policy and mutation flag", async () => {
+  const fixture = await aromaApprovalFixture();
+  const { publicKey } = generateKeyPairSync("ed25519");
+  const publicKeyPem = publicKey
+    .export({ type: "spki", format: "pem" })
+    .toString();
+  const keyId = `g16-${createHash("sha256")
+    .update(publicKey.export({ type: "spki", format: "der" }))
+    .digest("hex")
+    .slice(0, 20)}`;
+  const parentBytes = Buffer.from(
+    "environment: development\nverification:\n  aromaSandbox: null\nservices:\n  aroma-convergence:\n    mutationsEnabled: false\n    unrelated: preserved\n",
+  );
+  const { trustedApprovers: _unusedApprovers, ...historicalPolicy } =
+    fixture.policy;
+  const input = {
+    parentBytes,
+    historicalPolicy,
+    publicKeyPem,
+    keyId,
+    approver: "g16-operator",
+  };
+  const child = parseYaml(buildG16ChildConfig(input).toString("utf8"));
+  assert.equal(child.services["aroma-convergence"].mutationsEnabled, true);
+  assert.equal(child.services["aroma-convergence"].unrelated, "preserved");
+  assert.deepEqual(child.verification.aromaSandbox.trustedApprovers, [
+    { keyId, approver: "g16-operator", publicKeyPem },
+  ]);
+  const { trustedApprovers: _childApprovers, ...childPolicy } =
+    child.verification.aromaSandbox;
+  assert.deepEqual(childPolicy, historicalPolicy);
+  assert.throws(
+    () => buildG16ChildConfig({ ...input, keyId: "g16-foreign" }),
+    /G16_APPROVER_IDENTITY_INVALID/u,
+  );
+  assert.throws(
+    () =>
+      buildG16ChildConfig({
+        ...input,
+        parentBytes: Buffer.from(
+          parentBytes
+            .toString()
+            .replace("mutationsEnabled: false", "mutationsEnabled: true"),
+        ),
+      }),
+    /G16_PARENT_CONFIG_INVALID/u,
+  );
+  assert.throws(
+    () =>
+      buildG16ChildConfig({
+        ...input,
+        historicalPolicy: {
+          ...historicalPolicy,
+          existingAccountException: {
+            ...fixture.policy.existingAccountException,
+            authority: "foreign",
+          },
+        },
+      }),
+    /G16_HISTORICAL_POLICY_INVALID/u,
+  );
+});
+
+void test("G16 historical approval requires the exact committed proof artifact", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "coffee-approved-policy-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const git = (...args) =>
+    execFileSync("git", ["-C", root, ...args], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim();
+  git("init", "-q", "-b", "main");
+  git("config", "user.name", "Fixture");
+  git("config", "user.email", "fixture@example.invalid");
+  const path = join(root, "evidence/aroma-provider/controlled-account.json");
+  await mkdir(dirname(path), { recursive: true });
+  const bytes = await readFile(
+    new URL(
+      "../../../evidence/aroma-provider/controlled-account.json",
+      import.meta.url,
+    ),
+  );
+  await writeFile(path, bytes);
+  git("add", ".");
+  git("commit", "-qm", "approved proof");
+  const sha = git("rev-parse", "HEAD");
+  const policy = await readApprovedG16Policy(root, sha);
+  assert.equal(policy.existingAccountException.authority, "user-2026-10-23");
+  assert.equal(Object.hasOwn(policy, "trustedApprovers"), false);
+  await writeFile(path, `${bytes.toString()} `);
+  await assert.rejects(
+    readApprovedG16Policy(root, sha),
+    /G16_APPROVED_POLICY_BLOB_INVALID/u,
+  );
+  git("add", ".");
+  git("commit", "-qm", "altered proof");
+  await assert.rejects(
+    readApprovedG16Policy(root, git("rev-parse", "HEAD")),
+    /G16_APPROVED_POLICY_BLOB_INVALID/u,
+  );
 });
 
 void test("signed AROMA approval admits only the policy-bound controlled-live authorization", async () => {

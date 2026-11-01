@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import fsPromises from "node:fs/promises";
 import childProcess from "node:child_process";
+import { EventEmitter } from "node:events";
+import { PassThrough } from "node:stream";
 import { execFileSync, spawnSync } from "node:child_process";
 import {
   createHash,
@@ -7847,7 +7849,9 @@ void test("browser correlation executes the child lifecycle and preserves early 
   );
   for (const file of [
     "tests/observability/runtime-matrix.mjs",
+    "tools/compose-smoke.mjs",
     "verification/launch/v1/scenarios/rollback.mjs",
+    "verification/launch/v1/run.mjs",
     "tools/config-bootstrap/index.mjs",
   ]) {
     await cp(join(REPO_ROOT, file), join(root, file));
@@ -7925,10 +7929,12 @@ void test("browser correlation executes the child lifecycle and preserves early 
     "verification/launch/v1/scenarios/browser.mjs",
     "tools/observability/verify.mjs",
     "tests/observability/runtime-matrix.mjs",
+    "tools/compose-smoke.mjs",
     "tools/browser-proof.mjs",
     "tests/realtime/fixtures/setup.mjs",
     "tools/realtime-capacity.mjs",
     "verification/launch/v1/scenarios/rollback.mjs",
+    "verification/launch/v1/run.mjs",
     "tools/config-bootstrap/index.mjs",
   );
   git(
@@ -8024,18 +8030,490 @@ void test("browser correlation executes the child lifecycle and preserves early 
   );
   syncBuiltinESMExports();
   process.chdir(root);
-  const { runBrowserParent, validateBrowserCorrelation: validateCorrelation } =
-    await import(
-      pathToFileURL(join(root, "verification/launch/v1/scenarios/browser.mjs"))
-        .href
-    );
+  const {
+    runBrowserParent,
+    validateBrowserCorrelation: validateCorrelation,
+    writeControlledChildContext,
+  } = await import(
+    pathToFileURL(join(root, "verification/launch/v1/scenarios/browser.mjs"))
+      .href
+  );
   const success = await makeContext("20261030T120000Z");
+  const { createRollbackBaseline, readRollbackParent } = await import(
+    pathToFileURL(join(root, "verification/launch/v1/scenarios/rollback.mjs"))
+      .href
+  );
+  const controlled = await createRollbackBaseline({
+    candidateRoot: root,
+    candidateSha: sha,
+  });
+  try {
+    const child = await writeControlledChildContext({
+      contextPath: success.contextPath,
+      childRoot: controlled.baselineRoot,
+      childSha: controlled.baselineSha,
+      scope: "G18",
+    });
+    assert.equal(child.context.resources.controlledParentCandidateSha, sha);
+    assert.equal(
+      child.context.resources.controlledParentContextPath,
+      success.contextPath,
+    );
+    assert.equal(child.context.candidateSha, controlled.baselineSha);
+    assert.equal(child.lineage.parent.commitSha, sha);
+    assert.equal(child.lineage.baseline.commitSha, controlled.baselineSha);
+    const childIdentity = {
+      context: child.context,
+      sourceRoot,
+      candidateRoot: controlled.baselineRoot,
+    };
+    const parent = await readRollbackParent(childIdentity);
+    assert.equal(parent.contextFile, success.contextPath);
+    assert.equal(parent.identity.context.candidateSha, sha);
+    await assert.rejects(
+      readRollbackParent({
+        ...childIdentity,
+        context: {
+          ...child.context,
+          resources: {
+            ...child.context.resources,
+            controlledParentCandidateSha: "a".repeat(40),
+          },
+        },
+      }),
+    );
+    await assert.rejects(
+      writeControlledChildContext({
+        contextPath: success.contextPath,
+        childRoot: controlled.baselineRoot,
+        childSha: "a".repeat(40),
+        scope: "G18",
+      }),
+    );
+    await assert.rejects(
+      writeControlledChildContext({
+        contextPath: success.contextPath,
+        childRoot: controlled.baselineRoot,
+        childSha: controlled.baselineSha,
+        scope: "foreign",
+      }),
+    );
+    await rm(child.context.evidenceDir, { recursive: true, force: true });
+  } finally {
+    await rm(controlled.directory, { recursive: true, force: true });
+  }
   const expectedKafka = await writeSyntheticParentG12({
     candidateRoot: root,
     evidenceDir: success.evidenceDir,
     context: success.context,
     indexBytes,
   });
+  let syntheticRollbackArtifact;
+  {
+    const rollback = await import(
+      pathToFileURL(join(root, "verification/launch/v1/scenarios/rollback.mjs"))
+        .href
+    );
+    const imageReader = await import(
+      pathToFileURL(join(root, "tools/verified-infrastructure-image.mjs")).href
+    );
+    const baseline = await rollback.createRollbackBaseline({
+      candidateRoot: root,
+      candidateSha: sha,
+    });
+    let checkouts;
+    let child;
+    try {
+      child = await writeControlledChildContext({
+        contextPath: success.contextPath,
+        childRoot: baseline.baselineRoot,
+        childSha: baseline.baselineSha,
+        scope: "G18",
+      });
+      checkouts = await rollback.createRollbackCheckouts({
+        candidateRoot: baseline.baselineRoot,
+        candidateSha: baseline.baselineSha,
+      });
+      const lineage = await rollback.validateRollbackLineage({
+        launchIdentity: {
+          candidateRoot: baseline.baselineRoot,
+          context: {
+            checkoutDir: baseline.baselineRoot,
+            candidateSha: baseline.baselineSha,
+          },
+        },
+        ...checkouts,
+      });
+      const parentBundle = await rollback.writeRollbackLineageBundle({
+        candidateSha: sha,
+        restoredRoot: baseline.baselineRoot,
+        restoredSha: baseline.baselineSha,
+        evidenceDir: success.evidenceDir,
+      });
+      const transitionBundle = await rollback.writeRollbackLineageBundle({
+        candidateSha: baseline.baselineSha,
+        restoredRoot: checkouts.restoredRoot,
+        restoredSha: checkouts.restoredSha,
+        evidenceDir: child.context.evidenceDir,
+      });
+      const runtimeImages = await imageReader.readVerifiedRuntimeImages({
+        contextFile: success.contextPath,
+      });
+      const artifact = {
+        schemaVersion: 1,
+        gateId: "G18_ROLLBACK",
+        runId: child.context.runId,
+        candidateSha: baseline.baselineSha,
+        lineage,
+        cleanup: {
+          complete: true,
+          failures: [],
+          retainedResources: [],
+          inventory: { containers: [], volumes: [], networks: [] },
+        },
+        runtimeProof: {
+          schemaVersion: 1,
+          candidateSha: baseline.baselineSha,
+          lineage,
+          ownerHttp: {
+            unknown: "UnknownOutcome",
+            disabled: "Blocked",
+            restored: "InSync",
+          },
+          provider: { kind: "local-fake", liveProviderAcceptance: false },
+          runtime: {
+            disabledConfig: {
+              baseConfigSha256: lineage.B.configSha256,
+              actualConfigSha256: lineage.D.configSha256,
+              phase: "disabled",
+              mutationsEnabled: false,
+            },
+            restoredConfig: {
+              baseConfigSha256: lineage.B.configSha256,
+              actualConfigSha256: lineage.R.configSha256,
+              phase: "base",
+              mutationsEnabled: true,
+            },
+          },
+          orders: {
+            oldReservationState: "RecoveredNotApplied",
+            oldGatewayState: "UnknownOutcome",
+            newReservationState: "Verified",
+            oldOperationDigest: "4".repeat(64),
+            newOperationDigest: "5".repeat(64),
+            historyBeforeDigest: "6".repeat(64),
+            historyAfterDigest: "7".repeat(64),
+          },
+          imageBinding: {
+            parentRunId: success.context.runId,
+            parentCandidateSha: sha,
+            runtimeImages,
+            kafkaImageId: expectedKafka.imageId,
+          },
+        },
+      };
+      syntheticRollbackArtifact = structuredClone(artifact);
+      const dir = join(success.evidenceDir, "gates/G18_ROLLBACK/artifacts");
+      const contextBytes = await readFile(child.path),
+        artifactBytes = Buffer.from(JSON.stringify(artifact));
+      const transitionBytes = await readFile(transitionBundle.path);
+      await writeFile(join(dir, "rollback-child-context.json"), contextBytes);
+      await writeFile(
+        join(dir, "mutation-disable-rollback.json"),
+        artifactBytes,
+      );
+      await writeFile(
+        join(dir, "rollback-runtime-lineage.bundle"),
+        transitionBytes,
+      );
+      const receipt = {
+        schemaVersion: 1,
+        runId: success.context.runId,
+        candidateSha: sha,
+        childRunId: child.context.runId,
+        childSha: baseline.baselineSha,
+        parentBundleSha256: parentBundle.sha256,
+        runtimeBundleSha256: hash(transitionBytes),
+        childContextSha256: hash(contextBytes),
+        runtimeArtifactSha256: hash(artifactBytes),
+        cleanup: { checkoutRemoved: true, evidenceRemoved: true },
+      };
+      await writeFile(
+        join(dir, "rollback-parent.json"),
+        JSON.stringify(receipt),
+      );
+      await rm(checkouts.directory, { recursive: true, force: true });
+      checkouts = null;
+      await rm(baseline.directory, { recursive: true, force: true });
+      await rm(child.context.evidenceDir, { recursive: true, force: true });
+      const args = {
+        parentIdentity: {
+          context: success.context,
+          sourceRoot,
+          candidateRoot: root,
+          evidenceDir: success.evidenceDir,
+        },
+        parentContextPath: success.contextPath,
+      };
+      await rollback.verifyControlledRollbackEvidence(args);
+      await writeFile(
+        join(dir, "rollback-parent.json"),
+        JSON.stringify({
+          ...receipt,
+          cleanup: { checkoutRemoved: false, evidenceRemoved: true },
+        }),
+      );
+      await assert.rejects(
+        rollback.verifyControlledRollbackEvidence(args),
+        /ROLLBACK_PARENT_RECEIPT_INVALID/u,
+      );
+      await writeFile(
+        join(dir, "rollback-parent.json"),
+        JSON.stringify({ ...receipt, childSha: "--help" }),
+      );
+      await assert.rejects(
+        rollback.verifyControlledRollbackEvidence(args),
+        /ROLLBACK_PARENT_RECEIPT_INVALID/u,
+      );
+      await writeFile(
+        join(dir, "rollback-parent.json"),
+        JSON.stringify({ ...receipt, parentBundleSha256: "0".repeat(64) }),
+      );
+      await assert.rejects(
+        rollback.verifyControlledRollbackEvidence(args),
+        /ROLLBACK_PARENT_BUNDLE_INVALID/u,
+      );
+      const wrongContextBytes = Buffer.from(
+        JSON.stringify({ ...child.context, baseConfigSha256: "a".repeat(64) }),
+      );
+      await writeFile(
+        join(dir, "rollback-child-context.json"),
+        wrongContextBytes,
+      );
+      await writeFile(
+        join(dir, "rollback-parent.json"),
+        JSON.stringify({
+          ...receipt,
+          childContextSha256: hash(wrongContextBytes),
+        }),
+      );
+      await assert.rejects(
+        rollback.verifyControlledRollbackEvidence(args),
+        /ROLLBACK_PARENT_CONFIG_INVALID/u,
+      );
+      await writeFile(join(dir, "rollback-child-context.json"), contextBytes);
+      await writeFile(
+        join(dir, "rollback-parent.json"),
+        JSON.stringify(receipt),
+      );
+      artifact.runtimeProof.imageBinding.parentCandidateSha = "a".repeat(40);
+      const wrongImage = Buffer.from(JSON.stringify(artifact));
+      await writeFile(join(dir, "mutation-disable-rollback.json"), wrongImage);
+      await writeFile(
+        join(dir, "rollback-parent.json"),
+        JSON.stringify({ ...receipt, runtimeArtifactSha256: hash(wrongImage) }),
+      );
+      await assert.rejects(
+        rollback.verifyControlledRollbackEvidence(args),
+        /ROLLBACK_PARENT_IMAGE_BINDING_INVALID/u,
+      );
+    } finally {
+      if (checkouts)
+        await rm(checkouts.directory, { recursive: true, force: true });
+      await rm(baseline.directory, { recursive: true, force: true });
+      if (child)
+        await rm(child.context.evidenceDir, { recursive: true, force: true });
+    }
+  }
+  {
+    const rollback = await import(
+      pathToFileURL(join(root, "verification/launch/v1/scenarios/rollback.mjs"))
+        .href
+    );
+    const imageReader = await import(
+      pathToFileURL(join(root, "tools/verified-infrastructure-image.mjs")).href
+    );
+    const lifecycle = await makeContext("20261030T140000Z");
+    const lifecycleKafka = await writeSyntheticParentG12({
+      candidateRoot: root,
+      evidenceDir: lifecycle.evidenceDir,
+      context: lifecycle.context,
+      indexBytes,
+    });
+    const runtimeImages = await imageReader.readVerifiedRuntimeImages({
+      contextFile: lifecycle.contextPath,
+    });
+    let failChild = false;
+    let observed;
+    const childMock = t.mock.method(
+      childProcess,
+      "spawn",
+      (command, args, options) => {
+        assert.equal(command, process.execPath);
+        assert.equal(
+          args[0],
+          join(options.cwd, "verification/launch/v1/scenarios/rollback.mjs"),
+        );
+        observed = {
+          checkout: options.cwd,
+          contextPath: options.env.COFFEE_LAUNCH_CONTEXT_FILE,
+        };
+        const child = new EventEmitter();
+        child.stdout = new PassThrough();
+        child.stderr = new PassThrough();
+        queueMicrotask(() => {
+          void (async () => {
+            if (failChild) {
+              child.emit("close", 1, null);
+              return;
+            }
+            const context = JSON.parse(
+              await readFile(observed.contextPath, "utf8"),
+            );
+            const checkouts = await rollback.createRollbackCheckouts({
+              candidateRoot: observed.checkout,
+              candidateSha: context.candidateSha,
+            });
+            let runtimeArtifact;
+            try {
+              const lineage = await rollback.validateRollbackLineage({
+                launchIdentity: {
+                  candidateRoot: observed.checkout,
+                  context: {
+                    checkoutDir: observed.checkout,
+                    candidateSha: context.candidateSha,
+                  },
+                },
+                ...checkouts,
+              });
+              await rollback.writeRollbackLineageBundle({
+                candidateSha: context.candidateSha,
+                restoredRoot: checkouts.restoredRoot,
+                restoredSha: checkouts.restoredSha,
+                evidenceDir: context.evidenceDir,
+              });
+              const artifact = structuredClone(syntheticRollbackArtifact);
+              Object.assign(artifact, {
+                runId: context.runId,
+                candidateSha: context.candidateSha,
+                lineage,
+              });
+              Object.assign(artifact.runtimeProof, {
+                candidateSha: context.candidateSha,
+                lineage,
+                imageBinding: {
+                  parentRunId: lifecycle.context.runId,
+                  parentCandidateSha: sha,
+                  runtimeImages,
+                  kafkaImageId: lifecycleKafka.imageId,
+                },
+              });
+              Object.assign(artifact.runtimeProof.runtime.disabledConfig, {
+                baseConfigSha256: lineage.B.configSha256,
+                actualConfigSha256: lineage.D.configSha256,
+              });
+              Object.assign(artifact.runtimeProof.runtime.restoredConfig, {
+                baseConfigSha256: lineage.B.configSha256,
+                actualConfigSha256: lineage.R.configSha256,
+              });
+              runtimeArtifact = await rollback.writeRollbackRuntimeArtifact({
+                artifact,
+                identity: {
+                  runId: context.runId,
+                  candidateSha: context.candidateSha,
+                  lineage,
+                },
+                evidenceDir: context.evidenceDir,
+              });
+            } finally {
+              await rm(checkouts.directory, { recursive: true, force: true });
+            }
+            child.stdout.end(`${JSON.stringify({ runtimeArtifact })}\n`);
+            child.emit("close", 0, null);
+          })().catch((error) => {
+            child.stderr.end(String(error));
+            child.emit("close", 1, null);
+          });
+        });
+        return child;
+      },
+    );
+    syncBuiltinESMExports();
+    try {
+      const result = await rollback.runRollbackScenario(lifecycle.contextPath);
+      assert.equal(result.controlledChild.cleanup.checkoutRemoved, true);
+      assert.equal(result.controlledChild.cleanup.evidenceRemoved, true);
+      assert.equal(await stat(observed.checkout).catch(() => null), null);
+      assert.equal(await stat(observed.contextPath).catch(() => null), null);
+      await rollback.verifyControlledRollbackEvidence({
+        parentIdentity: {
+          context: lifecycle.context,
+          sourceRoot,
+          candidateRoot: root,
+          evidenceDir: lifecycle.evidenceDir,
+        },
+        parentContextPath: lifecycle.contextPath,
+      });
+      const runner = await import(
+        pathToFileURL(join(root, "verification/launch/v1/run.mjs")).href
+      );
+      const gate = { id: "G18_ROLLBACK" };
+      const makeRecord = () => ({
+        status: "NOT_RUN",
+        artifacts: [],
+        runs: [{ exitCode: 0, timedOut: false, outputLimitExceeded: false }],
+      });
+      const record = makeRecord();
+      assert.equal(
+        await runner.verifyGateArtifacts(gate, record, lifecycle.evidenceDir),
+        null,
+      );
+      assert.equal(record.artifacts.length, 5);
+      const parentReceiptPath = join(
+        lifecycle.evidenceDir,
+        "gates/G18_ROLLBACK/artifacts/rollback-parent.json",
+      );
+      const parentReceipt = JSON.parse(
+        await readFile(parentReceiptPath, "utf8"),
+      );
+      await writeFile(
+        parentReceiptPath,
+        JSON.stringify({
+          ...parentReceipt,
+          cleanup: { checkoutRemoved: false, evidenceRemoved: true },
+        }),
+      );
+      assert.match(
+        await runner.verifyGateArtifacts(
+          gate,
+          makeRecord(),
+          lifecycle.evidenceDir,
+        ),
+        /G18 controlled child failed/u,
+      );
+      const failure = await makeContext("20261030T150000Z");
+      failChild = true;
+      await assert.rejects(rollback.runRollbackScenario(failure.contextPath));
+      assert.match(
+        await runner.verifyGateArtifacts(
+          gate,
+          makeRecord(),
+          failure.evidenceDir,
+        ),
+        /G18 controlled child failed/u,
+      );
+      assert.ok(await stat(observed.checkout));
+      assert.ok(await stat(observed.contextPath));
+      const retainedContext = JSON.parse(
+        await readFile(observed.contextPath, "utf8"),
+      );
+      await rm(dirname(observed.checkout), { recursive: true, force: true });
+      await rm(retainedContext.evidenceDir, { recursive: true, force: true });
+    } finally {
+      childMock.mock.restore();
+      syncBuiltinESMExports();
+    }
+  }
   const { loadVerifiedGateImage: loadFixtureKafka, readQualificationInputs } =
     await import(
       pathToFileURL(join(root, "tests/realtime/fixtures/setup.mjs")).href

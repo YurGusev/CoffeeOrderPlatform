@@ -1,7 +1,7 @@
 issue: 13
 baseCommit: a37789c2bb13775f96f5590fb74b6e9a8f51aca2
 status: source-descriptor-before-formal-verification
-asOfUtc: "2026-10-31T20:43:40.474782+00:00"
+asOfUtc: "2026-11-01T02:32:33.794056+00:00"
 inputs:
   - issue: 2
     acceptedMergeCommit: 327638d4494269a151ee7c0ac945ac0053c3e0d4
@@ -140,7 +140,7 @@ outputs:
     consumers:
       - 1
   - artifact: docs/launch/21_LAUNCH_VERIFICATION_SPEC.md
-    sha256: e49460e44069e592319dd57a9d3104673b5485b2bf8a6717365ae7d98b039179
+    sha256: d232c94e1ca8131546d423671e5cf979da721f1b1d609942120e1a33f991de3f
     consumers:
       - 1
   - artifact: docs/operations/observability.md
@@ -168,11 +168,11 @@ outputs:
     consumers:
       - 1
   - artifact: tests/compose/topology.test.mjs
-    sha256: 57deb598a70d5743b3c289521bfdc2881c9b0f3e9243609f816afc915994e3b9
+    sha256: eb96356a7ebfd8d6b99572e31f0cf56061837027b164514989dc796fd8e65098
     consumers:
       - 1
   - artifact: tests/config/observability-bootstrap.test.mjs
-    sha256: 97c54ef674a246d82ac68f0e031863b460acab784b76e6025f11b770a788245f
+    sha256: c65a6e0ed5a623bca706df1c2c693d66525cb30c69d0bbe56bbd49913c49f7f4
     consumers:
       - 1
   - artifact: tests/observability/alerts.test.mjs
@@ -188,7 +188,7 @@ outputs:
     consumers:
       - 1
   - artifact: tools/compose-smoke.mjs
-    sha256: 519dea1102384cdf43aa98e4ae006efd9ba5a438fdc775b33433c62ff83911d2
+    sha256: 31a0ab08de78117eca8696f4a4a7240b09bca359dddece5f9584e79af0319194
     consumers:
       - 1
   - artifact: tools/observability/verify.mjs
@@ -200,13 +200,29 @@ outputs:
     consumers:
       - 1
   - artifact: verification/launch/v1/run.mjs
-    sha256: 4eb604a7214a09e4e0de7d5b1f74421c9f0dfeac2707973579342b6150b0df4a
+    sha256: 1597641a60efc15af750c25b186ec7e47e315594ccd076197dbe882c3d38fce0
     consumers:
       - 1
   - artifact: verification/launch/v1/runner.test.mjs
-    sha256: 1e75836696a152d6a1c8e3b666cdfa458874822997e8ced242da92b6e3059308
+    sha256: eaa907ba3658fc78a18327d6ed7ba3fcba5200b26d6e4c62ab54e6873dab50d8
     consumers:
       - 1
+  - artifact: docs/adr/ADR-0034-g16-existing-account-verification.md
+    sha256: 7eef0f7ca468695bfb29726877b46facb5d6ddd4eb1afac5dffc4d8805e0c8e5
+  - artifact: docs/adr/ADR-0035-launch-rollback-config-lineage.md
+    sha256: 75ff9840a288cb275e853ed63a22e4c9bc89bb979eab7d46b5e2cba249a5bd37
+  - artifact: evidence/aroma-provider/controlled-account.json
+    sha256: e77a818d16b833f34c27de4c7500afe14160b96037eb6fe4767d53432ced5e8b
+  - artifact: evidence/launch-preparation/2026-11-01/controlled-config-lineage.md
+    sha256: 1a6922ebac4f7bcc9e0c9de1672ec49d1438c6bcd65e529962f4b3180ad5d61e
+  - artifact: verification/launch/v1/scenarios/browser.mjs
+    sha256: e04ff0d9725ba4734bb50f286f59fb3469bd48654e5e32ecc54fb36a06351a61
+  - artifact: verification/launch/v1/scenarios/aroma-sandbox.mjs
+    sha256: 226fd8ea311577d90c953be14de80ed8bd99284535c26f3251ae8e1d9f25f7e2
+  - artifact: verification/launch/v1/scenarios/aroma-sandbox-resources.mjs
+    sha256: d583229f493a23d582a37e4e020415333943207d2475a57ddc53ba433cd64304
+  - artifact: verification/launch/v1/scenarios/rollback.mjs
+    sha256: 9e0b665e9b1f294e67362e9d98aa11d181456dc1f809b10cb0d84e9c20a06360
 verification:
   - command:
       node --test --test-name-pattern='G14 queries actual child telemetry|full G14 coverage requires
@@ -265,6 +281,26 @@ verification:
   - command: pnpm security:secrets на dfd1b6a
     result: PASS, 1.920 s
     logSha256: a219e1d01452451f8e90a321d14603bf7be45c9f68d471e8207118c5b4ad6c19
+  - command: G16 privacy и actual caller regression на замороженных файлах
+    result:
+      "Synthetic age encryption/decryption, original-byte signature, malformed READY/owned cleanup
+      и actual verifyGateArtifacts NOT_RUN→PASS: PASS; live signer/provider/Docker NOT_RUN"
+    logSha256: 574c13aa1a3e27acbb4727c3f92d4021e1cb866463b44faae399debd86050d5b
+  - command: G18 final synthetic parent/child lifecycle
+    result:
+      "PASS 1/1, 99.7 s: Git P→B→D→R, bundles, parent G12 binding, actual caller и unknown cleanup
+      отказ; не Docker runtime"
+    logSha256: 76847f1ee1255d74139321f2ea8dcd565a30344bda5194cb3f595660c1834d16
+  - command: independent runtime image ownership/cache targeted tests
+    result:
+      "PASS 5/5, 1.47 s: zero/full/partial named+dangling baseline, selective G10 customer/recovery
+      build, foreign preservation, baseline hash and cleanup; fake Docker inventory"
+    logSha256: 00f9e92664093c5428ebd6fbcacacd0f96ba08d54059d297fb3ca264aa23502e
+  - command: R18-2 affected cache regressions после удаления заменённого пути
+    result:
+      PASS 5/5, 1.013 s; zero/full/partial и foreign/dangling preservation сохранены, dead helpers
+      отсутствуют; scoped lint/format/syntax PASS
+    logSha256: 9eb9a52c3ca27741352cad5b4dec5c3838d01348eb08302c4abbe85836a7fab1
 consumerContract:
   consumer: 1
   admission:
@@ -288,15 +324,16 @@ consumerContract:
       - GitHub PR
       - Obsidian
     note: Фактические файлы и их хэши публикуются после запуска без изменения source SHA.
+  controlledConfigAuthority:
+    "Решение владельца от 1 ноября 2026: parent false/null; ограниченные G16
+    policy/key/flag child и G18 baseline flag child с проверенной lineage. Лимиты и provider scope сохранены;
+    exact parent G12 product images, отдельная BOM/image-ID проверка fixture PostgreSQL."
 limitations:
-  - "На dfd1b6a успешно завершены pnpm format:check (31.006 s), pnpm check (469.185 s) и pnpm security:secrets
-    (1.920 s). Основной suite: 1546 tests / 1467 pass / 0 fail / 0 cancelled / 79 skipped. Это локальные
-    проверки исходников, не formal G00–G19 admission."
+  - На dfd1b6a завершены локальные format:check/check/security:secrets. После согласованного расширения
+    G16/G18 новые общие проверки и полный runtime на окончательном SHA ещё NOT_RUN; перечисленные ниже targeted
+    проверки относятся к замороженным файлам и не являются runtime admission.
   - Итоговые G12, обязательная SSE qualification и полный G00–G19 на окончательном SHA ещё NOT_RUN. Component
     cffe147 и прежние qualification не переносятся.
   - Фактические runtime results и hashes появятся после выполнения; согласованная публикация двух артефактов
     не является доказательством PASS до полного запуска.
   - Отрицательный G00 a6cceea сохранён без изменения статуса, он не считается финальным PASS.
-  - "Обнаружено противоречие: G14 требует canonical mutationsEnabled=false, G16/G18 требуют true. Изолированные
-    config-only child для G16/G18 предложены владельцу; до решения новые исключения не реализованы, критерии
-    не ослаблены."

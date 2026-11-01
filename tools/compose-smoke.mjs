@@ -20,7 +20,7 @@ import { execFileSync, spawn } from "node:child_process";
 import { request as httpsRequest } from "node:https";
 import { dirname, join, resolve } from "node:path";
 import { createHash, generateKeyPairSync, randomUUID } from "node:crypto";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { tmpdir } from "node:os";
 import { dump as dumpYaml, load as parseYaml } from "js-yaml";
 import { parsePublicTlsHostname } from "../packages/platform-security/src/index.ts";
@@ -97,6 +97,7 @@ import {
 import {
   attachRollbackDisabledReconcileSubstage,
   createRollbackFailureReceipt,
+  readRollbackParent,
   ROLLBACK_DISABLED_RECONCILE_SUBSTAGES,
   ROLLBACK_FAILURE_STAGES,
   rollbackComposeProjectName,
@@ -1607,6 +1608,7 @@ export function buildRuntimeImages(
   runtimes = RUNTIMES,
   builtImages = [],
   buildRoot = ROOT,
+  buildNginx = true,
 ) {
   const sourceRoot = resolve(buildRoot);
   for (const runtime of runtimes) {
@@ -1627,22 +1629,23 @@ export function buildRuntimeImages(
     );
     builtImages.push(`${projectName}-${runtime}:latest`);
   }
-  execFileSync(
-    process.execPath,
-    [
-      join(ROOT, "tools/docker-build.mjs"),
-      "--file",
-      "apps/edge-nginx/Dockerfile",
-      "--target",
-      "edge-nginx",
-      "--load",
-      "-t",
-      `${projectName}-edge-nginx:latest`,
-      sourceRoot,
-    ],
-    { cwd: ROOT, env: process.env, stdio: "inherit" },
-  );
-  builtImages.push(`${projectName}-edge-nginx:latest`);
+  if (buildNginx)
+    execFileSync(
+      process.execPath,
+      [
+        join(ROOT, "tools/docker-build.mjs"),
+        "--file",
+        "apps/edge-nginx/Dockerfile",
+        "--target",
+        "edge-nginx",
+        "--load",
+        "-t",
+        `${projectName}-edge-nginx:latest`,
+        sourceRoot,
+      ],
+      { cwd: ROOT, env: process.env, stdio: "inherit" },
+    );
+  if (buildNginx) builtImages.push(`${projectName}-edge-nginx:latest`);
 }
 
 export function removeBuiltRuntimeImages(images, options) {
@@ -1710,13 +1713,15 @@ export function inspectLaunchRuntimeImages(
     listedIds.map((id, index) => [id, inspectedIds[index]]),
   );
   const refs = new Map();
-  let resident = false;
+  const preexisting = new Map();
   let dangling = false;
   for (const row of rows) {
     const reference = `${row.Repository}:${row.Tag}`;
     const imageId = identities.get(row.ID);
     if ([...expected.values()].includes(imageId)) {
-      resident = true;
+      const references = preexisting.get(imageId) ?? [];
+      references.push(reference);
+      preexisting.set(imageId, references);
       if (row.Repository === "<none>" && row.Tag === "<none>") dangling = true;
     }
     if (expected.has(reference)) {
@@ -1724,52 +1729,100 @@ export function inspectLaunchRuntimeImages(
       refs.set(reference, imageId);
     }
   }
-  return { expected, refs, resident, dangling };
+  return { expected, refs, dangling, preexisting };
 }
 
-export function launchRuntimeImageMode(inventory, initial = false) {
-  if (initial) {
-    assert.equal(inventory.refs.size, 0, "run image reference already exists");
-    return inventory.resident ? "disabled" : "build";
+export function captureRuntimeImageBaseline(inventory) {
+  assert.equal(inventory.refs.size, 0, "run image reference already exists");
+  return [...inventory.preexisting]
+    .map(([imageId, references]) => ({
+      imageId,
+      references: [...references].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0)),
+    }))
+    .sort((a, b) =>
+      a.imageId < b.imageId ? -1 : a.imageId > b.imageId ? 1 : 0,
+    );
+}
+
+export function validateRuntimeImageOwnership(inventory, baseline, phase) {
+  assert.ok(["baseline", "ready", "cleanup"].includes(phase));
+  assert.ok(Array.isArray(baseline));
+  const ids = new Set(baseline.map(({ imageId }) => imageId));
+  assert.equal(ids.size, baseline.length, "duplicate baseline image ID");
+  for (const { imageId, references } of baseline) {
+    assert.ok(
+      [...inventory.expected.values()].includes(imageId) &&
+        Array.isArray(references) &&
+        references.length > 0,
+    );
+    const actual = inventory.preexisting.get(imageId) ?? [];
+    for (const reference of references)
+      assert.ok(
+        actual.includes(reference),
+        "pre-existing image reference changed",
+      );
   }
-  for (const [reference, id] of inventory.refs)
-    assert.equal(
-      id,
-      inventory.expected.get(reference),
-      "run image reference has an unexpected ID",
-    );
-  if (inventory.refs.size === 0) return "build";
-  assert.equal(
-    inventory.refs.size,
-    inventory.expected.size,
-    "run image references are incomplete",
+  const owned = [...inventory.expected].filter(
+    ([, imageId]) => !ids.has(imageId),
   );
-  return "reuse";
+  for (const [reference, imageId] of inventory.refs)
+    assert.ok(
+      owned.some(
+        ([expectedRef, expectedId]) =>
+          expectedRef === reference && expectedId === imageId,
+      ),
+      "run image ownership mismatch",
+    );
+  if (phase === "baseline") {
+    for (const [reference, imageId] of owned)
+      if (!inventory.refs.has(reference) && inventory.preexisting.has(imageId))
+        assert.ok(
+          owned.some(
+            ([otherRef, otherId]) =>
+              otherId === imageId && inventory.refs.has(otherRef),
+          ),
+          "new image appeared after baseline",
+        );
+  } else if (phase === "ready") {
+    assert.equal(
+      inventory.refs.size,
+      owned.length,
+      "run image references are incomplete",
+    );
+    for (const [, imageId] of inventory.expected)
+      assert.ok(
+        inventory.preexisting.has(imageId),
+        "verified image is missing",
+      );
+  }
+  return {
+    owned,
+    pending: owned.filter(([reference]) => !inventory.refs.has(reference)),
+  };
 }
 
-export function ownedLaunchRuntimeImageMode(inventory, phase) {
-  assert.ok(["baseline", "ready"].includes(phase));
-  const mode = launchRuntimeImageMode(inventory);
-  assert.equal(mode, phase === "baseline" ? "build" : "reuse");
-  if (phase === "baseline")
-    assert.equal(
-      inventory.resident,
-      false,
-      "verified image appeared after ownership baseline",
-    );
-  return mode;
+export function runtimeImageBuildTargets(projectName, pending, customerOnly) {
+  const references = new Set(pending.map(([reference]) => reference));
+  return {
+    runtimes: (customerOnly ? [DATABASE_PROOF_RUNTIME] : RUNTIMES).filter(
+      (service) => references.has(`${projectName}-${service}:latest`),
+    ),
+    nginx: references.has(`${projectName}-edge-nginx:latest`),
+  };
 }
 
 export function cleanupLaunchRuntimeImages(
   projectName,
   verifiedImages,
   run = runImageControl,
+  baseline,
 ) {
   const inventory = inspectLaunchRuntimeImages(
     projectName,
     verifiedImages,
     run,
   );
+  if (baseline) validateRuntimeImageOwnership(inventory, baseline, "cleanup");
   for (const [reference, id] of inventory.refs)
     assert.equal(
       id,
@@ -1790,6 +1843,17 @@ export function cleanupLaunchRuntimeImages(
   }
   const after = inspectLaunchRuntimeImages(projectName, verifiedImages, run);
   assert.equal(after.refs.size, 0, "run image cleanup is incomplete");
+  if (baseline) {
+    validateRuntimeImageOwnership(after, baseline, "cleanup");
+    const ids = new Set(baseline.map(({ imageId }) => imageId));
+    for (const [imageId, references] of after.preexisting)
+      if (!ids.has(imageId))
+        assert.ok(
+          !references.includes("<none>:<none>"),
+          "run image cleanup left an unowned dangling image",
+        );
+    return;
+  }
   assert.equal(
     after.dangling,
     false,
@@ -1801,6 +1865,7 @@ export function assertVerifiedRuntimeImages({
   projectName,
   verifiedImages,
   noBuild = false,
+  directImageIds = false,
 }) {
   const images = new Map(
     verifiedImages.map(({ service, imageId }) => [service, imageId]),
@@ -1812,8 +1877,9 @@ export function assertVerifiedRuntimeImages({
       /^sha256:[a-f0-9]{64}$/u,
       `G12 image ID missing for ${service}`,
     );
-    const reference =
-      service === "edge-nginx" && noBuild
+    const reference = directImageIds
+      ? expected
+      : service === "edge-nginx" && noBuild
         ? "coffee-platform-edge-nginx:local"
         : `${projectName}-${service}:latest`;
     const actual = runDocker([
@@ -3135,6 +3201,34 @@ export async function writeScopedComposeOverride(projectName, options = {}) {
   }
   if (options.edgeNginxImage)
     service("edge-nginx").image = options.edgeNginxImage;
+  if (options.runtimeImages) {
+    assert.equal(
+      options.runtimeImages.length,
+      RUNTIMES.length + 1,
+      "runtime image inventory must contain exact 15 services",
+    );
+    const images = new Map(
+      options.runtimeImages.map(({ service: name, imageId }) => [
+        name,
+        imageId,
+      ]),
+    );
+    assert.equal(
+      images.size,
+      RUNTIMES.length + 1,
+      "runtime image inventory must contain exact 15 services",
+    );
+    for (const name of [...RUNTIMES, "edge-nginx"]) {
+      const imageId = images.get(name);
+      assert.match(
+        imageId ?? "",
+        /^sha256:[a-f0-9]{64}$/u,
+        `runtime image is missing for ${name}`,
+      );
+      service(name).image = imageId;
+      service(name).pull_policy = "never";
+    }
+  }
   if (loggingOverride) {
     for (const [name, definition] of Object.entries(loggingOverride)) {
       if (definition.logging) service(name).logging = definition.logging;
@@ -3186,6 +3280,7 @@ export function rollbackRuntimeComposeOptions(
   launchContextPath,
   configPath,
   kafkaImage,
+  controlled,
 ) {
   return {
     ...(kafkaImage ? { kafkaImage } : {}),
@@ -3193,7 +3288,14 @@ export function rollbackRuntimeComposeOptions(
     recoveryProof: true,
     launchContextPath,
     edgeNginxImage: `${projectName}-edge-nginx:latest`,
-    ...(configPath ? { aromaConvergenceConfigPath: configPath } : {}),
+    ...(controlled
+      ? {
+          runtimeImages: controlled.runtimeImages,
+          g14Config: { path: configPath, sha256: controlled.configSha256 },
+        }
+      : configPath
+        ? { aromaConvergenceConfigPath: configPath }
+        : {}),
   };
 }
 
@@ -7734,6 +7836,7 @@ async function runMutationDisableRollbackProof({
   markInitialUnknownSubstage,
   markDisabledReconcileSubstage,
   kafkaImage,
+  runtimeImages,
 }) {
   assert.ok(
     rollbackOrder &&
@@ -7743,6 +7846,21 @@ async function runMutationDisableRollbackProof({
       recoveryProofCredentials,
     "G18 fixtures are missing",
   );
+  const verifyConvergenceImage = (override) => {
+    if (!runtimeImages) return;
+    const row = serviceRows(projectName, secretsDir, override).find(
+      ({ Service }) => Service === "aroma-convergence",
+    );
+    const expected = runtimeImages.find(
+      ({ service }) => service === "aroma-convergence",
+    ).imageId;
+    assert.ok(row?.ID, "G18 convergence container is missing");
+    assert.equal(
+      runDocker(["inspect", "--format", "{{.Image}}", row.ID]).trim(),
+      expected,
+      "G18 convergence image changed after restart",
+    );
+  };
   const port = recoveryDatabaseProof.port;
   const projectionConsumers = platformConfig.services[
     "orders-aroma-preparation"
@@ -8009,6 +8127,9 @@ async function runMutationDisableRollbackProof({
       launchContextPath,
       join(disabledRoot, "config/platform.yaml"),
       kafkaImage,
+      runtimeImages
+        ? { runtimeImages, configSha256: lineage.D.configSha256 }
+        : undefined,
     ),
   );
   const composeFiles = [composeFile, disabledOverride];
@@ -8036,6 +8157,7 @@ async function runMutationDisableRollbackProof({
     );
     throwIfRollbackTerminationRequested();
     markDisabledReconcileSubstage("config-attestation");
+    verifyConvergenceImage(disabledOverride);
     const disabledRuntimeConfig = await readContainerConfigProof(
       projectName,
       secretsDir,
@@ -8256,6 +8378,9 @@ async function runMutationDisableRollbackProof({
         launchContextPath,
         join(restoredRoot, "config/platform.yaml"),
         kafkaImage,
+        runtimeImages
+          ? { runtimeImages, configSha256: lineage.R.configSha256 }
+          : undefined,
       ),
     );
     composeFiles.push(restoredOverride);
@@ -8280,6 +8405,7 @@ async function runMutationDisableRollbackProof({
       { composeFile: restoredOverride, inherit: true, timeout: 90_000 },
     );
     throwIfRollbackTerminationRequested();
+    verifyConvergenceImage(restoredOverride);
     await waitForRuntimeReadiness(
       projectName,
       secretsDir,
@@ -9542,6 +9668,7 @@ export async function runComposeSmoke({
       "Compose must use the launch context's exact project name",
     );
   let rollbackLineage;
+  let rollbackParent;
   if (options.mutationDisableRollback) {
     assert.ok(launchIdentity, "G18 launch context is missing");
     assert.equal(
@@ -9567,12 +9694,15 @@ export async function runComposeSmoke({
       restoredRoot: options.restoredRoot,
       restoredSha: options.restoredSha,
     });
+    if (launchIdentity.context.resources?.controlledScope === "G18")
+      rollbackParent = await readRollbackParent(launchIdentity);
   }
   let secretsDir;
   let provisionedNetwork = false;
   let databaseProofNetwork;
   let externalPostgresAttachment;
   let verifiedKafka;
+  let rollbackRuntimeImages;
   const externalRunDatabaseResources = [];
   let externalDatabaseCleanupReceipt;
   let composeDownComplete = false;
@@ -9581,6 +9711,10 @@ export async function runComposeSmoke({
   let composeAttempted = false;
   const builtImages = [];
   let parentOwnedRuntimeImages = false;
+  let ownedRuntimeImages;
+  let ownedMissingRefs;
+  let ownedImagePhase;
+  let ownedImageBaseline;
   let databaseProofContainer;
   const fixturePostgresRunId = options.observabilityFixture
     ? randomUUID()
@@ -9781,12 +9915,41 @@ export async function runComposeSmoke({
         "Kafka requires a launch context and G12 artifact",
       );
       // G08 already checks the exact G15 parent and its OIDC-only lineage.
-      verifiedKafka = await loadVerifiedGateImage({
+      const parentImages = rollbackParent
+        ? await import(
+            pathToFileURL(
+              join(
+                rollbackParent.identity.candidateRoot,
+                "tools/verified-infrastructure-image.mjs",
+              ),
+            ).href
+          )
+        : null;
+      verifiedKafka = await (
+        parentImages?.loadVerifiedGateImage ?? loadVerifiedGateImage
+      )({
         target: "kafka",
         contextFile:
+          rollbackParent?.contextFile ??
           recoveryProofCredentials?.g08PreparationContextPath ??
           launchContextPath,
       });
+      if (parentImages) {
+        rollbackRuntimeImages = await parentImages.readVerifiedRuntimeImages({
+          contextFile: rollbackParent.contextFile,
+        });
+        assertVerifiedRuntimeImages({
+          projectName,
+          verifiedImages: rollbackRuntimeImages,
+          directImageIds: true,
+        });
+        for (const path of [
+          join(ROOT, "config/platform.yaml"),
+          join(options.disabledRoot, "config/platform.yaml"),
+          join(options.restoredRoot, "config/platform.yaml"),
+        ])
+          await chmod(path, 0o444);
+      }
     }
     const recoveryPlatformConfig =
       recoveryProofCredentials && proofLaunchIdentity
@@ -9802,6 +9965,65 @@ export async function runComposeSmoke({
     );
     if (options.mutationDisableRollback)
       markRollbackBootstrapSubstage("compose-override");
+    const ownershipPath = process.env.COFFEE_LAUNCH_IMAGE_OWNERSHIP;
+    if (
+      ownershipPath &&
+      !options.noBuild &&
+      !g14Browser &&
+      !browser &&
+      !(
+        options.databaseProof ||
+        options.aromaBindingProof ||
+        options.aromaCartProof ||
+        options.mutationDisableRollback
+      )
+    ) {
+      assert.ok(launchIdentity, "run-owned images require launch identity");
+      assert.equal(
+        ownershipPath,
+        join(
+          launchIdentity.evidenceDir,
+          "gates/G10_INTEGRATION/artifacts/runtime-image-ownership.json",
+        ),
+      );
+      assert.equal(await realpath(ownershipPath), ownershipPath);
+      const info = await lstat(ownershipPath);
+      assert.ok(
+        info.isFile() &&
+          !info.isSymbolicLink() &&
+          info.uid === process.getuid() &&
+          (info.mode & 0o777) === 0o400 &&
+          info.size > 0 &&
+          info.size <= 16384,
+      );
+      const ownership = JSON.parse(await readFile(ownershipPath, "utf8"));
+      ownedRuntimeImages = await readVerifiedRuntimeImages({
+        contextFile: launchContextPath,
+      });
+      assert.equal(ownership.runId, launchIdentity.context.runId);
+      assert.equal(ownership.candidateSha, launchIdentity.context.candidateSha);
+      assert.equal(ownership.projectName, projectName);
+      assert.deepEqual(ownership.images, ownedRuntimeImages);
+      assert.equal(
+        createHash("sha256")
+          .update(JSON.stringify(ownership.baseline))
+          .digest("hex"),
+        ownership.baselineSha256,
+        "runtime image baseline hash mismatch",
+      );
+      const inventory = inspectLaunchRuntimeImages(
+        projectName,
+        ownedRuntimeImages,
+      );
+      ownedMissingRefs = validateRuntimeImageOwnership(
+        inventory,
+        ownership.baseline,
+        ownership.phase,
+      ).pending;
+      ownedImagePhase = ownership.phase;
+      ownedImageBaseline = ownership.baseline;
+      parentOwnedRuntimeImages = true;
+    }
     composeFile = await writeScopedComposeOverride(projectName, {
       sharedPostgres: !(
         options.databaseProof ||
@@ -9820,6 +10042,16 @@ export async function runComposeSmoke({
       edgeNginxImage: options.noBuild
         ? undefined
         : `${projectName}-edge-nginx:latest`,
+      ...(rollbackRuntimeImages
+        ? {
+            runtimeImages: rollbackRuntimeImages,
+            g14Config: {
+              path: join(ROOT, "config/platform.yaml"),
+              sha256: rollbackLineage.B.configSha256,
+            },
+          }
+        : {}),
+      ...(ownedRuntimeImages ? { runtimeImages: ownedRuntimeImages } : {}),
       runtimeLogging: observability ? platformConfig : undefined,
     });
     composeFiles.push(composeFile);
@@ -10235,43 +10467,26 @@ export async function runComposeSmoke({
     const imageIdentity = g14Browser
       ? await validateLaunchContext(imageContextPath)
       : launchIdentity;
-    let imageMode = "build";
-    const ownershipPath = process.env.COFFEE_LAUNCH_IMAGE_OWNERSHIP;
-    if (ownershipPath && bindRuntimeImages && !options.noBuild && !g14Browser) {
-      assert.ok(imageIdentity, "run-owned images require launch identity");
-      const expectedPath = join(
-        imageIdentity.evidenceDir,
-        "gates/G10_INTEGRATION/artifacts/runtime-image-ownership.json",
-      );
-      assert.equal(ownershipPath, expectedPath);
-      assert.equal(await realpath(ownershipPath), ownershipPath);
-      const info = await lstat(ownershipPath);
-      assert.ok(
-        info.isFile() &&
-          !info.isSymbolicLink() &&
-          info.uid === process.getuid() &&
-          (info.mode & 0o777) === 0o400 &&
-          info.size > 0 &&
-          info.size <= 16384,
-      );
-      const ownership = JSON.parse(await readFile(ownershipPath, "utf8"));
-      const verifiedImages = await readVerifiedRuntimeImages({
-        contextFile: imageContextPath,
-      });
-      assert.equal(ownership.runId, imageIdentity.context.runId);
-      assert.equal(ownership.candidateSha, imageIdentity.context.candidateSha);
-      assert.equal(ownership.projectName, projectName);
-      assert.deepEqual(ownership.images, verifiedImages);
-      const inventory = inspectLaunchRuntimeImages(projectName, verifiedImages);
-      imageMode = ownedLaunchRuntimeImageMode(inventory, ownership.phase);
-      parentOwnedRuntimeImages = true;
-    }
-    if (!options.noBuild) {
+    const ownedTargets = parentOwnedRuntimeImages
+      ? runtimeImageBuildTargets(
+          projectName,
+          ownedMissingRefs,
+          options.customerProof,
+        )
+      : null;
+    const imageMode =
+      ownedImagePhase === "ready" ||
+      (ownedTargets &&
+        ownedTargets.runtimes.length === 0 &&
+        !ownedTargets.nginx)
+        ? "reuse"
+        : "build";
+    if (!options.noBuild && !rollbackRuntimeImages) {
       let temporary;
       let snapshot;
       const imageStart = Date.now();
       try {
-        if (imageIdentity && bindRuntimeImages) {
+        if (imageMode === "build" && imageIdentity && bindRuntimeImages) {
           temporary = await mkdtemp(join(tmpdir(), "coffee-runtime-build-"));
           snapshot = await createBuildInputSnapshot({
             candidateRoot: imageIdentity.candidateRoot,
@@ -10284,13 +10499,16 @@ export async function runComposeSmoke({
           if (imageMode === "build")
             buildRuntimeImages(
               projectName,
-              options.databaseProof || options.customerProof
-                ? [DATABASE_PROOF_RUNTIME]
-                : options.aromaBindingProof || options.aromaCartProof
-                  ? ["api-internal", "aroma-gateway"]
-                  : RUNTIMES,
+              parentOwnedRuntimeImages
+                ? ownedTargets.runtimes
+                : options.databaseProof || options.customerProof
+                  ? [DATABASE_PROOF_RUNTIME]
+                  : options.aromaBindingProof || options.aromaCartProof
+                    ? ["api-internal", "aroma-gateway"]
+                    : RUNTIMES,
               builtImages,
               snapshot?.contextPath ?? ROOT,
+              !parentOwnedRuntimeImages || ownedTargets.nginx,
             );
         } finally {
           if (snapshot) await verifyBuildInputSnapshot(snapshot);
@@ -10314,7 +10532,37 @@ export async function runComposeSmoke({
         projectName,
         verifiedImages,
         noBuild: options.noBuild,
+        directImageIds: parentOwnedRuntimeImages,
       });
+      if (parentOwnedRuntimeImages)
+        validateRuntimeImageOwnership(
+          inspectLaunchRuntimeImages(projectName, verifiedImages),
+          ownedImageBaseline,
+          "ready",
+        );
+    }
+    if (parentOwnedRuntimeImages && options.customerProof) {
+      validateRuntimeImageOwnership(
+        inspectLaunchRuntimeImages(projectName, ownedRuntimeImages),
+        ownedImageBaseline,
+        ownedImagePhase,
+      );
+      for (const service of [DATABASE_PROOF_RUNTIME, "edge-nginx"]) {
+        const expected = ownedRuntimeImages.find(
+          (image) => image.service === service,
+        ).imageId;
+        assert.equal(
+          runDocker([
+            "image",
+            "inspect",
+            "--format",
+            "{{.Id}}",
+            expected,
+          ]).trim(),
+          expected,
+          `${service} image differs from the scanned G12 artifact`,
+        );
+      }
     }
     throwIfRollbackTerminationRequested();
     if (options.customerProof)
@@ -10393,6 +10641,17 @@ export async function runComposeSmoke({
         verifiedKafka.imageId,
         "Kafka runtime differs from the scanned G12 artifact",
       );
+    }
+    if (rollbackRuntimeImages) {
+      for (const { service: name, imageId } of rollbackRuntimeImages) {
+        const row = rows.get(name);
+        assert.ok(row?.ID, `verified runtime container is missing: ${name}`);
+        assert.equal(
+          runDocker(["inspect", "--format", "{{.Image}}", row.ID]).trim(),
+          imageId,
+          `${name} runtime differs from the scanned parent G12 artifact`,
+        );
+      }
     }
     if (browserHook) {
       const idp = rows.get("g15-idp");
@@ -10914,10 +11173,18 @@ export async function runComposeSmoke({
           launchContextPath,
           launchIdentity,
           kafkaImage: verifiedKafka.imageId,
+          runtimeImages: rollbackRuntimeImages,
           markStage: markRollbackStage,
           markInitialUnknownSubstage: markRollbackInitialUnknownSubstage,
           markDisabledReconcileSubstage: markRollbackDisabledReconcileSubstage,
         });
+        if (rollbackParent)
+          rollbackEvidence.imageBinding = {
+            parentRunId: rollbackParent.identity.context.runId,
+            parentCandidateSha: rollbackParent.identity.context.candidateSha,
+            runtimeImages: rollbackRuntimeImages,
+            kafkaImageId: verifiedKafka.imageId,
+          };
       } else if (options.recoveryProof && !browserHook) {
         assert.ok(
           aromaCartProviderFixture,

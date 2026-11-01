@@ -423,6 +423,220 @@ function replaceMutationFlag(configBytes) {
   return Buffer.from(changed, "utf8");
 }
 
+export async function validateConfigOnlyLineage({
+  parentRoot,
+  parentSha,
+  baselineRoot,
+  baselineSha,
+}) {
+  const parent = await inspectCheckout(parentRoot, parentSha);
+  const baseline = await inspectCheckout(baselineRoot, baselineSha);
+  if (baseline.parents.length !== 1 || baseline.parents[0] !== parent.commitSha)
+    fail("ROLLBACK_BASELINE_PARENT_INVALID");
+  assertOnlyConfigChanged(parent, baseline);
+  return { parent, baseline };
+}
+
+/** Validate the approved parent(false) → G18 baseline(true) transition. */
+export async function validateRollbackBaseline({
+  parentRoot,
+  parentSha,
+  baselineRoot,
+  baselineSha,
+}) {
+  const { parent, baseline } = await validateConfigOnlyLineage({
+    parentRoot,
+    parentSha,
+    baselineRoot,
+    baselineSha,
+  });
+  assertCanonicalConfigTransition(baseline, parent);
+  assertLiteralFlagChange(configBytes(baseline), configBytes(parent));
+  return {
+    parent: {
+      commitSha: parent.commitSha,
+      treeSha: parent.treeSha,
+      configSha256: configSha256(parent),
+    },
+    baseline: {
+      commitSha: baseline.commitSha,
+      treeSha: baseline.treeSha,
+      configSha256: configSha256(baseline),
+    },
+  };
+}
+
+export async function readRollbackParent(launchIdentity) {
+  const { context, sourceRoot, candidateRoot } = launchIdentity;
+  const resources = context.resources;
+  if (
+    resources?.controlledScope !== "G18" ||
+    !/^[0-9]{8}T[0-9]{6}Z-[0-9a-f]{7}$/u.test(
+      resources.controlledParentRunId ?? "",
+    ) ||
+    !SHA.test(resources.controlledParentCandidateSha ?? "")
+  )
+    fail("ROLLBACK_CONTROLLED_PARENT_INVALID");
+  const parentPath = join(
+    sourceRoot,
+    "evidence/launch",
+    resources.controlledParentRunId,
+    "context.json",
+  );
+  if (
+    resources.controlledParentContextPath !== parentPath ||
+    (await realpath(parentPath)) !== parentPath
+  )
+    fail("ROLLBACK_CONTROLLED_PARENT_INVALID");
+  const info = await lstat(parentPath);
+  if (
+    !info.isFile() ||
+    info.isSymbolicLink() ||
+    info.uid !== process.getuid() ||
+    (info.mode & 0o777) !== 0o400 ||
+    info.size > 16384
+  )
+    fail("ROLLBACK_CONTROLLED_PARENT_INVALID");
+  const parentContext = JSON.parse(await readFile(parentPath, "utf8"));
+  if (
+    parentContext.runId !== resources.controlledParentRunId ||
+    parentContext.candidateSha !== resources.controlledParentCandidateSha ||
+    parentContext.sourceRepoRoot !== sourceRoot
+  )
+    fail("ROLLBACK_CONTROLLED_PARENT_INVALID");
+  const lineage = await validateRollbackBaseline({
+    parentRoot: parentContext.checkoutDir,
+    parentSha: parentContext.candidateSha,
+    baselineRoot: candidateRoot,
+    baselineSha: context.candidateSha,
+  });
+  if (
+    lineage.parent.configSha256 !== parentContext.baseConfigSha256 ||
+    lineage.baseline.configSha256 !== context.baseConfigSha256
+  )
+    fail("ROLLBACK_CONTROLLED_CONFIG_INVALID");
+  const parentReport = await import(
+    pathToFileURL(
+      join(parentContext.checkoutDir, "verification/launch/v1/report.mjs"),
+    ).href
+  );
+  const parentIdentity = await parentReport.validateLaunchContext(parentPath);
+  if (
+    parentIdentity.sourceRoot !== sourceRoot ||
+    parentIdentity.candidateRoot !== parentContext.checkoutDir
+  )
+    fail("ROLLBACK_CONTROLLED_PARENT_INVALID");
+  return { contextFile: parentPath, identity: parentIdentity, lineage };
+}
+
+export async function createConfigOnlyCheckout({
+  candidateRoot,
+  candidateSha,
+  childConfig,
+  parentDirectory = tmpdir(),
+}) {
+  const parent = await inspectCheckout(candidateRoot, candidateSha);
+  if (!Buffer.isBuffer(childConfig)) fail("ROLLBACK_CONFIG_INVALID");
+  const directory = await mkdtemp(
+    join(parentDirectory, "coffee-controlled-config-"),
+  );
+  const baselineRoot = join(directory, "B");
+  try {
+    execFileSync(
+      "git",
+      [
+        "clone",
+        "--quiet",
+        "--shared",
+        "--no-hardlinks",
+        parent.root,
+        baselineRoot,
+      ],
+      { stdio: "ignore", timeout: 60_000 },
+    );
+    gitOutput(
+      baselineRoot,
+      "remote",
+      "set-url",
+      "origin",
+      "https://github.com/YurGusev/CoffeeOrderPlatform",
+    );
+    gitOutput(
+      baselineRoot,
+      "checkout",
+      "--quiet",
+      "--detach",
+      parent.commitSha,
+    );
+    await writeFile(join(baselineRoot, CONFIG_PATH), childConfig, {
+      mode: 0o644,
+    });
+    gitOutput(baselineRoot, "add", "--", CONFIG_PATH);
+    gitOutput(
+      baselineRoot,
+      "-c",
+      "user.name=Coffee verifier",
+      "-c",
+      "user.email=coffee-verifier@example.invalid",
+      "commit",
+      "--quiet",
+      "-m",
+      "Изолированная конфигурация проверки",
+    );
+    const baselineSha = gitText(baselineRoot, "rev-parse", "HEAD");
+    await validateConfigOnlyLineage({
+      parentRoot: parent.root,
+      parentSha: parent.commitSha,
+      baselineRoot,
+      baselineSha,
+    });
+    return { directory, baselineRoot, baselineSha };
+  } catch (error) {
+    await rm(directory, { recursive: true, force: true });
+    throw error;
+  }
+}
+
+export async function createRollbackBaseline({
+  candidateRoot,
+  candidateSha,
+  parentDirectory = tmpdir(),
+}) {
+  const parent = await inspectCheckout(candidateRoot, candidateSha);
+  const original = configBytes(parent);
+  const text = original.toString("utf8");
+  if (!Buffer.from(text, "utf8").equals(original))
+    fail("ROLLBACK_CONFIG_INVALID");
+  if (
+    parsedConfig(parent)?.services?.["aroma-convergence"]?.mutationsEnabled !==
+    false
+  )
+    fail("ROLLBACK_BASELINE_PARENT_FLAG_INVALID");
+  const pattern =
+    /^([\t ]*mutationsEnabled:[\t ]*)false([\t ]*(?:#.*)?)(\r?)$/gmu;
+  if ([...text.matchAll(pattern)].length !== 1)
+    fail("ROLLBACK_CONFIG_AMBIGUOUS");
+  const enabled = Buffer.from(text.replace(pattern, "$1true$2$3"));
+  assertLiteralFlagChange(enabled, original);
+  const checkout = await createConfigOnlyCheckout({
+    candidateRoot,
+    candidateSha,
+    childConfig: enabled,
+    parentDirectory,
+  });
+  try {
+    const lineage = await validateRollbackBaseline({
+      parentRoot: candidateRoot,
+      parentSha: candidateSha,
+      ...checkout,
+    });
+    return { ...checkout, lineage };
+  } catch (error) {
+    await rm(checkout.directory, { recursive: true, force: true });
+    throw error;
+  }
+}
+
 /** Create disposable clean D/R clones; the candidate checkout itself is read-only. */
 export async function createRollbackCheckouts({
   candidateRoot,
@@ -1044,12 +1258,216 @@ export async function writeRollbackRuntimeArtifact({
   return { path: artifactPath, sha256: digest, sizeBytes: artifactStat.size };
 }
 
+export async function verifyControlledRollbackEvidence({
+  parentIdentity,
+  parentContextPath,
+  requireCleanup = true,
+}) {
+  const artifacts = join(
+    parentIdentity.evidenceDir,
+    "gates/G18_ROLLBACK/artifacts",
+  );
+  const receipt = JSON.parse(
+    await readFile(join(artifacts, "rollback-parent.json"), "utf8"),
+  );
+  if (
+    receipt.schemaVersion !== 1 ||
+    receipt.runId !== parentIdentity.context.runId ||
+    receipt.candidateSha !== parentIdentity.context.candidateSha ||
+    !SHA.test(receipt.childSha ?? "") ||
+    receipt.cleanup?.checkoutRemoved !== requireCleanup ||
+    receipt.cleanup?.evidenceRemoved !== requireCleanup
+  )
+    fail("ROLLBACK_PARENT_RECEIPT_INVALID");
+  const contextBytes = await readFile(
+    join(artifacts, "rollback-child-context.json"),
+  );
+  if (
+    createHash("sha256").update(contextBytes).digest("hex") !==
+    receipt.childContextSha256
+  )
+    fail("ROLLBACK_CHILD_CONTEXT_INVALID");
+  const context = JSON.parse(contextBytes.toString("utf8"));
+  if (
+    !/^[0-9]{8}T[0-9]{6}Z-[0-9a-f]{7}$/u.test(context.runId ?? "") ||
+    context.runId !== receipt.childRunId ||
+    context.candidateSha !== receipt.childSha ||
+    !context.runId.endsWith(`-${context.candidateSha.slice(0, 7)}`) ||
+    context.acceptedBaseCommit !== parentIdentity.context.acceptedBaseCommit ||
+    context.sourceRepoRoot !== parentIdentity.sourceRoot ||
+    context.evidenceDir !==
+      join(parentIdentity.sourceRoot, "evidence/launch", context.runId) ||
+    context.resources?.composeProject !==
+      `coffee-launch-${context.runId.toLowerCase()}` ||
+    context.resources?.kafkaPrefix !== context.runId ||
+    context.resources?.controlledScope !== "G18" ||
+    context.resources.controlledParentContextPath !== parentContextPath ||
+    context.resources.controlledParentCandidateSha !==
+      parentIdentity.context.candidateSha ||
+    context.resources.controlledParentRunId !== parentIdentity.context.runId
+  )
+    fail("ROLLBACK_CHILD_CONTEXT_INVALID");
+  const artifactBytes = await readFile(
+    join(artifacts, "mutation-disable-rollback.json"),
+  );
+  if (
+    createHash("sha256").update(artifactBytes).digest("hex") !==
+    receipt.runtimeArtifactSha256
+  )
+    fail("ROLLBACK_RUNTIME_ARTIFACT_INVALID");
+  const artifact = JSON.parse(artifactBytes.toString("utf8"));
+  if (
+    ![artifact.lineage?.D?.commitSha, artifact.lineage?.R?.commitSha].every(
+      (sha) => SHA.test(sha ?? ""),
+    )
+  )
+    fail("ROLLBACK_RUNTIME_ARTIFACT_INVALID");
+  const parentBundle = join(artifacts, "rollback-config-lineage.bundle");
+  const runtimeBundle = join(artifacts, "rollback-runtime-lineage.bundle");
+  for (const [path, expected] of [
+    [parentBundle, receipt.parentBundleSha256],
+    [runtimeBundle, receipt.runtimeBundleSha256],
+  ]) {
+    const info = await lstat(path);
+    if (
+      !info.isFile() ||
+      info.isSymbolicLink() ||
+      info.size > 16 * 1024 * 1024 ||
+      createHash("sha256")
+        .update(await readFile(path))
+        .digest("hex") !== expected
+    )
+      fail("ROLLBACK_PARENT_BUNDLE_INVALID");
+  }
+  const temporary = await mkdtemp(join(tmpdir(), "coffee-rollback-admission-"));
+  try {
+    const baselineRoot = join(temporary, "B"),
+      disabledRoot = join(temporary, "D"),
+      restoredRoot = join(temporary, "R");
+    execFileSync(
+      "git",
+      [
+        "clone",
+        "--quiet",
+        "--shared",
+        "--no-hardlinks",
+        parentIdentity.candidateRoot,
+        baselineRoot,
+      ],
+      { stdio: "ignore", timeout: 60_000 },
+    );
+    gitOutput(baselineRoot, "bundle", "verify", parentBundle);
+    if (
+      gitText(baselineRoot, "bundle", "list-heads", parentBundle) !==
+      `${receipt.childSha} HEAD`
+    )
+      fail("ROLLBACK_PARENT_BUNDLE_INVALID");
+    gitOutput(
+      baselineRoot,
+      "fetch",
+      "--quiet",
+      "--no-tags",
+      parentBundle,
+      "HEAD",
+    );
+    gitOutput(
+      baselineRoot,
+      "checkout",
+      "--quiet",
+      "--detach",
+      receipt.childSha,
+    );
+    const parentLineage = await validateRollbackBaseline({
+      parentRoot: parentIdentity.candidateRoot,
+      parentSha: parentIdentity.context.candidateSha,
+      baselineRoot,
+      baselineSha: receipt.childSha,
+    });
+    if (
+      parentLineage.parent.configSha256 !==
+        parentIdentity.context.baseConfigSha256 ||
+      parentLineage.baseline.configSha256 !== context.baseConfigSha256
+    )
+      fail("ROLLBACK_PARENT_CONFIG_INVALID");
+    gitOutput(baselineRoot, "bundle", "verify", runtimeBundle);
+    if (
+      gitText(baselineRoot, "bundle", "list-heads", runtimeBundle) !==
+      `${artifact.lineage?.R?.commitSha} HEAD`
+    )
+      fail("ROLLBACK_RUNTIME_BUNDLE_INVALID");
+    gitOutput(
+      baselineRoot,
+      "fetch",
+      "--quiet",
+      "--no-tags",
+      runtimeBundle,
+      "HEAD",
+    );
+    for (const [root, sha] of [
+      [disabledRoot, artifact.lineage.D.commitSha],
+      [restoredRoot, artifact.lineage.R.commitSha],
+    ]) {
+      execFileSync(
+        "git",
+        ["clone", "--quiet", "--shared", "--no-hardlinks", baselineRoot, root],
+        { stdio: "ignore", timeout: 60_000 },
+      );
+      gitOutput(root, "checkout", "--quiet", "--detach", sha);
+    }
+    const lineage = await validateRollbackLineage({
+      launchIdentity: {
+        candidateRoot: baselineRoot,
+        context: { checkoutDir: baselineRoot, candidateSha: receipt.childSha },
+      },
+      disabledRoot,
+      disabledSha: artifact.lineage.D.commitSha,
+      restoredRoot,
+      restoredSha: artifact.lineage.R.commitSha,
+    });
+    validateRollbackRuntimeArtifact(artifact, {
+      runId: context.runId,
+      candidateSha: receipt.childSha,
+      lineage,
+    });
+    const images = await import(
+      pathToFileURL(
+        join(
+          parentIdentity.candidateRoot,
+          "tools/verified-infrastructure-image.mjs",
+        ),
+      ).href
+    );
+    const runtimeImages = await images.readVerifiedRuntimeImages({
+      contextFile: parentContextPath,
+    });
+    const kafka = await images.loadVerifiedGateImage({
+      contextFile: parentContextPath,
+      target: "kafka",
+      loadImage: false,
+    });
+    if (
+      !isDeepStrictEqual(artifact.runtimeProof.imageBinding, {
+        parentRunId: parentIdentity.context.runId,
+        parentCandidateSha: parentIdentity.context.candidateSha,
+        runtimeImages,
+        kafkaImageId: kafka.imageId,
+      })
+    )
+      fail("ROLLBACK_PARENT_IMAGE_BINDING_INVALID");
+    return { receipt, artifact, context };
+  } finally {
+    await rm(temporary, { recursive: true, force: true });
+  }
+}
+
 export async function writeRollbackLineageBundle({
   restoredRoot,
   candidateSha,
   restoredSha,
   evidenceDir,
+  scope = "G18",
 }) {
+  if (!["G16", "G18"].includes(scope)) fail("ROLLBACK_BUNDLE_SCOPE_INVALID");
   await inspectCheckout(restoredRoot, restoredSha);
   if (!SHA.test(candidateSha ?? "")) fail("ROLLBACK_CHECKOUT_INPUT_INVALID");
   const temporaryBundle = join(
@@ -1081,7 +1499,9 @@ export async function writeRollbackLineageBundle({
   const bytes = await readFile(temporaryBundle);
   const path = join(
     evidenceDir,
-    "gates/G18_ROLLBACK/artifacts/rollback-config-lineage.bundle",
+    scope === "G16"
+      ? "gates/G16_AROMA_SANDBOX/artifacts/controlled-config.bundle"
+      : "gates/G18_ROLLBACK/artifacts/rollback-config-lineage.bundle",
   );
   await mkdir(dirname(path), { recursive: true, mode: 0o700 });
   await writeFile(path, bytes, { flag: "wx", mode: 0o600 });
@@ -1119,6 +1539,141 @@ async function assertRollbackContainersStopped(projectName) {
   if (output) fail("ROLLBACK_COMPOSE_CONTAINERS_STILL_OWN_MOUNTS");
 }
 
+async function runControlledRollbackParent(parentIdentity, parentContextPath) {
+  const { prepareBrowserChildCheckout, writeControlledChildContext } =
+    await import("./browser.mjs");
+  const { context, candidateRoot, evidenceDir } = parentIdentity;
+  const baseline = await createRollbackBaseline({
+    candidateRoot,
+    candidateSha: context.candidateSha,
+  });
+  let child;
+  let childStarted = false;
+  try {
+    await prepareBrowserChildCheckout(baseline.baselineRoot);
+    child = await writeControlledChildContext({
+      contextPath: parentContextPath,
+      childRoot: baseline.baselineRoot,
+      childSha: baseline.baselineSha,
+      scope: "G18",
+    });
+    const artifacts = join(evidenceDir, "gates/G18_ROLLBACK/artifacts");
+    const parentBundle = await writeRollbackLineageBundle({
+      candidateSha: context.candidateSha,
+      restoredSha: baseline.baselineSha,
+      restoredRoot: baseline.baselineRoot,
+      evidenceDir,
+    });
+    childStarted = true;
+    const result = await runManagedRollbackChild({
+      args: [
+        join(
+          baseline.baselineRoot,
+          "verification/launch/v1/scenarios/rollback.mjs",
+        ),
+      ],
+      cwd: baseline.baselineRoot,
+      env: { ...process.env, COFFEE_LAUNCH_CONTEXT_FILE: child.path },
+      terminationGraceMs: 150_000,
+    });
+    const outcome = lastJsonLine(result.stdout);
+    const childArtifacts = join(
+      child.context.evidenceDir,
+      "gates/G18_ROLLBACK/artifacts",
+    );
+    const runtimeBytes = await readFile(
+      join(childArtifacts, "mutation-disable-rollback.json"),
+    );
+    if (
+      outcome.runtimeArtifact?.sha256 !==
+      createHash("sha256").update(runtimeBytes).digest("hex")
+    )
+      fail("ROLLBACK_RUNTIME_ARTIFACT_INVALID");
+    const contextBytes = await readFile(child.path);
+    const runtimeBundleBytes = await readFile(
+      join(childArtifacts, "rollback-config-lineage.bundle"),
+    );
+    await writeFile(
+      join(artifacts, "rollback-child-context.json"),
+      contextBytes,
+      { flag: "wx", mode: 0o600 },
+    );
+    await writeFile(
+      join(artifacts, "mutation-disable-rollback.json"),
+      runtimeBytes,
+      { flag: "wx", mode: 0o600 },
+    );
+    await writeFile(
+      join(artifacts, "rollback-runtime-lineage.bundle"),
+      runtimeBundleBytes,
+      { flag: "wx", mode: 0o600 },
+    );
+    const receipt = {
+      schemaVersion: 1,
+      runId: context.runId,
+      candidateSha: context.candidateSha,
+      childRunId: child.context.runId,
+      childSha: baseline.baselineSha,
+      parentBundleSha256: parentBundle.sha256,
+      runtimeBundleSha256: createHash("sha256")
+        .update(runtimeBundleBytes)
+        .digest("hex"),
+      childContextSha256: createHash("sha256")
+        .update(contextBytes)
+        .digest("hex"),
+      runtimeArtifactSha256: createHash("sha256")
+        .update(runtimeBytes)
+        .digest("hex"),
+      cleanup: { checkoutRemoved: false, evidenceRemoved: false },
+    };
+    const receiptPath = join(artifacts, "rollback-parent.json");
+    await writeFile(receiptPath, `${JSON.stringify(receipt, null, 2)}\n`, {
+      flag: "wx",
+      mode: 0o600,
+    });
+    await verifyControlledRollbackEvidence({
+      parentIdentity,
+      parentContextPath,
+      requireCleanup: false,
+    });
+    await rm(baseline.directory, { recursive: true });
+    await rm(child.context.evidenceDir, { recursive: true });
+    if (
+      (await lstat(baseline.directory).then(
+        () => true,
+        () => false,
+      )) ||
+      (await lstat(child.context.evidenceDir).then(
+        () => true,
+        () => false,
+      ))
+    )
+      fail("ROLLBACK_CHILD_CLEANUP_INVALID");
+    receipt.cleanup = { checkoutRemoved: true, evidenceRemoved: true };
+    await writeFile(receiptPath, `${JSON.stringify(receipt, null, 2)}\n`, {
+      mode: 0o600,
+    });
+    await verifyControlledRollbackEvidence({
+      parentIdentity,
+      parentContextPath,
+    });
+    return {
+      schemaVersion: 1,
+      controlledChild: {
+        candidateSha: baseline.baselineSha,
+        runId: child.context.runId,
+        cleanup: receipt.cleanup,
+      },
+    };
+  } finally {
+    if (!childStarted) {
+      await rm(baseline.directory, { recursive: true, force: true });
+      if (child)
+        await rm(child.context.evidenceDir, { recursive: true, force: true });
+    } // Once the child starts, uncertain cleanup must retain its checkout and evidence.
+  }
+}
+
 /** Runtime gate entry point. The Compose proof performs lineage validation again before creating resources. */
 export async function runRollbackScenario(
   contextPath = process.env.COFFEE_LAUNCH_CONTEXT_FILE,
@@ -1132,6 +1687,15 @@ export async function runRollbackScenario(
     fail("ROLLBACK_CANDIDATE_EXECUTION_MISMATCH");
   }
   const { context, candidateRoot } = launchIdentity;
+  const parentCheckout = await inspectCheckout(
+    candidateRoot,
+    context.candidateSha,
+  );
+  if (
+    parsedConfig(parentCheckout)?.services?.["aroma-convergence"]
+      ?.mutationsEnabled === false
+  )
+    return runControlledRollbackParent(launchIdentity, resolve(contextPath));
   const expectedProject = rollbackComposeProjectName(context);
   if (context.candidateSha !== gitText(candidateRoot, "rev-parse", "HEAD"))
     fail("ROLLBACK_CANDIDATE_HEAD_MISMATCH");

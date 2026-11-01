@@ -35,7 +35,7 @@ import {
 } from "./report.mjs";
 import {
   inspectLaunchCheckout,
-  validateRollbackRuntimeArtifact,
+  verifyControlledRollbackEvidence,
 } from "./scenarios/rollback.mjs";
 import { validateRoleMap } from "../../../scripts/db-bootstrap.mjs";
 import {
@@ -51,8 +51,9 @@ import {
 } from "../../../tools/verified-infrastructure-image.mjs";
 import {
   cleanupLaunchRuntimeImages,
+  captureRuntimeImageBaseline,
   inspectLaunchRuntimeImages,
-  launchRuntimeImageMode,
+  validateRuntimeImageOwnership,
 } from "../../../tools/compose-smoke.mjs";
 import { validateDependencyReadiness } from "../../../tests/observability/runtime-matrix.mjs";
 import { loadPlatformConfig } from "../../../scripts/config-lib.mjs";
@@ -713,6 +714,9 @@ export async function executeArgv(
   const start = Date.now();
   const childEnv = { ...process.env };
   delete childEnv.COFFEE_LAUNCH_IMAGE_OWNERSHIP;
+  delete childEnv.COFFEE_G16_SIGNER_PATH;
+  if (options.g16SignerPath)
+    childEnv.COFFEE_G16_SIGNER_PATH = options.g16SignerPath;
   if (options.imageOwnershipPath)
     childEnv.COFFEE_LAUNCH_IMAGE_OWNERSHIP = options.imageOwnershipPath;
   childEnv.pnpm_config_verify_deps_before_run = "false";
@@ -1789,24 +1793,49 @@ export async function verifyGateArtifacts(
       return "G13 missing or invalid Kafka namespace inventory receipt";
     }
   }
-  if (gate.id === "G18_ROLLBACK" && gate.status === "PASS") {
-    const path = join(gateDir, "artifacts/mutation-disable-rollback.json");
-    let artifact;
+  if (gate.id === "G16_AROMA_SANDBOX" && record.status !== "FAIL") {
     try {
-      artifact = JSON.parse(await readFile(path, "utf8"));
-    } catch {
-      return "G18 missing or invalid artifacts/mutation-disable-rollback.json";
-    }
-    try {
-      validateRollbackRuntimeArtifact(artifact, {
-        runId: context.runId,
-        candidateSha: context.candidateSha,
-        lineage: artifact.lineage,
+      const contextPath = join(evidenceDir, "context.json");
+      const parentIdentity = await validateLaunchContext(contextPath);
+      const { verifyControlledG16Evidence } =
+        await import("./scenarios/aroma-sandbox.mjs");
+      await verifyControlledG16Evidence({
+        parentIdentity,
+        parentContextPath: contextPath,
       });
     } catch {
-      return "G18 rollback runtime artifact failed identity, lineage, phase or cleanup validation";
+      return "G16 controlled child failed parent binding, signature, runtime proof or cleanup validation";
     }
-    additions.push(await hashFile(path));
+    for (const name of [
+      "controlled-parent.json",
+      "controlled-child-context.json",
+      "controlled-child-result.json",
+      "controlled-approval.json.age",
+      "controlled-approval.sig.age",
+      "controlled-config.bundle",
+      "controlled-config.bundle.json",
+    ])
+      additions.push(await hashFile(join(gateDir, "artifacts", name)));
+  }
+  if (gate.id === "G18_ROLLBACK" && record.status !== "FAIL") {
+    try {
+      const contextPath = join(evidenceDir, "context.json");
+      const parentIdentity = await validateLaunchContext(contextPath);
+      await verifyControlledRollbackEvidence({
+        parentIdentity,
+        parentContextPath: contextPath,
+      });
+    } catch {
+      return "G18 controlled child failed parent binding, lineage, runtime proof, images or cleanup validation";
+    }
+    for (const name of [
+      "rollback-parent.json",
+      "rollback-child-context.json",
+      "mutation-disable-rollback.json",
+      "rollback-config-lineage.bundle",
+      "rollback-runtime-lineage.bundle",
+    ])
+      additions.push(await hashFile(join(gateDir, "artifacts", name)));
   }
   if (gate.id === "G19_REPORT") {
     const result = JSON.parse(
@@ -1889,13 +1918,28 @@ function formatPnpmVersion(output) {
   return match?.[0] ?? "unknown";
 }
 
+function assertRuntimeImageBaselineHash(ownership) {
+  if (!ownership.baseline) return;
+  const hash = createHash("sha256")
+    .update(JSON.stringify(ownership.baseline))
+    .digest("hex");
+  if (hash !== ownership.baselineSha256)
+    throw new Error("runtime image baseline hash mismatch");
+}
+
 export function finishRuntimeImageOwnership(
   ownership,
   ownerGate,
   cleanup = cleanupLaunchRuntimeImages,
 ) {
   try {
-    cleanup(ownership.projectName, ownership.images);
+    assertRuntimeImageBaselineHash(ownership);
+    cleanup(
+      ownership.projectName,
+      ownership.images,
+      undefined,
+      ownership.baseline,
+    );
     ownership.phase = "cleaned";
     return true;
   } catch (error) {
@@ -1918,6 +1962,7 @@ export async function runGate(
   g08ExpectedSystemIdentifier,
   realtimeQualificationPath,
   imageOwnershipPath,
+  g16SignerPath,
 ) {
   if (outputBudget.exceeded && gate.id !== "G19_REPORT") {
     record.reason =
@@ -1949,12 +1994,9 @@ export async function runGate(
     await updateGateArtifact(evidenceDir, record);
     return;
   }
-  if (
-    gate.id === "G16_AROMA_SANDBOX" &&
-    !process.env.AROMA_SANDBOX_APPROVAL_FILE
-  ) {
+  if (gate.id === "G16_AROMA_SANDBOX" && !g16SignerPath) {
     record.reason =
-      "NOT_RUN: AROMA_SANDBOX_APPROVAL_FILE отсутствует; controlled-live G16 требует подписанный approval";
+      "NOT_RUN: --g16-signer отсутствует; controlled-live G16 требует RAM signer";
     record.endedAt = nowIso();
     await writeFile(join(evidenceDir, "gates", gate.id, "stdout.log"), "", {
       mode: 0o600,
@@ -2095,7 +2137,11 @@ export async function runGate(
         stderrPath,
         contextPath,
         outputBudget,
-        { imageOwnershipPath },
+        {
+          imageOwnershipPath,
+          g16SignerPath:
+            gate.id === "G16_AROMA_SANDBOX" ? g16SignerPath : undefined,
+        },
       );
     } catch (error) {
       run = {
@@ -2514,16 +2560,18 @@ export async function executeRun(options = {}) {
             contextFile: contextPath,
           });
           const projectName = `coffee-launch-${runId.toLowerCase()}`;
-          const mode = launchRuntimeImageMode(
-            inspectLaunchRuntimeImages(projectName, images),
-            true,
-          );
+          const inventory = inspectLaunchRuntimeImages(projectName, images);
+          const baseline = captureRuntimeImageBaseline(inventory);
           imageOwnership = {
             runId,
             candidateSha,
             projectName,
             images,
-            phase: mode === "build" ? "baseline" : "disabled",
+            baseline,
+            baselineSha256: createHash("sha256")
+              .update(JSON.stringify(baseline))
+              .digest("hex"),
+            phase: "baseline",
           };
           const path = join(
             evidenceDir,
@@ -2531,8 +2579,7 @@ export async function executeRun(options = {}) {
           );
           await atomicJson(path, imageOwnership);
           await chmod(path, 0o400);
-          if (mode === "build") imageOwnershipPath = path;
-          else record.artifacts.push(await hashFile(path));
+          imageOwnershipPath = path;
         } catch (error) {
           record.status = "FAIL";
           record.reason = `Runtime image ownership preflight failed: ${redactText(error.message)}`;
@@ -2609,6 +2656,7 @@ export async function executeRun(options = {}) {
         ].includes(gate.id)
           ? imageOwnershipPath
           : undefined,
+        options.g16SignerPath,
       );
       if (gate.id === "G12_SUPPLY_CHAIN" && record.status === "PASS") {
         await applyLaunchImageEvidence({
@@ -2627,15 +2675,14 @@ export async function executeRun(options = {}) {
         record.status === "PASS"
       ) {
         try {
-          if (
-            launchRuntimeImageMode(
-              inspectLaunchRuntimeImages(
-                imageOwnership.projectName,
-                imageOwnership.images,
-              ),
-            ) !== "reuse"
-          )
-            throw new Error("all 15 verified runtime images must be retained");
+          validateRuntimeImageOwnership(
+            inspectLaunchRuntimeImages(
+              imageOwnership.projectName,
+              imageOwnership.images,
+            ),
+            imageOwnership.baseline,
+            "ready",
+          );
           imageOwnership.phase = "ready";
           await atomicJson(imageOwnershipPath, imageOwnership);
           await chmod(imageOwnershipPath, 0o400);
@@ -2679,9 +2726,12 @@ export async function executeRun(options = {}) {
   } finally {
     try {
       if (imageOwnershipPath && !imageCleanupVerified) {
+        assertRuntimeImageBaselineHash(imageOwnership);
         cleanupLaunchRuntimeImages(
           imageOwnership.projectName,
           imageOwnership.images,
+          undefined,
+          imageOwnership.baseline,
         );
         imageOwnership.phase = imageCleanupReported
           ? "cleanup-failed"
@@ -2703,7 +2753,16 @@ export function parseArgs(argv) {
       options.githubSnapshotPath = resolve(argv[++index]);
     else if (argv[index] === "--accepted-base-commit")
       options.acceptedBaseCommit = argv[++index];
-    else if (argv[index] === "--realtime-qualification") {
+    else if (argv[index] === "--g16-signer") {
+      const path = argv[++index];
+      if (
+        options.g16SignerPath !== undefined ||
+        typeof path !== "string" ||
+        !isAbsolute(path)
+      )
+        throw new Error("--g16-signer requires one absolute path");
+      options.g16SignerPath = resolve(path);
+    } else if (argv[index] === "--realtime-qualification") {
       const path = argv[++index];
       if (options.realtimeQualificationPath !== undefined)
         throw new Error("--realtime-qualification may be specified only once");

@@ -69,6 +69,16 @@ Builder проверяет точный artifact hash и parent Git blob, зат
 policy со свежим ключом в единственный versioned child config. Runtime не
 читает этот evidence-файл как конфигурацию.
 
+Persistent evidence содержит только `controlled-approval.json.age` и
+`controlled-approval.sig.age`. Используется уже закреплённый age и recipients
+из `.sops.yaml`, как в G17. Исходные approval/signature bytes передаются через
+stdin/stdout только в памяти; plaintext-файлы остаются только в private tmpfs.
+Verifier проверяет ciphertext hashes, расшифровывает в ограниченные RAM buffers
+через существующий операторский `SOPS_AGE_KEY_FILE`, затем выполняет прежнюю
+проверку исходных hashes, binding и подписи. Approval wire format и TTL не меняются.
+Без operator identity криптографический допуск невозможен: одни hashes и
+утверждение `signatureVerified=true` не заменяют проверку подписи.
+
 Используются существующие canonical development refs `aroma.email/password`
 через trusted `config-bootstrap` и Gateway-scoped materialization в tmpfs.
 Копии credentials, второй encrypted inventory, legacy fallback и изменение

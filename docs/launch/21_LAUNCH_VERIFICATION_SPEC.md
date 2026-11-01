@@ -300,6 +300,14 @@ restore = immediate FAIL, mutation disable и defect. Production targets
 origin/account для указанного запуска. Environment приложения `production`
 запрещён без исключений. Approval/secrets не попадают в evidence plaintext.
 
+Для повторяемой криптопроверки сохраняются только age ciphertext approval и
+подписи, их hashes и hashes исходных bytes. Используются существующие age,
+recipients `.sops.yaml` и операторский `SOPS_AGE_KEY_FILE`, как в G17.
+Расшифрование и `crypto.verify` выполняются в ограниченной памяти без plaintext
+temp-файла на persistent FS и без вывода payload в логи. Доступность age,
+его закреплённая версия и совпадение identity с recipients проверяются до
+controlled child/provider phase. Без identity hashes не заменяют signature proof.
+
 Начальная корзина должна быть пустой. Разрешены один свежий offer без помола
 и количество не больше двух единиц Gateway. Provider checkout, заказы, счета,
 оплата, профиль и credentials не меняются. При чужих изменениях — STOP/FAIL,
