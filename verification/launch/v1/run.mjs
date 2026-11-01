@@ -643,15 +643,15 @@ async function readProcStat(pid) {
 async function readPeakRssBytes(pgid) {
   let procEntries;
   try {
-    procEntries = await readdir("/proc", { withFileTypes: true });
+    procEntries = await readdir("/proc");
   } catch (error) {
     throw peakRssError("readdir", error?.code);
   }
   let total = 0;
   let found = false;
   for (const entry of procEntries) {
-    if (!entry.isDirectory() || !/^\d+$/.test(entry.name)) continue;
-    const pid = Number(entry.name);
+    if (!/^\d+$/.test(entry)) continue;
+    const pid = Number(entry);
     if (!Number.isSafeInteger(pid)) throw peakRssError("stat", "EINVAL");
     const process = await readProcStat(pid);
     if (

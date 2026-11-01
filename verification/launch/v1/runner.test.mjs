@@ -7717,6 +7717,8 @@ void test(
       activeStatusReads: 0,
       maxActiveStatusReads: 0,
       readdirDelayMs: 0,
+      unknownEntryGone: false,
+      readdirErrno: null,
       procScans: 0,
     };
     const procError = (code) =>
@@ -7729,6 +7731,7 @@ void test(
     t.mock.method(fsPromises, "readdir", async (path, ...args) => {
       if (path === "/proc") {
         state.procScans += 1;
+        if (state.readdirErrno) throw procError(state.readdirErrno);
         if (state.readdirDelayMs) {
           const delay = state.readdirDelayMs;
           state.readdirDelayMs = 0;
@@ -7737,9 +7740,15 @@ void test(
           );
         }
         if (!state.targetPid) return [];
-        return state.records.map((record) =>
-          fakeDirent(String(state.targetPid + record.offset)),
-        );
+        if (state.unknownEntryGone && args[0]?.withFileTypes)
+          throw procError("ENOENT");
+        const names = [
+          "self",
+          ...state.records.map((record) =>
+            String(state.targetPid + record.offset),
+          ),
+        ];
+        return args[0]?.withFileTypes ? names.map(fakeDirent) : names;
       }
       return originalReaddir(path, ...args);
     });
@@ -7799,6 +7808,8 @@ void test(
         readdirDelayMs = 0,
         statusHook = null,
         outputBudget = null,
+        unknownEntryGone = false,
+        readdirErrno = null,
       }) => {
         runNumber += 1;
         state.targetPid = null;
@@ -7809,6 +7820,8 @@ void test(
         state.activeStatusReads = 0;
         state.maxActiveStatusReads = 0;
         state.readdirDelayMs = readdirDelayMs;
+        state.unknownEntryGone = unknownEntryGone;
+        state.readdirErrno = readdirErrno;
         state.procScans = 0;
         const runDirectory = join(directory, String(runNumber));
         await mkdir(runDirectory);
@@ -7850,6 +7863,7 @@ void test(
       };
 
       const races = await runFixture({
+        unknownEntryGone: true,
         records: [
           { offset: 0, kind: "live" },
           { offset: 1, kind: "stat-exit", errno: "ENOENT" },
@@ -7864,6 +7878,16 @@ void test(
       assert.equal(races.result.peakRssBytes, 128 * 1024);
       assert.equal(races.result.outputLimitExceeded, false);
       assert.equal(races.stderr, "");
+
+      const directoryError = await runFixture({
+        records: [{ offset: 0, kind: "live" }],
+        readdirErrno: "EIO",
+      });
+      assert.equal(directoryError.result.peakRssBytes, null);
+      assert.match(
+        directoryError.stderr,
+        /^\[RSS\] stage=readdir errno=EIO attempted=\d+ valid=0 no-match=\d+ errors=\d+\n$/,
+      );
 
       const accessDenied = await runFixture({
         records: [

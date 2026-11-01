@@ -208,11 +208,11 @@ outputs:
     consumers:
       - 1
   - artifact: verification/launch/v1/run.mjs
-    sha256: 5f19d5e302c7233676f6b0002a8471f39fd776bafd2fced2ad183a058402ee18
+    sha256: 893ae475ed3cb83bf9200ef8a243b7d9f1550878f20f4588cf0ba65d3c080bfe
     consumers:
       - 1
   - artifact: verification/launch/v1/runner.test.mjs
-    sha256: f94a0aead7bed89b75141459f4b787730581a916cf0f1f1b0cf95da5a5d6cc32
+    sha256: 363476d4a77adf7e0b8b08269b1aa5ea317854d3421a91f057d0ca0f57c6b605
     consumers:
       - 1
   - artifact: docs/adr/ADR-0034-g16-existing-account-verification.md
@@ -276,7 +276,7 @@ outputs:
     consumers:
       - 1
   - artifact: evidence/launch-preparation/2026-11-01/controller-readiness.md
-    sha256: 0e0469450aa8a79b82a98f36ec07956e4f844d4cc3be343beef1344b7b8eb4e5
+    sha256: c857bbd926da3bc06031bc0e49150a73fde274b6e5c75980fe46327a47662b3e
     consumers:
       - 1
 verification:
@@ -435,6 +435,10 @@ verification:
     result: "PASS; пять actual mounts, readonly/nonroot/identity/hash и own cleanup; parent 883 с двумя локальными WIP файлами, не SSE qualification"
     artifact: evidence/launch-preparation/2026-11-01/driver-mounts.md
     logSha256: a2dfd73f000895539dc59bbf96e0cef5316a3c533669be8e2a135ac7bbd2286b
+  - command: "node --test --test-name-pattern='RSS sampler distinguishes proc races|deadline terminates the exact child process group' verification/launch/v1/runner.test.mjs"
+    result: "PASS 2/2, fail/cancel/skip 0, 8.336 s; Source 7078f36 с локальным RSS fix, не formal PASS"
+    artifact: evidence/launch-preparation/2026-11-01/controller-readiness.md
+    logSha256: 870c16d056f9eeb2b2253c5a0348ea2a59b2dbc5c4b10dd72cc182e682d50678
   - command: "node --test verification/launch/v1/runner.test.mjs"
     result: "PASS 91/91, fail/cancel/skip 0; wall 116.859 s, Node test duration 116.775 s. Parent 5cb6e89 с пятью локальными WIP файлами; CLI startup без service dist, image ownership и failure receipt G16."
     logSha256: 4c781681c8047bceb921c9862954cf918376fd062e2382b97bd77e36102237d5
