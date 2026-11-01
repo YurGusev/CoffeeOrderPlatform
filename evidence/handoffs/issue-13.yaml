@@ -1,7 +1,7 @@
 issue: 13
 baseCommit: ad72338496f49241e83956aadfc12d17a6dedc2a
 status: source-descriptor-before-formal-verification
-asOfUtc: "2026-11-01T06:49:32.900Z"
+asOfUtc: "2026-11-01T07:56:19.567780+00:00"
 inputs:
   - issue: 2
     acceptedMergeCommit: 327638d4494269a151ee7c0ac945ac0053c3e0d4
@@ -243,6 +243,18 @@ outputs:
     sha256: 30623ad8f486b9cc00e5d04a3c7a10a7ba179ee2cb878b1fc061bb25370c3a18
     consumers:
       - 1
+  - artifact: scripts/check-toolchain-versions.mjs
+    sha256: 4cb87158f7ca327d8f4aa88cdb76a46e6322d96a31206e93583c67e48391ea83
+    consumers:
+      - 1
+  - artifact: tests/architecture/checks.test.mjs
+    sha256: dec32c8ba7dfca0fe0d5a2aada1cfdbd285374fcb6c0559714471f76edb22fdd
+    consumers:
+      - 1
+  - artifact: evidence/launch-preparation/2026-11-01/runtime-build-inputs.md
+    sha256: 81c210ff21d8b51aad04ac4a28521ffabe98330fd768cbe75504b36fd834cdbe
+    consumers:
+      - 1
 verification:
   - command:
       node --test --test-name-pattern='G14 queries actual child telemetry|full G14 coverage requires
@@ -360,6 +372,15 @@ verification:
   - command: "node --test --test-name-pattern='G12 temporary root validates|G12 builds product images, records pinned upstream identity' tests/tools/security-scan.test.mjs"
     result: "PASS2/2,32.28s; bigscratch moved, originalscannerlock and cleanup preserved; mockedDocker"
     logSha256: 9cfb6816ebc93135d8dbe078bd9031da0c0273f76db811cf507b0b5b651f3c56
+  - command: "PR #249 CI 41282824691 на 1e95d5c"
+    result: "PASS: 1556 tests /1477 pass /0 fail /79 skipped,317.698 s; до исправления nested fixture classification"
+    logSha256: 32cd04a5fb34f0eb5083217083963f1b75a7e499568bbb8e61d719cd15725bce
+  - command: standalone G12 1e95d5c run065708
+    result: "PASS: 1462.207 s,23targets/46reports/22images;rawHIGH2→approvedFixed2,unresolvedHIGH0/CRITICAL0;guardsfalse,owncleanupPASS;componentonly"
+    logSha256: a0299d9910a519884bc158f34b08aa1025221cffe5a4f517457570ddcdfa0135
+  - command: "node --test --test-name-pattern='TOOLCHAIN-FINAL-IMAGE|exact TS7 toolchain' tests/architecture/checks.test.mjs"
+    result: "PASS3/3,1.344s;nestedtestfixtureGREEN,child/rootproductionandforeignprefixRED;scopedlint/format/syntaxPASS"
+    logSha256: aa40af8f54a848460c900a597bab5b7b6270092b1a17e60a62a4bd682fa239cc
 consumerContract:
   consumer: 1
   admission:
@@ -388,6 +409,7 @@ consumerContract:
     policy/key/flag child и G18 baseline flag child с проверенной lineage. Лимиты и provider scope сохранены;
     exact parent G12 product images, отдельная BOM/image-ID проверка fixture PostgreSQL."
 limitations:
+  - "Standalone G12 1e95d5c PASS за1462.207s не переносится на новый source. SSE qualification прежнего SHA не началась: отрицательные operator preflights и nested fixture false positive сохранены; own cleanup выполнен отдельно. Новый Source требует собственные CI/G12/qualification/G00–G19."
   - "Общий локальный check aae20ab: pnpm check FAIL на прежнем 2 s readiness fixture; отдельное исправление #250 принято через PR #251.
     CI c4b38ce и db30ffa PASS. Новый source с раздельным размещением scratch требует собственный CI, G12, qualification и ordered runtime;
     прежние результаты не переносятся."

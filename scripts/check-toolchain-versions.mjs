@@ -754,6 +754,7 @@ async function checkFinalImages(root) {
       !label.startsWith("node_modules/") &&
       !label.startsWith("docs/") &&
       !label.startsWith("tests/") &&
+      !/^\.g15-browser-child-[A-Za-z0-9]+\/tests\//u.test(label) &&
       (/(?:^|\/)Dockerfile(?:\..*)?$/.test(label) ||
         label.endsWith(".Dockerfile"))
     );
