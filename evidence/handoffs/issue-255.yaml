@@ -1,0 +1,104 @@
+issue: 255
+baseCommit: e06c5d478123d6dc2908739882171fbf5c06fa3a
+status: locally-verified
+inputs:
+  - issue: 7
+    acceptedMergeCommit: c88c62c91e5a6833d26c8368e3f45e78948f051c
+    artifact: evidence/handoffs/issue-7.yaml
+    sha256: 692e3e7a6920e2e9203b7f8582636aeb692e4a6478a5473a95b8f2fa6395fc08
+  - issue: 61
+    acceptedMergeCommit: d1f462838da15b25049842a241f4e3f6f75a6b4f
+    artifact: evidence/handoffs/issue-61.yaml
+    sha256: 3c83d9e42870a35baeb2f12c7dfb62901b316bab536a54a3dadd099ca172459b
+  - issue: 162
+    acceptedMergeCommit: 327474d917e1f3f1dfd9d12da8a1273775f8591f
+    artifact: evidence/handoffs/issue-162.yaml
+    sha256: f7ba488cc54b5abc44d9e160a2815baf4abfbdaa4a99db70b5946a007f843a54
+outputs:
+  - artifact: config/platform.schema.json
+    sha256: 19fc1c4ce85ef2590e706c57b7d6944445e40c5f3a4b29db8612ec28742976c2
+    consumers:
+      - 13
+      - 254
+  - artifact: config/platform.yaml
+    sha256: e54231d29f00031b6be36eeb0486008740d5586cad89677b01988a3d90cd1d39
+    consumers:
+      - 13
+      - 254
+  - artifact: docs/launch/24_SERVICE_IDENTITY_AND_DELEGATION.md
+    sha256: f6147bf07c3ca603f34eb72d0ed2384c18319526a3aa50f703a9ac3780d4a7aa
+    consumers:
+      - 13
+      - 254
+  - artifact: docs/platform/LOCAL_PLATFORM.md
+    sha256: 82182c595402e1e8ed68d26182113d12bf79e86248c011c7101f60c136cf6086
+    consumers:
+      - 13
+      - 254
+  - artifact: packages/platform-config/src/index.ts
+    sha256: 7fd7086b77410331564f6d411f893f8fd29623d69bf4ad5343584f6f14373ab4
+    consumers:
+      - 13
+      - 254
+  - artifact: secrets/platform.secrets.sops.yaml
+    sha256: 54e0686ee98acb5a59fc22064f08f8083e7ed6756d1bed892a8dd081ef575451
+    consumers:
+      - 13
+      - 254
+  - artifact: tests/config/observability-bootstrap.test.mjs
+    sha256: 84319d1c0c60b07133ccb668d53702e3004b3045a313228ace2090de2e14d733
+    consumers:
+      - 13
+      - 254
+  - artifact: tests/config/platform-config.test.mjs
+    sha256: ecae08cc5ee026dccd190f457ad03f2daae87523934031650a77087d7d7dea73
+    consumers:
+      - 13
+      - 254
+  - artifact: tools/config-bootstrap/index.mjs
+    sha256: 21d1240acb90ff8e5a5918696c5002c45f1944d4ec0d2b925a2f06f57bf08f22
+    consumers:
+      - 13
+      - 254
+  - artifact: evidence/service-identity/2026-11-01/renewal.json
+    sha256: 7dca653a835b2ab9b2d07a9b5cd00a4b2df7b52a3d1668f3105a100797e394fc
+    consumers:
+      - 13
+      - 254
+behavior:
+  - "Trusted config-bootstrap обновляет только существующие development transport leaf certificates: срок 24 часа, окно обновления
+    6 часов; CA и service keys сохраняются."
+  - Сравнение публичных атрибутов после реального обновления подтвердило 15 из 15 leaf certificates, CA, SPKI, точные DNS/SPIFFE,
+    подписи и соответствие ключей; состояние действительности зафиксировано на момент сравнения.
+  - Публичный TLS и получатели шифрования сохранены; приватные ключи и PEM не включены в публичный receipt.
+verification:
+  - command: pnpm install --offline --frozen-lockfile --ignore-scripts
+    result: PASS, 2.6s; shared heavy lease.
+  - command: pnpm exec tsc -b packages/platform-runtime packages/platform-idempotency
+    result: PASS; shared heavy lease.
+  - command:
+      node --test --test-concurrency=1 --test-name-pattern='^(development transport renewal preserves authority and all
+      other secrets|transport certificate policy enforces the 24-hour lifetime and 6-hour renewal window)$' tests/config/observability-bootstrap.test.mjs
+      tests/config/platform-config.test.mjs
+    result: "PASS: 2/2, 0 fail, 0 skip, 12.349s; Node 26.8.1, shared heavy lease."
+    logSha256: 7640e54233b9469e2d5e69f25fa845f77b86285b9ed1b48fe47c7dd973e40766
+  - command:
+      flock --no-fork -w 120 /run/user/1000/coffee-platform-heavy.lock timeout --signal=TERM --kill-after=30s 120s node
+      tools/config-bootstrap/index.mjs --renew-development-transport
+    result: "PASS: 15 существующих identities обновлены, прежний development CA сохранён; Node 26.8.1, umask 0077."
+    logSha256: 027d26c56c963bec0a2017fd71afb9c3e39e54b4b92a62e25b0184b613a20db5
+  - command: Независимое сравнение публичных атрибутов до и после обновления trusted materialization.
+    result: PASS 15/15, baseline и очистка собственного tmpfs и reader containers подтверждены; публичный receipt в outputs.
+    operatorSha256: ce101833616db9c785791ef78151d631e64fdd64625c505c314ec6d8c42a56dd
+    reportSha256: 7dca653a835b2ab9b2d07a9b5cd00a4b2df7b52a3d1668f3105a100797e394fc
+  - command: Независимый review изменённого bootstrap и synthetic regression tests.
+    result: ACCEPT без блокирующих замечаний.
+    bootstrapSha256: 21d1240acb90ff8e5a5918696c5002c45f1944d4ec0d2b925a2f06f57bf08f22
+    testSha256: 84319d1c0c60b07133ccb668d53702e3004b3045a313228ace2090de2e14d733
+limitations:
+  - CI окончательного HEAD ещё должен пройти в PR до merge.
+  - G13, deployment и нормальный запуск с обновлёнными сертификатами не выполнялись; формального допуска issue 13 нет.
+  - Проверка ограничена 15 существующими development transport leaf certificates; scheduler и перекрытие сроков действия не
+    проверялись.
+  - "Обновлённый ciphertext находится только в worktree #255; Main issue 13 и worktree #254 сохраняют прежний ciphertext до
+    принятия изменений."

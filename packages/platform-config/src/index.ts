@@ -384,7 +384,12 @@ export type PlatformConfig = Readonly<{
   kafkaNamespaceIsolation: boolean;
   unitCoverage: UnitCoverageVerificationConfig | null;
   nginxTransport: Readonly<Record<string, unknown>>;
-  security: Readonly<Record<string, unknown>>;
+  security: Readonly<
+    Record<string, unknown> & {
+      certificateValidityHours: 24;
+      certificateRenewBeforeHours: 6;
+    }
+  >;
   services: Readonly<Record<RuntimeName, RuntimeConfig>>;
 }>;
 
@@ -2636,6 +2641,17 @@ export function parsePlatformConfig(value: unknown): PlatformConfig {
     source["nginxTransport"],
     "config.nginxTransport",
   );
+  const security = opaqueObject(source["security"], "config.security");
+  if (security["certificateValidityHours"] !== 24)
+    throw new PlatformConfigError(
+      "config.security.certificateValidityHours",
+      "ожидалось значение 24",
+    );
+  if (security["certificateRenewBeforeHours"] !== 6)
+    throw new PlatformConfigError(
+      "config.security.certificateRenewBeforeHours",
+      "ожидалось значение 6",
+    );
   assertDatabaseAdmissionBudget({ services: typedServices, postgres });
   return Object.freeze({
     schemaVersion: 1,
@@ -2658,7 +2674,11 @@ export function parsePlatformConfig(value: unknown): PlatformConfig {
         ? null
         : parseUnitCoverageVerification(verification["unitCoverage"]),
     nginxTransport,
-    security: opaqueObject(source["security"], "config.security"),
+    security: Object.freeze({
+      ...security,
+      certificateValidityHours: 24,
+      certificateRenewBeforeHours: 6,
+    }),
     services: Object.freeze(typedServices),
   });
 }
