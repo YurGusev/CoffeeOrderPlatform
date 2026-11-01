@@ -3545,6 +3545,8 @@ void test("startRuntime removes signal listeners and repeated process signals pe
   const runtimePath = join(root, "packages/platform-runtime/dist/index.js");
   const script = `
     import {startRuntime} from ${JSON.stringify(runtimePath)};
+    const names = ["SIGTERM", "SIGINT"];
+    const before = Object.fromEntries(names.map(signal => [signal, new Set(process.listeners(signal))]));
     const app = await startRuntime({
       name: "signal-child",
       host: "127.0.0.1",
@@ -3556,15 +3558,28 @@ void test("startRuntime removes signal listeners and repeated process signals pe
         destroy: () => console.log("destroy-hook"),
       }],
     });
-    console.log("ready");
+    const runtimeHandlers = {};
+    for (const signal of names) {
+      const added = process.listeners(signal).filter(handler => !before[signal].has(handler));
+      if (added.length !== 1) throw new Error("runtime signal handler missing");
+      runtimeHandlers[signal] = added[0];
+      process.on(signal, () => process.send({type: "signal", signal,
+        runtimeHandlerPresent: process.listeners(signal).includes(runtimeHandlers[signal])}));
+    }
+    process.send({type: "ready"});
     void app;
   `;
   const child = spawn(process.execPath, ["--input-type=module", "-e", script], {
     cwd: root,
-    stdio: ["ignore", "pipe", "pipe"],
+    stdio: ["ignore", "pipe", "pipe", "ipc"],
   });
   let stdout = "";
   let stderr = "";
+  const signals = [];
+  const closed = new Promise((resolve) => child.once("close", resolve));
+  child.on("message", (message) => {
+    if (message?.type === "signal") signals.push(message);
+  });
   child.stdout.setEncoding("utf8");
   child.stderr.setEncoding("utf8");
   child.stdout.on("data", (chunk) => {
@@ -3573,37 +3588,76 @@ void test("startRuntime removes signal listeners and repeated process signals pe
   child.stderr.on("data", (chunk) => {
     stderr += chunk;
   });
+  let exit;
   try {
     await new Promise((resolve, reject) => {
-      const timer = setTimeout(
-        () => reject(new Error(`child did not start: ${stderr}`)),
-        2_000,
-      );
-      const onData = () => {
-        if (stdout.includes("ready")) {
-          clearTimeout(timer);
-          child.stdout.removeListener("data", onData);
+      const cleanup = () => {
+        clearTimeout(timer);
+        child.removeListener("message", onMessage);
+        child.removeListener("exit", onExit);
+        child.removeListener("error", onError);
+      };
+      const onMessage = (message) => {
+        if (message?.type === "ready") {
+          cleanup();
           resolve();
         }
       };
-      child.stdout.on("data", onData);
-      child.once("error", (error) => {
-        clearTimeout(timer);
+      const onExit = (code, signal) => {
+        cleanup();
+        reject(
+          new Error(`child exited before ready: ${code ?? signal}; ${stderr}`),
+        );
+      };
+      const onError = (error) => {
+        cleanup();
         reject(error);
-      });
+      };
+      const timer = setTimeout(() => {
+        cleanup();
+        reject(new Error(`child did not start: ${stderr}`));
+      }, health.startupGraceMs);
+      child.on("message", onMessage);
+      child.once("exit", onExit);
+      child.once("error", onError);
     });
-    child.kill("SIGTERM");
-    await new Promise((resolve) => setTimeout(resolve, 10));
-    child.kill("SIGINT");
-    const exit = await waitForChildExit(child);
-    assert.equal(exit.code, 1, stderr);
-    assert.equal((stdout.match(/stop-hook/g) ?? []).length, 1, stdout);
-    assert.equal((stdout.match(/destroy-hook/g) ?? []).length, 1, stdout);
-    assert.equal((stdout.match(/runtime.shutdown"/g) ?? []).length, 1, stdout);
+    const exited = waitForChildExit(child);
+    void exited.catch(() => {});
+    assert.equal(child.kill("SIGTERM"), true);
+    assert.equal(child.kill("SIGINT"), true);
+    exit = await exited;
   } finally {
     if (child.exitCode === null && child.signalCode === null)
       child.kill("SIGKILL");
+    let timer;
+    try {
+      await Promise.race([
+        closed,
+        new Promise((_, reject) => {
+          timer = setTimeout(
+            () => reject(new Error("child did not close")),
+            2_000,
+          );
+        }),
+      ]);
+    } finally {
+      clearTimeout(timer);
+    }
   }
+  assert.equal(exit.code, 1, stderr);
+  assert.equal(signals.length, 2);
+  assert.equal(
+    signals.filter((message) => message.signal === "SIGTERM").length,
+    1,
+  );
+  assert.equal(
+    signals.filter((message) => message.signal === "SIGINT").length,
+    1,
+  );
+  assert.ok(signals.every((message) => message.runtimeHandlerPresent === true));
+  assert.equal((stdout.match(/stop-hook/g) ?? []).length, 1, stdout);
+  assert.equal((stdout.match(/destroy-hook/g) ?? []).length, 1, stdout);
+  assert.equal((stdout.match(/runtime.shutdown"/g) ?? []).length, 1, stdout);
 });
 
 void test("scoped secrets fail closed on foreign identity or missing refs", () => {
