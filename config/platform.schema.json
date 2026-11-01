@@ -86,7 +86,7 @@
             "egressRepositories": {
               "const": [
                 "ghcr.io/aquasecurity/trivy-db",
-                "ghcr.io/aquasecurity/trivy-java-db"
+                "mirror.gcr.io/aquasec/trivy-java-db"
               ]
             }
           }

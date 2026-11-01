@@ -31,6 +31,14 @@ Node и deployed package links, а не pnpm installer. Состав завис�
 экспорт и qualification подтверждаются фактическим runtime evidence;
 само наличие exporter options не является PASS.
 
+G12 загружает основную базу Trivy из GHCR, а Java DB — через
+`mirror.gcr.io/aquasec/trivy-java-db`, один из [официальных default locations
+Trivy](https://trivy.dev/docs/dev/configuration/db/). В локальной диагностике
+GHCR загрузка Java DB оборвалась с `unexpected EOF`; отдельная загрузка через
+mirror завершилась, и SHA-256 полученной БД совпал с предыдущей GHCR-копией.
+Явный `--java-db-repository` задаёт единственный выбранный маршрут, а не
+автоматический fallback. Эта диагностика не является PASS полного G12.
+
 Основание: [pnpm #9474](https://github.com/pnpm/pnpm/issues/9474),
 [modules manifest pnpm 11.24.0](https://github.com/pnpm/pnpm/blob/v11.24.0/pnpm11/installing/modules-yaml/src/index.ts),
 [BuildKit 0.32.2 exporter options](https://github.com/moby/buildkit/blob/v0.32.2/exporter/containerimage/opts.go)

@@ -412,7 +412,7 @@ void test("G12 scanner policy is strict verification-only configuration", async 
     approvedFixed: ["CVE-2026-21728", "CVE-2026-28377"],
     egressRepositories: [
       "ghcr.io/aquasecurity/trivy-db",
-      "ghcr.io/aquasecurity/trivy-java-db",
+      "mirror.gcr.io/aquasec/trivy-java-db",
     ],
   };
   assert.deepEqual(
@@ -435,11 +435,39 @@ void test("G12 scanner policy is strict verification-only configuration", async 
   const parsed = parsePlatformConfig(document);
   assert.equal(Object.hasOwn(parsed, "verification"), false);
   assert.equal(Object.hasOwn(parsed, "securityScan"), false);
+  const schema = JSON.parse(
+    await readFile(join(REPO_ROOT, "config/platform.schema.json"), "utf8"),
+  );
+  const nginxSchema = JSON.parse(
+    await readFile(join(REPO_ROOT, "config/nginx-profile.schema.json"), "utf8"),
+  );
+  const ajv = new Ajv2020({ allErrors: true, strict: true });
+  ajv.addSchema(nginxSchema);
+  const validate = ajv.compile(schema);
+  assert.equal(validate(document), true, JSON.stringify(validate.errors));
+  const foreignRepository = structuredClone(document);
+  foreignRepository.verification.securityScan.egressRepositories[1] =
+    "registry.example.invalid/trivy-java-db";
+  assert.equal(validate(foreignRepository), false);
   for (const changed of [
     { ...expected, enabled: false },
     { ...expected, cpu: 3 },
     { ...expected, parallel: 2 },
     { ...expected, maximumDatabaseAgeHours: 25 },
+    {
+      ...expected,
+      egressRepositories: [
+        "ghcr.io/aquasecurity/trivy-db",
+        "registry.example.invalid/trivy-java-db",
+      ],
+    },
+    {
+      ...expected,
+      egressRepositories: [
+        "ghcr.io/aquasecurity/trivy-db",
+        "ghcr.io/aquasecurity/trivy-java-db",
+      ],
+    },
     {
       ...expected,
       egressRepositories: [

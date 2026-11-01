@@ -1,7 +1,7 @@
 issue: 13
 baseCommit: e06c5d478123d6dc2908739882171fbf5c06fa3a
 status: source-descriptor-before-formal-verification
-asOfUtc: "2026-11-01T12:03:45.602687+00:00"
+asOfUtc: "2026-11-01T16:27:00.901340+00:00"
 inputs:
   - issue: 2
     acceptedMergeCommit: 327638d4494269a151ee7c0ac945ac0053c3e0d4
@@ -140,7 +140,7 @@ historicalAcceptance:
     не создаётся задним числом.
 outputs:
   - artifact: config/platform.yaml
-    sha256: 9548528ae189629cbe12a12562c1e66bdfcc77e16f0c15c9ff30e85b020457c5
+    sha256: ef0304a8a8444311527be0126539a471673cc3b8eb17698784a9fbe151f4f7a1
     consumers:
       - 1
   - artifact: docs/launch/13_DELIVERY_DEPENDENCY_GRAPH.md
@@ -176,7 +176,7 @@ outputs:
     consumers:
       - 1
   - artifact: tests/compose/topology.test.mjs
-    sha256: a59a6eacfff45118725d41c6c5ac8a2a31c1bf545960f4f3b26bdbae66fe59c9
+    sha256: 1cd39279f7ee48afca6692689ec5d92b29bfaf659c5b11717ec5843b9300d86f
     consumers:
       - 1
   - artifact: tests/config/observability-bootstrap.test.mjs

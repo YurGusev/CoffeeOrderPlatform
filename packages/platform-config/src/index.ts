@@ -398,7 +398,7 @@ export type SecurityScanVerificationConfig = Readonly<{
   approvedFixed: readonly ("CVE-2026-21728" | "CVE-2026-28377")[];
   egressRepositories: readonly [
     "ghcr.io/aquasecurity/trivy-db",
-    "ghcr.io/aquasecurity/trivy-java-db",
+    "mirror.gcr.io/aquasec/trivy-java-db",
   ];
 }>;
 
@@ -681,7 +681,7 @@ export function parseSecurityScanVerification(
   );
   const expectedRepositories = [
     "ghcr.io/aquasecurity/trivy-db",
-    "ghcr.io/aquasecurity/trivy-java-db",
+    "mirror.gcr.io/aquasec/trivy-java-db",
   ] as const;
   if (
     egressRepositories.length !== expectedRepositories.length ||
@@ -691,7 +691,7 @@ export function parseSecurityScanVerification(
   ) {
     throw new PlatformConfigError(
       `${path}.egressRepositories`,
-      "разрешены только официальные GHCR Trivy vulnerability DB registries",
+      "разрешены только закреплённые официальные Trivy vulnerability DB registries",
     );
   }
   return Object.freeze({
