@@ -1,7 +1,7 @@
 issue: 13
-baseCommit: a37789c2bb13775f96f5590fb74b6e9a8f51aca2
+baseCommit: ad72338496f49241e83956aadfc12d17a6dedc2a
 status: source-descriptor-before-formal-verification
-asOfUtc: "2026-11-01T02:32:33.794056+00:00"
+asOfUtc: "2026-11-01T03:09:38.812008+00:00"
 inputs:
   - issue: 2
     acceptedMergeCommit: 327638d4494269a151ee7c0ac945ac0053c3e0d4
@@ -119,6 +119,10 @@ inputs:
     acceptedMergeCommit: a37789c2bb13775f96f5590fb74b6e9a8f51aca2
     artifact: evidence/handoffs/issue-247.yaml
     sha256: 8dae367419436121f0dce2dce9935382f57f722a05957ea1d56c4f8436256b30
+  - issue: 250
+    acceptedMergeCommit: ad72338496f49241e83956aadfc12d17a6dedc2a
+    artifact: evidence/handoffs/issue-250.yaml
+    sha256: eec1b9898db579ca566fbc537930e9df91396016e0df7270f4de22549e16fb47
 historicalAcceptance:
   issue: 14
   acceptedMergeCommit: 9b5a320b936cecafcb74de2d6a1253e3d0a155ce
@@ -301,6 +305,21 @@ verification:
       PASS 5/5, 1.013 s; zero/full/partial и foreign/dangling preservation сохранены, dead helpers
       отсутствуют; scoped lint/format/syntax PASS
     logSha256: 9eb9a52c3ca27741352cad5b4dec5c3838d01348eb08302c4abbe85836a7fab1
+  - command: pnpm check на aae20ab (локальный)
+    result:
+      "FAIL 520.269 s: 1554 tests / 1474 pass / 1 fail / 79 skipped; existing lifecycle child ready
+      timeout 2 s, corrected by accepted #250"
+    logSha256: 3b8dc6f4ffdbb1f9b25b705100c0ddb9248581aa1423e10cb2665cf40da5165c
+  - command: "PR #249 CI 41265835532 на aae20ab"
+    result:
+      "PASS: 1554 tests / 1475 pass / 0 fail / 79 skipped, main suite 300.201 s; local failure preserved
+      separately"
+    logSha256: d4941164b0ceb52014eb705b92fa629150e34fcecb7f4145143d1f0288f45df9
+  - command: "PR #251 CI 41267388955 на 632a2ef"
+    result:
+      "PASS: 1530 tests / 1451 pass / 0 fail / 79 skipped, main suite 224.253 s; IPC readiness with
+      unchanged shutdown guarantee"
+    logSha256: f827cb1be978cf51939e0616a809e62c607014f4b9222ee458ee709ea70fad3d
 consumerContract:
   consumer: 1
   admission:
@@ -329,9 +348,10 @@ consumerContract:
     policy/key/flag child и G18 baseline flag child с проверенной lineage. Лимиты и provider scope сохранены;
     exact parent G12 product images, отдельная BOM/image-ID проверка fixture PostgreSQL."
 limitations:
-  - На dfd1b6a завершены локальные format:check/check/security:secrets. После согласованного расширения
-    G16/G18 новые общие проверки и полный runtime на окончательном SHA ещё NOT_RUN; перечисленные ниже targeted
-    проверки относятся к замороженным файлам и не являются runtime admission.
+  - "Общий локальный check aae20ab: format PASS, pnpm check FAIL только на прежнем 2 s readiness fixture.
+    Его отдельное исправление #250 принято через PR #251 с CI PASS. CI PR #249 на aae20ab также PASS. Новому
+    объединённому head ещё нужны собственный CI, G12, qualification и ordered runtime; прежние результаты
+    не переносятся."
   - Итоговые G12, обязательная SSE qualification и полный G00–G19 на окончательном SHA ещё NOT_RUN. Component
     cffe147 и прежние qualification не переносятся.
   - Фактические runtime results и hashes появятся после выполнения; согласованная публикация двух артефактов
