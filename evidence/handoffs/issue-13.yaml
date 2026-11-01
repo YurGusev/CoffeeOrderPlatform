@@ -1,7 +1,7 @@
 issue: 13
 baseCommit: e06c5d478123d6dc2908739882171fbf5c06fa3a
 status: source-descriptor-before-formal-verification
-asOfUtc: "2026-11-01T19:36:48.970738+00:00"
+asOfUtc: "2026-11-01T20:34:49.562581+00:00"
 inputs:
   - issue: 2
     acceptedMergeCommit: 327638d4494269a151ee7c0ac945ac0053c3e0d4
@@ -180,7 +180,7 @@ outputs:
     consumers:
       - 1
   - artifact: tests/config/observability-bootstrap.test.mjs
-    sha256: c65a6e0ed5a623bca706df1c2c693d66525cb30c69d0bbe56bbd49913c49f7f4
+    sha256: 92565c48d4e02cb78bcbbb2e1a55171488ed755172e07425201e1f606fcaac68
     consumers:
       - 1
   - artifact: tests/observability/alerts.test.mjs
@@ -230,7 +230,7 @@ outputs:
   - artifact: verification/launch/v1/scenarios/aroma-sandbox-resources.mjs
     sha256: d583229f493a23d582a37e4e020415333943207d2475a57ddc53ba433cd64304
   - artifact: verification/launch/v1/scenarios/rollback.mjs
-    sha256: 9e0b665e9b1f294e67362e9d98aa11d181456dc1f809b10cb0d84e9c20a06360
+    sha256: f95227f2f0769dc06fef2088ac55eaab484fa874700b3a155ea2ece005e88271
   - artifact: tools/security-scan.mjs
     sha256: b44e8bb849423da25f4e0f92d6a59fab5f44c3d49a9a14e5db55732483c21894
     consumers:
@@ -463,6 +463,9 @@ verification:
   - command: "COFFEE_DB_LIVE_PROOF=1 TMPDIR=/tmp node --test --test-concurrency=1 --test-reporter=tap tests/catalog-pipeline/security-live.test.mjs"
     result: "PASS 4/4, 0 fail/cancel/skip, 10.531 s; реальный временный PostgreSQL, собственные containers удалены, baseline сохранён; локальная проверка, не formal G10."
     logSha256: 5099ae81279cf5f6309a287163e654588c444fb1051768c57718c1e725d3649d
+  - command: "node --test --test-name-pattern='^browser correlation executes the child lifecycle and preserves early image failure evidence$' tests/config/observability-bootstrap.test.mjs"
+    result: "PASS 1/1, fail/cancel/skip 0; тест 94.408 s, всего 95.181 s, Node 26.8.1 под общим heavy lease. Синтетический failure receipt/context binding; wrapper: flock --no-fork -w 120 и timeout 120s только для diagnostic; локальная проверка, не runtime admission G18."
+    logSha256: 58382edaff8ba50bce8fa7e253937c6c418734b471713d48b8757fb7928fd2ed
 consumerContract:
   consumer: 1
   admission:
@@ -491,6 +494,7 @@ consumerContract:
     policy/key/flag child и G18 baseline flag child с проверенной lineage. Лимиты и provider scope сохранены;
     exact parent G12 product images, отдельная BOM/image-ID проверка fixture PostgreSQL."
 limitations:
+  - "Исправление G18 parent failure receipt локально проверено, но не является runtime admission; qualification Source 0dc прервана владельцем через SIGTERM до завершения и не является PASS или sealed. Новому frozen Source нужны свежие CI, G12, SSE qualification и полный G00–G19."
   - "Full run 2c4250a/185412: G00–G09 и G12 PASS, G10 FAIL при проверке захвата логов; G11 и G13–G18 NOT_RUN, G19 REPORT PASS не является admission. Локальный fix захвата fd 1 проверен на 9/9 существующих live tests; окончательному Source нужны собственные CI, G12, SSE qualification и полный G00–G19."
   - "Компонентный G12 5cb6e89 прерван по запросу владельца; отдельный G16 stub и CLI startup не являются runtime admission. Будущему замороженному Source нужны собственные CI, G12, SSE qualification и полный G00–G19."
   - "Source 883 standalone G12 PASS; qualification FAIL до нагрузки с сохранённым отрицательным результатом. Синтетический Docker-пробник WIP не является qualification или полным admission; окончательному Source нужны собственные CI, G12, SSE и G00–G19."

@@ -1539,6 +1539,191 @@ async function assertRollbackContainersStopped(projectName) {
   if (output) fail("ROLLBACK_COMPOSE_CONTAINERS_STILL_OWN_MOUNTS");
 }
 
+export async function runControlledRollbackChild({
+  args,
+  cwd,
+  env,
+  parentIdentity,
+  parentContextPath,
+  child,
+}) {
+  try {
+    return await runManagedRollbackChild({
+      args,
+      cwd,
+      env,
+      terminationGraceMs: 150_000,
+    });
+  } catch (error) {
+    const parent = parentIdentity.context;
+    let safeFailure = {
+      schemaVersion: 1,
+      status: "FAIL",
+      code: "ROLLBACK_CONTROLLED_CHILD_FAILURE_UNVERIFIED",
+      parentRunId: parent.runId,
+      parentCandidateSha: parent.candidateSha,
+      childRunId: child.context.runId,
+      childCandidateSha: child.context.candidateSha,
+      cleanup: {
+        verified: false,
+        complete: false,
+        failures: [],
+        retainedResources: [],
+        inventory: { containers: [], volumes: [], networks: [] },
+      },
+    };
+    let contextBytes;
+    try {
+      const contextInfo = await lstat(child.path);
+      if (
+        error?.result?.joined !== true ||
+        error.message !== "ROLLBACK_CHILD_FAILED" ||
+        error.result.code === 0 ||
+        !contextInfo.isFile() ||
+        contextInfo.isSymbolicLink() ||
+        contextInfo.uid !== process.getuid() ||
+        (contextInfo.mode & 0o777) !== 0o400 ||
+        contextInfo.size > 16384 ||
+        child.path !== join(child.context.evidenceDir, "context.json") ||
+        child.context.evidenceDir !==
+          join(
+            parentIdentity.sourceRoot,
+            "evidence/launch",
+            child.context.runId,
+          )
+      )
+        fail("ROLLBACK_CONTROLLED_FAILURE_INVALID");
+      const candidateContextBytes = await readFile(child.path);
+      const childReport = await import(
+        pathToFileURL(join(cwd, "verification/launch/v1/report.mjs")).href
+      );
+      const identity = await childReport.validateLaunchContext(child.path);
+      if (
+        candidateContextBytes.length !== contextInfo.size ||
+        !isDeepStrictEqual(
+          JSON.parse(candidateContextBytes.toString("utf8")),
+          child.context,
+        ) ||
+        !isDeepStrictEqual(identity.context, child.context) ||
+        identity.candidateRoot !== cwd ||
+        identity.sourceRoot !== parentIdentity.sourceRoot ||
+        child.context.candidateSha !== child.lineage.baseline.commitSha ||
+        child.context.baseConfigSha256 !==
+          child.lineage.baseline.configSha256 ||
+        child.context.acceptedBaseCommit !== parent.acceptedBaseCommit ||
+        child.context.resources?.controlledScope !== "G18" ||
+        child.context.resources.controlledParentContextPath !==
+          parentContextPath ||
+        child.context.resources.controlledParentCandidateSha !==
+          parent.candidateSha ||
+        child.context.resources.controlledParentRunId !== parent.runId
+      )
+        fail("ROLLBACK_CONTROLLED_FAILURE_INVALID");
+      contextBytes = candidateContextBytes;
+      const path = join(
+        child.context.evidenceDir,
+        "gates/G18_ROLLBACK/artifacts/mutation-disable-rollback-failure.json",
+      );
+      const info = await lstat(path);
+      if (
+        !info.isFile() ||
+        info.isSymbolicLink() ||
+        info.uid !== process.getuid() ||
+        (info.mode & 0o777) !== 0o600 ||
+        info.size > 131072 ||
+        (await realpath(path)) !== path
+      )
+        fail("ROLLBACK_CONTROLLED_FAILURE_INVALID");
+      const bytes = await readFile(path);
+      if (bytes.length !== info.size)
+        fail("ROLLBACK_CONTROLLED_FAILURE_INVALID");
+      const failure = JSON.parse(bytes.toString("utf8"));
+      validateRollbackFailureArtifact(failure, {
+        runId: child.context.runId,
+        candidateSha: child.context.candidateSha,
+        lineage: failure.lineage,
+      });
+      if (
+        failure.lineage?.B?.commitSha !== child.context.candidateSha ||
+        failure.lineage.B.treeSha !== child.lineage.baseline.treeSha ||
+        failure.lineage.B.configSha256 !== child.context.baseConfigSha256 ||
+        !failureCleanupIsValid({ ...failure.cleanup, verified: true })
+      )
+        fail("ROLLBACK_CONTROLLED_FAILURE_INVALID");
+      const cleanup = failure.cleanup;
+      safeFailure = {
+        schemaVersion: 1,
+        status: "FAIL",
+        parentRunId: parent.runId,
+        parentCandidateSha: parent.candidateSha,
+        childRunId: child.context.runId,
+        childCandidateSha: child.context.candidateSha,
+        childContextSha256: createHash("sha256")
+          .update(contextBytes)
+          .digest("hex"),
+        sourceFailureSha256: createHash("sha256").update(bytes).digest("hex"),
+        stage: failure.stage,
+        code: failure.code,
+        errorName: failure.errorName,
+        messageSha256: failure.messageSha256,
+        ...(failure.disabledReconcileSubstage
+          ? { disabledReconcileSubstage: failure.disabledReconcileSubstage }
+          : {}),
+        ...(failure.sourceLocation
+          ? {
+              sourceLocation: {
+                source: failure.sourceLocation.source,
+                line: failure.sourceLocation.line,
+                column: failure.sourceLocation.column,
+              },
+            }
+          : {}),
+        cleanup: {
+          verified: cleanup.verified,
+          complete: cleanup.complete,
+          failures: [...cleanup.failures],
+          retainedResources: cleanup.retainedResources.map(
+            ({ kind, name }) => ({ kind, name }),
+          ),
+          inventory: Object.fromEntries(
+            ["containers", "volumes", "networks"].map((kind) => [
+              kind,
+              [...cleanup.inventory[kind]],
+            ]),
+          ),
+        },
+      };
+    } catch {
+      // Missing or untrusted child data cannot establish cleanup or failure stage.
+    }
+    const artifacts = join(
+      parentIdentity.evidenceDir,
+      "gates/G18_ROLLBACK/artifacts",
+    );
+    if (contextBytes)
+      await writeFile(
+        join(artifacts, "rollback-child-context.json"),
+        contextBytes,
+        { flag: "wx", mode: 0o600 },
+      );
+    const path = join(artifacts, "rollback-child-failure.json");
+    const bytes = Buffer.from(`${JSON.stringify(safeFailure, null, 2)}\n`);
+    await writeFile(path, bytes, { flag: "wx", mode: 0o600 });
+    const failure = new Error(
+      safeFailure.code === "ROLLBACK_CONTROLLED_CHILD_FAILURE_UNVERIFIED"
+        ? safeFailure.code
+        : "ROLLBACK_CONTROLLED_CHILD_FAILED",
+    );
+    failure.safeDetails = {
+      failureReceipt: {
+        path,
+        sha256: createHash("sha256").update(bytes).digest("hex"),
+      },
+    };
+    throw failure;
+  }
+}
+
 async function runControlledRollbackParent(parentIdentity, parentContextPath) {
   const { prepareBrowserChildCheckout, writeControlledChildContext } =
     await import("./browser.mjs");
@@ -1565,7 +1750,7 @@ async function runControlledRollbackParent(parentIdentity, parentContextPath) {
       evidenceDir,
     });
     childStarted = true;
-    const result = await runManagedRollbackChild({
+    const result = await runControlledRollbackChild({
       args: [
         join(
           baseline.baselineRoot,
@@ -1574,7 +1759,9 @@ async function runControlledRollbackParent(parentIdentity, parentContextPath) {
       ],
       cwd: baseline.baselineRoot,
       env: { ...process.env, COFFEE_LAUNCH_CONTEXT_FILE: child.path },
-      terminationGraceMs: 150_000,
+      parentIdentity,
+      parentContextPath,
+      child,
     });
     const outcome = lastJsonLine(result.stdout);
     const childArtifacts = join(
@@ -1787,6 +1974,14 @@ if (
   try {
     console.log(JSON.stringify(await runRollbackScenario()));
   } catch (error) {
+    if (error?.safeDetails?.failureReceipt)
+      console.log(
+        JSON.stringify({
+          status: "FAIL",
+          code: error.message,
+          ...error.safeDetails,
+        }),
+      );
     console.error(
       error instanceof Error ? error.message : "ROLLBACK_RUNTIME_PROOF_FAILED",
     );

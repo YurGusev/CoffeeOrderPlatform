@@ -8102,6 +8102,196 @@ void test("browser correlation executes the child lifecycle and preserves early 
   } finally {
     await rm(controlled.directory, { recursive: true, force: true });
   }
+  {
+    const rollback = await import(
+      pathToFileURL(join(root, "verification/launch/v1/scenarios/rollback.mjs"))
+        .href
+    );
+    for (const [stamp, mutation] of [
+      ["20261030T121000Z", "none"],
+      ["20261030T122000Z", "receipt"],
+      ["20261030T123000Z", "context"],
+      ["20261030T124000Z", "missing"],
+    ]) {
+      const parent = await makeContext(stamp);
+      const baseline = await rollback.createRollbackBaseline({
+        candidateRoot: root,
+        candidateSha: sha,
+      });
+      let child;
+      let checkouts;
+      try {
+        child = await writeControlledChildContext({
+          contextPath: parent.contextPath,
+          childRoot: baseline.baselineRoot,
+          childSha: baseline.baselineSha,
+          scope: "G18",
+        });
+        checkouts = await rollback.createRollbackCheckouts({
+          candidateRoot: baseline.baselineRoot,
+          candidateSha: baseline.baselineSha,
+        });
+        const lineage = await rollback.validateRollbackLineage({
+          launchIdentity: {
+            candidateRoot: baseline.baselineRoot,
+            context: {
+              checkoutDir: baseline.baselineRoot,
+              candidateSha: baseline.baselineSha,
+            },
+          },
+          ...checkouts,
+        });
+        const retainedName = `${child.context.resources.composeProject}-orders`;
+        const receipt = {
+          ...rollback.createRollbackFailureReceipt({
+            runId: child.context.runId,
+            candidateSha: child.context.candidateSha,
+            stage: "disabled-reconcile",
+            error: new Error("sensitive-message-canary"),
+            cleanup: {
+              verified: true,
+              complete: false,
+              failures: ["compose-down"],
+              retainedResources: [
+                {
+                  kind: "containers",
+                  name: retainedName,
+                  privateValue: "private-canary",
+                },
+              ],
+              inventory: {
+                containers: [retainedName],
+                volumes: [],
+                networks: [],
+              },
+            },
+          }),
+          lineage,
+          privateValue: "private-canary",
+        };
+        if (mutation === "receipt") receipt.candidateSha = "a".repeat(40);
+        if (mutation === "context") {
+          await chmod(child.path, 0o600);
+          await writeFile(
+            child.path,
+            JSON.stringify({
+              ...child.context,
+              resources: {
+                ...child.context.resources,
+                controlledParentCandidateSha: "b".repeat(40),
+              },
+            }),
+          );
+          await chmod(child.path, 0o400);
+        }
+        const failurePath = join(
+          child.context.evidenceDir,
+          "gates/G18_ROLLBACK/artifacts/mutation-disable-rollback-failure.json",
+        );
+        const parentArtifacts = join(
+          parent.evidenceDir,
+          "gates/G18_ROLLBACK/artifacts",
+        );
+        await mkdir(parentArtifacts, { recursive: true, mode: 0o700 });
+        const script = `import fs from 'node:fs';${mutation === "missing" ? "" : `fs.mkdirSync(${JSON.stringify(dirname(failurePath))},{recursive:true,mode:0o700});fs.writeFileSync(${JSON.stringify(failurePath)},${JSON.stringify(JSON.stringify(receipt))},{mode:0o600});`}console.error('sensitive-stderr-canary');process.exitCode=1;`;
+        const error = await rollback
+          .runControlledRollbackChild({
+            args: ["--input-type=module", "-e", script],
+            cwd: baseline.baselineRoot,
+            env: process.env,
+            parentIdentity: {
+              context: parent.context,
+              sourceRoot,
+              candidateRoot: root,
+              evidenceDir: parent.evidenceDir,
+            },
+            parentContextPath: parent.contextPath,
+            child,
+          })
+          .catch((cause) => cause);
+        if (mutation === "none") {
+          assert.equal(error.message, "ROLLBACK_CONTROLLED_CHILD_FAILED");
+          const persisted = await readFile(
+            error.safeDetails.failureReceipt.path,
+          );
+          assert.equal(
+            hash(persisted),
+            error.safeDetails.failureReceipt.sha256,
+          );
+          assert.equal(
+            (await stat(error.safeDetails.failureReceipt.path)).mode & 0o777,
+            0o600,
+          );
+          const failure = JSON.parse(persisted);
+          assert.equal(failure.childRunId, child.context.runId);
+          assert.equal(failure.stage, "disabled-reconcile");
+          assert.deepEqual(failure.cleanup.retainedResources, [
+            { kind: "containers", name: retainedName },
+          ]);
+          assert.equal(
+            failure.childContextSha256,
+            hash(await readFile(child.path)),
+          );
+          assert.equal(persisted.includes("canary"), false);
+          assert.deepEqual(
+            await readFile(
+              join(parentArtifacts, "rollback-child-context.json"),
+            ),
+            await readFile(child.path),
+          );
+        } else {
+          assert.equal(
+            error.message,
+            "ROLLBACK_CONTROLLED_CHILD_FAILURE_UNVERIFIED",
+          );
+          assert.equal(
+            error.safeDetails.failureReceipt.path,
+            join(parentArtifacts, "rollback-child-failure.json"),
+          );
+          const bytes = await readFile(error.safeDetails.failureReceipt.path);
+          assert.equal(hash(bytes), error.safeDetails.failureReceipt.sha256);
+          assert.equal(
+            (await stat(error.safeDetails.failureReceipt.path)).mode & 0o777,
+            0o600,
+          );
+          const fallback = JSON.parse(bytes);
+          assert.equal(
+            fallback.code,
+            "ROLLBACK_CONTROLLED_CHILD_FAILURE_UNVERIFIED",
+          );
+          assert.equal(fallback.parentRunId, parent.context.runId);
+          assert.equal(
+            fallback.parentCandidateSha,
+            parent.context.candidateSha,
+          );
+          assert.equal(fallback.childRunId, child.context.runId);
+          assert.equal(fallback.childCandidateSha, child.context.candidateSha);
+          assert.deepEqual(fallback.cleanup, {
+            verified: false,
+            complete: false,
+            failures: [],
+            retainedResources: [],
+            inventory: { containers: [], volumes: [], networks: [] },
+          });
+          assert.equal(Object.hasOwn(fallback, "stage"), false);
+          assert.equal(bytes.includes("canary"), false);
+          const copiedContext = await readFile(
+            join(parentArtifacts, "rollback-child-context.json"),
+          ).catch(() => null);
+          if (mutation === "context") assert.equal(copiedContext, null);
+          else assert.deepEqual(copiedContext, await readFile(child.path));
+        }
+        assert.ok(await stat(baseline.baselineRoot));
+        assert.ok(await stat(child.context.evidenceDir));
+      } finally {
+        if (checkouts)
+          await rm(checkouts.directory, { recursive: true, force: true });
+        await rm(baseline.directory, { recursive: true, force: true });
+        if (child)
+          await rm(child.context.evidenceDir, { recursive: true, force: true });
+      }
+    }
+  }
   const expectedKafka = await writeSyntheticParentG12({
     candidateRoot: root,
     evidenceDir: success.evidenceDir,
