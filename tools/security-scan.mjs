@@ -1169,6 +1169,14 @@ export function trivyArgs({
     network,
     "--mount",
     mount(cacheDir, "/cache"),
+    ...(!["fs", "image"].includes(command[0])
+      ? []
+      : [
+          "--mount",
+          mount(join(cacheDir, "db"), "/cache/db", true),
+          "--mount",
+          mount(join(cacheDir, "java-db"), "/cache/java-db", true),
+        ]),
     "--mount",
     mount(outputDir, "/out"),
     ...(imageTar ? ["--env", "TMPDIR=/cache"] : []),
@@ -2379,44 +2387,144 @@ async function loadUpstreamImages({
   }
 }
 
-async function validateDb(cacheDir, now, policy) {
+async function inspectDatabaseFile(
+  path,
+  maxBytes,
+  { expected, hashContent = false, readBytes = false } = {},
+) {
+  const failure = expected ? "VULNERABILITY_DB_CHANGED" : "INPUT_FILE_INVALID";
+  const fingerprint = (info) => ({
+    dev: info.dev,
+    ino: info.ino,
+    size: info.size,
+    mode: info.mode,
+    mtimeNs: info.mtimeNs,
+    ctimeNs: info.ctimeNs,
+  });
+  const same = (a, b) => Object.keys(a).every((key) => a[key] === b[key]);
+  const before = await lstat(path, { bigint: true }).catch(() => null);
+  if (
+    !before?.isFile() ||
+    before.isSymbolicLink() ||
+    before.size > BigInt(maxBytes) ||
+    (await realpath(path).catch(() => null)) !== path
+  )
+    fail(failure);
+  const original = fingerprint(before);
+  if (expected && !same(original, expected)) fail(failure);
+  const handle = await open(
+    path,
+    constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0),
+  ).catch(() => null);
+  if (!handle) fail(failure);
+  try {
+    const opened = await handle.stat({ bigint: true });
+    if (!opened.isFile() || !same(fingerprint(opened), original)) fail(failure);
+    let bytes;
+    let contentSha256;
+    if (readBytes) bytes = await handle.readFile();
+    else if (hashContent) {
+      const hash = createHash("sha256");
+      let size = 0;
+      for await (const chunk of handle.createReadStream({
+        autoClose: false,
+        highWaterMark: 1024 * 1024,
+      })) {
+        size += chunk.length;
+        if (size > maxBytes) fail(failure);
+        hash.update(chunk);
+      }
+      if (BigInt(size) !== original.size) fail(failure);
+      contentSha256 = hash.digest("hex");
+    }
+    const afterFd = await handle.stat({ bigint: true });
+    const afterPath = await lstat(path, { bigint: true }).catch(() => null);
+    if (
+      !afterPath?.isFile() ||
+      afterPath.isSymbolicLink() ||
+      !same(fingerprint(afterFd), original) ||
+      !same(fingerprint(afterPath), original) ||
+      (await realpath(path).catch(() => null)) !== path ||
+      (bytes && BigInt(bytes.length) !== original.size)
+    )
+      fail(failure);
+    return {
+      fingerprint: original,
+      bytes,
+      contentSha256,
+      contentBytes: Number(original.size),
+    };
+  } finally {
+    await handle.close();
+  }
+}
+
+async function validateDb(
+  cacheDir,
+  now,
+  policy,
+  { baseline, hashContents = true } = {},
+) {
   const records = [];
+  const fingerprints = [];
   for (const [name, databaseFile] of [
     ["db", "trivy.db"],
     ["java-db", "trivy-java.db"],
   ]) {
     const path = join(cacheDir, name, "metadata.json");
-    const bytes = await readRegular(path, 64 * 1024);
+    const metadataFile = await inspectDatabaseFile(path, 64 * 1024, {
+      expected: baseline?.[records.length]?.metadata,
+      readBytes: true,
+    });
+    const bytes = metadataFile.bytes;
     const metadata = parseJson(bytes, "VULNERABILITY_DB_METADATA_INVALID");
     const freshness = validateDatabaseMetadata(
       metadata,
       now,
       policy.maximumDatabaseAgeHours * 60 * 60 * 1000,
     );
-    const content = await inspectRegularFile(
+    const content = await inspectDatabaseFile(
       join(cacheDir, name, databaseFile),
       MAX_DATABASE_BYTES,
+      {
+        expected: baseline?.[records.length]?.content,
+        hashContent: hashContents,
+      },
     );
     records.push({
       name,
       ...freshness,
       metadataSha256: sha256(bytes),
-      contentSha256: content.sha256,
-      contentBytes: content.bytes,
+      ...(hashContents ? { contentSha256: content.contentSha256 } : {}),
+      contentBytes: content.contentBytes,
+    });
+    fingerprints.push({
+      metadata: metadataFile.fingerprint,
+      content: content.fingerprint,
     });
   }
-  return records;
+  return { records, fingerprints };
 }
 
-async function assertDatabasesUnchanged({ cacheDir, clock, policy, expected }) {
-  const current = await validateDb(cacheDir, clock(), policy);
+async function assertDatabasesUnchanged({
+  cacheDir,
+  clock,
+  policy,
+  expected,
+  baseline,
+  final = false,
+}) {
+  const { records: current } = await validateDb(cacheDir, clock(), policy, {
+    baseline,
+    hashContents: final,
+  });
   if (
     current.length !== expected.length ||
     current.some(
       (database, index) =>
         database.name !== expected[index].name ||
         database.metadataSha256 !== expected[index].metadataSha256 ||
-        database.contentSha256 !== expected[index].contentSha256 ||
+        (final && database.contentSha256 !== expected[index].contentSha256) ||
         database.contentBytes !== expected[index].contentBytes,
     )
   )
@@ -2438,6 +2546,7 @@ async function scanTarget({
   clock,
   policy,
   databases,
+  databaseFingerprints,
 }) {
   const vulnerabilityName = `${name}.vulnerabilities.json`;
   const sbomName = `${name}.sbom.cdx.json`;
@@ -2462,6 +2571,7 @@ async function scanTarget({
       clock,
       policy,
       expected: databases,
+      baseline: databaseFingerprints,
     });
     await run("docker", scanArgs, { onChild });
   } catch (error) {
@@ -2473,6 +2583,7 @@ async function scanTarget({
       clock,
       policy,
       expected: databases,
+      baseline: databaseFingerprints,
     });
   } catch (error) {
     try {
@@ -2972,7 +3083,9 @@ export async function runSecurityScan({
       policy.egressRepositories[1],
       "--download-java-db-only",
     ]);
-    result.databases = await validateDb(cacheDir, clock(), policy);
+    const initialDatabases = await validateDb(cacheDir, clock(), policy);
+    result.databases = initialDatabases.records;
+    const databaseFingerprints = initialDatabases.fingerprints;
     await freeSpace(temporary, policy, statfsFn);
     await freeSpace(outputRoot, policy, statfsFn);
     stage = "manifest-scan";
@@ -2990,6 +3103,7 @@ export async function runSecurityScan({
       clock,
       policy,
       databases: result.databases,
+      databaseFingerprints,
     });
     result.reports.push(...manifestReports);
 
@@ -3032,6 +3146,7 @@ export async function runSecurityScan({
           clock,
           policy,
           databases: result.databases,
+          databaseFingerprints,
         });
         result.reports.push(...imageReports);
         if (["kafka", "storage-helper", "grafana"].includes(image.service)) {
@@ -3107,6 +3222,15 @@ export async function runSecurityScan({
       clock,
       policy,
       expected: result.databases,
+      baseline: databaseFingerprints,
+      final: true,
+    });
+    await assertDatabasesUnchanged({
+      cacheDir,
+      clock,
+      policy,
+      expected: result.databases,
+      baseline: databaseFingerprints,
     });
     if (
       result.reports.length !==

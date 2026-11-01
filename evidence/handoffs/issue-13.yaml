@@ -1,7 +1,7 @@
 issue: 13
 baseCommit: ad72338496f49241e83956aadfc12d17a6dedc2a
 status: source-descriptor-before-formal-verification
-asOfUtc: "2026-11-01T03:09:38.812008+00:00"
+asOfUtc: "2026-11-01T05:54:09.496955+00:00"
 inputs:
   - issue: 2
     acceptedMergeCommit: 327638d4494269a151ee7c0ac945ac0053c3e0d4
@@ -227,6 +227,18 @@ outputs:
     sha256: d583229f493a23d582a37e4e020415333943207d2475a57ddc53ba433cd64304
   - artifact: verification/launch/v1/scenarios/rollback.mjs
     sha256: 9e0b665e9b1f294e67362e9d98aa11d181456dc1f809b10cb0d84e9c20a06360
+  - artifact: tools/security-scan.mjs
+    sha256: ab46df648f4f524ffad7e60d1e3679c9efa84f3152a79c2cbebbf3c56e7eb77d
+    consumers:
+      - 1
+  - artifact: tests/tools/security-scan.test.mjs
+    sha256: bb0c8d3755cc9205e0f6daebf886f317d68b9d61282d6b5698c52fda0ac94bed
+    consumers:
+      - 1
+  - artifact: evidence/launch-preparation/2026-11-01/security-database-integrity.md
+    sha256: 91cb54628e153f5e14e46d0be16923cbaeee3e4b67b0efe88b5008e28c96ae0e
+    consumers:
+      - 1
 verification:
   - command:
       node --test --test-name-pattern='G14 queries actual child telemetry|full G14 coverage requires
@@ -320,6 +332,18 @@ verification:
       "PASS: 1530 tests / 1451 pass / 0 fail / 79 skipped, main suite 224.253 s; IPC readiness with
       unchanged shutdown guarantee"
     logSha256: f827cb1be978cf51939e0616a809e62c607014f4b9222ee458ee709ea70fad3d
+  - command: "PR #249 CI 41268089144 на c4b38ce"
+    result: "PASS: 1554 tests / 1475 pass / 0 fail / 79 skipped, основной suite 272.884 s; до оптимизации DB integrity"
+    logSha256: 79cf2f5d38f38ccee20eede7a7ad66b946907fc6de7a56bb105c8148125615ac
+  - command: node --test tests/tools/security-scan.test.mjs
+    result: "PASS 16/16, 30.887 s; после добавления двух read-boundary negatives повторён затронутый test 1/1, 32.629 s"
+    logSha256: 21b5dbf9e3c726545a2358bc76683000ca5bec90cc7263e3dc3bff7eeeaf8da5
+  - command: "node --test --test-name-pattern='G12 builds product images' tests/tools/security-scan.test.mjs"
+    result: "PASS 1/1, 32.629 s: четыре полных DB file reads вместо96; expiry/tamper/identity/read-boundary negatives fail-closed"
+    logSha256: bb9cb4ace8ad16ddd48ce099403f5678dbcb7ab6dca07b9a61de1e76e61031e2
+  - command: pinned Trivy Kafka readonly database compatibility
+    result: "PASS: 15.010 s, один Java result /109 Maven packages; live readonly mounts и оба FD, unchanged DB/metadata SHA, own cleanup; не G12 admission"
+    artifact: evidence/launch-preparation/2026-11-01/security-database-integrity.md
 consumerContract:
   consumer: 1
   admission:
@@ -348,10 +372,11 @@ consumerContract:
     policy/key/flag child и G18 baseline flag child с проверенной lineage. Лимиты и provider scope сохранены;
     exact parent G12 product images, отдельная BOM/image-ID проверка fixture PostgreSQL."
 limitations:
-  - "Общий локальный check aae20ab: format PASS, pnpm check FAIL только на прежнем 2 s readiness fixture.
-    Его отдельное исправление #250 принято через PR #251 с CI PASS. CI PR #249 на aae20ab также PASS. Новому
-    объединённому head ещё нужны собственный CI, G12, qualification и ordered runtime; прежние результаты
-    не переносятся."
+  - "Общий локальный check aae20ab: pnpm check FAIL на прежнем 2 s readiness fixture; отдельное исправление #250 принято через PR #251.
+    CI объединённого c4b38ce PASS. Новый source с оптимизацией DB integrity требует собственный CI, G12, qualification и ordered runtime;
+    прежние результаты не переносятся."
+  - "C4 component run050241: FAIL/INTERRUPTED по builder floor1GiB после1766.202 s,26частичныхотчётов; это не превышение1800 s и не PASS.
+    Отдельный run031919 остановлен из-за operator umask0077. Оба negative сохранены; thresholds не изменены."
   - Итоговые G12, обязательная SSE qualification и полный G00–G19 на окончательном SHA ещё NOT_RUN. Component
     cffe147 и прежние qualification не переносятся.
   - Фактические runtime results и hashes появятся после выполнения; согласованная публикация двух артефактов
