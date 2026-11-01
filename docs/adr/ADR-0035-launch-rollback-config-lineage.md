@@ -12,20 +12,28 @@ committed переключение в `false` и возврат исходног
 
 ## Решение
 
-Product candidate `B` остаётся единственным SHA в основном launch result.
-Только G18 получает два отдельных проверочных config commits:
+По дополнительному решению владельца от 1 ноября 2026 product candidate `P`
+остаётся единственным product SHA в основном launch result с обычным
+`mutationsEnabled=false` и `aromaSandbox=null`. Только G18 получает отдельную
+проверочную историю конфигурации:
 
-1. `D` имеет единственного родителя `B`. Его diff меняет только
+1. `B` имеет единственного родителя `P`; единственное изменение —
+   `config/platform.yaml.services.aroma-convergence.mutationsEnabled: false → true`.
+   Policy остаётся `null`.
+
+2. `D` имеет единственного родителя `B`. Его diff меняет только
    `config/platform.yaml.services.aroma-convergence.mutationsEnabled: true → false`.
-2. `R` имеет единственного родителя `D`. Его config побайтно совпадает с `B`.
-   Остальные tracked файлы во всех трёх commits побайтно одинаковы.
+3. `R` имеет единственного родителя `D`. Его config побайтно совпадает с `B`.
+   Остальные tracked файлы во всех четырёх commits побайтно одинаковы.
 
 Runner обязан проверять ancestry и полные Git trees/diffs, запретить merge
 commits, дополнительные файлы/поля и одновременно staged/unstaged overrides.
-Все три дерева должны быть clean. Diff проверяется как на уровне полного файла,
+Все четыре дерева должны быть clean. Diff проверяется как на уровне полного файла,
 так и canonical parsed config: единственное различие `B → D` — указанный boolean.
 Для каждого состояния сохраняются commit, parent, tree, config SHA-256 и runtime
 receipt. Images, lockfile, pins, code, миграции и encrypted inventory не меняются.
+Context, sealed bundle и runtime image IDs связываются с проверенным G12 parent
+`P`; подмена или копирование G12 receipt для `B` запрещены.
 Config берётся из соответствующего проверенного checkout по canonical пути;
 env overlay, второй service config и подмена основного candidate SHA запрещены.
 
@@ -51,6 +59,8 @@ child output. Первый actual run `20261024T110000Z-2fc5704` заверши�
 Все его временные Docker resources удалены. Исправленная диагностика требует
 нового run-id; static tests и правильная lineage не являются runtime PASS.
 
-После завершения всего эксперимента рабочая область возвращается к обычным
-defaults `mutationsEnabled=false`, `aromaSandbox=null`. Этот cleanup не подменяет
-ни `B`, ни результаты его проверки и фиксируется отдельно.
+Product parent `P` сохраняет обычные defaults во время и после эксперимента.
+Child cleanup и восстановление принадлежащих ему ресурсов фиксируются отдельно;
+неизвестное состояние запрещает PASS. [Согласованные границы](../../evidence/launch-preparation/2026-11-01/controlled-config-lineage.md)
+не увеличивают таймаут G18 1800 секунд или main 7200 секунд и не разрешают
+живые provider mutations. Прежние failed runs сохраняются.

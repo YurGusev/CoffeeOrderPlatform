@@ -47,12 +47,23 @@ PASS не выводится. Эти исключения не означают 
 явно и принимается только после проверки parent/child lineage; оно не даёт
 права подменять SHA остальных gates или добавлять постоянный IdP.
 
+Владелец 1 ноября 2026 дополнительно согласовал изолированные config-only
+состояния G16 и G18. Основной candidate `P` сохраняет обычные
+`aromaSandbox=null` и `mutationsEnabled=false`. G16 получает child с точной
+утверждённой policy, свежим публичным ключом RAM-signer и включённым флагом;
+G18 — отдельный baseline `B` с единственным изменением флага в `true`, затем
+существующие `B→D→R`. [Точные границы решения](../../evidence/launch-preparation/2026-11-01/controlled-config-lineage.md)
+требуют неизменного кода, проверенных Git/config/context/bundle/image bindings,
+прежнего provider scope и успешного cleanup. Таймауты не меняются. Эти child
+не разрешают постоянно включать mutations и не расширяют OIDC-only исключения.
+
 ## 1. Решение о допуске
 
 Результат имеет только два значения:
 
 - `ДОПУСТИТЬ`: каждый mandatory gate имеет `PASS`, exact command, exit code 0,
-  артефакт и проверяемую связь с одним commit SHA;
+  артефакт и проверяемую связь с одним product commit SHA; явно согласованные
+  config-only состояния принимаются только через их проверенную lineage;
 - `НЕ ДОПУСТИТЬ`: хотя бы один gate `FAIL`, `SKIPPED`, `NOT_RUN`, выполнен на
   другом SHA/окружении или не имеет evidence.
 
@@ -476,7 +487,9 @@ image по `config/toolchain-versions.json`. Node 24 считается version 
 Исходное состояние: running stack, одна unfinished reservation/UnknownOutcome и
 доступный safe observer. Процедура:
 
-1. создать отдельный config-only commit `D` от product candidate `B` по
+1. от product candidate `P` с обычным флагом `false` создать отдельный baseline
+   `B`, меняющий только этот флаг в `true`; policy остаётся `null`;
+   затем создать config-only commit `D` от `B` по
    [ADR-0035](../adr/ADR-0035-launch-rollback-config-lineage.md): в единственном
    `config/platform.yaml` меняется только
    `services.aroma-convergence.mutationsEnabled: true → false`; overlay запрещён;
@@ -490,11 +503,12 @@ image по `config/toolchain-versions.json`. Node 24 считается version 
 8. config-only commit `R` от `D` возвращает прежние байты config из `B` и
    восстанавливает worker только после fresh GET; blind mutation отсутствует.
 
-В основном run-result остаётся product candidate `B`. Отдельное evidence G18
-обязано доказать lineage `B → D → R`, unchanged product trees, точные config hashes
+В основном run-result остаётся product candidate `P`. Отдельное evidence G18
+обязано доказать lineage `P → B → D → R`, unchanged product trees, точные config hashes
 и фактическое применение каждого config runtime. Дополнительные source изменения,
 неверные parent/diff или отсутствие receipts не допускаются. Разрешение владельца
-от 24 октября касается этой узкой процедуры; оно не означает PASS G18.
+от 24 октября и расширение от 1 ноября касаются этой узкой процедуры;
+они не означают PASS G18.
 
 PASS: zero provider mutation while flag false, no durable row loss, observer и
 owner paths healthy, recovery resumes safely.
