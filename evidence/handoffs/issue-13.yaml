@@ -1,7 +1,7 @@
 issue: 13
 baseCommit: ad72338496f49241e83956aadfc12d17a6dedc2a
 status: source-descriptor-before-formal-verification
-asOfUtc: "2026-11-01T07:56:19.567780+00:00"
+asOfUtc: "2026-11-01T08:46:14.111851+00:00"
 inputs:
   - issue: 2
     acceptedMergeCommit: 327638d4494269a151ee7c0ac945ac0053c3e0d4
@@ -144,7 +144,7 @@ outputs:
     consumers:
       - 1
   - artifact: docs/launch/21_LAUNCH_VERIFICATION_SPEC.md
-    sha256: 845fe42ceae4e1e4a3dee63a1840423589709d171dfaaa53ec56a11b873f5f52
+    sha256: 6c6f55eb0cc98b57f5b87de43b0b2545c9e5397a27b704219d9cb6c43f873fdc
     consumers:
       - 1
   - artifact: docs/operations/observability.md
@@ -228,11 +228,11 @@ outputs:
   - artifact: verification/launch/v1/scenarios/rollback.mjs
     sha256: 9e0b665e9b1f294e67362e9d98aa11d181456dc1f809b10cb0d84e9c20a06360
   - artifact: tools/security-scan.mjs
-    sha256: d64804c5d2030637f4674725957a7e614dbad95cfe63da9b13485b33b4a98997
+    sha256: f563779fbae759f4e12abd71beb4befa2b49594d88ab633fe1560fdb8970e058
     consumers:
       - 1
   - artifact: tests/tools/security-scan.test.mjs
-    sha256: 5b28322822f5fb2542ca22cba188b0a72f877c9c798897e18d43eadc6acf07d2
+    sha256: d283d24f4b0f37c51f1884c9314633e4862d680156573180941b8041e46c4eff
     consumers:
       - 1
   - artifact: evidence/launch-preparation/2026-11-01/security-database-integrity.md
@@ -253,6 +253,10 @@ outputs:
       - 1
   - artifact: evidence/launch-preparation/2026-11-01/runtime-build-inputs.md
     sha256: 81c210ff21d8b51aad04ac4a28521ffabe98330fd768cbe75504b36fd834cdbe
+    consumers:
+      - 1
+  - artifact: evidence/launch-preparation/2026-11-01/build-context-storage.md
+    sha256: a896674638eb84343e385af3a4a8272be4ee6919cc67b9345bed208c15629071
     consumers:
       - 1
 verification:
@@ -381,6 +385,21 @@ verification:
   - command: "node --test --test-name-pattern='TOOLCHAIN-FINAL-IMAGE|exact TS7 toolchain' tests/architecture/checks.test.mjs"
     result: "PASS3/3,1.344s;nestedtestfixtureGREEN,child/rootproductionandforeignprefixRED;scopedlint/format/syntaxPASS"
     logSha256: aa40af8f54a848460c900a597bab5b7b6270092b1a17e60a62a4bd682fa239cc
+  - command: "PR #249 CI 41286926948 на 4777695"
+    result: "PASS: 1557 tests /1478 pass /0 fail /79 skipped,303.189 s;contracts49/49,architecture74/74"
+    logSha256: 7806577986782024ef1df671585bb00d3e341754228e48a0bccb27059e391ebe
+  - command: standalone G12 4777695 run080816
+    result: "PASS840.099s,46reports/22images,approvedFixed2/unresolvedHIGH0/CRITICAL0,owncleanupPASS,independentreviewPASS;componentonly"
+    logSha256: cd1d8d2abfeef7fd24b80a991e438410656550145e52c75358066e23c51de0be
+  - command: qualification 4777695 i12-6de2a2cb04184272
+    result: "FAIL423.869s beforemeasurement(durationMs0): strict rebuilt image mismatch; negativepreserved,manualcleanupPASS; NTFSsourcexattrs vs ext4"
+    artifact: evidence/launch-preparation/2026-11-01/build-context-storage.md
+  - command: isolated exact OCI export of edge-gateway from ext4 source
+    result: "PASS22.006s: exact canonical --load imageID a64578..., not NTFS37955...; no image-store tag,owncleanupPASS;diagnosticonly"
+    logSha256: 7224ffd179ef6f44a5ba046d7cc05485662fbe5cd995fdfa71128d189443eb40
+  - command: node --test tests/tools/security-scan.test.mjs
+    result: "PASS17/17,37.715s: separate source/DB/OCI roots, original lock, PASS/lateFAIL/SIGTERM cleanup, cleanup error blocks; synthetic Docker"
+    logSha256: 0f523607611073c48f08c7c32eca248de0f2ba17730f14e20d5a629402de4127
 consumerContract:
   consumer: 1
   admission:
@@ -409,6 +428,7 @@ consumerContract:
     policy/key/flag child и G18 baseline flag child с проверенной lineage. Лимиты и provider scope сохранены;
     exact parent G12 product images, отдельная BOM/image-ID проверка fixture PostgreSQL."
 limitations:
+  - "477 G12 component PASS не является SSE/full admission: qualification до измерения обнаружила реальные different COPY layers. Source context возвращён в originaltmpdir; новый frozen SHA требует собственные CI/G12/exact4IDs/qualification/G00–G19. Никакие thresholds/image bindings не ослаблены."
   - "Standalone G12 1e95d5c PASS за1462.207s не переносится на новый source. SSE qualification прежнего SHA не началась: отрицательные operator preflights и nested fixture false positive сохранены; own cleanup выполнен отдельно. Новый Source требует собственные CI/G12/qualification/G00–G19."
   - "Общий локальный check aae20ab: pnpm check FAIL на прежнем 2 s readiness fixture; отдельное исправление #250 принято через PR #251.
     CI c4b38ce и db30ffa PASS. Новый source с раздельным размещением scratch требует собственный CI, G12, qualification и ordered runtime;

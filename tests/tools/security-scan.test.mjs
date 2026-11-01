@@ -1371,6 +1371,23 @@ void test("G12 builds product images, records pinned upstream identity, and fail
   let databaseFullReads = 0;
   let tamperAtDatabaseRead = false;
   const originalOpen = fsPromises.open;
+  const originalRm = fsPromises.rm;
+  let failSourceCleanup = false;
+  let retainedSourceDirectory;
+  const rmMock = t.mock.method(fsPromises, "rm", async (path, options) => {
+    if (
+      failSourceCleanup &&
+      typeof path === "string" &&
+      path.startsWith(join(tmpdir(), "coffee-image-source-"))
+    ) {
+      failSourceCleanup = false;
+      retainedSourceDirectory = path;
+      throw Object.assign(new Error("synthetic source cleanup failure"), {
+        code: "EACCES",
+      });
+    }
+    return originalRm(path, options);
+  });
   const openMock = t.mock.method(fsPromises, "open", async (path, ...args) => {
     const handle = await originalOpen(path, ...args);
     if (
@@ -1395,7 +1412,15 @@ void test("G12 builds product images, records pinned upstream identity, and fail
   syncBuiltinESMExports();
   t.after(() => {
     openMock.mock.restore();
+    rmMock.mock.restore();
     syncBuiltinESMExports();
+  });
+  t.after(async () => {
+    if (retainedSourceDirectory)
+      await originalRm(retainedSourceDirectory, {
+        recursive: true,
+        force: true,
+      });
   });
   const temp = await mkdtemp(join(tmpdir(), "image-scan-fixture-"));
   t.after(() => rm(temp, { recursive: true, force: true }));
@@ -1838,6 +1863,10 @@ void test("G12 builds product images, records pinned upstream identity, and fail
   }
   await commitCompose(validCompose);
   let scanCache;
+  let observedSourceDirectory;
+  let checkTempPlacement = false;
+  let placementLock;
+  let interruptDuringBuild = false;
   let imageExports = 0;
   let productBuilds = 0;
   let upstreamPulls = 0;
@@ -2095,6 +2124,22 @@ void test("G12 builds product images, records pinned upstream identity, and fail
         }
         flowEvents.push(`build:${service}`);
         const sourceContext = args.at(-1);
+        if (checkTempPlacement) {
+          observedSourceDirectory = dirname(sourceContext);
+          assert.equal(dirname(observedSourceDirectory), tmpdir());
+          assert.equal(
+            (
+              await lstat(join(observedSourceDirectory, "candidate-source.tar"))
+            ).isFile(),
+            true,
+          );
+          assert.ok(scanCache.startsWith(`${selectedTempRoot}/`));
+          assert.equal((await lstat(placementLock)).isFile(), true);
+        }
+        if (interruptDuringBuild) {
+          interruptDuringBuild = false;
+          process.emit("SIGTERM", "SIGTERM");
+        }
         assert.notEqual(sourceContext, candidateRoot);
         assert.equal(
           await readFile(join(sourceContext, "pnpm-lock.yaml"), "utf8"),
@@ -2168,6 +2213,8 @@ void test("G12 builds product images, records pinned upstream identity, and fail
         const ociLayout = args
           .find((value) => value.startsWith("type=oci,tar=false,dest="))
           .slice("type=oci,tar=false,dest=".length);
+        if (checkTempPlacement)
+          assert.ok(ociLayout.startsWith(`${selectedTempRoot}/`));
         lastProductLayoutPath = ociLayout;
         const buildLayerBytes =
           service === "grafana" ? grafanaLayerBytes : ociLayerBytes;
@@ -2891,14 +2938,26 @@ void test("G12 builds product images, records pinned upstream identity, and fail
   const initialTimeoutStart = trivyRunTimeouts.length;
   const readsBefore = databaseFullReads;
   databaseAdvanceMs = 5 * 60_000;
+  process.env.COFFEE_LAUNCH_DATA_TEMP_DIR = selectedTempRoot;
+  checkTempPlacement = true;
+  placementLock = join(tmpdir(), "coffee-platform-trivy.lock");
   const result = await runSecurityScan({
     contextFile: contextPath,
     clock: () => fakeNow,
     validateContext: validateSyntheticContext,
     run: fakeRun,
     statfsFn: async () => ({ bavail: 30 * 1024 ** 3, bsize: 1 }),
-    lockPath: join(temp, "scanner.lock"),
   });
+  checkTempPlacement = false;
+  if (priorDataTemp === undefined)
+    delete process.env.COFFEE_LAUNCH_DATA_TEMP_DIR;
+  else process.env.COFFEE_LAUNCH_DATA_TEMP_DIR = priorDataTemp;
+  assert.ok(observedSourceDirectory);
+  await assert.rejects(lstat(observedSourceDirectory), { code: "ENOENT" });
+  await assert.rejects(lstat(join(tmpdir(), "coffee-platform-trivy.lock")), {
+    code: "ENOENT",
+  });
+  assert.deepEqual(await readdir(selectedTempRoot), []);
   databaseAdvanceMs = 0;
   assert.equal(
     result.status,
@@ -3815,6 +3874,10 @@ void test("G12 builds product images, records pinned upstream identity, and fail
   replaceImageOnFirstScanReference = toolchain.otelCollectorImage;
   foreignAliasOnFirstScanReference = scannerReference;
   const changedDatabaseRmStart = imageRmTargets.length;
+  observedSourceDirectory = undefined;
+  checkTempPlacement = true;
+  process.env.COFFEE_LAUNCH_DATA_TEMP_DIR = selectedTempRoot;
+  placementLock = join(temp, "scanner-db-changed.lock");
   const changedDatabaseResult = await runSecurityScan({
     contextFile: contextPath,
     outputDir: join(gateArtifactsDir, "supply-chain-db-changed"),
@@ -3824,6 +3887,13 @@ void test("G12 builds product images, records pinned upstream identity, and fail
     statfsFn: async () => ({ bavail: 30 * 1024 ** 3, bsize: 1 }),
     lockPath: join(temp, "scanner-db-changed.lock"),
   });
+  checkTempPlacement = false;
+  if (priorDataTemp === undefined)
+    delete process.env.COFFEE_LAUNCH_DATA_TEMP_DIR;
+  else process.env.COFFEE_LAUNCH_DATA_TEMP_DIR = priorDataTemp;
+  assert.ok(observedSourceDirectory);
+  await assert.rejects(lstat(observedSourceDirectory), { code: "ENOENT" });
+  assert.deepEqual(await readdir(selectedTempRoot), []);
   assert.equal(changedDatabaseResult.status, "FAIL");
   assert.equal(changedDatabaseResult.code, "VULNERABILITY_DB_CHANGED");
   assert.deepEqual(changedDatabaseResult.failure, {
@@ -3880,6 +3950,51 @@ void test("G12 builds product images, records pinned upstream identity, and fail
     changedDatabaseResult.databases[0].contentSha256,
     /^[0-9a-f]{64}$/u,
   );
+
+  tamperDbOnFirstScan = false;
+  failSourceCleanup = true;
+  const sourceCleanupFailure = await runSecurityScan({
+    contextFile: contextPath,
+    outputDir: join(gateArtifactsDir, "supply-chain-source-cleanup"),
+    clock: () => fakeNow,
+    validateContext: validateSyntheticContext,
+    run: fakeRun,
+    statfsFn: async () => ({ bavail: 30 * 1024 ** 3, bsize: 1 }),
+    lockPath: join(temp, "scanner-source-cleanup.lock"),
+  });
+  assert.equal(sourceCleanupFailure.status, "FAIL");
+  assert.equal(sourceCleanupFailure.code, "TEMP_CLEANUP_FAILED");
+  assert.deepEqual(sourceCleanupFailure.failure, {
+    code: "TEMP_CLEANUP_FAILED",
+    stage: "temporary-cleanup",
+  });
+  assert.ok(retainedSourceDirectory);
+  await originalRm(retainedSourceDirectory, { recursive: true, force: true });
+  retainedSourceDirectory = undefined;
+
+  observedSourceDirectory = undefined;
+  checkTempPlacement = true;
+  interruptDuringBuild = true;
+  placementLock = join(temp, "scanner-source-interrupted.lock");
+  process.env.COFFEE_LAUNCH_DATA_TEMP_DIR = selectedTempRoot;
+  const interrupted = await runSecurityScan({
+    contextFile: contextPath,
+    outputDir: join(gateArtifactsDir, "supply-chain-source-interrupted"),
+    clock: () => fakeNow,
+    validateContext: validateSyntheticContext,
+    run: fakeRun,
+    statfsFn: async () => ({ bavail: 30 * 1024 ** 3, bsize: 1 }),
+    lockPath: placementLock,
+  });
+  checkTempPlacement = false;
+  if (priorDataTemp === undefined)
+    delete process.env.COFFEE_LAUNCH_DATA_TEMP_DIR;
+  else process.env.COFFEE_LAUNCH_DATA_TEMP_DIR = priorDataTemp;
+  assert.equal(interrupted.status, "FAIL");
+  assert.equal(interrupted.code, "INTERRUPTED");
+  assert.ok(observedSourceDirectory);
+  await assert.rejects(lstat(observedSourceDirectory), { code: "ENOENT" });
+  assert.deepEqual(await readdir(selectedTempRoot), []);
 
   highFinding = true;
   findingService = "grafana";

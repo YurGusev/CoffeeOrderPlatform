@@ -2734,6 +2734,7 @@ export async function runSecurityScan({
   let identity;
   let policy;
   let temporary;
+  let sourceTemporary;
   let lockHandle;
   let activeChild = null;
   let stopped = null;
@@ -2962,10 +2963,11 @@ export async function runSecurityScan({
     await prepareBuildxRegistration(dockerConfig, runBounded);
     const outputRoot = join(outputDir, "artifacts");
     await mkdir(outputRoot, { recursive: true, mode: 0o700 });
+    sourceTemporary = await mkdtemp(join(tmpdir(), "coffee-image-source-"));
     const sourceSnapshot = await createBuildInputSnapshot({
       candidateRoot: identity.candidateRoot,
       candidateSha: identity.context.candidateSha,
-      temporary,
+      temporary: sourceTemporary,
       run: runBounded,
       onChild,
     });
@@ -3434,6 +3436,10 @@ export async function runSecurityScan({
         containerCleanupFailed = true;
       }
     }
+    if (sourceTemporary)
+      await rm(sourceTemporary, { recursive: true, force: true }).catch(() => {
+        setCleanupFailure("TEMP_CLEANUP_FAILED", "temporary-cleanup");
+      });
     if (containerCleanupFailed) {
       setCleanupFailure("CONTAINER_CLEANUP_FAILED", "container-cleanup");
       await lockHandle?.close().catch(() => {});

@@ -76,6 +76,8 @@ risk вместо обязательного gate запрещены. После
 существующий canonical directory текущего UID с режимом `0700`, без symlink,
 до создания checkout/evidence. G12 получает отдельный внутренний locator
 только для большого scratch; его исходные `TMPDIR` и scanner lock сохраняются.
+Git archive и извлечённый build context G12 остаются в исходном `TMPDIR`,
+как у остальных runtime-сборок; внешний locator применяется к DB/OCI данным.
 G14 получает внешний `TMPDIR` для storage/backup, сохраняя существующее
 размещение browser child внутри candidate checkout. Parent, qualification
 и остальные gates используют прежние пути. Gate argv, DTO, config/BOM/image
