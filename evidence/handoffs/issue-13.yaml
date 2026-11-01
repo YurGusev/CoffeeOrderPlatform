@@ -1,7 +1,7 @@
 issue: 13
 baseCommit: e06c5d478123d6dc2908739882171fbf5c06fa3a
 status: source-descriptor-before-formal-verification
-asOfUtc: "2026-11-01T16:27:00.901340+00:00"
+asOfUtc: "2026-11-01T19:36:48.970738+00:00"
 inputs:
   - issue: 2
     acceptedMergeCommit: 327638d4494269a151ee7c0ac945ac0053c3e0d4
@@ -279,6 +279,18 @@ outputs:
     sha256: c857bbd926da3bc06031bc0e49150a73fde274b6e5c75980fe46327a47662b3e
     consumers:
       - 1
+  - artifact: tests/catalog-pipeline/security-live.test.mjs
+    sha256: 6535df833f95cc850ff49db371679fd1da4ed61ed052e58b622e5e454e26d693
+    consumers:
+      - 1
+  - artifact: tests/orders/owner-live.test.mjs
+    sha256: 2609dfffcedef98178e7fc5abece46c37ac3f24db8e15118adcde2a63d537238
+    consumers:
+      - 1
+  - artifact: tests/log-capture.mjs
+    sha256: ff271a244721a8ac69077655873a89b2e2578c00a09342ff274941aed3807df2
+    consumers:
+      - 1
 verification:
   - command: node --test --test-concurrency=1 tests/compose/topology.test.mjs tests/tools/security-scan.test.mjs
     result: PASS 65/65, fail/cancel/skip 0, 44.591 s, Node 26.8.1; после объединения принятого #252, до freeze нового candidate.
@@ -445,6 +457,12 @@ verification:
   - command: standalone G12 5cb6e89 run114056
     result: "FAIL/INTERRUPTED по запросу владельца через 326.036 s, 10 частичных отчётов, guard не сработал, cleanup failures отсутствуют; не G12 PASS."
     artifact: evidence/launch-preparation/2026-11-01/controller-readiness.md
+  - command: "COFFEE_DB_LIVE_PROOF=1 TMPDIR=/tmp node --test --test-concurrency=1 --test-reporter=tap tests/orders/owner-live.test.mjs"
+    result: "PASS 5/5, 0 fail/cancel/skip, 29.392 s; реальный временный PostgreSQL, собственные containers удалены, baseline сохранён; локальная проверка, не formal G10."
+    logSha256: 38e6add422d8e5a15048f5114686f211ae0db4817f237a5219db802ce5e316ef
+  - command: "COFFEE_DB_LIVE_PROOF=1 TMPDIR=/tmp node --test --test-concurrency=1 --test-reporter=tap tests/catalog-pipeline/security-live.test.mjs"
+    result: "PASS 4/4, 0 fail/cancel/skip, 10.531 s; реальный временный PostgreSQL, собственные containers удалены, baseline сохранён; локальная проверка, не formal G10."
+    logSha256: 5099ae81279cf5f6309a287163e654588c444fb1051768c57718c1e725d3649d
 consumerContract:
   consumer: 1
   admission:
@@ -473,6 +491,7 @@ consumerContract:
     policy/key/flag child и G18 baseline flag child с проверенной lineage. Лимиты и provider scope сохранены;
     exact parent G12 product images, отдельная BOM/image-ID проверка fixture PostgreSQL."
 limitations:
+  - "Full run 2c4250a/185412: G00–G09 и G12 PASS, G10 FAIL при проверке захвата логов; G11 и G13–G18 NOT_RUN, G19 REPORT PASS не является admission. Локальный fix захвата fd 1 проверен на 9/9 существующих live tests; окончательному Source нужны собственные CI, G12, SSE qualification и полный G00–G19."
   - "Компонентный G12 5cb6e89 прерван по запросу владельца; отдельный G16 stub и CLI startup не являются runtime admission. Будущему замороженному Source нужны собственные CI, G12, SSE qualification и полный G00–G19."
   - "Source 883 standalone G12 PASS; qualification FAIL до нагрузки с сохранённым отрицательным результатом. Синтетический Docker-пробник WIP не является qualification или полным admission; окончательному Source нужны собственные CI, G12, SSE и G00–G19."
   - "Принятый #252 содержит парное подтверждение edge-gateway на Source 8009671; это не полный G12, SSE qualification или G00–G19 issue13 на новом окончательном Source."
