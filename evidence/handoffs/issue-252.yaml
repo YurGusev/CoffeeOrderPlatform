@@ -1,6 +1,6 @@
 issue: 252
 baseCommit: ad72338496f49241e83956aadfc12d17a6dedc2a
-status: implemented-awaiting-runtime-and-ci
+status: verified-runtime
 inputs:
   - issue: 61
     acceptedMergeCommit: d1f462838da15b25049842a241f4e3f6f75a6b4f
@@ -35,6 +35,10 @@ outputs:
     sha256: f5739a8911b00e8a53d334ca1af3497ce317fb1a453c975f944af7eb93b00d85
     consumers:
       - 13
+  - artifact: evidence/runtime-images/2026-11-01/identity.json
+    sha256: ac4ba15459d212294fabce6fec52e788ed066bd4d003eaf010ad15b24fcc300f
+    consumers:
+      - 13
 behavior:
   - Production deploy исключает изменяемое состояние установщика pnpm .modules.yaml до final COPY; production
     dependencies и native-addon probe сохранены.
@@ -42,6 +46,7 @@ behavior:
   - Ambient SOURCE_DATE_EPOCH исключается только из копии canonical build child environment; custom/non-load
     outputs и parent environment сохранены.
   - Exact image IDs, OCI provenance/attestation, HIGH/CRITICAL policy, pins и thresholds не ослаблены.
+  - Issue 13 обязан повторить G12, SSE qualification и G00–G19 на окончательном Source; прежний PASS не переносится.
 verification:
   - command: pnpm install --offline --frozen-lockfile --ignore-scripts
     result: PASS под shared heavy lease; native addon на host не собирался.
@@ -55,7 +60,15 @@ verification:
   - command: scoped Prettier/Oxlint/node --check + git diff --check
     result: PASS по пяти code/test файлам.
     logSha256: 64baf1a3ca4d99ba54374861757fe3bb15b3e9a57bb691bc7b52db1f1584615d
+  - command: Парные OCI и Docker load, затем native probe; фактические argv с явными подстановками путей сохранены в identity.json.
+    result: PASS для edge-gateway на Source 8009671d5a68313e30748c6e0abe294683a20ff4; image ID и 11 diff IDs совпали, native probe завершился с кодом 0.
+    reportSha256: cf9dd5526db30369a71cd3cebb81670db31c94c07d57bfaf4ba96befcf937315
+    logSha256: b38d15fd05aea018129d42e8941895bd5ca8dc03656cc8190bf0db1677863217
+  - command: GitHub Actions check, run 41295013831, Source 8009671d5a68313e30748c6e0abe294683a20ff4
+    result: PASS; проверка metadata-only HEAD будет выполнена в PR.
+    logSha256: 6150c87b88199d294c4cf6f8756ce093fe7b654900edba3daea86a0a06c139c6
 limitations:
-  - Парный реальный OCI/Docker export нового замороженного source и CI ещё обязательны; до них merge запрещён.
+  - Реальный парный экспорт проверен только для edge-gateway на Source 8009671d5a68313e30748c6e0abe294683a20ff4, не на последующем metadata-only HEAD; evidence исключён из Docker build context.
+  - CI metadata-only HEAD ещё не выполнен и должен пройти в PR до merge.
   - Проверка не заявляет cold-build identity при изменении OS repository contents.
   - Этот product fix не заменяет G12/SSE/G00–G19 issue13 на его окончательном SHA.

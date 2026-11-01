@@ -1,0 +1,210 @@
+{
+  "schemaVersion": 1,
+  "scope": "Парное подтверждение идентичности runtime edge-gateway; не G12 и не SSE qualification",
+  "candidateSha": "8009671d5a68313e30748c6e0abe294683a20ff4",
+  "source": {
+    "archiveSha256": "636f9ab8a28befb0836bee64b135debc1af841124b9f26682dc8adf30aef700e",
+    "extractedTreeSha256": "feb64b97d7f8c087370698598484b181d11eee611784b86049a1f296b6e7a464",
+    "sourceTreeSha": "52916b8de0d1e27be5e5a8c8d5bdc6af53875118"
+  },
+  "commands": {
+    "substitutions": {
+      "<snapshot>": "временный извлечённый source указанного candidateSha",
+      "<metadata-file>": "временный файл metadata экспорта",
+      "<oci-layout>": "временный каталог OCI layout",
+      "<pinned-node>": "исполняемый Node v26.8.1",
+      "<source-root>": "checkout указанного candidateSha"
+    },
+    "oci": {
+      "argv": [
+        "/usr/bin/docker",
+        "buildx",
+        "build",
+        "--builder",
+        "coffee-platform-mtu",
+        "--allow",
+        "network.host",
+        "--build-arg",
+        "RUNTIME=edge-gateway",
+        "--target",
+        "runtime",
+        "--platform",
+        "linux/amd64",
+        "--metadata-file",
+        "<metadata-file>",
+        "--provenance=mode=min",
+        "--output",
+        "type=oci,tar=false,dest=<oci-layout>,source-date-epoch=0,rewrite-timestamp=true",
+        "-t",
+        "coffee-image-metadata-proof-1648092:latest-oci",
+        "<snapshot>"
+      ],
+      "cwd": "<snapshot>"
+    },
+    "dockerLoad": {
+      "argv": [
+        "<pinned-node>",
+        "<source-root>/tools/docker-build.mjs",
+        "--build-arg",
+        "RUNTIME=edge-gateway",
+        "--target",
+        "runtime",
+        "--load",
+        "-t",
+        "coffee-image-metadata-proof-1648092:latest",
+        "<snapshot>"
+      ],
+      "cwd": "<source-root>"
+    },
+    "probe": {
+      "argv": [
+        "/usr/bin/docker",
+        "run",
+        "--rm",
+        "--name",
+        "coffee-image-metadata-probe-1648092",
+        "--network",
+        "none",
+        "--read-only",
+        "--cap-drop",
+        "ALL",
+        "--security-opt",
+        "no-new-privileges",
+        "--pids-limit",
+        "64",
+        "--cpus",
+        "1",
+        "--memory",
+        "256m",
+        "--entrypoint",
+        "node",
+        "coffee-image-metadata-proof-1648092:latest",
+        "--input-type=commonjs",
+        "-e",
+        "const {createRequire}=require('node:module');const fs=require('node:fs');const a=createRequire('/app/package.json');const b=createRequire(a.resolve('@coffee-platform/runtime'));const c=createRequire(b.resolve('@coffee-platform/kafka-runtime'));const ok=typeof c('@confluentinc/kafka-javascript').RdKafka.Producer==='function';const r={version:process.version,uid:process.getuid(),producer:ok,modulesYamlExists:fs.existsSync('/app/node_modules/.modules.yaml')};console.log(JSON.stringify(r));if(r.version!=='v26.8.1'||r.uid!==1000||!r.producer||r.modulesYamlExists)process.exit(1);"
+      ]
+    }
+  },
+  "oci": {
+    "indexDigest": "sha256:c23ca2611214b60c8b59ff273cb0144c5440b72c83751a7c8c8b640cb6617fff",
+    "manifestDigest": "sha256:8637a45fdfe32bf492d1098ce9f741323206a5b580c076b60e1dec9facfb80a4",
+    "configId": "sha256:db23248996469c5f5b0cf2ed347915a3410b9e46351b3735b653c5739f99e921",
+    "layers": [
+      {
+        "digest": "sha256:55afa1ecc21d2bb5e5045f32dafee56272ffd89860bac26f6c32123439af26a4",
+        "size": 3846391
+      },
+      {
+        "digest": "sha256:9098cc82c400bbe83569e25f937227d53aad39a688142b5dbb979dab5cfc5414",
+        "size": 59755485
+      },
+      {
+        "digest": "sha256:80d39da31aaab43d6b63da0ed87ad747290062bd97f8901fe45eefb469cfeb0c",
+        "size": 451
+      },
+      {
+        "digest": "sha256:b67246d5d21a1e5208d87db10a035e60592ce32fc1bd322536cd6248ad3f3ea1",
+        "size": 79
+      },
+      {
+        "digest": "sha256:0c7834b9e8666c83e73430449b060d60b82c131af416c882824ba8738d4c6be7",
+        "size": 5681029
+      },
+      {
+        "digest": "sha256:51c43965949d7735e2fbf399cb01d7213ea1946c5ace82491702b856a3fc6e37",
+        "size": 11413890
+      },
+      {
+        "digest": "sha256:b547440eea22cf13a1e218814b2cfd210ef671acdf22f1ecf444ec84311dffdb",
+        "size": 1792891
+      },
+      {
+        "digest": "sha256:4e3a1a71d270e3b0962e8746a8aa8f85aa282d79de475b63f876e65ad22f7d8c",
+        "size": 10764991
+      },
+      {
+        "digest": "sha256:5fa14a39b0f52756a2fb2f2cfbb76c4c3cc53fa186e13c55efcb24342d475d36",
+        "size": 27353
+      },
+      {
+        "digest": "sha256:a64218453a953952180ccbc0b199f07bb419e1f0e33fd5a1c157a6d02997426d",
+        "size": 1371
+      },
+      {
+        "digest": "sha256:2547ac0b2afabf46fe51e3c0b3c7b6373b0f1755befc3cac1edfdbeb9a538da0",
+        "size": 3736
+      }
+    ],
+    "diffIds": [
+      "sha256:34884abbe92863fce933ed7c39c0e045631af0ed86d5cc0dfbdf9fdca426ce3c",
+      "sha256:5b4067ab556306db046a403f500d18e8aa3b1a935aed2e760db2aa303d5520de",
+      "sha256:06cfb6c3f844b9c3e4624e1a811bba4bbda080d70dd429a5731a567989dd359b",
+      "sha256:8b6da3bd28008659e694315022ffb9c31aa31b5840b77e8f6197872538b9473a",
+      "sha256:1e7e9d354c0d15cb985237f877e3c8bd6b220c8ade7f835c063c9a07542b1e1e",
+      "sha256:7b126c9ab35f3214502e50da60db2386182b81c35b87b16e7ee6d5ec5b91f1b1",
+      "sha256:31035dcd255998db14fb6d0231c01128d14585eb1f116653535c3933602e3391",
+      "sha256:a6483e16bf19ff2e8e2d120fc8b872a80770f6afca1e83c699c44216ca33d8b5",
+      "sha256:dd71c027af01955ace899bdae8c505c77fe26c9f4e336fa364cbe29e023e3d77",
+      "sha256:d8e7568f8368e6dc76166aff123a296195980107b0981f3b15d6e5a3b7cd9da9",
+      "sha256:54644509531ef29bd1bef9b99c5aae79db9e3d07c6aad1276748625dabfbe75f"
+    ]
+  },
+  "dockerLoad": {
+    "imageId": "sha256:db23248996469c5f5b0cf2ed347915a3410b9e46351b3735b653c5739f99e921",
+    "diffIds": [
+      "sha256:34884abbe92863fce933ed7c39c0e045631af0ed86d5cc0dfbdf9fdca426ce3c",
+      "sha256:5b4067ab556306db046a403f500d18e8aa3b1a935aed2e760db2aa303d5520de",
+      "sha256:06cfb6c3f844b9c3e4624e1a811bba4bbda080d70dd429a5731a567989dd359b",
+      "sha256:8b6da3bd28008659e694315022ffb9c31aa31b5840b77e8f6197872538b9473a",
+      "sha256:1e7e9d354c0d15cb985237f877e3c8bd6b220c8ade7f835c063c9a07542b1e1e",
+      "sha256:7b126c9ab35f3214502e50da60db2386182b81c35b87b16e7ee6d5ec5b91f1b1",
+      "sha256:31035dcd255998db14fb6d0231c01128d14585eb1f116653535c3933602e3391",
+      "sha256:a6483e16bf19ff2e8e2d120fc8b872a80770f6afca1e83c699c44216ca33d8b5",
+      "sha256:dd71c027af01955ace899bdae8c505c77fe26c9f4e336fa364cbe29e023e3d77",
+      "sha256:d8e7568f8368e6dc76166aff123a296195980107b0981f3b15d6e5a3b7cd9da9",
+      "sha256:54644509531ef29bd1bef9b99c5aae79db9e3d07c6aad1276748625dabfbe75f"
+    ],
+    "configUser": "node",
+    "imageIdMatchesOci": true,
+    "diffIdsMatchOci": true
+  },
+  "probe": {
+    "exitCode": 0,
+    "version": "v26.8.1",
+    "uid": 1000,
+    "producer": true,
+    "modulesYamlExists": false
+  },
+  "resources": {
+    "rootFloorBytes": 36541335962,
+    "minimumRootFreeBytes": 38586523648,
+    "builderFloorBytes": 1073741824,
+    "minimumBuilderFreeBytes": 14576025600
+  },
+  "timing": {
+    "startedAtUtc": "2026-11-01T09:55:14.386773+00:00",
+    "completedAtUtc": "2026-11-01T10:03:46.081120+00:00",
+    "queueSeconds": 330.065,
+    "durationSeconds": 511.694,
+    "buildTimeoutSecondsEach": 300,
+    "lockQueueLimitSeconds": 7200
+  },
+  "cleanup": {
+    "verified": true,
+    "probeContainerAbsent": true,
+    "localProcessGroupGone": true,
+    "tagRemovalExitCode": 0,
+    "foreignImagesBefore": 42,
+    "foreignImagesAfter": 42,
+    "foreignImagesPreserved": true
+  },
+  "privateEvidence": {
+    "reportSha256": "cf9dd5526db30369a71cd3cebb81670db31c94c07d57bfaf4ba96befcf937315",
+    "logSha256": "b38d15fd05aea018129d42e8941895bd5ca8dc03656cc8190bf0db1677863217"
+  },
+  "limitations": [
+    "Проверен только edge-gateway; это не полный G12, SSE qualification или запуск issue 13.",
+    "Не подтверждена identity холодной сборки при изменении содержимого OS repositories.",
+    "Доказательство относится к указанному candidateSha; для issue 13 необходимы свежие G12, SSE и G00–G19 на финальном Source."
+  ]
+}
