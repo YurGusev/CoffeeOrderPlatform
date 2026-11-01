@@ -113,7 +113,8 @@ RUN node scripts/check-node26-compatibility.mjs \
 # compilation or the common typecheck when Compose materializes all 14 Node images.
 ARG RUNTIME=edge-gateway
 # Явное копирование ускоряет deploy на файловой системе builder, сохраняя /runtime.
-RUN test "${RUNTIME}" != "web" && pnpm --filter "@coffee-platform/${RUNTIME}" deploy --prod --legacy --package-import-method=copy /runtime
+RUN test "${RUNTIME}" != "web" && pnpm --filter "@coffee-platform/${RUNTIME}" deploy --prod --legacy --package-import-method=copy /runtime \
+  && rm -f /runtime/node_modules/.modules.yaml
 
 # pnpm deploy copies package-store files, so carry the explicitly built addon
 # into the deployed dependency and verify that the production tree loads it.

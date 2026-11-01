@@ -85,6 +85,12 @@ function ensureBuilder() {
 }
 
 const extraArgs = process.argv.slice(2);
+const normalizeLoad =
+  extraArgs.includes("--load") &&
+  !extraArgs.some(
+    (arg) =>
+      arg === "--output" || arg.startsWith("--output=") || arg.startsWith("-o"),
+  );
 const nginxBuild =
   extraArgs.some((argument) =>
     argument.includes("apps/edge-nginx/Dockerfile"),
@@ -117,7 +123,12 @@ const args = [
   BUILDER,
   "--allow",
   "network.host",
+  ...(normalizeLoad
+    ? ["--output", "type=docker,source-date-epoch=0,rewrite-timestamp=true"]
+    : []),
   ...extraArgs,
 ];
-const result = spawnSync("docker", args, { stdio: "inherit" });
+const env = { ...process.env };
+if (normalizeLoad) delete env.SOURCE_DATE_EPOCH;
+const result = spawnSync("docker", args, { stdio: "inherit", env });
 process.exitCode = result.status ?? 1;
