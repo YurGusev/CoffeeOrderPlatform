@@ -1,0 +1,649 @@
+{
+  "scope": "public-only comparison of trusted scoped development transport material; no deployment",
+  "status": "PASS",
+  "expectedCAFingerprint": "10:F3:13:97:99:BE:89:F7:DE:04:44:07:AD:8D:61:4A:29:8D:A2:C7:97:77:74:E6:EB:80:A8:E0:E8:CC:51:86",
+  "cipherSha256": {
+    "old": "1adc96a403e7046c7aecb584534ee130b4217acc8f845b4ca30fc78cd8399aab",
+    "renewed": "54e0686ee98acb5a59fc22064f08f8083e7ed6756d1bed892a8dd081ef575451"
+  },
+  "bootstrapSha256": {
+    "old": "1fdf095beea6ba31fc9d9866ebf2c0e0cab6fdce62effc0fc78b92732f492123",
+    "renewed": "21d1240acb90ff8e5a5918696c5002c45f1944d4ec0d2b925a2f06f57bf08f22"
+  },
+  "recipientComparison": {
+    "count": 3,
+    "equal": true
+  },
+  "runtimes": [
+    {
+      "runtime": "api-internal",
+      "old": {
+        "ca": {
+          "fingerprint256": "10:F3:13:97:99:BE:89:F7:DE:04:44:07:AD:8D:61:4A:29:8D:A2:C7:97:77:74:E6:EB:80:A8:E0:E8:CC:51:86",
+          "spkiSha256": "91d9992f1da0b0c5243ee24d77521abf8293129fe06eecc4edfbfb95083418ec",
+          "validFrom": "Oct 28 18:47:49 2026 GMT",
+          "validTo": "Oct 28 18:47:49 2027 GMT"
+        },
+        "client": {
+          "fingerprint256": "DD:DB:D7:E5:5B:90:58:73:65:94:4E:09:C5:ED:7A:D3:FB:01:0E:43:51:09:35:98:03:9F:25:DD:7B:7E:28:6C",
+          "spkiSha256": "94a91a7d5d6eab4927784b63cbcbea9a16917f80f8532c9ee1250beee2ab64bc",
+          "validFrom": "Oct 28 18:47:49 2026 GMT",
+          "validTo": "Oct 29 18:47:49 2026 GMT",
+          "subjectAltName": "URI:spiffe://coffee-platform/development/api-internal, DNS:api-internal.development.svc.coffee-platform.internal"
+        },
+        "clientSignedByCA": true,
+        "keyMatch": true
+      },
+      "renewed": {
+        "ca": {
+          "fingerprint256": "10:F3:13:97:99:BE:89:F7:DE:04:44:07:AD:8D:61:4A:29:8D:A2:C7:97:77:74:E6:EB:80:A8:E0:E8:CC:51:86",
+          "spkiSha256": "91d9992f1da0b0c5243ee24d77521abf8293129fe06eecc4edfbfb95083418ec",
+          "validFrom": "Oct 28 18:47:49 2026 GMT",
+          "validTo": "Oct 28 18:47:49 2027 GMT"
+        },
+        "client": {
+          "fingerprint256": "0F:9D:64:2F:C8:FC:48:3E:D7:F9:76:19:87:2C:48:14:02:F6:55:43:AE:3C:97:97:AD:15:47:EF:A5:6C:07:42",
+          "spkiSha256": "94a91a7d5d6eab4927784b63cbcbea9a16917f80f8532c9ee1250beee2ab64bc",
+          "validFrom": "Nov  1 21:09:58 2026 GMT",
+          "validTo": "Nov  2 21:09:58 2026 GMT",
+          "subjectAltName": "URI:spiffe://coffee-platform/development/api-internal, DNS:api-internal.development.svc.coffee-platform.internal"
+        },
+        "clientSignedByCA": true,
+        "keyMatch": true
+      },
+      "spkiUnchanged": true,
+      "newExactSAN": true,
+      "newValidNowAnd24h": true
+    },
+    {
+      "runtime": "api-public",
+      "old": {
+        "ca": {
+          "fingerprint256": "10:F3:13:97:99:BE:89:F7:DE:04:44:07:AD:8D:61:4A:29:8D:A2:C7:97:77:74:E6:EB:80:A8:E0:E8:CC:51:86",
+          "spkiSha256": "91d9992f1da0b0c5243ee24d77521abf8293129fe06eecc4edfbfb95083418ec",
+          "validFrom": "Oct 28 18:47:49 2026 GMT",
+          "validTo": "Oct 28 18:47:49 2027 GMT"
+        },
+        "client": {
+          "fingerprint256": "B8:F2:F6:15:67:F8:E5:8C:44:A2:E4:86:0A:5E:10:33:78:04:6E:E6:66:35:94:E8:14:55:B3:08:0B:49:B5:DC",
+          "spkiSha256": "e372d274ed36cb89ef32fb5ce9939090ba74c428a2e1014f033e90fe12ce5154",
+          "validFrom": "Oct 28 18:47:49 2026 GMT",
+          "validTo": "Oct 29 18:47:49 2026 GMT",
+          "subjectAltName": "URI:spiffe://coffee-platform/development/api-public, DNS:api-public.development.svc.coffee-platform.internal"
+        },
+        "clientSignedByCA": true,
+        "keyMatch": true
+      },
+      "renewed": {
+        "ca": {
+          "fingerprint256": "10:F3:13:97:99:BE:89:F7:DE:04:44:07:AD:8D:61:4A:29:8D:A2:C7:97:77:74:E6:EB:80:A8:E0:E8:CC:51:86",
+          "spkiSha256": "91d9992f1da0b0c5243ee24d77521abf8293129fe06eecc4edfbfb95083418ec",
+          "validFrom": "Oct 28 18:47:49 2026 GMT",
+          "validTo": "Oct 28 18:47:49 2027 GMT"
+        },
+        "client": {
+          "fingerprint256": "2A:7D:75:DE:4D:0D:AD:66:31:63:AB:FE:DA:BB:88:EE:72:3D:39:35:68:37:9B:41:0C:3B:3D:D3:B4:7D:72:06",
+          "spkiSha256": "e372d274ed36cb89ef32fb5ce9939090ba74c428a2e1014f033e90fe12ce5154",
+          "validFrom": "Nov  1 21:09:58 2026 GMT",
+          "validTo": "Nov  2 21:09:58 2026 GMT",
+          "subjectAltName": "URI:spiffe://coffee-platform/development/api-public, DNS:api-public.development.svc.coffee-platform.internal"
+        },
+        "clientSignedByCA": true,
+        "keyMatch": true
+      },
+      "spkiUnchanged": true,
+      "newExactSAN": true,
+      "newValidNowAnd24h": true
+    },
+    {
+      "runtime": "aroma-convergence",
+      "old": {
+        "ca": {
+          "fingerprint256": "10:F3:13:97:99:BE:89:F7:DE:04:44:07:AD:8D:61:4A:29:8D:A2:C7:97:77:74:E6:EB:80:A8:E0:E8:CC:51:86",
+          "spkiSha256": "91d9992f1da0b0c5243ee24d77521abf8293129fe06eecc4edfbfb95083418ec",
+          "validFrom": "Oct 28 18:47:49 2026 GMT",
+          "validTo": "Oct 28 18:47:49 2027 GMT"
+        },
+        "client": {
+          "fingerprint256": "E6:9B:C2:07:B4:8D:47:B4:29:83:69:B9:2F:D4:3C:A3:EB:E8:8A:18:D5:70:EE:D7:90:9E:60:B0:F3:AF:1A:10",
+          "spkiSha256": "098a8199f0caec37a2f5b334f40eb59614b4a3dbd026963001161d41e67fea64",
+          "validFrom": "Oct 28 18:47:49 2026 GMT",
+          "validTo": "Oct 29 18:47:49 2026 GMT",
+          "subjectAltName": "URI:spiffe://coffee-platform/development/aroma-convergence, DNS:aroma-convergence.development.svc.coffee-platform.internal"
+        },
+        "clientSignedByCA": true,
+        "keyMatch": true
+      },
+      "renewed": {
+        "ca": {
+          "fingerprint256": "10:F3:13:97:99:BE:89:F7:DE:04:44:07:AD:8D:61:4A:29:8D:A2:C7:97:77:74:E6:EB:80:A8:E0:E8:CC:51:86",
+          "spkiSha256": "91d9992f1da0b0c5243ee24d77521abf8293129fe06eecc4edfbfb95083418ec",
+          "validFrom": "Oct 28 18:47:49 2026 GMT",
+          "validTo": "Oct 28 18:47:49 2027 GMT"
+        },
+        "client": {
+          "fingerprint256": "F7:81:02:63:E9:D4:C9:AD:30:3F:54:FA:0C:D0:46:5E:4E:8E:F2:82:19:3F:2C:B3:4C:71:33:BB:56:A6:D3:CC",
+          "spkiSha256": "098a8199f0caec37a2f5b334f40eb59614b4a3dbd026963001161d41e67fea64",
+          "validFrom": "Nov  1 21:09:59 2026 GMT",
+          "validTo": "Nov  2 21:09:59 2026 GMT",
+          "subjectAltName": "URI:spiffe://coffee-platform/development/aroma-convergence, DNS:aroma-convergence.development.svc.coffee-platform.internal"
+        },
+        "clientSignedByCA": true,
+        "keyMatch": true
+      },
+      "spkiUnchanged": true,
+      "newExactSAN": true,
+      "newValidNowAnd24h": true
+    },
+    {
+      "runtime": "aroma-gateway",
+      "old": {
+        "ca": {
+          "fingerprint256": "10:F3:13:97:99:BE:89:F7:DE:04:44:07:AD:8D:61:4A:29:8D:A2:C7:97:77:74:E6:EB:80:A8:E0:E8:CC:51:86",
+          "spkiSha256": "91d9992f1da0b0c5243ee24d77521abf8293129fe06eecc4edfbfb95083418ec",
+          "validFrom": "Oct 28 18:47:49 2026 GMT",
+          "validTo": "Oct 28 18:47:49 2027 GMT"
+        },
+        "client": {
+          "fingerprint256": "63:A5:7E:FD:A8:77:5C:60:16:BC:7C:36:24:2D:2B:42:02:7F:DD:5E:2B:D7:59:AF:69:B8:AA:B4:3F:57:B3:EB",
+          "spkiSha256": "f46345823d58a935c5666a3172bec1b2999d4a75befc3dd2be2ab923b34b1698",
+          "validFrom": "Oct 28 18:47:50 2026 GMT",
+          "validTo": "Oct 29 18:47:50 2026 GMT",
+          "subjectAltName": "URI:spiffe://coffee-platform/development/aroma-gateway, DNS:aroma-gateway.development.svc.coffee-platform.internal"
+        },
+        "clientSignedByCA": true,
+        "keyMatch": true
+      },
+      "renewed": {
+        "ca": {
+          "fingerprint256": "10:F3:13:97:99:BE:89:F7:DE:04:44:07:AD:8D:61:4A:29:8D:A2:C7:97:77:74:E6:EB:80:A8:E0:E8:CC:51:86",
+          "spkiSha256": "91d9992f1da0b0c5243ee24d77521abf8293129fe06eecc4edfbfb95083418ec",
+          "validFrom": "Oct 28 18:47:49 2026 GMT",
+          "validTo": "Oct 28 18:47:49 2027 GMT"
+        },
+        "client": {
+          "fingerprint256": "54:4E:55:F0:B4:E8:BF:DF:33:B7:A4:74:C9:55:F4:DA:6B:DD:5F:21:A3:24:41:76:72:7D:46:0A:78:97:BA:A4",
+          "spkiSha256": "f46345823d58a935c5666a3172bec1b2999d4a75befc3dd2be2ab923b34b1698",
+          "validFrom": "Nov  1 21:09:59 2026 GMT",
+          "validTo": "Nov  2 21:09:59 2026 GMT",
+          "subjectAltName": "URI:spiffe://coffee-platform/development/aroma-gateway, DNS:aroma-gateway.development.svc.coffee-platform.internal"
+        },
+        "clientSignedByCA": true,
+        "keyMatch": true
+      },
+      "spkiUnchanged": true,
+      "newExactSAN": true,
+      "newValidNowAnd24h": true
+    },
+    {
+      "runtime": "aroma-observer",
+      "old": {
+        "ca": {
+          "fingerprint256": "10:F3:13:97:99:BE:89:F7:DE:04:44:07:AD:8D:61:4A:29:8D:A2:C7:97:77:74:E6:EB:80:A8:E0:E8:CC:51:86",
+          "spkiSha256": "91d9992f1da0b0c5243ee24d77521abf8293129fe06eecc4edfbfb95083418ec",
+          "validFrom": "Oct 28 18:47:49 2026 GMT",
+          "validTo": "Oct 28 18:47:49 2027 GMT"
+        },
+        "client": {
+          "fingerprint256": "9F:D4:71:B7:CF:7F:02:7E:43:D8:63:CC:B6:05:66:AF:4B:CD:D5:5B:2F:03:C7:7D:A3:C0:3E:54:76:62:95:94",
+          "spkiSha256": "a1f006a044a8644d48bd7df2afd4e7bbf1302cf99ae60ad2e6b4283f5284bd41",
+          "validFrom": "Oct 28 18:47:49 2026 GMT",
+          "validTo": "Oct 29 18:47:49 2026 GMT",
+          "subjectAltName": "URI:spiffe://coffee-platform/development/aroma-observer, DNS:aroma-observer.development.svc.coffee-platform.internal"
+        },
+        "clientSignedByCA": true,
+        "keyMatch": true
+      },
+      "renewed": {
+        "ca": {
+          "fingerprint256": "10:F3:13:97:99:BE:89:F7:DE:04:44:07:AD:8D:61:4A:29:8D:A2:C7:97:77:74:E6:EB:80:A8:E0:E8:CC:51:86",
+          "spkiSha256": "91d9992f1da0b0c5243ee24d77521abf8293129fe06eecc4edfbfb95083418ec",
+          "validFrom": "Oct 28 18:47:49 2026 GMT",
+          "validTo": "Oct 28 18:47:49 2027 GMT"
+        },
+        "client": {
+          "fingerprint256": "BE:E2:0F:82:CC:DC:DF:4F:89:33:9D:79:B7:4F:BA:86:9A:2B:CC:FF:86:90:68:41:CC:38:C9:56:57:97:E1:36",
+          "spkiSha256": "a1f006a044a8644d48bd7df2afd4e7bbf1302cf99ae60ad2e6b4283f5284bd41",
+          "validFrom": "Nov  1 21:09:59 2026 GMT",
+          "validTo": "Nov  2 21:09:59 2026 GMT",
+          "subjectAltName": "URI:spiffe://coffee-platform/development/aroma-observer, DNS:aroma-observer.development.svc.coffee-platform.internal"
+        },
+        "clientSignedByCA": true,
+        "keyMatch": true
+      },
+      "spkiUnchanged": true,
+      "newExactSAN": true,
+      "newValidNowAnd24h": true
+    },
+    {
+      "runtime": "catalog-activation-worker",
+      "old": {
+        "ca": {
+          "fingerprint256": "10:F3:13:97:99:BE:89:F7:DE:04:44:07:AD:8D:61:4A:29:8D:A2:C7:97:77:74:E6:EB:80:A8:E0:E8:CC:51:86",
+          "spkiSha256": "91d9992f1da0b0c5243ee24d77521abf8293129fe06eecc4edfbfb95083418ec",
+          "validFrom": "Oct 28 18:47:49 2026 GMT",
+          "validTo": "Oct 28 18:47:49 2027 GMT"
+        },
+        "client": {
+          "fingerprint256": "C4:5C:3F:A5:E4:5A:C0:9C:C3:43:72:D5:B3:69:E6:50:E4:81:4B:BF:AD:9E:4C:F5:F0:12:B1:AA:E4:4A:6F:C6",
+          "spkiSha256": "790064d00006424860e3e92213b22e9476e16143de92b3a295dbc0eac360e31b",
+          "validFrom": "Oct 28 18:47:49 2026 GMT",
+          "validTo": "Oct 29 18:47:49 2026 GMT",
+          "subjectAltName": "URI:spiffe://coffee-platform/development/catalog-activation-worker, DNS:catalog-activation-worker.development.svc.coffee-platform.internal"
+        },
+        "clientSignedByCA": true,
+        "keyMatch": true
+      },
+      "renewed": {
+        "ca": {
+          "fingerprint256": "10:F3:13:97:99:BE:89:F7:DE:04:44:07:AD:8D:61:4A:29:8D:A2:C7:97:77:74:E6:EB:80:A8:E0:E8:CC:51:86",
+          "spkiSha256": "91d9992f1da0b0c5243ee24d77521abf8293129fe06eecc4edfbfb95083418ec",
+          "validFrom": "Oct 28 18:47:49 2026 GMT",
+          "validTo": "Oct 28 18:47:49 2027 GMT"
+        },
+        "client": {
+          "fingerprint256": "1C:6E:1D:42:A6:70:36:97:72:16:89:EF:A9:EA:47:CA:17:6B:20:AB:C5:B2:C2:6F:9C:DC:77:5A:87:87:1E:BD",
+          "spkiSha256": "790064d00006424860e3e92213b22e9476e16143de92b3a295dbc0eac360e31b",
+          "validFrom": "Nov  1 21:09:59 2026 GMT",
+          "validTo": "Nov  2 21:09:59 2026 GMT",
+          "subjectAltName": "URI:spiffe://coffee-platform/development/catalog-activation-worker, DNS:catalog-activation-worker.development.svc.coffee-platform.internal"
+        },
+        "clientSignedByCA": true,
+        "keyMatch": true
+      },
+      "spkiUnchanged": true,
+      "newExactSAN": true,
+      "newValidNowAnd24h": true
+    },
+    {
+      "runtime": "catalog-service",
+      "old": {
+        "ca": {
+          "fingerprint256": "10:F3:13:97:99:BE:89:F7:DE:04:44:07:AD:8D:61:4A:29:8D:A2:C7:97:77:74:E6:EB:80:A8:E0:E8:CC:51:86",
+          "spkiSha256": "91d9992f1da0b0c5243ee24d77521abf8293129fe06eecc4edfbfb95083418ec",
+          "validFrom": "Oct 28 18:47:49 2026 GMT",
+          "validTo": "Oct 28 18:47:49 2027 GMT"
+        },
+        "client": {
+          "fingerprint256": "71:88:29:B5:0F:D1:DA:CD:DB:37:E5:EA:A7:F0:C1:C7:FF:B2:9B:18:6C:C0:C8:E2:F7:66:6A:5A:03:35:F0:91",
+          "spkiSha256": "cef1107c78a91daf43cc69c8f594c70d9daaa252e66346342e2d17f87e478bd9",
+          "validFrom": "Oct 28 18:47:49 2026 GMT",
+          "validTo": "Oct 29 18:47:49 2026 GMT",
+          "subjectAltName": "URI:spiffe://coffee-platform/development/catalog-service, DNS:catalog-service.development.svc.coffee-platform.internal"
+        },
+        "clientSignedByCA": true,
+        "keyMatch": true
+      },
+      "renewed": {
+        "ca": {
+          "fingerprint256": "10:F3:13:97:99:BE:89:F7:DE:04:44:07:AD:8D:61:4A:29:8D:A2:C7:97:77:74:E6:EB:80:A8:E0:E8:CC:51:86",
+          "spkiSha256": "91d9992f1da0b0c5243ee24d77521abf8293129fe06eecc4edfbfb95083418ec",
+          "validFrom": "Oct 28 18:47:49 2026 GMT",
+          "validTo": "Oct 28 18:47:49 2027 GMT"
+        },
+        "client": {
+          "fingerprint256": "0D:1F:E6:1D:71:CD:B4:72:21:50:6C:DE:C8:C5:1D:5E:3D:29:09:6C:C9:1A:EA:AE:C3:E1:37:2E:4B:D6:0F:17",
+          "spkiSha256": "cef1107c78a91daf43cc69c8f594c70d9daaa252e66346342e2d17f87e478bd9",
+          "validFrom": "Nov  1 21:09:58 2026 GMT",
+          "validTo": "Nov  2 21:09:58 2026 GMT",
+          "subjectAltName": "URI:spiffe://coffee-platform/development/catalog-service, DNS:catalog-service.development.svc.coffee-platform.internal"
+        },
+        "clientSignedByCA": true,
+        "keyMatch": true
+      },
+      "spkiUnchanged": true,
+      "newExactSAN": true,
+      "newValidNowAnd24h": true
+    },
+    {
+      "runtime": "catalog-supplier-sync",
+      "old": {
+        "ca": {
+          "fingerprint256": "10:F3:13:97:99:BE:89:F7:DE:04:44:07:AD:8D:61:4A:29:8D:A2:C7:97:77:74:E6:EB:80:A8:E0:E8:CC:51:86",
+          "spkiSha256": "91d9992f1da0b0c5243ee24d77521abf8293129fe06eecc4edfbfb95083418ec",
+          "validFrom": "Oct 28 18:47:49 2026 GMT",
+          "validTo": "Oct 28 18:47:49 2027 GMT"
+        },
+        "client": {
+          "fingerprint256": "05:07:65:6F:B2:F0:D3:6A:23:91:F8:60:23:CD:31:93:46:96:B3:20:4D:1D:D6:37:C1:3A:FB:8D:50:BD:34:99",
+          "spkiSha256": "c5424b869e34a9b7196ad526c4ec99471225f39ac3ed9705ae0bb567ddb033dc",
+          "validFrom": "Oct 28 18:47:49 2026 GMT",
+          "validTo": "Oct 29 18:47:49 2026 GMT",
+          "subjectAltName": "URI:spiffe://coffee-platform/development/catalog-supplier-sync, DNS:catalog-supplier-sync.development.svc.coffee-platform.internal"
+        },
+        "clientSignedByCA": true,
+        "keyMatch": true
+      },
+      "renewed": {
+        "ca": {
+          "fingerprint256": "10:F3:13:97:99:BE:89:F7:DE:04:44:07:AD:8D:61:4A:29:8D:A2:C7:97:77:74:E6:EB:80:A8:E0:E8:CC:51:86",
+          "spkiSha256": "91d9992f1da0b0c5243ee24d77521abf8293129fe06eecc4edfbfb95083418ec",
+          "validFrom": "Oct 28 18:47:49 2026 GMT",
+          "validTo": "Oct 28 18:47:49 2027 GMT"
+        },
+        "client": {
+          "fingerprint256": "2F:D8:B7:AE:4B:B6:7E:E8:D6:A5:87:0A:9F:7F:FD:61:21:87:07:32:0F:D9:6D:5A:C3:23:22:7C:2F:57:27:3C",
+          "spkiSha256": "c5424b869e34a9b7196ad526c4ec99471225f39ac3ed9705ae0bb567ddb033dc",
+          "validFrom": "Nov  1 21:09:59 2026 GMT",
+          "validTo": "Nov  2 21:09:59 2026 GMT",
+          "subjectAltName": "URI:spiffe://coffee-platform/development/catalog-supplier-sync, DNS:catalog-supplier-sync.development.svc.coffee-platform.internal"
+        },
+        "clientSignedByCA": true,
+        "keyMatch": true
+      },
+      "spkiUnchanged": true,
+      "newExactSAN": true,
+      "newValidNowAnd24h": true
+    },
+    {
+      "runtime": "customer-service",
+      "old": {
+        "ca": {
+          "fingerprint256": "10:F3:13:97:99:BE:89:F7:DE:04:44:07:AD:8D:61:4A:29:8D:A2:C7:97:77:74:E6:EB:80:A8:E0:E8:CC:51:86",
+          "spkiSha256": "91d9992f1da0b0c5243ee24d77521abf8293129fe06eecc4edfbfb95083418ec",
+          "validFrom": "Oct 28 18:47:49 2026 GMT",
+          "validTo": "Oct 28 18:47:49 2027 GMT"
+        },
+        "client": {
+          "fingerprint256": "7B:7A:E2:59:70:D1:6E:92:0E:D0:75:E7:01:3B:E5:3B:7D:23:A3:DA:EC:80:55:1E:0B:B9:D8:10:17:51:08:0D",
+          "spkiSha256": "677c1474d09022c48db63cde935866c9c5c7ad40c84818ea24cb2d6f45dbbbbe",
+          "validFrom": "Oct 28 18:47:49 2026 GMT",
+          "validTo": "Oct 29 18:47:49 2026 GMT",
+          "subjectAltName": "URI:spiffe://coffee-platform/development/customer-service, DNS:customer-service.development.svc.coffee-platform.internal"
+        },
+        "clientSignedByCA": true,
+        "keyMatch": true
+      },
+      "renewed": {
+        "ca": {
+          "fingerprint256": "10:F3:13:97:99:BE:89:F7:DE:04:44:07:AD:8D:61:4A:29:8D:A2:C7:97:77:74:E6:EB:80:A8:E0:E8:CC:51:86",
+          "spkiSha256": "91d9992f1da0b0c5243ee24d77521abf8293129fe06eecc4edfbfb95083418ec",
+          "validFrom": "Oct 28 18:47:49 2026 GMT",
+          "validTo": "Oct 28 18:47:49 2027 GMT"
+        },
+        "client": {
+          "fingerprint256": "30:CF:91:FA:63:4E:2B:64:0A:DF:B0:69:B7:40:A1:69:BD:FB:64:E1:60:76:F5:CE:CD:ED:C0:13:EB:DE:F6:E3",
+          "spkiSha256": "677c1474d09022c48db63cde935866c9c5c7ad40c84818ea24cb2d6f45dbbbbe",
+          "validFrom": "Nov  1 21:09:58 2026 GMT",
+          "validTo": "Nov  2 21:09:58 2026 GMT",
+          "subjectAltName": "URI:spiffe://coffee-platform/development/customer-service, DNS:customer-service.development.svc.coffee-platform.internal"
+        },
+        "clientSignedByCA": true,
+        "keyMatch": true
+      },
+      "spkiUnchanged": true,
+      "newExactSAN": true,
+      "newValidNowAnd24h": true
+    },
+    {
+      "runtime": "edge-gateway",
+      "old": {
+        "ca": {
+          "fingerprint256": "10:F3:13:97:99:BE:89:F7:DE:04:44:07:AD:8D:61:4A:29:8D:A2:C7:97:77:74:E6:EB:80:A8:E0:E8:CC:51:86",
+          "spkiSha256": "91d9992f1da0b0c5243ee24d77521abf8293129fe06eecc4edfbfb95083418ec",
+          "validFrom": "Oct 28 18:47:49 2026 GMT",
+          "validTo": "Oct 28 18:47:49 2027 GMT"
+        },
+        "client": {
+          "fingerprint256": "74:C2:34:5E:95:58:72:26:39:1E:D4:60:8D:D4:D0:C6:92:39:28:21:43:AD:6C:FF:28:F2:5A:BF:78:40:76:0A",
+          "spkiSha256": "2ba68774058b5bcc627696dd889ad8d34a2859bc4b13777454332f451c5d29bb",
+          "validFrom": "Oct 28 18:47:49 2026 GMT",
+          "validTo": "Oct 29 18:47:49 2026 GMT",
+          "subjectAltName": "URI:spiffe://coffee-platform/development/edge-gateway, DNS:edge-gateway.development.svc.coffee-platform.internal"
+        },
+        "clientSignedByCA": true,
+        "keyMatch": true
+      },
+      "renewed": {
+        "ca": {
+          "fingerprint256": "10:F3:13:97:99:BE:89:F7:DE:04:44:07:AD:8D:61:4A:29:8D:A2:C7:97:77:74:E6:EB:80:A8:E0:E8:CC:51:86",
+          "spkiSha256": "91d9992f1da0b0c5243ee24d77521abf8293129fe06eecc4edfbfb95083418ec",
+          "validFrom": "Oct 28 18:47:49 2026 GMT",
+          "validTo": "Oct 28 18:47:49 2027 GMT"
+        },
+        "client": {
+          "fingerprint256": "F3:DA:75:EE:BF:F9:8C:7E:A5:BC:D0:65:B2:0A:B6:71:79:D8:12:44:1D:95:A4:46:72:55:3F:EF:6E:BF:72:AD",
+          "spkiSha256": "2ba68774058b5bcc627696dd889ad8d34a2859bc4b13777454332f451c5d29bb",
+          "validFrom": "Nov  1 21:09:58 2026 GMT",
+          "validTo": "Nov  2 21:09:58 2026 GMT",
+          "subjectAltName": "URI:spiffe://coffee-platform/development/edge-gateway, DNS:edge-gateway.development.svc.coffee-platform.internal"
+        },
+        "clientSignedByCA": true,
+        "keyMatch": true
+      },
+      "spkiUnchanged": true,
+      "newExactSAN": true,
+      "newValidNowAnd24h": true
+    },
+    {
+      "runtime": "orders-aroma-preparation",
+      "old": {
+        "ca": {
+          "fingerprint256": "10:F3:13:97:99:BE:89:F7:DE:04:44:07:AD:8D:61:4A:29:8D:A2:C7:97:77:74:E6:EB:80:A8:E0:E8:CC:51:86",
+          "spkiSha256": "91d9992f1da0b0c5243ee24d77521abf8293129fe06eecc4edfbfb95083418ec",
+          "validFrom": "Oct 28 18:47:49 2026 GMT",
+          "validTo": "Oct 28 18:47:49 2027 GMT"
+        },
+        "client": {
+          "fingerprint256": "DF:F9:BC:4B:DC:BA:45:69:50:05:7E:7D:BE:3C:42:7C:3E:CD:7C:A2:38:C4:EA:C1:66:47:2E:25:70:D1:FD:7A",
+          "spkiSha256": "6e90e0d6ac26cac14e3439de01fcea4aa22662ac30acddb52e8ce7c2d2be10a8",
+          "validFrom": "Oct 28 18:47:49 2026 GMT",
+          "validTo": "Oct 29 18:47:49 2026 GMT",
+          "subjectAltName": "URI:spiffe://coffee-platform/development/orders-aroma-preparation, DNS:orders-aroma-preparation.development.svc.coffee-platform.internal"
+        },
+        "clientSignedByCA": true,
+        "keyMatch": true
+      },
+      "renewed": {
+        "ca": {
+          "fingerprint256": "10:F3:13:97:99:BE:89:F7:DE:04:44:07:AD:8D:61:4A:29:8D:A2:C7:97:77:74:E6:EB:80:A8:E0:E8:CC:51:86",
+          "spkiSha256": "91d9992f1da0b0c5243ee24d77521abf8293129fe06eecc4edfbfb95083418ec",
+          "validFrom": "Oct 28 18:47:49 2026 GMT",
+          "validTo": "Oct 28 18:47:49 2027 GMT"
+        },
+        "client": {
+          "fingerprint256": "09:FE:37:08:95:BE:E9:6A:9D:95:54:29:23:43:71:9D:AA:0C:6D:87:24:A2:03:85:78:B3:B1:DF:C9:AB:25:81",
+          "spkiSha256": "6e90e0d6ac26cac14e3439de01fcea4aa22662ac30acddb52e8ce7c2d2be10a8",
+          "validFrom": "Nov  1 21:09:59 2026 GMT",
+          "validTo": "Nov  2 21:09:59 2026 GMT",
+          "subjectAltName": "URI:spiffe://coffee-platform/development/orders-aroma-preparation, DNS:orders-aroma-preparation.development.svc.coffee-platform.internal"
+        },
+        "clientSignedByCA": true,
+        "keyMatch": true
+      },
+      "spkiUnchanged": true,
+      "newExactSAN": true,
+      "newValidNowAnd24h": true
+    },
+    {
+      "runtime": "orders-service",
+      "old": {
+        "ca": {
+          "fingerprint256": "10:F3:13:97:99:BE:89:F7:DE:04:44:07:AD:8D:61:4A:29:8D:A2:C7:97:77:74:E6:EB:80:A8:E0:E8:CC:51:86",
+          "spkiSha256": "91d9992f1da0b0c5243ee24d77521abf8293129fe06eecc4edfbfb95083418ec",
+          "validFrom": "Oct 28 18:47:49 2026 GMT",
+          "validTo": "Oct 28 18:47:49 2027 GMT"
+        },
+        "client": {
+          "fingerprint256": "C2:EC:36:B6:BC:8D:FB:A7:D5:5D:A6:13:B7:94:F3:35:44:2D:3B:89:6A:E2:F8:E1:01:17:7E:84:A8:33:24:88",
+          "spkiSha256": "674b77292c0ab21fb92433e80589fe80eafee79183f9cdf2b5e2db96dd5b6047",
+          "validFrom": "Oct 28 18:47:49 2026 GMT",
+          "validTo": "Oct 29 18:47:49 2026 GMT",
+          "subjectAltName": "URI:spiffe://coffee-platform/development/orders-service, DNS:orders-service.development.svc.coffee-platform.internal"
+        },
+        "clientSignedByCA": true,
+        "keyMatch": true
+      },
+      "renewed": {
+        "ca": {
+          "fingerprint256": "10:F3:13:97:99:BE:89:F7:DE:04:44:07:AD:8D:61:4A:29:8D:A2:C7:97:77:74:E6:EB:80:A8:E0:E8:CC:51:86",
+          "spkiSha256": "91d9992f1da0b0c5243ee24d77521abf8293129fe06eecc4edfbfb95083418ec",
+          "validFrom": "Oct 28 18:47:49 2026 GMT",
+          "validTo": "Oct 28 18:47:49 2027 GMT"
+        },
+        "client": {
+          "fingerprint256": "28:6E:B9:06:09:61:D9:A1:FD:BA:BB:43:28:5F:C0:1A:7B:33:2A:56:C6:63:81:9B:C1:2D:44:DE:D8:06:EF:DF",
+          "spkiSha256": "674b77292c0ab21fb92433e80589fe80eafee79183f9cdf2b5e2db96dd5b6047",
+          "validFrom": "Nov  1 21:09:59 2026 GMT",
+          "validTo": "Nov  2 21:09:59 2026 GMT",
+          "subjectAltName": "URI:spiffe://coffee-platform/development/orders-service, DNS:orders-service.development.svc.coffee-platform.internal"
+        },
+        "clientSignedByCA": true,
+        "keyMatch": true
+      },
+      "spkiUnchanged": true,
+      "newExactSAN": true,
+      "newValidNowAnd24h": true
+    },
+    {
+      "runtime": "pricing-service",
+      "old": {
+        "ca": {
+          "fingerprint256": "10:F3:13:97:99:BE:89:F7:DE:04:44:07:AD:8D:61:4A:29:8D:A2:C7:97:77:74:E6:EB:80:A8:E0:E8:CC:51:86",
+          "spkiSha256": "91d9992f1da0b0c5243ee24d77521abf8293129fe06eecc4edfbfb95083418ec",
+          "validFrom": "Oct 28 18:47:49 2026 GMT",
+          "validTo": "Oct 28 18:47:49 2027 GMT"
+        },
+        "client": {
+          "fingerprint256": "3C:B4:50:78:1F:D5:0F:B9:00:83:44:24:D9:9C:17:85:6B:71:23:68:FE:45:58:A3:8A:E4:FF:D2:3E:A9:25:B4",
+          "spkiSha256": "fd354ad0ae186244b7f2b28a3f58c83943b769d9ce18666c70c980d111c2b8c7",
+          "validFrom": "Oct 28 18:47:49 2026 GMT",
+          "validTo": "Oct 29 18:47:49 2026 GMT",
+          "subjectAltName": "URI:spiffe://coffee-platform/development/pricing-service, DNS:pricing-service.development.svc.coffee-platform.internal"
+        },
+        "clientSignedByCA": true,
+        "keyMatch": true
+      },
+      "renewed": {
+        "ca": {
+          "fingerprint256": "10:F3:13:97:99:BE:89:F7:DE:04:44:07:AD:8D:61:4A:29:8D:A2:C7:97:77:74:E6:EB:80:A8:E0:E8:CC:51:86",
+          "spkiSha256": "91d9992f1da0b0c5243ee24d77521abf8293129fe06eecc4edfbfb95083418ec",
+          "validFrom": "Oct 28 18:47:49 2026 GMT",
+          "validTo": "Oct 28 18:47:49 2027 GMT"
+        },
+        "client": {
+          "fingerprint256": "10:57:09:08:61:B9:82:5F:0C:34:AB:FA:31:99:3A:E7:B9:F8:E2:99:1E:06:65:35:C7:1D:82:24:E0:34:87:CB",
+          "spkiSha256": "fd354ad0ae186244b7f2b28a3f58c83943b769d9ce18666c70c980d111c2b8c7",
+          "validFrom": "Nov  1 21:09:59 2026 GMT",
+          "validTo": "Nov  2 21:09:59 2026 GMT",
+          "subjectAltName": "URI:spiffe://coffee-platform/development/pricing-service, DNS:pricing-service.development.svc.coffee-platform.internal"
+        },
+        "clientSignedByCA": true,
+        "keyMatch": true
+      },
+      "spkiUnchanged": true,
+      "newExactSAN": true,
+      "newValidNowAnd24h": true
+    },
+    {
+      "runtime": "realtime-gateway",
+      "old": {
+        "ca": {
+          "fingerprint256": "10:F3:13:97:99:BE:89:F7:DE:04:44:07:AD:8D:61:4A:29:8D:A2:C7:97:77:74:E6:EB:80:A8:E0:E8:CC:51:86",
+          "spkiSha256": "91d9992f1da0b0c5243ee24d77521abf8293129fe06eecc4edfbfb95083418ec",
+          "validFrom": "Oct 28 18:47:49 2026 GMT",
+          "validTo": "Oct 28 18:47:49 2027 GMT"
+        },
+        "client": {
+          "fingerprint256": "64:93:73:89:D3:8A:EA:31:0D:A6:E9:A9:E4:9B:27:D8:4A:A0:68:7F:24:BE:F8:E8:F3:98:B5:22:3A:E7:65:08",
+          "spkiSha256": "aefa2f7937c092dae9450f154d182026267adcf30cf4b0eaeccd50f52fe78538",
+          "validFrom": "Oct 28 18:47:50 2026 GMT",
+          "validTo": "Oct 29 18:47:50 2026 GMT",
+          "subjectAltName": "URI:spiffe://coffee-platform/development/realtime-gateway, DNS:realtime-gateway.development.svc.coffee-platform.internal"
+        },
+        "clientSignedByCA": true,
+        "keyMatch": true
+      },
+      "renewed": {
+        "ca": {
+          "fingerprint256": "10:F3:13:97:99:BE:89:F7:DE:04:44:07:AD:8D:61:4A:29:8D:A2:C7:97:77:74:E6:EB:80:A8:E0:E8:CC:51:86",
+          "spkiSha256": "91d9992f1da0b0c5243ee24d77521abf8293129fe06eecc4edfbfb95083418ec",
+          "validFrom": "Oct 28 18:47:49 2026 GMT",
+          "validTo": "Oct 28 18:47:49 2027 GMT"
+        },
+        "client": {
+          "fingerprint256": "D5:3A:85:32:B9:3D:A4:1C:BF:6E:C4:B4:A0:58:75:E9:B4:BB:6B:CA:31:09:09:5C:7F:C6:6E:0A:52:64:08:F1",
+          "spkiSha256": "aefa2f7937c092dae9450f154d182026267adcf30cf4b0eaeccd50f52fe78538",
+          "validFrom": "Nov  1 21:09:59 2026 GMT",
+          "validTo": "Nov  2 21:09:59 2026 GMT",
+          "subjectAltName": "URI:spiffe://coffee-platform/development/realtime-gateway, DNS:realtime-gateway.development.svc.coffee-platform.internal"
+        },
+        "clientSignedByCA": true,
+        "keyMatch": true
+      },
+      "spkiUnchanged": true,
+      "newExactSAN": true,
+      "newValidNowAnd24h": true
+    },
+    {
+      "runtime": "edge-nginx",
+      "old": {
+        "ca": {
+          "fingerprint256": "10:F3:13:97:99:BE:89:F7:DE:04:44:07:AD:8D:61:4A:29:8D:A2:C7:97:77:74:E6:EB:80:A8:E0:E8:CC:51:86",
+          "spkiSha256": "91d9992f1da0b0c5243ee24d77521abf8293129fe06eecc4edfbfb95083418ec",
+          "validFrom": "Oct 28 18:47:49 2026 GMT",
+          "validTo": "Oct 28 18:47:49 2027 GMT"
+        },
+        "client": {
+          "fingerprint256": "52:C4:FF:D4:1F:13:A0:44:1F:6A:25:8E:1C:70:38:70:03:B0:8A:3B:5B:2F:BC:9A:25:D9:81:C1:DF:65:BC:07",
+          "spkiSha256": "84ee88866c6093fc66de8d26bcb8a4c8480647a0bc5505656cad268a62d1bb6e",
+          "validFrom": "Oct 28 18:47:50 2026 GMT",
+          "validTo": "Oct 29 18:47:50 2026 GMT",
+          "subjectAltName": "URI:spiffe://coffee-platform/development/edge-nginx, DNS:edge-nginx.development.svc.coffee-platform.internal"
+        },
+        "public": {
+          "fingerprint256": "0D:D6:15:14:EB:46:99:3B:8D:4D:96:D5:A8:50:E7:D2:EA:21:57:54:B1:9F:A7:23:99:85:73:83:AD:2D:AF:00",
+          "spkiSha256": "907f60b7132b3c2c417b956080d21140dbec58a5833a008e64400cbd8b5538a9",
+          "validFrom": "Sep  6 09:29:11 2026 GMT",
+          "validTo": "Dec  5 09:29:11 2026 GMT",
+          "subjectAltName": "DNS:localhost"
+        },
+        "clientSignedByCA": true,
+        "keyMatchByTrustedMaterializer": true
+      },
+      "renewed": {
+        "ca": {
+          "fingerprint256": "10:F3:13:97:99:BE:89:F7:DE:04:44:07:AD:8D:61:4A:29:8D:A2:C7:97:77:74:E6:EB:80:A8:E0:E8:CC:51:86",
+          "spkiSha256": "91d9992f1da0b0c5243ee24d77521abf8293129fe06eecc4edfbfb95083418ec",
+          "validFrom": "Oct 28 18:47:49 2026 GMT",
+          "validTo": "Oct 28 18:47:49 2027 GMT"
+        },
+        "client": {
+          "fingerprint256": "A1:C9:25:C2:47:DD:8F:9F:CE:6E:3C:61:F0:72:6D:8E:9C:94:BF:19:1A:B5:E4:88:46:58:56:79:73:F0:FE:90",
+          "spkiSha256": "84ee88866c6093fc66de8d26bcb8a4c8480647a0bc5505656cad268a62d1bb6e",
+          "validFrom": "Nov  1 21:09:59 2026 GMT",
+          "validTo": "Nov  2 21:09:59 2026 GMT",
+          "subjectAltName": "URI:spiffe://coffee-platform/development/edge-nginx, DNS:edge-nginx.development.svc.coffee-platform.internal"
+        },
+        "public": {
+          "fingerprint256": "0D:D6:15:14:EB:46:99:3B:8D:4D:96:D5:A8:50:E7:D2:EA:21:57:54:B1:9F:A7:23:99:85:73:83:AD:2D:AF:00",
+          "spkiSha256": "907f60b7132b3c2c417b956080d21140dbec58a5833a008e64400cbd8b5538a9",
+          "validFrom": "Sep  6 09:29:11 2026 GMT",
+          "validTo": "Dec  5 09:29:11 2026 GMT",
+          "subjectAltName": "DNS:localhost"
+        },
+        "clientSignedByCA": true,
+        "keyMatchByTrustedMaterializer": true
+      },
+      "spkiUnchanged": true,
+      "newExactSAN": true,
+      "newValidNowAnd24h": true
+    }
+  ],
+  "privateKeyBytesStored": false,
+  "formalAdmission": false,
+  "cleanupFailures": [],
+  "pinnedReaderImage": {
+    "reference": "node:26.8.1-alpine@sha256:2d984a15c9b54fd0aeb608b8e0d0d83529eb34d2966db27a1fb4f1edc3d298a3",
+    "id": "sha256:89824ea3fb69002f51789e1e40a2f389aeb70dc4b9349ac2b467c5ba11d506cb",
+    "pullNever": true
+  },
+  "baseline": {
+    "images": 41,
+    "containers": 23,
+    "sha256": "378af9e28d1726fa971063a537ba720c6ae52e86aa51e20ebf4afa238ad32d06"
+  },
+  "tmpfsRemoved": true,
+  "baselinePreserved": true,
+  "readerContainersRemoved": true
+}

@@ -31,6 +31,10 @@ mTLS listener и client. Expired/unknown SAN делает readiness 503 на int
 trust surface.
 Для первого Compose launch rotation/revocation применяется повторным
 config-bootstrap и restart всех затронутых runtime; отдельная PKI-служба не нужна.
+Доверенная команда первого обновления:
+`node tools/config-bootstrap/index.mjs --renew-development-transport`.
+Она использует существующую development CA и не заменяет public TLS pair или
+root доверия.
 
 ## Public actor delegation
 

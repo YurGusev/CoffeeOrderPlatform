@@ -91,6 +91,16 @@ node tools/config-bootstrap/index.mjs --runtime customer-service
 secretRef или неверным mode завершается до открытия listener. Общий plaintext
 secret bundle не создаётся.
 
+Для первого Compose launch trusted bootstrap обновляет истёкшие и близкие к
+истечению service certificates командой
+`node tools/config-bootstrap/index.mjs --renew-development-transport`.
+Она разрешена только в development и использует действующую CA из
+зашифрованного `security.serviceTransportAuthority`: существующие private keys,
+SAN и остальные секреты сохраняются. Срок service certificate — 24 часа,
+подготовка обновления начинается за 6 часов; настройки закреплены в
+`config/platform.yaml`. После обновления требуется перезапустить затронутые
+runtime. Автоматический scheduler эта команда не создаёт.
+
 ### Постоянные age identities и резервная копия на этом сервере
 
 Для локального CoffeeOrderPlatform используются три age identities:

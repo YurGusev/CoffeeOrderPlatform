@@ -80,6 +80,42 @@ function run(root, env = {}) {
   );
 }
 
+void test("transport certificate policy enforces the 24-hour lifetime and 6-hour renewal window", async () => {
+  const document = parseYaml(
+    await readFile(join(REPO_ROOT, "config/platform.yaml"), "utf8"),
+    { json: true },
+  );
+  const schema = JSON.parse(
+    await readFile(join(REPO_ROOT, "config/platform.schema.json"), "utf8"),
+  );
+  const nginxSchema = JSON.parse(
+    await readFile(join(REPO_ROOT, "config/nginx-profile.schema.json"), "utf8"),
+  );
+  const ajv = new Ajv2020({ allErrors: true, strict: true });
+  ajv.addSchema(nginxSchema);
+  const validate = ajv.compile(schema);
+  assert.equal(validate(document), true, JSON.stringify(validate.errors));
+  assert.equal(
+    parsePlatformConfig(document).security.certificateValidityHours,
+    24,
+  );
+  assert.equal(
+    parsePlatformConfig(document).security.certificateRenewBeforeHours,
+    6,
+  );
+  for (const [field, invalidValues] of [
+    ["certificateValidityHours", [undefined, 0, 23, 25, "24"]],
+    ["certificateRenewBeforeHours", [undefined, 0, 5, 7, "6"]],
+  ]) {
+    for (const value of invalidValues) {
+      const candidate = structuredClone(document);
+      candidate.security[field] = value;
+      assert.equal(validate(candidate), false);
+      assert.throws(() => parsePlatformConfig(candidate), PlatformConfigError);
+    }
+  }
+});
+
 void test("GREEN: platform parser preserves a null or fully explicit browser OIDC profile", async () => {
   const document = parseYaml(
     await readFile(join(REPO_ROOT, "config/platform.yaml"), "utf8"),

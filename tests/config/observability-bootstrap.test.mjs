@@ -64,6 +64,7 @@ import {
   materializeCollectorSecrets,
   materializeGrafanaAdminSecret,
   provisionDevelopmentGrafanaAdmin,
+  renewDevelopmentTransportSecrets,
   materializeRuntimeSecrets,
   openAromaSandboxMigrator,
   probeCanonicalMigrationTarget,
@@ -1173,6 +1174,297 @@ void test("unprovisioned collector and admin credentials fail closed without wri
     await rm(fixtureRoot, { recursive: true, force: true });
     await rm(collectorDir, { recursive: true, force: true });
     await rm(adminDir, { recursive: true, force: true });
+  }
+});
+
+void test("development transport renewal preserves authority and all other secrets", async (t) => {
+  const fixture = await createSecretMaterializationFixture();
+  const bundlePath = join(fixture.root, "secrets/platform.secrets.sops.yaml");
+  const configPath = join(fixture.root, "config/platform.yaml");
+  const caKeyPath = join(fixture.root, "ca.key");
+  const caPath = join(fixture.root, "ca.crt");
+  const leafKeyPath = join(fixture.root, "leaf.key");
+  const csrPath = join(fixture.root, "leaf.csr");
+  const certPath = join(fixture.root, "leaf.crt");
+  const openssl = (args) => execFileSync("openssl", args, { stdio: "ignore" });
+  try {
+    const originalConfig = await readFile(configPath, "utf8");
+    const originalCiphertext = await readFile(bundlePath);
+    const tmpBefore = (await readdir("/dev/shm")).filter((name) =>
+      name.startsWith("coffee-development-transport-"),
+    );
+    for (const environment of ["staging", "production"]) {
+      const config = parseYaml(originalConfig, { json: true });
+      config.environment = environment;
+      config.telemetry.releaseDigest = `sha256:${"a".repeat(64)}`;
+      await writeFile(configPath, dumpYaml(config, { lineWidth: -1 }));
+      await assert.rejects(
+        renewDevelopmentTransportSecrets({
+          root: fixture.root,
+          env: fixture.env,
+        }),
+        /restricted to development/u,
+      );
+      assert.equal(
+        await stat(join(fixture.bin, "sops-invoked")).catch(() => null),
+        null,
+      );
+      assert.deepEqual(await readFile(bundlePath), originalCiphertext);
+      assert.deepEqual(
+        (await readdir("/dev/shm")).filter((name) =>
+          name.startsWith("coffee-development-transport-"),
+        ),
+        tmpBefore,
+      );
+    }
+    await writeFile(configPath, originalConfig);
+    openssl([
+      "req",
+      "-x509",
+      "-newkey",
+      "ed25519",
+      "-nodes",
+      "-keyout",
+      caKeyPath,
+      "-out",
+      caPath,
+      "-subj",
+      "/CN=fixture CA",
+      "-days",
+      "365",
+      "-addext",
+      "basicConstraints=critical,CA:TRUE",
+    ]);
+    openssl(["genpkey", "-algorithm", "ED25519", "-out", leafKeyPath]);
+    const caPem = await readFile(caPath, "utf8");
+    const caKeyPem = await readFile(caKeyPath, "utf8");
+    const keyPem = await readFile(leafKeyPath, "utf8");
+    const issue = async (name, san) => {
+      openssl([
+        "req",
+        "-new",
+        "-key",
+        leafKeyPath,
+        "-out",
+        csrPath,
+        "-subj",
+        `/CN=${name}`,
+        "-addext",
+        `subjectAltName=${san}`,
+        "-addext",
+        "basicConstraints=critical,CA:FALSE",
+      ]);
+      openssl([
+        "x509",
+        "-req",
+        "-in",
+        csrPath,
+        "-CA",
+        caPath,
+        "-CAkey",
+        caKeyPath,
+        "-set_serial",
+        `0x${randomBytes(16).toString("hex")}`,
+        "-days",
+        "0",
+        "-copy_extensions",
+        "copy",
+        "-out",
+        certPath,
+      ]);
+      return readFile(certPath, "utf8");
+    };
+    const plain = JSON.parse(await readFile(fixture.plainPath, "utf8"));
+    const development = plain.environments.development;
+    development.bootstrap.internalCaPrivateKey = keyPem;
+    development.security.serviceTransportAuthority = JSON.stringify({
+      certificatePem: caPem,
+      privateKeyPem: caKeyPem,
+    });
+    const config = await loadPlatformConfig(fixture.root);
+    const runtimes = [...Object.keys(config.services), "edge-nginx"];
+    assert.equal(runtimes.length, 15);
+    for (const runtime of runtimes) {
+      const certPem = await issue(
+        runtime,
+        `URI:spiffe://coffee-platform/development/${runtime},DNS:${runtime}.development.svc.coffee-platform.internal`,
+      );
+      development.security.serviceTransportKeys[runtime] = JSON.stringify({
+        caPem,
+        certPem,
+        keyPem,
+      });
+    }
+    const before = structuredClone(plain);
+    await writeFile(fixture.plainPath, JSON.stringify(plain));
+    await installFakeMigrationSops(fixture);
+    const now = Date.now();
+    let checkedNow = now + 5 * 60_000;
+    t.mock.method(Date, "now", () => checkedNow);
+    const originalEncrypted = JSON.parse(await readFile(bundlePath, "utf8"));
+    for (const invalid of [
+      "invalid JSON",
+      JSON.stringify({ certificatePem: caPem, privateKeyPem: keyPem }),
+    ]) {
+      development.security.serviceTransportAuthority = invalid;
+      await writeFile(fixture.plainPath, JSON.stringify(plain));
+      await assert.rejects(
+        renewDevelopmentTransportSecrets({
+          root: fixture.root,
+          env: fixture.env,
+        }),
+        /CONFIG-DEVELOPMENT-CA/u,
+      );
+    }
+    development.security.serviceTransportAuthority =
+      before.environments.development.security.serviceTransportAuthority;
+    const ref = development.security.serviceTransportKeys["customer-service"];
+    for (const [commonName, san] of [
+      [
+        "customer-service",
+        "URI:spiffe://coffee-platform/development/other,DNS:customer-service.development.svc.coffee-platform.internal",
+      ],
+      [
+        "customer-service.development.svc.coffee-platform.internal",
+        "URI:spiffe://coffee-platform/development/customer-service",
+      ],
+      [
+        "customer-service",
+        "URI:spiffe://coffee-platform/development/customer-service,DNS:*.development.svc.coffee-platform.internal",
+      ],
+    ]) {
+      const invalid = JSON.parse(ref);
+      invalid.certPem = await issue(commonName, san);
+      development.security.serviceTransportKeys["customer-service"] =
+        JSON.stringify(invalid);
+      await writeFile(fixture.plainPath, JSON.stringify(plain));
+      await assert.rejects(
+        renewDevelopmentTransportSecrets({
+          root: fixture.root,
+          env: fixture.env,
+        }),
+        /CONFIG-DEVELOPMENT-LEAF/u,
+      );
+    }
+    const foreign = JSON.parse(ref);
+    foreign.caPem = foreign.certPem;
+    development.security.serviceTransportKeys["customer-service"] =
+      JSON.stringify(foreign);
+    await writeFile(fixture.plainPath, JSON.stringify(plain));
+    await assert.rejects(
+      renewDevelopmentTransportSecrets({
+        root: fixture.root,
+        env: fixture.env,
+      }),
+      /CONFIG-DEVELOPMENT-CA/u,
+    );
+    development.security.serviceTransportKeys["customer-service"] = ref;
+    await writeFile(fixture.plainPath, JSON.stringify(plain));
+    checkedNow = now + 400 * 86_400_000;
+    await assert.rejects(
+      renewDevelopmentTransportSecrets({
+        root: fixture.root,
+        env: fixture.env,
+      }),
+      /CONFIG-DEVELOPMENT-CA/u,
+    );
+    checkedNow = now + 5 * 60_000;
+    assert.deepEqual(await readFile(bundlePath), originalCiphertext);
+    const result = await renewDevelopmentTransportSecrets({
+      root: fixture.root,
+      env: fixture.env,
+    });
+    assert.equal(result.changed, true);
+    assert.deepEqual(result.updatedRuntimes, runtimes);
+    const saved = JSON.parse(
+      execFileSync("sops", ["--decrypt", bundlePath], {
+        env: fixture.env,
+        encoding: "utf8",
+      }),
+    );
+    const normalized = structuredClone(saved);
+    for (const runtime of runtimes) {
+      const oldMaterial = JSON.parse(
+        before.environments.development.security.serviceTransportKeys[runtime],
+      );
+      const material = JSON.parse(
+        saved.environments.development.security.serviceTransportKeys[runtime],
+      );
+      const certificate = new X509Certificate(material.certPem);
+      assert.notEqual(material.certPem, oldMaterial.certPem);
+      assert.equal(material.keyPem, oldMaterial.keyPem);
+      assert.equal(material.caPem, oldMaterial.caPem);
+      assert.equal(
+        certificate.subjectAltName,
+        new X509Certificate(oldMaterial.certPem).subjectAltName,
+      );
+      assert.equal(
+        certificate.verify(new X509Certificate(caPem).publicKey),
+        true,
+      );
+      assert.equal(
+        Date.parse(certificate.validTo) - Date.parse(certificate.validFrom),
+        24 * 3_600_000,
+      );
+      normalized.environments.development.security.serviceTransportKeys[
+        runtime
+      ] = JSON.stringify({ ...material, certPem: oldMaterial.certPem });
+    }
+    assert.deepEqual(normalized, before);
+    assert.deepEqual(
+      JSON.parse(await readFile(bundlePath, "utf8")).sops.age,
+      originalEncrypted.sops.age,
+    );
+    assert.equal((await readFile(bundlePath, "utf8")).includes(keyPem), false);
+    assert.equal(
+      (
+        await renewDevelopmentTransportSecrets({
+          root: fixture.root,
+          env: fixture.env,
+        })
+      ).changed,
+      false,
+    );
+    checkedNow = now + 18 * 3_600_000 - 120_000;
+    assert.equal(
+      (
+        await renewDevelopmentTransportSecrets({
+          root: fixture.root,
+          env: fixture.env,
+        })
+      ).changed,
+      false,
+    );
+    checkedNow = now + 18 * 3_600_000 + 120_000;
+    assert.deepEqual(
+      (
+        await renewDevelopmentTransportSecrets({
+          root: fixture.root,
+          env: fixture.env,
+        })
+      ).updatedRuntimes,
+      runtimes,
+    );
+    await installFakeMigrationSops(fixture, {
+      mutateBundleDuringEncrypt: "changed fixture\n",
+    });
+    await assert.rejects(
+      renewDevelopmentTransportSecrets({
+        root: fixture.root,
+        env: fixture.env,
+      }),
+      /CONFIG-G08-BUNDLE_CHANGED/u,
+    );
+    assert.equal(await readFile(bundlePath, "utf8"), "changed fixture\n");
+    assert.deepEqual(
+      (await readdir("/dev/shm")).filter((name) =>
+        name.startsWith("coffee-development-transport-"),
+      ),
+      tmpBefore,
+    );
+  } finally {
+    await rm(fixture.root, { recursive: true, force: true });
+    await rm(fixture.bin, { recursive: true, force: true });
   }
 });
 
@@ -6230,7 +6522,7 @@ async function createSecretMaterializationFixture() {
     await writeFile(
       `${root}/secrets/platform.secrets.sops.yaml`,
       JSON.stringify(encrypted),
-      "utf8",
+      { encoding: "utf8", mode: 0o600 },
     );
     const decrypted = structuredClone(encrypted);
     delete decrypted.sops;

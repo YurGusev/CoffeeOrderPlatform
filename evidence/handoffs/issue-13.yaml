@@ -1,5 +1,5 @@
 issue: 13
-baseCommit: e06c5d478123d6dc2908739882171fbf5c06fa3a
+baseCommit: a572ef1899678381e6a27d8654cd4f0fc6b5428f
 status: source-descriptor-before-formal-verification
 asOfUtc: "2026-11-01T20:34:49.562581+00:00"
 inputs:
@@ -127,6 +127,10 @@ inputs:
     acceptedMergeCommit: e06c5d478123d6dc2908739882171fbf5c06fa3a
     artifact: evidence/handoffs/issue-252.yaml
     sha256: 8825748ec8290b175c1cadb52a63cefa400a0e1e7914e92f7d8e33de1cfa3222
+  - issue: 255
+    acceptedMergeCommit: a572ef1899678381e6a27d8654cd4f0fc6b5428f
+    artifact: evidence/handoffs/issue-255.yaml
+    sha256: bee4c927421633aa57941fa59596e4fcd6e84096e6a1883b387e7554e245895b
 historicalAcceptance:
   issue: 14
   acceptedMergeCommit: 9b5a320b936cecafcb74de2d6a1253e3d0a155ce
@@ -140,7 +144,7 @@ historicalAcceptance:
     не создаётся задним числом.
 outputs:
   - artifact: config/platform.yaml
-    sha256: ef0304a8a8444311527be0126539a471673cc3b8eb17698784a9fbe151f4f7a1
+    sha256: 2a44852027aa4758d2ea88ef42f19451bd75451159078946c5861bae2899e0a1
     consumers:
       - 1
   - artifact: docs/launch/13_DELIVERY_DEPENDENCY_GRAPH.md
@@ -180,7 +184,7 @@ outputs:
     consumers:
       - 1
   - artifact: tests/config/observability-bootstrap.test.mjs
-    sha256: 92565c48d4e02cb78bcbbb2e1a55171488ed755172e07425201e1f606fcaac68
+    sha256: 9c48e9599d174e309d5f6bd79f0b35471db840c1e14663a6dd1ebf0d17f53885
     consumers:
       - 1
   - artifact: tests/observability/alerts.test.mjs
@@ -494,6 +498,7 @@ consumerContract:
     policy/key/flag child и G18 baseline flag child с проверенной lineage. Лимиты и provider scope сохранены;
     exact parent G12 product images, отдельная BOM/image-ID проверка fixture PostgreSQL."
 limitations:
+  - После объединения принятого #255 окончательный SHA ещё не создан; CI, G12, SSE qualification и полный G00–G19 для него не выполнялись.
   - "Исправление G18 parent failure receipt локально проверено, но не является runtime admission; qualification Source 0dc прервана владельцем через SIGTERM до завершения и не является PASS или sealed. Новому frozen Source нужны свежие CI, G12, SSE qualification и полный G00–G19."
   - "Full run 2c4250a/185412: G00–G09 и G12 PASS, G10 FAIL при проверке захвата логов; G11 и G13–G18 NOT_RUN, G19 REPORT PASS не является admission. Локальный fix захвата fd 1 проверен на 9/9 существующих live tests; окончательному Source нужны собственные CI, G12, SSE qualification и полный G00–G19."
   - "Компонентный G12 5cb6e89 прерван по запросу владельца; отдельный G16 stub и CLI startup не являются runtime admission. Будущему замороженному Source нужны собственные CI, G12, SSE qualification и полный G00–G19."
