@@ -1,7 +1,7 @@
 issue: 13
 baseCommit: e06c5d478123d6dc2908739882171fbf5c06fa3a
 status: source-descriptor-before-formal-verification
-asOfUtc: "2026-11-01T10:24:26.853725+00:00"
+asOfUtc: "2026-11-01T11:29:25.208766+00:00"
 inputs:
   - issue: 2
     acceptedMergeCommit: 327638d4494269a151ee7c0ac945ac0053c3e0d4
@@ -192,7 +192,7 @@ outputs:
     consumers:
       - 1
   - artifact: tests/realtime/fixtures/harness.test.mjs
-    sha256: fce5e798dd548f976f6c711b5912becbb7f4d508598c8896211f0b75cd7c6e53
+    sha256: b825ae27a33b619c6ef43b7e29355b0a026d4f89347156ec1cb68c8e53003719
     consumers:
       - 1
   - artifact: tools/compose-smoke.mjs
@@ -261,6 +261,14 @@ outputs:
       - 1
   - artifact: evidence/launch-preparation/2026-11-01/build-context-storage.md
     sha256: a896674638eb84343e385af3a4a8272be4ee6919cc67b9345bed208c15629071
+    consumers:
+      - 1
+  - artifact: tests/realtime/soak.test.mjs
+    sha256: 5005add43e6ea251ca6342e5bed32f23067ddd5db9cf14e3e5dab1a3d62a98be
+    consumers:
+      - 1
+  - artifact: evidence/launch-preparation/2026-11-01/driver-mounts.md
+    sha256: 05e51fe611474585634a1576d6b9f42208645c578e8f194e8db1c29fbecda6fd
     consumers:
       - 1
 verification:
@@ -407,6 +415,18 @@ verification:
   - command: node --test tests/tools/security-scan.test.mjs
     result: "PASS17/17,37.715s: separate source/DB/OCI roots, original lock, PASS/lateFAIL/SIGTERM cleanup, cleanup error blocks; synthetic Docker"
     logSha256: 0f523607611073c48f08c7c32eca248de0f2ba17730f14e20d5a629402de4127
+  - command: standalone G12 883c207 run103433
+    result: "PASS 1696.201 s, 46 reports/22 images; component only, не admission для последующего Source"
+  - command: qualification 883c207 i12-410581156d89479b
+    result: "FAIL до нагрузки, durationMs=0, Docker exit 125; четыре native image ID совпали с G12; отдельная ручная очистка, два image refs сохранены при неизвестном владении"
+    artifact: evidence/launch-preparation/2026-11-01/driver-mounts.md
+  - command: "node --test --test-name-pattern='product launch scopes fixture mounts and proves role-local read access' tests/realtime/fixtures/harness.test.mjs"
+    result: "PASS 1/1, 0 skipped, 422.518 ms; на parent 883 с двумя локальными WIP файлами, не на будущем SHA"
+    logSha256: c77676b627ca058b503cf5b3e2426c35ebcf58edd1fb6e763907e2ba2d06feaf
+  - command: Docker synthetic public driver bind mount diagnostic
+    result: "PASS; пять actual mounts, readonly/nonroot/identity/hash и own cleanup; parent 883 с двумя локальными WIP файлами, не SSE qualification"
+    artifact: evidence/launch-preparation/2026-11-01/driver-mounts.md
+    logSha256: a2dfd73f000895539dc59bbf96e0cef5316a3c533669be8e2a135ac7bbd2286b
 consumerContract:
   consumer: 1
   admission:
@@ -435,6 +455,7 @@ consumerContract:
     policy/key/flag child и G18 baseline flag child с проверенной lineage. Лимиты и provider scope сохранены;
     exact parent G12 product images, отдельная BOM/image-ID проверка fixture PostgreSQL."
 limitations:
+  - "Source 883 standalone G12 PASS; qualification FAIL до нагрузки с сохранённым отрицательным результатом. Синтетический Docker-пробник WIP не является qualification или полным admission; окончательному Source нужны собственные CI, G12, SSE и G00–G19."
   - "Принятый #252 содержит парное подтверждение edge-gateway на Source 8009671; это не полный G12, SSE qualification или G00–G19 issue13 на новом окончательном Source."
   - "477 G12 component PASS не является SSE/full admission: qualification до измерения обнаружила реальные different COPY layers. Source context возвращён в originaltmpdir; новый frozen SHA требует собственные CI/G12/exact4IDs/qualification/G00–G19. Никакие thresholds/image bindings не ослаблены."
   - "Standalone G12 1e95d5c PASS за1462.207s не переносится на новый source. SSE qualification прежнего SHA не началась: отрицательные operator preflights и nested fixture false positive сохранены; own cleanup выполнен отдельно. Новый Source требует собственные CI/G12/qualification/G00–G19."

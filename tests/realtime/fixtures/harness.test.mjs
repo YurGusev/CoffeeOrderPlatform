@@ -3490,11 +3490,11 @@ void test("product launch scopes fixture mounts and proves role-local read acces
                 driverProbeInputs.platformBytes ?? driverPlatformBytes,
               ],
               [
-                "/fixture/database-ownership.json",
+                "/run/coffee-launch/database-ownership.json",
                 driverProbeInputs.ownershipBytes ?? driverOwnershipBytes,
               ],
               [
-                "/fixture/launch-context.json",
+                "/run/coffee-launch/context.json",
                 Buffer.from(
                   JSON.stringify(
                     driverProbeInputs.launchContext ?? driverLaunchContext,
@@ -3608,13 +3608,13 @@ void test("product launch scopes fixture mounts and proves role-local read acces
         {
           Type: "bind",
           Source: "/candidate/config/database-ownership.json",
-          Destination: "/fixture/database-ownership.json",
+          Destination: "/run/coffee-launch/database-ownership.json",
           RW: false,
         },
         {
           Type: "bind",
           Source: "/evidence/context.json",
-          Destination: "/fixture/launch-context.json",
+          Destination: "/run/coffee-launch/context.json",
           RW: false,
         },
       ].sort((a, b) => a.Destination.localeCompare(b.Destination));
@@ -3835,14 +3835,22 @@ void test("product launch scopes fixture mounts and proves role-local read acces
   }
   const launchDriver = await invoke("driver", expected("driver", true), true);
   assert.equal(launchDriver.execCalls.length, 1);
+  const driverMounts = launchDriver.calls[0].filter((arg) =>
+    arg.startsWith("type=bind,"),
+  );
+  assert.equal(driverMounts.length, 5);
+  assert.ok(
+    driverMounts.every((mount) => !mount.includes(",dst=/fixture/")),
+    "driver file mounts must not be nested inside the read-only fixture mount",
+  );
   assert.deepEqual(
     JSON.parse(JSON.stringify(launchDriver.receipts[0].scopedMounts)),
     {
       readOnly: true,
       readablePaths: [
         "/fixture/platform.yaml",
-        "/fixture/database-ownership.json",
-        "/fixture/launch-context.json",
+        "/run/coffee-launch/database-ownership.json",
+        "/run/coffee-launch/context.json",
       ],
       configSha256: driverConfigSha256,
       databaseOwnershipSha256: driverOwnershipSha256,
@@ -3851,12 +3859,12 @@ void test("product launch scopes fixture mounts and proves role-local read acces
   );
   assert.ok(
     launchDriver.calls[0].includes(
-      "type=bind,src=/candidate/config/database-ownership.json,dst=/fixture/database-ownership.json,readonly",
+      "type=bind,src=/candidate/config/database-ownership.json,dst=/run/coffee-launch/database-ownership.json,readonly",
     ),
   );
   assert.ok(
     launchDriver.calls[0].includes(
-      "type=bind,src=/evidence/context.json,dst=/fixture/launch-context.json,readonly",
+      "type=bind,src=/evidence/context.json,dst=/run/coffee-launch/context.json,readonly",
     ),
   );
   await assert.rejects(
@@ -3868,6 +3876,12 @@ void test("product launch scopes fixture mounts and proves role-local read acces
   await assert.rejects(
     invoke("driver", expected("driver", true), true, {
       platformBytes: Buffer.from("changed child config\n"),
+    }),
+    /driver fixture mount verification failed/u,
+  );
+  await assert.rejects(
+    invoke("driver", expected("driver", true), true, {
+      ownershipBytes: Buffer.from("changed ownership\n"),
     }),
     /driver fixture mount verification failed/u,
   );
