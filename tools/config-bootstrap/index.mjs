@@ -13,9 +13,11 @@ import {
   chmod,
   lstat,
   mkdir,
+  mkdtemp,
   open,
   readFile,
   realpath,
+  rm,
   statfs,
   rename,
   unlink,
@@ -1314,6 +1316,231 @@ async function writeMigrationEncryptedBundle(
         fail("CONFIG-G08-BUNDLE_TEMP", "G08 temporary bundle cleanup failed");
     });
   }
+}
+
+export async function renewDevelopmentTransportSecrets({
+  root = REPO_ROOT,
+  env = process.env,
+} = {}) {
+  assertLocatorEnv(env, true);
+  const config = await loadPlatformConfig(
+    root,
+    env.COFFEE_CONFIG_FILE
+      ? resolve(env.COFFEE_CONFIG_FILE)
+      : join(root, "config/platform.yaml"),
+  );
+  if (config.environment !== "development")
+    fail(
+      "CONFIG-DEVELOPMENT-TRANSPORT",
+      "transport renewal is restricted to development",
+    );
+  const snapshot = await captureMigrationBundleSnapshot(root);
+  const { decrypted } = await readMigrationSecretBundle(root, env);
+  await assertMigrationBundleSnapshot(snapshot);
+  const secrets = decrypted.environments.development;
+  const materials = [];
+  const upstreamNames = Object.fromEntries(
+    Object.values(config.nginxTransport.upstreams).map(
+      ({ host, serverName }) => [host, serverName],
+    ),
+  );
+  const exactDns = { subject: "never", wildcards: false };
+  let authority;
+  let authorityPem;
+  let authorityKeyPem;
+  try {
+    const issuedAuthority = JSON.parse(
+      secretValueAt(secrets, "security.serviceTransportAuthority"),
+    );
+    if (
+      !issuedAuthority ||
+      Object.keys(issuedAuthority).sort().join(",") !==
+        "certificatePem,privateKeyPem"
+    )
+      fail("CONFIG-DEVELOPMENT-CA", "development CA authority is invalid");
+    authorityPem = issuedAuthority.certificatePem;
+    authorityKeyPem = issuedAuthority.privateKeyPem;
+    authority = new X509Certificate(authorityPem);
+    const key = createPrivateKey(authorityKeyPem);
+    if (
+      !authority.ca ||
+      key.asymmetricKeyType !== "ed25519" ||
+      !authority.checkPrivateKey(key) ||
+      !authority.checkIssued(authority) ||
+      !authority.verify(authority.publicKey) ||
+      Date.now() < Date.parse(authority.validFrom) ||
+      Date.now() >= Date.parse(authority.validTo)
+    )
+      fail(
+        "CONFIG-DEVELOPMENT-CA",
+        "development CA key or validity is invalid",
+      );
+    for (const runtime of [...Object.keys(config.services), "edge-nginx"]) {
+      const ref = `security.serviceTransportKeys.${runtime}`;
+      const material = JSON.parse(secretValueAt(secrets, ref));
+      if (
+        !material ||
+        Object.keys(material).sort().join(",") !== "caPem,certPem,keyPem"
+      )
+        fail(
+          "CONFIG-DEVELOPMENT-LEAF",
+          `${runtime}: transport material is invalid`,
+        );
+      const ca = new X509Certificate(material.caPem);
+      if (ca.fingerprint256 !== authority.fingerprint256)
+        fail(
+          "CONFIG-DEVELOPMENT-CA",
+          `${runtime}: CA fingerprint ${ca.fingerprint256} differs from ${authority.fingerprint256}`,
+        );
+      const certificate = new X509Certificate(material.certPem);
+      const key = createPrivateKey(material.keyPem);
+      const identitySans = (
+        certificate.subjectAltName?.split(",").map((value) => value.trim()) ??
+        []
+      ).filter((value) => value.startsWith("URI:"));
+      if (
+        certificate.ca ||
+        !certificate.checkIssued(authority) ||
+        !certificate.verify(authority.publicKey) ||
+        key.asymmetricKeyType !== "ed25519" ||
+        !certificate.checkPrivateKey(key) ||
+        Date.now() < Date.parse(certificate.validFrom) ||
+        identitySans.length !== 1 ||
+        identitySans[0] !==
+          `URI:spiffe://coffee-platform/development/${runtime}` ||
+        !certificate.checkHost(
+          `${runtime}.development.svc.coffee-platform.internal`,
+          exactDns,
+        ) ||
+        (upstreamNames[runtime] &&
+          !certificate.checkHost(upstreamNames[runtime], exactDns))
+      )
+        fail(
+          "CONFIG-DEVELOPMENT-LEAF",
+          `${runtime}: certificate identity, key or signature is invalid`,
+        );
+      materials.push({ runtime, ref, material, certificate });
+    }
+  } catch (error) {
+    if (error instanceof ConfigError) throw error;
+    fail(
+      "CONFIG-DEVELOPMENT-CA",
+      "development CA or scoped transport material is invalid",
+    );
+  }
+  const due = materials.filter(
+    ({ certificate }) =>
+      Date.parse(certificate.validTo) - Date.now() <=
+      config.security.certificateRenewBeforeHours * 3_600_000,
+  );
+  if (due.length === 0) {
+    await assertMigrationBundleSnapshot(snapshot);
+    return {
+      changed: false,
+      authorityFingerprint: authority.fingerprint256,
+      updatedRuntimes: [],
+    };
+  }
+  if (
+    Date.parse(authority.validTo) - Date.now() <
+    config.security.certificateValidityHours * 3_600_000 + 60_000
+  )
+    fail(
+      "CONFIG-DEVELOPMENT-CA",
+      "development CA expires too soon to issue a leaf",
+    );
+  const temporary = await mkdtemp("/dev/shm/coffee-development-transport-");
+  try {
+    await ensurePrivateSecretDirectory(temporary);
+    if ((await statfs(temporary)).type !== 0x01021994)
+      fail("CONFIG-DEVELOPMENT-TRANSPORT", "private tmpfs is required");
+    const caPath = join(temporary, "ca.pem");
+    const caKeyPath = join(temporary, "ca.key");
+    const keyPath = join(temporary, "leaf.key");
+    const certPath = join(temporary, "leaf.crt");
+    const csrPath = join(temporary, "leaf.csr");
+    const resultPath = join(temporary, "signed.crt");
+    await writePrivateSecret(caPath, authorityPem);
+    await writePrivateSecret(caKeyPath, authorityKeyPem);
+    const openssl = (args) =>
+      execFileSync("openssl", args, { env, stdio: "ignore", timeout: 30_000 });
+    for (const { ref, material, certificate } of due) {
+      await writePrivateSecret(keyPath, material.keyPem);
+      await writePrivateSecret(certPath, material.certPem);
+      openssl([
+        "x509",
+        "-in",
+        certPath,
+        "-x509toreq",
+        "-signkey",
+        keyPath,
+        "-copy_extensions",
+        "copy",
+        "-out",
+        csrPath,
+      ]);
+      openssl([
+        "x509",
+        "-req",
+        "-in",
+        csrPath,
+        "-CA",
+        caPath,
+        "-CAkey",
+        caKeyPath,
+        "-set_serial",
+        `0x${randomBytes(16).toString("hex")}`,
+        "-days",
+        "1",
+        "-copy_extensions",
+        "copy",
+        "-out",
+        resultPath,
+      ]);
+      const certPem = await readFile(resultPath, "utf8");
+      const signed = new X509Certificate(certPem);
+      const issuedNow = Date.now();
+      if (
+        signed.ca ||
+        !signed.checkIssued(authority) ||
+        !signed.verify(authority.publicKey) ||
+        !signed.checkPrivateKey(createPrivateKey(material.keyPem)) ||
+        issuedNow < Date.parse(signed.validFrom) ||
+        issuedNow >= Date.parse(signed.validTo) ||
+        Date.parse(signed.validTo) > Date.parse(authority.validTo) ||
+        Date.parse(signed.validTo) - Date.parse(signed.validFrom) !==
+          config.security.certificateValidityHours * 3_600_000 ||
+        signed.subjectAltName !== certificate.subjectAltName
+      )
+        fail("CONFIG-DEVELOPMENT-LEAF", "issued leaf failed verification");
+      setSecretAt(secrets, ref, JSON.stringify({ ...material, certPem }));
+    }
+  } catch (error) {
+    if (error instanceof ConfigError) throw error;
+    fail(
+      "CONFIG-DEVELOPMENT-TRANSPORT",
+      "development transport renewal failed",
+    );
+  } finally {
+    await rm(temporary, { recursive: true, force: true });
+  }
+  const ciphertext = encryptMigrationSecretBundle(
+    root,
+    env,
+    snapshot,
+    decrypted,
+  );
+  const result = await writeMigrationEncryptedBundle(snapshot, ciphertext, {
+    root,
+    env,
+    expectedPlaintext: decrypted,
+  });
+  return {
+    changed: true,
+    authorityFingerprint: authority.fingerprint256,
+    updatedRuntimes: due.map(({ runtime }) => runtime),
+    encryptedSha256: result.sha256,
+  };
 }
 
 async function readSavedMigrationSecretBundle(root, env, expectedSnapshot) {
@@ -3993,8 +4220,20 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const runtimeIndex = process.argv.indexOf("--runtime");
   const runtime =
     runtimeIndex >= 0 ? process.argv[runtimeIndex + 1] : undefined;
+  const renewDevelopmentTransport = process.argv.includes(
+    "--renew-development-transport",
+  );
   try {
-    if (!runtime) {
+    if (renewDevelopmentTransport && runtimeIndex >= 0) {
+      fail(
+        "CONFIG-DEVELOPMENT-TRANSPORT",
+        "renewal and runtime are separate operations",
+      );
+    } else if (renewDevelopmentTransport) {
+      console.log(
+        JSON.stringify(await renewDevelopmentTransportSecrets({ root })),
+      );
+    } else if (!runtime) {
       await checkBootstrap(root);
       console.log(
         "config-bootstrap: config and encrypted secret checks passed",
