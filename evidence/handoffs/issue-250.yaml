@@ -1,0 +1,64 @@
+issue: 250
+baseCommit: a37789c2bb13775f96f5590fb74b6e9a8f51aca2
+status: implemented-awaiting-ci
+inputs:
+  - issue: 61
+    acceptedMergeCommit: d1f462838da15b25049842a241f4e3f6f75a6b4f
+    artifact: evidence/handoffs/issue-61.yaml
+    sha256: 3c83d9e42870a35baeb2f12c7dfb62901b316bab536a54a3dadd099ca172459b
+outputs:
+  - artifact: tests/runtime/lifecycle.test.mjs
+    sha256: b96ae83d91a6ddad2368915309be50bfd8ea3ddac054edf2b0c2ef6c1d2d902e
+    consumers:
+      - 13
+behavior:
+  - Дочерний runtime сообщает о готовности по IPC после успешного startRuntime; до этого сигналы не отправляются.
+  - Ожидание готовности ограничено существующим в тестовом файле health.startupGraceMs 30000 ms; ранний exit или ошибка child завершают тест ошибкой.
+  - SIGTERM и SIGINT отправляются без sleep и подтверждаются отдельными IPC-сообщениями; shutdownGraceMs остаётся 50 ms.
+  - При подтверждении каждого сигнала проверяется наличие именно сохранённого до установки тестового listener обработчика runtime.
+  - Сохранены ограничения ожидания завершения и проверки exit code 1, ровно одного stop hook, destroy hook и shutdown log; после exit ожидается закрытие потоков child.
+verification:
+  - command: pnpm install --offline --frozen-lockfile --ignore-scripts
+    result: PASS, 7.46 s, под общей heavy lease.
+    logSha256: d771a8444b7160b990a6005d93b7c41270bda588a812f65d563932517ddab488
+  - command: pnpm exec tsc -b --pretty false
+    result: PASS, 12.36 s, под общей heavy lease.
+    logSha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+  - command: >-
+      node --test --test-name-pattern="startRuntime removes signal listeners and repeated process signals"
+      tests/runtime/lifecycle.test.mjs
+    result: PASS до уточнения проверки runtime listener, 1 тест, 0 skipped, 1.78 s, под общей heavy lease.
+    logSha256: d4cd45df6855febc510950e0d04286684558cf4d63660b8d544638d4085983ef
+  - command: >-
+      node --test --test-name-pattern="startRuntime removes signal listeners and repeated process signals"
+      tests/runtime/lifecycle.test.mjs
+    result: PASS после уточнения проверки runtime listener, 1 тест, 0 skipped, 1.83 s, под общей heavy lease.
+    logSha256: 98a247248681fb3663af4d5b46d71445c7e74c630fc05b429544c9cc412f56f6
+  - command: >-
+      node --test --test-name-pattern="startRuntime removes signal listeners and repeated process signals"
+      /home/yurgusev/.cache/coffee-launch-delivery/issue-250/mutant.NRZcpz0d/lifecycle-mutant.mjs
+    result: >-
+      Ожидаемый exit 1, 1 тест, 0 skipped, 1.87 s: временная копия удаляла сохранённый runtime listener
+      другого сигнала после первого callback, и assertion runtimeHandlerPresent отклонил мутант.
+      Временная копия и её symlink удалены; production source не менялся.
+    logSha256: ad08ca4b473b07d2a45332be8cf59f56950bfee29e7b1e64284dca3e7f421cc2
+  - command: >-
+      node --test --test-name-pattern="startRuntime removes its process signal listeners after normal stop|blackhole shutdown aborts requests, destroys resources, and closes the listener|Fastify close drains in-flight work"
+      tests/runtime/lifecycle.test.mjs
+    result: PASS до уточнения проверки runtime listener, 3 теста, 0 skipped, 1.44 s, под общей heavy lease.
+    logSha256: 2f8f14616655430df6854839c907da058b7ce1d50ff9fe81b93d57caeff45904
+  - command: node_modules/.bin/oxlint --type-aware --deny-warnings tests/runtime/lifecycle.test.mjs
+    result: PASS после уточнения проверки runtime listener, 0.70 s.
+    logSha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+  - command: node_modules/.bin/prettier --check tests/runtime/lifecycle.test.mjs
+    result: PASS после уточнения проверки runtime listener, 0.80 s.
+    logSha256: 17aa973d3f004560237d9a95171210b0671deff23d61628eecf7322ff5938f20
+  - command: node --check tests/runtime/lifecycle.test.mjs
+    result: PASS, 0.04 s.
+  - command: git diff --check
+    result: PASS до добавления handoff.
+limitations:
+  - Предыдущий запуск full pnpm check на aae20ab завершился ошибкой ожидания готовности за 2 s; причина самой задержки не измерена.
+  - Последний перед базой commit, затронувший файл, — 9f4e24ef48b41c80f5c4dc51b0d36152e63943bb; исходный сигналовый тест введён issue 61.
+  - Проверки под высокой конкурентной нагрузкой и полный pnpm check после изменения не запускались; итоговый CI ожидается.
+  - PostgreSQL, Docker и provider операции не выполнялись.
