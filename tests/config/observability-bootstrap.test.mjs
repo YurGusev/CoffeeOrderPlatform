@@ -6520,7 +6520,7 @@ async function createSecretMaterializationFixture() {
     await writeFile(
       `${root}/secrets/platform.secrets.sops.yaml`,
       JSON.stringify(encrypted),
-      "utf8",
+      { encoding: "utf8", mode: 0o600 },
     );
     const decrypted = structuredClone(encrypted);
     delete decrypted.sops;

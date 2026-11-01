@@ -46,7 +46,7 @@ outputs:
       - 13
       - 254
   - artifact: tests/config/observability-bootstrap.test.mjs
-    sha256: 84319d1c0c60b07133ccb668d53702e3004b3045a313228ace2090de2e14d733
+    sha256: 909275dd0b2f28243916148cf32bb5e48357d6708f7eed71dbb217adf061d4ac
     consumers:
       - 13
       - 254
@@ -82,6 +82,17 @@ verification:
       tests/config/platform-config.test.mjs
     result: "PASS: 2/2, 0 fail, 0 skip, 12.349s; Node 26.8.1, shared heavy lease."
     logSha256: 7640e54233b9469e2d5e69f25fa845f77b86285b9ed1b48fe47c7dd973e40766
+  - command: GitHub Actions CI 41351534624 на Source ef522.
+    result: FAIL; новый тест остановился на CONFIG-G08-BUNDLE при создании input fixture с umask 0002.
+  - command: Повтор regression test с umask 0002 до исправления fixture.
+    result: RED; воспроизведён CONFIG-G08-BUNDLE.
+    logSha256: f8010a8c7d034b6dc0456f49078f273f6f9a998e4c4b17cfdc96d4d51dae9de4
+  - command: >-
+      umask 0002; flock --no-fork -w 120 /run/user/1000/coffee-platform-heavy.lock node --test
+      --test-concurrency=1 --test-name-pattern='^development transport renewal preserves authority and all other secrets$'
+      tests/config/observability-bootstrap.test.mjs
+    result: "PASS: 1/1, 0 skip, 11.841793s; fixture создаёт файл с mode 0600."
+    logSha256: af3c274ad77fafe1b6329ecf6d8a1c2c80d1ef83416ed40d591f8a615f80e0a3
   - command:
       flock --no-fork -w 120 /run/user/1000/coffee-platform-heavy.lock timeout --signal=TERM --kill-after=30s 120s node
       tools/config-bootstrap/index.mjs --renew-development-transport
@@ -92,7 +103,7 @@ verification:
     operatorSha256: ce101833616db9c785791ef78151d631e64fdd64625c505c314ec6d8c42a56dd
     reportSha256: 7dca653a835b2ab9b2d07a9b5cd00a4b2df7b52a3d1668f3105a100797e394fc
   - command: Независимый review изменённого bootstrap и synthetic regression tests.
-    result: ACCEPT без блокирующих замечаний.
+    result: ACCEPT без блокирующих замечаний до последующего изменения mode fixture.
     bootstrapSha256: 21d1240acb90ff8e5a5918696c5002c45f1944d4ec0d2b925a2f06f57bf08f22
     testSha256: 84319d1c0c60b07133ccb668d53702e3004b3045a313228ace2090de2e14d733
 limitations:
