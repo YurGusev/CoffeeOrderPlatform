@@ -8,6 +8,7 @@ import {
   mkdir,
   stat,
   symlink,
+  truncate,
   readFile,
   readdir,
   rm,
@@ -3088,7 +3089,16 @@ void test("G12 builds product images, records pinned upstream identity, and fail
     contextFile: contextPath,
     clock: () => fakeNow,
     validateContext: validateSyntheticContext,
-    run: fakeRun,
+    run: async (command, args, options) => {
+      const output = await fakeRun(command, args, options);
+      if (
+        command === "tar" &&
+        args[0] === "-cf" &&
+        args[1].endsWith("/keycloak.oci.tar")
+      )
+        await truncate(args[1], 65 * 1024 * 1024);
+      return output;
+    },
     statfsFn: async () => ({ bavail: 30 * 1024 ** 3, bsize: 1 }),
     lockPath: join(temp, "scanner.lock"),
   });
@@ -3335,6 +3345,10 @@ void test("G12 builds product images, records pinned upstream identity, and fail
   await writeFile(join(outputDir, "result.json"), resultForRuntime);
   const keycloakReceipt = JSON.parse(
     await readFile(join(outputDir, "artifacts/keycloak-receipt.json")),
+  );
+  assert.ok(
+    (await stat(join(outputDir, "artifacts/keycloak.oci.tar"))).size >
+      64 * 1024 * 1024,
   );
   const verifiedKeycloak = await loadVerifiedGateImage({
     target: "keycloak",

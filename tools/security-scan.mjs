@@ -3665,6 +3665,7 @@ export async function runSecurityScan({
           "kafka.oci.tar",
           "storage-helper.oci.tar",
           "grafana.oci.tar",
+          "keycloak.oci.tar",
         ].includes(entry.name)
           ? MAX_BUILD_CONTEXT_BYTES
           : [
