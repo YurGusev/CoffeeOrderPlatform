@@ -295,7 +295,18 @@ outputs:
     sha256: ff271a244721a8ac69077655873a89b2e2578c00a09342ff274941aed3807df2
     consumers:
       - 1
+  - artifact: tests/customer/customer-live.test.mjs
+    sha256: c3b1ca4446dbe4c44368b4a447446d06b65743329ba578c9720e9272e0685ee4
+    consumers:
+      - 1
+  - artifact: docs/reports/launch/20261102T064519Z-4393aea/ОТЧЁТ.md
+    sha256: 578161d7a54ce309b5c766250b8cc0a1ffba086eea292ad3c50ff1aad32b169b
+    consumers:
+      - 1
 verification:
+  - command: pnpm test:integration
+    result: "FAIL: full run 20261102T064519Z-4393aea, exit 1 за 266.541 с; Customer unknown-COMMIT proof ожидал открытый errorCode вместо штатного [REDACTED]. Именованное событие и HTTP 503 подтверждены; rollback/restart/replay после assertion не достигнуты. Отрицательный отчёт сохранён."
+    logSha256: 2dd11f69727ac07b1ad7147a69086408973044ecda246855c5832033886bf779
   - command: node --test --test-name-pattern='G12 scanner policy is strict verification-only configuration' tests/config/platform-config.test.mjs
     result: "PASS: 1/1, fail/cancel/skip 0, 0.780 s; официальный GHCR Java DB соответствует accepted develop, предел свежести 24 часа сохранён, до нового freeze"
     logSha256: 74db77c6d1e7a959ebba2917db444561b530a738320be9ce16e39bc85b508aff
@@ -507,6 +518,7 @@ consumerContract:
     policy/key/flag child и G18 baseline flag child с проверенной lineage. Лимиты и provider scope сохранены;
     exact parent G12 product images, отдельная BOM/image-ID проверка fixture PostgreSQL."
 limitations:
+  - "Full run 20261102T064519Z-4393aea: G00–G09 и G12 PASS, G10 FAIL из-за устаревшего ожидания errorCode в логе; G11 и G13–G18 NOT_RUN, G19 PASS с решением НЕ ДОПУСТИТЬ. Исправлен только assertion: классификация по именованному событию, errorCode скрыт общим logger. Новому SHA нужны собственные CI, G12, Customer proof, SSE qualification и полный G00–G19; результаты 4393aea не переносятся."
   - После объединения принятого #255 окончательный SHA ещё не создан; CI, G12, SSE qualification и полный G00–G19 для него не выполнялись.
   - "Исправление G18 parent failure receipt локально проверено, но не является runtime admission; qualification Source 0dc прервана владельцем через SIGTERM до завершения и не является PASS или sealed. Новому frozen Source нужны свежие CI, G12, SSE qualification и полный G00–G19."
   - "Full run 2c4250a/185412: G00–G09 и G12 PASS, G10 FAIL при проверке захвата логов; G11 и G13–G18 NOT_RUN, G19 REPORT PASS не является admission. Локальный fix захвата fd 1 проверен на 9/9 существующих live tests; окончательному Source нужны собственные CI, G12, SSE qualification и полный G00–G19."
