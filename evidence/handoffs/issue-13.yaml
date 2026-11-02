@@ -1,7 +1,7 @@
 issue: 13
-baseCommit: a572ef1899678381e6a27d8654cd4f0fc6b5428f
+baseCommit: 6e770bef48b8a9739e2a3aea3b5f9c654a53cc71
 status: source-descriptor-before-formal-verification
-asOfUtc: "2026-11-01T20:34:49.562581+00:00"
+asOfUtc: "2026-11-02T08:35:13Z"
 inputs:
   - issue: 2
     acceptedMergeCommit: 327638d4494269a151ee7c0ac945ac0053c3e0d4
@@ -131,6 +131,14 @@ inputs:
     acceptedMergeCommit: a572ef1899678381e6a27d8654cd4f0fc6b5428f
     artifact: evidence/handoffs/issue-255.yaml
     sha256: bee4c927421633aa57941fa59596e4fcd6e84096e6a1883b387e7554e245895b
+  - issue: 259
+    acceptedMergeCommit: b75a4a2681e5e8c9db742a830082a728245d180c
+    artifact: evidence/handoffs/issue-259.yaml
+    sha256: 6283e3486f50cc18ce006688697ab6031de4f452966e8153a5f5fb98ef754ba4
+  - issue: 257
+    acceptedMergeCommit: 6e770bef48b8a9739e2a3aea3b5f9c654a53cc71
+    artifact: evidence/handoffs/issue-257.yaml
+    sha256: 40d016508148fee93b8c2d3231dbc43f0c2b59703f1d552e38c0a34d6e02bb0e
 historicalAcceptance:
   issue: 14
   acceptedMergeCommit: 9b5a320b936cecafcb74de2d6a1253e3d0a155ce
@@ -301,6 +309,10 @@ outputs:
       - 1
   - artifact: docs/reports/launch/20261102T064519Z-4393aea/ОТЧЁТ.md
     sha256: 578161d7a54ce309b5c766250b8cc0a1ffba086eea292ad3c50ff1aad32b169b
+    consumers:
+      - 1
+  - artifact: evidence/launch-preparation/2026-11-02/defects.json
+    sha256: 205910dc5e73ce75c02571ca3467207498cc965b1cff15e90afedcc6f59b0ed6
     consumers:
       - 1
 verification:
@@ -518,6 +530,7 @@ consumerContract:
     policy/key/flag child и G18 baseline flag child с проверенной lineage. Лимиты и provider scope сохранены;
     exact parent G12 product images, отдельная BOM/image-ID проверка fixture PostgreSQL."
 limitations:
+  - "Приняты отдельные fixes #259 (nginx HTTPS readiness) и #257 (Customer redaction assertion), оба с успешным CI и merge в develop. Новый candidate включает их accepted handoffs; ему нужны собственные CI, matching G12, узкий Customer proof, свежая SSE qualification и полный G00–G19. Публикация G10 defect связана с #257 отдельным defects.json receipt; исходный отрицательный manifest не изменён."
   - "Full run 20261102T064519Z-4393aea: G00–G09 и G12 PASS, G10 FAIL из-за устаревшего ожидания errorCode в логе; G11 и G13–G18 NOT_RUN, G19 PASS с решением НЕ ДОПУСТИТЬ. Исправлен только assertion: классификация по именованному событию, errorCode скрыт общим logger. Новому SHA нужны собственные CI, G12, Customer proof, SSE qualification и полный G00–G19; результаты 4393aea не переносятся."
   - После объединения принятого #255 окончательный SHA ещё не создан; CI, G12, SSE qualification и полный G00–G19 для него не выполнялись.
   - "Исправление G18 parent failure receipt локально проверено, но не является runtime admission; qualification Source 0dc прервана владельцем через SIGTERM до завершения и не является PASS или sealed. Новому frozen Source нужны свежие CI, G12, SSE qualification и полный G00–G19."

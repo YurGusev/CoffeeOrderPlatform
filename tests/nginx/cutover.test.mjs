@@ -920,9 +920,8 @@ try {
   created.push(negativeId);
   await waitFor(
     async () =>
-      docker("inspect", "--format", "{{.State.Running}}", negativeId).trim() ===
-      "true",
-    "negative TLS fixture process",
+      (await request("/health/live", { port: negativePort })).status === 200,
+    "negative TLS fixture HTTPS readiness",
   );
   const negativeStart = Date.now();
   const rejected = await request("/api/client-v1/orders/drafts", {
