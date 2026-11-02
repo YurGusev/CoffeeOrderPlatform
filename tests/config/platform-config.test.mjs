@@ -185,6 +185,18 @@ void test("local identity settings preserve the formal null browser profile", as
   assert.equal(document.browserOidc, null);
   assert.equal(document.localIdentity.actorRef, "actor:owner");
   assert.equal(document.localIdentity.databasePoolMax, 2);
+  assert.equal(document.localIdentity.cacheMode, "local");
+  assert.equal(document.localIdentity.startupGraceMs, 90000);
+  for (const cacheMode of [undefined, "ispn"]) {
+    const invalidCache = structuredClone(document);
+    invalidCache.localIdentity.cacheMode = cacheMode;
+    assert.equal(validate(invalidCache), false);
+  }
+  for (const startupGraceMs of [undefined, 30000]) {
+    const invalidGrace = structuredClone(document);
+    invalidGrace.localIdentity.startupGraceMs = startupGraceMs;
+    assert.equal(validate(invalidGrace), false);
+  }
   const overloaded = structuredClone(document);
   overloaded.localIdentity.databasePoolMax = 10;
   assert.throws(

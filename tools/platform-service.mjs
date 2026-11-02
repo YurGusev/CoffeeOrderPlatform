@@ -48,6 +48,33 @@ export function isLocalRuntimeReady(entry) {
   );
 }
 
+export function inspectOptionalDockerResource(type, name, run) {
+  try {
+    const rows = JSON.parse(run([type, "inspect", name]));
+    if (!Array.isArray(rows) || rows.length !== 1 || rows[0]?.Name !== name)
+      throw new Error("invalid inspection response");
+    return rows[0];
+  } catch (error) {
+    const escaped = name.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+    const absent =
+      type === "network"
+        ? `network ${escaped} not found`
+        : `get ${escaped}: no such volume`;
+    const missing = new RegExp(
+      `^(?:Error response from daemon: |Error: )?(?:No such ${type}: ${escaped}|${absent})$`,
+      "u",
+    );
+    if (
+      error.status === 1 &&
+      missing.test(String(error.stderr ?? error.message).trim())
+    )
+      return undefined;
+    throw new Error(
+      `RECOVERY_REQUIRED: ${type} ${name} cannot be safely inspected`,
+    );
+  }
+}
+
 /** User unit starts the exact accepted release after observability provisioning. */
 export function renderLocalRuntimeUnit({
   root,
@@ -403,6 +430,7 @@ export function createLocalComposeOverride({
     ],
     environment: {
       KC_DB: "postgres",
+      KC_CACHE: identity.cacheMode,
       KC_DB_URL_HOST: config.postgres.host,
       KC_DB_URL_PORT: String(config.postgres.port),
       KC_DB_URL_DATABASE: identity.databaseName,
@@ -462,7 +490,7 @@ export function createLocalComposeOverride({
       ],
       interval: `${config.platform.health.intervalMs}ms`,
       timeout: `${config.platform.health.timeoutMs}ms`,
-      start_period: `${config.platform.health.startupGraceMs}ms`,
+      start_period: `${identity.startupGraceMs}ms`,
       retries: config.platform.health.failureThreshold,
     },
   };
@@ -686,25 +714,6 @@ export async function startLocalRuntime({
       .some((entry) => !isLocalRuntimeReady(entry))
   )
     throw new Error("RECOVERY_REQUIRED: observability is not ready");
-  const inspectOptional = (type, name) => {
-    try {
-      const rows = JSON.parse(run([type, "inspect", name]));
-      if (!Array.isArray(rows) || rows.length !== 1 || rows[0]?.Name !== name)
-        throw new Error("invalid inspection response");
-      return rows[0];
-    } catch (error) {
-      const escaped = name.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
-      const missing = new RegExp(
-        `(?:^|\\n)(?:(?:Error response from daemon: )|(?:Error: ))?No such ${type}: ${escaped}$`,
-        "u",
-      );
-      if (error.status === 1 && missing.test(String(error.message).trim()))
-        return undefined;
-      throw new Error(
-        `RECOVERY_REQUIRED: ${type} ${name} cannot be safely inspected`,
-      );
-    }
-  };
   for (const [name, internal] of Object.entries({
     coffee_host_ingress: false,
     coffee_edge_backend: true,
@@ -713,7 +722,7 @@ export async function startLocalRuntime({
     coffee_kafka_event: true,
     coffee_provider_egress: false,
   })) {
-    const network = inspectOptional("network", name);
+    const network = inspectOptionalDockerResource("network", name, run);
     if (
       network &&
       (network.Driver !== "bridge" ||
@@ -723,7 +732,11 @@ export async function startLocalRuntime({
     )
       throw new Error(`RECOVERY_REQUIRED: network ${name} is foreign`);
   }
-  const postgresNetwork = inspectOptional("network", "coffee_postgres_data");
+  const postgresNetwork = inspectOptionalDockerResource(
+    "network",
+    "coffee_postgres_data",
+    run,
+  );
   if (
     !postgresNetwork ||
     postgresNetwork.Driver !== "bridge" ||
@@ -739,7 +752,7 @@ export async function startLocalRuntime({
     [`${PROJECT}_kafka_data`, "kafka_data", "kafka"],
     [`${PROJECT}_${cacheName}`, cacheName, "keycloak"],
   ]) {
-    const volume = inspectOptional("volume", volumeName);
+    const volume = inspectOptionalDockerResource("volume", volumeName, run);
     if (!volume) continue;
     if (
       volume.Driver !== "local" ||

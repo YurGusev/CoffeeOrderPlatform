@@ -30,6 +30,7 @@ import {
   identityState,
   identitySigningKeysHash,
   inspectLocalRuntime,
+  inspectOptionalDockerResource,
   isLocalRuntimeReady,
   maintainLocalCertificates,
   prepareLocalRelease,
@@ -1111,6 +1112,8 @@ void test("local runtime compose binds verified images and scoped identity mater
   assert.equal(compose.services.kafka.image, options.kafkaImageId);
   assert.equal(compose.services.keycloak.image, options.keycloakImageId);
   assert.equal(compose.services.keycloak.read_only, true);
+  assert.equal(compose.services.keycloak.environment.KC_CACHE, "local");
+  assert.equal(compose.services.keycloak.healthcheck.start_period, "90000ms");
   assert.deepEqual(compose.services.keycloak.healthcheck.test, [
     "CMD",
     "wget",
@@ -1167,6 +1170,64 @@ void test("local runtime compose binds verified images and scoped identity mater
       }),
     /image or path/u,
   );
+});
+
+void test("local runtime distinguishes absent Docker resources from failed inspection", () => {
+  for (const [type, name, detail] of [
+    ["network", "coffee_host_ingress", "network coffee_host_ingress not found"],
+    [
+      "volume",
+      "coffee-platform_kafka_data",
+      "get coffee-platform_kafka_data: no such volume",
+    ],
+  ]) {
+    for (const stderr of [
+      `Error response from daemon: ${detail}\n`,
+      `Error: No such ${type}: ${name}\n`,
+    ]) {
+      assert.equal(
+        inspectOptionalDockerResource(type, name, (args) => {
+          assert.deepEqual(args, [type, "inspect", name]);
+          throw Object.assign(new Error("docker inspect failed"), {
+            status: 1,
+            stderr,
+          });
+        }),
+        undefined,
+      );
+    }
+    for (const [status, stderr] of [
+      [1, "permission denied"],
+      [1, "Cannot connect to the Docker daemon"],
+      [1, `Error response from daemon: ${detail}\npermission denied`],
+      [1, `Error: No such ${type}: foreign`],
+      [125, `Error response from daemon: ${detail}`],
+    ]) {
+      assert.throws(
+        () =>
+          inspectOptionalDockerResource(type, name, () => {
+            throw Object.assign(new Error("docker inspect failed"), {
+              status,
+              stderr,
+            });
+          }),
+        /cannot be safely inspected/u,
+      );
+    }
+    for (const rows of [[], [{ Name: "foreign" }]])
+      assert.throws(
+        () =>
+          inspectOptionalDockerResource(type, name, () => JSON.stringify(rows)),
+        /cannot be safely inspected/u,
+      );
+    const resource = { Name: name, Driver: "bridge" };
+    assert.deepEqual(
+      inspectOptionalDockerResource(type, name, () =>
+        JSON.stringify([resource]),
+      ),
+      resource,
+    );
+  }
 });
 
 void test("local runtime status admits only one container owned by its release", async () => {

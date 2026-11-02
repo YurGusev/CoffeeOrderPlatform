@@ -181,6 +181,8 @@
         "databaseName",
         "databaseRole",
         "databasePoolMax",
+        "cacheMode",
+        "startupGraceMs",
         "memoryLimitMiB",
         "operatorUsername",
         "actorRef",
@@ -206,6 +208,8 @@
           "pattern": "^coffee_[a-z_]{1,48}_rw$"
         },
         "databasePoolMax": { "type": "integer", "minimum": 1, "maximum": 20 },
+        "cacheMode": { "const": "local" },
+        "startupGraceMs": { "type": "integer", "const": 90000 },
         "memoryLimitMiB": { "type": "integer", "minimum": 512 },
         "operatorUsername": {
           "type": "string",

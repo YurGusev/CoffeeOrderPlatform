@@ -232,6 +232,8 @@ localIdentity:
   databaseName: coffee_platform_identity
   databaseRole: coffee_identity_rw
   databasePoolMax: 2
+  cacheMode: local
+  startupGraceMs: 90000
   memoryLimitMiB: 2048
   operatorUsername: owner
   actorRef: actor:owner

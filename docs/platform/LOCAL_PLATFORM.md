@@ -185,6 +185,15 @@ unit для этого release. Последующий штатный запус
 restart с сохранением данных обязательны до приёмки установки. Такой запуск
 сам по себе не является formal G00–G19 admission.
 
+Для единственного локального экземпляра Keycloak профиль development задаёт
+`localIdentity.cacheMode: local`. Контроллер передаёт его как `KC_CACHE` при
+обычном `start`: кластерный `jdbc-ping` требует минимум 4 DB connections и
+не соответствует выделенному пулу 2. Этот профиль не предоставляет кластерную
+отказоустойчивость; identity и пользовательские сессии сохраняются в PostgreSQL.
+Первичная инициализация БД на target заняла около 61 секунды до readiness,
+поэтому `localIdentity.startupGraceMs: 90000` задаёт отдельный startup grace.
+Общие health timeout, interval и failure threshold сохраняются.
+
 ### Постоянные age identities и резервная копия на этом сервере
 
 Для локального CoffeeOrderPlatform используются три age identities:
