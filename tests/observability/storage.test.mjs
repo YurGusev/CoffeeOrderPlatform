@@ -727,7 +727,7 @@ void test("G12 binds storage helper to the Node base, receipt, index and image",
             approvedFixed: [],
             egressRepositories: [
               "ghcr.io/aquasecurity/trivy-db",
-              "mirror.gcr.io/aquasec/trivy-java-db",
+              "ghcr.io/aquasecurity/trivy-java-db",
             ],
           },
         },

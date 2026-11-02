@@ -448,7 +448,7 @@ void test("G12 scanner policy is strict verification-only configuration", async 
     approvedFixed: ["CVE-2026-21728", "CVE-2026-28377"],
     egressRepositories: [
       "ghcr.io/aquasecurity/trivy-db",
-      "mirror.gcr.io/aquasec/trivy-java-db",
+      "ghcr.io/aquasecurity/trivy-java-db",
     ],
   };
   assert.deepEqual(
@@ -501,7 +501,7 @@ void test("G12 scanner policy is strict verification-only configuration", async 
       ...expected,
       egressRepositories: [
         "ghcr.io/aquasecurity/trivy-db",
-        "ghcr.io/aquasecurity/trivy-java-db",
+        "mirror.gcr.io/aquasec/trivy-java-db",
       ],
     },
     {

@@ -403,7 +403,7 @@ export type SecurityScanVerificationConfig = Readonly<{
   approvedFixed: readonly ("CVE-2026-21728" | "CVE-2026-28377")[];
   egressRepositories: readonly [
     "ghcr.io/aquasecurity/trivy-db",
-    "mirror.gcr.io/aquasec/trivy-java-db",
+    "ghcr.io/aquasecurity/trivy-java-db",
   ];
 }>;
 
@@ -686,7 +686,7 @@ export function parseSecurityScanVerification(
   );
   const expectedRepositories = [
     "ghcr.io/aquasecurity/trivy-db",
-    "mirror.gcr.io/aquasec/trivy-java-db",
+    "ghcr.io/aquasecurity/trivy-java-db",
   ] as const;
   if (
     egressRepositories.length !== expectedRepositories.length ||

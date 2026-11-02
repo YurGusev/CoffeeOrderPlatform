@@ -144,7 +144,7 @@ historicalAcceptance:
     не создаётся задним числом.
 outputs:
   - artifact: config/platform.yaml
-    sha256: 2a44852027aa4758d2ea88ef42f19451bd75451159078946c5861bae2899e0a1
+    sha256: e875ccc013d2005292bbc4cffe940c8e1875462d11d8a0da92f6e9f38bfaeccf
     consumers:
       - 1
   - artifact: docs/launch/13_DELIVERY_DEPENDENCY_GRAPH.md
@@ -180,7 +180,7 @@ outputs:
     consumers:
       - 1
   - artifact: tests/compose/topology.test.mjs
-    sha256: 270dfbe1f6b14ec290208bab3fa1cbc7b7bc036ae4d66929a66b0df393cb949e
+    sha256: 6a74a2828f4b5dcc832e26dd6a6b931d275109b8799b1f1f21e9a9c71424a472
     consumers:
       - 1
   - artifact: tests/config/observability-bootstrap.test.mjs
@@ -296,6 +296,12 @@ outputs:
     consumers:
       - 1
 verification:
+  - command: node --test --test-name-pattern='G12 scanner policy is strict verification-only configuration' tests/config/platform-config.test.mjs
+    result: "PASS: 1/1, fail/cancel/skip 0, 0.780 s; официальный GHCR Java DB соответствует accepted develop, предел свежести 24 часа сохранён, до нового freeze"
+    logSha256: 74db77c6d1e7a959ebba2917db444561b530a738320be9ce16e39bc85b508aff
+  - command: pinned Trivy 0.76.1 image --java-db-repository ghcr.io/aquasecurity/trivy-java-db --download-java-db-only
+    result: "PASS diagnostic: 92.272 s; UpdatedAt 2026-11-02T01:21:00Z, strict metadata guard 24h PASS; не formal G12"
+    logSha256: ad030adeb4d5c533d0a3ee8302ed172d87d96d250db038a6cda60033d2a43007
   - command: node --test --test-name-pattern='Kafka namespace inventory proves exact physical claims' tests/compose/topology.test.mjs
     result: "PASS: 1/1, fail/cancel/skip 0, 1.040 s; loader согласован с namespace policy для четырёх proof-режимов, до нового freeze; runtime ещё не проверен"
     logSha256: edf63ed9575663aa8d63593d5639830d7b93b3844523fd009bb10e97408f707b
