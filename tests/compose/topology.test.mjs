@@ -47,6 +47,132 @@ const OBSERVABILITY_CONFIG = {
   },
 };
 
+void test("Customer proof preserves only the validated launch context through both harness boundaries", async () => {
+  const composeSource = await readFile(
+    join(REPO_ROOT, "tools/compose-smoke.mjs"),
+    "utf8",
+  );
+  const customerSource = await readFile(
+    join(REPO_ROOT, "tests/customer/customer-live.test.mjs"),
+    "utf8",
+  );
+  const proofStart = composeSource.indexOf(
+    "async function runCustomerIntegrationProof(",
+  );
+  const proofEnd = composeSource.indexOf(
+    "\nasync function waitForDockerHealthy(",
+    proofStart,
+  );
+  const harnessStart = customerSource.indexOf("function spawnCustomerHarness(");
+  const harnessEnd = customerSource.indexOf(
+    "\nasync function waitForHarnessLog(",
+    harnessStart,
+  );
+  assert.ok(
+    proofStart >= 0 &&
+      proofEnd > proofStart &&
+      harnessStart >= 0 &&
+      harnessEnd > harnessStart,
+  );
+
+  for (const contextPath of [undefined, "/private/context.json"]) {
+    let dockerArgs;
+    let dockerEnv;
+    const stream = { pipe() {}, setEncoding() {}, on() {} };
+    const proof = runInNewContext(
+      `(${composeSource.slice(proofStart, proofEnd)})`,
+      {
+        ROOT: "/candidate",
+        CUSTOMER_TEST_IMAGE: "node-image",
+        resolve,
+        join,
+        mkdir: async () => {},
+        writeFile: async () => {},
+        createWriteStream: () => ({ end() {} }),
+        spawnCompose: () => ({
+          child: { stdout: stream, stderr: stream, kill() {} },
+          done: Promise.resolve(),
+        }),
+        runDockerAsync: async (args, options) => {
+          dockerArgs = args;
+          dockerEnv = options.env;
+        },
+      },
+    );
+    await proof(
+      "project",
+      "/private/secrets",
+      { owner: { username: "owner", password: "password" } },
+      {
+        migrator: { username: "migrator", password: "password" },
+        foreignDatabase: "foreign",
+      },
+      "/compose.yaml",
+      "customer",
+      contextPath,
+    );
+    const mount = `${contextPath}:/run/coffee-launch/context.json:ro`;
+    assert.equal(dockerArgs.includes(mount), Boolean(contextPath));
+    if (contextPath)
+      assert.equal(dockerArgs[dockerArgs.indexOf(mount) - 1], "--volume");
+    const locator =
+      "COFFEE_LAUNCH_CONTEXT_FILE=/run/coffee-launch/context.json";
+    assert.equal(dockerArgs.includes(locator), Boolean(contextPath));
+    if (contextPath)
+      assert.equal(dockerArgs[dockerArgs.indexOf(locator) - 1], "--env");
+    assert.ok(
+      dockerArgs.includes("CUSTOMER_UNKNOWN_COMMIT_DB_TARGET_HOST=customer_db"),
+    );
+    assert.match(
+      dockerEnv.CUSTOMER_UNKNOWN_COMMIT_OBSERVER_DATABASE_URL,
+      /@customer_db:5432\/customer$/u,
+    );
+
+    let childEnv;
+    const harness = runInNewContext(
+      `(${customerSource.slice(harnessStart, harnessEnd).replace("import.meta.url", "sourceUrl")})`,
+      {
+        process: {
+          execPath: "node",
+          env: {
+            ...(contextPath
+              ? {
+                  COFFEE_LAUNCH_CONTEXT_FILE: "/run/coffee-launch/context.json",
+                }
+              : {}),
+            COFFEE_OTHER: "blocked",
+            SOPS_KEY: "blocked",
+          },
+        },
+        sourceUrl: pathToFileURL(
+          join(REPO_ROOT, "tests/customer/customer-live.test.mjs"),
+        ).href,
+        URL,
+        fileURLToPath,
+        REPOSITORY_ROOT: "/candidate",
+        spawn: (_command, _args, options) => {
+          childEnv = options.env;
+          return { stdout: stream, stderr: stream, once() {} };
+        },
+      },
+    );
+    harness({
+      configPath: "/config",
+      secretsPath: "/secrets",
+      dbAdapterLogPath: "/log",
+      entry: "/entry",
+    });
+    assert.equal(
+      childEnv.COFFEE_LAUNCH_CONTEXT_FILE,
+      contextPath ? "/run/coffee-launch/context.json" : undefined,
+    );
+    assert.equal(childEnv.COFFEE_OTHER, undefined);
+    assert.equal(childEnv.SOPS_KEY, undefined);
+    assert.equal(childEnv.COFFEE_CONFIG_FILE, "/config");
+    assert.equal(childEnv.COFFEE_RUNTIME_SECRETS_FILE, "/secrets");
+  }
+});
+
 void test("dependency readiness evidence covers every configured owner and rejects incomplete transitions", async () => {
   const { load } = await import("js-yaml");
   const { validateDependencyReadiness } =

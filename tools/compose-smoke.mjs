@@ -3600,6 +3600,7 @@ async function runCustomerIntegrationProof(
   roles,
   composeFile,
   databaseName,
+  launchContextPath,
 ) {
   const databaseUrl = (username, password, database, host = "customer_db") =>
     `postgresql://${encodeURIComponent(username)}:${encodeURIComponent(password)}@${host}:5432/${database}`;
@@ -3668,6 +3669,14 @@ async function runCustomerIntegrationProof(
     "CUSTOMER_UNKNOWN_COMMIT_DB_ADAPTER_LOG_FILE=/run/customer-logs/db-adapter.log",
     "--env",
     "CUSTOMER_UNKNOWN_COMMIT_ENTRY=/workspace/apps/customer-service/dist/main.js",
+    ...(launchContextPath
+      ? [
+          "--volume",
+          `${resolve(launchContextPath)}:/run/coffee-launch/context.json:ro`,
+          "--env",
+          "COFFEE_LAUNCH_CONTEXT_FILE=/run/coffee-launch/context.json",
+        ]
+      : []),
     CUSTOMER_TEST_IMAGE,
     "sh",
     "-lc",
@@ -10791,6 +10800,7 @@ export async function runComposeSmoke({
         customerProofRoles,
         composeFile,
         databaseProofCredentials.databaseName,
+        proofLaunchIdentity ? launchContextPath : undefined,
       );
     } else {
       kafkaRetention = assertKafkaDurableRetention(

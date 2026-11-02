@@ -180,7 +180,7 @@ outputs:
     consumers:
       - 1
   - artifact: tests/compose/topology.test.mjs
-    sha256: 6a74a2828f4b5dcc832e26dd6a6b931d275109b8799b1f1f21e9a9c71424a472
+    sha256: 8675e0b1336a46ab795f74f6331eb3f219c62bc08bb4649ececd75cc26b2fc5d
     consumers:
       - 1
   - artifact: tests/config/observability-bootstrap.test.mjs
@@ -200,7 +200,7 @@ outputs:
     consumers:
       - 1
   - artifact: tools/compose-smoke.mjs
-    sha256: e36e5f37ada72edf5e38efc6be1bacc901afc5e36ebbde07807a1e663db8121b
+    sha256: 816ef3331467ac2260b9d27ef202bb88f1dac108b1105cf83a6885ef892c1501
     consumers:
       - 1
   - artifact: tools/observability/verify.mjs
