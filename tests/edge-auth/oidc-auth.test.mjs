@@ -226,6 +226,7 @@ void test("valid callback maps identity only through resolver and yields opaque 
     login.state,
     "fixture-code",
     login.loginBinding,
+    PROFILE.issuer,
   );
   assert.equal(completed.actorRef, "actor:employee-7");
   assert.equal(completed.returnTo, "/app/customers");
@@ -301,6 +302,36 @@ void test("OIDC callback cannot redeem an attacker's state in another browser", 
     h.calls.some((call) => call.url === PROFILE.tokenUrl),
     false,
   );
+});
+
+void test("callback issuer must match exactly before any provider request", async () => {
+  for (const issuer of [
+    "https://attacker.fixture.invalid",
+    `${PROFILE.issuer}/`,
+    "",
+  ]) {
+    const h = harness();
+    const login = await h.begin();
+    await assert.rejects(
+      h.authority.complete(
+        login.state,
+        "fixture-code",
+        login.loginBinding,
+        issuer,
+      ),
+      /authorization response issuer/,
+    );
+    assert.deepEqual(h.calls, []);
+    await assert.rejects(
+      h.authority.complete(
+        login.state,
+        "fixture-code",
+        login.loginBinding,
+        PROFILE.issuer,
+      ),
+      /state/,
+    );
+  }
 });
 
 void test("state and session expire absolutely", async () => {

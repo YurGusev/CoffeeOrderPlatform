@@ -168,6 +168,44 @@ scoped tmpfs secrets, владельческие БД и миграции, Kafka
 запускает бизнес-сервисы и nginx. Все 17 product containers получают общую
 bounded non-blocking logging policy из `config/platform.yaml`.
 
+Перед запуском бизнес-сервисов контроллер проверяет committed offsets всех
+разделов durable consumer groups из config. Если позиций нет, `start` останавливается
+с `RECOVERY_REQUIRED`; Kafka и identity остаются доступны для проверки.
+Автоматического reset нет: `auto.offset.reset=none` сохраняет требование
+[явного операторского решения](../CoffeeOrderSystem_CANONICAL_Architecture_EndToEndHardened_RU_2026-08-19/M06_KAFKA_EVENT_PLATFORM/09_REPLAY_DLQ_AND_CONSUMER_RECOVERY.md#7-offset-reset-policy).
+
+При самом первом включении сначала сохранить вывод `--describe --state` и
+`--describe --offsets` для каждой durable group, beginning/end offsets её topics
+через `kafka-get-offsets.sh --time -2` / `--time -1` и историю создания broker.
+Проверить, что groups не активны, committed offsets отсутствуют, а начало
+каждого раздела равно 0. Одного отсутствия offsets недостаточно для вывода,
+что группа новая: у старой группы они могли истечь. После явного решения
+оператора для подтверждённых новых group/topic пар выполнить dry-run:
+
+```sh
+docker exec coffee-platform-kafka-1 /opt/kafka/bin/kafka-consumer-groups.sh \
+  --bootstrap-server kafka:9092 \
+  --command-config /etc/kafka/secrets/client.properties \
+  --group <group-from-config> --topic <topic-from-config> \
+  --reset-offsets --to-earliest --dry-run
+```
+
+Проверить точный набор разделов и `NEW-OFFSET=0`; только после одобрения
+заменить `--dry-run` на `--execute`. Существующие committed offsets не менять.
+Затем повторно проверить `--describe --offsets`, выполнить `stop` и `start`.
+Накопленные сообщения будут обработаны с начала через обычные Inbox guards;
+`latest` для этого bootstrap запрещён. При повторном запуске и обслуживании
+позиции сохраняются, перечисленные reset-команды не выполняются.
+
+До отзыва bootstrap-admin контроллер согласует User Profile локального realm:
+`email`, `firstName` и `lastName` необязательны для владельца, созданного с логином.
+Существующие validators, permissions и остальные настройки профиля сохраняются;
+`VERIFY_PROFILE`, пароль и PKCE остаются включены. Контроллер читает профиль,
+меняет только обязательность этих трёх полей и проверяет сохранённый результат.
+Повторный запуск не переписывает уже согласованный профиль; персональные данные
+владельца не подставляются. После отзыва временного администратора этот шаг
+больше не выполняется.
+
 После фактического входа `owner` в HTTPS UI выполнить
 `node tools/platform-service.mjs recover`: контроллер проверяет живую сессию
 владельца и его административные права в identity, затем отзывает временный

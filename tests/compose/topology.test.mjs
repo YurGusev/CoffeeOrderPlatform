@@ -23,8 +23,10 @@ import { createRuntimeLoggingOverride } from "../../tools/observability/generate
 import { canonicalRequestHash } from "../../packages/platform-idempotency/dist/index.js";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import {
+  assertLocalKafkaOffsets,
   authorizeIdentityRetirement,
   captureLocalFrontend,
+  configureLocalIdentityProfile,
   createLocalComposeOverride,
   dispatchCertificateMaintenance,
   identityState,
@@ -696,6 +698,73 @@ void test("identity signing authority uses canonical RSA keys rather than JWKS o
   );
 });
 
+void test("local identity bootstrap preserves profile validation while making contact fields optional", async () => {
+  const config = {
+    localIdentity: {
+      realm: "coffee",
+      bootstrapAdminUsername: "bootstrap-admin",
+    },
+  };
+  const initial = {
+    attributes: [
+      {
+        name: "username",
+        required: { roles: ["user"] },
+        validations: { length: { min: 3 } },
+      },
+      ...["email", "firstName", "lastName"].map((name) => ({
+        name,
+        required: { roles: ["user"] },
+        validations: { length: { max: 255 } },
+        permissions: { view: ["admin", "user"], edit: ["admin", "user"] },
+      })),
+    ],
+    groups: [{ name: "user-metadata", displayHeader: "User metadata" }],
+    unmanagedAttributePolicy: "DISABLED",
+  };
+  let stored = structuredClone(initial);
+  let ignoreWrite = false;
+  const methods = [];
+  const call = async (path, options) => {
+    methods.push(options.method ?? "GET");
+    if (path.endsWith("/token")) {
+      assert.equal(
+        new URLSearchParams(options.body).get("password"),
+        "fixture",
+      );
+      return { access_token: "transient" };
+    }
+    assert.equal(path, "/admin/realms/coffee/users/profile");
+    assert.equal(options.token, "transient");
+    if (options.method === "PUT") {
+      assert.equal(options.contentType, "application/json");
+      if (!ignoreWrite) stored = JSON.parse(options.body);
+    }
+    return structuredClone(stored);
+  };
+  const options = { config, bootstrapPassword: "fixture", call };
+  await configureLocalIdentityProfile(options);
+  const expected = structuredClone(initial);
+  for (const attribute of expected.attributes.slice(1))
+    delete attribute.required;
+  assert.deepEqual(stored, expected);
+  assert.deepEqual(methods, ["POST", "GET", "PUT", "GET"]);
+  methods.length = 0;
+  await configureLocalIdentityProfile(options);
+  assert.deepEqual(methods, ["POST", "GET"]);
+  stored = structuredClone(initial);
+  ignoreWrite = true;
+  await assert.rejects(
+    configureLocalIdentityProfile(options),
+    /profile was not preserved/u,
+  );
+  stored = { attributes: [] };
+  await assert.rejects(
+    configureLocalIdentityProfile(options),
+    /attribute is ambiguous/u,
+  );
+});
+
 void test("temporary identity retirement requires the actual owner session and realm administration", async () => {
   const config = {
     localIdentity: {
@@ -1169,6 +1238,75 @@ void test("local runtime compose binds verified images and scoped identity mater
         runtimeImages: runtimeImages.slice(1),
       }),
     /image or path/u,
+  );
+});
+
+void test("local runtime requires durable Kafka offsets without resetting groups", () => {
+  const config = {
+    kafka: { topics: { orders: { name: "orders", partitions: 2 } } },
+    services: {
+      orders: {
+        kafka: {
+          consumers: [
+            {
+              groupId: "orders-owner",
+              topics: ["orders"],
+              processing: "durable",
+            },
+            {
+              groupId: "realtime",
+              topics: ["orders"],
+              processing: "ephemeral",
+            },
+          ],
+        },
+      },
+    },
+  };
+  const calls = [];
+  let output =
+    "GROUP TOPIC PARTITION CURRENT-OFFSET LOG-END-OFFSET LAG CONSUMER-ID HOST CLIENT-ID\norders-owner orders 0 0 9 9 - - -\norders-owner orders 1 7 7 0 - - -\n";
+  const compose = (...args) => {
+    calls.push(args);
+    return output;
+  };
+  assertLocalKafkaOffsets(config, compose);
+  assert.deepEqual(calls, [
+    [
+      "exec",
+      "-T",
+      "kafka",
+      "/opt/kafka/bin/kafka-consumer-groups.sh",
+      "--bootstrap-server",
+      "kafka:9092",
+      "--command-config",
+      "/etc/kafka/secrets/client.properties",
+      "--describe",
+      "--group",
+      "orders-owner",
+      "--offsets",
+    ],
+  ]);
+  for (const invalid of [
+    "",
+    "Error: GroupIdNotFoundException",
+    "orders-owner orders 0 0",
+    "orders-owner orders 0 -\norders-owner orders 1 7",
+    "orders-owner orders 0 0\norders-owner orders 0 0\norders-owner orders 1 7",
+    "orders-owner foreign 0 0\norders-owner orders 1 7",
+  ]) {
+    output = invalid;
+    assert.throws(
+      () => assertLocalKafkaOffsets(config, compose),
+      /requires operator verification/u,
+    );
+  }
+  assert.throws(
+    () =>
+      assertLocalKafkaOffsets(config, () => {
+        throw new Error("broker unavailable");
+      }),
+    /broker unavailable/u,
   );
 });
 

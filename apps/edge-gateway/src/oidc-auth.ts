@@ -422,6 +422,7 @@ export function createOidcAuthority(options: OidcAuthorityOptions) {
       state: string,
       code: string,
       loginBinding: string,
+      issuer?: string,
     ): Promise<{
       sessionId: string;
       csrf: string;
@@ -444,6 +445,8 @@ export function createOidcAuthority(options: OidcAuthorityOptions) {
         throw new Error("invalid OIDC browser binding");
       if (typeof code !== "string" || code.length === 0 || code.length > 4_096)
         throw new Error("invalid authorization code");
+      if (issuer !== undefined && issuer !== profile.issuer)
+        throw new Error("invalid authorization response issuer");
       const body = new URLSearchParams({
         grant_type: "authorization_code",
         code,

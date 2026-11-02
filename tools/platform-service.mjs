@@ -23,6 +23,7 @@ import {
 import { homedir, tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { isDeepStrictEqual } from "node:util";
 import { createRuntimeLoggingOverride } from "./observability/generate.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -46,6 +47,48 @@ export function isLocalRuntimeReady(entry) {
     (entry.health === "healthy" ||
       (entry.service === "alert-sink" && entry.health === "none"))
   );
+}
+
+export function assertLocalKafkaOffsets(config, compose) {
+  for (const service of Object.values(config.services)) {
+    for (const consumer of service.kafka.consumers.filter(
+      (entry) => entry.processing === "durable",
+    )) {
+      const remaining = new Set();
+      for (const name of consumer.topics) {
+        const topic = Object.values(config.kafka.topics).find(
+          (entry) => entry.name === name,
+        );
+        for (let partition = 0; partition < topic.partitions; partition++)
+          remaining.add(`${name}:${partition}`);
+      }
+      const output = compose(
+        "exec",
+        "-T",
+        "kafka",
+        "/opt/kafka/bin/kafka-consumer-groups.sh",
+        "--bootstrap-server",
+        "kafka:9092",
+        "--command-config",
+        "/etc/kafka/secrets/client.properties",
+        "--describe",
+        "--group",
+        consumer.groupId,
+        "--offsets",
+      );
+      const message = `RECOVERY_REQUIRED: ${consumer.groupId} requires operator verification of Kafka offsets; see docs/platform/LOCAL_PLATFORM.md`;
+      for (const line of output.split("\n")) {
+        const [group, topic, partition, offset] = line.trim().split(/\s+/u);
+        if (group !== consumer.groupId) continue;
+        if (
+          !/^\d+$/u.test(offset ?? "") ||
+          !remaining.delete(`${topic}:${partition}`)
+        )
+          throw new Error(message);
+      }
+      if (remaining.size) throw new Error(message);
+    }
+  }
 }
 
 export function inspectOptionalDockerResource(type, name, run) {
@@ -287,6 +330,7 @@ async function identityRequest({
   method = "GET",
   token,
   body,
+  contentType = "application/x-www-form-urlencoded",
   expected = 200,
 }) {
   return new Promise((resolveCall, reject) => {
@@ -298,9 +342,7 @@ async function identityRequest({
         signal: AbortSignal.timeout(timeoutMs),
         headers: {
           ...(token ? { authorization: `Bearer ${token}` } : {}),
-          ...(body
-            ? { "content-type": "application/x-www-form-urlencoded" }
-            : {}),
+          ...(body ? { "content-type": contentType } : {}),
         },
       },
       (res) => {
@@ -796,7 +838,6 @@ export async function startLocalRuntime({
     else if (actual.imageId !== image.imageId)
       throw new Error("image ID mismatch");
   }
-  const builtImages = [];
   if (missing.length) {
     const temporary = await mkdtemp(join(tmpdir(), "coffee-local-build-"));
     try {
@@ -812,7 +853,7 @@ export async function startLocalRuntime({
       smoke.buildRuntimeImages(
         project,
         missing.filter((service) => service !== "edge-nginx"),
-        builtImages,
+        [],
         snapshot.contextPath,
         { includeNginx: missing.includes("edge-nginx") },
       );
@@ -1114,7 +1155,13 @@ export async function startLocalRuntime({
             retirement.stage === "retired" ? steadyOverridePath : overridePath,
             ...args,
           ],
-          { cwd: root, env: composeEnv, stdio: "inherit", timeout: 300_000 },
+          {
+            cwd: root,
+            env: composeEnv,
+            stdio: ["ignore", "pipe", "inherit"],
+            encoding: "utf8",
+            timeout: 300_000,
+          },
         );
       compose(
         "up",
@@ -1127,8 +1174,8 @@ export async function startLocalRuntime({
         "kafka",
         "keycloak",
       );
+      const ca = await readFile(join(secretsDir, "keycloak/ca.crt"));
       if (retirement.stage === "retired") {
-        const ca = await readFile(join(secretsDir, "keycloak/ca.crt"));
         const jwks = await identityRequest({
           base: projected.localIdentity.publicBaseUrl,
           ca,
@@ -1140,6 +1187,22 @@ export async function startLocalRuntime({
           throw new Error(
             "RECOVERY_REQUIRED: identity signing keys differ from the retired authority",
           );
+      } else {
+        await configureLocalIdentityProfile({
+          config: projected,
+          bootstrapPassword: await readIdentityBootstrapPassword(
+            join(secretsDir, "keycloak/keycloak.conf"),
+          ),
+          call: (path, options) =>
+            identityRequest({
+              base: projected.localIdentity.publicBaseUrl,
+              ca,
+              timeoutMs: projected.platform.requestDeadlineMs,
+              maxBytes: projected.platform.bodyLimitBytes,
+              path,
+              ...options,
+            }),
+        });
       }
       await bootstrap.provisionLocalBusinessDatabases({
         root,
@@ -1148,6 +1211,7 @@ export async function startLocalRuntime({
       });
       const topicCommands = smoke.buildKafkaRegistryBootstrapScript(projected);
       compose("exec", "-T", "kafka", "sh", "-ceu", topicCommands.join("\n"));
+      assertLocalKafkaOffsets(projected, compose);
       compose(
         "up",
         "--no-deps",
@@ -1201,7 +1265,6 @@ export async function startLocalRuntime({
         )
       )
         throw new Error("RECOVERY_REQUIRED: Collector refresh is not ready");
-      for (const tag of builtImages) run(["image", "rm", tag]);
       return {
         releaseDir,
         sourceSha: metadata.sourceSha,
@@ -1215,13 +1278,7 @@ export async function startLocalRuntime({
   });
 }
 
-/** Check the real owner session and effective realm role before revoking temporary access. */
-export async function authorizeIdentityRetirement({
-  config,
-  bootstrapPassword,
-  call,
-  beforeDelete,
-}) {
+async function identityAdminToken({ config, bootstrapPassword, call }) {
   const form = new URLSearchParams({
     grant_type: "password",
     client_id: "admin-cli",
@@ -1234,7 +1291,75 @@ export async function authorizeIdentityRetirement({
   );
   if (typeof tokenReply?.access_token !== "string" || !tokenReply.access_token)
     throw new Error("RECOVERY_REQUIRED: temporary admin token is unavailable");
-  const token = tokenReply.access_token;
+  return tokenReply.access_token;
+}
+
+async function readIdentityBootstrapPassword(secretPath) {
+  const secretInfo = await lstat(secretPath);
+  if (
+    !secretInfo.isFile() ||
+    secretInfo.isSymbolicLink() ||
+    secretInfo.uid !== process.getuid() ||
+    (secretInfo.mode & 0o777) !== 0o400
+  )
+    throw new Error(
+      "RECOVERY_REQUIRED: identity bootstrap secret ownership is unknown",
+    );
+  const secret = await readFile(secretPath, "utf8");
+  const match =
+    /^db-password=[A-Za-z0-9_-]{32,128}\nbootstrap-admin-password=([A-Za-z0-9_-]{32,128})\n$/u.exec(
+      secret,
+    );
+  if (!match)
+    throw new Error("RECOVERY_REQUIRED: identity bootstrap secret is invalid");
+  return match[1];
+}
+
+export async function configureLocalIdentityProfile({
+  config,
+  bootstrapPassword,
+  call,
+}) {
+  const token = await identityAdminToken({ config, bootstrapPassword, call });
+  const path = `/admin/realms/${encodeURIComponent(config.localIdentity.realm)}/users/profile`;
+  const profile = await call(path, { token });
+  if (!Array.isArray(profile?.attributes))
+    throw new Error("RECOVERY_REQUIRED: identity user profile is invalid");
+  let changed = false;
+  for (const name of ["email", "firstName", "lastName"]) {
+    const attributes = profile.attributes.filter(
+      (entry) => entry?.name === name,
+    );
+    if (attributes.length !== 1)
+      throw new Error(
+        "RECOVERY_REQUIRED: identity profile attribute is ambiguous",
+      );
+    if (Object.hasOwn(attributes[0], "required")) {
+      delete attributes[0].required;
+      changed = true;
+    }
+  }
+  if (!changed) return;
+  await call(path, {
+    token,
+    method: "PUT",
+    body: JSON.stringify(profile),
+    contentType: "application/json",
+  });
+  if (!isDeepStrictEqual(await call(path, { token }), profile))
+    throw new Error(
+      "RECOVERY_REQUIRED: identity user profile was not preserved",
+    );
+}
+
+/** Check the real owner session and effective realm role before revoking temporary access. */
+export async function authorizeIdentityRetirement({
+  config,
+  bootstrapPassword,
+  call,
+  beforeDelete,
+}) {
+  const token = await identityAdminToken({ config, bootstrapPassword, call });
   const realm = encodeURIComponent(config.localIdentity.realm);
   const query = (value) => encodeURIComponent(value);
   const ownerRows = await call(
@@ -1424,23 +1549,7 @@ export async function recoverLocalIdentity({
   )
     throw new Error("RECOVERY_REQUIRED: identity CA differs from the release");
   const secretPath = join(secretsDir, "keycloak/keycloak.conf");
-  const secretInfo = await lstat(secretPath);
-  if (
-    !secretInfo.isFile() ||
-    secretInfo.isSymbolicLink() ||
-    secretInfo.uid !== process.getuid() ||
-    (secretInfo.mode & 0o777) !== 0o400
-  )
-    throw new Error(
-      "RECOVERY_REQUIRED: identity bootstrap secret ownership is unknown",
-    );
-  const secret = await readFile(secretPath, "utf8");
-  const match =
-    /^db-password=[A-Za-z0-9_-]{32,128}\nbootstrap-admin-password=([A-Za-z0-9_-]{32,128})\n$/u.exec(
-      secret,
-    );
-  if (!match)
-    throw new Error("RECOVERY_REQUIRED: identity bootstrap secret is invalid");
+  const bootstrapPassword = await readIdentityBootstrapPassword(secretPath);
   const call = (path, options = {}) =>
     identityRequest({
       base: config.localIdentity.publicBaseUrl,
@@ -1462,7 +1571,7 @@ export async function recoverLocalIdentity({
   };
   await authorizeIdentityRetirement({
     config,
-    bootstrapPassword: match[1],
+    bootstrapPassword,
     call,
     beforeDelete: async () => {
       const file = await open(retirement.path, "wx", 0o600);

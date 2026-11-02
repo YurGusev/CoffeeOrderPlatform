@@ -50,6 +50,16 @@ paths:
           in: query
           required: false
           schema: { type: string }
+        - name: iss
+          in: query
+          required: false
+          description: При наличии должен точно совпадать с настроенным issuer до обмена code.
+          schema: { type: string, maxLength: 4096 }
+        - name: session_state
+          in: query
+          required: false
+          description: Непрозрачное состояние сессии провайдера; не используется для авторизации.
+          schema: { type: string, maxLength: 4096, pattern: "^[^ ]*$" }
       responses:
         "303":
           description: Validated code exchange, ID-token proof and actor mapping; redirect only to the saved local /app/ path.

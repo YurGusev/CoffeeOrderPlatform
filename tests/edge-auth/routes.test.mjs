@@ -48,8 +48,8 @@ function fixture({
         loginBinding: LOGIN_BINDING,
       };
     },
-    complete: async (state, code, loginBinding) => {
-      calls.complete.push([state, code, loginBinding]);
+    complete: async (state, code, loginBinding, issuer) => {
+      calls.complete.push([state, code, loginBinding, issuer]);
       return {
         sessionId: "session-fixture",
         csrf: "csrf-fixture",
@@ -415,13 +415,18 @@ void test("login and callback use authority state, local return path, no-store a
 
   const callback = await app.inject({
     method: "GET",
-    url: "/auth/callback?state=state-fixture&code=fixture-code",
+    url: "/auth/callback?state=state-fixture&code=fixture-code&iss=https%3A%2F%2Fidp.fixture.invalid&session_state=opaque-session",
     headers: { cookie: `__Host-coffee-login=${LOGIN_BINDING}` },
   });
   assert.equal(callback.statusCode, 303);
   assert.equal(callback.headers.location, "/app/orders");
   assert.deepEqual(f.calls.complete, [
-    ["state-fixture", "fixture-code", LOGIN_BINDING],
+    [
+      "state-fixture",
+      "fixture-code",
+      LOGIN_BINDING,
+      "https://idp.fixture.invalid",
+    ],
   ]);
   const cookies = callback.headers["set-cookie"];
   assert.equal(cookies.length, 3);
@@ -437,6 +442,27 @@ void test("login and callback use authority state, local return path, no-store a
     cookies[2],
     /^__Host-coffee-login=; Path=\/; Max-Age=0; Secure; HttpOnly; SameSite=Lax$/u,
   );
+
+  for (const extra of [
+    "&unknown=value",
+    "&state=duplicate",
+    "&code=duplicate",
+    "&iss=first&iss=second",
+    "&session_state=first&session_state=second",
+    `&iss=${"x".repeat(4_097)}`,
+    `&session_state=${"x".repeat(4_097)}`,
+    "&session_state=contains+space",
+  ]) {
+    const rejected = await app.inject({
+      method: "GET",
+      url: `/auth/callback?state=state-fixture&code=fixture-code${extra}`,
+      headers: { cookie: `__Host-coffee-login=${LOGIN_BINDING}` },
+    });
+    assert.equal(rejected.statusCode, 400);
+    assert.equal(rejected.json().code, "INVALID_AUTH_REQUEST");
+    assert.match(rejected.headers["set-cookie"], /^__Host-coffee-login=;/u);
+    assert.equal(f.calls.complete.length, 1);
+  }
 
   for (const attempt of [
     {
