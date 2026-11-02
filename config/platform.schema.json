@@ -170,6 +170,54 @@
     "browserOidc": {
       "anyOf": [{ "type": "null" }, { "$ref": "#/$defs/browserOidcProfile" }]
     },
+    "localIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "publicBaseUrl",
+        "privateBaseUrl",
+        "realm",
+        "clientId",
+        "databaseName",
+        "databaseRole",
+        "databasePoolMax",
+        "memoryLimitMiB",
+        "operatorUsername",
+        "actorRef",
+        "bootstrapAdminUsername"
+      ],
+      "properties": {
+        "publicBaseUrl": {
+          "type": "string",
+          "pattern": "^https://[A-Za-z0-9.-]+(:[0-9]{1,5})?$"
+        },
+        "privateBaseUrl": {
+          "type": "string",
+          "pattern": "^https://[A-Za-z0-9.-]+(:[0-9]{1,5})?$"
+        },
+        "realm": { "type": "string", "pattern": "^[a-z][a-z0-9-]{0,62}$" },
+        "clientId": { "type": "string", "pattern": "^[a-z][a-z0-9-]{0,62}$" },
+        "databaseName": {
+          "type": "string",
+          "pattern": "^coffee_platform_[a-z][a-z0-9_]{0,39}$"
+        },
+        "databaseRole": {
+          "type": "string",
+          "pattern": "^coffee_[a-z_]{1,48}_rw$"
+        },
+        "databasePoolMax": { "type": "integer", "minimum": 1, "maximum": 20 },
+        "memoryLimitMiB": { "type": "integer", "minimum": 512 },
+        "operatorUsername": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{0,62}$"
+        },
+        "actorRef": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "bootstrapAdminUsername": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{0,62}$"
+        }
+      }
+    },
     "services": {
       "type": "object",
       "additionalProperties": false,
@@ -1156,6 +1204,11 @@
       "properties": {
         "publicBaseUrl": { "type": "string", "pattern": "^https://[^\\s]+$" },
         "shutdownGraceMs": { "type": "integer", "const": 30000 },
+        "localRestartMaxAttempts": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10
+        },
         "requestDeadlineMs": { "type": "integer", "const": 5000 },
         "bodyLimitBytes": { "type": "integer", "const": 1048576 },
 

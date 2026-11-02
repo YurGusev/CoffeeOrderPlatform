@@ -102,6 +102,7 @@ export type PostgresConfig = Readonly<{
   rolloutReplicas: number;
 }>;
 export type DatabaseAdmissionInput = Readonly<{
+  localIdentity?: Readonly<Record<string, unknown>> | undefined;
   services: Readonly<
     Record<string, Pick<RuntimeConfig, "replicas" | "dbPool" | "database">>
   >;
@@ -375,6 +376,7 @@ export type PlatformConfig = Readonly<{
   toolchainRef: string;
   platform: Readonly<Record<string, unknown>>;
   postgres: PostgresConfig;
+  localIdentity?: Readonly<Record<string, unknown>>;
   kafka: KafkaConfig;
   aroma: AromaConfig;
   pricingPolicy: PricingPolicyConfig;
@@ -1873,8 +1875,15 @@ export function calculateDatabaseAdmissionBudget(
       "ожидалось целое неотрицательное число",
     );
   }
-  let steadyConnections = 0;
-  let largestPool = 0;
+  const identityPoolMax =
+    input.localIdentity === undefined
+      ? 0
+      : positiveIntegerValue(
+          input.localIdentity["databasePoolMax"],
+          "config.localIdentity.databasePoolMax",
+        );
+  let steadyConnections = identityPoolMax;
+  let largestPool = identityPoolMax;
   for (const [runtime, service] of Object.entries(input.services)) {
     if (service === null || typeof service !== "object") {
       throw new PlatformConfigError(
@@ -2433,7 +2442,7 @@ export function parsePlatformConfig(value: unknown): PlatformConfig {
       "services",
     ],
     "config",
-    ["browserOidc", "verification"],
+    ["browserOidc", "localIdentity", "verification"],
   );
   if (source["verification"] !== undefined) {
     const verification = record(source["verification"], "config.verification");
@@ -2652,7 +2661,15 @@ export function parsePlatformConfig(value: unknown): PlatformConfig {
       "config.security.certificateRenewBeforeHours",
       "ожидалось значение 6",
     );
-  assertDatabaseAdmissionBudget({ services: typedServices, postgres });
+  const localIdentity =
+    source["localIdentity"] === undefined
+      ? undefined
+      : opaqueObject(source["localIdentity"], "config.localIdentity");
+  assertDatabaseAdmissionBudget({
+    services: typedServices,
+    postgres,
+    localIdentity,
+  });
   return Object.freeze({
     schemaVersion: 1,
     $schema: "./platform.schema.json",
@@ -2660,6 +2677,7 @@ export function parsePlatformConfig(value: unknown): PlatformConfig {
     toolchainRef: stringValue(source["toolchainRef"], "config.toolchainRef"),
     platform: opaqueObject(source["platform"], "config.platform"),
     postgres,
+    ...(localIdentity === undefined ? {} : { localIdentity }),
     kafka,
     aroma: aromaConfig(source["aroma"], "config.aroma"),
     pricingPolicy,

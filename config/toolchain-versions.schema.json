@@ -33,6 +33,13 @@
     "nodeImage",
     "nodeBookwormSlimImage",
     "kafkaImage",
+    "keycloakVersion",
+    "keycloakDistributionImage",
+    "keycloakRuntimeImage",
+    "keycloakGuavaSha256",
+    "keycloakJavaReleaseSha256",
+    "keycloakJavaCacertsSha256",
+    "keycloakJavaSecuritySha256",
     "postgresImage",
     "nginxImage",
     "nginxVersion",
@@ -137,6 +144,25 @@
       "const": "node:26.8.1-bookworm-slim@sha256:27f5e13512830beb5d9a574108daa6701a0a0b91528aeaf1ee84ecdcddaeeaae"
     },
     "kafkaImage": { "pattern": "^apache/kafka:4\\.3\\.2@sha256:[0-9a-f]{64}$" },
+    "keycloakVersion": { "const": "26.8.1" },
+    "keycloakDistributionImage": {
+      "const": "dhi.io/keycloak@sha256:6c6d2363b9b3943d1c32b25b026ae12dfe392d117bd3142d747542d664c0badb"
+    },
+    "keycloakRuntimeImage": {
+      "const": "eclipse-temurin:21.0.13_9-jre-alpine-3.24@sha256:82cf3d9ccbe1ed46252008d51b2f2329e6b9e8a2f4394c4bebefc3ea7f4b1372"
+    },
+    "keycloakGuavaSha256": {
+      "const": "b530942257fb935f8b2cfaa5f8eb5bd59c555fd8e8d01b8ce98912e077ea606c"
+    },
+    "keycloakJavaReleaseSha256": {
+      "const": "f0cf3edc39eee65f0eeeb97cd39ceb8116693199f5d27ac22fcce60ca41c9525"
+    },
+    "keycloakJavaCacertsSha256": {
+      "const": "628b436e6698c364c5498a32c5bff91806bea7a9b501f75e2289ddc60b4ca7ef"
+    },
+    "keycloakJavaSecuritySha256": {
+      "const": "819f635801f1e89bc4c6d319e7649e516a9eac18f7b821c9ffb5e5e7764f8083"
+    },
     "postgresImage": {
       "const": "postgres:17.11-alpine@sha256:18cfe3ef5e6815560c98237d6216d1e5119702fb0f3894c8785dd58b8bbe5d73"
     },

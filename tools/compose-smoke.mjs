@@ -1607,6 +1607,7 @@ export function buildRuntimeImages(
   runtimes = RUNTIMES,
   builtImages = [],
   buildRoot = ROOT,
+  { includeNginx = true } = {},
 ) {
   const sourceRoot = resolve(buildRoot);
   for (const runtime of runtimes) {
@@ -1627,6 +1628,7 @@ export function buildRuntimeImages(
     );
     builtImages.push(`${projectName}-${runtime}:latest`);
   }
+  if (!includeNginx) return;
   execFileSync(
     process.execPath,
     [
@@ -3892,7 +3894,7 @@ async function inspectExternalRunDatabase(admin, database) {
   return { exists: true, owner: result.rows[0].owner };
 }
 
-async function externalOwnerMigrations(root, database) {
+export async function externalOwnerMigrations(root, database) {
   const expectedMigrationPath = {
     customer: "apps/customer-service/migrations",
     catalog: "apps/catalog-service/migrations",

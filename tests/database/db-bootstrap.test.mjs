@@ -1,11 +1,14 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
+import { createHash, createHmac } from "node:crypto";
 import { readFile } from "node:fs/promises";
-import { join, resolve } from "node:path";
+import { createRequire } from "node:module";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 import Ajv2020 from "ajv/dist/2020.js";
 import { load as parseYaml } from "js-yaml";
+import { bootstrapLocalIdentityDatabase } from "../../tools/config-bootstrap/index.mjs";
 
 import {
   assertBootstrapInputs,
@@ -19,6 +22,225 @@ import {
   validateRoleMap,
   validateServerProbe,
 } from "../../scripts/db-bootstrap.mjs";
+
+void test("local identity bootstrap rejects foreign ownership and validates the server before DDL", async () => {
+  const roleMap = JSON.parse(
+    await readFile(
+      new URL("../../config/database-role-map.json", import.meta.url),
+      "utf8",
+    ),
+  );
+  const identity = {
+    databaseName: "coffee_platform_identity",
+    databaseRole: "coffee_identity_rw",
+  };
+  const expectedServerIdentity = "7613370342949990434";
+  const probe = {
+    current_database: "postgres",
+    current_user: "bootstrap",
+    server_version: "17.11",
+    is_superuser: true,
+    system_identifier: expectedServerIdentity,
+  };
+  const safeRole = {
+    rolcanlogin: true,
+    rolinherit: false,
+    rolsuper: false,
+    rolcreatedb: false,
+    rolcreaterole: false,
+    rolreplication: false,
+    rolbypassrls: false,
+    rolconnlimit: 20,
+    rolvaliduntil: null,
+    owner_marker: "coffee-platform:local-identity:v1",
+    has_memberships: false,
+    owns_other_database: false,
+  };
+  const execute = async ({
+    server = probe,
+    role,
+    database,
+    foreignAccess = [],
+    publicAccess = [],
+    password = "a".repeat(48),
+    requireExisting = false,
+    expectedDatabaseOid,
+  } = {}) => {
+    const queries = [];
+    const adminClient = {
+      async query(sql) {
+        queries.push(sql);
+        if (sql.includes("pg_control_system()")) return { rows: [server] };
+        if (sql.includes("FROM pg_roles r"))
+          return { rows: role ? [role] : [] };
+        if (sql.includes("pg_get_userbyid"))
+          return { rows: database ? [database] : [] };
+        if (sql.includes("has_database_privilege"))
+          return { rows: foreignAccess };
+        if (sql.includes("aclexplode")) return { rows: publicAccess };
+        return { rows: [] };
+      },
+    };
+    const result = bootstrapLocalIdentityDatabase({
+      adminClient,
+      connectIdentity: async () => ({ async query() {}, async end() {} }),
+      identity,
+      roleMap,
+      password,
+      expectedServerIdentity,
+      requireExisting,
+      expectedDatabaseOid,
+    });
+    return { result, queries };
+  };
+
+  const fresh = await execute();
+  assert.deepEqual(await fresh.result, {
+    database: identity.databaseName,
+    role: identity.databaseRole,
+    created: true,
+  });
+  assert.equal(
+    fresh.queries.filter((sql) => sql.startsWith("CREATE DATABASE")).length,
+    1,
+  );
+  assert.equal(
+    fresh.queries.some((sql) => sql.includes("a".repeat(48))),
+    false,
+  );
+  assert.equal(
+    fresh.queries.some((sql) => sql.includes("SCRAM-SHA-256$4096:")),
+    true,
+  );
+  const verifier = fresh.queries
+    .join("\n")
+    .match(
+      /SCRAM-SHA-256\$4096:([A-Za-z0-9+/=]+)\$([A-Za-z0-9+/=]+):([A-Za-z0-9+/=]+)/u,
+    );
+  assert.ok(verifier);
+  const require = createRequire(import.meta.url);
+  const sasl = require(join(dirname(require.resolve("pg")), "crypto/sasl.js"));
+  const session = sasl.startSession(["SCRAM-SHA-256"]);
+  const first = session.response.slice(3);
+  const serverFirst = `r=${session.clientNonce}server,s=${verifier[1]},i=4096`;
+  await sasl.continueSession(session, "a".repeat(48), serverFirst);
+  const [finalWithoutProof, proof] = session.response.split(",p=");
+  const authMessage = `${first},${serverFirst},${finalWithoutProof}`;
+  const signature = createHmac("sha256", Buffer.from(verifier[2], "base64"))
+    .update(authMessage)
+    .digest();
+  const clientKey = Buffer.from(proof, "base64").map(
+    (byte, index) => byte ^ signature[index],
+  );
+  assert.equal(
+    createHash("sha256").update(clientKey).digest("base64"),
+    verifier[2],
+  );
+  const serverSignature = createHmac(
+    "sha256",
+    Buffer.from(verifier[3], "base64"),
+  )
+    .update(authMessage)
+    .digest("base64");
+  sasl.finalizeSession(session, `v=${serverSignature}`);
+  const existing = await execute({
+    role: safeRole,
+    database: {
+      owner: identity.databaseRole,
+      owner_marker: "coffee-platform:local-identity:v1",
+    },
+  });
+  assert.equal((await existing.result).created, false);
+  const trustedDatabase = {
+    owner: identity.databaseRole,
+    owner_marker: "coffee-platform:local-identity:v1",
+    database_oid: "12345",
+  };
+  const readonly = await execute({
+    role: safeRole,
+    database: trustedDatabase,
+    requireExisting: true,
+    expectedDatabaseOid: "12345",
+  });
+  assert.equal((await readonly.result).databaseOid, "12345");
+  assert.ok(
+    readonly.queries.every(
+      (sql) => !/^(CREATE|REVOKE|ALTER|DROP|COMMENT)/u.test(sql),
+    ),
+  );
+  for (const params of [
+    {
+      role: safeRole,
+      database: trustedDatabase,
+      requireExisting: true,
+      expectedDatabaseOid: "99999",
+    },
+    { role: safeRole, requireExisting: true },
+    {
+      role: safeRole,
+      database: trustedDatabase,
+      requireExisting: true,
+      publicAccess: [{ datname: identity.databaseName }],
+    },
+  ]) {
+    const rejected = await execute(params);
+    await assert.rejects(rejected.result);
+    assert.ok(
+      rejected.queries.every(
+        (sql) => !/^(CREATE|REVOKE|ALTER|DROP|COMMENT)/u.test(sql),
+      ),
+    );
+  }
+  assert.equal(
+    existing.queries.some(
+      (sql) => sql.startsWith("CREATE DATABASE") || sql.includes("CREATE ROLE"),
+    ),
+    false,
+  );
+  const partial = await execute({ role: safeRole });
+  assert.equal((await partial.result).created, true);
+  assert.equal(
+    partial.queries.some((sql) => sql.includes("CREATE ROLE")),
+    false,
+  );
+  const unicode = await execute({ password: "пароль".repeat(8) });
+  await assert.rejects(unicode.result, /CONFIG-LOCAL-PASSWORD/u);
+  assert.deepEqual(unicode.queries, []);
+  for (const parameters of [
+    { server: { ...probe, system_identifier: "0" } },
+    { role: safeRole, database: { owner: "other_owner" } },
+    {
+      role: { ...safeRole, owner_marker: null },
+      database: { owner: identity.databaseRole },
+    },
+    {
+      role: { ...safeRole, has_memberships: true },
+      database: {
+        owner: identity.databaseRole,
+        owner_marker: "coffee-platform:local-identity:v1",
+      },
+    },
+    {
+      role: safeRole,
+      database: {
+        owner: identity.databaseRole,
+        owner_marker: "coffee-platform:local-identity:v1",
+      },
+      foreignAccess: [{ datname: "coffee_platform_orders" }],
+    },
+    { publicAccess: [{ datname: "coffee_platform_orders" }] },
+  ]) {
+    const rejected = await execute(parameters);
+    await assert.rejects(rejected.result);
+    assert.equal(
+      rejected.queries.some(
+        (sql) =>
+          sql.startsWith("CREATE DATABASE") || sql.includes("CREATE ROLE"),
+      ),
+      false,
+    );
+  }
+});
 import {
   buildSmokeCases,
   runDatabaseSmoke,
@@ -538,6 +760,7 @@ void test("GREEN/RED: DB admission reserves one serial rollout without changing 
   const budget = assertDatabaseAdmissionBudget({
     services: config.services,
     postgres: config.postgres,
+    localIdentity: config.localIdentity,
   });
   assert.deepEqual(budget, {
     steadyConnections: 56,
@@ -559,12 +782,22 @@ void test("GREEN/RED: DB admission reserves one serial rollout without changing 
       assertDatabaseAdmissionBudget({
         services: config.services,
         postgres: { ...config.postgres, rolloutReplicas: 2 },
+        localIdentity: config.localIdentity,
       }),
     (error) =>
       error instanceof PlatformConfigError &&
       /DB admission budget 104 exceeds maxConnections 96/u.test(error.message),
   );
   assert.equal(config.postgres.maxConnections, originalMaxConnections);
+  assert.throws(
+    () =>
+      assertDatabaseAdmissionBudget({
+        services: config.services,
+        postgres: config.postgres,
+        localIdentity: { ...config.localIdentity, databasePoolMax: 10 },
+      }),
+    /DB admission budget 106 exceeds maxConnections 96/u,
+  );
   assert.deepEqual(
     Object.fromEntries(
       Object.entries(config.services).map(([runtime, service]) => [

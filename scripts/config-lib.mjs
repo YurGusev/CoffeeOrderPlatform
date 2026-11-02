@@ -258,7 +258,7 @@ const SERVICE_BASELINE = {
     deadlineMs: 10000,
     concurrency: 8,
     database: "coffee_platform_integration",
-    pool: 8,
+    pool: 6,
     terminalTimeoutMs: 2000,
     transactionTimeoutMs: 10000,
   },
@@ -669,6 +669,7 @@ export async function loadPlatformConfig(
     assertDatabaseAdmissionBudget({
       services: config.services,
       postgres: config.postgres,
+      localIdentity: config.localIdentity,
     });
   } catch (error) {
     if (error instanceof PlatformConfigError)

@@ -7,9 +7,11 @@ import {
   readFile,
   rm,
   stat,
+  symlink,
   writeFile,
 } from "node:fs/promises";
 import childProcess from "node:child_process";
+import { writeFileSync, writeSync } from "node:fs";
 import pg from "pg";
 import { spawnSync } from "node:child_process";
 import { syncBuiltinESMExports } from "node:module";
@@ -20,8 +22,1261 @@ import test from "node:test";
 import { createRuntimeLoggingOverride } from "../../tools/observability/generate.mjs";
 import { canonicalRequestHash } from "../../packages/platform-idempotency/dist/index.js";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import {
+  authorizeIdentityRetirement,
+  captureLocalFrontend,
+  createLocalComposeOverride,
+  dispatchCertificateMaintenance,
+  identityState,
+  identitySigningKeysHash,
+  inspectLocalRuntime,
+  isLocalRuntimeReady,
+  maintainLocalCertificates,
+  prepareLocalRelease,
+  publishMaintenanceWarning,
+  renderLocalCertificateMaintenanceUnits,
+  renderLocalRuntimeUnit,
+  stopLocalRuntime,
+} from "../../tools/platform-service.mjs";
 
 const REPO_ROOT = resolve(fileURLToPath(new URL("../..", import.meta.url)));
+
+void test("failed secret preparation removes only its incomplete release and permits retry", async () => {
+  const temporary = await mkdtemp(
+    join(tmpdir(), "coffee-release-preparation-"),
+  );
+  const releaseDir = join(temporary, "release");
+  const secretsDir = join(temporary, "secrets");
+  let database = false;
+  let compose = false;
+  try {
+    await mkdir(releaseDir);
+    await assert.rejects(
+      prepareLocalRelease({
+        releaseDir,
+        secretsDir,
+        existingRelease: false,
+        prepare: async ({ secretsCreated }) => {
+          await mkdir(secretsDir);
+          await secretsCreated();
+          throw new Error("CONFIG-SOPS: synthetic wrong key");
+        },
+      }),
+      /CONFIG-SOPS/u,
+    );
+    await assert.rejects(stat(releaseDir), { code: "ENOENT" });
+    await assert.rejects(stat(secretsDir), { code: "ENOENT" });
+    assert.equal(database, false);
+    assert.equal(compose, false);
+    await mkdir(releaseDir);
+    const result = await prepareLocalRelease({
+      releaseDir,
+      secretsDir,
+      existingRelease: false,
+      prepare: async ({ secretsCreated, beforeDatabase }) => {
+        await mkdir(secretsDir);
+        await secretsCreated();
+        await writeFile(join(releaseDir, "release.json"), "{}", {
+          mode: 0o400,
+        });
+        await chmod(releaseDir, 0o500);
+        beforeDatabase();
+        database = true;
+        compose = true;
+        return "ready-for-review";
+      },
+    });
+    assert.equal(result, "ready-for-review");
+    assert.equal((await stat(releaseDir)).mode & 0o777, 0o500);
+    await assert.rejects(
+      prepareLocalRelease({
+        releaseDir,
+        secretsDir,
+        existingRelease: true,
+        prepare: async () => {
+          throw new Error("synthetic failure");
+        },
+      }),
+      /synthetic failure/u,
+    );
+    assert.equal(
+      await readFile(join(releaseDir, "release.json"), "utf8"),
+      "{}",
+    );
+    await chmod(releaseDir, 0o700);
+    await rm(releaseDir, { recursive: true });
+    await mkdir(releaseDir);
+    const foreign = join(temporary, "foreign");
+    await mkdir(foreign);
+    await writeFile(join(foreign, "sentinel"), "preserved");
+    await assert.rejects(
+      prepareLocalRelease({
+        releaseDir,
+        secretsDir,
+        existingRelease: false,
+        prepare: async () => {
+          await rm(releaseDir, { recursive: true });
+          await symlink(foreign, releaseDir);
+          throw new Error("synthetic failure");
+        },
+      }),
+      /failed to remove incomplete local release/u,
+    );
+    assert.equal(
+      await readFile(join(foreign, "sentinel"), "utf8"),
+      "preserved",
+    );
+    await rm(releaseDir);
+    const source = await readFile(
+      join(REPO_ROOT, "tools/platform-service.mjs"),
+      "utf8",
+    );
+    const start = source.indexOf("      const own = before.filter(");
+    const end = source.indexOf("      let artifacts;", start);
+    assert.ok(start >= 0 && end > start);
+    const operations = [];
+    const record = (name, value) => async () => {
+      operations.push(name);
+      return value;
+    };
+    const imageId = `sha256:${"a".repeat(64)}`;
+    const context = {
+      before: [{ service: "kafka", status: "restarting", imageId }],
+      OBSERVABILITY: [],
+      runtimeImages: [],
+      kafka: { imageId },
+      keycloak: { imageId },
+      existingRelease: true,
+      isLocalRuntimeReady: () => false,
+      secretsDir: "/fixture/secrets",
+      configPath: "/fixture/platform.yaml",
+      root: "/fixture",
+      env: {},
+      join,
+      configBytes: Buffer.from("fixture"),
+      writeFile: record("write"),
+      lstat: async () => {
+        operations.push("inspect secrets");
+        const error = new Error("missing");
+        error.code = "ENOENT";
+        throw error;
+      },
+      mkdir: record("create"),
+      rm: record("remove"),
+      secretsCreated: record("mark"),
+      smoke: { bootstrapEnvironment: () => ({}) },
+      bootstrap: { materializeLocalRuntimeSecrets: record("materialize", {}) },
+    };
+    await assert.rejects(
+      runInNewContext(
+        `(async () => { ${source.slice(start, end)} })()`,
+        context,
+      ),
+      /incomplete local runtime is still running/u,
+    );
+    assert.deepEqual(operations, []);
+  } finally {
+    await chmod(releaseDir, 0o700).catch(() => {});
+    await rm(temporary, { recursive: true, force: true });
+  }
+});
+
+void test("local boot unit binds one immutable controller and its release", () => {
+  const sourceSha = "a".repeat(40);
+  const root = `/home/example/coffee-platform/runtime/controllers/${sourceSha}`;
+  const options = {
+    root,
+    nodePath: "/opt/node/bin/node",
+    pnpmPath: "/opt/pnpm/bin/pnpm",
+    flockPath: "/usr/bin/flock",
+    lockPath: "/run/user/1000/coffee-platform-heavy.lock",
+    contextFile: "/home/example/evidence/context.json",
+    expectedServerIdentity: "7613370342949990434",
+    releaseId: `${sourceSha}-${"b".repeat(16)}-${"c".repeat(12)}`,
+    ageKeyFile: "/home/example/private/age-key.txt",
+    ownedServiceCount: 17,
+    shutdownGraceMs: 30000,
+  };
+  const unit = renderLocalRuntimeUnit(options);
+  assert.match(unit, /^Type=oneshot$/mu);
+  assert.match(unit, /^RemainAfterExit=yes$/mu);
+  assert.match(unit, /^Restart=no$/mu);
+  assert.match(unit, /^Wants=coffee-observability\.service$/mu);
+  assert.match(unit, /^After=coffee-observability\.service$/mu);
+  assert.equal(unit.match(/^ExecStart=/gmu)?.length, 1);
+  assert.ok(
+    unit.includes(
+      `ExecStart="/usr/bin/flock" --no-fork --timeout=7200 "/run/user/1000/coffee-platform-heavy.lock" "/opt/node/bin/node" "${root}/tools/platform-service.mjs" start`,
+    ),
+  );
+  assert.ok(unit.includes(`COFFEE_LOCAL_RELEASE_ID=${options.releaseId}`));
+  assert.ok(unit.includes(`COFFEE_LAUNCH_CONTEXT_FILE=${options.contextFile}`));
+  const maintenance = renderLocalCertificateMaintenanceUnits({
+    ...options,
+    certificateRenewBeforeHours: 6,
+  });
+  assert.match(maintenance.timer, /^OnCalendar=\*-\*-\* 00\/3:00:00 UTC$/mu);
+  assert.match(maintenance.timer, /^Persistent=true$/mu);
+  assert.match(maintenance.service, /^Type=oneshot$/mu);
+  assert.match(
+    maintenance.service,
+    /^ExecCondition=\/usr\/bin\/systemctl --user is-active --quiet coffee-platform\.service$/mu,
+  );
+  assert.match(
+    maintenance.service,
+    /^ExecStart=.*tools\/platform-service\.mjs" dispatch-maintenance$/mu,
+  );
+  assert.match(
+    unit,
+    /^ExecReload=.*coffee-platform-heavy\.lock.* maintain-certificates$/mu,
+  );
+  assert.match(unit, /^ExecStopPost=.* stop$/mu);
+  assert.doesNotMatch(unit, /^ExecStop=/mu);
+  assert.doesNotMatch(maintenance.service, /^Requires=|^BindsTo=/mu);
+  assert.throws(
+    () =>
+      renderLocalCertificateMaintenanceUnits({
+        ...options,
+        certificateRenewBeforeHours: 5,
+      }),
+    /interval is invalid/u,
+  );
+  const timeout = Number(/^TimeoutStopSec=(\d+)$/mu.exec(unit)?.[1]);
+  assert.ok(Number.isSafeInteger(timeout));
+  // Two bounded batch metadata calls, 17 bounded stops and one control allowance.
+  assert.ok(timeout >= 2 * 10 + 17 * (30 + 5) + 10);
+  assert.ok(timeout <= 12 * 60);
+  assert.ok(timeout >= (17 * options.shutdownGraceMs) / 1000);
+  assert.throws(
+    () =>
+      renderLocalRuntimeUnit({
+        ...options,
+        root: `${root}\nExecStart=foreign`,
+      }),
+    /locators are invalid/u,
+  );
+  assert.throws(
+    () => renderLocalRuntimeUnit({ ...options, releaseId: "foreign" }),
+    /locators are invalid/u,
+  );
+  assert.throws(
+    () => renderLocalRuntimeUnit({ ...options, ownedServiceCount: 0 }),
+    /locators are invalid/u,
+  );
+});
+
+void test("certificate maintenance respects its unit, deadline and failed stop", async () => {
+  await assert.rejects(
+    maintainLocalCertificates({ env: {} }),
+    /requires the unit reload process/u,
+  );
+  await assert.rejects(
+    maintainLocalCertificates({
+      env: { INVOCATION_ID: "a".repeat(32), SYSTEMD_EXEC_PID: "0" },
+    }),
+    /requires the unit reload process/u,
+  );
+  const root = "/fixture/controller";
+  const releaseId = `${"a".repeat(40)}-${"b".repeat(16)}-${"c".repeat(12)}`;
+  const env = {
+    INVOCATION_ID: "a".repeat(32),
+    SYSTEMD_EXEC_PID: String(process.pid),
+    COFFEE_LAUNCH_CONTEXT_FILE: "/fixture/context.json",
+    COFFEE_LOCAL_RELEASE_ID: releaseId,
+  };
+  const calls = [];
+  let earliest = Date.now() + 7 * 3_600_000;
+  let publicExpiry = Date.now() + 24 * 3_600_000;
+  let warningFailure = false;
+  let stopFailure = false;
+  const options = {
+    root,
+    env,
+    validateContext: async (path) => {
+      assert.equal(path, env.COFFEE_LAUNCH_CONTEXT_FILE);
+      return { candidateRoot: root };
+    },
+    readRelease: async () => ({ releaseId, releaseDir: "/fixture/release" }),
+    loadConfig: async () => ({ security: { certificateRenewBeforeHours: 6 } }),
+    readExpiry: async () => ({
+      earliest,
+      publicExpiry,
+    }),
+    stop: async () => {
+      calls.push("stop");
+      if (stopFailure) throw new Error("interrupted cleanup");
+    },
+    start: async () => {
+      calls.push("start");
+      return { state: "awaiting-owner-relogin" };
+    },
+    publish: async (event) => {
+      calls.push(event.reason);
+      if (warningFailure) throw new Error("warning delivery failed");
+    },
+  };
+  assert.deepEqual(await maintainLocalCertificates(options), {
+    state: "current",
+    publicRenewalRequired: false,
+  });
+  assert.deepEqual(calls, []);
+  publicExpiry = Date.now() + 5 * 3_600_000;
+  assert.deepEqual(await maintainLocalCertificates(options), {
+    state: "current",
+    publicRenewalRequired: true,
+  });
+  assert.deepEqual(calls, ["public_certificate_expiring"]);
+  calls.length = 0;
+  warningFailure = true;
+  await assert.rejects(
+    maintainLocalCertificates(options),
+    /warning delivery failed/u,
+  );
+  assert.deepEqual(calls, ["public_certificate_expiring"]);
+  calls.length = 0;
+  warningFailure = false;
+  publicExpiry = Date.now() + 24 * 3_600_000;
+  earliest = Date.now() + 5 * 3_600_000;
+  assert.deepEqual(await maintainLocalCertificates(options), {
+    state: "awaiting-owner-relogin",
+    publicRenewalRequired: false,
+  });
+  assert.deepEqual(calls, ["stop", "start"]);
+  calls.length = 0;
+  stopFailure = true;
+  await assert.rejects(
+    maintainLocalCertificates(options),
+    /interrupted cleanup/u,
+  );
+  assert.deepEqual(calls, ["stop"]);
+  calls.length = 0;
+  await assert.rejects(
+    maintainLocalCertificates({
+      ...options,
+      env: { ...env, COFFEE_LOCAL_RELEASE_ID: "foreign" },
+    }),
+    /maintenance release differs/u,
+  );
+  assert.deepEqual(calls, []);
+});
+
+void test("maintenance warnings carry only allowlisted public metadata and fail closed", async () => {
+  const releaseId = `${"a".repeat(40)}-${"b".repeat(16)}-${"c".repeat(12)}`;
+  const ids = Array.from({ length: 6 }, (_, index) =>
+    String(index + 1).padStart(64, "0"),
+  );
+  const imageId = `sha256:${"d".repeat(64)}`;
+  const rows = ids.map((Id, index) => ({
+    Id,
+    Image: imageId,
+    Config: {
+      Labels: {
+        "com.docker.compose.service":
+          index === 0 ? "alert-sink" : `service-${index}`,
+      },
+    },
+    State: { Running: true },
+  }));
+  const accepted = {
+    root: "/accepted/observability",
+    helper: { imageId },
+    config: {
+      environment: "development",
+      telemetry: {
+        namespace: "coffee-platform",
+        loki: { endpoint: "http://loki:3100" },
+      },
+      platform: { requestDeadlineMs: 5000 },
+    },
+  };
+  let payload;
+  let senderProgram;
+  let wrongReadback = false;
+  const execute = (args, options) => {
+    if (args[0] === "inspect") return JSON.stringify(rows);
+    assert.deepEqual(args.slice(0, 3), ["exec", "-i", ids[0]]);
+    assert.deepEqual(args.slice(3, 5), ["node", "-e"]);
+    senderProgram = args[5];
+    payload = JSON.parse(options.input);
+    return JSON.stringify({
+      event_id: wrongReadback ? "foreign" : payload.event.event_id,
+    });
+  };
+  const options = {
+    reason: "public_certificate_expiring",
+    releaseId,
+    publicNotAfter: Date.now() + 10000,
+    message: "PRIVATE_CANARY",
+    readObservability: async () => accepted,
+    inspectTelemetry: () => ids,
+    run: execute,
+  };
+  const delivered = await publishMaintenanceWarning(options);
+  assert.equal(delivered.eventId, payload.event.event_id);
+  assert.equal(payload.event.reason, "public_certificate_expiring");
+  assert.equal(payload.event.severity, "warn");
+  assert.doesNotMatch(JSON.stringify(payload), /PRIVATE_CANARY/u);
+  assert.deepEqual(
+    Object.keys(payload.event).sort(),
+    [
+      "action",
+      "environment",
+      "event_id",
+      "namespace",
+      "public_not_after",
+      "reason",
+      "release_id",
+      "service",
+      "severity",
+      "time",
+    ].sort(),
+  );
+  const senderInput = structuredClone(payload);
+  senderInput.budget = 450;
+  const executeSender = async (mode) => {
+    let clock = Date.parse(senderInput.event.time);
+    let stdout = "";
+    let stderr = "";
+    const calls = [];
+    const fakeProcess = {
+      stdout: {
+        write: (value) => {
+          stdout += value;
+        },
+      },
+      stderr: {
+        write: (value) => {
+          stderr += value;
+        },
+      },
+      exitCode: undefined,
+    };
+    class FakeDate extends Date {
+      static now() {
+        return clock;
+      }
+    }
+    const fetch = async (url, request = {}) => {
+      calls.push({ url: String(url), method: request.method ?? "GET" });
+      assert.ok(
+        request.signal.timeout > 0 &&
+          request.signal.timeout <= senderInput.budget,
+      );
+      if (request.method === "POST") {
+        assert.equal(url.pathname, "/otlp/v1/logs");
+        const body = JSON.parse(request.body);
+        const resource = body.resourceLogs[0];
+        assert.equal(
+          resource.resource.attributes[0].value.stringValue,
+          senderInput.event.service,
+        );
+        assert.deepEqual(
+          JSON.parse(resource.scopeLogs[0].logRecords[0].body.stringValue),
+          senderInput.event,
+        );
+        return { ok: mode !== "post_non2xx" };
+      }
+      assert.equal(url.pathname, "/loki/api/v1/query_range");
+      assert.ok(
+        url.searchParams.get("query").includes(senderInput.event.event_id),
+      );
+      const seen = { ...senderInput.event };
+      if (mode === "foreign") seen.event_id = "foreign-event";
+      if (mode === "incomplete") delete seen.severity;
+      const values =
+        mode === "missing"
+          ? []
+          : [[String(BigInt(clock) * 1000000n), JSON.stringify(seen)]];
+      return {
+        ok: mode !== "query_non2xx",
+        json: async () => ({
+          status: "success",
+          data: {
+            resultType: "streams",
+            result: [
+              { stream: { service_name: senderInput.event.service }, values },
+            ],
+          },
+        }),
+      };
+    };
+    await runInNewContext(senderProgram, {
+      require: (name) => {
+        assert.equal(name, "node:fs");
+        return {
+          readFileSync: (fd, encoding) => {
+            assert.equal(fd, 0);
+            assert.equal(encoding, "utf8");
+            return JSON.stringify(senderInput);
+          },
+        };
+      },
+      process: fakeProcess,
+      Date: FakeDate,
+      URL,
+      URLSearchParams,
+      BigInt,
+      AbortSignal: { timeout: (timeout) => ({ timeout }) },
+      setTimeout: (callback, milliseconds) => {
+        clock += milliseconds;
+        callback();
+      },
+      fetch,
+    });
+    return {
+      stdout,
+      stderr,
+      exitCode: fakeProcess.exitCode,
+      calls,
+      elapsed: clock - Date.parse(senderInput.event.time),
+    };
+  };
+  const observed = await executeSender("exact");
+  assert.deepEqual(JSON.parse(observed.stdout), {
+    event_id: senderInput.event.event_id,
+  });
+  assert.equal(observed.exitCode, undefined);
+  assert.equal(observed.calls.length, 2);
+  for (const mode of ["foreign", "missing", "incomplete"]) {
+    const rejected = await executeSender(mode);
+    assert.equal(rejected.stdout, "");
+    assert.equal(rejected.exitCode, 1);
+    assert.match(rejected.stderr, /delivery failed/u);
+    assert.ok(rejected.elapsed >= senderInput.budget);
+    assert.equal(
+      rejected.calls.filter((call) => call.method === "POST").length,
+      1,
+    );
+    assert.ok(
+      rejected.calls.filter((call) => call.method === "GET").length > 0,
+    );
+  }
+  for (const mode of ["post_non2xx", "query_non2xx"]) {
+    const rejected = await executeSender(mode);
+    assert.equal(rejected.stdout, "");
+    assert.equal(rejected.exitCode, 1);
+    assert.match(rejected.stderr, /delivery failed/u);
+    assert.equal(rejected.calls.length, mode === "post_non2xx" ? 1 : 2);
+  }
+  wrongReadback = true;
+  await assert.rejects(publishMaintenanceWarning(options), /readback differs/u);
+  await assert.rejects(
+    publishMaintenanceWarning({ ...options, reason: "foreign" }),
+    /input is invalid/u,
+  );
+
+  const cause = new Error("PRIVATE_CANARY");
+  const sent = [];
+  const dispatch = {
+    env: { COFFEE_LOCAL_RELEASE_ID: releaseId },
+    unitState: async () => "active",
+    reload: async () => {
+      throw cause;
+    },
+    publish: async (value) => {
+      sent.push(value);
+    },
+  };
+  await assert.rejects(
+    dispatchCertificateMaintenance(dispatch),
+    (error) =>
+      error.cause === cause &&
+      error.warningDelivery === "delivered" &&
+      !error.message.includes("PRIVATE_CANARY"),
+  );
+  assert.deepEqual(sent, [
+    { reason: "certificate_maintenance_failed", releaseId },
+  ]);
+  await assert.rejects(
+    dispatchCertificateMaintenance({
+      ...dispatch,
+      publish: async () => {
+        throw new Error("private");
+      },
+    }),
+    (error) => error.cause === cause && error.warningDelivery === "failed",
+  );
+  sent.length = 0;
+  assert.deepEqual(
+    await dispatchCertificateMaintenance({
+      ...dispatch,
+      unitState: async () => "inactive",
+    }),
+    { state: "inactive" },
+  );
+  assert.deepEqual(sent, []);
+});
+
+void test("identity retirement receipt fails closed after an interrupted or foreign change", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "coffee-identity-state-"));
+  const identity = {
+    postgresSystemIdentifier: "7613370342949990434",
+    databaseName: "coffee_platform_identity",
+    databaseRole: "coffee_identity_rw",
+    realm: "coffee",
+  };
+  const options = {
+    identity,
+    directory,
+    bootstrap: { ensurePrivateSecretDirectory: async () => {} },
+  };
+  const path = join(directory, "identity.json");
+  const receipt = {
+    ...identity,
+    databaseOid: "12345",
+    signingKeySha256: "a".repeat(64),
+  };
+  try {
+    assert.equal((await identityState(options)).stage, "pending");
+    await writeFile(path, JSON.stringify({ ...receipt, stage: "retiring" }), {
+      mode: 0o600,
+    });
+    await assert.rejects(identityState(options), /retirement was interrupted/u);
+    await writeFile(path, JSON.stringify({ ...receipt, stage: "retired" }));
+    assert.equal((await identityState(options)).stage, "retired");
+    for (const change of [
+      { postgresSystemIdentifier: "1234567890" },
+      { databaseName: "foreign" },
+      { databaseRole: "foreign" },
+      { realm: "foreign" },
+    ])
+      await assert.rejects(
+        identityState({ ...options, identity: { ...identity, ...change } }),
+        /receipt is invalid/u,
+      );
+    for (const sourceSha of ["a".repeat(40), "b".repeat(40)])
+      assert.equal(
+        (
+          await identityState({
+            ...options,
+            identity: {
+              ...identity,
+              sourceSha,
+              encryptedSecretsSha256: sourceSha,
+            },
+          })
+        ).stage,
+        "retired",
+      );
+    await writeFile(path, "{");
+    await assert.rejects(identityState(options), /receipt is invalid/u);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+void test("identity signing authority uses canonical RSA keys rather than JWKS order or key IDs", () => {
+  const first = generateKeyPairSync("rsa", {
+    modulusLength: 2048,
+  }).publicKey.export({ format: "jwk" });
+  const second = generateKeyPairSync("rsa", {
+    modulusLength: 2048,
+  }).publicKey.export({ format: "jwk" });
+  const key = (value, kid) => ({ ...value, use: "sig", alg: "RS256", kid });
+  const initial = identitySigningKeysHash({
+    keys: [key(first, "one"), key(second, "two")],
+  });
+  assert.equal(
+    identitySigningKeysHash({
+      keys: [key(second, "changed"), key(first, "changed")],
+    }),
+    initial,
+  );
+  assert.notEqual(
+    identitySigningKeysHash({ keys: [key(first, "one")] }),
+    initial,
+  );
+  assert.throws(
+    () =>
+      identitySigningKeysHash({
+        keys: [{ ...first, use: "enc", alg: "RS256" }],
+      }),
+    /signing keys are missing/u,
+  );
+});
+
+void test("temporary identity retirement requires the actual owner session and realm administration", async () => {
+  const config = {
+    localIdentity: {
+      realm: "coffee",
+      clientId: "coffee-platform",
+      operatorUsername: "owner",
+      bootstrapAdminUsername: "bootstrap-admin",
+    },
+  };
+  for (const scenario of [
+    "accepted",
+    "wrong-owner",
+    "no-session",
+    "wrong-role",
+    "unmarked-admin",
+    "receipt-failure",
+  ]) {
+    const actions = [];
+    const call = async (path, options) => {
+      actions.push(options.method === "DELETE" ? "delete" : path);
+      if (path.endsWith("/token")) return { access_token: "transient" };
+      assert.equal(options.token, "transient");
+      if (path.includes("/master/users?"))
+        return [
+          {
+            id: "temporary-id",
+            username: "bootstrap-admin",
+            attributes:
+              scenario === "unmarked-admin"
+                ? {}
+                : { is_temporary_admin: ["true"] },
+          },
+        ];
+      if (path.includes("/coffee/users?"))
+        return [
+          {
+            id: "owner-id",
+            enabled: true,
+            username: scenario === "wrong-owner" ? "other" : "owner",
+          },
+        ];
+      if (path.endsWith("/sessions"))
+        return [
+          {
+            clients: {
+              first: scenario === "no-session" ? "other" : "coffee-platform",
+            },
+          },
+        ];
+      if (path.includes("/clients?"))
+        return [{ id: "manager-id", clientId: "realm-management" }];
+      if (path.endsWith("/composite"))
+        return [
+          {
+            name: scenario === "wrong-role" ? "view-users" : "realm-admin",
+            clientRole: true,
+          },
+        ];
+      if (options.method === "DELETE") {
+        assert.equal(path, "/admin/realms/master/users/temporary-id");
+        return undefined;
+      }
+      throw new Error("unexpected API request");
+    };
+    const attempt = authorizeIdentityRetirement({
+      config,
+      bootstrapPassword: "synthetic",
+      call,
+      beforeDelete: async () => {
+        actions.push("receipt");
+        if (scenario === "receipt-failure") throw new Error("receipt failed");
+      },
+    });
+    if (scenario === "accepted") {
+      await attempt;
+      assert.deepEqual(actions.slice(-2), ["receipt", "delete"]);
+    } else if (scenario === "receipt-failure") {
+      await assert.rejects(attempt, /receipt failed/u);
+      assert.equal(actions.includes("delete"), false);
+    } else {
+      await assert.rejects(attempt, /RECOVERY_REQUIRED/u);
+      assert.equal(actions.includes("receipt"), false);
+      assert.equal(actions.includes("delete"), false);
+    }
+  }
+});
+
+void test("local release captures frontend from the verified image and cleans only its container", async (t) => {
+  const releaseDir = await mkdtemp(join(tmpdir(), "coffee-local-release-"));
+  const id = "1".repeat(64);
+  const imageId = `sha256:${"2".repeat(64)}`;
+  const calls = [];
+  let foreign = false;
+  let failCopy = false;
+  const run = (args) => {
+    calls.push(args);
+    if (args[0] === "create") return id;
+    if (args[0] === "inspect")
+      return JSON.stringify([
+        {
+          Id: id,
+          Image: foreign ? `sha256:${"3".repeat(64)}` : imageId,
+          Config: {
+            Labels: {
+              "coffee.owner": "operations",
+              "coffee.lifecycle": "temporary",
+            },
+          },
+        },
+      ]);
+    if (args[0] === "cp") writeFileSync(args[2], "nginx-config");
+    return "";
+  };
+  t.mock.method(childProcess, "execFileSync", (command, args, options) => {
+    assert.equal(command, "docker");
+    assert.deepEqual(args, ["cp", `${id}:/usr/share/nginx/html`, "-"]);
+    if (failCopy) throw new Error("copy failed");
+    writeSync(options.stdio[1], "browser-tar");
+  });
+  syncBuiltinESMExports();
+  try {
+    const captured = await captureLocalFrontend({
+      root: REPO_ROOT,
+      releaseDir,
+      nginxImageId: imageId,
+      run,
+    });
+    assert.equal(
+      captured.nginxSha256,
+      createHash("sha256").update("nginx-config").digest("hex"),
+    );
+    assert.equal(
+      captured.browserAssetsSha256,
+      createHash("sha256").update("browser-tar").digest("hex"),
+    );
+    assert.equal(
+      (await stat(join(releaseDir, "browser-assets.tar"))).mode & 0o777,
+      0o400,
+    );
+    assert.deepEqual(calls.at(-1), ["rm", id]);
+    await rm(join(releaseDir, "nginx.conf"));
+    await rm(join(releaseDir, "browser-assets.tar"));
+    calls.length = 0;
+    foreign = true;
+    await assert.rejects(
+      captureLocalFrontend({
+        root: REPO_ROOT,
+        releaseDir,
+        nginxImageId: imageId,
+        run,
+      }),
+      /ownership is unknown/u,
+    );
+    assert.ok(calls.every((args) => args[0] !== "rm"));
+    calls.length = 0;
+    foreign = false;
+    failCopy = true;
+    await assert.rejects(
+      captureLocalFrontend({
+        root: REPO_ROOT,
+        releaseDir,
+        nginxImageId: imageId,
+        run,
+      }),
+      /copy failed/u,
+    );
+    assert.deepEqual(calls.at(-1), ["rm", id]);
+  } finally {
+    t.mock.restoreAll();
+    syncBuiltinESMExports();
+    await rm(releaseDir, { recursive: true, force: true });
+  }
+});
+
+void test("local runtime stop preserves observability and stops only owned containers", async () => {
+  const calls = [];
+  const status = [
+    { service: "kafka", containerId: "kafka-id", status: "running" },
+    { service: "edge-nginx", containerId: "nginx-id", status: "running" },
+    { service: "orders-service", containerId: "orders-id", status: "running" },
+    { service: "keycloak", containerId: "keycloak-id", status: "running" },
+    { service: "grafana", containerId: "grafana-id", status: "running" },
+  ];
+  const result = await stopLocalRuntime({
+    root: REPO_ROOT,
+    inspect: async () => status,
+    loadConfig: async () => ({ platform: { shutdownGraceMs: 30_000 } }),
+    run: (args) => {
+      calls.push(args);
+      return "";
+    },
+  });
+  assert.deepEqual(result.stopped, [
+    "edge-nginx",
+    "orders-service",
+    "keycloak",
+    "kafka",
+  ]);
+  assert.deepEqual(
+    calls.map((args) => args.at(-1)),
+    ["nginx-id", "orders-id", "keycloak-id", "kafka-id"],
+  );
+  assert.ok(
+    calls.every(
+      (args) => args[0] === "stop" && args[1] === "--time" && args[2] === "30",
+    ),
+  );
+  const rejectedCalls = [];
+  await assert.rejects(
+    stopLocalRuntime({
+      root: REPO_ROOT,
+      inspect: async () => status,
+      loadConfig: async () => ({ platform: { shutdownGraceMs: 30_000 } }),
+      run: (args) => rejectedCalls.push(args),
+      env: { COFFEE_LOCAL_RELEASE_ID: "foreign" },
+    }),
+    /stop release identity is invalid/u,
+  );
+  assert.deepEqual(rejectedCalls, []);
+  const catalog = JSON.parse(
+    await readFile(join(REPO_ROOT, "config/service-catalog.json"), "utf8"),
+  );
+  const roles = [
+    ...catalog.runtimes.map((entry) => entry.name),
+    "kafka",
+    "keycloak",
+  ];
+  const image = `sha256:${"a".repeat(64)}`;
+  const identity = {
+    runtimeImages: catalog.runtimes.map(({ name }) => ({
+      service: name,
+      imageId: image,
+    })),
+    kafkaImageId: image,
+    keycloakImageId: image,
+  };
+  const bound = status.map((entry) => ({ ...entry, imageId: image }));
+  const releaseEnv = {
+    COFFEE_LOCAL_RELEASE_ID: `${"a".repeat(40)}-${"b".repeat(16)}-${"c".repeat(12)}`,
+  };
+  const stopCalls = [];
+  const stopOptions = {
+    root: REPO_ROOT,
+    inspect: async () => bound,
+    loadConfig: async () => ({ platform: { shutdownGraceMs: 30_000 } }),
+    loadRelease: async () => ({ identity }),
+    run: (args) => {
+      stopCalls.push(args);
+      return "";
+    },
+    env: releaseEnv,
+  };
+  bound.find((entry) => entry.service === "kafka").imageId =
+    `sha256:${"b".repeat(64)}`;
+  await assert.rejects(
+    stopLocalRuntime(stopOptions),
+    /stop container image identity differs/u,
+  );
+  assert.deepEqual(stopCalls, []);
+  bound.find((entry) => entry.service === "kafka").imageId = image;
+  bound.find((entry) => entry.service === "orders-service").status =
+    "restarting";
+  await assert.rejects(
+    stopLocalRuntime({
+      ...stopOptions,
+      env: { ...releaseEnv, SERVICE_RESULT: "signal" },
+    }),
+    /unit stopped after an unsuccessful operation/u,
+  );
+  assert.deepEqual(
+    stopCalls.map((args) => args.at(-1)),
+    ["nginx-id", "orders-id", "keycloak-id", "kafka-id"],
+  );
+  const telemetry = [
+    "grafana",
+    "loki",
+    "prometheus",
+    "tempo",
+    "otel-collector",
+    "alert-sink",
+  ];
+  const containers = [...roles, ...telemetry]
+    .map((service, index) => ({
+      Id: (index + 1).toString(16).padStart(64, "0"),
+      Image: `sha256:${(index + 1).toString(16).padStart(64, "0")}`,
+      Config: {
+        Labels: {
+          "com.docker.compose.project": "coffee-platform",
+          "com.docker.compose.service": service,
+          "com.docker.compose.project.working_dir": roles.includes(service)
+            ? REPO_ROOT
+            : "/separate/observability/release",
+        },
+      },
+      State: { Status: "running" },
+    }))
+    .reverse();
+  const exercise = async (rows, partial = false) => {
+    const commands = [];
+    const run = (args) => {
+      commands.push(args);
+      if (args[0] === "ps") return rows.map((item) => item.Id).join("\n");
+      if (args[0] === "inspect")
+        return JSON.stringify(partial ? rows.slice(1) : rows);
+      return "";
+    };
+    return {
+      commands,
+      result: stopLocalRuntime({
+        root: REPO_ROOT,
+        run,
+        loadConfig: async () => ({ platform: { shutdownGraceMs: 30000 } }),
+      }),
+    };
+  };
+  const valid = await exercise(containers);
+  const stopped = await valid.result;
+  assert.equal(valid.commands.filter((args) => args[0] === "ps").length, 1);
+  assert.equal(
+    valid.commands.filter((args) => args[0] === "inspect").length,
+    1,
+  );
+  assert.equal(valid.commands.filter((args) => args[0] === "stop").length, 17);
+  assert.deepEqual(stopped.stopped, [
+    "edge-nginx",
+    ...roles.filter(
+      (role) => !["edge-nginx", "kafka", "keycloak"].includes(role),
+    ),
+    "keycloak",
+    "kafka",
+  ]);
+  assert.ok(
+    valid.commands
+      .filter((args) => args[0] === "stop")
+      .every(
+        (args) =>
+          !containers.some(
+            (item) =>
+              telemetry.includes(
+                item.Config.Labels["com.docker.compose.service"],
+              ) && item.Id === args.at(-1),
+          ),
+      ),
+  );
+  for (const variant of ["foreign", "duplicate", "image", "partial"]) {
+    const rows = structuredClone(containers);
+    const product = rows.find(
+      (item) =>
+        item.Config.Labels["com.docker.compose.service"] === "orders-service",
+    );
+    if (variant === "foreign")
+      product.Config.Labels["com.docker.compose.project.working_dir"] =
+        "/foreign";
+    if (variant === "duplicate")
+      rows.find(
+        (item) =>
+          item.Config.Labels["com.docker.compose.service"] === "api-public",
+      ).Config.Labels["com.docker.compose.service"] = "orders-service";
+    if (variant === "image") product.Image = "foreign";
+    const rejected = await exercise(rows, variant === "partial");
+    await assert.rejects(
+      rejected.result,
+      /identity is ambiguous|inspection is incomplete|does not belong/u,
+    );
+    assert.equal(
+      rejected.commands.some((args) => args[0] === "stop"),
+      false,
+    );
+  }
+});
+
+void test("local runtime compose binds verified images and scoped identity material", async () => {
+  const { load } = await import("js-yaml");
+  const config = load(
+    await readFile(join(REPO_ROOT, "config/platform.yaml"), "utf8"),
+  );
+  const catalog = JSON.parse(
+    await readFile(join(REPO_ROOT, "config/service-catalog.json"), "utf8"),
+  );
+  const runtimes = catalog.runtimes
+    .map((entry) => entry.name)
+    .filter((name) => name !== "edge-nginx");
+  const runtimeImages = [...runtimes, "edge-nginx"].map((service, index) => ({
+    service,
+    imageId: `sha256:${(index + 1).toString(16).padStart(64, "0")}`,
+  }));
+  const options = {
+    config,
+    runtimes,
+    runtimeImages,
+    kafkaImageId: `sha256:${"a".repeat(64)}`,
+    keycloakImageId: `sha256:${"b".repeat(64)}`,
+    configPath: "/private/release/platform.yaml",
+    secretsDir: "/dev/shm/coffee-private",
+  };
+  const compose = createLocalComposeOverride(options);
+  for (const entry of runtimeImages)
+    assert.equal(compose.services[entry.service].image, entry.imageId);
+  for (const service of [...runtimes, "edge-nginx", "kafka", "keycloak"]) {
+    assert.equal(compose.services[service].restart, "on-failure:3");
+    assert.deepEqual(compose.services[service].logging, {
+      driver: "json-file",
+      options: {
+        "max-size": "8m",
+        "max-file": "3",
+        mode: "non-blocking",
+        "max-buffer-size": String(
+          config.telemetry.producer.maxRecordBytes *
+            config.telemetry.producer.queueCapacity,
+        ),
+      },
+    });
+  }
+  assert.equal(compose.services.kafka.image, options.kafkaImageId);
+  assert.equal(compose.services.keycloak.image, options.keycloakImageId);
+  assert.equal(compose.services.keycloak.read_only, true);
+  assert.deepEqual(compose.services.keycloak.healthcheck.test, [
+    "CMD",
+    "wget",
+    "-q",
+    "--spider",
+    "http://127.0.0.1:9000/health/ready",
+  ]);
+  assert.deepEqual(compose.services.keycloak.cap_drop, ["ALL"]);
+  for (const name of ["INITIAL", "MIN", "MAX"])
+    assert.equal(
+      compose.services.keycloak.environment[`KC_DB_POOL_${name}_SIZE`],
+      "2",
+    );
+  assert.equal(
+    compose.services.keycloak.environment.KC_HTTP_MANAGEMENT_HOST,
+    "127.0.0.1",
+  );
+  assert.equal(compose.services.keycloak.mem_limit, "2048m");
+  assert.deepEqual(compose.services.keycloak.ports, ["127.0.0.1:9443:8443"]);
+  assert.ok(compose.services.keycloak.command.includes("--import-realm"));
+  assert.ok(compose.services.keycloak.environment.KC_BOOTSTRAP_ADMIN_USERNAME);
+  const steady = createLocalComposeOverride({
+    ...options,
+    steadyIdentity: true,
+  });
+  assert.equal(steady.services.keycloak.image, compose.services.keycloak.image);
+  assert.equal(
+    steady.services.keycloak.command.includes("--import-realm"),
+    false,
+  );
+  assert.equal(
+    "KC_BOOTSTRAP_ADMIN_USERNAME" in steady.services.keycloak.environment,
+    false,
+  );
+  assert.equal(
+    steady.services.keycloak.volumes.some(
+      (volume) => volume.target === "/opt/keycloak/data/import",
+    ),
+    false,
+  );
+  assert.equal(
+    compose.services["edge-gateway"].environment.NODE_EXTRA_CA_CERTS,
+    "/run/identity-ca/ca.crt",
+  );
+  assert.doesNotMatch(
+    JSON.stringify(compose),
+    /bootstrap-admin-password|databasePassword|operatorPassword/u,
+  );
+  assert.throws(
+    () =>
+      createLocalComposeOverride({
+        ...options,
+        runtimeImages: runtimeImages.slice(1),
+      }),
+    /image or path/u,
+  );
+});
+
+void test("local runtime status admits only one container owned by its release", async () => {
+  const id = "a".repeat(64);
+  const imageId = `sha256:${"b".repeat(64)}`;
+  const inspect = {
+    Id: id,
+    Image: imageId,
+    Config: {
+      Labels: {
+        "com.docker.compose.project": "coffee-platform",
+        "com.docker.compose.service": "edge-nginx",
+        "com.docker.compose.project.working_dir": REPO_ROOT,
+      },
+      Env: ["PRIVATE_VALUE=synthetic-canary"],
+    },
+    State: { Status: "running", Health: { Status: "healthy" } },
+  };
+  const run = (args) => {
+    if (args[0] === "inspect") return JSON.stringify([inspect]);
+    return args.includes("label=com.docker.compose.service=edge-nginx")
+      ? id
+      : "";
+  };
+  const telemetry = {
+    telemetryRoot: () => REPO_ROOT,
+    inspectTelemetry: () => [],
+  };
+  const status = await inspectLocalRuntime({
+    root: REPO_ROOT,
+    run,
+    ...telemetry,
+  });
+  assert.deepEqual(
+    status.find((entry) => entry.service === "edge-nginx"),
+    {
+      service: "edge-nginx",
+      containerId: id,
+      imageId,
+      status: "running",
+      health: "healthy",
+    },
+  );
+  assert.equal(status.filter((entry) => entry.status === "missing").length, 22);
+  const telemetryId = "c".repeat(64);
+  const sinkId = "d".repeat(64);
+  const telemetryStatus = await inspectLocalRuntime({
+    root: REPO_ROOT,
+    run: (args) =>
+      args[0] === "inspect" && [telemetryId, sinkId].includes(args[1])
+        ? JSON.stringify([
+            {
+              ...inspect,
+              Id: args[1],
+              Config: {
+                Labels: {
+                  "com.docker.compose.service":
+                    args[1] === sinkId ? "alert-sink" : "grafana",
+                },
+              },
+              State:
+                args[1] === sinkId
+                  ? { Status: "running", Running: true }
+                  : inspect.State,
+            },
+          ])
+        : run(args),
+    telemetryRoot: () => "/separate/observability/release",
+    inspectTelemetry: ({ root }) => {
+      assert.equal(root, "/separate/observability/release");
+      return [telemetryId, sinkId];
+    },
+  });
+  assert.equal(
+    telemetryStatus.find((entry) => entry.service === "grafana").health,
+    "healthy",
+  );
+  const sink = telemetryStatus.find((entry) => entry.service === "alert-sink");
+  assert.equal(sink.health, "none");
+  assert.equal(isLocalRuntimeReady(sink), true);
+  assert.equal(isLocalRuntimeReady({ ...sink, status: "exited" }), false);
+  assert.equal(isLocalRuntimeReady({ ...sink, health: "unhealthy" }), false);
+  assert.equal(isLocalRuntimeReady({ ...sink, health: "unknown" }), false);
+  assert.equal(
+    isLocalRuntimeReady({
+      service: "grafana",
+      status: "running",
+      health: "none",
+    }),
+    false,
+  );
+  assert.equal(
+    isLocalRuntimeReady({
+      service: "orders-service",
+      status: "running",
+      health: "unhealthy",
+    }),
+    false,
+  );
+  assert.doesNotMatch(JSON.stringify(status), /synthetic-canary/u);
+  inspect.Config.Labels["com.docker.compose.project.working_dir"] = "/foreign";
+  await assert.rejects(
+    inspectLocalRuntime({ root: REPO_ROOT, run }),
+    /does not belong/u,
+  );
+  await assert.rejects(
+    inspectLocalRuntime({ root: REPO_ROOT, run: () => `${id}\n${id}` }),
+    /ambiguous/u,
+  );
+});
 const COMPOSE_FILE = join(REPO_ROOT, "compose.yaml");
 const OBSERVABILITY_CONFIG = {
   platform: {
@@ -382,6 +1637,17 @@ void test("smoke removes only project-scoped images built by this run", async (t
       "/private/g14-child-C",
     );
     assert.equal(calls[0][1].at(-1), "/private/g14-child-C");
+    calls.length = 0;
+    const missingOnly = [];
+    buildRuntimeImages(
+      "coffee-local-build",
+      ["first"],
+      missingOnly,
+      "/private/source",
+      { includeNginx: false },
+    );
+    assert.deepEqual(missingOnly, ["coffee-local-build-first:latest"]);
+    assert.equal(calls.length, 1);
   } finally {
     t.mock.restoreAll();
     syncBuiltinESMExports();
@@ -2050,6 +3316,7 @@ void test("verified infrastructure image loader accepts only context-bound Kafka
   const services = [
     ...RUNTIME_NAMES,
     "grafana",
+    "keycloak",
     "storage-helper",
     "edge-nginx",
     "kafka",

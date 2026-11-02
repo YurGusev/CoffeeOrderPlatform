@@ -8,6 +8,8 @@ ARG NODE_IMAGE=node:26.8.1-alpine@sha256:2d984a15c9b54fd0aeb608b8e0d0d83529eb34d
 # inert default keeps unrelated targets parseable without enabling a fallback.
 ARG KAFKA_IMAGE=scratch
 ARG GRAFANA_IMAGE=scratch
+ARG KEYCLOAK_DISTRIBUTION_IMAGE=scratch
+ARG KEYCLOAK_RUNTIME_IMAGE=scratch
 
 FROM ${NODE_IMAGE} AS librdkafka-build
 
@@ -162,6 +164,16 @@ COPY --from=grafana-plugins --chown=472:472 /loki /opt/grafana/plugins/loki
 COPY --from=grafana-plugins --chown=472:472 /tempo /opt/grafana/plugins/tempo
 COPY --from=grafana-plugins --chown=472:472 /prometheus /opt/grafana/plugins/prometheus
 ENV GF_PATHS_PLUGINS=/opt/grafana/plugins
+
+# Package the pinned Keycloak distribution with the pinned Temurin runtime.
+FROM ${KEYCLOAK_DISTRIBUTION_IMAGE} AS keycloak-distribution
+FROM ${KEYCLOAK_RUNTIME_IMAGE} AS keycloak
+RUN addgroup -g 1000 keycloak && adduser -D -u 1000 -G keycloak keycloak
+COPY --from=keycloak-distribution --chown=1000:1000 /opt/keycloak /opt/keycloak
+WORKDIR /opt/keycloak
+USER 1000:1000
+ENTRYPOINT ["/opt/keycloak/bin/kc.sh"]
+CMD ["start", "--optimized"]
 
 FROM ${NODE_IMAGE} AS runtime
 

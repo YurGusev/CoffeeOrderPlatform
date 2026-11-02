@@ -7,6 +7,7 @@ import {
   mkdtemp,
   mkdir,
   stat,
+  symlink,
   readFile,
   readdir,
   rm,
@@ -33,6 +34,7 @@ import {
   validateDatabaseMetadata,
   verifyBuildxMetadata,
   verifyGrafanaImageFiles,
+  verifyKeycloakImageFiles,
   verifyOciAttestation,
   verifySlsaStatement,
   verifyKafkaBaseMaterialStatement,
@@ -280,6 +282,186 @@ void test("G12 accepts Buildx mode=min metadata shape and requires statement sub
       ),
     { code: "STORAGE_HELPER_BASE_MATERIAL_MISMATCH" },
   );
+});
+
+void test("G12 binds both Keycloak input materials and rejects missing or foreign provenance", () => {
+  const vendor = "1".repeat(64);
+  const runtime = "2".repeat(64);
+  const material = (sourceRef, sha256) => ({
+    sourceRef,
+    platformManifestDigest: `sha256:${"3".repeat(64)}`,
+    indexArtifact: { sha256 },
+  });
+  const base = {
+    distribution: material(`dhi.io/keycloak@sha256:${vendor}`, vendor),
+    runtime: material(
+      `eclipse-temurin:21.0.13_9-jre-alpine-3.24@sha256:${runtime}`,
+      runtime,
+    ),
+  };
+  const dependencies = [
+    {
+      uri: `pkg:docker/dhi.io/keycloak?digest=sha256:${vendor}&platform=linux%2Famd64`,
+      digest: { sha256: vendor },
+    },
+    {
+      uri: `pkg:docker/eclipse-temurin@21.0.13_9-jre-alpine-3.24?digest=sha256:${runtime}&platform=linux%2Famd64`,
+      digest: { sha256: runtime },
+    },
+  ];
+  const statement = {
+    _type: "https://in-toto.io/Statement/v1",
+    predicateType: "https://slsa.dev/provenance/v1",
+    subject: [{ digest: { sha256: "f".repeat(64) } }],
+    predicate: {
+      buildDefinition: {
+        buildType:
+          "https://github.com/moby/buildkit/blob/master/docs/attestations/slsa-definitions.md",
+        resolvedDependencies: dependencies,
+      },
+      runDetails: {
+        metadata: { buildkit_completeness: { resolvedDependencies: false } },
+      },
+    },
+  };
+  assert.equal(
+    verifySlsaStatement(
+      "keycloak",
+      statement,
+      `sha256:${"f".repeat(64)}`,
+      candidateSha,
+      base,
+    ).service,
+    "keycloak",
+  );
+  statement.predicate.buildDefinition.resolvedDependencies = [dependencies[0]];
+  assert.throws(
+    () =>
+      verifySlsaStatement(
+        "keycloak",
+        statement,
+        `sha256:${"f".repeat(64)}`,
+        candidateSha,
+        base,
+      ),
+    { code: "KEYCLOAK_RUNTIME_BASE_MATERIAL_MISMATCH" },
+  );
+  statement.predicate.buildDefinition.resolvedDependencies = [
+    dependencies[0],
+    { ...dependencies[1], digest: { sha256: "4".repeat(64) } },
+  ];
+  assert.throws(
+    () =>
+      verifySlsaStatement(
+        "keycloak",
+        statement,
+        `sha256:${"f".repeat(64)}`,
+        candidateSha,
+        base,
+      ),
+    { code: "KEYCLOAK_RUNTIME_BASE_MATERIAL_MISMATCH" },
+  );
+});
+
+void test("G12 checks final Keycloak files and rejects Java overwrites", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "keycloak-image-proof-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const base = join(root, "base");
+  const added = join(root, "added");
+  const java = "opt/java/openjdk/release";
+  const guava =
+    "opt/keycloak/lib/lib/main/com.google.guava.guava-33.7.2-jre.jar";
+  await mkdir(join(base, dirname(java)), { recursive: true });
+  await mkdir(join(added, dirname(guava)), { recursive: true });
+  await writeFile(join(base, java), "synthetic JRE release");
+  for (const [path, value] of [
+    ["opt/java/openjdk/lib/security/cacerts", "synthetic cacerts"],
+    ["opt/java/openjdk/conf/security/java.security", "synthetic java security"],
+  ]) {
+    await mkdir(join(base, dirname(path)), { recursive: true });
+    await writeFile(join(base, path), value);
+  }
+  await writeFile(join(added, guava), "synthetic Guava");
+  for (const [directory, name] of [
+    [base, "base.tar"],
+    [added, "added.tar"],
+  ])
+    execFileSync("tar", ["-cf", join(root, name), "-C", directory, "."]);
+  const toolchain = {
+    keycloakJavaCacertsSha256: createHash("sha256")
+      .update("synthetic cacerts")
+      .digest("hex"),
+    keycloakJavaSecuritySha256: createHash("sha256")
+      .update("synthetic java security")
+      .digest("hex"),
+    keycloakJavaReleaseSha256: createHash("sha256")
+      .update("synthetic JRE release")
+      .digest("hex"),
+    keycloakGuavaSha256: createHash("sha256")
+      .update("synthetic Guava")
+      .digest("hex"),
+  };
+  await writeFile(
+    join(root, "config.json"),
+    JSON.stringify({
+      config: {
+        User: "1000:1000",
+        WorkingDir: "/opt/keycloak",
+        Entrypoint: ["/opt/keycloak/bin/kc.sh"],
+        Cmd: ["start", "--optimized"],
+        Env: ["JAVA_HOME=/opt/java/openjdk"],
+      },
+    }),
+  );
+  const image = {
+    imageLayoutPath: root,
+    dockerArchiveManifest: {
+      Config: "config.json",
+      Layers: ["base.tar", "added.tar"],
+    },
+    baseMaterial: { runtime: { manifestArtifact: { layerCount: 1 } } },
+  };
+  const run = async (command, args) =>
+    execFileSync(command, args, { encoding: "utf8" });
+  const files = await verifyKeycloakImageFiles({ image, toolchain, run });
+  assert.equal(files.guava.sha256, toolchain.keycloakGuavaSha256);
+  assert.equal(files.javaRelease.sha256, toolchain.keycloakJavaReleaseSha256);
+  for (const ancestor of [
+    "opt/keycloak/lib",
+    "opt/keycloak/lib/lib",
+    "opt/keycloak/lib/lib/main",
+  ]) {
+    for (const kind of ["symlink", "file"]) {
+      const attackRoot = join(root, "ancestor-attack");
+      const attackPath = join(attackRoot, ancestor);
+      await mkdir(dirname(attackPath), { recursive: true });
+      if (kind === "symlink") await symlink("/tmp", attackPath);
+      else await writeFile(attackPath, "not a directory");
+      execFileSync("tar", [
+        "-cf",
+        join(root, "ancestor.tar"),
+        "-C",
+        attackRoot,
+        ".",
+      ]);
+      const modified = {
+        ...image,
+        dockerArchiveManifest: {
+          ...image.dockerArchiveManifest,
+          Layers: [...image.dockerArchiveManifest.Layers, "ancestor.tar"],
+        },
+      };
+      await assert.rejects(
+        verifyKeycloakImageFiles({ image: modified, toolchain, run }),
+        /ValueError: ancestor/u,
+      );
+      await rm(attackRoot, { recursive: true, force: true });
+    }
+  }
+  await mkdir(join(added, dirname(java)), { recursive: true });
+  await writeFile(join(added, java), "foreign runtime");
+  execFileSync("tar", ["-cf", join(root, "added.tar"), "-C", added, "."]);
+  await assert.rejects(verifyKeycloakImageFiles({ image, toolchain, run }));
 });
 
 void test("G12 binds Kafka provenance to the single pinned linux/amd64 base descriptor", () => {
@@ -984,7 +1166,16 @@ void test("G12 Grafana effective binary proof rejects later links, files and whi
   await writeFile(
     join(layout, "config.json"),
     JSON.stringify({
-      config: { Env: ["GF_PATHS_PLUGINS=/opt/grafana/plugins"] },
+      config: {
+        Env: [
+          "GF_PATHS_PLUGINS=/opt/grafana/plugins",
+          "JAVA_HOME=/opt/java/openjdk",
+        ],
+        User: "1000:1000",
+        WorkingDir: "/opt/keycloak",
+        Entrypoint: ["/opt/keycloak/bin/kc.sh"],
+        Cmd: ["start", "--optimized"],
+      },
     }),
   );
   execFileSync("tar", ["-cf", join(layout, "base.tar"), "-C", root, "."]);
@@ -1380,6 +1571,38 @@ void test("G12 builds product images, records pinned upstream identity, and fail
       .replace(kafkaPlatformDigest, `sha256:${"f".repeat(64)}`),
   );
   toolchainFixture.grafanaImage = `grafana/grafana:13.3.0-slim@sha256:${fakeSha(grafanaBaseIndexBytes)}`;
+  const keycloakRuntimeManifestBytes = Buffer.from(
+    JSON.stringify({
+      schemaVersion: 2,
+      layers: [{ digest: `sha256:${"9".repeat(64)}` }],
+    }),
+  );
+  const keycloakRuntimePlatform = `sha256:${fakeSha(keycloakRuntimeManifestBytes)}`;
+  const keycloakRuntimeIndex = JSON.parse(kafkaBaseIndexBytes.toString());
+  keycloakRuntimeIndex.manifests[0].digest = keycloakRuntimePlatform;
+  keycloakRuntimeIndex.manifests[0].size = keycloakRuntimeManifestBytes.length;
+  const keycloakRuntimeIndexBytes = Buffer.from(
+    JSON.stringify(keycloakRuntimeIndex),
+  );
+  const keycloakDistributionIndexBytes = Buffer.from(
+    kafkaBaseIndexBytes
+      .toString()
+      .replace(kafkaPlatformDigest, `sha256:${"8".repeat(64)}`),
+  );
+  toolchainFixture.keycloakDistributionImage = `dhi.io/keycloak@sha256:${fakeSha(keycloakDistributionIndexBytes)}`;
+  toolchainFixture.keycloakRuntimeImage = `eclipse-temurin:21.0.13_9-jre-alpine-3.24@sha256:${fakeSha(keycloakRuntimeIndexBytes)}`;
+  toolchainFixture.keycloakGuavaSha256 = fakeSha(
+    Buffer.from("synthetic Guava"),
+  );
+  toolchainFixture.keycloakJavaReleaseSha256 = fakeSha(
+    Buffer.from("synthetic JRE release"),
+  );
+  toolchainFixture.keycloakJavaCacertsSha256 = fakeSha(
+    Buffer.from("synthetic cacerts"),
+  );
+  toolchainFixture.keycloakJavaSecuritySha256 = fakeSha(
+    Buffer.from("synthetic java security"),
+  );
   const keyFixture = Buffer.from("const publicKeyText = `synthetic-key`\n");
   toolchainFixture.grafanaSigningKeySourceSha256 = fakeSha(keyFixture);
   const pluginFixtures = {};
@@ -1516,7 +1739,16 @@ void test("G12 builds product images, records pinned upstream identity, and fail
     JSON.stringify({
       architecture: "amd64",
       os: "linux",
-      config: { Env: ["GF_PATHS_PLUGINS=/opt/grafana/plugins"] },
+      config: {
+        Env: [
+          "GF_PATHS_PLUGINS=/opt/grafana/plugins",
+          "JAVA_HOME=/opt/java/openjdk",
+        ],
+        User: "1000:1000",
+        WorkingDir: "/opt/keycloak",
+        Entrypoint: ["/opt/keycloak/bin/kc.sh"],
+        Cmd: ["start", "--optimized"],
+      },
       rootfs: { type: "layers", diff_ids: [ociLayerDiffId] },
       history: [{ created_by: "synthetic G12 OCI fixture" }],
     }),
@@ -1562,6 +1794,34 @@ void test("G12 builds product images, records pinned upstream identity, and fail
     { encoding: null },
   );
   const grafanaLayerDigest = `sha256:${sha(grafanaLayerBytes)}`;
+  const keycloakLayerRoot = join(temp, "keycloak-layer-root");
+  const keycloakBaseRoot = join(temp, "keycloak-base-root");
+  const guavaPath =
+    "opt/keycloak/lib/lib/main/com.google.guava.guava-33.7.2-jre.jar";
+  const javaPath = "opt/java/openjdk/release";
+  await mkdir(join(keycloakLayerRoot, dirname(guavaPath)), { recursive: true });
+  await mkdir(join(keycloakBaseRoot, dirname(javaPath)), { recursive: true });
+  await writeFile(join(keycloakLayerRoot, guavaPath), "synthetic Guava");
+  await writeFile(join(keycloakBaseRoot, javaPath), "synthetic JRE release");
+  for (const [path, value] of [
+    ["opt/java/openjdk/lib/security/cacerts", "synthetic cacerts"],
+    ["opt/java/openjdk/conf/security/java.security", "synthetic java security"],
+  ]) {
+    await mkdir(join(keycloakBaseRoot, dirname(path)), { recursive: true });
+    await writeFile(join(keycloakBaseRoot, path), value);
+  }
+  const keycloakLayerBytes = execFileSync(
+    "tar",
+    ["-cf", "-", "-C", keycloakLayerRoot, "."],
+    { encoding: null },
+  );
+  const keycloakBaseBytes = execFileSync(
+    "tar",
+    ["-cf", "-", "-C", keycloakBaseRoot, "."],
+    { encoding: null },
+  );
+  const keycloakLayerDigest = `sha256:${sha(keycloakLayerBytes)}`;
+  const keycloakBaseDigest = `sha256:${sha(keycloakBaseBytes)}`;
   const scannerReference =
     "ghcr.io/aquasecurity/trivy@sha256:790fd66d1697395d8693d1acaa1ea702406a20f109b6fc7bac8db623eca6c06c";
   const pinnedRefs = new Set([
@@ -1980,7 +2240,19 @@ void test("G12 builds product images, records pinned upstream identity, and fail
             0o777,
           0o755,
         );
-        if (service === "grafana") {
+        if (service === "keycloak") {
+          assert.ok(
+            args.includes(
+              `KEYCLOAK_DISTRIBUTION_IMAGE=${toolchain.keycloakDistributionImage}`,
+            ),
+          );
+          assert.ok(
+            args.includes(
+              `KEYCLOAK_RUNTIME_IMAGE=${toolchain.keycloakRuntimeImage}`,
+            ),
+          );
+          assert.equal(args[args.indexOf("--target") + 1], "keycloak");
+        } else if (service === "grafana") {
           assert.ok(args.includes(`GRAFANA_IMAGE=${toolchain.grafanaImage}`));
           assert.ok(args.some((arg) => arg.startsWith("grafana-plugins=")));
           assert.equal(args[args.indexOf("--target") + 1], "grafana");
@@ -2042,14 +2314,31 @@ void test("G12 builds product images, records pinned upstream identity, and fail
           .split(",")[0];
         lastProductLayoutPath = ociLayout;
         const buildLayerBytes =
-          service === "grafana" ? grafanaLayerBytes : ociLayerBytes;
+          service === "grafana"
+            ? grafanaLayerBytes
+            : service === "keycloak"
+              ? keycloakLayerBytes
+              : ociLayerBytes;
         const buildLayerDigest =
-          service === "grafana" ? grafanaLayerDigest : ociLayerDigest;
+          service === "grafana"
+            ? grafanaLayerDigest
+            : service === "keycloak"
+              ? keycloakLayerDigest
+              : ociLayerDigest;
         const imageManifestBytes = Buffer.from(
           JSON.stringify({
             schemaVersion: 2,
             config: { digest: configDigest, size: ociConfigBytes.length },
             layers: [
+              ...(service === "keycloak"
+                ? [
+                    {
+                      mediaType: "application/vnd.oci.image.layer.v1.tar",
+                      digest: keycloakBaseDigest,
+                      size: keycloakBaseBytes.length,
+                    },
+                  ]
+                : []),
               {
                 mediaType: "application/vnd.oci.image.layer.v1.tar",
                 digest: buildLayerDigest,
@@ -2086,35 +2375,49 @@ void test("G12 builds product images, records pinned upstream identity, and fail
                 "https://github.com/moby/buildkit/blob/master/docs/attestations/slsa-definitions.md",
               externalParameters: { configSource: { path: "Dockerfile" } },
               resolvedDependencies:
-                service === "kafka"
+                service === "keycloak"
                   ? [
                       {
-                        uri: `pkg:docker/apache/kafka@4.3.2?digest=sha256:${kafkaBaseMaterial.indexArtifact.sha256}&platform=linux%2Famd64`,
+                        uri: `pkg:docker/dhi.io/keycloak?digest=sha256:${fakeSha(keycloakDistributionIndexBytes)}&platform=linux%2Famd64`,
                         digest: {
-                          sha256: kafkaBaseMaterial.indexArtifact.sha256,
+                          sha256: fakeSha(keycloakDistributionIndexBytes),
                         },
                       },
+                      {
+                        uri: `pkg:docker/eclipse-temurin@21.0.13_9-jre-alpine-3.24?digest=sha256:${fakeSha(keycloakRuntimeIndexBytes)}&platform=linux%2Famd64`,
+                        digest: { sha256: fakeSha(keycloakRuntimeIndexBytes) },
+                      },
                     ]
-                  : service === "storage-helper"
+                  : service === "kafka"
                     ? [
                         {
-                          uri: `pkg:docker/node@26.8.1-alpine?digest=sha256:${storageHelperBaseMaterial.indexArtifact.sha256}&platform=linux%2Famd64`,
+                          uri: `pkg:docker/apache/kafka@4.3.2?digest=sha256:${kafkaBaseMaterial.indexArtifact.sha256}&platform=linux%2Famd64`,
                           digest: {
-                            sha256:
-                              storageHelperBaseMaterial.indexArtifact.sha256,
+                            sha256: kafkaBaseMaterial.indexArtifact.sha256,
                           },
                         },
                       ]
-                    : service === "grafana"
+                    : service === "storage-helper"
                       ? [
                           {
-                            uri: `pkg:docker/grafana/grafana@13.3.0-slim?digest=sha256:${grafanaBaseMaterial.indexArtifact.sha256}&platform=linux%2Famd64`,
+                            uri: `pkg:docker/node@26.8.1-alpine?digest=sha256:${storageHelperBaseMaterial.indexArtifact.sha256}&platform=linux%2Famd64`,
                             digest: {
-                              sha256: grafanaBaseMaterial.indexArtifact.sha256,
+                              sha256:
+                                storageHelperBaseMaterial.indexArtifact.sha256,
                             },
                           },
                         ]
-                      : [],
+                      : service === "grafana"
+                        ? [
+                            {
+                              uri: `pkg:docker/grafana/grafana@13.3.0-slim?digest=sha256:${grafanaBaseMaterial.indexArtifact.sha256}&platform=linux%2Famd64`,
+                              digest: {
+                                sha256:
+                                  grafanaBaseMaterial.indexArtifact.sha256,
+                              },
+                            },
+                          ]
+                        : [],
             },
             runDetails: {
               metadata: {
@@ -2206,6 +2509,11 @@ void test("G12 builds product images, records pinned upstream identity, and fail
           join(ociLayout, "blobs/sha256", buildLayerDigest.slice(7)),
           buildLayerBytes,
         );
+        if (service === "keycloak")
+          await writeFile(
+            join(ociLayout, "blobs/sha256", keycloakBaseDigest.slice(7)),
+            keycloakBaseBytes,
+          );
         await writeFile(
           join(ociLayout, "blobs/sha256", attestationDigest.slice(7)),
           attestationBytes,
@@ -2274,6 +2582,15 @@ void test("G12 builds product images, records pinned upstream identity, and fail
         args[2] === "inspect" &&
         args[3] === "--raw"
       ) {
+        if (args[4] === toolchain.keycloakDistributionImage)
+          return keycloakDistributionIndexBytes.toString("utf8");
+        if (args[4] === toolchain.keycloakRuntimeImage)
+          return keycloakRuntimeIndexBytes.toString("utf8");
+        if (
+          args[4] ===
+          `eclipse-temurin:21.0.13_9-jre-alpine-3.24@${keycloakRuntimePlatform}`
+        )
+          return keycloakRuntimeManifestBytes.toString("utf8");
         if (args[4] === toolchain.kafkaImage)
           return kafkaBaseIndexBytes.toString("utf8");
         if (args[4] === toolchain.grafanaImage)
@@ -2559,7 +2876,9 @@ void test("G12 builds product images, records pinned upstream identity, and fail
         } else {
           analysisRuns += 1;
           const service = report.slice(0, report.indexOf("."));
-          if (["kafka", "storage-helper", "grafana"].includes(service)) {
+          if (
+            ["kafka", "storage-helper", "grafana", "keycloak"].includes(service)
+          ) {
             const expectedOci = productOciExpectations.get(service);
             assert.ok(expectedOci, `${service} OCI fixture exists before scan`);
             const imageMount = args
@@ -2583,7 +2902,12 @@ void test("G12 builds product images, records pinned upstream identity, and fail
               {
                 Config: `blobs/sha256/${configDigest.slice(7)}`,
                 RepoTags: [expectedOci.tag],
-                Layers: [`blobs/sha256/${expectedOci.layerDigest.slice(7)}`],
+                Layers: [
+                  ...(service === "keycloak"
+                    ? [`blobs/sha256/${keycloakBaseDigest.slice(7)}`]
+                    : []),
+                  `blobs/sha256/${expectedOci.layerDigest.slice(7)}`,
+                ],
               },
             ]);
             assert.equal(
@@ -2830,25 +3154,25 @@ void test("G12 builds product images, records pinned upstream identity, and fail
   );
   assert.equal(
     trivyRunNetworks.filter((run) => run.kind === "conversion").length,
-    23,
+    24,
   );
   assert.ok(
     trivyRunNetworks
       .filter((run) => run.kind === "conversion")
       .every((run) => run.network === "none"),
   );
-  assert.equal(result.reports.length, 46);
-  assert.equal(trivyVulnerabilityModes.length, 23);
+  assert.equal(result.reports.length, 48);
+  assert.equal(trivyVulnerabilityModes.length, 24);
   assert.ok(trivyVulnerabilityModes.every((mode) => mode === 0o644));
   for (const report of result.reports) {
     const reportPath = join(outputDir, "artifacts", report.path);
     assert.equal((await stat(reportPath)).mode & 0o777, 0o600, report.path);
     assert.equal(sha(await readFile(reportPath)), report.sha256, report.path);
   }
-  assert.equal(reportWrites, 46);
-  assert.equal(analysisRuns, 23);
-  assert.equal(conversionRuns, 23);
-  assert.equal(conversionCacheDirs.size, 23);
+  assert.equal(reportWrites, 48);
+  assert.equal(analysisRuns, 24);
+  assert.equal(conversionRuns, 24);
+  assert.equal(conversionCacheDirs.size, 24);
   assert.deepEqual(
     result.databases.map(({ name }) => name),
     ["db", "java-db"],
@@ -2901,12 +3225,17 @@ void test("G12 builds product images, records pinned upstream identity, and fail
   assert.equal(lastProductLayoutPath, undefined);
   await assert.rejects(lstat(lastUpstreamTarPath), { code: "ENOENT" });
   assert.equal(imageExports, 4);
-  assert.equal(productBuilds, 18);
+  assert.equal(productBuilds, 19);
   assert.deepEqual(
     [...builtServices].sort((a, b) => a.localeCompare(b, "en")),
-    [...RUNTIME_NAMES, "grafana", "storage-helper", "edge-nginx", "kafka"].sort(
-      (a, b) => a.localeCompare(b, "en"),
-    ),
+    [
+      ...RUNTIME_NAMES,
+      "grafana",
+      "keycloak",
+      "storage-helper",
+      "edge-nginx",
+      "kafka",
+    ].sort((a, b) => a.localeCompare(b, "en")),
   );
   assert.equal(upstreamPulls, 5);
   assert.equal(imageRemovals, 5);
@@ -2976,6 +3305,55 @@ void test("G12 builds product images, records pinned upstream identity, and fail
     );
   }
   await writeFile(join(outputDir, "result.json"), resultForRuntime);
+  const keycloakReceipt = JSON.parse(
+    await readFile(join(outputDir, "artifacts/keycloak-receipt.json")),
+  );
+  const verifiedKeycloak = await loadVerifiedGateImage({
+    target: "keycloak",
+    contextFile: contextPath,
+    validateContext: validateSyntheticContext,
+    loadImage: false,
+  });
+  assert.equal(verifiedKeycloak.imageId, keycloakReceipt.imageId);
+  assert.equal(
+    keycloakReceipt.baseMaterial.distribution.sourceRef,
+    toolchain.keycloakDistributionImage,
+  );
+  assert.equal(
+    keycloakReceipt.baseMaterial.runtime.sourceRef,
+    toolchain.keycloakRuntimeImage,
+  );
+  for (const path of [
+    "keycloak-distribution-base-index.json",
+    "keycloak-runtime-base-index.json",
+    "keycloak-runtime-base-manifest.json",
+    "keycloak.oci.tar",
+  ]) {
+    const proofPath = join(outputDir, "artifacts", path);
+    const original = await readFile(proofPath);
+    await writeFile(proofPath, "foreign or corrupt proof");
+    await assert.rejects(
+      loadVerifiedGateImage({
+        target: "keycloak",
+        contextFile: contextPath,
+        validateContext: validateSyntheticContext,
+        loadImage: false,
+      }),
+    );
+    await writeFile(proofPath, original);
+  }
+  await assert.rejects(
+    loadVerifiedGateImage({
+      target: "keycloak",
+      contextFile: contextPath,
+      validateContext: async () => ({
+        context: { ...context, candidateSha: "f".repeat(40) },
+        candidateRoot,
+        evidenceDir,
+      }),
+      loadImage: false,
+    }),
+  );
   const grafanaArchivePath = join(outputDir, "artifacts/grafana.oci.tar");
   const grafanaArchiveBytes = await readFile(grafanaArchivePath);
   await writeFile(grafanaArchivePath, "broken-grafana-archive");
@@ -3297,7 +3675,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
     savedResult.provenance.buildInputBinding.sourceKind,
     "git-archive-local-context",
   );
-  assert.equal(savedResult.provenance.images.length, 22);
+  assert.equal(savedResult.provenance.images.length, 23);
   assert.deepEqual(
     savedResult.provenance.images.find((image) => image.service === "kafka")
       .baseMaterial,
@@ -3306,7 +3684,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
   const checksumInventory = JSON.parse(
     await readFile(join(outputDir, "artifacts/checksums.json"), "utf8"),
   );
-  assert.equal(checksumInventory.length, 59);
+  assert.equal(checksumInventory.length, 66);
   assert.ok(
     checksumInventory.some(
       (entry) =>
@@ -3453,12 +3831,12 @@ void test("G12 builds product images, records pinned upstream identity, and fail
   });
   assert.equal(failedPullResult.code, "COMMAND_FAILED");
   assert.deepEqual(failedPullResult.cleanupFailures, []);
-  assert.equal(failedPullResult.reports.length, 38);
+  assert.equal(failedPullResult.reports.length, 40);
   assert.equal(failedPullResult.provenance.status, "PARTIAL");
   assert.equal(
     failedPullResult.provenance.images.filter((image) => !image.identityStatus)
       .length,
-    18,
+    19,
   );
   assert.equal(imageRmTargets.length, removalsBeforePullFailure + 1);
   assert.deepEqual(
@@ -3614,7 +3992,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
     ["IMAGE_CLEANUP_FAILED", "IMAGE_OWNERSHIP_CHANGED"],
   );
   assert.equal(changedDatabaseResult.provenance.status, "PARTIAL");
-  assert.equal(changedDatabaseResult.provenance.images.length, 22);
+  assert.equal(changedDatabaseResult.provenance.images.length, 23);
   const changedDatabaseRmTargets = imageRmTargets.slice(changedDatabaseRmStart);
   assert.ok(
     changedDatabaseRmTargets.every((target) =>

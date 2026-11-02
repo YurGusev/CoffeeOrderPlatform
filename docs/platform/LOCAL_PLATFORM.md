@@ -101,6 +101,74 @@ SAN и остальные секреты сохраняются. Срок servic
 `config/platform.yaml`. После обновления требуется перезапустить затронутые
 runtime. Автоматический scheduler эта команда не создаёт.
 
+Для первоначальной подготовки локального окружения trusted bootstrap принимает
+`node tools/config-bootstrap/index.mjs --prepare-development-runtime`. Команда
+работает только в `development`, добавляет недостающие scoped credentials и
+использует действующую development CA из зашифрованного
+`security.serviceTransportAuthority`. Действующие пароли не перезаписываются.
+
+Постоянная локальная установка располагается в `~/coffee-platform`: чистые
+контроллеры — в `runtime/controllers/<commit>`, immutable release bundles — в
+`runtime/releases/<release>`, состояние identity — в `runtime/state`.
+Имена каталогов и постоянных Compose-ресурсов не содержат номеров задач или
+проверочных запусков; release определяется commit и хешами config/secrets.
+
+Срок service certificates — `security.certificateValidityHours: 24`, подготовка
+обновления начинается за `security.certificateRenewBeforeHours: 6`. Проверяются
+ключ, доверенный издатель и точные DNS SAN. Публичный edge certificate сохраняет
+отдельную пару и своего издателя. Если издатель публичного edge
+certificate не соответствует доступной CA, команда завершится с ошибкой без
+смены корня доверия. Для обычного release контроллер подготавливает user timer,
+который каждые три часа проверяет срок действующих scoped certificates и при
+остатке не более шести часов выполняет последовательный холодный перезапуск
+своих сервисов. Публичный edge certificate продлевается отдельно у своего
+издателя. До включения timer необходимо измерить недоступность и проверить
+пересоздание, доставку телеметрии и сохранность данных; установка unit сама
+timer не включает. Новая CA и служба подписи не создаются.
+При неудачном запуске или обслуживании основной user unit не перезапускается
+автоматически: требуется проверить состояние и выполнить recovery. Ограниченные
+Docker restart для отдельных контейнеров остаются действующими.
+Предупреждения об истекающем публичном сертификате и ошибке обслуживания
+доставляются в Loki как события `coffee-platform-maintenance`; они доступны в
+Grafana Explore, datasource `loki`, по запросу
+`{service_name="coffee-platform-maintenance"}`. Это не alert episode и не push.
+Перед включением timer необходимо проверить реальную доставку и отображение.
+
+### Постоянный локальный запуск
+
+Контроллер работает из чистого detached checkout
+`~/coffee-platform/runtime/controllers/<commit>`. Ему передают сохранённый
+`COFFEE_LAUNCH_CONTEXT_FILE` с успешным G12 для того же commit и точных image IDs,
+`COFFEE_DB_EXPECTED_SERVER_IDENTITY` утверждённого PostgreSQL и
+`SOPS_AGE_KEY_FILE` существующего age identity. Эти переменные содержат только
+локаторы и проверяемый идентификатор, не пароли. Образы другого commit или
+неполный scan не допускаются. `browserOidc: null` исходной normal config
+преобразуется в локальный HTTPS OIDC profile; оба isolation flags должны быть
+`false`. Итоговый config и его SHA сохраняются в immutable release bundle.
+
+Из этого checkout выполнить `node tools/platform-service.mjs start`:
+контроллер проверяет существующую наблюдаемость и PostgreSQL, подготавливает
+scoped tmpfs secrets, владельческие БД и миграции, Kafka и identity, затем
+запускает бизнес-сервисы и nginx. Все 17 product containers получают общую
+bounded non-blocking logging policy из `config/platform.yaml`.
+
+После фактического входа `owner` в HTTPS UI выполнить
+`node tools/platform-service.mjs recover`: контроллер проверяет живую сессию
+владельца и его административные права в identity, затем отзывает временный
+bootstrap-admin. `node tools/platform-service.mjs install` устанавливает user
+unit для этого release. Последующий штатный запуск —
+`systemctl --user start coffee-platform.service`, остановка —
+`systemctl --user stop coffee-platform.service`; `status` контроллера показывает
+фактическое состояние и принадлежность контейнеров. БД и volumes при остановке
+не удаляются. Автоматический certificate timer включается отдельно после
+проверки обслуживания на target.
+
+Сервер PostgreSQL не перенастраивается: budget 96 включает 54 Node connections,
+2 identity connections, 8 на serial rollout и резерв 32. Пул AROMA Gateway — 6;
+остальные Node pools сохранены. Реальные login, readiness, API→DB→Kafka→SSE и
+restart с сохранением данных обязательны до приёмки установки. Такой запуск
+сам по себе не является formal G00–G19 admission.
+
 ### Постоянные age identities и резервная копия на этом сервере
 
 Для локального CoffeeOrderPlatform используются три age identities:

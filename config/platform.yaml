@@ -192,6 +192,7 @@ verification:
 platform:
   publicBaseUrl: https://localhost:8443
   shutdownGraceMs: 30000
+  localRestartMaxAttempts: 3
   requestDeadlineMs: 5000
   bodyLimitBytes: 1048576
 
@@ -222,6 +223,19 @@ postgres:
   maxConnections: 96
   reservedConnections: 32
   rolloutReplicas: 1
+
+localIdentity:
+  publicBaseUrl: https://identity.localhost:9443
+  privateBaseUrl: https://keycloak:8443
+  realm: coffee
+  clientId: coffee-platform
+  databaseName: coffee_platform_identity
+  databaseRole: coffee_identity_rw
+  databasePoolMax: 2
+  memoryLimitMiB: 2048
+  operatorUsername: owner
+  actorRef: actor:owner
+  bootstrapAdminUsername: bootstrap-admin
 
 kafka:
   brokers: [kafka:9092]
@@ -1170,7 +1184,7 @@ services:
     replicas: 1
     dbPool:
       {
-        max: 8,
+        max: 6,
         checkoutTimeoutMs: 250,
         lockTimeoutMs: 250,
         interactiveStatementTimeoutMs: 1500,

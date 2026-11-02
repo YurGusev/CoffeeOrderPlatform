@@ -24,11 +24,12 @@ import {
   symlink,
   writeFile,
 } from "node:fs/promises";
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { syncBuiltinESMExports } from "node:module";
 import https from "node:https";
 import { tmpdir } from "node:os";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { collectorRefreshOverride } from "../../tools/observability/service.mjs";
 import { dirname, join, resolve } from "node:path";
 import test from "node:test";
 import { dump as dumpYaml, load as parseYaml } from "js-yaml";
@@ -61,6 +62,13 @@ import {
   materializeAromaSandboxSecrets,
   materializeCollectorSecrets,
   materializeGrafanaAdminSecret,
+  materializeKeycloakRealm,
+  materializeKeycloakSecrets,
+  materializeKafkaBrokerSecrets,
+  materializeLocalRuntimeSecrets,
+  prepareDevelopmentRuntimeSecrets,
+  projectLocalRuntimeConfig,
+  retireKeycloakBootstrapSecret,
   provisionDevelopmentGrafanaAdmin,
   renewDevelopmentTransportSecrets,
   materializeRuntimeSecrets,
@@ -92,6 +100,10 @@ import { runMigrationStage } from "../../verification/launch/v1/scenarios/migrat
 import { validateLaunchContext } from "../../verification/launch/v1/report.mjs";
 import { assertScopedSecrets } from "../../packages/platform-runtime/dist/index.js";
 import { checkObservabilityHealth } from "../../tools/observability/health.mjs";
+import {
+  prepareLocalRelease,
+  readLocalCertificateExpiry,
+} from "../../tools/platform-service.mjs";
 import {
   createOidcProviderServer,
   selectBrowserFixtureAccount,
@@ -197,6 +209,36 @@ void test("infrastructure scopes separate Collector and Grafana credentials", as
     ],
     "grafana-bootstrap": [
       { name: "admin-secret", ref: "telemetry.grafanaAdmin" },
+    ],
+    "keycloak-runtime": [
+      { name: "database-password", ref: "identity.databasePassword" },
+      {
+        name: "bootstrap-admin-password",
+        ref: "identity.bootstrapAdminPassword",
+      },
+      { name: "tls-key", ref: "identity.tlsPrivateKey" },
+      { name: "tls-cert", ref: "identity.tlsCertificate" },
+      { name: "tls-ca", ref: "identity.tlsCaBundle" },
+    ],
+    "keycloak-operator": [
+      { name: "operator-password", ref: "identity.operatorPassword" },
+    ],
+    "kafka-broker": [
+      { name: "broker-user", ref: "kafka.broker.username" },
+      { name: "broker-password", ref: "kafka.broker.password" },
+      { name: "store-password", ref: "kafka.broker.storePassword" },
+      { name: "tls-key", ref: "kafka.broker.tlsPrivateKey" },
+      { name: "tls-cert", ref: "kafka.broker.tlsCertificate" },
+      { name: "tls-ca", ref: "kafka.broker.tlsCaBundle" },
+      { name: "catalog-user", ref: "kafka.catalog.username" },
+      { name: "catalog-password", ref: "kafka.catalog.password" },
+      { name: "catalog-ca", ref: "kafka.catalog.caPem" },
+      { name: "orders-user", ref: "kafka.orders.username" },
+      { name: "orders-password", ref: "kafka.orders.password" },
+      { name: "orders-ca", ref: "kafka.orders.caPem" },
+      { name: "realtime-user", ref: "kafka.realtime.username" },
+      { name: "realtime-password", ref: "kafka.realtime.password" },
+      { name: "realtime-ca", ref: "kafka.realtime.caPem" },
     ],
   });
   assert.deepEqual(
@@ -515,6 +557,88 @@ void test("backend ownership helper refuses foreign volumes before changing owne
 });
 
 void test("Collector config accepts only exact selected log files and bounds export", () => {
+  const oldId = "a".repeat(64);
+  const newId = "b".repeat(64);
+  const base = {
+    services: {
+      "otel-collector": {
+        image: "accepted-image",
+        command: ["run", "/etc/alloy/config.alloy"],
+        volumes: [
+          {
+            type: "bind",
+            source: "/old/alloy",
+            target: "/etc/alloy/config.alloy",
+            read_only: true,
+          },
+          {
+            type: "volume",
+            source: "collector_checkpoints",
+            target: "/var/lib/alloy",
+          },
+          {
+            type: "bind",
+            source: `/var/lib/docker/containers/${oldId}`,
+            target: `/var/lib/docker/containers/${oldId}`,
+            read_only: true,
+          },
+        ],
+        networks: ["coffee_observability"],
+      },
+      grafana: { image: "unchanged" },
+    },
+  };
+  const networks = ["coffee_observability", "coffee_edge_backend"];
+  const generated = structuredClone(base);
+  generated.volumes = { collector_checkpoints: {} };
+  base.volumes = { collector_checkpoints: { name: "foreign-checkpoints" } };
+  generated.services["otel-collector"].networks = networks;
+  generated.services["otel-collector"].volumes[0].source =
+    "/run/collector.alloy";
+  generated.services["otel-collector"].volumes[2] = {
+    type: "bind",
+    source: `/var/lib/docker/containers/${newId}`,
+    target: `/var/lib/docker/containers/${newId}`,
+    read_only: true,
+  };
+  const refreshed = collectorRefreshOverride(generated, base, networks);
+  assert.deepEqual(refreshed.services.grafana, { image: "unchanged" });
+  assert.deepEqual(refreshed.volumes.collector_checkpoints, {});
+  assert.deepEqual(refreshed.services["otel-collector"].networks, networks);
+  assert.deepEqual(
+    refreshed.services["otel-collector"].volumes.map(({ target }) => target),
+    [
+      "/etc/alloy/config.alloy",
+      "/var/lib/alloy",
+      `/var/lib/docker/containers/${newId}`,
+    ],
+  );
+  assert.equal(
+    refreshed.services["otel-collector"].volumes[0].source,
+    "/run/collector.alloy",
+  );
+  for (const tamper of [
+    (collector) => {
+      collector.image = "foreign-image";
+    },
+    (collector) => {
+      collector.command = ["foreign-command"];
+    },
+    (collector) => {
+      collector.volumes.push({
+        type: "bind",
+        source: "/foreign",
+        target: "/foreign",
+      });
+    },
+  ]) {
+    const stale = structuredClone(base);
+    tamper(stale.services["otel-collector"]);
+    assert.throws(
+      () => collectorRefreshOverride(generated, stale, networks),
+      /specification differs/u,
+    );
+  }
   const config = createCollectorConfig({
     config: sample,
     logFiles: logs,
@@ -1133,6 +1257,1140 @@ void test("collector/admin refs remain optional in the shared encrypted-secret i
   const telemetry = schema.$defs.environment.properties.telemetry;
   assert.equal(telemetry.required.includes("grafanaAdmin"), false);
   assert.equal(telemetry.properties.grafanaAdmin.$ref, "#/$defs/encrypted");
+});
+
+void test("development preparation preserves existing secrets and refreshes only trusted certificate identities", async (t) => {
+  const fixture = await createSecretMaterializationFixture();
+  const bundlePath = join(fixture.root, "secrets/platform.secrets.sops.yaml");
+  const caKey = join(fixture.root, "ca.key");
+  const caCert = join(fixture.root, "ca.crt");
+  const leafKey = join(fixture.root, "leaf.key");
+  const csr = join(fixture.root, "leaf.csr");
+  const leafCert = join(fixture.root, "leaf.crt");
+  const openssl = (args) => execFileSync("openssl", args, { stdio: "ignore" });
+  try {
+    const configPath = join(fixture.root, "config/platform.yaml");
+    const originalConfig = await readFile(configPath, "utf8");
+    const originalCiphertext = await readFile(bundlePath);
+    const initialTemporary = (await readdir("/dev/shm")).filter((name) =>
+      name.startsWith("coffee-development-pki-"),
+    );
+    for (const environment of ["staging", "production"]) {
+      const config = parseYaml(originalConfig, { json: true });
+      config.environment = environment;
+      config.telemetry.releaseDigest = `sha256:${"a".repeat(64)}`;
+      await writeFile(configPath, dumpYaml(config, { lineWidth: -1 }));
+      await assert.rejects(
+        prepareDevelopmentRuntimeSecrets({
+          root: fixture.root,
+          env: fixture.env,
+        }),
+        /runtime secret preparation is restricted to development/u,
+      );
+      assert.equal(
+        await stat(join(fixture.bin, "sops-invoked")).catch(() => null),
+        null,
+      );
+      assert.deepEqual(await readFile(bundlePath), originalCiphertext);
+      assert.deepEqual(
+        (await readdir("/dev/shm")).filter((name) =>
+          name.startsWith("coffee-development-pki-"),
+        ),
+        initialTemporary,
+      );
+    }
+    await writeFile(configPath, originalConfig);
+    openssl([
+      "req",
+      "-x509",
+      "-newkey",
+      "ed25519",
+      "-nodes",
+      "-keyout",
+      caKey,
+      "-out",
+      caCert,
+      "-subj",
+      "/CN=fixture CA",
+      "-days",
+      "365",
+      "-addext",
+      "basicConstraints=critical,CA:TRUE",
+    ]);
+    openssl(["genpkey", "-algorithm", "ED25519", "-out", leafKey]);
+    const caPem = await readFile(caCert, "utf8");
+    const keyPem = await readFile(leafKey, "utf8");
+    const issue = async (name, san, days) => {
+      openssl([
+        "req",
+        "-new",
+        "-key",
+        leafKey,
+        "-out",
+        csr,
+        "-subj",
+        `/CN=${name}`,
+        "-addext",
+        `subjectAltName=${san}`,
+        "-addext",
+        "basicConstraints=critical,CA:FALSE",
+      ]);
+      openssl([
+        "x509",
+        "-req",
+        "-in",
+        csr,
+        "-CA",
+        caCert,
+        "-CAkey",
+        caKey,
+        "-set_serial",
+        `0x${randomBytes(16).toString("hex")}`,
+        "-days",
+        String(days),
+        "-copy_extensions",
+        "copy",
+        "-out",
+        leafCert,
+      ]);
+      return readFile(leafCert, "utf8");
+    };
+    const plain = JSON.parse(await readFile(fixture.plainPath, "utf8"));
+    const development = plain.environments.development;
+    const encrypted = JSON.parse(await readFile(bundlePath, "utf8"));
+    const encryptedDevelopment = encrypted.environments.development;
+    const encryptedValue = "ENC[AES256_GCM,data:x,iv:x,tag:x,type:str]";
+    const publicKey = createPublicKey(createPrivateKey(keyPem)).export({
+      type: "spki",
+      format: "pem",
+    });
+    development.security.serviceVerificationKeys["pricing-service"] = {
+      active: publicKey,
+      previous: publicKey,
+    };
+    encryptedDevelopment.security.serviceVerificationKeys["pricing-service"] = {
+      active: encryptedValue,
+      previous: encryptedValue,
+    };
+    for (const key of [
+      "pricingServiceDelegationSigningPrivateKey",
+      "ordersServiceDelegationSigningPrivateKey",
+    ]) {
+      development.security[key] = keyPem;
+      encryptedDevelopment.security[key] = encryptedValue;
+    }
+    await writeFile(bundlePath, JSON.stringify(encrypted));
+    development.bootstrap.internalCaPrivateKey = keyPem;
+    development.security.serviceTransportAuthority = JSON.stringify({
+      certificatePem: caPem,
+      privateKeyPem: await readFile(caKey, "utf8"),
+    });
+    const config = await loadPlatformConfig(fixture.root);
+    for (const runtime of [...Object.keys(config.services), "edge-nginx"]) {
+      const certPem = await issue(
+        runtime,
+        `URI:spiffe://coffee-platform/development/${runtime},DNS:${runtime}.development.svc.coffee-platform.internal`,
+        runtime === "customer-service" ? 0 : 1,
+      );
+      development.security.serviceTransportKeys[runtime] = JSON.stringify({
+        caPem,
+        certPem,
+        keyPem,
+      });
+    }
+    development.edge.tlsPrivateKey = keyPem;
+    development.edge.tlsCertificate = await issue(
+      "localhost",
+      "DNS:localhost",
+      0,
+    );
+    for (const role of ["catalog", "orders", "realtime"]) {
+      development.kafka[role].username = role;
+      development.kafka[role].password =
+        `fixture_${role}_password_0123456789abcdef`;
+    }
+    const before = structuredClone(development);
+    await writeFile(fixture.plainPath, JSON.stringify(plain));
+    await installFakeMigrationSops(fixture);
+    const now = Date.now();
+    let checkedNow = now + 5 * 60_000;
+    t.mock.method(Date, "now", () => checkedNow);
+    const originalBundle = await readFile(bundlePath);
+    development.security.serviceTransportAuthority = JSON.stringify({
+      certificatePem: caPem,
+      privateKeyPem: keyPem,
+    });
+    await writeFile(fixture.plainPath, JSON.stringify(plain));
+    await assert.rejects(
+      prepareDevelopmentRuntimeSecrets({
+        root: fixture.root,
+        env: fixture.env,
+      }),
+      /CONFIG-DEVELOPMENT-CA/u,
+    );
+    development.security.serviceTransportAuthority = "invalid JSON";
+    await writeFile(fixture.plainPath, JSON.stringify(plain));
+    await assert.rejects(
+      prepareDevelopmentRuntimeSecrets({
+        root: fixture.root,
+        env: fixture.env,
+      }),
+      /CONFIG-DEVELOPMENT-CA/u,
+    );
+    development.security.serviceTransportAuthority =
+      before.security.serviceTransportAuthority;
+    const customerMaterial = JSON.parse(
+      before.security.serviceTransportKeys["customer-service"],
+    );
+    customerMaterial.certPem = await issue(
+      "customer-service",
+      "URI:spiffe://coffee-platform/development/other,DNS:customer-service.development.svc.coffee-platform.internal",
+      1,
+    );
+    development.security.serviceTransportKeys["customer-service"] =
+      JSON.stringify(customerMaterial);
+    await writeFile(fixture.plainPath, JSON.stringify(plain));
+    await assert.rejects(
+      prepareDevelopmentRuntimeSecrets({
+        root: fixture.root,
+        env: fixture.env,
+      }),
+      /CONFIG-DEVELOPMENT-LEAF/u,
+    );
+    development.security.serviceTransportKeys["customer-service"] =
+      before.security.serviceTransportKeys["customer-service"];
+    for (const [commonName, san] of [
+      [
+        "customer-service.development.svc.coffee-platform.internal",
+        "URI:spiffe://coffee-platform/development/customer-service",
+      ],
+      [
+        "customer-service",
+        "URI:spiffe://coffee-platform/development/customer-service,DNS:*.development.svc.coffee-platform.internal",
+      ],
+    ]) {
+      const invalidDns = JSON.parse(
+        before.security.serviceTransportKeys["customer-service"],
+      );
+      invalidDns.certPem = await issue(commonName, san, 1);
+      development.security.serviceTransportKeys["customer-service"] =
+        JSON.stringify(invalidDns);
+      await writeFile(fixture.plainPath, JSON.stringify(plain));
+      await assert.rejects(
+        prepareDevelopmentRuntimeSecrets({
+          root: fixture.root,
+          env: fixture.env,
+        }),
+        /CONFIG-DEVELOPMENT-LEAF/u,
+      );
+    }
+    development.security.serviceTransportKeys["customer-service"] =
+      before.security.serviceTransportKeys["customer-service"];
+    const foreignAuthority = JSON.parse(
+      before.security.serviceTransportKeys["customer-service"],
+    );
+    foreignAuthority.caPem = foreignAuthority.certPem;
+    development.security.serviceTransportKeys["customer-service"] =
+      JSON.stringify(foreignAuthority);
+    await writeFile(fixture.plainPath, JSON.stringify(plain));
+    await assert.rejects(
+      prepareDevelopmentRuntimeSecrets({
+        root: fixture.root,
+        env: fixture.env,
+      }),
+      /CONFIG-DEVELOPMENT-CA/u,
+    );
+    development.security.serviceTransportKeys["customer-service"] =
+      before.security.serviceTransportKeys["customer-service"];
+    openssl([
+      "req",
+      "-x509",
+      "-key",
+      leafKey,
+      "-out",
+      leafCert,
+      "-subj",
+      "/CN=localhost",
+      "-days",
+      "1",
+      "-addext",
+      "basicConstraints=critical,CA:FALSE",
+      "-addext",
+      "subjectAltName=DNS:localhost",
+    ]);
+    development.edge.tlsCertificate = await readFile(leafCert, "utf8");
+    await writeFile(fixture.plainPath, JSON.stringify(plain));
+    checkedNow = now + 20 * 3_600_000;
+    const transportTmpBefore = (await readdir("/dev/shm")).filter((name) =>
+      name.startsWith("coffee-development-transport-"),
+    );
+    const realExec = childProcess.execFileSync;
+    let signedServiceLeaves = 0;
+    const signSpy = t.mock.method(
+      childProcess,
+      "execFileSync",
+      (command, args, options) => {
+        if (
+          command === "openssl" &&
+          args[0] === "x509" &&
+          args.includes("-req")
+        )
+          signedServiceLeaves += 1;
+        return realExec(command, args, options);
+      },
+    );
+    syncBuiltinESMExports();
+    try {
+      await assert.rejects(
+        prepareDevelopmentRuntimeSecrets({
+          root: fixture.root,
+          env: fixture.env,
+        }),
+        /public edge renewal requires its existing trusted issuer/u,
+      );
+    } finally {
+      signSpy.mock.restore();
+      syncBuiltinESMExports();
+    }
+    assert.ok(signedServiceLeaves > 0);
+    assert.deepEqual(await readFile(bundlePath), originalBundle);
+    assert.equal(
+      await stat(join(fixture.bin, "g08-encrypt-invoked")).catch(() => null),
+      null,
+    );
+    assert.deepEqual(
+      (await readdir("/dev/shm")).filter((name) =>
+        name.startsWith("coffee-development-transport-"),
+      ),
+      transportTmpBefore,
+    );
+    checkedNow = now + 5 * 60_000;
+    development.edge.tlsCertificate = before.edge.tlsCertificate;
+    await writeFile(fixture.plainPath, JSON.stringify(plain));
+    checkedNow = now + 400 * 86_400_000;
+    await assert.rejects(
+      prepareDevelopmentRuntimeSecrets({
+        root: fixture.root,
+        env: fixture.env,
+      }),
+      /CONFIG-DEVELOPMENT-CA/u,
+    );
+    checkedNow = now + 5 * 60_000;
+    assert.deepEqual(await readFile(bundlePath), originalBundle);
+    const temporaryBefore = (await readdir("/dev/shm")).filter((name) =>
+      name.startsWith("coffee-development-pki-"),
+    );
+    const result = await prepareDevelopmentRuntimeSecrets({
+      root: fixture.root,
+      env: fixture.env,
+    });
+    assert.equal(result.changed, true);
+    assert.equal(result.updatedRefs.length, 17);
+    assert.equal(
+      result.updatedRefs.includes(
+        "security.serviceTransportKeys.customer-service",
+      ),
+      true,
+    );
+    const savedDocument = JSON.parse(
+      execFileSync("sops", ["--decrypt", bundlePath], {
+        env: fixture.env,
+        encoding: "utf8",
+      }),
+    );
+    const saved = savedDocument.environments.development;
+    assert.equal(
+      saved.bootstrap.internalCaPrivateKey,
+      before.bootstrap.internalCaPrivateKey,
+    );
+    assert.equal(
+      saved.security.serviceTransportAuthority,
+      before.security.serviceTransportAuthority,
+    );
+    assert.deepEqual(saved.tasty, before.tasty);
+    assert.equal(saved.edge.tlsPrivateKey, before.edge.tlsPrivateKey);
+    assert.notEqual(saved.edge.tlsCertificate, before.edge.tlsCertificate);
+    assert.equal(
+      new X509Certificate(saved.edge.tlsCertificate).verify(
+        new X509Certificate(caPem).publicKey,
+      ),
+      true,
+    );
+    assert.equal(
+      new X509Certificate(saved.edge.tlsCertificate).subjectAltName,
+      new X509Certificate(before.edge.tlsCertificate).subjectAltName,
+    );
+    for (const role of ["catalog", "orders", "realtime"]) {
+      assert.equal(saved.kafka[role].password, before.kafka[role].password);
+      assert.equal(
+        new X509Certificate(saved.kafka[role].caPem).fingerprint256,
+        new X509Certificate(caPem).fingerprint256,
+      );
+    }
+    for (const runtime of [...Object.keys(config.services), "edge-nginx"]) {
+      const oldMaterial = JSON.parse(
+        before.security.serviceTransportKeys[runtime],
+      );
+      const material = JSON.parse(saved.security.serviceTransportKeys[runtime]);
+      assert.equal(material.keyPem, oldMaterial.keyPem);
+      assert.equal(
+        new X509Certificate(material.certPem).subjectAltName,
+        new X509Certificate(oldMaterial.certPem).subjectAltName,
+      );
+      assert.equal(
+        new X509Certificate(material.certPem).verify(
+          new X509Certificate(caPem).publicKey,
+        ),
+        true,
+      );
+      if (runtime === "customer-service") {
+        const renewed = new X509Certificate(material.certPem);
+        assert.equal(
+          Date.parse(renewed.validTo) - Date.parse(renewed.validFrom),
+          24 * 3_600_000,
+        );
+      }
+      if (runtime !== "customer-service")
+        assert.equal(material.certPem, oldMaterial.certPem);
+      else assert.notEqual(material.certPem, oldMaterial.certPem);
+    }
+    for (const [prefix, names] of [
+      ["identity", ["identity.localhost", "keycloak"]],
+      ["broker", ["kafka", "localhost"]],
+    ]) {
+      const material =
+        prefix === "identity" ? saved.identity : saved.kafka.broker;
+      const certificate = new X509Certificate(material.tlsCertificate);
+      assert.equal(
+        certificate.checkPrivateKey(createPrivateKey(material.tlsPrivateKey)),
+        true,
+      );
+      assert.equal(
+        certificate.verify(new X509Certificate(caPem).publicKey),
+        true,
+      );
+      assert.equal(
+        names.every((name) => certificate.checkHost(name)),
+        true,
+      );
+    }
+    assert.equal((await readFile(bundlePath, "utf8")).includes(keyPem), false);
+    assert.equal(
+      (
+        await prepareDevelopmentRuntimeSecrets({
+          root: fixture.root,
+          env: fixture.env,
+        })
+      ).changed,
+      false,
+    );
+    const localConfigPath = join(fixture.root, "config/local.yaml");
+    await writeFile(
+      localConfigPath,
+      dumpYaml(projectLocalRuntimeConfig(config), { lineWidth: -1 }),
+    );
+    const generatedOperations = join(
+      fixture.root,
+      "apps/edge-gateway/src/client-operations.gen.ts",
+    );
+    await mkdir(dirname(generatedOperations), { recursive: true });
+    await cp(
+      join(REPO_ROOT, "apps/edge-gateway/src/client-operations.gen.ts"),
+      generatedOperations,
+    );
+    const scopedDir = join(fixture.root, "local-scope");
+    await mkdir(scopedDir, { mode: 0o700 });
+    const ciphertextBeforeBatch = await readFile(bundlePath);
+    const realBatchExec = childProcess.execFileSync;
+    let decryptCount = 0;
+    let encryptionCount = 0;
+    let brokerCertificate;
+    const batchSpy = t.mock.method(
+      childProcess,
+      "execFileSync",
+      (command, args, options) => {
+        if (command === "sops" && args.includes("--decrypt")) decryptCount += 1;
+        if (command === "sops" && args[0] === "encrypt") encryptionCount += 1;
+        if (command === "docker") return Buffer.alloc(0);
+        if (command === "openssl" && args[0] === "pkcs12") {
+          brokerCertificate = readFileSync(
+            args[args.indexOf("-in") + 1],
+            "utf8",
+          );
+          writeFileSync(args[args.indexOf("-out") + 1], "synthetic store");
+          return Buffer.alloc(0);
+        }
+        if (command === "keytool") {
+          writeFileSync(args[args.indexOf("-keystore") + 1], "synthetic store");
+          return Buffer.alloc(0);
+        }
+        return realBatchExec(command, args, options);
+      },
+    );
+    syncBuiltinESMExports();
+    checkedNow = now + 20 * 3_600_000;
+    let scoped;
+    try {
+      scoped = await materializeLocalRuntimeSecrets({
+        root: fixture.root,
+        outputDir: scopedDir,
+        includeBootstrap: true,
+        env: { ...fixture.env, COFFEE_CONFIG_FILE: localConfigPath },
+      });
+    } finally {
+      batchSpy.mock.restore();
+      syncBuiltinESMExports();
+    }
+    assert.equal(decryptCount, 1);
+    assert.equal(encryptionCount, 0);
+    assert.deepEqual(await readFile(bundlePath), ciphertextBeforeBatch);
+    assert.equal(scoped.updatedRuntimes.length, 15);
+    assert.equal(
+      await readFile(join(scopedDir, "edge-nginx/public.crt"), "utf8"),
+      saved.edge.tlsCertificate,
+    );
+    const identityCert = new X509Certificate(
+      await readFile(join(scopedDir, "keycloak/tls.crt"), "utf8"),
+    );
+    assert.notEqual(
+      identityCert.fingerprint256,
+      new X509Certificate(saved.identity.tlsCertificate).fingerprint256,
+    );
+    assert.equal(
+      identityCert.checkPrivateKey(
+        createPrivateKey(saved.identity.tlsPrivateKey),
+      ),
+      true,
+    );
+    assert.equal(
+      identityCert.verify(new X509Certificate(caPem).publicKey),
+      true,
+    );
+    const kafkaCert = new X509Certificate(brokerCertificate);
+    assert.notEqual(
+      kafkaCert.fingerprint256,
+      new X509Certificate(saved.kafka.broker.tlsCertificate).fingerprint256,
+    );
+    assert.equal(
+      kafkaCert.checkPrivateKey(
+        createPrivateKey(saved.kafka.broker.tlsPrivateKey),
+      ),
+      true,
+    );
+    assert.equal(kafkaCert.verify(new X509Certificate(caPem).publicKey), true);
+    for (const name of ["server.key", "server.crt", "ca.crt"])
+      await assert.rejects(stat(join(scopedDir, "kafka", name)), {
+        code: "ENOENT",
+      });
+    const roles = [
+      ...Object.keys(config.services),
+      "edge-nginx",
+      "kafka",
+      "keycloak",
+    ];
+    const product = roles.map((service, index) => ({
+      service,
+      containerId: (index + 1).toString(16).padStart(64, "0"),
+      imageId: `sha256:${(index + 1).toString(16).padStart(64, "0")}`,
+    }));
+    const bind = (source, destination) => ({
+      Type: "bind",
+      Source: source,
+      Destination: destination,
+      RW: false,
+    });
+    const rows = product.map((entry) => ({
+      Id: entry.containerId,
+      Image: entry.imageId,
+      Mounts:
+        entry.service === "edge-nginx"
+          ? ["client.crt", "upstream-ca.crt", "public.crt"].map((name) =>
+              bind(
+                join(scopedDir, "edge-nginx", name),
+                `/run/secrets/edge-nginx/${name}`,
+              ),
+            )
+          : entry.service === "keycloak"
+            ? [bind(join(scopedDir, "keycloak"), "/run/keycloak")]
+            : entry.service === "kafka"
+              ? [bind(join(scopedDir, "kafka"), "/etc/kafka/secrets")]
+              : [
+                  bind(
+                    join(scopedDir, `${entry.service}.yaml`),
+                    "/run/secrets/coffee-platform.yaml",
+                  ),
+                ],
+    }));
+    const release = {
+      product,
+      secretsDir: scopedDir,
+      identity: {
+        certificates: {
+          edge: scoped.nginxIdentity.publicCertificateFingerprint,
+          transportCa: scoped.nginxIdentity.transportCaFingerprint,
+          identityKeySha256: scoped.keycloakIdentity.publicKeySha256,
+        },
+      },
+    };
+    const mountedScopes = new Map();
+    for (const { service } of product.filter(({ service }) =>
+      Object.hasOwn(config.services, service),
+    )) {
+      mountedScopes.set(
+        service,
+        parseYaml(await readFile(join(scopedDir, `${service}.yaml`), "utf8"), {
+          json: true,
+        }),
+      );
+    }
+    let kafkaTrustCa = caPem;
+    const expirySpy = t.mock.method(
+      childProcess,
+      "execFileSync",
+      (command, args, options) => {
+        if (command === "docker" && args[0] === "inspect")
+          return JSON.stringify(rows);
+        if (command === "docker" && args[0] === "exec" && args[2] === "node") {
+          const name = args.at(-1);
+          assert.equal(
+            product.find((entry) => entry.service === name).containerId,
+            args[1],
+          );
+          const scoped = mountedScopes.get(name);
+          const material = JSON.parse(
+            scoped.secrets.security.serviceTransportKeys[name],
+          );
+          const keySha256 = createHash("sha256")
+            .update(
+              createPublicKey(createPrivateKey(material.keyPem)).export({
+                type: "spki",
+                format: "der",
+              }),
+            )
+            .digest("hex");
+          return JSON.stringify({
+            runtime: scoped.runtime,
+            environment: scoped.environment,
+            certPem: material.certPem,
+            caPem: material.caPem,
+            keySha256,
+          });
+        }
+        if (command === "docker" && args[0] === "exec")
+          return readFileSync(
+            join(scopedDir, "edge-nginx", args.at(-1).split("/").at(-1)),
+            "utf8",
+          );
+        if (command === "openssl" && args[0] === "pkcs12")
+          return args.includes("-cacerts") ? kafkaTrustCa : brokerCertificate;
+        return realBatchExec(command, args, options);
+      },
+    );
+    syncBuiltinESMExports();
+    try {
+      const current = await readLocalCertificateExpiry({
+        root: fixture.root,
+        release,
+        config: projectLocalRuntimeConfig(config),
+      });
+      assert.ok(current.earliest - checkedNow <= 6 * 3_600_000);
+      assert.equal(
+        current.publicExpiry,
+        Date.parse(new X509Certificate(saved.edge.tlsCertificate).validTo),
+      );
+      checkedNow = now + 5 * 60_000;
+      const notDue = await readLocalCertificateExpiry({
+        root: fixture.root,
+        release,
+        config: projectLocalRuntimeConfig(config),
+      });
+      assert.ok(notDue.earliest - checkedNow > 6 * 3_600_000);
+      const customer = mountedScopes.get("customer-service");
+      const freshCustomerMaterial =
+        customer.secrets.security.serviceTransportKeys["customer-service"];
+      customer.secrets.security.serviceTransportKeys["customer-service"] =
+        before.security.serviceTransportKeys["customer-service"];
+      const staleMount = await readLocalCertificateExpiry({
+        root: fixture.root,
+        release,
+        config: projectLocalRuntimeConfig(config),
+      });
+      assert.ok(
+        staleMount.earliest <= checkedNow,
+        "stale mounted leaf must not be hidden by the fresh host file",
+      );
+      customer.secrets.security.serviceTransportKeys["customer-service"] =
+        freshCustomerMaterial;
+      const catalog = mountedScopes.get("catalog-service");
+      const validCatalogMaterial =
+        catalog.secrets.security.serviceTransportKeys["catalog-service"];
+      const badCatalog = JSON.parse(validCatalogMaterial);
+      badCatalog.certPem = await issue(
+        "catalog-service",
+        "URI:spiffe://coffee-platform/development/catalog-service,DNS:wrong.invalid",
+        1,
+      );
+      catalog.secrets.security.serviceTransportKeys["catalog-service"] =
+        JSON.stringify(badCatalog);
+      await assert.rejects(
+        readLocalCertificateExpiry({
+          root: fixture.root,
+          release,
+          config: projectLocalRuntimeConfig(config),
+        }),
+        /active certificate identity differs/u,
+      );
+      catalog.secrets.security.serviceTransportKeys["catalog-service"] =
+        validCatalogMaterial;
+      kafkaTrustCa = identityCert.toString();
+      await assert.rejects(
+        readLocalCertificateExpiry({
+          root: fixture.root,
+          release,
+          config: projectLocalRuntimeConfig(config),
+        }),
+        /active certificate identity differs/u,
+      );
+      kafkaTrustCa = caPem;
+      checkedNow = now + 20 * 3_600_000;
+      rows.find(
+        (row) =>
+          row.Id ===
+          product.find((entry) => entry.service === "kafka").containerId,
+      ).Mounts[0].Source = "/foreign";
+      await assert.rejects(
+        readLocalCertificateExpiry({
+          root: fixture.root,
+          release,
+          config: projectLocalRuntimeConfig(config),
+        }),
+        /scoped certificate mount differs/u,
+      );
+    } finally {
+      expirySpy.mock.restore();
+      syncBuiltinESMExports();
+    }
+    const runtimeScope = parseYaml(
+      await readFile(join(scopedDir, "customer-service.yaml"), "utf8"),
+      { json: true },
+    );
+    assert.equal(runtimeScope.runtime, "customer-service");
+    assert.equal(
+      runtimeScope.secrets.security.serviceTransportAuthority,
+      undefined,
+    );
+    assert.equal(runtimeScope.secrets.bootstrap, undefined);
+    assert.ok(
+      await stat(
+        join(
+          scopedDir,
+          "keycloak-import",
+          `${config.localIdentity.realm}-realm.json`,
+        ),
+      ),
+    );
+    const identityScope = join(scopedDir, "keycloak");
+    const certBeforeRetirement = await readFile(join(identityScope, "tls.crt"));
+    await retireKeycloakBootstrapSecret({ outputDir: identityScope });
+    assert.doesNotMatch(
+      await readFile(join(identityScope, "keycloak.conf"), "utf8"),
+      /bootstrap-admin-password/u,
+    );
+    assert.deepEqual(
+      await readFile(join(identityScope, "tls.crt")),
+      certBeforeRetirement,
+    );
+    await assert.rejects(
+      retireKeycloakBootstrapSecret({ outputDir: identityScope }),
+      /identity bootstrap configuration is invalid/u,
+    );
+    for (const scenario of ["authority", "public"]) {
+      const invalid = structuredClone(savedDocument);
+      if (scenario === "authority")
+        invalid.environments.development.security.serviceTransportAuthority =
+          JSON.stringify({ certificatePem: caPem, privateKeyPem: keyPem });
+      else
+        invalid.environments.development.edge.tlsCertificate =
+          before.edge.tlsCertificate;
+      await writeFile(fixture.plainPath, JSON.stringify(invalid));
+      await installFakeMigrationSops(fixture);
+      const rejectedDir = join(fixture.root, `rejected-${scenario}`);
+      await mkdir(rejectedDir, { mode: 0o700 });
+      await assert.rejects(
+        materializeLocalRuntimeSecrets({
+          root: fixture.root,
+          outputDir: rejectedDir,
+          includeBootstrap: false,
+          env: { ...fixture.env, COFFEE_CONFIG_FILE: localConfigPath },
+        }),
+        scenario === "authority"
+          ? /CONFIG-DEVELOPMENT-CA/u
+          : /public edge certificate is expired/u,
+      );
+      assert.deepEqual(await readdir(rejectedDir), []);
+      assert.deepEqual(await readFile(bundlePath), ciphertextBeforeBatch);
+    }
+    checkedNow = now + 5 * 60_000;
+    assert.deepEqual(
+      (await readdir("/dev/shm")).filter((name) =>
+        name.startsWith("coffee-development-pki-"),
+      ),
+      temporaryBefore,
+    );
+    savedDocument.environments.development.security.serviceTransportKeys[
+      "customer-service"
+    ] = before.security.serviceTransportKeys["customer-service"];
+    await writeFile(fixture.plainPath, JSON.stringify(savedDocument));
+    await installFakeMigrationSops(fixture, {
+      mutateBundleDuringEncrypt: "changed fixture\n",
+    });
+    await assert.rejects(
+      prepareDevelopmentRuntimeSecrets({
+        root: fixture.root,
+        env: fixture.env,
+      }),
+      /CONFIG-G08-BUNDLE_CHANGED/u,
+    );
+    assert.equal(await readFile(bundlePath, "utf8"), "changed fixture\n");
+    assert.deepEqual(
+      (await readdir("/dev/shm")).filter((name) =>
+        name.startsWith("coffee-development-pki-"),
+      ),
+      temporaryBefore,
+    );
+  } finally {
+    await rm(fixture.root, { recursive: true, force: true });
+    await rm(fixture.bin, { recursive: true, force: true });
+  }
+});
+
+void test("Keycloak materialization isolates its credentials and rejects invalid TLS or secret syntax", async () => {
+  const fixture = await createSecretMaterializationFixture();
+  const outputDir = join(fixture.root, "keycloak-output");
+  const keyPath = join(fixture.root, "synthetic.key");
+  const certPath = join(fixture.root, "synthetic.crt");
+  try {
+    execFileSync(
+      "openssl",
+      [
+        "req",
+        "-x509",
+        "-newkey",
+        "rsa:2048",
+        "-nodes",
+        "-days",
+        "1",
+        "-subj",
+        "/CN=identity.localhost",
+        "-addext",
+        "basicConstraints=critical,CA:TRUE",
+        "-addext",
+        "subjectAltName=DNS:identity.localhost,DNS:keycloak",
+        "-keyout",
+        keyPath,
+        "-out",
+        certPath,
+      ],
+      { stdio: "ignore", timeout: 30_000 },
+    );
+    const configPath = join(fixture.root, "config/platform.yaml");
+    const config = parseYaml(await readFile(configPath, "utf8"));
+    config.browserOidc = {
+      issuer: "https://identity.localhost:9443/realms/coffee",
+      clientId: "coffee-platform",
+      authorizationUrl:
+        "https://identity.localhost:9443/realms/coffee/protocol/openid-connect/auth",
+      tokenUrl:
+        "https://keycloak:8443/realms/coffee/protocol/openid-connect/token",
+      jwksUrl:
+        "https://keycloak:8443/realms/coffee/protocol/openid-connect/certs",
+      redirectUri: "https://localhost:8443/auth/callback",
+      allowedAlgorithms: ["RS256"],
+      actorRefClaim: "actor_ref",
+      permissionsClaim: "permissions",
+    };
+    await writeFile(configPath, dumpYaml(config));
+    const encryptedPath = join(
+      fixture.root,
+      "secrets/platform.secrets.sops.yaml",
+    );
+    const encrypted = JSON.parse(await readFile(encryptedPath, "utf8"));
+    const encryptedValue = "ENC[AES256_GCM,data:x,iv:x,tag:x,type:str]";
+    const identity = {
+      databasePassword: "d".repeat(48),
+      bootstrapAdminPassword: "a".repeat(48),
+      operatorPassword: "o".repeat(48),
+      tlsPrivateKey: await readFile(keyPath, "utf8"),
+      tlsCertificate: await readFile(certPath, "utf8"),
+      tlsCaBundle: await readFile(certPath, "utf8"),
+    };
+    encrypted.environments.development.identity = Object.fromEntries(
+      Object.keys(identity).map((name) => [name, encryptedValue]),
+    );
+    await writeFile(encryptedPath, JSON.stringify(encrypted));
+    const plain = JSON.parse(await readFile(fixture.plainPath, "utf8"));
+    plain.environments.development.identity = identity;
+    await writeFile(fixture.plainPath, JSON.stringify(plain));
+    const materialized = await materializeKeycloakSecrets({
+      root: fixture.root,
+      outputDir,
+      env: fixture.env,
+    });
+    assert.deepEqual(materialized.files.sort(), [
+      "ca.crt",
+      "keycloak.conf",
+      "tls.crt",
+      "tls.key",
+    ]);
+    const contents = await Promise.all(
+      materialized.files.map((name) => readFile(join(outputDir, name), "utf8")),
+    );
+    assert.ok(
+      contents.every((value) => !value.includes(identity.operatorPassword)),
+    );
+    for (const name of materialized.files)
+      assert.equal((await stat(join(outputDir, name))).mode & 0o777, 0o400);
+    const steadyDir = join(fixture.root, "keycloak-steady-output");
+    await materializeKeycloakSecrets({
+      root: fixture.root,
+      outputDir: steadyDir,
+      includeBootstrap: false,
+      env: fixture.env,
+    });
+    const steadyConfig = await readFile(
+      join(steadyDir, "keycloak.conf"),
+      "utf8",
+    );
+    assert.equal(steadyConfig, `db-password=${identity.databasePassword}\n`);
+    assert.doesNotMatch(steadyConfig, /bootstrap-admin-password/u);
+    const bundleDir = join(fixture.root, "local-bundle");
+    const scopedDir = join(fixture.root, "local-bundle-secrets");
+    const sopsPath = join(fixture.bin, "sops");
+    const sopsScript = await readFile(sopsPath, "utf8");
+    await mkdir(bundleDir);
+    await writeFile(sopsPath, "#!/bin/sh\nexit 1\n");
+    await assert.rejects(
+      prepareLocalRelease({
+        releaseDir: bundleDir,
+        secretsDir: scopedDir,
+        existingRelease: false,
+        prepare: async ({ secretsCreated }) => {
+          await mkdir(scopedDir);
+          await secretsCreated();
+          return materializeKeycloakSecrets({
+            root: fixture.root,
+            outputDir: scopedDir,
+            env: fixture.env,
+          });
+        },
+      }),
+      /CONFIG-SOPS/u,
+    );
+    await assert.rejects(stat(bundleDir), { code: "ENOENT" });
+    await assert.rejects(stat(scopedDir), { code: "ENOENT" });
+    await writeFile(sopsPath, sopsScript);
+    await mkdir(bundleDir);
+    const retry = await prepareLocalRelease({
+      releaseDir: bundleDir,
+      secretsDir: scopedDir,
+      existingRelease: false,
+      prepare: async ({ secretsCreated }) => {
+        await mkdir(scopedDir);
+        await secretsCreated();
+        return materializeKeycloakSecrets({
+          root: fixture.root,
+          outputDir: scopedDir,
+          env: fixture.env,
+        });
+      },
+    });
+    assert.equal(retry.runtime, "keycloak");
+    assert.ok(
+      (await readFile(join(scopedDir, "keycloak.conf"), "utf8")).includes(
+        "bootstrap-admin-password=",
+      ),
+    );
+    await mkdir(join(fixture.root, "apps/edge-gateway/src"), {
+      recursive: true,
+    });
+    await cp(
+      join(REPO_ROOT, "apps/edge-gateway/src/client-operations.gen.ts"),
+      join(fixture.root, "apps/edge-gateway/src/client-operations.gen.ts"),
+    );
+    const imported = await materializeKeycloakRealm({
+      root: fixture.root,
+      outputDir: join(fixture.root, "identity-import"),
+      env: fixture.env,
+    });
+    const realm = JSON.parse(await readFile(imported.path, "utf8"));
+    const { clientV1BrowserOperations } =
+      await import("../../apps/edge-gateway/src/client-operations.gen.ts");
+    const requiredPermissions = [
+      ...new Set(
+        clientV1BrowserOperations.flatMap((operation) =>
+          "permission" in operation ? [operation.permission] : [],
+        ),
+      ),
+    ];
+    assert.equal(realm.clients[0].publicClient, true);
+    assert.equal(
+      realm.clients[0].attributes["pkce.code.challenge.method"],
+      "S256",
+    );
+    assert.deepEqual(realm.clients[0].redirectUris, [
+      "https://localhost:8443/auth/callback",
+    ]);
+    assert.deepEqual(
+      realm.users[0].attributes.permissions,
+      requiredPermissions,
+    );
+    assert.deepEqual(realm.users[0].attributes.actor_ref, ["actor:owner"]);
+    assert.deepEqual(realm.users[0].clientRoles, {
+      "realm-management": ["realm-admin"],
+    });
+    assert.equal(
+      realm.users[0].credentials[0].value,
+      identity.operatorPassword,
+    );
+    assert.equal((await stat(imported.path)).mode & 0o777, 0o400);
+    plain.environments.development.identity.databasePassword = "bad\npassword";
+    await writeFile(fixture.plainPath, JSON.stringify(plain));
+    await assert.rejects(
+      materializeKeycloakSecrets({
+        root: fixture.root,
+        outputDir,
+        env: fixture.env,
+      }),
+      /CONFIG-IDENTITY-SECRET/u,
+    );
+    plain.environments.development.identity.databasePassword = "d".repeat(48);
+    plain.environments.development.identity.tlsPrivateKey = "not-a-private-key";
+    await writeFile(fixture.plainPath, JSON.stringify(plain));
+    await assert.rejects(
+      materializeKeycloakSecrets({
+        root: fixture.root,
+        outputDir,
+        env: fixture.env,
+      }),
+      /CONFIG-IDENTITY-SECRET/u,
+    );
+  } finally {
+    await rm(fixture.root, { recursive: true, force: true });
+    await rm(fixture.bin, { recursive: true, force: true });
+  }
+});
+
+void test("Kafka broker materialization keeps client credentials scoped and refuses replacement", async () => {
+  const fixture = await createSecretMaterializationFixture();
+  const outputDir = join(fixture.root, "kafka-output");
+  const keyPath = join(fixture.root, "synthetic-kafka.key");
+  const certPath = join(fixture.root, "synthetic-kafka.crt");
+  try {
+    execFileSync(
+      "openssl",
+      [
+        "req",
+        "-x509",
+        "-newkey",
+        "rsa:2048",
+        "-nodes",
+        "-days",
+        "1",
+        "-subj",
+        "/CN=kafka",
+        "-addext",
+        "basicConstraints=critical,CA:TRUE",
+        "-addext",
+        "subjectAltName=DNS:kafka,DNS:localhost",
+        "-keyout",
+        keyPath,
+        "-out",
+        certPath,
+      ],
+      { stdio: "ignore", timeout: 30_000 },
+    );
+    const encryptedPath = join(
+      fixture.root,
+      "secrets/platform.secrets.sops.yaml",
+    );
+    const encrypted = JSON.parse(await readFile(encryptedPath, "utf8"));
+    const plain = JSON.parse(await readFile(fixture.plainPath, "utf8"));
+    const encryptedValue = "ENC[AES256_GCM,data:x,iv:x,tag:x,type:str]";
+    const ca = await readFile(certPath, "utf8");
+    const broker = {
+      username: "kafka",
+      password: "b".repeat(48),
+      storePassword: "s".repeat(48),
+      tlsPrivateKey: await readFile(keyPath, "utf8"),
+      tlsCertificate: ca,
+      tlsCaBundle: ca,
+    };
+    encrypted.environments.development.kafka.broker = Object.fromEntries(
+      Object.keys(broker).map((name) => [
+        name,
+        name === "username" ? "kafka" : encryptedValue,
+      ]),
+    );
+    plain.environments.development.kafka.broker = broker;
+    for (const role of ["catalog", "orders", "realtime"]) {
+      encrypted.environments.development.kafka[role].username = role;
+      encrypted.environments.development.kafka[role].caPem = encryptedValue;
+      plain.environments.development.kafka[role] = {
+        username: role,
+        password: role[0].repeat(48),
+        caPem: ca,
+      };
+    }
+    await writeFile(encryptedPath, JSON.stringify(encrypted));
+    await writeFile(fixture.plainPath, JSON.stringify(plain));
+    const result = await materializeKafkaBrokerSecrets({
+      root: fixture.root,
+      outputDir,
+      env: fixture.env,
+    });
+    assert.deepEqual(result, { runtime: "kafka", path: outputDir });
+    const jaas = await readFile(join(outputDir, "kafka_jaas.conf"), "utf8");
+    for (const role of ["kafka", "catalog", "orders", "realtime"])
+      assert.match(jaas, new RegExp(`user_${role}=`));
+    const files = await readdir(outputDir);
+    assert.deepEqual(
+      files.sort(),
+      [
+        "client.properties",
+        "kafka.keystore.p12",
+        "kafka.keystore.password",
+        "kafka.truststore.p12",
+        "kafka_jaas.conf",
+      ].sort(),
+    );
+    for (const name of files)
+      assert.equal((await stat(join(outputDir, name))).mode & 0o777, 0o400);
+    await assert.rejects(
+      materializeKafkaBrokerSecrets({
+        root: fixture.root,
+        outputDir,
+        env: fixture.env,
+      }),
+      { code: "EEXIST" },
+    );
+    assert.equal(
+      await readFile(join(outputDir, "kafka_jaas.conf"), "utf8"),
+      jaas,
+    );
+    plain.environments.development.kafka.catalog.caPem = "not-a-ca";
+    await writeFile(fixture.plainPath, JSON.stringify(plain));
+    await assert.rejects(
+      materializeKafkaBrokerSecrets({
+        root: fixture.root,
+        outputDir: join(fixture.root, "invalid-output"),
+        env: fixture.env,
+      }),
+      /CONFIG-KAFKA-SECRET/u,
+    );
+  } finally {
+    await rm(fixture.root, { recursive: true, force: true });
+    await rm(fixture.bin, { recursive: true, force: true });
+  }
 });
 
 void test("unprovisioned collector and admin credentials fail closed without writing scoped files", async () => {
@@ -7966,6 +9224,7 @@ async function writeSyntheticParentG12({
   const services = [
     ...RUNTIME_NAMES,
     "grafana",
+    "keycloak",
     "storage-helper",
     "edge-nginx",
     "kafka",
@@ -8140,6 +9399,7 @@ void test("browser correlation executes the child lifecycle and preserves early 
   for (const file of [
     "verification/launch/v1/scenarios/rollback.mjs",
     "tools/config-bootstrap/index.mjs",
+    "tools/verified-infrastructure-image.mjs",
   ]) {
     await cp(join(REPO_ROOT, file), join(root, file));
   }
@@ -8220,6 +9480,7 @@ void test("browser correlation executes the child lifecycle and preserves early 
     "tools/realtime-capacity.mjs",
     "verification/launch/v1/scenarios/rollback.mjs",
     "tools/config-bootstrap/index.mjs",
+    "tools/verified-infrastructure-image.mjs",
   );
   git(
     "-c",

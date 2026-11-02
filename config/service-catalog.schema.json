@@ -41,7 +41,13 @@
     "infrastructureSecretScopes": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["otel-collector", "grafana-bootstrap"],
+      "required": [
+        "otel-collector",
+        "grafana-bootstrap",
+        "keycloak-runtime",
+        "keycloak-operator",
+        "kafka-broker"
+      ],
       "properties": {
         "otel-collector": {
           "const": [
@@ -50,6 +56,42 @@
         },
         "grafana-bootstrap": {
           "const": [{ "name": "admin-secret", "ref": "telemetry.grafanaAdmin" }]
+        },
+        "keycloak-runtime": {
+          "const": [
+            { "name": "database-password", "ref": "identity.databasePassword" },
+            {
+              "name": "bootstrap-admin-password",
+              "ref": "identity.bootstrapAdminPassword"
+            },
+            { "name": "tls-key", "ref": "identity.tlsPrivateKey" },
+            { "name": "tls-cert", "ref": "identity.tlsCertificate" },
+            { "name": "tls-ca", "ref": "identity.tlsCaBundle" }
+          ]
+        },
+        "keycloak-operator": {
+          "const": [
+            { "name": "operator-password", "ref": "identity.operatorPassword" }
+          ]
+        },
+        "kafka-broker": {
+          "const": [
+            { "name": "broker-user", "ref": "kafka.broker.username" },
+            { "name": "broker-password", "ref": "kafka.broker.password" },
+            { "name": "store-password", "ref": "kafka.broker.storePassword" },
+            { "name": "tls-key", "ref": "kafka.broker.tlsPrivateKey" },
+            { "name": "tls-cert", "ref": "kafka.broker.tlsCertificate" },
+            { "name": "tls-ca", "ref": "kafka.broker.tlsCaBundle" },
+            { "name": "catalog-user", "ref": "kafka.catalog.username" },
+            { "name": "catalog-password", "ref": "kafka.catalog.password" },
+            { "name": "catalog-ca", "ref": "kafka.catalog.caPem" },
+            { "name": "orders-user", "ref": "kafka.orders.username" },
+            { "name": "orders-password", "ref": "kafka.orders.password" },
+            { "name": "orders-ca", "ref": "kafka.orders.caPem" },
+            { "name": "realtime-user", "ref": "kafka.realtime.username" },
+            { "name": "realtime-password", "ref": "kafka.realtime.password" },
+            { "name": "realtime-ca", "ref": "kafka.realtime.caPem" }
+          ]
         }
       }
     },

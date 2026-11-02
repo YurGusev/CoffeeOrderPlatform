@@ -18,7 +18,7 @@ import { validateLaunchContext } from "../verification/launch/v1/report.mjs";
 
 const IMAGE_ID = /^sha256:[a-f0-9]{64}$/u;
 const VERIFIED_TAG =
-  /^coffee-g12-[a-f0-9]{12}-(?:kafka|storage-helper|grafana):latest$/u;
+  /^coffee-g12-[a-f0-9]{12}-(?:kafka|storage-helper|grafana|keycloak):latest$/u;
 const KAFKA_RUNTIME_MARKER = "coffee-platform-kafka:verified-artifact-required";
 const MAX_EVIDENCE_BYTES = 512 * 1024 * 1024;
 const MAX_METADATA_BYTES = 64 * 1024;
@@ -120,7 +120,7 @@ function isMissingImage(error, reference) {
   ).test(error.message.trim());
 }
 
-function inspectDockerImage(run, reference) {
+export function inspectDockerImage(run, reference) {
   let output;
   try {
     output = run([
@@ -158,6 +158,7 @@ function validateBaseMaterial(baseMaterial, baseImage, target) {
       "sourceRef",
       "platformManifestDigest",
       "indexArtifact",
+      ...(target === "keycloak-runtime" ? ["manifestArtifact"] : []),
     ]) ||
     baseMaterial.sourceRef !== baseImage ||
     !IMAGE_ID.test(baseMaterial.platformManifestDigest ?? "") ||
@@ -181,6 +182,48 @@ function validateBinding(
   toolchain,
 ) {
   const grafana = target === "grafana";
+  const keycloak = target === "keycloak";
+  const files = binding?.effectiveFiles;
+  const keycloakValid =
+    !keycloak ||
+    (exactKeys(files, [
+      "guava",
+      "javaRelease",
+      "javaCacerts",
+      "javaSecurity",
+    ]) &&
+      [
+        [
+          "guava",
+          "/opt/keycloak/lib/lib/main/com.google.guava.guava-33.7.2-jre.jar",
+          toolchain.keycloakGuavaSha256,
+        ],
+        [
+          "javaRelease",
+          "/opt/java/openjdk/release",
+          toolchain.keycloakJavaReleaseSha256,
+        ],
+        [
+          "javaCacerts",
+          "/opt/java/openjdk/lib/security/cacerts",
+          toolchain.keycloakJavaCacertsSha256,
+        ],
+        [
+          "javaSecurity",
+          "/opt/java/openjdk/conf/security/java.security",
+          toolchain.keycloakJavaSecuritySha256,
+        ],
+      ].every(([name, path, digest]) => {
+        const file = files[name];
+        return (
+          exactKeys(file, ["path", "sha256", "sizeBytes", "layerDigest"]) &&
+          file.path === path &&
+          file.sha256 === digest &&
+          Number.isSafeInteger(file.sizeBytes) &&
+          file.sizeBytes > 0 &&
+          IMAGE_ID.test(file.layerDigest ?? "")
+        );
+      }));
   const vendor = binding?.vendorPlugins;
   const vendorValid =
     !grafana ||
@@ -225,8 +268,10 @@ function validateBinding(
       "buildkitMaterialsCompleteness",
       "invocation",
       ...(grafana ? ["vendorPlugins"] : []),
+      ...(keycloak ? ["effectiveFiles"] : []),
     ]) &&
     vendorValid &&
+    keycloakValid &&
     binding.status === "OBSERVED" &&
     binding.sourceCommit === context.candidateSha &&
     binding.sourceTreeSha === environment.treeSha &&
@@ -267,7 +312,7 @@ async function validateGateImage({
   validateContext = validateLaunchContext,
   loadImage = true,
 } = {}) {
-  if (!["kafka", "storage-helper", "grafana"].includes(target))
+  if (!["kafka", "storage-helper", "grafana", "keycloak"].includes(target))
     fail("G12_KAFKA_TARGET_INVALID");
   if (typeof contextFile !== "string" || !isAbsolute(contextFile))
     fail("G12_KAFKA_LAUNCH_CONTEXT_REQUIRED");
@@ -314,7 +359,9 @@ async function validateGateImage({
       ? toolchain.kafkaImage
       : target === "grafana"
         ? toolchain.grafanaImage
-        : toolchain.nodeImage;
+        : target === "keycloak"
+          ? toolchain.keycloakDistributionImage
+          : toolchain.nodeImage;
   if (!/@sha256:[a-f0-9]{64}$/u.test(baseImage ?? ""))
     fail("G12_KAFKA_BASE_IMAGE_INVALID");
 
@@ -339,7 +386,9 @@ async function validateGateImage({
       ? result.kafka
       : target === "grafana"
         ? result.grafana
-        : result.storageHelper;
+        : target === "keycloak"
+          ? result.keycloak
+          : result.storageHelper;
   if (
     !exactKeys(image, [
       "path",
@@ -436,44 +485,97 @@ async function validateGateImage({
   )
     fail("G12_KAFKA_RECEIPT_INVALID");
 
-  const sourceDigest = /@sha256:([a-f0-9]{64})$/u.exec(baseImage)?.[1];
-  const baseMaterial = receipt.baseMaterial;
   if (
-    !validateBaseMaterial(baseMaterial, baseImage, target) ||
-    baseMaterial.indexArtifact.sha256 !== sourceDigest
+    target === "keycloak" &&
+    !exactKeys(receipt.baseMaterial, ["distribution", "runtime"])
   )
     fail("G12_KAFKA_BASE_MATERIAL_INVALID");
-  const indexBytes = await readEvidenceFile(
-    join(supplyChainDir, baseMaterial.indexArtifact.path),
-    { maxBytes: MAX_INDEX_BYTES },
-  );
-  const index = parseJson(indexBytes);
-  if (
-    indexBytes.length !== baseMaterial.indexArtifact.sizeBytes ||
-    sha256(indexBytes) !== baseMaterial.indexArtifact.sha256 ||
-    index?.schemaVersion !== 2 ||
-    !INDEX_MEDIA_TYPES.has(index?.mediaType) ||
-    !Array.isArray(index?.manifests) ||
-    index.manifests.length < 1 ||
-    index.manifests.some(
-      (descriptor) =>
-        !MANIFEST_MEDIA_TYPES.has(descriptor?.mediaType) ||
-        !IMAGE_ID.test(descriptor?.digest ?? "") ||
-        !Number.isSafeInteger(descriptor?.size) ||
-        descriptor.size < 1,
+  const bases =
+    target === "keycloak"
+      ? [
+          [
+            receipt.baseMaterial.distribution,
+            toolchain.keycloakDistributionImage,
+            "keycloak-distribution",
+          ],
+          [
+            receipt.baseMaterial.runtime,
+            toolchain.keycloakRuntimeImage,
+            "keycloak-runtime",
+          ],
+        ]
+      : [[receipt.baseMaterial, baseImage, target]];
+  for (const [baseMaterial, expectedBaseImage, baseTarget] of bases) {
+    const sourceDigest = /@sha256:([a-f0-9]{64})$/u.exec(
+      expectedBaseImage,
+    )?.[1];
+    if (
+      !validateBaseMaterial(baseMaterial, expectedBaseImage, baseTarget) ||
+      baseMaterial.indexArtifact.sha256 !== sourceDigest
     )
-  )
-    fail("G12_KAFKA_BASE_MATERIAL_INVALID");
-  const platformDescriptors = index.manifests.filter(
-    (descriptor) =>
-      descriptor.platform?.os === "linux" &&
-      descriptor.platform?.architecture === "amd64",
-  );
-  if (
-    platformDescriptors.length !== 1 ||
-    platformDescriptors[0].digest !== baseMaterial.platformManifestDigest
-  )
-    fail("G12_KAFKA_BASE_MATERIAL_INVALID");
+      fail("G12_KAFKA_BASE_MATERIAL_INVALID");
+    const indexBytes = await readEvidenceFile(
+      join(supplyChainDir, baseMaterial.indexArtifact.path),
+      { maxBytes: MAX_INDEX_BYTES },
+    );
+    const index = parseJson(indexBytes);
+    if (
+      indexBytes.length !== baseMaterial.indexArtifact.sizeBytes ||
+      sha256(indexBytes) !== baseMaterial.indexArtifact.sha256 ||
+      index?.schemaVersion !== 2 ||
+      !INDEX_MEDIA_TYPES.has(index?.mediaType) ||
+      !Array.isArray(index?.manifests) ||
+      index.manifests.length < 1 ||
+      index.manifests.some(
+        (descriptor) =>
+          !MANIFEST_MEDIA_TYPES.has(descriptor?.mediaType) ||
+          !IMAGE_ID.test(descriptor?.digest ?? "") ||
+          !Number.isSafeInteger(descriptor?.size) ||
+          descriptor.size < 1,
+      )
+    )
+      fail("G12_KAFKA_BASE_MATERIAL_INVALID");
+    const platformDescriptors = index.manifests.filter(
+      (descriptor) =>
+        descriptor.platform?.os === "linux" &&
+        descriptor.platform?.architecture === "amd64",
+    );
+    if (
+      platformDescriptors.length !== 1 ||
+      platformDescriptors[0].digest !== baseMaterial.platformManifestDigest
+    )
+      fail("G12_KAFKA_BASE_MATERIAL_INVALID");
+
+    if (baseTarget === "keycloak-runtime") {
+      const artifact = baseMaterial.manifestArtifact;
+      if (
+        !exactKeys(artifact, ["path", "sha256", "sizeBytes", "layerCount"]) ||
+        artifact.path !== "artifacts/keycloak-runtime-base-manifest.json" ||
+        artifact.sha256 !== baseMaterial.platformManifestDigest.slice(7) ||
+        !Number.isSafeInteger(artifact.sizeBytes) ||
+        artifact.sizeBytes < 1 ||
+        artifact.sizeBytes > MAX_INDEX_BYTES ||
+        !Number.isSafeInteger(artifact.layerCount) ||
+        artifact.layerCount < 1
+      )
+        fail("G12_KAFKA_BASE_MATERIAL_INVALID");
+      const bytes = await readEvidenceFile(
+        join(supplyChainDir, artifact.path),
+        { maxBytes: MAX_INDEX_BYTES },
+      );
+      const manifest = parseJson(bytes);
+      if (
+        bytes.length !== artifact.sizeBytes ||
+        bytes.length !== platformDescriptors[0].size ||
+        sha256(bytes) !== artifact.sha256 ||
+        manifest?.schemaVersion !== 2 ||
+        !Array.isArray(manifest.layers) ||
+        manifest.layers.length !== artifact.layerCount ||
+        manifest.layers.some((layer) => !IMAGE_ID.test(layer?.digest ?? ""))
+      )
+        fail("G12_KAFKA_BASE_MATERIAL_INVALID");
+    }
+  }
 
   const artifactPath = join(supplyChainDir, `artifacts/${target}.oci.tar`);
   if (!within(supplyChainDir, artifactPath))
@@ -588,6 +690,7 @@ async function validateGateImage({
     const targets = [
       ...RUNTIME_NAMES,
       "grafana",
+      "keycloak",
       "storage-helper",
       "edge-nginx",
       "kafka",
@@ -804,7 +907,7 @@ async function validateGateImage({
 }
 
 export async function loadVerifiedGateImage(options = {}) {
-  const { runtimeImages, ...image } = await validateGateImage({
+  const { runtimeImages: _runtimeImages, ...image } = await validateGateImage({
     ...options,
     readRuntimeImages: false,
   });
@@ -831,7 +934,7 @@ export function removeVerifiedGateImage({
   image,
   run = dockerRun,
 } = {}) {
-  if (!["kafka", "storage-helper", "grafana"].includes(target))
+  if (!["kafka", "storage-helper", "grafana", "keycloak"].includes(target))
     fail("G12_KAFKA_TARGET_INVALID");
   if (!image || image.imported !== true) return false;
   if (
