@@ -1,5 +1,5 @@
 issue: 257
-baseCommit: a572ef1899678381e6a27d8654cd4f0fc6b5428f
+baseCommit: b75a4a2681e5e8c9db742a830082a728245d180c
 status: locally-verified
 inputs:
   - issue: 5
@@ -14,6 +14,10 @@ inputs:
     acceptedMergeCommit: e6439599be85a5fc8b83d99293064e877a2ff012
     artifact: evidence/handoffs/issue-64.yaml
     sha256: 73283a79ba020cb126351506f324be9439975516af42a90b235d6bdf9484afae
+  - issue: 259
+    acceptedMergeCommit: b75a4a2681e5e8c9db742a830082a728245d180c
+    artifact: evidence/handoffs/issue-259.yaml
+    sha256: 6283e3486f50cc18ce006688697ab6031de4f452966e8153a5f5fb98ef754ba4
 outputs:
   - artifact: tests/customer/customer-live.test.mjs
     sha256: f063c4dfc83e0c1fa939ac7be60050eb992f62d9f82250ebef1ae186a0969a1e
@@ -24,6 +28,9 @@ behavior:
   - Проверки dropped COMMIT, HTTP 503/no-leak, отсутствия ROLLBACK, единственных durable effects и replay после restart сохранены.
   - Production logger, Customer owner, config, contracts, pins и thresholds не изменены.
 verification:
+  - command: gh run view 41408084739 --repo YurGusev/CoffeeOrderPlatform --log-failed
+    result: "Исторический CI FAIL на head 280725a9: 1453 PASS, 79 live-only skip, одна ошибка readiness nginx cutover. Причина отдельно исправлена и принята через PR 260; повтор без исправления не выполнялся."
+    logSha256: d34d7927e89454d31861ec85a8369e601e90cbd033669ffcd0d4e96907162568
   - command: node --check tests/customer/customer-live.test.mjs
     result: PASS, exit 0, Node 26.8.1.
   - command: pnpm install --offline --frozen-lockfile
@@ -40,6 +47,7 @@ verification:
   - command: git diff --check
     result: PASS, exit 0.
 limitations:
+  - Принят #259 и его handoff; Customer test output hash не изменился. Новый CI проверяет объединённый head, предыдущий FAIL не переименовывается в PASS.
   - Первая выборочная сборка трёх apps не включила contracts-pricing-v1/contracts-orders-v1; тест не запускался. Стандартная workspace build затем прошла; код зависимостей не менялся.
   - Полный Customer live proof с PostgreSQL, restart/replay, свежая SSE qualification и formal G00–G19 выполняются в issue 13 на новом candidate после принятия этого исправления; данный handoff не является runtime admission.
   - Отрицательный formal run 20261102T064519Z-4393aea сохранён с решением НЕ ДОПУСТИТЬ; новый assertion не меняет его результат.
