@@ -1,0 +1,40 @@
+issue: 259
+baseCommit: a572ef1899678381e6a27d8654cd4f0fc6b5428f
+status: locally-verified
+inputs:
+  - issue: 162
+    acceptedMergeCommit: 327474d917e1f3f1dfd9d12da8a1273775f8591f
+    artifact: evidence/handoffs/issue-162.yaml
+    sha256: f7ba488cc54b5abc44d9e160a2815baf4abfbdaa4a99db70b5946a007f843a54
+outputs:
+  - artifact: tests/nginx/cutover.test.mjs
+    sha256: 65f5e9398aa88d42c3966d1b22f778585a085015d62efe15da052fc3654078ce
+    consumers:
+      - 257
+      - 13
+behavior:
+  - Отрицательная upstream-trust фикстура ждёт HTTPS GET /health/live со статусом 200 на собственном negativePort вместо Docker State.Running.
+  - Переиспользованы прежние request и waitFor; CA, SNI, rejectUnauthorized, deadline и единственный POST сохранены.
+  - Проверки typed 502, UPSTREAM_UNAVAILABLE, bounded response и нуля business requests не изменены; production nginx/config не меняются.
+verification:
+  - command: node --check tests/nginx/cutover.test.mjs
+    result: PASS, exit 0, Node 26.8.1.
+  - command: pnpm install --offline --frozen-lockfile
+    result: PASS, 2.6 с; существующий store, downloads 0.
+  - command: pnpm exec prettier --check tests/nginx/cutover.test.mjs
+    result: PASS, exit 0.
+    logSha256: faf872f3db88cbad90a0c2b345a3c8a22bbb46b604f3b19339e6cb4c1420d1fd
+  - command: node --test tests/nginx/cutover.test.mjs
+    result: PASS, 1/1, fail/cancel/skip 0, 102.056 с; shared heavy lock; HTTPS/mTLS, signed assertion, SSE, revoked upstream trust, reload, TLS rotation/rollback.
+    logSha256: faf872f3db88cbad90a0c2b345a3c8a22bbb46b604f3b19339e6cb4c1420d1fd
+  - command: git diff --check
+    result: PASS, exit 0.
+  - command: docker buildx history logs --builder default c1bvro3kuqifyehqafvknkxvb
+    result: READ-ONLY provenance; build 2026-11-02T07:48:27.582Z сохранил tag coffee-edge-cutover-fixture:cutover-1152716. Из process.pid следует hostPort 36716 и negativePort 36717; последний совпал с портом ошибки CI 41408084739.
+    logSha256: a4fca00b790af8d415c5e917d44b846a7ff8f040f29d170235b408d24619f4c0
+  - command: gh run view 41408084739 --log-failed
+    result: Исторический FAIL сохранён; 1453 PASS, 79 live-only skip, один cutover FAIL до TLS handshake. Повтор CI без исправления не выполнялся.
+    logSha256: d34d7927e89454d31861ec85a8369e601e90cbd033669ffcd0d4e96907162568
+limitations:
+  - После PASS read-only inventory не обнаружил контейнеров и образов с cutover tags или сетей edge-cutover; runtime fixtures удалены штатным finally.
+  - Предыдущий CI PR 258 остаётся FAIL; для #257 требуется принять это исправление и получить CI нового head. Полный G00–G19 и SSE qualification issue 13 этим cutover proof не заменяются.
