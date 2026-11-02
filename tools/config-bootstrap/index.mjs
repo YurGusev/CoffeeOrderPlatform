@@ -2180,11 +2180,62 @@ async function writeMigrationEncryptedBundle(
   }
 }
 
+function dockerHubPullAuth(value) {
+  if (
+    typeof value !== "string" ||
+    value.length > 16_384 ||
+    !/^[A-Za-z0-9+/]+={0,2}$/u.test(value)
+  )
+    fail(
+      "CONFIG-REGISTRY-AUTH",
+      "Docker Hub pull credential is missing or invalid",
+    );
+  const decoded = Buffer.from(value, "base64");
+  const separator = decoded.indexOf(58);
+  if (
+    decoded.toString("base64") !== value ||
+    separator <= 0 ||
+    separator === decoded.length - 1 ||
+    decoded.includes(0)
+  )
+    fail("CONFIG-REGISTRY-AUTH", "Docker Hub pull credential is invalid");
+  return value;
+}
+
+export async function materializeBuildRegistryCredentials({
+  root = REPO_ROOT,
+  outputDir,
+  env = process.env,
+} = {}) {
+  assertLocatorEnv(env, true);
+  if (typeof outputDir !== "string" || !outputDir.startsWith("/dev/shm/"))
+    fail("CONFIG-REGISTRY-AUTH", "registry credentials require private tmpfs");
+  await ensurePrivateSecretDirectory(outputDir);
+  if ((await statfs(outputDir)).type !== 0x01021994)
+    fail("CONFIG-REGISTRY-AUTH", "registry credentials require private tmpfs");
+  const config = await loadPlatformConfig(root);
+  const { decrypted } = await readMigrationSecretBundle(root, env);
+  const auth = dockerHubPullAuth(
+    secretValueAt(
+      decrypted.environments[config.environment],
+      "bootstrap.dockerHubPullAuth",
+    ),
+  );
+  const path = join(outputDir, "config.json");
+  await writePrivateSecret(
+    path,
+    JSON.stringify({ auths: { "https://index.docker.io/v1/": { auth } } }) +
+      "\n",
+  );
+  return { path, secretRefs: ["bootstrap.dockerHubPullAuth"] };
+}
+
 // Новый публичный CA создаётся только по явной команде; запись — только ciphertext.
 export async function prepareDevelopmentRuntimeSecrets({
   root = REPO_ROOT,
   env = process.env,
   provisionPublicAuthority = false,
+  dockerHubAuthFile,
 } = {}) {
   assertLocatorEnv(env, true);
   const config = await loadPlatformConfig(
@@ -2207,6 +2258,40 @@ export async function prepareDevelopmentRuntimeSecrets({
   const changed = updatedRuntimes.map(
     (runtime) => `security.serviceTransportKeys.${runtime}`,
   );
+
+  if (dockerHubAuthFile !== undefined) {
+    let auth;
+    try {
+      const metadata = await lstat(dockerHubAuthFile);
+      if (
+        !metadata.isFile() ||
+        metadata.uid !== process.getuid() ||
+        (metadata.mode & 0o077) !== 0 ||
+        (await realpath(dockerHubAuthFile)) !== resolve(dockerHubAuthFile)
+      )
+        throw new Error();
+      const supplied = JSON.parse(await readFile(dockerHubAuthFile, "utf8"));
+      auth = dockerHubPullAuth(
+        supplied.auths?.["https://index.docker.io/v1/"]?.auth,
+      );
+    } catch {
+      fail(
+        "CONFIG-REGISTRY-AUTH",
+        "owned private Docker Hub credential file is required",
+      );
+    }
+    const ref = "bootstrap.dockerHubPullAuth";
+    const existing = secretValueAt(secrets, ref);
+    if (existing !== undefined && existing !== auth)
+      fail(
+        "CONFIG-REGISTRY-AUTH",
+        "existing Docker Hub credential differs; rotation requires a separate operation",
+      );
+    if (existing === undefined) {
+      setSecretAt(secrets, ref, auth);
+      changed.push(ref);
+    }
+  }
 
   const passwordRefs = [
     "identity.databasePassword",
@@ -5669,10 +5754,23 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const prepareDevelopmentRuntime = process.argv.includes(
     "--prepare-development-runtime",
   );
+  const dockerHubAuthIndex = process.argv.indexOf("--import-docker-hub-auth");
+  const dockerHubAuthFile =
+    dockerHubAuthIndex >= 0 ? process.argv[dockerHubAuthIndex + 1] : undefined;
   const provisionPublicAuthority = process.argv.includes(
     "--provision-public-authority",
   );
   try {
+    if (
+      dockerHubAuthIndex >= 0 &&
+      (!prepareDevelopmentRuntime ||
+        !dockerHubAuthFile ||
+        dockerHubAuthFile.startsWith("--"))
+    )
+      fail(
+        "CONFIG-REGISTRY-AUTH",
+        "registry import requires development preparation and an input file",
+      );
     if (provisionPublicAuthority && !prepareDevelopmentRuntime)
       fail(
         "CONFIG-DEVELOPMENT-CA",
@@ -5701,6 +5799,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
           await prepareDevelopmentRuntimeSecrets({
             root,
             provisionPublicAuthority,
+            dockerHubAuthFile,
           }),
         ),
       );

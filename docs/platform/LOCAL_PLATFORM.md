@@ -115,6 +115,14 @@ runtime. Автоматический scheduler эта команда не со�
 выполняется отдельно. Срок CA — 8760 часов, edge certificate — 2160 часов,
 согласно `security.publicAuthorityValidityHours` и `publicCertificateValidityHours`.
 
+DHI требует доступ Docker Hub. Существующую учётную запись однократно импортирует
+trusted bootstrap: `node tools/config-bootstrap/index.mjs --prepare-development-runtime --import-docker-hub-auth /home/yurgusev/.docker/config.json`.
+Источник должен принадлежать пользователю и иметь закрытые права. Команда
+записывает только encrypted `bootstrap.dockerHubPullAuth`, не заменяет отличающуюся
+существующую credential и не меняет Docker login. G12 материализует только эту
+credential в собственный `/dev/shm/coffee-image-registry-*` и удаляет каталог
+после успеха или ошибки; build context, evidence и runtime её не получают.
+
 Постоянная локальная установка располагается в `~/coffee-platform`: чистые
 контроллеры — в `runtime/controllers/<commit>`, immutable release bundles — в
 `runtime/releases/<release>`, состояние identity — в `runtime/state`.

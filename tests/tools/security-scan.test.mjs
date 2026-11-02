@@ -1492,6 +1492,32 @@ void test("G12 scanner arguments constrain the input and include lockfile dev de
 void test("G12 builds product images, records pinned upstream identity, and fails on findings or tampered OCI proof", async (t) => {
   const temp = await mkdtemp(join(tmpdir(), "image-scan-fixture-"));
   t.after(() => rm(temp, { recursive: true, force: true }));
+  const registryDirectories = [];
+  const registryAuth = {
+    auths: {
+      "https://index.docker.io/v1/": {
+        auth: Buffer.from("fixture:pull-token").toString("base64"),
+      },
+    },
+  };
+  const fakeRegistryCredentials = async ({ outputDir, env }) => {
+    assert.ok(outputDir.startsWith("/dev/shm/coffee-image-registry-"));
+    assert.equal((await stat(outputDir)).mode & 0o777, 0o700);
+    assert.equal(
+      Object.keys(env).some((name) => name.startsWith("COFFEE_")),
+      false,
+    );
+    registryDirectories.push(outputDir);
+    await writeFile(
+      join(outputDir, "config.json"),
+      JSON.stringify(registryAuth),
+      { mode: 0o600 },
+    );
+  };
+  t.after(async () => {
+    for (const directory of registryDirectories)
+      await assert.rejects(stat(directory), { code: "ENOENT" });
+  });
   const candidateRoot = join(temp, "candidate");
   const evidenceDir = join(temp, "evidence");
   const gateDir = join(evidenceDir, "gates", "G12_SUPPLY_CHAIN");
@@ -1948,6 +1974,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
     await commitCompose(Buffer.from(scenario.compose));
     let unexpectedCommands = 0;
     const invalidDeclaration = await runSecurityScan({
+      materializeRegistryCredentials: fakeRegistryCredentials,
       contextFile: contextPath,
       outputDir: join(gateArtifactsDir, `invalid-kafka-compose-${index}`),
       validateContext: validateSyntheticContext,
@@ -3057,6 +3084,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
   const initialTimeoutStart = trivyRunTimeouts.length;
   databaseAdvanceMs = 5 * 60_000;
   const result = await runSecurityScan({
+    materializeRegistryCredentials: fakeRegistryCredentials,
     contextFile: contextPath,
     clock: () => fakeNow,
     validateContext: validateSyntheticContext,
@@ -3741,6 +3769,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
   fakeNow = now;
   mismatchDigestReference = toolchain.lokiImage;
   const mismatchedBackend = await runSecurityScan({
+    materializeRegistryCredentials: fakeRegistryCredentials,
     contextFile: contextPath,
     outputDir: join(gateArtifactsDir, "supply-chain-upstream-digest-mismatch"),
     clock: () => now,
@@ -3767,6 +3796,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
     ["vulnerability-database", "java-database"].includes(run.kind),
   ).length;
   const exhaustedResult = await runSecurityScan({
+    materializeRegistryCredentials: fakeRegistryCredentials,
     contextFile: contextPath,
     outputDir: join(gateArtifactsDir, "supply-chain-db-budget-exhausted"),
     clock: () => fakeNow,
@@ -3816,6 +3846,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
   failPullReference = toolchain.otelCollectorImage;
   const removalsBeforePullFailure = imageRmTargets.length;
   const failedPullResult = await runSecurityScan({
+    materializeRegistryCredentials: fakeRegistryCredentials,
     contextFile: contextPath,
     outputDir: join(gateArtifactsDir, "supply-chain-pull-failure"),
     clock: () => now,
@@ -3864,6 +3895,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
   failPullLeavesImage = true;
   const removalsBeforePartialPullFailure = imageRmTargets.length;
   const partialPullResult = await runSecurityScan({
+    materializeRegistryCredentials: fakeRegistryCredentials,
     contextFile: contextPath,
     outputDir: join(gateArtifactsDir, "supply-chain-partial-pull-failure"),
     clock: () => now,
@@ -3926,6 +3958,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
   scanAdvanceMs = 60_000;
   databaseTtlMs = 2 * 60_000;
   const expiringDatabaseResult = await runSecurityScan({
+    materializeRegistryCredentials: fakeRegistryCredentials,
     contextFile: contextPath,
     outputDir: join(gateArtifactsDir, "supply-chain-expiring-db"),
     clock: () => fakeNow,
@@ -3948,6 +3981,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
   tamperDbDuringVulnerabilityScan = true;
   dbTampered = false;
   const immediateScanTamper = await runSecurityScan({
+    materializeRegistryCredentials: fakeRegistryCredentials,
     contextFile: contextPath,
     outputDir: join(gateArtifactsDir, "supply-chain-db-changed-during-scan"),
     clock: () => fakeNow,
@@ -3971,6 +4005,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
   foreignAliasOnFirstScanReference = scannerReference;
   const changedDatabaseRmStart = imageRmTargets.length;
   const changedDatabaseResult = await runSecurityScan({
+    materializeRegistryCredentials: fakeRegistryCredentials,
     contextFile: contextPath,
     outputDir: join(gateArtifactsDir, "supply-chain-db-changed"),
     clock: () => fakeNow,
@@ -4041,6 +4076,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
   tamperDbOnFirstScan = false;
   fakeNow = now;
   const highResult = await runSecurityScan({
+    materializeRegistryCredentials: fakeRegistryCredentials,
     contextFile: contextPath,
     outputDir: join(gateArtifactsDir, "supply-chain-high"),
     clock: () => fakeNow,
@@ -4057,6 +4093,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
 
   omitConvertedPackage = true;
   const incompleteSbomResult = await runSecurityScan({
+    materializeRegistryCredentials: fakeRegistryCredentials,
     contextFile: contextPath,
     outputDir: join(gateArtifactsDir, "supply-chain-incomplete-sbom"),
     clock: () => fakeNow,
@@ -4073,6 +4110,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
   criticalFinding = true;
   failScanReport = `${RUNTIME_NAMES[1]}.sbom.cdx.json`;
   const partialFindingResult = await runSecurityScan({
+    materializeRegistryCredentials: fakeRegistryCredentials,
     contextFile: contextPath,
     outputDir: join(gateArtifactsDir, "supply-chain-partial-findings"),
     clock: () => fakeNow,
@@ -4103,6 +4141,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
   criticalFinding = false;
   tamperGrafanaReport = true;
   const changedGrafanaResult = await runSecurityScan({
+    materializeRegistryCredentials: fakeRegistryCredentials,
     contextFile: contextPath,
     outputDir: join(gateArtifactsDir, "supply-chain-changed-grafana"),
     run: fakeRun,
@@ -4115,6 +4154,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
   assert.equal(changedGrafanaResult.code, "GRAFANA_SCAN_REPORT_CHANGED");
   tamperOci = true;
   const tamperedResult = await runSecurityScan({
+    materializeRegistryCredentials: fakeRegistryCredentials,
     contextFile: contextPath,
     outputDir: join(gateArtifactsDir, "supply-chain-tampered"),
     clock: () => fakeNow,
@@ -4131,6 +4171,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
   nextRunBehavior = { clientDies: true, onlyScan: true };
   const beforeOwnedCleanup = containerRmCalls;
   const timedOutResult = await runSecurityScan({
+    materializeRegistryCredentials: fakeRegistryCredentials,
     contextFile: contextPath,
     outputDir: join(gateArtifactsDir, "supply-chain-client-timeout"),
     clock: () => fakeNow,
@@ -4164,6 +4205,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
   const unwitnessedLock = join(temp, "scanner-unwitnessed-container.lock");
   let unwitnessedSequence = 0;
   const unwitnessedResult = await runSecurityScan({
+    materializeRegistryCredentials: fakeRegistryCredentials,
     contextFile: contextPath,
     outputDir: join(gateArtifactsDir, "supply-chain-unwitnessed-container"),
     clock: () => fakeNow,
@@ -4214,6 +4256,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
   nextRunBehavior = { clientDies: true, onlyScan: true, owner: "FOREIGN" };
   const beforeMismatchRemoval = containerRmCalls;
   const mismatchResult = await runSecurityScan({
+    materializeRegistryCredentials: fakeRegistryCredentials,
     contextFile: contextPath,
     outputDir: join(gateArtifactsDir, "supply-chain-ownership-mismatch"),
     clock: () => fakeNow,
@@ -4247,6 +4290,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
   failContainerRemoval = true;
   const beforeFailedRemoval = containerRmCalls;
   const failedCleanupResult = await runSecurityScan({
+    materializeRegistryCredentials: fakeRegistryCredentials,
     contextFile: contextPath,
     outputDir: join(gateArtifactsDir, "supply-chain-cleanup-failure"),
     clock: () => fakeNow,
@@ -4304,6 +4348,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
   fakeContainers.set(collisionName, collision);
   const beforeCollisionRemoval = containerRmCalls;
   const collisionResult = await runSecurityScan({
+    materializeRegistryCredentials: fakeRegistryCredentials,
     contextFile: contextPath,
     outputDir: join(gateArtifactsDir, "supply-chain-name-collision"),
     clock: () => fakeNow,
@@ -4330,6 +4375,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
     );
     const lockPath = join(temp, `scanner-${scenario.substage}-failure.lock`);
     const failedDatabaseResult = await runSecurityScan({
+      materializeRegistryCredentials: fakeRegistryCredentials,
       contextFile: contextPath,
       outputDir: output,
       clock: () => fakeNow,
@@ -4362,6 +4408,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
   failImageInputRemoval = true;
   const buildsBeforeImageScanFailure = productBuilds;
   const imageScanFailure = await runSecurityScan({
+    materializeRegistryCredentials: fakeRegistryCredentials,
     contextFile: contextPath,
     outputDir: join(gateArtifactsDir, "supply-chain-image-scan-failure"),
     clock: () => fakeNow,
@@ -4411,6 +4458,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
   failImageInputRemoval = true;
   const buildsBeforeImageCleanupFailure = productBuilds;
   const imageCleanupFailure = await runSecurityScan({
+    materializeRegistryCredentials: fakeRegistryCredentials,
     contextFile: contextPath,
     outputDir: join(gateArtifactsDir, "supply-chain-image-cleanup-failure"),
     clock: () => fakeNow,

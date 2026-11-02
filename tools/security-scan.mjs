@@ -26,6 +26,7 @@ import {
 } from "../packages/platform-config/src/index.ts";
 import { RUNTIME_NAMES } from "../packages/platform-config/src/index.ts";
 import { validateLaunchContext } from "../verification/launch/v1/report.mjs";
+import { materializeBuildRegistryCredentials } from "./config-bootstrap/index.mjs";
 
 const SCANNER_IMAGE =
   "ghcr.io/aquasecurity/trivy@sha256:790fd66d1697395d8693d1acaa1ea702406a20f109b6fc7bac8db623eca6c06c";
@@ -2805,6 +2806,7 @@ export async function runSecurityScan({
   run = runCommand,
   statfsFn = statfs,
   removeImageInput = rm,
+  materializeRegistryCredentials = materializeBuildRegistryCredentials,
   lockPath = SCAN_LOCK,
 } = {}) {
   const scanDeadlineAt = clock() + G12_SCAN_BUDGET_MS;
@@ -3030,12 +3032,24 @@ export async function runSecurityScan({
     await chmod(temporary, 0o700);
     const cacheDir = join(temporary, "cache");
     const inputDir = join(temporary, "manifests");
-    dockerConfig = join(temporary, "docker-config");
+    dockerConfig = await mkdtemp("/dev/shm/coffee-image-registry-");
     await Promise.all([
       mkdir(cacheDir, { mode: 0o700 }),
       mkdir(inputDir, { mode: 0o700 }),
-      mkdir(dockerConfig, { mode: 0o700 }),
     ]);
+    stage = "registry-credentials";
+    const registryEnv = Object.fromEntries(
+      Object.entries(process.env).filter(
+        ([name]) =>
+          !(name.startsWith("COFFEE_") || name.startsWith("SOPS_")) ||
+          name === "SOPS_AGE_KEY_FILE",
+      ),
+    );
+    await materializeRegistryCredentials({
+      root: identity.candidateRoot,
+      outputDir: dockerConfig,
+      env: registryEnv,
+    });
     stage = "source-preparation";
     await prepareBuildxRegistration(dockerConfig, runBounded);
     const outputRoot = join(outputDir, "artifacts");
@@ -3630,6 +3644,11 @@ export async function runSecurityScan({
         });
       }
     }
+    // Docker config не монтируется в проверяемые контейнеры и удаляется даже при их неоднозначной очистке.
+    if (dockerConfig)
+      await rm(dockerConfig, { recursive: true, force: true }).catch(() => {
+        setCleanupFailure("REGISTRY_CLEANUP_FAILED", "registry-cleanup");
+      });
     result.findings = summarizeFindings(result.reports);
     process.removeListener("SIGINT", onInt);
     process.removeListener("SIGTERM", onTerm);

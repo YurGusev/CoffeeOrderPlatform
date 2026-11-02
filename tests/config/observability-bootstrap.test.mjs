@@ -67,6 +67,7 @@ import {
   materializeKafkaBrokerSecrets,
   materializeLocalRuntimeSecrets,
   prepareDevelopmentRuntimeSecrets,
+  materializeBuildRegistryCredentials,
   projectLocalRuntimeConfig,
   retireKeycloakBootstrapSecret,
   provisionDevelopmentGrafanaAdmin,
@@ -2240,6 +2241,69 @@ void test("development preparation preserves existing secrets and refreshes only
       publicExpirySpy.mock.restore();
       syncBuiltinESMExports();
     }
+    const dockerHubAuthFile = join(fixture.root, "docker-auth.json");
+    const auth = Buffer.from("fixture:pull-token").toString("base64");
+    await writeFile(
+      dockerHubAuthFile,
+      JSON.stringify({ auths: { "https://index.docker.io/v1/": { auth } } }),
+      { mode: 0o600 },
+    );
+    const importedRegistry = await prepareDevelopmentRuntimeSecrets({
+      root: fixture.root,
+      env: fixture.env,
+      dockerHubAuthFile,
+    });
+    assert.deepEqual(importedRegistry.updatedRefs, [
+      "bootstrap.dockerHubPullAuth",
+    ]);
+    assert.equal(
+      (
+        await prepareDevelopmentRuntimeSecrets({
+          root: fixture.root,
+          env: fixture.env,
+          dockerHubAuthFile,
+        })
+      ).changed,
+      false,
+    );
+    const registryDirectory = join(fixture.root, "registry-scope");
+    const registry = await materializeBuildRegistryCredentials({
+      root: fixture.root,
+      outputDir: registryDirectory,
+      env: fixture.env,
+    });
+    assert.deepEqual(JSON.parse(await readFile(registry.path, "utf8")), {
+      auths: { "https://index.docker.io/v1/": { auth } },
+    });
+    assert.equal((await stat(registry.path)).mode & 0o777, 0o400);
+    await assert.rejects(
+      materializeBuildRegistryCredentials({
+        root: fixture.root,
+        outputDir: "/tmp/coffee-registry-not-tmpfs",
+        env: fixture.env,
+      }),
+      /private tmpfs/u,
+    );
+    const registryCiphertext = await readFile(bundlePath);
+    await writeFile(
+      dockerHubAuthFile,
+      JSON.stringify({
+        auths: {
+          "https://index.docker.io/v1/": {
+            auth: Buffer.from("fixture:different-token").toString("base64"),
+          },
+        },
+      }),
+    );
+    await assert.rejects(
+      prepareDevelopmentRuntimeSecrets({
+        root: fixture.root,
+        env: fixture.env,
+        dockerHubAuthFile,
+      }),
+      /existing Docker Hub credential differs/u,
+    );
+    assert.deepEqual(await readFile(bundlePath), registryCiphertext);
     // Восстановить вход предыдущего сценария конкурирующей записи.
     await writeFile(bundlePath, ciphertextBeforeBatch);
     savedDocument.environments.development.security.serviceTransportKeys[
