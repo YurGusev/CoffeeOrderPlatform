@@ -1253,7 +1253,12 @@ void test("Customer classifies an unacknowledged COMMIT and replays it after a r
       firstProcess,
       /customer\.transaction_outcome_unknown/u,
     );
-    assert.match(firstProcess.output, /TRANSACTION_OUTCOME_UNKNOWN/u);
+    const outcomeLog = firstProcess.output
+      .split("\n")
+      .find((line) =>
+        line.includes('"event":"customer.transaction_outcome_unknown"'),
+      );
+    assert.equal(JSON.parse(outcomeLog).errorCode, "[REDACTED]");
     const adapterCommands = await waitForFilePattern(
       options.dbAdapterLogPath,
       /COMMIT/u,
