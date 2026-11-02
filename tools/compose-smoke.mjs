@@ -9708,12 +9708,15 @@ export async function runComposeSmoke({
             )
           : await readRecoveryProofCredentials(proofLaunchIdentity)
         : undefined;
-    if (!(
-      options.databaseProof ||
-      options.customerProof ||
-      options.aromaBindingProof ||
-      options.aromaCartProof
-    )) {
+    const needsKafka =
+      platformConfig.verification?.kafkaNamespaceIsolation === true ||
+      !(
+        options.databaseProof ||
+        options.customerProof ||
+        options.aromaBindingProof ||
+        options.aromaCartProof
+      );
+    if (needsKafka) {
       assert.ok(
         launchIdentity,
         "Kafka requires a launch context and G12 artifact",

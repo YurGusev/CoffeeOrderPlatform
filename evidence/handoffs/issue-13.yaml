@@ -180,7 +180,7 @@ outputs:
     consumers:
       - 1
   - artifact: tests/compose/topology.test.mjs
-    sha256: 1cd39279f7ee48afca6692689ec5d92b29bfaf659c5b11717ec5843b9300d86f
+    sha256: 270dfbe1f6b14ec290208bab3fa1cbc7b7bc036ae4d66929a66b0df393cb949e
     consumers:
       - 1
   - artifact: tests/config/observability-bootstrap.test.mjs
@@ -200,7 +200,7 @@ outputs:
     consumers:
       - 1
   - artifact: tools/compose-smoke.mjs
-    sha256: c784388b1ff5a9f618b58197494a12d25c2c889a6b9a7fcf8a7259fcc28ab1a5
+    sha256: e36e5f37ada72edf5e38efc6be1bacc901afc5e36ebbde07807a1e663db8121b
     consumers:
       - 1
   - artifact: tools/observability/verify.mjs
@@ -296,6 +296,9 @@ outputs:
     consumers:
       - 1
 verification:
+  - command: node --test --test-name-pattern='Kafka namespace inventory proves exact physical claims' tests/compose/topology.test.mjs
+    result: "PASS: 1/1, fail/cancel/skip 0, 1.040 s; loader согласован с namespace policy для четырёх proof-режимов, до нового freeze; runtime ещё не проверен"
+    logSha256: edf63ed9575663aa8d63593d5639830d7b93b3844523fd009bb10e97408f707b
   - command: node --test --test-concurrency=1 tests/compose/topology.test.mjs tests/tools/security-scan.test.mjs
     result: PASS 65/65, fail/cancel/skip 0, 44.591 s, Node 26.8.1; после объединения принятого #252, до freeze нового candidate.
     logSha256: a6b576b6f8ed4db7ee726598641bc21c574f22d4594faf9ed881ec622fce449c

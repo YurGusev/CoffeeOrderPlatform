@@ -5183,12 +5183,70 @@ void test("G18 operator wake proves real command correlation, preparation delive
   );
 });
 
-void test("Kafka namespace inventory proves exact physical claims and rejects canonical broker names", async () => {
+void test("Kafka namespace inventory proves exact physical claims and rejects canonical broker names", async (t) => {
   const {
     buildKafkaRegistryBootstrapScript,
     captureKafkaNamespaceInventory,
     kafkaNamespaceLaunchIdentity,
+    writeScopedComposeOverride,
   } = await import("../../tools/compose-smoke.mjs");
+  const source = await readFile(
+    join(REPO_ROOT, "tools/compose-smoke.mjs"),
+    "utf8",
+  );
+  const kafkaPredicate = source.match(/const needsKafka\s*=\s*([^;]+);/u)?.[1];
+  assert.ok(kafkaPredicate);
+  for (const flag of [
+    "databaseProof",
+    "customerProof",
+    "aromaBindingProof",
+    "aromaCartProof",
+  ]) {
+    for (const isolated of [false, true]) {
+      assert.equal(
+        runInNewContext(kafkaPredicate, {
+          options: { [flag]: true },
+          platformConfig: {
+            verification: { kafkaNamespaceIsolation: isolated },
+          },
+        }),
+        isolated,
+        `${flag}: Kafka admission must match namespace use`,
+      );
+    }
+  }
+  for (const options of [
+    {},
+    { recoveryProof: true },
+    { mutationDisableRollback: true },
+  ])
+    assert.equal(
+      runInNewContext(kafkaPredicate, { options, platformConfig: {} }),
+      true,
+    );
+  const admission = source.indexOf("if (needsKafka)");
+  const load = source.indexOf('target: "kafka"', admission);
+  const override = source.indexOf("kafkaImage: verifiedKafka?.imageId", load);
+  const up = source.indexOf("prepareKafkaNamespaceRegistry(", override);
+  assert.ok(
+    admission >= 0 && admission < load && load < override && override < up,
+  );
+  const imageId = `sha256:${"d".repeat(64)}`;
+  const composeOverride = await writeScopedComposeOverride(
+    "coffee-namespace-proof",
+    { kafkaImage: imageId },
+  );
+  t.after(() => rm(composeOverride, { force: true }));
+  const { load: loadYaml } = await import("js-yaml");
+  const kafka = loadYaml(await readFile(composeOverride, "utf8")).services
+    .kafka;
+  assert.equal(kafka.image, imageId);
+  assert.equal(kafka.pull_policy, "never");
+  await assert.rejects(
+    writeScopedComposeOverride("coffee-namespace-proof", {
+      kafkaImage: "coffee-platform-kafka:verified-artifact-required",
+    }),
+  );
   const candidateSha = "a".repeat(40);
   const contextIdentity = {
     schemaVersion: 1,
