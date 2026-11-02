@@ -105,7 +105,15 @@ runtime. Автоматический scheduler эта команда не со�
 `node tools/config-bootstrap/index.mjs --prepare-development-runtime`. Команда
 работает только в `development`, добавляет недостающие scoped credentials и
 использует действующую development CA из зашифрованного
-`security.serviceTransportAuthority`. Действующие пароли не перезаписываются.
+`security.serviceTransportAuthority`. Действующие пароли не перезаписываются. Для создания
+совместимого с браузером публичного RSA CA после отдельного решения владельца
+к этой команде добавляется `--provision-public-authority`. Ключ издателя остаётся
+только в SOPS (`security.publicTransportAuthority`); runtime его не получает.
+Команда сохраняет leaf keys и SAN, меняет издателя только у edge и Keycloak;
+внутренний mTLS и Kafka сохраняются. Повторная команда не создаёт другой CA.
+Доверие ОС/браузера команда не изменяет: импорт проверенного публичного CA
+выполняется отдельно. Срок CA — 8760 часов, edge certificate — 2160 часов,
+согласно `security.publicAuthorityValidityHours` и `publicCertificateValidityHours`.
 
 Постоянная локальная установка располагается в `~/coffee-platform`: чистые
 контроллеры — в `runtime/controllers/<commit>`, immutable release bundles — в
@@ -124,7 +132,7 @@ certificate не соответствует доступной CA, команд�
 своих сервисов. Публичный edge certificate продлевается отдельно у своего
 издателя. До включения timer необходимо измерить недоступность и проверить
 пересоздание, доставку телеметрии и сохранность данных; установка unit сама
-timer не включает. Новая CA и служба подписи не создаются.
+timer не включает. Обслуживание не создаёт новый CA или службу подписи.
 При неудачном запуске или обслуживании основной user unit не перезапускается
 автоматически: требуется проверить состояние и выполнить recovery. Ограниченные
 Docker restart для отдельных контейнеров остаются действующими.

@@ -1705,27 +1705,25 @@ void test("development preparation preserves existing secrets and refreshes only
     let decryptCount = 0;
     let encryptionCount = 0;
     let brokerCertificate;
+    const materializeSecretsExec = (command, args, options) => {
+      if (command === "sops" && args.includes("--decrypt")) decryptCount += 1;
+      if (command === "sops" && args[0] === "encrypt") encryptionCount += 1;
+      if (command === "docker") return Buffer.alloc(0);
+      if (command === "openssl" && args[0] === "pkcs12") {
+        brokerCertificate = readFileSync(args[args.indexOf("-in") + 1], "utf8");
+        writeFileSync(args[args.indexOf("-out") + 1], "synthetic store");
+        return Buffer.alloc(0);
+      }
+      if (command === "keytool") {
+        writeFileSync(args[args.indexOf("-keystore") + 1], "synthetic store");
+        return Buffer.alloc(0);
+      }
+      return realBatchExec(command, args, options);
+    };
     const batchSpy = t.mock.method(
       childProcess,
       "execFileSync",
-      (command, args, options) => {
-        if (command === "sops" && args.includes("--decrypt")) decryptCount += 1;
-        if (command === "sops" && args[0] === "encrypt") encryptionCount += 1;
-        if (command === "docker") return Buffer.alloc(0);
-        if (command === "openssl" && args[0] === "pkcs12") {
-          brokerCertificate = readFileSync(
-            args[args.indexOf("-in") + 1],
-            "utf8",
-          );
-          writeFileSync(args[args.indexOf("-out") + 1], "synthetic store");
-          return Buffer.alloc(0);
-        }
-        if (command === "keytool") {
-          writeFileSync(args[args.indexOf("-keystore") + 1], "synthetic store");
-          return Buffer.alloc(0);
-        }
-        return realBatchExec(command, args, options);
-      },
+      materializeSecretsExec,
     );
     syncBuiltinESMExports();
     checkedNow = now + 20 * 3_600_000;
@@ -1828,6 +1826,7 @@ void test("development preparation preserves existing secrets and refreshes only
         certificates: {
           edge: scoped.nginxIdentity.publicCertificateFingerprint,
           transportCa: scoped.nginxIdentity.transportCaFingerprint,
+          identityCa: scoped.keycloakIdentity.caFingerprint,
           identityKeySha256: scoped.keycloakIdentity.publicKeySha256,
         },
       },
@@ -1844,47 +1843,49 @@ void test("development preparation preserves existing secrets and refreshes only
       );
     }
     let kafkaTrustCa = caPem;
+    let expiryScope = scopedDir;
+    const inspectCertificates = (command, args, options) => {
+      if (command === "docker" && args[0] === "inspect")
+        return JSON.stringify(rows);
+      if (command === "docker" && args[0] === "exec" && args[2] === "node") {
+        const name = args.at(-1);
+        assert.equal(
+          product.find((entry) => entry.service === name).containerId,
+          args[1],
+        );
+        const scoped = mountedScopes.get(name);
+        const material = JSON.parse(
+          scoped.secrets.security.serviceTransportKeys[name],
+        );
+        const keySha256 = createHash("sha256")
+          .update(
+            createPublicKey(createPrivateKey(material.keyPem)).export({
+              type: "spki",
+              format: "der",
+            }),
+          )
+          .digest("hex");
+        return JSON.stringify({
+          runtime: scoped.runtime,
+          environment: scoped.environment,
+          certPem: material.certPem,
+          caPem: material.caPem,
+          keySha256,
+        });
+      }
+      if (command === "docker" && args[0] === "exec")
+        return readFileSync(
+          join(expiryScope, "edge-nginx", args.at(-1).split("/").at(-1)),
+          "utf8",
+        );
+      if (command === "openssl" && args[0] === "pkcs12")
+        return args.includes("-cacerts") ? kafkaTrustCa : brokerCertificate;
+      return realBatchExec(command, args, options);
+    };
     const expirySpy = t.mock.method(
       childProcess,
       "execFileSync",
-      (command, args, options) => {
-        if (command === "docker" && args[0] === "inspect")
-          return JSON.stringify(rows);
-        if (command === "docker" && args[0] === "exec" && args[2] === "node") {
-          const name = args.at(-1);
-          assert.equal(
-            product.find((entry) => entry.service === name).containerId,
-            args[1],
-          );
-          const scoped = mountedScopes.get(name);
-          const material = JSON.parse(
-            scoped.secrets.security.serviceTransportKeys[name],
-          );
-          const keySha256 = createHash("sha256")
-            .update(
-              createPublicKey(createPrivateKey(material.keyPem)).export({
-                type: "spki",
-                format: "der",
-              }),
-            )
-            .digest("hex");
-          return JSON.stringify({
-            runtime: scoped.runtime,
-            environment: scoped.environment,
-            certPem: material.certPem,
-            caPem: material.caPem,
-            keySha256,
-          });
-        }
-        if (command === "docker" && args[0] === "exec")
-          return readFileSync(
-            join(scopedDir, "edge-nginx", args.at(-1).split("/").at(-1)),
-            "utf8",
-          );
-        if (command === "openssl" && args[0] === "pkcs12")
-          return args.includes("-cacerts") ? kafkaTrustCa : brokerCertificate;
-        return realBatchExec(command, args, options);
-      },
+      inspectCertificates,
     );
     syncBuiltinESMExports();
     try {
@@ -2037,6 +2038,210 @@ void test("development preparation preserves existing secrets and refreshes only
       ),
       temporaryBefore,
     );
+    // Явная смена только публичного издателя сохраняет внутренний CA и credentials.
+    const publicInput = structuredClone(savedDocument);
+    openssl([
+      "genpkey",
+      "-algorithm",
+      "RSA",
+      "-pkeyopt",
+      "rsa_keygen_bits:2048",
+      "-out",
+      leafKey,
+    ]);
+    publicInput.environments.development.edge.tlsPrivateKey = await readFile(
+      leafKey,
+      "utf8",
+    );
+    publicInput.environments.development.edge.tlsCertificate = await issue(
+      "localhost",
+      "DNS:localhost",
+      1,
+    );
+    await writeFile(fixture.plainPath, JSON.stringify(publicInput));
+    await installFakeMigrationSops(fixture);
+    const publicResult = await prepareDevelopmentRuntimeSecrets({
+      root: fixture.root,
+      env: fixture.env,
+      provisionPublicAuthority: true,
+    });
+    assert.equal(publicResult.changed, true);
+    const publicSaved = JSON.parse(
+      execFileSync("sops", ["--decrypt", bundlePath], {
+        env: fixture.env,
+        encoding: "utf8",
+      }),
+    );
+    const publicSecrets = publicSaved.environments.development;
+    const publicAuthority = JSON.parse(
+      publicSecrets.security.publicTransportAuthority,
+    );
+    const publicCa = new X509Certificate(publicAuthority.certificatePem);
+    assert.equal(publicCa.publicKey.asymmetricKeyType, "rsa");
+    assert.equal(
+      publicCa.checkPrivateKey(createPrivateKey(publicAuthority.privateKeyPem)),
+      true,
+    );
+    assert.equal(
+      Date.parse(publicCa.validTo) - Date.parse(publicCa.validFrom),
+      8760 * 3_600_000,
+    );
+    assert.equal(
+      publicSecrets.edge.tlsCaBundle,
+      publicAuthority.certificatePem,
+    );
+    assert.equal(
+      publicSecrets.identity.tlsCaBundle,
+      publicAuthority.certificatePem,
+    );
+    assert.equal(
+      new X509Certificate(publicSecrets.edge.tlsCertificate).verify(
+        publicCa.publicKey,
+      ),
+      true,
+    );
+    assert.equal(
+      new X509Certificate(publicSecrets.identity.tlsCertificate).verify(
+        publicCa.publicKey,
+      ),
+      true,
+    );
+    assert.equal(
+      Date.parse(
+        new X509Certificate(publicSecrets.edge.tlsCertificate).validTo,
+      ) -
+        Date.parse(
+          new X509Certificate(publicSecrets.edge.tlsCertificate).validFrom,
+        ),
+      2160 * 3_600_000,
+    );
+    assert.equal(
+      publicSecrets.edge.tlsPrivateKey,
+      publicInput.environments.development.edge.tlsPrivateKey,
+    );
+    assert.equal(
+      publicSecrets.identity.tlsPrivateKey,
+      saved.identity.tlsPrivateKey,
+    );
+    assert.deepEqual(publicSecrets.kafka, saved.kafka);
+    assert.equal(
+      publicSecrets.security.serviceTransportAuthority,
+      saved.security.serviceTransportAuthority,
+    );
+    assert.deepEqual(
+      publicSecrets.security.serviceTransportKeys,
+      saved.security.serviceTransportKeys,
+    );
+    assert.equal(
+      publicSecrets.identity.operatorPassword,
+      saved.identity.operatorPassword,
+    );
+    assert.equal(
+      (
+        await prepareDevelopmentRuntimeSecrets({
+          root: fixture.root,
+          env: fixture.env,
+          provisionPublicAuthority: true,
+        })
+      ).changed,
+      false,
+    );
+    const publicCiphertext = await readFile(bundlePath);
+    const invalidPublic = structuredClone(publicSaved);
+    invalidPublic.environments.development.security.publicTransportAuthority =
+      JSON.stringify({
+        certificatePem: publicAuthority.certificatePem,
+        privateKeyPem: keyPem,
+      });
+    await writeFile(fixture.plainPath, JSON.stringify(invalidPublic));
+    await installFakeMigrationSops(fixture);
+    await assert.rejects(
+      prepareDevelopmentRuntimeSecrets({
+        root: fixture.root,
+        env: fixture.env,
+      }),
+      /public CA key or validity is invalid/u,
+    );
+    assert.deepEqual(await readFile(bundlePath), publicCiphertext);
+    await writeFile(fixture.plainPath, JSON.stringify(publicSaved));
+    await installFakeMigrationSops(fixture);
+    const publicScopedDir = join(fixture.root, "public-scoped");
+    await mkdir(publicScopedDir, { mode: 0o700 });
+    const publicBatchSpy = t.mock.method(
+      childProcess,
+      "execFileSync",
+      materializeSecretsExec,
+    );
+    syncBuiltinESMExports();
+    let publicScoped;
+    try {
+      publicScoped = await materializeLocalRuntimeSecrets({
+        root: fixture.root,
+        outputDir: publicScopedDir,
+        env: { ...fixture.env, COFFEE_CONFIG_FILE: localConfigPath },
+      });
+    } finally {
+      publicBatchSpy.mock.restore();
+      syncBuiltinESMExports();
+    }
+    const publicRuntime = parseYaml(
+      await readFile(join(publicScopedDir, "edge-gateway.yaml"), "utf8"),
+    );
+    assert.equal(
+      publicRuntime.secrets.security.publicTransportAuthority,
+      undefined,
+    );
+    assert.equal(
+      publicRuntime.secrets.security.serviceTransportAuthority,
+      undefined,
+    );
+    expiryScope = publicScopedDir;
+    release.secretsDir = publicScopedDir;
+    release.identity.certificates.edge =
+      publicScoped.nginxIdentity.publicCertificateFingerprint;
+    release.identity.certificates.identityCa =
+      publicScoped.keycloakIdentity.caFingerprint;
+    for (const row of rows)
+      for (const item of row.Mounts) {
+        if (item.Source === "/foreign") item.Source = join(scopedDir, "kafka");
+        item.Source = item.Source.replace(scopedDir, publicScopedDir);
+      }
+    for (const name of mountedScopes.keys())
+      mountedScopes.set(
+        name,
+        parseYaml(
+          await readFile(join(publicScopedDir, `${name}.yaml`), "utf8"),
+        ),
+      );
+    const publicExpirySpy = t.mock.method(
+      childProcess,
+      "execFileSync",
+      inspectCertificates,
+    );
+    syncBuiltinESMExports();
+    try {
+      const expiry = await readLocalCertificateExpiry({
+        root: fixture.root,
+        release,
+        config: projectLocalRuntimeConfig(config),
+      });
+      assert.ok(expiry.earliest > checkedNow);
+      release.identity.certificates.identityCa =
+        scoped.nginxIdentity.transportCaFingerprint;
+      await assert.rejects(
+        readLocalCertificateExpiry({
+          root: fixture.root,
+          release,
+          config: projectLocalRuntimeConfig(config),
+        }),
+        /active certificate identity differs/u,
+      );
+    } finally {
+      publicExpirySpy.mock.restore();
+      syncBuiltinESMExports();
+    }
+    // Восстановить вход предыдущего сценария конкурирующей записи.
+    await writeFile(bundlePath, ciphertextBeforeBatch);
     savedDocument.environments.development.security.serviceTransportKeys[
       "customer-service"
     ] = before.security.serviceTransportKeys["customer-service"];

@@ -105,6 +105,8 @@ void test("transport certificate policy enforces the 24-hour lifetime and 6-hour
     6,
   );
   for (const [field, invalidValues] of [
+    ["publicAuthorityValidityHours", [undefined, 0, 8759, 8761, "8760"]],
+    ["publicCertificateValidityHours", [undefined, 0, 2159, 2161, "2160"]],
     ["certificateValidityHours", [undefined, 0, 23, 25, "24"]],
     ["certificateRenewBeforeHours", [undefined, 0, 5, 7, "6"]],
   ]) {
@@ -200,6 +202,8 @@ void test("local identity settings preserve the formal null browser profile", as
   assert.equal(document.security.certificateValidityHours, 24);
   assert.equal(document.security.certificateRenewBeforeHours, 6);
   for (const [field, invalidValues] of [
+    ["publicAuthorityValidityHours", [undefined, 0, 8759, 8761, "8760"]],
+    ["publicCertificateValidityHours", [undefined, 0, 2159, 2161, "2160"]],
     ["certificateValidityHours", [undefined, 0, 23, 25, "24"]],
     ["certificateRenewBeforeHours", [undefined, 0, 5, 7, "6"]],
   ]) {

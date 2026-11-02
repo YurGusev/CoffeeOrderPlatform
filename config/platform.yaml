@@ -385,6 +385,8 @@ telemetry:
 browserOidc: null
 
 security:
+  publicAuthorityValidityHours: 8760
+  publicCertificateValidityHours: 2160
   certificateValidityHours: 24
   certificateRenewBeforeHours: 6
   actorContext:

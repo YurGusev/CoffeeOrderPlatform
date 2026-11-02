@@ -1919,12 +1919,13 @@ export async function readLocalCertificateExpiry({ root, release, config }) {
     dnsNames = [],
     uri,
     keySha256,
+    expectedCaFingerprint = caFingerprint,
   ) => {
     const certificate = new X509Certificate(certificatePem);
     const authority = new X509Certificate(authorityPem);
     if (
       !authority.ca ||
-      authority.fingerprint256 !== caFingerprint ||
+      authority.fingerprint256 !== expectedCaFingerprint ||
       !Number.isFinite(Date.parse(authority.validFrom)) ||
       !Number.isFinite(Date.parse(authority.validTo)) ||
       Date.now() < Date.parse(authority.validFrom) ||
@@ -2041,10 +2042,18 @@ export async function readLocalCertificateExpiry({ root, release, config }) {
       .digest("hex") !== release.identity.certificates.identityKeySha256
   )
     throw new Error("RECOVERY_REQUIRED: identity certificate key differs");
-  inspect(identityCert, identityCa, identityKey, [
-    new URL(config.localIdentity.publicBaseUrl).hostname,
-    new URL(config.localIdentity.privateBaseUrl).hostname,
-  ]);
+  inspect(
+    identityCert,
+    identityCa,
+    identityKey,
+    [
+      new URL(config.localIdentity.publicBaseUrl).hostname,
+      new URL(config.localIdentity.privateBaseUrl).hostname,
+    ],
+    undefined,
+    undefined,
+    release.identity.certificates.identityCa ?? "",
+  );
   mount("kafka", "/etc/kafka/secrets", join(scope, "kafka"));
   const kafka = join(scope, "kafka");
   const [kafkaCertificate, kafkaCa] = [

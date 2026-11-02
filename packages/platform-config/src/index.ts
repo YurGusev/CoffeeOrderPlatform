@@ -388,6 +388,8 @@ export type PlatformConfig = Readonly<{
   nginxTransport: Readonly<Record<string, unknown>>;
   security: Readonly<
     Record<string, unknown> & {
+      publicAuthorityValidityHours: 8760;
+      publicCertificateValidityHours: 2160;
       certificateValidityHours: 24;
       certificateRenewBeforeHours: 6;
     }
@@ -2651,6 +2653,16 @@ export function parsePlatformConfig(value: unknown): PlatformConfig {
     "config.nginxTransport",
   );
   const security = opaqueObject(source["security"], "config.security");
+  if (security["publicAuthorityValidityHours"] !== 8760)
+    throw new PlatformConfigError(
+      "config.security.publicAuthorityValidityHours",
+      "ожидалось значение 8760",
+    );
+  if (security["publicCertificateValidityHours"] !== 2160)
+    throw new PlatformConfigError(
+      "config.security.publicCertificateValidityHours",
+      "ожидалось значение 2160",
+    );
   if (security["certificateValidityHours"] !== 24)
     throw new PlatformConfigError(
       "config.security.certificateValidityHours",
@@ -2694,6 +2706,8 @@ export function parsePlatformConfig(value: unknown): PlatformConfig {
     nginxTransport,
     security: Object.freeze({
       ...security,
+      publicAuthorityValidityHours: 8760,
+      publicCertificateValidityHours: 2160,
       certificateValidityHours: 24,
       certificateRenewBeforeHours: 6,
     }),

@@ -2180,10 +2180,11 @@ async function writeMigrationEncryptedBundle(
   }
 }
 
-// Обновление ограничено существующей development CA и записывает только ciphertext.
+// Новый публичный CA создаётся только по явной команде; запись — только ciphertext.
 export async function prepareDevelopmentRuntimeSecrets({
   root = REPO_ROOT,
   env = process.env,
+  provisionPublicAuthority = false,
 } = {}) {
   assertLocatorEnv(env, true);
   const config = await loadPlatformConfig(
@@ -2273,6 +2274,7 @@ export async function prepareDevelopmentRuntimeSecrets({
       authorityPem,
       authorityKeyPem,
       allowProvision: true,
+      provisionPublicAuthority,
     })),
   );
   if (!changed.length) {
@@ -2306,6 +2308,7 @@ async function prepareDevelopmentInfrastructureMaterial({
   authorityPem,
   authorityKeyPem,
   allowProvision,
+  provisionPublicAuthority = false,
 }) {
   const now = Date.now();
   const threshold = config.security.certificateRenewBeforeHours * 3_600_000;
@@ -2323,16 +2326,6 @@ async function prepareDevelopmentInfrastructureMaterial({
       now < Date.parse(publicLeaf.validFrom)
     )
       throw new Error();
-    if (
-      allowProvision &&
-      Date.parse(publicLeaf.validTo) - now <= threshold &&
-      (!publicLeaf.checkIssued(authority) ||
-        !publicLeaf.verify(authority.publicKey))
-    )
-      fail(
-        "CONFIG-DEVELOPMENT-CA",
-        "public edge renewal requires its existing trusted issuer",
-      );
   } catch (error) {
     if (error instanceof ConfigError) throw error;
     fail(
@@ -2364,19 +2357,121 @@ async function prepareDevelopmentInfrastructureMaterial({
     const certPath = join(temporary, "leaf.crt");
     const csrPath = join(temporary, "leaf.csr");
     const resultPath = join(temporary, "signed.crt");
-    await writePrivateSecret(caPath, authorityPem);
-    await writePrivateSecret(caKeyPath, authorityKeyPem);
+    const openssl = (args) =>
+      execFileSync("openssl", args, { env, stdio: "ignore", timeout: 30_000 });
+    const serviceIssuer = { authority, authorityPem, authorityKeyPem };
+    const publicAuthorityRef = "security.publicTransportAuthority";
+    let publicMaterial = secretValueAt(secrets, publicAuthorityRef);
+    const replacePublicIssuer =
+      publicMaterial === undefined && provisionPublicAuthority;
+    if (replacePublicIssuer) {
+      const { privateKey } = generateKeyPairSync("rsa", {
+        modulusLength: 3072,
+        privateKeyEncoding: { type: "pkcs8", format: "pem" },
+        publicKeyEncoding: { type: "spki", format: "pem" },
+      });
+      await writePrivateSecret(caKeyPath, privateKey);
+      openssl([
+        "req",
+        "-x509",
+        "-new",
+        "-key",
+        caKeyPath,
+        "-sha256",
+        "-out",
+        caPath,
+        "-subj",
+        "/CN=Coffee Platform Public TLS CA",
+        "-days",
+        String(config.security.publicAuthorityValidityHours / 24),
+        "-addext",
+        "basicConstraints=critical,CA:TRUE,pathlen:0",
+        "-addext",
+        "keyUsage=critical,keyCertSign,cRLSign",
+      ]);
+      publicMaterial = JSON.stringify({
+        certificatePem: await readFile(caPath, "utf8"),
+        privateKeyPem: privateKey,
+      });
+      setSecretAt(secrets, publicAuthorityRef, publicMaterial);
+      changed.push(publicAuthorityRef);
+    }
+    let publicIssuer = serviceIssuer;
+    if (publicMaterial !== undefined) {
+      try {
+        const material = JSON.parse(publicMaterial);
+        if (
+          !material ||
+          Object.keys(material).sort().join(",") !==
+            "certificatePem,privateKeyPem"
+        )
+          throw new Error();
+        const certificate = new X509Certificate(material.certificatePem);
+        const key = createPrivateKey(material.privateKeyPem);
+        if (
+          !certificate.ca ||
+          key.asymmetricKeyType !== "rsa" ||
+          key.asymmetricKeyDetails.modulusLength < 2048 ||
+          !certificate.checkPrivateKey(key) ||
+          !certificate.checkIssued(certificate) ||
+          !certificate.verify(certificate.publicKey) ||
+          now < Date.parse(certificate.validFrom) ||
+          now >= Date.parse(certificate.validTo)
+        )
+          throw new Error();
+        publicIssuer = {
+          authority: certificate,
+          authorityPem: material.certificatePem,
+          authorityKeyPem: material.privateKeyPem,
+        };
+      } catch {
+        fail("CONFIG-DEVELOPMENT-CA", "public CA key or validity is invalid");
+      }
+    }
     if (
-      Date.parse(authority.validTo) - now <
-      config.security.certificateValidityHours * 3_600_000 + 60_000
+      publicMaterial !== undefined &&
+      createPrivateKey(publicKey).asymmetricKeyType !== "rsa"
+    )
+      fail("CONFIG-DEVELOPMENT-LEAF", "public HTTPS requires an RSA leaf key");
+    if (
+      !replacePublicIssuer &&
+      (publicMaterial !== undefined ||
+        (allowProvision &&
+          Date.parse(publicLeaf.validTo) - now <= threshold)) &&
+      (!publicLeaf.checkIssued(publicIssuer.authority) ||
+        !publicLeaf.verify(publicIssuer.authority.publicKey))
     )
       fail(
         "CONFIG-DEVELOPMENT-CA",
-        "development CA expires too soon to issue a leaf",
+        "public edge renewal requires its existing trusted issuer",
       );
-    const openssl = (args) =>
-      execFileSync("openssl", args, { env, stdio: "ignore", timeout: 30_000 });
-    const sign = async ({ key, certificate, names }) => {
+    if (publicMaterial !== undefined && !replacePublicIssuer) {
+      const ca = secretValueAt(secrets, "edge.tlsCaBundle");
+      if (
+        typeof ca !== "string" ||
+        new X509Certificate(ca).fingerprint256 !==
+          publicIssuer.authority.fingerprint256
+      )
+        fail("CONFIG-DEVELOPMENT-CA", "public edge CA bundle differs");
+    }
+    const sign = async ({
+      key,
+      certificate,
+      names,
+      issuer = serviceIssuer,
+      validityHours = config.security.certificateValidityHours,
+    }) => {
+      const { authority, authorityPem, authorityKeyPem } = issuer;
+      if (
+        Date.parse(authority.validTo) - now <
+        validityHours * 3_600_000 + 60_000
+      )
+        fail(
+          "CONFIG-DEVELOPMENT-CA",
+          "development CA expires too soon to issue a leaf",
+        );
+      await writePrivateSecret(caPath, authorityPem);
+      await writePrivateSecret(caKeyPath, authorityKeyPem);
       await writePrivateSecret(keyPath, key);
       if (certificate) {
         await writePrivateSecret(certPath, certificate);
@@ -2422,7 +2517,7 @@ async function prepareDevelopmentInfrastructureMaterial({
         "-set_serial",
         `0x${randomBytes(16).toString("hex")}`,
         "-days",
-        "1",
+        String(validityHours / 24),
         "-copy_extensions",
         "copy",
         "-out",
@@ -2439,7 +2534,7 @@ async function prepareDevelopmentInfrastructureMaterial({
         issuedNow < Date.parse(signed.validFrom) ||
         issuedNow >= Date.parse(signed.validTo) ||
         Date.parse(signed.validTo) - Date.parse(signed.validFrom) !==
-          config.security.certificateValidityHours * 3_600_000 ||
+          validityHours * 3_600_000 ||
         Date.parse(signed.validTo) > Date.parse(authority.validTo) ||
         (certificate &&
           signed.subjectAltName !==
@@ -2450,18 +2545,35 @@ async function prepareDevelopmentInfrastructureMaterial({
       return result;
     };
 
-    if (allowProvision && Date.parse(publicLeaf.validTo) - now <= threshold) {
+    if (
+      replacePublicIssuer ||
+      (allowProvision && Date.parse(publicLeaf.validTo) - now <= threshold)
+    ) {
       setSecretAt(
         secrets,
         "edge.tlsCertificate",
-        await sign({ key: publicKey, certificate: publicCertificate }),
+        await sign({
+          key: publicKey,
+          certificate: publicCertificate,
+          issuer: publicIssuer,
+          validityHours:
+            publicMaterial === undefined
+              ? config.security.certificateValidityHours
+              : config.security.publicCertificateValidityHours,
+        }),
       );
       changed.push("edge.tlsCertificate");
+      if (replacePublicIssuer) {
+        setSecretAt(secrets, "edge.tlsCaBundle", publicIssuer.authorityPem);
+        changed.push("edge.tlsCaBundle");
+      }
     }
     for (const [prefix, names] of [
       ["identity", hosts],
       ["kafka.broker", ["kafka", "localhost"]],
     ]) {
+      const issuer = prefix === "identity" ? publicIssuer : serviceIssuer;
+      const { authority, authorityPem } = issuer;
       const refs = [
         `${prefix}.tlsPrivateKey`,
         `${prefix}.tlsCertificate`,
@@ -2479,7 +2591,7 @@ async function prepareDevelopmentInfrastructureMaterial({
           privateKeyEncoding: { type: "pkcs8", format: "pem" },
           publicKeyEncoding: { type: "spki", format: "pem" },
         });
-        const certificate = await sign({ key: privateKey, names });
+        const certificate = await sign({ key: privateKey, names, issuer });
         [privateKey, certificate, authorityPem].forEach((value, index) =>
           setSecretAt(secrets, refs[index], value),
         );
@@ -2489,22 +2601,33 @@ async function prepareDevelopmentInfrastructureMaterial({
           const certificate = new X509Certificate(values[1]);
           const ca = new X509Certificate(values[2]);
           if (
-            ca.fingerprint256 !== authority.fingerprint256 ||
+            (!(replacePublicIssuer && prefix === "identity") &&
+              (ca.fingerprint256 !== authority.fingerprint256 ||
+                !certificate.checkIssued(authority) ||
+                !certificate.verify(authority.publicKey))) ||
             certificate.ca ||
-            !certificate.checkIssued(authority) ||
-            !certificate.verify(authority.publicKey) ||
             !certificate.checkPrivateKey(createPrivateKey(values[0])) ||
+            (prefix === "identity" &&
+              publicMaterial !== undefined &&
+              createPrivateKey(values[0]).asymmetricKeyType !== "rsa") ||
             names.some((name) => !certificate.checkHost(name, exactDns)) ||
             now < Date.parse(certificate.validFrom)
           )
             throw new Error();
-          if (Date.parse(certificate.validTo) - now <= threshold) {
+          if (
+            (replacePublicIssuer && prefix === "identity") ||
+            Date.parse(certificate.validTo) - now <= threshold
+          ) {
             setSecretAt(
               secrets,
               refs[1],
-              await sign({ key: values[0], certificate: values[1] }),
+              await sign({ key: values[0], certificate: values[1], issuer }),
             );
             changed.push(refs[1]);
+            if (replacePublicIssuer && prefix === "identity") {
+              setSecretAt(secrets, refs[2], authorityPem);
+              changed.push(refs[2]);
+            }
           }
         } catch (error) {
           if (error instanceof ConfigError) throw error;
@@ -5546,7 +5669,15 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const prepareDevelopmentRuntime = process.argv.includes(
     "--prepare-development-runtime",
   );
+  const provisionPublicAuthority = process.argv.includes(
+    "--provision-public-authority",
+  );
   try {
+    if (provisionPublicAuthority && !prepareDevelopmentRuntime)
+      fail(
+        "CONFIG-DEVELOPMENT-CA",
+        "public CA provisioning requires development preparation",
+      );
     if (
       renewDevelopmentTransport &&
       (runtimeIndex >= 0 || prepareDevelopmentRuntime)
@@ -5566,7 +5697,12 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
       );
     } else if (prepareDevelopmentRuntime) {
       console.log(
-        JSON.stringify(await prepareDevelopmentRuntimeSecrets({ root })),
+        JSON.stringify(
+          await prepareDevelopmentRuntimeSecrets({
+            root,
+            provisionPublicAuthority,
+          }),
+        ),
       );
     } else if (!runtime) {
       await checkBootstrap(root);
