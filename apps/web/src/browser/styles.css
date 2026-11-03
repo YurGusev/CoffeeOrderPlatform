@@ -316,20 +316,40 @@
     color: var(--cos-text-disabled);
     overflow-wrap: anywhere;
   }
-  .product-grid {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 12px;
+  .product-list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .product-list > li + li {
+    border-top: 1px solid var(--cos-border-subtle);
   }
   .product-card {
-    display: grid;
-    align-content: start;
-    gap: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
     min-width: 0;
-    padding: 14px;
-    border: 1px solid var(--cos-border-subtle);
-    border-radius: var(--cos-radius-sm);
-    background: var(--cos-surface-canvas-raised);
+    padding: 12px 14px;
+  }
+  .product-details {
+    display: grid;
+    flex: 1;
+    grid-template-columns: minmax(0, 1fr) auto;
+    column-gap: 16px;
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+  .product-details small {
+    grid-column: 1 / -1;
+  }
+  .product-actions {
+    display: flex;
+    align-items: end;
+    gap: 10px;
+  }
+  .product-actions > * {
+    min-width: 0;
   }
   .product-card-heading,
   .section-heading {
@@ -341,6 +361,9 @@
   .product-card-heading > span {
     color: var(--cos-text-secondary);
     font-size: 12px;
+  }
+  .product-card-heading {
+    justify-content: flex-start;
   }
   .section-heading h2 {
     margin: 0;
@@ -557,9 +580,6 @@
     .workspace-card {
       padding: 14px;
     }
-    .product-grid {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
     .state-grid {
       grid-template-columns: 1fr 1fr;
     }
@@ -636,7 +656,6 @@
       width: 100%;
     }
     .search-row,
-    .product-grid,
     .order-summary,
     .order-item,
     .command-bar {
@@ -647,9 +666,13 @@
       width: 100%;
     }
     .result-card,
-    .recovery-item {
+    .recovery-item,
+    .product-card {
       align-items: stretch;
       flex-direction: column;
+    }
+    .product-actions {
+      flex-wrap: wrap;
     }
     .item-actions,
     .command-actions {

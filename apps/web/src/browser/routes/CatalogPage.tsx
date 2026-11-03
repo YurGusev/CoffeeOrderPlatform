@@ -293,7 +293,7 @@ export function CatalogPage(): ReactElement {
             title="Товары не найдены"
           />
         ) : null}
-        <div className="product-grid">
+        <ul aria-label="Товары" className="product-list" role="list">
           {!catalogAccessDenied
             ? products.data?.items.map((product) => {
                 const key = `${product.productRef}:${product.variantRef}`;
@@ -306,99 +306,109 @@ export function CatalogPage(): ReactElement {
                     (option) => option.sourceGrindKeyHash === selectedGrindHash,
                   );
                 return (
-                  <article className="product-card" key={key}>
-                    <div className="product-card-heading">
-                      <Badge
-                        tone={
-                          product.availability === "Available"
-                            ? "success"
-                            : "warning"
-                        }
-                      >
-                        {availabilityLabels[product.availability]}
-                      </Badge>
-                      <span>{unitLabels[product.unit]}</span>
-                    </div>
-                    <h2>{product.displayName}</h2>
-                    <small>
-                      {product.mappingAvailable
-                        ? "Привязка к AROMA доступна"
-                        : "Нет привязки к AROMA"}
-                    </small>
-                    {hasOrderRef ? (
-                      <>
-                        <Field
-                          aria-label={`Количество для ${product.displayName}`}
-                          label="Количество"
-                          onChange={(value) =>
-                            setQuantities((current) => ({
-                              ...current,
-                              [key]: value,
-                            }))
-                          }
-                          value={quantity}
-                        />
-                        {grindOptions.length > 0 || selectedGrindUnavailable ? (
-                          <label className="select-field">
-                            Помол
-                            <select
-                              aria-label={`Помол для ${product.displayName}`}
-                              onChange={(event) =>
-                                setGrindSelections((current) => ({
-                                  ...current,
-                                  [key]: event.target.value,
-                                }))
-                              }
-                              value={selectedGrindHash}
-                            >
-                              <option value="">Без выбора</option>
-                              {selectedGrindUnavailable ? (
-                                <option disabled value={selectedGrindHash}>
-                                  Выбранный помол недоступен
-                                </option>
-                              ) : null}
-                              {grindOptions.map((option) => (
-                                <option
-                                  key={option.sourceGrindKeyHash}
-                                  value={option.sourceGrindKeyHash}
-                                >
-                                  {option.displayName}
-                                </option>
-                              ))}
-                            </select>
-                          </label>
-                        ) : null}
-                        <Button
-                          isDisabled={
-                            product.availability !== "Available" ||
-                            !product.mappingAvailable ||
-                            !quantity.trim() ||
-                            Boolean(conflictError)
-                          }
-                          isPending={addItem.isPending}
-                          onPress={() =>
-                            addItem.mutate(
-                              {
-                                itemRef: newUlidRef("itm"),
-                                product,
-                                quantity,
-                                ...(grindSelections[key]
-                                  ? { sourceGrindKeyHash: grindSelections[key] }
-                                  : {}),
-                              },
-                              { onSuccess: (next) => setAdded(next.orderRef) },
-                            )
-                          }
-                        >
-                          Добавить
-                        </Button>
-                      </>
-                    ) : null}
-                  </article>
+                  <li key={key}>
+                    <article className="product-card">
+                      <div className="product-details">
+                        <h2>{product.displayName}</h2>
+                        <div className="product-card-heading">
+                          <Badge
+                            tone={
+                              product.availability === "Available"
+                                ? "success"
+                                : "warning"
+                            }
+                          >
+                            {availabilityLabels[product.availability]}
+                          </Badge>
+                          <span>{unitLabels[product.unit]}</span>
+                        </div>
+                        <small>
+                          {product.mappingAvailable
+                            ? "Привязка к AROMA доступна"
+                            : "Нет привязки к AROMA"}
+                        </small>
+                      </div>
+                      {hasOrderRef ? (
+                        <div className="product-actions">
+                          <Field
+                            aria-label={`Количество для ${product.displayName}`}
+                            label="Количество"
+                            onChange={(value) =>
+                              setQuantities((current) => ({
+                                ...current,
+                                [key]: value,
+                              }))
+                            }
+                            value={quantity}
+                          />
+                          {grindOptions.length > 0 ||
+                          selectedGrindUnavailable ? (
+                            <label className="select-field">
+                              Помол
+                              <select
+                                aria-label={`Помол для ${product.displayName}`}
+                                onChange={(event) =>
+                                  setGrindSelections((current) => ({
+                                    ...current,
+                                    [key]: event.target.value,
+                                  }))
+                                }
+                                value={selectedGrindHash}
+                              >
+                                <option value="">Без выбора</option>
+                                {selectedGrindUnavailable ? (
+                                  <option disabled value={selectedGrindHash}>
+                                    Выбранный помол недоступен
+                                  </option>
+                                ) : null}
+                                {grindOptions.map((option) => (
+                                  <option
+                                    key={option.sourceGrindKeyHash}
+                                    value={option.sourceGrindKeyHash}
+                                  >
+                                    {option.displayName}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                          ) : null}
+                          <Button
+                            isDisabled={
+                              product.availability !== "Available" ||
+                              !product.mappingAvailable ||
+                              !quantity.trim() ||
+                              Boolean(conflictError)
+                            }
+                            isPending={addItem.isPending}
+                            onPress={() =>
+                              addItem.mutate(
+                                {
+                                  itemRef: newUlidRef("itm"),
+                                  product,
+                                  quantity,
+                                  ...(grindSelections[key]
+                                    ? {
+                                        sourceGrindKeyHash:
+                                          grindSelections[key],
+                                      }
+                                    : {}),
+                                },
+                                {
+                                  onSuccess: (next) => setAdded(next.orderRef),
+                                },
+                              )
+                            }
+                          >
+                            Добавить
+                          </Button>
+                        </div>
+                      ) : null}
+                    </article>
+                  </li>
                 );
               })
             : null}
-        </div>
+        </ul>
         {!catalogAccessDenied && products.data?.nextCursor ? (
           <Button
             onPress={() => {

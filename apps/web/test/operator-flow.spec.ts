@@ -211,6 +211,7 @@ async function installCommonMocks(
     aromaScenario?: "Blocked" | "UnknownOutcome";
     catalogUnavailable?: boolean;
     catalogNextCursor?: boolean;
+    multipleCatalogProducts?: boolean;
     catalogRefetchFailure?: Readonly<{ query: string; status: 403 | 503 }>;
     catalogRefetchFailureSequence?: Readonly<{
       query: string;
@@ -741,6 +742,19 @@ async function installCommonMocks(
             mappingAvailable: true,
             grindOptions,
           },
+          ...(options.multipleCatalogProducts
+            ? [
+                {
+                  productRef: "prd_01ARZ3NDEKTSV4RRFFQ69G5FAW",
+                  variantRef: "var_01ARZ3NDEKTSV4RRFFQ69G5FAW",
+                  displayName: "Латте",
+                  unit: "kilogram",
+                  availability: "Available",
+                  mappingAvailable: true,
+                  grindOptions,
+                },
+              ]
+            : []),
         ],
         nextCursor: options.catalogNextCursor ? "catalog-next-page" : null,
       });
@@ -990,7 +1004,9 @@ async function assertNoSeriousA11y(page: Page, label: string): Promise<void> {
 async function happyPath(context: BrowserContext): Promise<void> {
   const page = await context.newPage();
   await captureBrowserTelemetry(page);
-  const telemetry = await installCommonMocks(page);
+  const telemetry = await installCommonMocks(page, {
+    multipleCatalogProducts: true,
+  });
   await page.goto(`${origin}/`, { waitUntil: "networkidle" });
   await page.getByRole("heading", { name: "Клиенты" }).waitFor();
   assert.equal(new URL(page.url()).pathname, "/app/customers");
@@ -1086,8 +1102,33 @@ async function happyPath(context: BrowserContext): Promise<void> {
       `Каталог не показал товар: ${(await page.locator("body").textContent()) ?? ""}`,
     );
   }
+  const productList = page.getByRole("list", { name: "Товары" });
+  const productRows = productList.getByRole("listitem");
+  assert.equal(await productRows.count(), 2);
+  for (const [index, name] of ["Капучино", "Латте"].entries()) {
+    const row = productRows.nth(index);
+    await row.getByRole("heading", { name }).waitFor();
+    await row
+      .getByRole("textbox", { name: `Количество для ${name}` })
+      .waitFor();
+    await row.getByRole("combobox", { name: `Помол для ${name}` }).waitFor();
+    assert.equal(
+      await row.getByRole("button", { name: "Добавить" }).isEnabled(),
+      true,
+    );
+  }
+  await assertNoSeriousA11y(page, "catalog list");
   for (const width of [375, 1280]) {
     await page.setViewportSize({ width, height: 900 });
+    const firstRow = await productRows.nth(0).boundingBox();
+    const secondRow = await productRows.nth(1).boundingBox();
+    assert.ok(
+      firstRow &&
+        secondRow &&
+        Math.abs(firstRow.x - secondRow.x) <= 1 &&
+        secondRow.y >= firstRow.y + firstRow.height,
+      `catalog ${width}px rows: ${JSON.stringify([firstRow, secondRow])}`,
+    );
     const size = await page.evaluate(() => ({
       client: document.documentElement.clientWidth,
       scroll: document.documentElement.scrollWidth,
@@ -1097,7 +1138,10 @@ async function happyPath(context: BrowserContext): Promise<void> {
       `catalog ${width}px overflow: ${JSON.stringify(size)}`,
     );
     if (width === 375) {
-      const addButton = page.getByRole("button", { name: "Добавить" });
+      const addButton = productRows
+        .first()
+        .getByRole("button", { name: "Добавить" });
+      await addButton.scrollIntoViewIfNeeded();
       const box = await addButton.boundingBox();
       assert.ok(
         box && box.height >= 44 && box.x >= 0 && box.x + box.width <= width,
@@ -1130,7 +1174,7 @@ async function happyPath(context: BrowserContext): Promise<void> {
   await page
     .getByRole("textbox", { name: "Количество для Капучино" })
     .fill("2");
-  await page.getByRole("button", { name: "Добавить" }).click();
+  await productRows.first().getByRole("button", { name: "Добавить" }).click();
   await page.getByRole("link", { name: "К заказу" }).first().click();
   await page.getByText("500,00 ₽").first().waitFor();
   await page.getByRole("button", { name: "Удалить", exact: true }).click();

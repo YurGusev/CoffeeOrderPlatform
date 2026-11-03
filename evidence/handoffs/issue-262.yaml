@@ -1,0 +1,66 @@
+issue: 262
+baseCommit: 2a4f272444dd9484b0621104c300c07ee54dc2e2
+status: source-ready-runtime-pending
+inputs:
+  - issue: 254
+    acceptedMergeCommit: 2a4f272444dd9484b0621104c300c07ee54dc2e2
+    artifact: evidence/handoffs/issue-254.yaml
+    sha256: 5391732611bf0473b5b71f215d25328548f9b20924cd018b7f3b8e30bc23135e
+outputs:
+  - artifact: apps/web/src/browser/routes/CatalogPage.tsx
+    sha256: 22609581f082067476a1c1ff83b8b8414a57c1227e2b0cd55ac2a6951b280d7b
+    consumers:
+      - 13
+  - artifact: apps/web/src/browser/styles.css
+    sha256: 426ddbe1ec56321737eeb5221d7d9c0c816319b48d50289bbdc612b48570de8b
+    consumers:
+      - 13
+  - artifact: apps/web/test/operator-flow.spec.ts
+    sha256: ee73753dd6808ab5e05aebf71d55c281c62d32f9f78db8e37e41941a51ba8fa6
+    consumers:
+      - 13
+  - artifact: docs/launch/18_FRONTEND_IMPLEMENTATION_SPEC.md
+    sha256: e96059f9aa7f28f6113dfbcf7c09e86dceb1589757abb16189321f8f7820fa7e
+    consumers:
+      - 13
+  - artifact: secrets/platform.secrets.sops.yaml
+    sha256: 01744290a8d57dbda7271e3378a985d28b15c7d1355cebba64fe50fb036afaf3
+    consumers:
+      - 13
+behavior:
+  - >-
+    Каталог показывает семантический список с одним товаром в строке и разделителями; на широком экране
+    название, наличие и единица расположены рядом.
+  - >-
+    Поля количества/помола и команда Добавить сохраняют прежние guards editable Draft и allowedActions;
+    standalone остаётся просмотром.
+  - Поиск, availability, cursor pagination, quote/PUT, recovery и API не изменены.
+  - >-
+    Trusted bootstrap обновил 15 due internal certPem с прежними CA/keys/SAN; public RSA и browser trust
+    сохраняются.
+verification:
+  - command: pnpm web:build
+    result: PASS; выполнено под shared heavy lock.
+  - command: WEB_TEST_GROUP=routes node --experimental-strip-types apps/web/test/operator-flow.spec.ts
+    result: PASS после изменения markup/test; последующая правка только CSS.
+  - command: pnpm --filter @coffee-platform/web build:browser
+    result: PASS после финального CSS.
+  - command: >-
+      WEB_TEST_GROUP=accessibility
+      WEB_SCREENSHOT_DIR=/home/yurgusev/.cache/coffee-launch-delivery/catalog-list-preview node
+      --experimental-strip-types apps/web/test/operator-flow.spec.ts
+    result: >-
+      PASS после финального CSS: два товара в одном столбце, ширины375/1280, controls, axe; снимки осмотрены
+      root.
+  - command: pnpm exec prettier --check apps/web/src/browser/routes/CatalogPage.tsx apps/web/src/browser/styles.css apps/web/test/operator-flow.spec.ts
+    result: PASS после финального diff.
+  - command: targeted oxlint + git diff --check
+    result: PASS по изменённым TSX/test и diff.
+  - command: node tools/config-bootstrap/index.mjs --renew-development-transport
+    result: PASS; 15 leaves обновлены, Node validity до2026-11-04T16:03:47–48Z; scoped tmpfs удалён.
+    receiptSha256: 1041ae8bed12d72bb50d74e59e1a898599941fd55916cd201bb002d0ee2e33df
+limitations:
+  - CI, G12 и normal cutover этого source ещё не выполнены; на сервере пока работает прежний7b019e3.
+  - >-
+    Этот handoff не является полным admission issue13: после merge нужен новый exact candidate и обязательные
+    formal gates.

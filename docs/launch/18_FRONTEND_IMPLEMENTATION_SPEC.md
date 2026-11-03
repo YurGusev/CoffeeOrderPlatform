@@ -95,7 +95,7 @@ Node runtime или provider code. Package-owned inline SVG icons огранич
 - URL state: optional `orderRef`, `q`, `availability`, `cursor`; пустой поиск
   запрашивает browse без параметра `query`, поиск по названию — от двух символов;
   изменение поиска или фильтра сбрасывает cursor;
-- result row показывает owner Catalog fields; в Draft доступны quantity, помол
+- товары показаны списком по одному в строке; result row показывает owner Catalog fields; в Draft доступны quantity, помол
   и «Добавить»;
 - #9 запрашивает PricingQuote ровно для одной строки;
 - после quote success выполняет PUT item с generated `itemRef`, текущей
