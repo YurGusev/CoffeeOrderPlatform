@@ -101,7 +101,7 @@ export function createCatalogActivationStore(database: Database): Readonly<{
     "SELECT batch_number,offer_count,uncompressed_bytes,batch_hash,previous_batch_hash FROM catalog.snapshot_batches WHERE snapshot_ref=$1 ORDER BY batch_number",
   );
   const products = query<ReceivedGeneration["products"][number]>(
-    "SELECT source_product_key_hash,image_url FROM catalog.snapshot_products WHERE snapshot_ref=$1",
+    "SELECT source_product_key_hash,image_url,category_name FROM catalog.snapshot_products WHERE snapshot_ref=$1",
   );
   const variants = query<ReceivedGeneration["variants"][number]>(
     "SELECT source_variant_key_hash,source_product_key_hash,display_name,unit FROM catalog.snapshot_variants WHERE snapshot_ref=$1",
@@ -134,9 +134,9 @@ export function createCatalogActivationStore(database: Database): Readonly<{
     content_hash=NULL,received_at=NULL WHERE snapshot_ref=$1 AND state='Received'`);
   const outbox = createSqlOutboxStore(database, { schema: "catalog" });
   const insertProducts =
-    query<never>(`INSERT INTO catalog.products(snapshot_ref,product_ref,display_name,display_name_sort_key)
-    SELECT $1,x.product_ref,x.display_name,lower(x.display_name)
-    FROM jsonb_to_recordset($2::jsonb) AS x(product_ref varchar(30),display_name text)`);
+    query<never>(`INSERT INTO catalog.products(snapshot_ref,product_ref,display_name,display_name_sort_key,category_name)
+    SELECT $1,x.product_ref,x.display_name,lower(x.display_name),x.category_name
+    FROM jsonb_to_recordset($2::jsonb) AS x(product_ref varchar(30),display_name text,category_name text)`);
   const insertVariants =
     query<never>(`INSERT INTO catalog.variants(snapshot_ref,variant_ref,product_ref,unit,image_url,grind_options)
     SELECT $1,x.variant_ref,x.product_ref,x.unit,x.image_url,x.grind_options
@@ -161,8 +161,8 @@ export function createCatalogActivationStore(database: Database): Readonly<{
   >(`SELECT (COALESCE(MAX(aggregate_sequence),0)+1)::text AS next_sequence
     FROM catalog.outbox_messages WHERE aggregate_ref=$1`);
   const copyMissingProducts =
-    query<never>(`INSERT INTO catalog.products(snapshot_ref,product_ref,display_name,display_name_sort_key)
-    SELECT $1::varchar(30),p.product_ref,p.display_name,p.display_name_sort_key FROM catalog.products p
+    query<never>(`INSERT INTO catalog.products(snapshot_ref,product_ref,display_name,display_name_sort_key,category_name)
+    SELECT $1::varchar(30),p.product_ref,p.display_name,p.display_name_sort_key,p.category_name FROM catalog.products p
     WHERE p.snapshot_ref=$2 AND NOT EXISTS(SELECT 1 FROM catalog.products n WHERE n.snapshot_ref=$1 AND n.product_ref=p.product_ref)`);
   const copyMissingVariants =
     query<never>(`INSERT INTO catalog.variants(snapshot_ref,variant_ref,product_ref,unit,image_url,grind_options)
@@ -422,6 +422,7 @@ export function createCatalogActivationStore(database: Database): Readonly<{
           return {
             product_ref: ref("product", product.source_product_key_hash),
             display_name: variant.display_name,
+            category_name: product.category_name,
           };
         }),
       ),

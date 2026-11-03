@@ -415,5 +415,26 @@
     "status": 200,
     "mediaType": "text/event-stream",
     "streamFixture": "order-invalidations.json"
+  },
+  {
+    "document": "client-v1",
+    "operationId": "previewCatalogPrices",
+    "status": 200,
+    "mediaType": "application/json",
+    "schema": "PricingPreviewResponse",
+    "body": {
+      "snapshotRevision": "1",
+      "policyVersionRef": "pvr_01ARZ3NDEKTSV4RRFFQ69G5FB1",
+      "items": [
+        {
+          "productRef": "prd_01ARZ3NDEKTSV4RRFFQ69G5FAX",
+          "variantRef": "var_01ARZ3NDEKTSV4RRFFQ69G5FAY",
+          "unit": "kilogram",
+          "supplierUnitMinor": "1000",
+          "saleUnitMinor": "1300",
+          "currency": "RUB"
+        }
+      ]
+    }
   }
 ]

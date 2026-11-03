@@ -97,7 +97,11 @@ Legacy read подставляет пустой массив при отсутс
 внутренний `cartFingerprint` нельзя выдавать за полученный от провайдера proof.
 
 Каталог: `data[]` содержит product `id`, `name`, `product_on_stop`,
-`show_on_wholesale`, `category.{name,slug}`, `offers[]`, `discount[]`.
+`show_on_wholesale`, `category.{name,slug,composite_slug}`, `offers[]`, `discount[]`.
+Gateway передаёт только непустое `category.name` как optional `categoryName`
+в typed catalog export; `slug` и `composite_slug` для классификации не используются.
+Отсутствующие категория/название остаются неизвестными: поле опускается, без
+вывода категории из названия товара, SKU или помола.
 Offer содержит `id`, `name`, `vendor_code`, `price`, `params[]` с
 `param.{name,slug}`, `param_value.value`, `value`.
 Discount содержит `id`, `discount`, `min_weight`, `created_at`, `updated_at`.

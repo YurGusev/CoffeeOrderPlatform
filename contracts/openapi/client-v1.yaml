@@ -249,6 +249,59 @@ paths:
                 oneOf:
                   - $ref: "#/components/schemas/ErrorCatalogSnapshotIncomplete"
                   - $ref: "#/components/schemas/ErrorCatalogUnavailable"
+  /api/client-v1/pricing/catalog-preview:
+    post:
+      tags: [pricing]
+      operationId: previewCatalogPrices
+      summary: Получить две цены для страницы каталога без создания quote
+      x-permission: catalog:read
+      x-owner: pricing-service
+      x-audience: api-public
+      x-caller: edge-gateway
+      x-exposure: public
+      x-deadline: 1s
+      x-side-effects: none
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CorrelationId"
+        - $ref: "#/components/parameters/Traceparent"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PricingPreviewRequest"
+      responses:
+        "200":
+          description: Цены одной policy для точной revision каталога.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/NoStore"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PricingPreviewResponse"
+        "400":
+          $ref: "#/components/responses/ValidationFailed"
+        "401":
+          $ref: "#/components/responses/AuthenticationRequired"
+        "403":
+          $ref: "#/components/responses/ActorContextInvalid"
+        "409":
+          description: Revision каталога изменилась.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorCatalogRevisionChanged"
+        "503":
+          description: Каталог или policy недоступны.
+          content:
+            application/problem+json:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/ErrorCatalogUnavailable"
+                  - $ref: "#/components/schemas/ErrorPricingPolicyUnavailable"
   /api/client-v1/pricing/quotes:
     post:
       tags: [pricing]
@@ -1231,6 +1284,11 @@ components:
           type: string
           minLength: 1
           maxLength: 200
+        categoryName:
+          type: string
+          minLength: 1
+          maxLength: 200
+          description: Название категории поставщика; отсутствует, если поставщик его не передал.
         unit:
           type: string
           enum: [piece, gram, kilogram]
@@ -1243,6 +1301,8 @@ components:
           type: string
           format: uri
           maxLength: 2048
+        prices:
+          $ref: "#/components/schemas/CatalogPrices"
         grindOptions:
           type: array
           maxItems: 100
@@ -1271,9 +1331,89 @@ components:
           maxItems: 50
           items:
             $ref: "#/components/schemas/CatalogProductSummary"
+        policyVersionRef:
+          $ref: "../schemas/common/identifiers.v1.schema.json#/$defs/PolicyVersionRef"
         nextCursor:
           type: [string, "null"]
           maxLength: 512
+    CatalogPriceMinor:
+      allOf:
+        - $ref: "#/components/schemas/MoneyMinor"
+        - type: string
+          pattern: "^(0|[1-9][0-9]{0,18})$"
+    CatalogPrices:
+      type: object
+      additionalProperties: false
+      required: [supplierUnitMinor, saleUnitMinor, currency]
+      properties:
+        supplierUnitMinor:
+          $ref: "#/components/schemas/CatalogPriceMinor"
+        saleUnitMinor:
+          $ref: "#/components/schemas/CatalogPriceMinor"
+        currency:
+          $ref: "#/components/schemas/Currency"
+    PricingPreviewItem:
+      type: object
+      additionalProperties: false
+      required: [productRef, variantRef]
+      properties:
+        productRef:
+          $ref: "#/components/schemas/ProductRef"
+        variantRef:
+          $ref: "#/components/schemas/VariantRef"
+    PricingPreviewRequest:
+      type: object
+      additionalProperties: false
+      required: [snapshotRevision, items]
+      properties:
+        snapshotRevision:
+          $ref: "#/components/schemas/Revision"
+        items:
+          type: array
+          maxItems: 50
+          uniqueItems: true
+          items:
+            $ref: "#/components/schemas/PricingPreviewItem"
+    PricingPreviewPrice:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          productRef,
+          variantRef,
+          unit,
+          supplierUnitMinor,
+          saleUnitMinor,
+          currency,
+        ]
+      properties:
+        productRef:
+          $ref: "#/components/schemas/ProductRef"
+        variantRef:
+          $ref: "#/components/schemas/VariantRef"
+        unit:
+          type: string
+          enum: [piece, gram, kilogram]
+        supplierUnitMinor:
+          $ref: "#/components/schemas/CatalogPriceMinor"
+        saleUnitMinor:
+          $ref: "#/components/schemas/CatalogPriceMinor"
+        currency:
+          $ref: "#/components/schemas/Currency"
+    PricingPreviewResponse:
+      type: object
+      additionalProperties: false
+      required: [snapshotRevision, policyVersionRef, items]
+      properties:
+        snapshotRevision:
+          $ref: "#/components/schemas/Revision"
+        policyVersionRef:
+          $ref: "../schemas/common/identifiers.v1.schema.json#/$defs/PolicyVersionRef"
+        items:
+          type: array
+          maxItems: 50
+          items:
+            $ref: "#/components/schemas/PricingPreviewPrice"
     PricingQuoteCreateLine:
       type: object
       additionalProperties: false

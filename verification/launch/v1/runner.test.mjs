@@ -2145,7 +2145,7 @@ void test("G09 accepts only exact context-bound 10/40 runtime database evidence"
     owner,
     database: databaseByOwner[owner],
     migrationCount: {
-      catalog: 9,
+      catalog: 11,
       customer: 2,
       integration: 7,
       orders: 24,
@@ -2385,7 +2385,7 @@ void test("G08 rejects receipts without exact derived targets and cleanup", asyn
   const artifactDir = join(evidenceDir, "gates/G08_MIGRATIONS/artifacts");
   await mkdir(artifactDir, { recursive: true });
   const owners = [
-    ["catalog", 9],
+    ["catalog", 11],
     ["customer", 2],
     ["integration", 7],
     ["orders", 24],
@@ -2421,6 +2421,16 @@ void test("G08 rejects receipts without exact derived targets and cleanup", asyn
   const record = { artifacts: [], runs: [] };
   assert.equal(await verifyGateArtifacts(gate, record, evidenceDir), null);
   assert.equal(record.artifacts.length, 1);
+
+  const staleInventory = structuredClone(receipt);
+  staleInventory.owners.find(
+    ({ owner }) => owner === "catalog",
+  ).migrationCount = 9;
+  await writeFile(path, JSON.stringify(staleInventory));
+  assert.match(
+    await verifyGateArtifacts(gate, { artifacts: [], runs: [] }, evidenceDir),
+    /receipt does not match/u,
+  );
 
   const invalid = structuredClone(receipt);
   invalid.cleanup.removed.pop();

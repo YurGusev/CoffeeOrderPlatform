@@ -11,6 +11,7 @@ export type CatalogSearchRow = Readonly<{
   productRef: string | null;
   variantRef: string | null;
   displayName: string | null;
+  categoryName?: string | null;
   displayNameSortKey: string | null;
   unit: "piece" | "gram" | "kilogram" | null;
   availability: CatalogAvailability | null;
@@ -247,6 +248,7 @@ export async function searchCatalog(
       productRef: string;
       variantRef: string;
       displayName: string;
+      categoryName?: string;
       unit: "piece" | "gram" | "kilogram";
       availability: CatalogAvailability;
       mappingAvailable: boolean;
@@ -295,6 +297,7 @@ export async function searchCatalog(
       productRef: row.productRef,
       variantRef: row.variantRef,
       displayName: row.displayName,
+      ...(row.categoryName ? { categoryName: row.categoryName } : {}),
       unit: row.unit,
       availability: row.availability,
       mappingAvailable: row.mappingAvailable,

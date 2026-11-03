@@ -142,6 +142,10 @@ export type AromaCatalogItem = {
   sourceVariantKeyHash: HashSha256;
   sourceOfferKeyHash: HashSha256;
   displayName: string;
+  /**
+   * Название категории поставщика; отсутствует, если поставщик его не передал.
+   */
+  categoryName?: string;
   unit: 'piece' | 'gram' | 'kilogram';
   supplierUnitMinor: MoneyVersionTimeV1SchemaMoneyMinor;
   currency: MoneyVersionTimeV1SchemaCurrency;

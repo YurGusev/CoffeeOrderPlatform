@@ -262,6 +262,12 @@ export const internalV1Schemas = {
                   "minLength": 1,
                   "maxLength": 200
                 },
+                "categoryName": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200,
+                  "description": "Название категории поставщика; отсутствует, если поставщик его не передал."
+                },
                 "unit": {
                   "type": "string",
                   "enum": [

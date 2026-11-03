@@ -31,6 +31,10 @@ import type {
 } from "@coffee-platform/contracts-customer-v1";
 import {
   isPricingProblem,
+  isPricingPreviewRequest,
+  isPricingPreviewResponse,
+  type PricingPreviewRequest,
+  type PricingPreviewResponse,
   isPricingQuoteCreateRequest,
   isPricingQuoteResponse,
   pricingContractSchemas,
@@ -208,6 +212,10 @@ export type PublicApiAdapters = Readonly<{
     ) => Promise<CatalogForwardResult>;
   }>;
   pricing?: Readonly<{
+    preview: (
+      request: PricingPreviewRequest,
+      context: CatalogForwardContext,
+    ) => Promise<PricingForwardResult>;
     create: (
       request: PricingQuoteCreateRequest | undefined,
       context: ForwardContext,
@@ -886,13 +894,15 @@ async function catalogActor(
   request: Request,
   adapters: PublicApiAdapters,
   signal: AbortSignal,
+  operationId:
+    "searchCatalogProducts" | "previewCatalogPrices" = "searchCatalogProducts",
 ): Promise<ActorContextClaims> {
   if (spoofed(request)) throw new Error("ACTOR_CONTEXT_INVALID");
   const token = oneHeader(header(request, "x-actor-context"));
   if (token === undefined) throw new Error("AUTHENTICATION_REQUIRED");
   const claims = await adapters.verifyActor(
     token,
-    "searchCatalogProducts",
+    operationId,
     signal,
     request.runtimeContext?.correlationId ?? request.id,
   );
@@ -900,7 +910,7 @@ async function catalogActor(
     claims.iss !== "edge-gateway" ||
     claims.aud !== "api-public" ||
     claims.originalIssuer !== "edge-gateway" ||
-    claims.operationId !== "searchCatalogProducts" ||
+    claims.operationId !== operationId ||
     claims.sub.length === 0 ||
     !claims.permissions.includes("catalog:read")
   )
@@ -1346,14 +1356,80 @@ export function registerPublicRoutes(
           ),
         );
       try {
-        return sendCatalogForward(
-          request,
-          reply,
-          await adapters.catalog.search(decoded, {
+        const catalogPage = await adapters.catalog.search(decoded, {
+          actor: claims,
+          context: requestContext,
+        });
+        if (catalogPage.status !== 200)
+          return sendCatalogForward(request, reply, catalogPage);
+        if (!isCatalogSearchResponse(catalogPage.body))
+          throw new Error("invalid catalog page");
+        requestContext.signal.throwIfAborted();
+        // Catalog owns display facts. Only Pricing may supply the two monetary values.
+        const items = catalogPage.body.items.map(
+          ({ prices: _prices, ...item }) => item,
+        );
+        const eligible = items.filter(
+          (item) => item.availability === "Available" && item.mappingAvailable,
+        );
+        let body: CatalogSearchResponse = {
+          snapshotRevision: catalogPage.body.snapshotRevision,
+          items,
+          nextCursor: catalogPage.body.nextCursor,
+        };
+        if (eligible.length > 0) {
+          const previewRequest = {
+            snapshotRevision: body.snapshotRevision,
+            items: eligible.map(({ productRef, variantRef }) => ({
+              productRef,
+              variantRef,
+            })),
+          };
+          if (!isPricingPreviewRequest(previewRequest))
+            throw new Error("invalid catalog identities");
+          const preview = await adapters.pricing?.preview(previewRequest, {
             actor: claims,
             context: requestContext,
-          }),
-        );
+          });
+          requestContext.signal.throwIfAborted();
+          if (
+            preview?.status !== 200 ||
+            !matchesPricingPreview(preview.body, previewRequest)
+          )
+            throw new Error("pricing preview is unavailable");
+          const prices = new Map(
+            preview.body.items.map((item) => [
+              `${item.productRef}/${item.variantRef}`,
+              item,
+            ]),
+          );
+          if (
+            eligible.some(
+              (item) =>
+                prices.get(`${item.productRef}/${item.variantRef}`)?.unit !==
+                item.unit,
+            )
+          )
+            throw new Error("pricing preview does not match catalog page");
+          body = {
+            ...body,
+            policyVersionRef: preview.body.policyVersionRef,
+            items: items.map((item) => {
+              const value = prices.get(`${item.productRef}/${item.variantRef}`);
+              return value === undefined
+                ? item
+                : {
+                    ...item,
+                    prices: {
+                      supplierUnitMinor: value.supplierUnitMinor,
+                      saleUnitMinor: value.saleUnitMinor,
+                      currency: value.currency,
+                    },
+                  };
+            }),
+          };
+        }
+        return sendCatalogForward(request, reply, { status: 200, body });
       } catch {
         return sendProblem(
           reply,
@@ -1362,6 +1438,111 @@ export function registerPublicRoutes(
             503,
             "CATALOG_UNAVAILABLE",
             "catalog owner is unavailable",
+          ),
+        );
+      }
+    },
+  });
+
+  app.post("/api/client-v1/pricing/catalog-preview", {
+    config: { runtimeDeadlineProfile: "defaultMs" },
+    bodyLimit: MAX_BODY_BYTES,
+    errorHandler: (error, request, reply) =>
+      frameworkError(request, reply, error),
+    schema: {
+      response: pricingResponseSchema(
+        pricingContractSchemas.previewResponse,
+        200,
+        [400, 401, 403, 409, 503],
+      ),
+    },
+    handler: async (request, rawReply) => {
+      const reply = rawReply as unknown as Reply;
+      if (
+        !adapters.verifyTransport(
+          request,
+          adapters.expectedIngressCaller ?? "edge-nginx",
+        )
+      )
+        return sendProblem(
+          reply,
+          problem(
+            request,
+            401,
+            "AUTHENTICATION_REQUIRED",
+            "service identity is required",
+          ),
+        );
+      const requestContext = context(request, 1_000);
+      let claims: ActorContextClaims;
+      try {
+        claims = await catalogActor(
+          request,
+          adapters,
+          requestContext.signal,
+          "previewCatalogPrices",
+        );
+      } catch (error) {
+        const missing =
+          error instanceof Error && error.message === "AUTHENTICATION_REQUIRED";
+        return sendProblem(
+          reply,
+          problem(
+            request,
+            missing ? 401 : 403,
+            missing ? "AUTHENTICATION_REQUIRED" : "ACTOR_CONTEXT_INVALID",
+            "signed actor context is invalid",
+          ),
+        );
+      }
+      if (exceedsBodyLimit(request) || !isPricingPreviewRequest(request.body))
+        return sendProblem(
+          reply,
+          problem(
+            request,
+            400,
+            "VALIDATION_FAILED",
+            "Request validation failed",
+          ),
+        );
+      try {
+        const result = await adapters.pricing?.preview(request.body, {
+          actor: claims,
+          context: requestContext,
+        });
+        requestContext.signal.throwIfAborted();
+        if (
+          result?.status === 200 &&
+          matchesPricingPreview(result.body, request.body)
+        )
+          return reply
+            .header("cache-control", "no-store")
+            .code(200)
+            .send(result.body);
+        if (
+          result &&
+          isPricingProblem(result.body) &&
+          result.body.status === result.status &&
+          previewErrorCodes[result.status]?.includes(result.body.code)
+        )
+          return sendProblem(
+            reply,
+            problem(
+              request,
+              result.status,
+              result.body.code,
+              "pricing preview request failed",
+            ),
+          );
+        throw new Error("invalid pricing preview");
+      } catch {
+        return sendProblem(
+          reply,
+          problem(
+            request,
+            503,
+            "CATALOG_UNAVAILABLE",
+            "pricing preview is unavailable",
           ),
         );
       }
@@ -1825,6 +2006,32 @@ export function createHttpCatalogClient(
   };
 }
 
+function matchesPricingPreview(
+  value: unknown,
+  request: PricingPreviewRequest,
+): value is PricingPreviewResponse {
+  if (
+    !isPricingPreviewResponse(value) ||
+    value.snapshotRevision !== request.snapshotRevision ||
+    value.items.length !== request.items.length
+  )
+    return false;
+  const expected = new Set(
+    request.items.map((item) => `${item.productRef}/${item.variantRef}`),
+  );
+  return value.items.every((item) =>
+    expected.has(`${item.productRef}/${item.variantRef}`),
+  );
+}
+
+const previewErrorCodes: Readonly<Record<number, readonly string[]>> = {
+  400: ["VALIDATION_FAILED"],
+  401: ["AUTHENTICATION_REQUIRED"],
+  403: ["ACTOR_CONTEXT_INVALID"],
+  409: ["CATALOG_REVISION_CHANGED"],
+  503: ["CATALOG_UNAVAILABLE", "PRICING_POLICY_UNAVAILABLE"],
+};
+
 export function createHttpPricingClient(
   client: HttpClient,
   sign: (
@@ -1835,6 +2042,50 @@ export function createHttpPricingClient(
   ) => string,
 ): NonNullable<PublicApiAdapters["pricing"]> {
   return {
+    preview: async (body, requestContext) => {
+      const headers: Record<string, string> = {
+        "x-actor-context": sign(
+          requestContext.actor,
+          "pricing-service",
+          "previewCatalogPrices",
+          requestContext.context,
+        ),
+        "x-correlation-id": requestContext.context.correlationId,
+        "content-type": "application/json",
+        accept: "application/json, application/problem+json",
+      };
+      if (requestContext.context.traceparent !== undefined)
+        headers["traceparent"] = requestContext.context.traceparent;
+      const response = await client.fetch(
+        "/api/client-v1/pricing/catalog-preview",
+        {
+          method: "POST",
+          headers,
+          body: JSON.stringify(body),
+          signal: requestContext.context.signal,
+        },
+      );
+      if (
+        (response.status !== 200 &&
+          previewErrorCodes[response.status] === undefined) ||
+        mediaType(response) !==
+          (response.status === 200
+            ? "application/json"
+            : "application/problem+json")
+      )
+        throw new Error("pricing preview returned unsupported response");
+      const value = await boundedCatalogJson(response, 64 * 1024);
+      requestContext.context.signal.throwIfAborted();
+      if (
+        response.status === 200
+          ? !matchesPricingPreview(value, body)
+          : !isPricingProblem(value) ||
+            value.status !== response.status ||
+            !previewErrorCodes[response.status]?.includes(value.code)
+      )
+        throw new Error("pricing preview returned invalid response");
+      return { status: response.status, body: value };
+    },
     create: async (body, requestContext) => {
       const path = "/api/client-v1/pricing/quotes";
       const headers: Record<string, string> = {
@@ -2266,6 +2517,9 @@ export function createUnavailablePublicAdapters(): PublicApiAdapters {
       },
     },
     pricing: {
+      preview: async () => {
+        throw new Error("PUBLIC_API_PRICING_CLIENT_NOT_CONFIGURED");
+      },
       create: async () => {
         throw new Error("PUBLIC_API_PRICING_CLIENT_NOT_CONFIGURED");
       },

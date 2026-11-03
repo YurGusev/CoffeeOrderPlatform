@@ -33,7 +33,7 @@ const SEARCH_SQL = `WITH metadata AS (
     JOIN catalog.active_variants AS variant ON variant.snapshot_ref = product.snapshot_ref AND variant.product_ref = product.product_ref AND variant.variant_ref = $5
 ), candidates AS (
   SELECT metadata.snapshot_revision AS "snapshotRevision", product.product_ref AS "productRef",
-         variant.variant_ref AS "variantRef", product.display_name AS "displayName",
+         variant.variant_ref AS "variantRef", product.display_name AS "displayName", product.category_name AS "categoryName",
          product.display_name_sort_key AS "displayNameSortKey", variant.unit AS "unit",
          availability.state AS "availability",
          COALESCE(mapping.mapping_state = 'Active', false) AS "mappingAvailable", variant.image_url AS "imageUrl",
@@ -57,7 +57,7 @@ const SEARCH_SQL = `WITH metadata AS (
 SELECT metadata.snapshot_revision AS "snapshotRevision",
        ($3::text IS NULL OR EXISTS (SELECT 1 FROM position WHERE position.sort_key_hash = $3)) AS "cursorValid",
        candidates."productRef", candidates."variantRef",
-       candidates."displayName", candidates."displayNameSortKey", candidates."unit", candidates."availability",
+       candidates."displayName", candidates."categoryName", candidates."displayNameSortKey", candidates."unit", candidates."availability",
        candidates."mappingAvailable", candidates."imageUrl", candidates."offerRef", candidates."supplierUnitMinor",
        candidates."currency", candidates."mappingRevision", candidates."grindOptions"
   FROM metadata LEFT JOIN candidates ON true

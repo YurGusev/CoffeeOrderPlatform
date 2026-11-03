@@ -7,73 +7,293 @@ inputs:
     artifact: evidence/handoffs/issue-254.yaml
     sha256: 5391732611bf0473b5b71f215d25328548f9b20924cd018b7f3b8e30bc23135e
 outputs:
+  - artifact: apps/api-public/src/index.ts
+    sha256: 72002f8556066a62494273f389aa48ccba464abcbdb09ebed15e576528805189
+    consumers:
+      - 13
+  - artifact: apps/aroma-gateway/src/application/catalog-export.ts
+    sha256: 43938c0218b7b55efb159f38c07286fc803fa1c53937c906986c3d20b2688876
+    consumers:
+      - 13
+  - artifact: apps/aroma-gateway/src/application/provider-catalog-source.ts
+    sha256: 5300deff635a6fa6ea36778b4ec82ae22f99bb4ad00458b701a67e92b6bd552e
+    consumers:
+      - 13
+  - artifact: apps/aroma-gateway/src/infrastructure/provider/decoder.ts
+    sha256: 56114f22943e24acc558bfe25fb497b4866bb12799851ef170b396b4a0fd1e41
+    consumers:
+      - 13
+  - artifact: apps/catalog-activation-worker/src/infrastructure/activation-store.ts
+    sha256: 36f10903529355b74cc4b9482d183e1cc2e1c71f26abc03f083a029959c3b9e2
+    consumers:
+      - 13
+  - artifact: apps/catalog-activation-worker/src/verify-generation.ts
+    sha256: ad5ada03f498fcd37efb46ded7d04efba236904634b6ef5e9d935bbe6cdc7b03
+    consumers:
+      - 13
+  - artifact: apps/catalog-service/migrations/0010_catalog_category.sql
+    sha256: 9b8e8598069bd5c943b0a0d44fe0b94611dd860ebaf7d4dbf19fdc389e03fbb7
+    consumers:
+      - 13
+  - artifact: apps/catalog-service/migrations/0011_active_catalog_category.sql
+    sha256: 25af75d31ac7d18172f8f2d0af8b8337a5aa90b9c30d754169c5f17f0173f807
+    consumers:
+      - 13
+  - artifact: apps/catalog-service/src/application/search-catalog.ts
+    sha256: 5c061bf8ead55a3520af2a3fa25893c5d1307fd349f406b13ec182971e188fcb
+    consumers:
+      - 13
+  - artifact: apps/catalog-service/src/infrastructure/postgres/catalog-repository.ts
+    sha256: 9c1eecff38826b715e0f79c1e7deb33baa468750ad8dfba61d05a41da3040f60
+    consumers:
+      - 13
+  - artifact: apps/catalog-supplier-sync/src/infrastructure/catalog-import-store.ts
+    sha256: fbc184ce432e9bf8e3b55dfac71419a2d0cf031f09f4a81d761c53a20d6afb3b
+    consumers:
+      - 13
+  - artifact: apps/edge-gateway/src/client-operations.gen.ts
+    sha256: 12d081420866e993086c8601e65eb2e4a230af97d8881c6ee0ad6ac8c25d5d5f
+    consumers:
+      - 13
+  - artifact: apps/pricing-service/src/application/create-pricing-quote.ts
+    sha256: 128da6db8f5cb3c55954d5ceebca5a38887323a90142398dac8bc7bf5b96b7fb
+    consumers:
+      - 13
+  - artifact: apps/pricing-service/src/http/index.ts
+    sha256: 6282d146fb9407259d3363a260b3f5038bd900701fc2846348bdb9a3a9d6d479
+    consumers:
+      - 13
   - artifact: apps/web/src/browser/routes/CatalogPage.tsx
-    sha256: 22609581f082067476a1c1ff83b8b8414a57c1227e2b0cd55ac2a6951b280d7b
+    sha256: cfc90e95c1fc2c3522936c9d3bcda5a13319507d4cad5451dc6054154ff81f32
     consumers:
       - 13
   - artifact: apps/web/src/browser/styles.css
-    sha256: 426ddbe1ec56321737eeb5221d7d9c0c816319b48d50289bbdc612b48570de8b
+    sha256: 4ddbca9329d520197730b3fc123593371e82933bea1be39df0fc36ec63c65e8b
     consumers:
       - 13
   - artifact: apps/web/test/operator-flow.spec.ts
-    sha256: 03d4f6ee1adce7395826647ff2e8e29fcbd2071a6a0a0a8276aad690054a63f3
+    sha256: 3f0bfbf87e24db82a02f02ab2905056ec3c869aae0671352bada446af748a2f1
+    consumers:
+      - 13
+  - artifact: config/service-catalog.json
+    sha256: 7ddbaa1575de1bab5822c9cfe78d3735407a5f08bca9c52e5821762c7ba1a4da
+    consumers:
+      - 13
+  - artifact: contracts/fixtures/positive/http/success.json
+    sha256: 95cf85a3604fd874217af9cf151007e6ef93471a2e9565ad754b443c97e4acce
+    consumers:
+      - 13
+  - artifact: contracts/manifest.yaml
+    sha256: 37a845a53182b7b692975725543da9c04a202a99f11bd2b42f30d3c1dbdfab76
+    consumers:
+      - 13
+  - artifact: contracts/openapi/client-v1.yaml
+    sha256: ee1a4b55d29c987ab40b90be714c889af892134b8d5c881e5a04dbf5ce1997ad
+    consumers:
+      - 13
+  - artifact: contracts/openapi/internal-v1.yaml
+    sha256: 0335eba42ab1f13e117771e5625550910353d2e696668e25b8f638fb0c252778
+    consumers:
+      - 13
+  - artifact: docs/launch/15_CATALOG_IMPLEMENTATION_SPEC.md
+    sha256: 373d011eab173f40c87a9b8ce994108970b4c611ce7ff2828cdfb3f9a4bfe5aa
+    consumers:
+      - 13
+  - artifact: docs/launch/16_PRICING_IMPLEMENTATION_SPEC.md
+    sha256: f1d924f93dbec0b11785037206385e75ddbe40b6e1fec1cfa8fd829b5651446e
     consumers:
       - 13
   - artifact: docs/launch/18_FRONTEND_IMPLEMENTATION_SPEC.md
-    sha256: e96059f9aa7f28f6113dfbcf7c09e86dceb1589757abb16189321f8f7820fa7e
+    sha256: a6ddc6388c55580f8b9b6a5492226fe5d35b02b0d1ab47e30f1539a516058c63
+    consumers:
+      - 13
+  - artifact: docs/launch/27_AROMA_PROVIDER_PROTOCOL.md
+    sha256: af215bba0dce62ca98d1324fad1fc9a4464156f2867d31f89d8ae10cf90c155c
+    consumers:
+      - 13
+  - artifact: packages/contracts/catalog-v1/src/index.ts
+    sha256: 4cfad40d3cb3904f5fb2a33a3c38a70bc69c212ae8586b7461416eb4f8287a52
+    consumers:
+      - 13
+  - artifact: packages/contracts/pricing-v1/src/index.ts
+    sha256: 8bd36708d83e09e5fa1470192883ee9db9ec60fe519b03dd66b66da71fdb1d3e
+    consumers:
+      - 13
+  - artifact: packages/generated/client-v1/src/index.ts
+    sha256: 3e5ab8f5b4d4a49d086cdab6f0f47401fce2b3b681dbf52131649df4fd100deb
+    consumers:
+      - 13
+  - artifact: packages/generated/client-v1/src/runtime-schemas.gen.ts
+    sha256: b1fda8f2f232990546ccae98110153d45660542d5a785e4555f5d95bf4db3d0d
+    consumers:
+      - 13
+  - artifact: packages/generated/client-v1/src/types.gen.ts
+    sha256: c52d54c8e28fe3670b82040a1373b1ad858c5eeaf7d017041855a9df30b7bd5d
+    consumers:
+      - 13
+  - artifact: packages/generated/internal-v1/src/runtime-schemas.gen.ts
+    sha256: ddcbb691f621d31d0619bea9506c8dc90cb7ab4b3001e5525f5f69b3c2853550
+    consumers:
+      - 13
+  - artifact: packages/generated/internal-v1/src/types.gen.ts
+    sha256: be59eca02ae8a711227fd6da1b44638922fa9c7603f014b2056b9684ed088ff5
+    consumers:
+      - 13
+  - artifact: scripts/catalog-copy-live-proof.mjs
+    sha256: bbd927cca575808e7437530e5c814c59960952869a780b57aac2685ad3a476a1
+    consumers:
+      - 13
+  - artifact: scripts/catalog-live-harness.mjs
+    sha256: 3cc6fc5ebbd7966fd8b70612dd7288d3f96fc84a2793498286e5fe88a2932a1b
+    consumers:
+      - 13
+  - artifact: scripts/contracts-generate.mjs
+    sha256: 6ed8cb62d72241a60e4e9ab9249536ca9114a7b1c9c9f67cdb68d04effcdc06c
+    consumers:
+      - 13
+  - artifact: scripts/db-live-proof.mjs
+    sha256: c00d762766a2893631d4eed0451e2ca3feae88099901aa89a026286fc057c493
     consumers:
       - 13
   - artifact: secrets/platform.secrets.sops.yaml
     sha256: 01744290a8d57dbda7271e3378a985d28b15c7d1355cebba64fe50fb036afaf3
     consumers:
       - 13
+  - artifact: tests/aroma/catalog-export.test.mjs
+    sha256: d61321399a2e18dbd05325cbcc8f25182fc35fe87b4c6a395d2dedeb6326dccf
+    consumers:
+      - 13
+  - artifact: tests/aroma/provider-catalog-source.test.mjs
+    sha256: db999ce27e496148c7bab8a88570e10d73d0bbc1f937bcdeb5b46d4f9c4d416d
+    consumers:
+      - 13
+  - artifact: tests/aroma/provider-decoder.test.mjs
+    sha256: e29000ab1292ccbc4a5d9558910fddac07f713c1e8a2d02b0d632aa30fdd1552
+    consumers:
+      - 13
+  - artifact: tests/catalog-pipeline/pipeline-live.test.mjs
+    sha256: 1809c053d31a288c000ebb2102eef0fde43bff47471a5a48e7848d024ae2030d
+    consumers:
+      - 13
+  - artifact: tests/catalog-pipeline/publisher-live.test.mjs
+    sha256: aa25551b0baf3649a73ee3dcb299dc5b43ee6da1b0fcf811dbb678482df7bae5
+    consumers:
+      - 13
+  - artifact: tests/catalog-pipeline/recovery-live.test.mjs
+    sha256: 5af426c903a21c79488b43179b98380c5400de5f3fdd3383fd200106dfb7ddb1
+    consumers:
+      - 13
+  - artifact: tests/catalog/activation-crash-live.test.mjs
+    sha256: 69520c7328a96b66c1810c2cafa9c395381d95b9be6758c461cb1b57d14a56bc
+    consumers:
+      - 13
+  - artifact: tests/catalog/activation-live.test.mjs
+    sha256: 1346bbf4653bd133401515292dfcdd825542ba6933af244265bfc83c943641bc
+    consumers:
+      - 13
+  - artifact: tests/catalog/activation-migrations.test.mjs
+    sha256: a9cb041398697ba82c3beb8922064f9dd4a536e8a56d5c916679392b9827da99
+    consumers:
+      - 13
+  - artifact: tests/catalog/catalog-root.test.mjs
+    sha256: 3f2cd7a62e7a555338afd7d46bc34b1d16de1be1b1ad2eacca9599684c7dbdc6
+    consumers:
+      - 13
+  - artifact: tests/contracts/catalog-http.test.mjs
+    sha256: f25680f8e0e99156b5613407712e5cd5d0014575aa2c0a838c6629660a1b2367
+    consumers:
+      - 13
+  - artifact: tests/edge-auth/operations.test.mjs
+    sha256: 9b178881f031c665ffef6411f6babe98ef68c93bd3d59915a4117b311e877e81
+    consumers:
+      - 13
+  - artifact: tests/nginx/fixtures/served-backend.mjs
+    sha256: 195a896600e9ceff7eba2625458f738a3022ae60888e2985be3cf9bb169da5b8
+    consumers:
+      - 13
+  - artifact: tests/pricing/create-pricing-quote.test.mjs
+    sha256: f659e50957e644db4c7ec5cd7fb694dc75dd02440aaa26b7d3eda4c481f92d3a
+    consumers:
+      - 13
+  - artifact: tests/pricing/pricing-http.test.mjs
+    sha256: 9cf8a88ca481343712cd8c23453682ed93ced7a485386dadd09fc40a90d86878
+    consumers:
+      - 13
+  - artifact: tools/compose-smoke.mjs
+    sha256: 8f8f17068b5808d7ae46c2d7cc9a4e5f62af4d286967d06b0ace8809b5d16e75
+    consumers:
+      - 13
+  - artifact: verification/launch/v1/run.mjs
+    sha256: 7738711c416a71add9accfcfe0fe9a91be92c0ff10241e9c3f726f961693f538
+    consumers:
+      - 13
+  - artifact: verification/launch/v1/runner.test.mjs
+    sha256: 4f095d2b365f0d5a04e0cf7060a6fcdfb7d8c58f4b790b57c851cc490e635ac9
+    consumers:
+      - 13
+  - artifact: verification/launch/v1/scenarios/migrations.mjs
+    sha256: 9717a82903a8631b4adb31b34a4f304f02f594ab9368bf177d7a10052ac6fb68
+    consumers:
+      - 13
 behavior:
-  - >-
-    Каталог показывает семантический список с одним товаром в строке и разделителями; на широком экране
-    название, наличие и единица расположены рядом.
-  - >-
-    Поля количества/помола и команда Добавить сохраняют прежние guards editable Draft и allowedActions;
-    standalone остаётся просмотром.
-  - Поиск, availability, cursor pagination, quote/PUT, recovery и API не изменены.
-  - >-
-    Trusted bootstrap обновил 15 due internal certPem с прежними CA/keys/SAN; public RSA и browser trust
-    сохраняются.
+  - "Компактный семантический список: название 14px, категория под ним, наличие и единица. Обе цены и quantity выровнены,
+    включая товары без помола; mobile сохраняет reflow и primary target 44px."
+  - Фактическая category.name проходит Gateway/import/activation/Catalog. Nullable миграции 0010/0011 не меняют canonical
+    bytes старых snapshots без категории. Unknown отображается как «Не указана».
+  - "Один Catalog GET дополняется bounded readonly Pricing preview: catalog:read, существующая owner delegation, одна
+    активная policy, существующая bigint formula, максимум 50 пар и concurrency 8. Caller не передаёт деньги или policy."
+  - API-public проверяет точные revision/refs/unit и полный уникальный набор цен; общий Catalog deadline 1000ms сохранён.
+    Unavailable/unmapped строки не получают цены, UI показывает «Недоступна». Невалидный или неполный preview не выдаётся
+    как частичный успех.
+  - Обе серверные суммы показываются за product.unit. Preview не создаёт quote/idempotency/audit records. Добавление
+    использует прежний quote→PUT и pricing:create; preview не определяет принятую цену заказа.
+  - Поиск, availability, cursor pagination, allowedActions и guards editable Draft сохранены; standalone остаётся
+    просмотром.
+  - Trusted bootstrap обновил 15 due internal certPem с прежними CA/keys/SAN; public RSA и browser trust сохранены.
 verification:
-  - command: pnpm web:build
-    result: PASS; выполнено под shared heavy lock.
-  - command: WEB_TEST_GROUP=routes node --experimental-strip-types apps/web/test/operator-flow.spec.ts
-    result: PASS после изменения markup/test; последующая правка только CSS.
-  - command: pnpm --filter @coffee-platform/web build:browser
-    result: PASS после финального CSS.
-  - command: >-
-      WEB_TEST_GROUP=accessibility
-      WEB_SCREENSHOT_DIR=/home/yurgusev/.cache/coffee-launch-delivery/catalog-list-preview node
-      --experimental-strip-types apps/web/test/operator-flow.spec.ts
-    result: >-
-      PASS после финального CSS: два товара в одном столбце, ширины375/1280, controls, axe; снимки осмотрены
-      root.
-  - command: >-
-      pnpm exec prettier --check apps/web/src/browser/routes/CatalogPage.tsx apps/web/src/browser/styles.css
-      apps/web/test/operator-flow.spec.ts
-    result: PASS после финального diff.
-  - command: targeted oxlint + git diff --check
-    result: PASS по изменённым TSX/test и diff.
   - command: node tools/config-bootstrap/index.mjs --renew-development-transport
     result: PASS; 15 leaves обновлены, Node validity до2026-11-04T16:03:47–48Z; scoped tmpfs удалён.
     receiptSha256: 1041ae8bed12d72bb50d74e59e1a898599941fd55916cd201bb002d0ee2e33df
   - command: GitHub Actions 41671386290; source53e4c6cba3ee84250486b017c0a7f1e87e12eb7d
-    result: >-
-      FAIL: синхронный подсчёт списка в happyPath получил0 вместо2. Предположение о browse/search race не
-      доказано логом; отрицательный лог сохранён.
+    result:
+      "FAIL: синхронный подсчёт списка в happyPath получил0 вместо2. Предположение о browse/search race не доказано
+      логом; отрицательный лог сохранён."
     logSha256: 60d19e6d8b6a47196f3506819da2ed6dab5d2fddf1c802c0b3760b2dfe4ca76d
-  - command: pnpm test:web-operator
-    result: >-
-      PASS115.48s под shared heavy lock:10 realtime scenarios, затем happyPath с ожиданием HTTP200 нужного
-      поиска и DOM из2строк. После старта прогона удалён только дублирующий синхронныйassert; финальная точная
-      версия ожидаетCI.
-    logSha256: 651c0d8e84ec24ea5cae609376be611a4d84c4070279526e2dc7615f853f2116
+  - command: GitHub Actions 41672983536; source bfcb4a665ec1a094c797c99af1212b1f075ba0ea
+    result: CANCELLED после нового запроса компактности, категорий и цен; не PASS.
+  - command:
+      Category targeted build, 5 unit cases и 4 real PostgreSQL pipeline/migration cases; точные commands в
+      приватном receipt
+    result: "PASS: old-hash reconstruction, semantic category collision, activation и Missing propagation."
+    receiptSha256: eabd31715349f2e528121103e1730be3866e76e8631924be290335c84ca20650
+  - command: Existing G08/G09 receipt regressions после Catalog current 9→11 (prefix 8 сохранён)
+    result: "PASS; известный отдельный Customer current 2→3 остаётся исправлением formal #13."
+  - command:
+      Pricing application/HTTP, Catalog root, Edge inventory, OpenAPI fixture tests + targeted tsc/lint/contracts
+      checks
+    result:
+      42 PASS в основном запуске; единственный duplicate-Problem-fixture FAIL исправлен, только его повтор PASS.
+      Финальные 3 binding cases PASS. Первоначальные build failures и точные argv/измерения сохранены в receipt.
+    receiptSha256: 2c60479cdeb12f80c80800184f685040034f46efb5da711f70f4e909639bf838
+  - command: pnpm web:build; pnpm test:web-operator
+    result:
+      PASS; один полный browser run 117.42s. После него изменены только расположение и mock без помола; итоговый
+      CSS проверен узкой accessibility группой.
+    logSha256: 596bca10905fb1e2c636682b9f7b49eb27cd1e3b53121b54322d667f9b0fd3f5
+  - command:
+      WEB_TEST_GROUP=accessibility WEB_SCREENSHOT_DIR=/home/yurgusev/.cache/coffee-launch-delivery/catalog-list-preview-prices-final
+      node --experimental-strip-types apps/web/test/operator-flow.spec.ts
+    result:
+      "PASS после pnpm --filter @coffee-platform/web build:browser под shared heavy lock (exit 0; отдельный лог не сохранён, длительность не измерялась): 375/1280px, обе цены/единицы, unknown category/price, aligned prices/quantity
+      без помола, quote proof и прежний итог 500₽, reflow/targets/axe. Снимки mock просмотрены root."
+  - command: Независимый read-only review price diff
+    result:
+      Blockers не обнаружено, включая окончательный общий binding predicate; категории и исправление CAT262-01 также ранее проверены. Runtime latency ещё не
+      измерена.
 limitations:
-  - CI, G12 и normal cutover этого source ещё не выполнены; на сервере пока работает прежний7b019e3.
-  - >-
-    Этот handoff не является полным admission issue13: после merge нужен новый exact candidate и обязательные
-    formal gates.
+  - CI, G12 и normal cutover окончательного source ещё не выполнены; на сервере пока runtime 7b019e3.
+  - Снимки browser fixture показывают тестовые данные, не фактический supplier catalog.
+  - После normal cutover scheduler выполнит обычный импорт сразу при старте; категория появится после активации нового
+    snapshot.
+  - "Этот handoff не является полным admission issue #13: после merge нужен новый exact candidate и обязательные formal
+    gates."

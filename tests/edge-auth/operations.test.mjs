@@ -41,6 +41,12 @@ void test("client-v1 browser operation inventory is contract-derived and permiss
         permission: "orders:read:any",
       },
       {
+        method: "POST",
+        path: "/api/client-v1/pricing/catalog-preview",
+        operationId: "previewCatalogPrices",
+        permission: "catalog:read",
+      },
+      {
         method: "DELETE",
         path: "/api/client-v1/orders/{orderRef}/items/{itemRef}",
         operationId: "removeOrderItem",
@@ -90,6 +96,7 @@ void test("client-v1 browser operation inventory is contract-derived and permiss
     createOrderDraft: "orders:create",
     createPricingQuote: "pricing:create",
     getOrderCard: "orders:read:any",
+    previewCatalogPrices: "catalog:read",
     removeOrderItem: "orders:edit:any",
     requestAromaReconciliation: "orders:reconcile:any",
     searchCatalogProducts: "catalog:read",
@@ -97,7 +104,7 @@ void test("client-v1 browser operation inventory is contract-derived and permiss
     streamOrderInvalidations: "orders:read:any",
     upsertOrderItem: "orders:edit:any",
   });
-  assert.equal(clientV1BrowserOperations.length, 11);
+  assert.equal(clientV1BrowserOperations.length, 12);
   assert.equal(
     clientV1BrowserOperations.filter(
       (operation) => operation.permission === undefined,

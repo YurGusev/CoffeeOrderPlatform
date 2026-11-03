@@ -134,6 +134,7 @@ void test(
         "0007_catalog_grants",
         "0008_catalog_active_read",
         "0009_active_snapshot_freshness",
+        "0011_active_catalog_category",
       ])
         await adminClient.query(
           await readFile(

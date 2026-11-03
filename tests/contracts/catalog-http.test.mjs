@@ -110,6 +110,21 @@ void test("Catalog product, variant, search response and pricing input validator
   assert.equal(
     isCatalogSearchResponse({
       ...searchResponse,
+      items: [{ ...searchResponse.items[0], categoryName: "Чай" }],
+    }),
+    true,
+  );
+  for (const categoryName of [null, "", "x".repeat(201), 42])
+    assert.equal(
+      isCatalogSearchResponse({
+        ...searchResponse,
+        items: [{ ...searchResponse.items[0], categoryName }],
+      }),
+      false,
+    );
+  assert.equal(
+    isCatalogSearchResponse({
+      ...searchResponse,
       items: [{ ...searchResponse.items[0], extra: true }],
     }),
     false,

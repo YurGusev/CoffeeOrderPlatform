@@ -34,6 +34,7 @@ type Batch = Readonly<{
 type Product = Readonly<{
   source_product_key_hash: string;
   image_url: string | null;
+  category_name: string | null;
 }>;
 type Variant = Readonly<{
   source_variant_key_hash: string;
@@ -233,6 +234,9 @@ export function verifyReceivedGeneration(
         currency: "RUB",
         availability: present.availability as CatalogItem["availability"],
         imageUrl: product.image_url,
+        ...(product.category_name
+          ? { categoryName: product.category_name }
+          : {}),
         ...(row.supplier_promotions === null
           ? {}
           : { supplierPromotions: row.supplier_promotions }),

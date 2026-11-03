@@ -211,6 +211,7 @@ async function installCommonMocks(
     aromaScenario?: "Blocked" | "UnknownOutcome";
     catalogUnavailable?: boolean;
     catalogNextCursor?: boolean;
+    catalogMappingUnavailable?: boolean;
     multipleCatalogProducts?: boolean;
     catalogRefetchFailure?: Readonly<{ query: string; status: 403 | 503 }>;
     catalogRefetchFailureSequence?: Readonly<{
@@ -737,9 +738,19 @@ async function installCommonMocks(
             productRef,
             variantRef,
             displayName: "Капучино",
+            ...(options.multipleCatalogProducts
+              ? {
+                  categoryName: "Эспрессо-смеси",
+                  prices: {
+                    supplierUnitMinor: "18015",
+                    saleUnitMinor: "23590",
+                    currency: "RUB",
+                  },
+                }
+              : {}),
             unit: "piece",
             availability: "Available",
-            mappingAvailable: true,
+            mappingAvailable: !options.catalogMappingUnavailable,
             grindOptions,
           },
           ...(options.multipleCatalogProducts
@@ -747,11 +758,17 @@ async function installCommonMocks(
                 {
                   productRef: "prd_01ARZ3NDEKTSV4RRFFQ69G5FAW",
                   variantRef: "var_01ARZ3NDEKTSV4RRFFQ69G5FAW",
-                  displayName: "Латте",
+                  displayName: "Пуэр",
+                  categoryName: "Китайский чай",
+                  prices: {
+                    supplierUnitMinor: "105000",
+                    saleUnitMinor: "125000",
+                    currency: "RUB",
+                  },
                   unit: "kilogram",
                   availability: "Available",
                   mappingAvailable: true,
-                  grindOptions,
+                  grindOptions: [],
                 },
               ]
             : []),
@@ -1114,21 +1131,52 @@ async function happyPath(context: BrowserContext): Promise<void> {
   const productList = page.getByRole("list", { name: "Товары" });
   const productRows = productList.getByRole("listitem");
   await expect(productRows).toHaveCount(2);
-  for (const [index, name] of ["Капучино", "Латте"].entries()) {
+  for (const [index, name] of ["Капучино", "Пуэр"].entries()) {
     const row = productRows.nth(index);
     await row.getByRole("heading", { name }).waitFor();
     await row
+      .getByText(`Категория: ${["Эспрессо-смеси", "Китайский чай"][index]}`)
+      .waitFor();
+    await row
       .getByRole("textbox", { name: `Количество для ${name}` })
       .waitFor();
-    await row.getByRole("combobox", { name: `Помол для ${name}` }).waitFor();
+    if (index === 0)
+      await row.getByRole("combobox", { name: `Помол для ${name}` }).waitFor();
+    else
+      assert.equal(
+        await row.getByRole("combobox", { name: `Помол для ${name}` }).count(),
+        0,
+      );
     assert.equal(
       await row.getByRole("button", { name: "Добавить" }).isEnabled(),
       true,
     );
   }
+  for (const [index, unit, supplier, sale] of [
+    [0, "штука", "180,15 ₽", "235,90 ₽"],
+    [1, "килограмм", "1 050,00 ₽", "1 250,00 ₽"],
+  ] as const) {
+    const row = productRows.nth(index);
+    await row.getByText(`Цена поставщика / ${unit}`).waitFor();
+    await row.getByText(`Цена продажи / ${unit}`).waitFor();
+    await row.getByText(supplier, { exact: true }).waitFor();
+    await row.getByText(sale, { exact: true }).waitFor();
+  }
+  assert.equal(
+    await productList.getByText("Привязка к AROMA доступна").count(),
+    0,
+  );
   await assertNoSeriousA11y(page, "catalog list");
   for (const width of [375, 1280]) {
     await page.setViewportSize({ width, height: 900 });
+    const headingStyle = await productRows
+      .first()
+      .getByRole("heading", { name: "Капучино" })
+      .evaluate((node) => {
+        const style = getComputedStyle(node);
+        return { fontSize: style.fontSize, margin: style.margin };
+      });
+    assert.deepEqual(headingStyle, { fontSize: "14px", margin: "0px" });
     const firstRow = await productRows.nth(0).boundingBox();
     const secondRow = await productRows.nth(1).boundingBox();
     assert.ok(
@@ -1138,6 +1186,16 @@ async function happyPath(context: BrowserContext): Promise<void> {
         secondRow.y >= firstRow.y + firstRow.height,
       `catalog ${width}px rows: ${JSON.stringify([firstRow, secondRow])}`,
     );
+    if (width === 1280) {
+      for (const selector of [".product-prices", '[data-slot="field"]']) {
+        const first = await productRows.nth(0).locator(selector).boundingBox();
+        const second = await productRows.nth(1).locator(selector).boundingBox();
+        assert.ok(
+          first && second && Math.abs(first.x - second.x) <= 1,
+          `catalog ${selector} alignment: ${JSON.stringify([first, second])}`,
+        );
+      }
+    }
     const size = await page.evaluate(() => ({
       client: document.documentElement.clientWidth,
       scroll: document.documentElement.scrollWidth,
@@ -1147,6 +1205,14 @@ async function happyPath(context: BrowserContext): Promise<void> {
       `catalog ${width}px overflow: ${JSON.stringify(size)}`,
     );
     if (width === 375) {
+      const availabilityBox = await productRows
+        .first()
+        .getByText("Доступен", { exact: true })
+        .boundingBox();
+      assert.ok(
+        availabilityBox && availabilityBox.height <= 32,
+        `catalog availability wraps: ${JSON.stringify(availabilityBox)}`,
+      );
       const addButton = productRows
         .first()
         .getByRole("button", { name: "Добавить" });
@@ -1184,6 +1250,15 @@ async function happyPath(context: BrowserContext): Promise<void> {
     .getByRole("textbox", { name: "Количество для Капучино" })
     .fill("2");
   await productRows.first().getByRole("button", { name: "Добавить" }).click();
+  await page.getByText("Товар добавлен").waitFor();
+  assert.equal(telemetry.quoteRequests.length, 1);
+  assert.equal(telemetry.putRequests.length, 1);
+  const put = JSON.parse(telemetry.putRequests[0] ?? "{}") as {
+    quoteHash?: string;
+    quoteRef?: string;
+  };
+  assert.equal(put.quoteRef, quoteRef);
+  assert.equal(put.quoteHash, hash);
   await page.getByRole("link", { name: "К заказу" }).first().click();
   await page.getByText("500,00 ₽").first().waitFor();
   await page.getByRole("button", { name: "Удалить", exact: true }).click();
@@ -1299,6 +1374,25 @@ async function happyPath(context: BrowserContext): Promise<void> {
     false,
   );
   await page.close();
+  const uncategorizedPage = await context.newPage();
+  await installCommonMocks(uncategorizedPage, {
+    catalogMappingUnavailable: true,
+  });
+  await uncategorizedPage.goto(`${origin}/app/catalog?orderRef=${orderRef}`, {
+    waitUntil: "networkidle",
+  });
+  await uncategorizedPage.getByText("Категория: Не указана").waitFor();
+  await uncategorizedPage.getByText("Цена поставщика / штука").waitFor();
+  await uncategorizedPage.getByText("Цена продажи / штука").waitFor();
+  await expect(uncategorizedPage.getByText("Недоступна")).toHaveCount(2);
+  await uncategorizedPage.getByText("Нет привязки к AROMA").waitFor();
+  assert.equal(
+    await uncategorizedPage
+      .getByRole("button", { name: "Добавить" })
+      .isDisabled(),
+    true,
+  );
+  await uncategorizedPage.close();
 }
 
 async function ambiguousRecovery(context: BrowserContext): Promise<void> {

@@ -3,6 +3,9 @@ import {
   type CatalogPricingInput,
 } from "@coffee-platform/contracts-catalog-v1";
 import {
+  isPricingPreviewRequest,
+  type PricingPreviewRequest,
+  type PricingPreviewResponse,
   isPricingQuoteCreateRequest,
   type PricingQuoteCreateRequest,
 } from "@coffee-platform/contracts-pricing-v1";
@@ -11,6 +14,8 @@ import {
   type IdempotencyKey,
 } from "@coffee-platform/idempotency";
 import {
+  calculatePricingLine,
+  encodeMinor,
   parseQuantity,
   parseCanonicalMinor,
 } from "../domain/pricing-formula.js";
@@ -118,7 +123,10 @@ function checkedFact(
 async function fetchGroup(
   lines: PricingQuoteCreateRequest["lines"],
   catalog: CatalogPricingClient,
-  command: CreatePricingQuoteCommand,
+  command: Pick<
+    CreatePricingQuoteCommand,
+    "correlationId" | "traceparent" | "signal" | "signDelegation"
+  >,
   signal: AbortSignal,
 ): Promise<CatalogPricingInput[]> {
   const group = new AbortController();
@@ -242,4 +250,64 @@ export async function createPricingQuote(
     }),
     signal,
   });
+}
+
+/** Read-only page preview: one policy, exact Catalog revision, no quote or idempotency writes. */
+export async function previewCatalogPrices(
+  store: Pick<PricingStore, "readActivePolicy">,
+  catalog: CatalogPricingClient,
+  command: Readonly<{
+    request: PricingPreviewRequest;
+    correlationId: string;
+    traceparent?: string;
+    signal: AbortSignal;
+    signDelegation: () => string;
+  }>,
+): Promise<PricingPreviewResponse> {
+  if (!isPricingPreviewRequest(command.request))
+    throw new CreatePricingQuoteError("VALIDATION_FAILED");
+  command.signal.throwIfAborted();
+  const policy = await store.readActivePolicy(command.signal);
+  command.signal.throwIfAborted();
+  const facts = await fetchGroup(
+    command.request.items.map((item) => ({ ...item, quantity: "1" })),
+    catalog,
+    command,
+    command.signal,
+  );
+  command.signal.throwIfAborted();
+  if (
+    facts.some(
+      (fact) => fact.snapshotRevision !== command.request.snapshotRevision,
+    )
+  )
+    throw new CreatePricingQuoteError("CATALOG_REVISION_CHANGED");
+  const items = facts.map((fact) => {
+    let saleUnitMinor: string;
+    try {
+      saleUnitMinor = encodeMinor(
+        calculatePricingLine({
+          quantity: "1",
+          supplierUnitMinor: fact.supplierUnitMinor,
+          markupBasisPoints: policy.markupBasisPoints,
+          minimumMarginMinor: parseCanonicalMinor(policy.minimumMarginMinor),
+        }).unitMinor,
+      );
+    } catch {
+      throw new CatalogPricingError("CATALOG_UNAVAILABLE");
+    }
+    return {
+      productRef: fact.productRef,
+      variantRef: fact.variantRef,
+      unit: fact.unit,
+      supplierUnitMinor: fact.supplierUnitMinor,
+      saleUnitMinor,
+      currency: fact.currency,
+    };
+  });
+  return {
+    snapshotRevision: command.request.snapshotRevision,
+    policyVersionRef: policy.policyVersionRef,
+    items,
+  };
 }

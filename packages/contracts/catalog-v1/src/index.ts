@@ -69,6 +69,8 @@ const catalogProductSummarySchema = {
     productRef: productRefSchema,
     variantRef: variantRefSchema,
     displayName: { type: "string", minLength: 1, maxLength: 200 },
+    categoryName: { type: "string", minLength: 1, maxLength: 200 },
+    prices: clientV1Schemas.CatalogPrices,
     unit: { type: "string", enum: ["piece", "gram", "kilogram"] },
     availability: {
       type: "string",
@@ -87,6 +89,10 @@ const searchResponseSchema = {
     snapshotRevision: { type: "string", pattern: "^(0|[1-9][0-9]*)$" },
     items: { type: "array", maxItems: 50, items: catalogProductSummarySchema },
     nextCursor: { type: ["string", "null"], maxLength: 512 },
+    policyVersionRef: {
+      type: "string",
+      pattern: "^pvr_[0-9A-HJKMNP-TV-Z]{26}$",
+    },
   },
 } as const;
 const pricingInputSchema = {

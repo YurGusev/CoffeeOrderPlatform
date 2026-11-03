@@ -2,7 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { randomUUID } from "node:crypto";
 import { canonicalRequestHash } from "../../packages/platform-idempotency/dist/index.js";
-import { createPricingQuote } from "../../apps/pricing-service/dist/application/create-pricing-quote.js";
+import {
+  createPricingQuote,
+  previewCatalogPrices,
+} from "../../apps/pricing-service/dist/application/create-pricing-quote.js";
 
 const ref = (prefix, n = 1) => `${prefix}_${String(n).padStart(26, "0")}`;
 const request = (n = 1) => ({
@@ -341,4 +344,131 @@ void test("rejects invalid private facts without leaking them into errors or pub
   assert.equal(JSON.stringify(response).includes("supplierUnitMinor"), false);
   assert.equal(JSON.stringify(response).includes("offerRef"), false);
   assert.equal(JSON.stringify(response).includes("mappingRevision"), false);
+});
+
+const previewCommand = (n = 1) => ({
+  ...command(n),
+  request: {
+    snapshotRevision: "1",
+    items: request(n).lines.map(({ productRef, variantRef }) => ({
+      productRef,
+      variantRef,
+    })),
+  },
+  signal: new AbortController().signal,
+});
+
+void test("catalog price preview reads one policy, computes exact amounts and bounds 50 reads without writes", async () => {
+  const { calls, store, catalog } = fixture();
+  let active = 0,
+    peak = 0;
+  catalog.getPricingInput = async (input) => {
+    calls.catalog.push(input);
+    peak = Math.max(peak, ++active);
+    await new Promise((resolve) => setImmediate(resolve));
+    active--;
+    return { ...fact(input), supplierUnitMinor: "101" };
+  };
+  const preview = await previewCatalogPrices(
+    store,
+    catalog,
+    previewCommand(50),
+  );
+  assert.equal(calls.policy, 1);
+  assert.equal(calls.catalog.length, 50);
+  assert.equal(peak, 8);
+  assert.equal(preview.policyVersionRef, policy.policyVersionRef);
+  assert.equal(preview.items[0].supplierUnitMinor, "101");
+  assert.equal(preview.items[0].saleUnitMinor, "132");
+  assert.equal(preview.items[0].currency, "RUB");
+  assert.deepEqual(calls.precheck, []);
+  assert.deepEqual(calls.create, []);
+  const empty = fixture();
+  assert.deepEqual(
+    (await previewCatalogPrices(empty.store, empty.catalog, previewCommand(0)))
+      .items,
+    [],
+  );
+  assert.equal(empty.calls.policy, 1);
+  assert.equal(empty.calls.catalog.length, 0);
+  store.readActivePolicy = async () => ({
+    ...policy,
+    minimumMarginMinor: "100",
+  });
+  assert.equal(
+    (await previewCatalogPrices(store, catalog, previewCommand())).items[0]
+      .saleUnitMinor,
+    "201",
+  );
+});
+
+void test("catalog price preview rejects request money, duplicates, limits, wrong refs, revisions and overflow", async () => {
+  const pair = previewCommand().request.items[0];
+  for (const request of [
+    { snapshotRevision: "1", items: [pair, pair] },
+    previewCommand(51).request,
+    { snapshotRevision: "1", items: [{ ...pair, supplierUnitMinor: "1" }] },
+    {
+      snapshotRevision: "1",
+      items: [pair],
+      policyVersionRef: policy.policyVersionRef,
+    },
+  ]) {
+    const { calls, store, catalog } = fixture();
+    await assert.rejects(
+      previewCatalogPrices(store, catalog, { ...previewCommand(), request }),
+      { code: "VALIDATION_FAILED" },
+    );
+    assert.equal(calls.policy, 0);
+    assert.equal(calls.catalog.length, 0);
+  }
+  for (const [change, code] of [
+    [{ productRef: ref("prd", 99) }, "CATALOG_UNAVAILABLE"],
+    [{ variantRef: ref("var", 99) }, "CATALOG_UNAVAILABLE"],
+    [{ snapshotRevision: "2" }, "CATALOG_REVISION_CHANGED"],
+    [{ availability: "Unavailable" }, "CATALOG_PRODUCT_UNAVAILABLE"],
+    [{ supplierUnitMinor: "9223372036854775807" }, "CATALOG_UNAVAILABLE"],
+    [{ supplierUnitMinor: "9223372036854775808" }, "CATALOG_UNAVAILABLE"],
+  ]) {
+    const { calls, store, catalog } = fixture();
+    catalog.getPricingInput = async (input) => ({ ...fact(input), ...change });
+    await assert.rejects(
+      previewCatalogPrices(store, catalog, previewCommand()),
+      { code },
+    );
+    assert.deepEqual(calls.create, []);
+    assert.deepEqual(calls.precheck, []);
+  }
+  const mixed = fixture();
+  mixed.catalog.getPricingInput = async (input) =>
+    fact(input, input.productRef === ref("prd", 1) ? "1" : "2");
+  await assert.rejects(
+    previewCatalogPrices(mixed.store, mixed.catalog, previewCommand(2)),
+    { code: "CATALOG_REVISION_CHANGED" },
+  );
+});
+
+void test("catalog price preview preserves cancellation and unavailable policy without writes", async () => {
+  const { calls, store, catalog } = fixture();
+  const controller = new AbortController();
+  controller.abort(new Error("caller deadline"));
+  await assert.rejects(
+    previewCatalogPrices(store, catalog, {
+      ...previewCommand(),
+      signal: controller.signal,
+    }),
+    /caller deadline/u,
+  );
+  assert.equal(calls.policy, 0);
+  store.readActivePolicy = async () => {
+    throw Object.assign(new Error("policy unavailable"), {
+      code: "PRICING_POLICY_UNAVAILABLE",
+    });
+  };
+  await assert.rejects(previewCatalogPrices(store, catalog, previewCommand()), {
+    code: "PRICING_POLICY_UNAVAILABLE",
+  });
+  assert.equal(calls.catalog.length, 0);
+  assert.deepEqual(calls.create, []);
+  assert.deepEqual(calls.precheck, []);
 });

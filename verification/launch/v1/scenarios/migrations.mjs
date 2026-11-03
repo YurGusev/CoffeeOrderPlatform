@@ -28,7 +28,7 @@ const ROOT = resolve(fileURLToPath(new URL("../../../..", import.meta.url)));
 const ACCEPTED_PREFIX_COMMIT = "e278aeb10e57d37485542f8668f078456074b038";
 const OWNERS = Object.freeze({
   customer: { current: 3, prefix: 2 },
-  catalog: { current: 9, prefix: 8 },
+  catalog: { current: 11, prefix: 8 },
   pricing: { current: 5, prefix: 4 },
   orders: { current: 24, prefix: 6 },
   integration: { current: 7, prefix: 7 },

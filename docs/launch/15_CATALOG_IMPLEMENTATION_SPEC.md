@@ -75,9 +75,24 @@ SHA-256 конкатенации бинарных batch hashes в порядке
 Каждый item содержит обязательные `sourceProductKeyHash`,
 `sourceVariantKeyHash`, `sourceOfferKeyHash`, `displayName`, `unit`,
 `supplierUnitMinor`, `currency`, `availability`, `imageUrl` и
-`sourceIdentityScheme`; optional `supplierPromotions` и `grindOptions` передаются
+`sourceIdentityScheme`; optional `categoryName`, `supplierPromotions` и `grindOptions` передаются
 только в typed contract. Raw provider identifiers, cookies и session ids не
 передаются. `offerRef` назначается Catalog при активации.
+
+`categoryName` — непустое название категории поставщика (1..200 символов) из
+`data[].category.name`. Название, SKU и помол не используются для классификации.
+Если категория или её название отсутствует либо равно `null`, поле не передаётся;
+значение «Другие» не подставляется. Это display fact товара, не новая таксономия
+и не часть identity hash. Разные категории одного source product внутри снимка
+считаются semantic collision.
+
+Catalog хранит название в nullable `snapshot_products.category_name` и
+`products.category_name`; forward migrations `0010_catalog_category` и
+`0011_active_catalog_category` разделяют staging и active schema. При durable
+reconstruction SQL `NULL` восстанавливается как отсутствие `categoryName`, а не
+JSON `null`: canonical bytes, batch/content hashes прежних снимков не меняются.
+Активация сохраняет значение, включая перенос отсутствующих в новом снимке товаров;
+`active_products` и публичный поиск показывают факт из того же поколения.
 
 Gateway вычисляет каждый source hash только как HMAC-SHA256 с dedicated key
 `aroma.catalogIdentityKeyV1`. Точное byte framing сообщения `M`:
@@ -381,8 +396,20 @@ Catalog восстанавливает полный sort key по refs из то
 
 Response: `{snapshotRevision, items, nextCursor}`. Item содержит только
 `productRef`, `variantRef`, `displayName`, `unit`, `availability`,
-`mappingAvailable`, `imageUrl?`. `offerRef`, supplier price, source hashes,
+`mappingAvailable`, `imageUrl?`, `categoryName?`, `prices?`. `offerRef`, source hashes,
 provider identifiers и session data публично не возвращаются.
+
+По решению владельца #262 каталог показывает обе цены за `unit`:
+`prices: {supplierUnitMinor, saleUnitMinor, currency}` — decimal minor units,
+`RUB`. API-public дополняет страницу одним readonly Pricing preview только для
+`Available && mappingAvailable`; остальные строки не содержат `prices`.
+Отсутствующая цена не равна нулю. `policyVersionRef` передаётся один раз на странице.
+Catalog хранит supplier facts, а цену продажи вычисляет только Pricing из одной
+активной policy. API root проверяет точные revision, refs, unit и полноту preview,
+не вычисляет деньги и не принимает monetary facts из браузера. Ошибочный или
+недоступный preview возвращает существующий `503 CATALOG_UNAVAILABLE` без частичных
+цен. Catalog GET сохраняет общий deadline 1000 ms: оба owner вызова используют
+один AbortSignal; начало preview не запускает новый секундный бюджет.
 
 Если active generation отсутствует: `503 CATALOG_SNAPSHOT_INCOMPLETE`.
 Если недоступны owner/БД или ответ owner не соответствует контракту:
@@ -430,6 +457,9 @@ owner read view временем начала импорта из `supplier_snap
 `0004_catalog_active.sql`–`0008_catalog_active_read.sql` (#16). `0008`
 дополняет активные variants и read-модель без изменения checksum уже
 опубликованной `0004`; существующий ledger `0001`–`0007` обновляется вперёд.
+После `0009_active_snapshot_freshness.sql` применяются category migrations
+`0010_catalog_category.sql` и `0011_active_catalog_category.sql`; существующие
+товары получают `NULL` без изменения прежних canonical snapshots.
 Active-таблицы generation-
 scoped и не перезаписываются «на месте»:
 

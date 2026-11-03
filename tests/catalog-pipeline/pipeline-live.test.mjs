@@ -44,6 +44,11 @@ function item(n, name) {
     sourceVariantKeyHash: hash(n + 100),
     sourceOfferKeyHash: hash(n + 200),
     displayName: name,
+    ...(n === 1007
+      ? { categoryName: "Чай" }
+      : n === 1008
+        ? { categoryName: "Кофе" }
+        : {}),
     unit: "piece",
     supplierUnitMinor: "123",
     currency: "RUB",
@@ -57,9 +62,21 @@ function item(n, name) {
 function records(snapshotRef, name, mode = "ok") {
   const value = item(Number(snapshotRef.slice(-4)), name);
   const values =
-    mode === "multi"
-      ? [value, item(Number(snapshotRef.slice(-4)) + 1000, `${name} alternate`)]
-      : [value];
+    mode === "category-conflict"
+      ? [
+          value,
+          {
+            ...item(Number(snapshotRef.slice(-4)) + 1000, name),
+            sourceProductKeyHash: value.sourceProductKeyHash,
+            categoryName: "Кофе",
+          },
+        ]
+      : mode === "multi"
+        ? [
+            value,
+            item(Number(snapshotRef.slice(-4)) + 1000, `${name} alternate`),
+          ]
+        : [value];
   const batch = {
     streamVersion: "1",
     recordType: "snapshot-batch",
@@ -137,6 +154,7 @@ async function migrate(adminClient) {
     "0007_catalog_grants",
     "0008_catalog_active_read",
     "0009_active_snapshot_freshness",
+    "0011_active_catalog_category",
   ])
     await adminClient.query(
       await readFile(
@@ -296,8 +314,18 @@ void test(
         });
         const oldRevision = await searchRevision("Coffee old");
         assert.equal(oldRevision, "1");
+        assert.equal(
+          Object.hasOwn((await search()).json().items[0], "categoryName"),
+          false,
+        );
 
         const failed = [
+          {
+            n: 1012,
+            name: "Coffee inconsistent category",
+            mode: "category-conflict",
+            code: "SOURCE_IDENTITY_COLLISION",
+          },
           {
             n: 1002,
             name: "Coffee order",
@@ -428,6 +456,22 @@ void test(
           snapshotRevision: "2",
         });
         assert.equal(await searchRevision("Coffee replay"), "2");
+        assert.equal(
+          (await search())
+            .json()
+            .items.find((row) => row.displayName === "Coffee replay")
+            .categoryName,
+          "Чай",
+        );
+        assert.deepEqual(
+          (
+            await adminClient.query(
+              "SELECT category_name FROM catalog.snapshot_products WHERE snapshot_ref=$1",
+              [replayRef],
+            )
+          ).rows,
+          [{ category_name: "Чай" }],
+        );
 
         // Keep querying the real Fastify/API + PostgreSQL path while activation switches the pointer.
         const nextRef = REF(1008);
@@ -468,6 +512,27 @@ void test(
           assert.equal(afterSwitch.statusCode, 200, afterSwitch.body);
           const finalPage = JSON.parse(afterSwitch.body);
           assert.equal(finalPage.snapshotRevision, "3");
+          for (const row of finalPage.items) {
+            const expectedCategory =
+              row.displayName === "Coffee replay"
+                ? "Чай"
+                : row.displayName === "Coffee new"
+                  ? "Кофе"
+                  : undefined;
+            assert.equal(row.categoryName, expectedCategory);
+            assert.equal(
+              Object.hasOwn(row, "categoryName"),
+              expectedCategory !== undefined,
+            );
+          }
+          assert.equal(
+            (
+              await adminClient.query(
+                "SELECT category_name FROM catalog.active_products WHERE display_name='Coffee new'",
+              )
+            ).rows[0].category_name,
+            "Кофе",
+          );
           assert.deepEqual(
             finalPage.items.map((row) => row.displayName).sort(),
             [

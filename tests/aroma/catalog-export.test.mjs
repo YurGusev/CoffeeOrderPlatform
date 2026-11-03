@@ -208,6 +208,7 @@ void test("catalog export emits exact canonical bytes, hashes, links, and distin
   assert.equal(lines[1], `${canonicalCatalogJson(records[1])}\n`);
   assert.equal(lines[2], `${canonicalCatalogJson(records[2])}\n`);
   assert.equal(records[1].previousBatchHash, null);
+  assert.equal(Object.hasOwn(records[1].items[0], "categoryName"), false);
   assert.equal(records[1].offerCount, 2);
   assert.equal(records[2].productCount, 1);
   assert.equal(records[2].variantCount, 1);
@@ -585,9 +586,19 @@ void test("catalog export carries normalized supplier promotions and strips prov
   };
   const records = parse(
     await collect(
-      makeStream([{ ...offer(0), supplierPromotions: [promotion] }]),
+      makeStream([
+        { ...offer(0), categoryName: "Чай", supplierPromotions: [promotion] },
+      ]),
     ),
   );
+  assert.equal(records[1].items[0].categoryName, "Чай");
+  for (const categoryName of [null, "", "x".repeat(201), 42]) {
+    const rejected = parse(
+      await collect(makeStream([{ ...offer(0), categoryName }])),
+    );
+    assert.equal(rejected.at(-1).recordType, "snapshot-failed");
+    assert.equal(rejected.at(-1).code, "INVALID_STREAM");
+  }
   assert.deepEqual(records[1].items[0].supplierPromotions, [
     {
       discountBasisPoints: 1000,

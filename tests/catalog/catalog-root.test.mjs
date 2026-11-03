@@ -33,6 +33,32 @@ const searchResponse = {
   ],
   nextCursor: null,
 };
+const previewResponse = {
+  snapshotRevision: searchResponse.snapshotRevision,
+  policyVersionRef: "pvr_01ARZ3NDEKTSV4RRFFQ69G5FAV",
+  items: [
+    {
+      productRef,
+      variantRef,
+      unit: "gram",
+      supplierUnitMinor: "1200",
+      saleUnitMinor: "1560",
+      currency: "RUB",
+    },
+  ],
+};
+const pricedSearchResponse = {
+  ...searchResponse,
+  policyVersionRef: previewResponse.policyVersionRef,
+  items: searchResponse.items.map((item) => ({
+    ...item,
+    prices: {
+      supplierUnitMinor: "1200",
+      saleUnitMinor: "1560",
+      currency: "RUB",
+    },
+  })),
+};
 const pricingInput = {
   productRef,
   variantRef,
@@ -101,9 +127,39 @@ function publicAdapters(state) {
         throw new Error("unexpected customer work");
       },
     },
+    pricing: {
+      create: async () => {
+        throw new Error("unexpected quote creation");
+      },
+      preview: async (request, input) => {
+        state.preview = {
+          request,
+          actor: input.actor,
+          signal: input.context.signal,
+        };
+        if (state.previewError) throw state.previewError;
+        if (state.previewWaitForAbort)
+          await new Promise((_, reject) =>
+            input.context.signal.addEventListener(
+              "abort",
+              () => reject(input.context.signal.reason),
+              { once: true },
+            ),
+          );
+        return state.previewResult ?? { status: 200, body: previewResponse };
+      },
+    },
     catalog: {
       search: async (query, input) => {
-        state.search = { query, claims: input.actor };
+        state.search = {
+          query,
+          claims: input.actor,
+          signal: input.context.signal,
+        };
+        if (state.searchDelay)
+          await new Promise((resolve) =>
+            setTimeout(resolve, state.searchDelay),
+          );
         return state.result ?? { status: 200, body: searchResponse };
       },
     },
@@ -181,7 +237,12 @@ void test("public Catalog route validates actor/query, forwards to owner, and re
     headers: { "x-actor-context": "signed-edge-context" },
   });
   assert.equal(response.statusCode, 200);
-  assert.deepEqual(response.json(), searchResponse);
+  assert.deepEqual(response.json(), pricedSearchResponse);
+  assert.deepEqual(state.preview.request, {
+    snapshotRevision: "17",
+    items: [{ productRef, variantRef }],
+  });
+  assert.equal(state.preview.signal, state.search.signal);
   assert.equal(state.search.query.query, "coffee");
   assert.equal(state.search.query.availability, "Available");
   assert.equal(state.search.query.limit, 5);
@@ -303,9 +364,17 @@ void test("public Catalog route validates actor/query, forwards to owner, and re
     },
   };
   const ownerCalls = [];
+  const previewCalls = [];
   let ownerResult = { status: 200, body: searchResponse };
   const configured = createConfiguredPublicAdapters(configuredContext, {
     fetch: async (path, options) => {
+      if (path === "/api/client-v1/pricing/catalog-preview") {
+        previewCalls.push({ path, options });
+        return new Response(JSON.stringify(previewResponse), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
       ownerCalls.push({ path, options });
       const problemResponse = ownerResult.status !== 200;
       return new Response(JSON.stringify(ownerResult.body), {
@@ -359,7 +428,7 @@ void test("public Catalog route validates actor/query, forwards to owner, and re
     requestFor(configuredCorrelationId, ["catalog:read"]),
   );
   assert.equal(configuredResponse.statusCode, 200, configuredResponse.body);
-  assert.deepEqual(configuredResponse.json(), searchResponse);
+  assert.deepEqual(configuredResponse.json(), pricedSearchResponse);
   assert.equal(configuredResponse.headers["cache-control"], "no-store");
   assert.equal(ownerCalls.length, 1);
   const ownerCall = ownerCalls[0];
@@ -393,6 +462,24 @@ void test("public Catalog route validates actor/query, forwards to owner, and re
   assert.equal(delegation.correlationId, configuredCorrelationId);
   assert.equal(delegation.traceparent, traceparent);
   assert.deepEqual(delegation.permissions, ["catalog:read"]);
+  assert.equal(previewCalls.length, 1);
+  const previewDelegation = verifyActorContextWithKeySet(
+    previewCalls[0].options.headers["x-actor-context"],
+    {
+      publicKeys: [delegationKeys.publicKey],
+      issuer: "api-public",
+      audience: "pricing-service",
+      nowEpochSeconds: Math.floor(Date.now() / 1_000),
+      clockSkewSeconds: 5,
+    },
+  );
+  assert.equal(previewDelegation.operationId, "previewCatalogPrices");
+  assert.equal(previewDelegation.originalIssuer, "edge-gateway");
+  assert.equal(previewDelegation.sub, delegation.sub);
+  assert.equal(previewDelegation.correlationId, delegation.correlationId);
+  assert.deepEqual(previewDelegation.permissions, ["catalog:read"]);
+  assert.equal(previewCalls[0].options.signal, ownerCall.options.signal);
+  assert.equal(previewCalls[0].options.headers["idempotency-key"], undefined);
 
   const denied = await configuredApp.inject(
     requestFor(randomUUID(), ["orders:read:any"]),
@@ -777,4 +864,125 @@ void test("internal Catalog owner client validates status and response schema be
       ),
     /media type/u,
   );
+});
+
+void test("catalog price preview rejects incomplete, mixed, duplicate and mismatched facts and omits unavailable prices", async (t) => {
+  const state = {};
+  const app = await runtime(
+    t,
+    (value) => registerPublicRoutes(value, publicAdapters(state)),
+    "edge-nginx",
+  );
+  const get = () =>
+    app.inject({
+      method: "GET",
+      url: "/api/client-v1/catalog/products",
+      headers: { "x-actor-context": "signed" },
+    });
+  for (const body of [
+    { ...previewResponse, snapshotRevision: "18" },
+    { ...previewResponse, items: [] },
+    {
+      ...previewResponse,
+      items: [previewResponse.items[0], previewResponse.items[0]],
+    },
+    ...[
+      { unit: "piece" },
+      { productRef: "prd_00000000000000000000000001" },
+      { variantRef: "var_00000000000000000000000001" },
+      { saleUnitMinor: "9223372036854775808" },
+      { supplierUnitMinor: "-1" },
+    ].map((change) => ({
+      ...previewResponse,
+      items: [{ ...previewResponse.items[0], ...change }],
+    })),
+  ]) {
+    state.previewResult = { status: 200, body };
+    assert.equal((await get()).statusCode, 503);
+  }
+  state.previewError = new Error("unavailable");
+  assert.equal((await get()).statusCode, 503);
+  for (const change of [
+    { availability: "Unavailable" },
+    { availability: "Stopped" },
+    { mappingAvailable: false },
+  ]) {
+    state.preview = undefined;
+    state.result = {
+      status: 200,
+      body: {
+        ...pricedSearchResponse,
+        items: [{ ...pricedSearchResponse.items[0], ...change }],
+      },
+    };
+    const response = await get();
+    assert.equal(response.statusCode, 200);
+    assert.equal(Object.hasOwn(response.json().items[0], "prices"), false);
+    assert.equal(Object.hasOwn(response.json(), "policyVersionRef"), false);
+    assert.equal(state.preview, undefined);
+  }
+});
+
+void test("catalog price preview shares the original one-second deadline after Catalog", async (t) => {
+  const state = { searchDelay: 250, previewWaitForAbort: true };
+  const app = await runtime(
+    t,
+    (value) => registerPublicRoutes(value, publicAdapters(state)),
+    "edge-nginx",
+  );
+  const start = performance.now();
+  const response = await app.inject({
+    method: "GET",
+    url: "/api/client-v1/catalog/products",
+    headers: { "x-actor-context": "signed" },
+  });
+  assert.equal(response.statusCode, 503);
+  assert.equal(state.preview.signal, state.search.signal);
+  assert.equal(state.preview.signal.aborted, true);
+  assert.ok(
+    performance.now() - start < 1_200,
+    "preview must not restart the Catalog GET budget",
+  );
+});
+
+void test("public readonly pricing preview uses its own catalog-read operation", async (t) => {
+  const state = {};
+  const app = await runtime(
+    t,
+    (value) => registerPublicRoutes(value, publicAdapters(state)),
+    "edge-nginx",
+  );
+  const send = () =>
+    app.inject({
+      method: "POST",
+      url: "/api/client-v1/pricing/catalog-preview",
+      headers: { "x-actor-context": "signed" },
+      payload: { snapshotRevision: "17", items: [{ productRef, variantRef }] },
+    });
+  assert.equal((await send()).statusCode, 200);
+  assert.equal(state.preview.actor.operationId, "previewCatalogPrices");
+  for (const body of [
+    { ...previewResponse, snapshotRevision: "18" },
+    { ...previewResponse, items: [] },
+    {
+      ...previewResponse,
+      items: [
+        {
+          ...previewResponse.items[0],
+          variantRef: "var_00000000000000000000000001",
+        },
+      ],
+    },
+  ]) {
+    state.previewResult = { status: 200, body };
+    assert.equal((await send()).statusCode, 503);
+  }
+  state.previewResult = undefined;
+  state.actor = {
+    ...state.preview.actor,
+    operationId: "searchCatalogProducts",
+  };
+  assert.equal((await send()).statusCode, 403);
+  state.actor = { ...state.preview.actor, permissions: ["pricing:create"] };
+  assert.equal((await send()).statusCode, 403);
 });

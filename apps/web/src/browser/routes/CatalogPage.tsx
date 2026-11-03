@@ -14,6 +14,7 @@ import {
 import { useNavigate, useSearchParams } from "react-router-dom";
 import type { CatalogProductSummary } from "@coffee-platform/generated-client-v1";
 import { ApiError } from "../api/client.js";
+import { formatMoney } from "../api/format.js";
 import { ProblemAlert } from "../api/problem.js";
 import { newUlidRef } from "../api/ulid.js";
 import {
@@ -310,6 +311,9 @@ export function CatalogPage(): ReactElement {
                     <article className="product-card">
                       <div className="product-details">
                         <h2>{product.displayName}</h2>
+                        <span className="product-category">
+                          Категория: {product.categoryName ?? "Не указана"}
+                        </span>
                         <div className="product-card-heading">
                           <Badge
                             tone={
@@ -322,16 +326,39 @@ export function CatalogPage(): ReactElement {
                           </Badge>
                           <span>{unitLabels[product.unit]}</span>
                         </div>
-                        <small>
-                          {product.mappingAvailable
-                            ? "Привязка к AROMA доступна"
-                            : "Нет привязки к AROMA"}
-                        </small>
+                        {!product.mappingAvailable ? (
+                          <small>Нет привязки к AROMA</small>
+                        ) : null}
                       </div>
+                      <dl className="product-prices">
+                        <div>
+                          <dt>Цена поставщика / {unitLabels[product.unit]}</dt>
+                          <dd>
+                            {product.prices
+                              ? formatMoney(
+                                  product.prices.supplierUnitMinor,
+                                  product.prices.currency,
+                                )
+                              : "Недоступна"}
+                          </dd>
+                        </div>
+                        <div>
+                          <dt>Цена продажи / {unitLabels[product.unit]}</dt>
+                          <dd>
+                            {product.prices
+                              ? formatMoney(
+                                  product.prices.saleUnitMinor,
+                                  product.prices.currency,
+                                )
+                              : "Недоступна"}
+                          </dd>
+                        </div>
+                      </dl>
                       {hasOrderRef ? (
                         <div className="product-actions">
                           <Field
                             aria-label={`Количество для ${product.displayName}`}
+                            className="gap-[2px]"
                             label="Количество"
                             onChange={(value) =>
                               setQuantities((current) => ({
@@ -380,6 +407,7 @@ export function CatalogPage(): ReactElement {
                               Boolean(conflictError)
                             }
                             isPending={addItem.isPending}
+                            size="compact"
                             onPress={() =>
                               addItem.mutate(
                                 {

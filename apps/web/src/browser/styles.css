@@ -330,26 +330,72 @@
     justify-content: space-between;
     gap: 16px;
     min-width: 0;
-    padding: 12px 14px;
+    padding: 4px 14px;
   }
   .product-details {
     display: grid;
     flex: 1;
+    grid-template-areas:
+      "name status"
+      "category status";
     grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
     column-gap: 16px;
     min-width: 0;
     overflow-wrap: anywhere;
   }
   .product-details small {
     grid-column: 1 / -1;
+    grid-row: 3;
+  }
+  .product-details h2 {
+    grid-area: name;
+  }
+  .product-category {
+    grid-area: category;
+    color: var(--cos-text-secondary);
+    font-size: 12px;
+  }
+  .product-prices {
+    display: grid;
+    flex: 0 0 230px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    margin: 0;
+  }
+  .product-prices dt {
+    color: var(--cos-text-secondary);
+    font-size: 10px;
+    line-height: 16px;
+  }
+  .product-prices dd {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 600;
   }
   .product-actions {
-    display: flex;
+    display: grid;
+    grid-template-columns: 80px 132px auto;
     align-items: end;
     gap: 10px;
   }
+  .product-actions > span {
+    grid-column: 3;
+  }
   .product-actions > * {
     min-width: 0;
+  }
+  .product-actions [data-slot="field"] {
+    width: 80px;
+  }
+  .product-actions .select-field {
+    width: 132px;
+    gap: 2px;
+    line-height: 16px;
+  }
+  .product-actions .select-field select {
+    min-height: 32px;
+    padding-inline: 8px;
   }
   .product-card-heading,
   .section-heading {
@@ -363,6 +409,7 @@
     font-size: 12px;
   }
   .product-card-heading {
+    grid-area: status;
     justify-content: flex-start;
   }
   .section-heading h2 {
@@ -567,6 +614,15 @@
     font-style: normal;
   }
 
+  @media (max-width: 72em) {
+    .product-card {
+      flex-wrap: wrap;
+    }
+    .product-details {
+      flex-basis: 100%;
+    }
+  }
+
   @media (max-width: 82em) {
     .brand {
       padding-inline: 14px;
@@ -672,7 +728,18 @@
       flex-direction: column;
     }
     .product-actions {
+      display: flex;
       flex-wrap: wrap;
+    }
+    .product-card {
+      gap: 6px;
+      padding-block: 8px;
+    }
+    .product-prices {
+      flex-basis: auto;
+    }
+    .product-actions .select-field select {
+      min-height: 40px;
     }
     .item-actions,
     .command-actions {
@@ -689,8 +756,26 @@
   }
 }
 
-/* Badge size utilities take precedence over the components layer. */
+.product-list .product-card h2 {
+  margin: 0;
+  font-size: 14px;
+  line-height: 20px;
+}
+
+/* These sizes override package utilities. */
 @layer utilities {
+  .product-actions [data-slot="input"] {
+    min-height: 32px;
+    padding-block: 4px;
+  }
+  @media (max-width: 48em) {
+    .product-actions [data-slot="input"] {
+      min-height: 40px;
+    }
+    .product-actions [data-slot="button"] {
+      min-height: 44px;
+    }
+  }
   .workspace-topbar > .foundation-badge {
     min-height: 22px;
     font-size: 9px;
