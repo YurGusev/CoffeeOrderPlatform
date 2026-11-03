@@ -3222,7 +3222,11 @@ async function serverValidationIsAssociated(
 
 async function routeSemantics(context: BrowserContext): Promise<void> {
   const page = await context.newPage();
-  const telemetry = await installCommonMocks(page);
+  const telemetry = await installCommonMocks(page, { catalogNextCursor: true });
+  const requests: Array<{ method: string; url: URL }> = [];
+  page.on("request", (request) =>
+    requests.push({ method: request.method(), url: new URL(request.url()) }),
+  );
   await page.goto(`${origin}/app/customers`, { waitUntil: "networkidle" });
   await page.getByRole("heading", { name: "Начните поиск клиента" }).waitFor();
 
@@ -3255,13 +3259,104 @@ async function routeSemantics(context: BrowserContext): Promise<void> {
   );
   assert.equal(telemetry.draftRequests.length, 0);
 
+  const browseStart = requests.length;
   await page.goto(`${origin}/app/catalog`, { waitUntil: "networkidle" });
-  await page.getByText(/создайте черновик заказа/u).waitFor();
+  await page.getByRole("heading", { name: "Капучино" }).waitFor();
+  const browse = requests.slice(browseStart);
+  const firstPage = browse.find(
+    (request) => request.url.pathname === "/api/client-v1/catalog/products",
+  );
+  assert.ok(firstPage);
+  assert.equal(firstPage.url.searchParams.has("query"), false);
+  assert.equal(firstPage.url.searchParams.get("availability"), "Available");
+  assert.equal(firstPage.url.searchParams.get("limit"), "20");
+  assert.equal(
+    browse.some((request) =>
+      request.url.pathname.startsWith("/api/client-v1/orders"),
+    ),
+    false,
+  );
+  assert.equal(
+    browse.some((request) => request.method !== "GET"),
+    false,
+  );
+  assert.equal(await page.getByLabel("Количество для Капучино").count(), 0);
+  assert.equal(await page.getByLabel("Помол для Капучино").count(), 0);
+  assert.equal(await page.getByRole("button", { name: "Добавить" }).count(), 0);
+  await page
+    .getByRole("link", { name: "Выбрать клиента и создать заказ" })
+    .waitFor();
+  await page.getByRole("button", { name: "Следующая страница" }).click();
+  await expect(page).toHaveURL(
+    (url) => url.searchParams.get("cursor") === "catalog-next-page",
+  );
+  await expect
+    .poll(() =>
+      requests.some(
+        (request) =>
+          request.url.pathname === "/api/client-v1/catalog/products" &&
+          request.url.searchParams.get("cursor") === "catalog-next-page" &&
+          !request.url.searchParams.has("query"),
+      ),
+    )
+    .toBe(true);
+  await page.getByRole("textbox", { name: "Название товара" }).fill("кофе");
+  await expect(page).toHaveURL((url) => url.searchParams.get("q") === "кофе");
+  await expect
+    .poll(() =>
+      requests.some(
+        (request) =>
+          request.url.pathname === "/api/client-v1/catalog/products" &&
+          request.url.searchParams.get("query") === "кофе" &&
+          !request.url.searchParams.has("cursor"),
+      ),
+    )
+    .toBe(true);
+  assert.equal(new URL(page.url()).searchParams.has("cursor"), false);
+  assert.equal(new URL(page.url()).searchParams.has("orderRef"), false);
+  await page.getByRole("textbox", { name: "Название товара" }).fill("");
+  await expect(page).toHaveURL((url) => !url.searchParams.has("q"));
+  await page.goBack({ waitUntil: "networkidle" });
+  await expect(page).toHaveURL((url) => url.searchParams.get("q") === "кофе");
+  await expect(
+    page.getByRole("textbox", { name: "Название товара" }),
+  ).toHaveValue("кофе");
+  await page.goForward({ waitUntil: "networkidle" });
+  await expect(page).toHaveURL((url) => !url.searchParams.has("q"));
+  await expect(
+    page.getByRole("textbox", { name: "Название товара" }),
+  ).toHaveValue("");
+  await page.getByRole("button", { name: "Следующая страница" }).click();
+  await page.getByLabel("Доступность").selectOption("Stopped");
+  await page.getByRole("button", { name: "Найти" }).click();
+  await expect(page).toHaveURL(
+    (url) =>
+      url.searchParams.get("availability") === "Stopped" &&
+      !url.searchParams.has("cursor"),
+  );
+  assert.equal(telemetry.quoteRequests.length, 0);
+  assert.equal(telemetry.putRequests.length, 0);
+
+  for (const invalid of ["invalid", ""]) {
+    const before = requests.length;
+    await page.goto(`${origin}/app/catalog?orderRef=${invalid}`, {
+      waitUntil: "networkidle",
+    });
+    await page.getByText("Не удалось открыть каталог заказа").waitFor();
+    assert.equal(
+      requests
+        .slice(before)
+        .some((request) => request.url.pathname.startsWith("/api/client-v1/")),
+      false,
+    );
+  }
 
   await page.goto(`${origin}/app/catalog?orderRef=${orderRef}`, {
     waitUntil: "networkidle",
   });
-  await page.getByRole("heading", { name: "Начните поиск товара" }).waitFor();
+  await page.getByRole("heading", { name: "Капучино" }).waitFor();
+  assert.equal(telemetry.quoteRequests.length, 0);
+  assert.equal(telemetry.putRequests.length, 0);
   assert.equal(
     new URL(page.url()).searchParams.has("availability"),
     false,
@@ -4954,12 +5049,14 @@ export async function runServedBrowser(
     await page.getByRole("heading", { name: "Клиенты", exact: true }).waitFor();
     for (const [route, heading] of [
       ["/app/customers", "Клиенты"],
-      ["/app/catalog", "Не выбран заказ"],
+      ["/app/catalog", "Поиск товаров"],
       ["/app/orders/new", "Новый заказ"],
       [`/app/orders/${orderRef}`, "Иван Петров"],
     ]) {
       assert.equal((await page.goto(`${base}${route}`))?.status(), 200);
       await page.getByText(heading!, { exact: true }).first().waitFor();
+      if (route === "/app/catalog")
+        await page.getByRole("heading", { name: "Капучино" }).waitFor();
       assert.equal((await page.reload())?.status(), 200);
       await page.getByText(heading!, { exact: true }).first().waitFor();
     }

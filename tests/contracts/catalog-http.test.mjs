@@ -28,6 +28,7 @@ const problem = {
 };
 
 void test("Catalog query decoder validates source-contract fields and query error classification", () => {
+  assert.deepEqual(decodeCatalogSearchQuery({}), {});
   assert.deepEqual(decodeCatalogSearchQuery({ query: "coffee" }), {
     query: "coffee",
   });
@@ -52,6 +53,8 @@ void test("Catalog query decoder validates source-contract fields and query erro
   for (const invalid of [
     null,
     [],
+    { query: "" },
+    { query: " " },
     { query: "x" },
     { query: "coffee", limit: "0" },
     { query: "coffee", limit: "01" },
@@ -71,6 +74,7 @@ void test("Catalog query decoder validates source-contract fields and query erro
     catalogSearchQueryError({ query: "coffee", cursor: "bad!" }),
     "INVALID_CURSOR",
   );
+  assert.equal(catalogSearchQueryError({ cursor: "bad!" }), "INVALID_CURSOR");
   assert.equal(
     catalogSearchQueryError({ query: "x", cursor: "bad!" }),
     "VALIDATION_FAILED",

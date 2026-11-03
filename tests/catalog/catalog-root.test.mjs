@@ -187,6 +187,15 @@ void test("public Catalog route validates actor/query, forwards to owner, and re
   assert.equal(state.search.query.limit, 5);
   assert.equal(state.search.claims.operationId, "searchCatalogProducts");
   assert.equal(response.headers["cache-control"], "no-store");
+  const browse = await app.inject({
+    method: "GET",
+    url: "/api/client-v1/catalog/products",
+    headers: { "x-actor-context": "signed-edge-context" },
+  });
+  assert.equal(browse.statusCode, 200);
+  assert.equal(state.search.query.query, undefined);
+  assert.equal(state.search.query.limit, undefined);
+  assert.equal(state.search.claims.operationId, "searchCatalogProducts");
   assert.equal(
     (
       await app.inject({
@@ -463,6 +472,17 @@ void test("public Catalog owner client signs delegation, fixes path, and rejects
     "delegated:catalog-service:searchCatalogProducts",
   );
   assert.equal(call.options.headers["x-actor-ref"], undefined);
+  await client.search(
+    {},
+    {
+      actor: { iss: "edge-gateway" },
+      context: {
+        correlationId: "corr-public-browse",
+        signal: new AbortController().signal,
+      },
+    },
+  );
+  assert.equal(call.path, "/api/client-v1/catalog/products");
   const invalidClient = createHttpCatalogClient(
     {
       fetch: async () =>

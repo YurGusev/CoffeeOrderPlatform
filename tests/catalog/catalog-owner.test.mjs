@@ -248,6 +248,54 @@ void test("catalog search normalizes query and binds signed keyset cursor to rev
   );
 });
 
+void test("catalog browse omits the query filter and binds its cursor to the same availability", async () => {
+  const keys = generateKeyPairSync("ed25519");
+  const signer = createCatalogCursorSigner(keys.privateKey, keys.publicKey, {
+    nowEpochSeconds: () => 1_000,
+  });
+  const rows = [
+    row(),
+    row({
+      productRef: "prd_01ARZ3NDEKTSV4RRFFQ69G5FAW",
+      variantRef: "var_01ARZ3NDEKTSV4RRFFQ69G5FAW",
+      displayName: "Coffee Robusta",
+      displayNameSortKey: "coffee robusta",
+    }),
+  ];
+  const seen = [];
+  const store = {
+    search: async (input) => {
+      seen.push(input);
+      const start = input.after === null ? 0 : 1;
+      return {
+        snapshotRevision: "17",
+        cursorValid:
+          input.after === null || input.after.productRef === rows[0].productRef,
+        rows: rows.slice(start, start + input.limit),
+      };
+    },
+  };
+  const first = await searchCatalog(
+    store,
+    { availability: "Available", limit: 1 },
+    signer,
+  );
+  assert.equal(seen[0].query, "");
+  assert.ok(first.nextCursor);
+  const second = await searchCatalog(
+    store,
+    { availability: "Available", limit: 1, cursor: first.nextCursor },
+    signer,
+  );
+  assert.deepEqual(
+    second.items.map((item) => item.displayName),
+    ["Coffee Robusta"],
+  );
+  assert.equal(second.nextCursor, null);
+  assert.equal(seen[1].query, "");
+  assert.ok(seen[1].after);
+});
+
 void test("catalog search preserves request cancellation metadata and supported optional fields", async () => {
   const keys = generateKeyPairSync("ed25519");
   const signer = createCatalogCursorSigner(keys.privateKey, keys.publicKey);
@@ -861,10 +909,11 @@ void test("CatalogStore calls its repository with exact search and pricing param
 void test("catalog routes enforce verified public and pricing audiences before owner calls", async (t) => {
   const { registerCatalogRoutes } =
     await import("../../apps/catalog-service/dist/http/index.js");
-  const calls = { search: 0, pricingInput: 0 };
+  const calls = { search: 0, searchQuery: undefined, pricingInput: 0 };
   const owner = {
-    search: async () => {
+    search: async (input) => {
       calls.search += 1;
+      calls.searchQuery = input.query;
       return {
         status: 200,
         body: {
@@ -939,6 +988,13 @@ void test("catalog routes enforce verified public and pricing audiences before o
   const publicBody = publicResult.json();
   assert.equal("offerRef" in publicBody.items[0], false);
   assert.equal("supplierUnitMinor" in publicBody.items[0], false);
+  const browseResult = await app.inject({
+    method: "GET",
+    url: "/api/client-v1/catalog/products",
+    headers: { "x-actor-context": "signed-test" },
+  });
+  assert.equal(browseResult.statusCode, 200);
+  assert.equal(calls.searchQuery, undefined);
   const pricingResult = await app.inject({
     method: "GET",
     url: `/api/internal-v1/catalog/products/${productRef}/variants/${variantRef}/pricing-input`,
@@ -946,7 +1002,7 @@ void test("catalog routes enforce verified public and pricing audiences before o
   });
   assert.equal(pricingResult.statusCode, 200);
   assert.equal(pricingResult.json().offerRef, row().offerRef);
-  assert.equal(calls.search, 1);
+  assert.equal(calls.search, 2);
   assert.equal(calls.pricingInput, 1);
   const wrongCaller = await runtime(t, (value) =>
     registerCatalogRoutes(

@@ -538,7 +538,7 @@ export const api = {
         availability: availability || undefined,
         cursor,
         limit: "20",
-        query,
+        query: query || undefined,
       }),
       schema: clientSchemas["CatalogSearchResponse"],
       ...(signal ? { signal } : {}),

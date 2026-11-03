@@ -490,7 +490,7 @@ export type IfMatchVersion = IdentifiersV1SchemaVersion;
 export type CustomerQuery = string;
 
 /**
- * Trim, Unicode NFKC, then lowercase; the normalized result must contain 2–200 Unicode code points.
+ * Optional product-name filter. When supplied, trim and normalize with Unicode NFKC, then lowercase; the result must contain 2–200 Unicode code points.
  */
 export type CatalogQuery = string;
 
@@ -618,11 +618,11 @@ export type SearchCatalogProductsData = {
     traceparent?: MoneyVersionTimeV1SchemaTraceparent;
   };
   path?: never;
-  query: {
+  query?: {
     /**
-     * Trim, Unicode NFKC, then lowercase; the normalized result must contain 2–200 Unicode code points.
+     * Optional product-name filter. When supplied, trim and normalize with Unicode NFKC, then lowercase; the result must contain 2–200 Unicode code points.
      */
-    query: string;
+    query?: string;
     availability?: 'Available' | 'Unavailable' | 'Stopped';
     limit?: number;
     cursor?: string;

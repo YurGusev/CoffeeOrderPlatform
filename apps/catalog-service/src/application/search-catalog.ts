@@ -83,7 +83,8 @@ export class CatalogOwnerError extends Error {
   }
 }
 
-function normalizeQuery(value: string): string {
+function normalizeQuery(value: string | undefined): string {
+  if (value === undefined) return "";
   const query = value.trim().normalize("NFKC").toLowerCase();
   if (Array.from(query).length < 2 || Array.from(query).length > 200)
     throw new CatalogOwnerError("VALIDATION_FAILED");
@@ -231,7 +232,7 @@ export function validatedGrindOptions(
 export async function searchCatalog(
   store: CatalogPageStore,
   input: Readonly<{
-    query: string;
+    query?: string;
     availability?: CatalogAvailability;
     limit?: number;
     cursor?: string;

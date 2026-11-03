@@ -890,8 +890,8 @@ components:
     CatalogQuery:
       name: query
       in: query
-      required: true
-      description: Trim, Unicode NFKC, then lowercase; the normalized result must contain 2–200 Unicode code points.
+      required: false
+      description: Optional product-name filter. When supplied, trim and normalize with Unicode NFKC, then lowercase; the result must contain 2–200 Unicode code points.
       schema:
         type: string
     Availability:

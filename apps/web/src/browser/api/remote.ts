@@ -191,13 +191,12 @@ export function useCatalogSearch(
     orderRef: string;
     q: string;
   }>,
+  enabled: boolean,
 ) {
   const queryClient = useQueryClient();
   const queryKey = queryKeys.catalogSearch(input);
   return useQuery({
-    enabled:
-      input.q.trim().length >= 2 &&
-      /^ord_[0-9A-HJKMNP-TV-Z]{26}$/u.test(input.orderRef),
+    enabled: enabled && (input.q.length === 0 || input.q.length >= 2),
     queryFn: async ({ signal }) => {
       const session = captureApplicationSession(actorRef);
       try {

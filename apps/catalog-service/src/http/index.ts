@@ -84,7 +84,7 @@ type InternalClaims = Readonly<{
 export type CatalogOwner = Readonly<{
   search: (
     input: Readonly<{
-      query: string;
+      query?: string;
       availability?: CatalogAvailability;
       limit: number;
       cursor?: string;

@@ -104,7 +104,7 @@ type ForwardResult = Readonly<{
   replayed?: boolean;
 }>;
 type CatalogSearchQuery = Readonly<{
-  query: string;
+  query?: string;
   availability?: string;
   limit?: number;
   cursor?: string;
@@ -1787,7 +1787,8 @@ export function createHttpCatalogClient(
         "searchCatalogProducts",
         requestContext.context,
       );
-      const params = new URLSearchParams({ query: query.query });
+      const params = new URLSearchParams();
+      if (query.query !== undefined) params.set("query", query.query);
       if (query.availability !== undefined)
         params.set("availability", query.availability);
       if (query.limit !== undefined) params.set("limit", String(query.limit));
@@ -1800,7 +1801,7 @@ export function createHttpCatalogClient(
       if (requestContext.context.traceparent !== undefined)
         headers["traceparent"] = requestContext.context.traceparent;
       const response = await client.fetch(
-        `/api/client-v1/catalog/products?${params.toString()}`,
+        `/api/client-v1/catalog/products${params.size === 0 ? "" : `?${params.toString()}`}`,
         { method: "GET", headers, signal: requestContext.context.signal },
       );
       if (![200, 400, 401, 403, 503].includes(response.status))
