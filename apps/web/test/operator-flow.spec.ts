@@ -1091,8 +1091,17 @@ async function happyPath(context: BrowserContext): Promise<void> {
   await page.getByRole("heading", { name: "Иван Петров" }).waitFor();
   await page.getByRole("link", { name: "Открыть каталог" }).click();
   await page.getByRole("heading", { name: "Поиск товаров" }).waitFor();
+  const searchResponse = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      url.pathname === "/api/client-v1/catalog/products" &&
+      url.searchParams.get("query") === "капучино" &&
+      response.status() === 200
+    );
+  });
   await page.getByRole("textbox", { name: "Название товара" }).fill("капучино");
   await page.getByRole("button", { name: "Найти" }).click();
+  await searchResponse;
   try {
     await page
       .getByRole("heading", { name: "Капучино" })
@@ -1104,7 +1113,7 @@ async function happyPath(context: BrowserContext): Promise<void> {
   }
   const productList = page.getByRole("list", { name: "Товары" });
   const productRows = productList.getByRole("listitem");
-  assert.equal(await productRows.count(), 2);
+  await expect(productRows).toHaveCount(2);
   for (const [index, name] of ["Капучино", "Латте"].entries()) {
     const row = productRows.nth(index);
     await row.getByRole("heading", { name }).waitFor();

@@ -16,7 +16,7 @@ outputs:
     consumers:
       - 13
   - artifact: apps/web/test/operator-flow.spec.ts
-    sha256: ee73753dd6808ab5e05aebf71d55c281c62d32f9f78db8e37e41941a51ba8fa6
+    sha256: 03d4f6ee1adce7395826647ff2e8e29fcbd2071a6a0a0a8276aad690054a63f3
     consumers:
       - 13
   - artifact: docs/launch/18_FRONTEND_IMPLEMENTATION_SPEC.md
@@ -52,13 +52,26 @@ verification:
     result: >-
       PASS после финального CSS: два товара в одном столбце, ширины375/1280, controls, axe; снимки осмотрены
       root.
-  - command: pnpm exec prettier --check apps/web/src/browser/routes/CatalogPage.tsx apps/web/src/browser/styles.css apps/web/test/operator-flow.spec.ts
+  - command: >-
+      pnpm exec prettier --check apps/web/src/browser/routes/CatalogPage.tsx apps/web/src/browser/styles.css
+      apps/web/test/operator-flow.spec.ts
     result: PASS после финального diff.
   - command: targeted oxlint + git diff --check
     result: PASS по изменённым TSX/test и diff.
   - command: node tools/config-bootstrap/index.mjs --renew-development-transport
     result: PASS; 15 leaves обновлены, Node validity до2026-11-04T16:03:47–48Z; scoped tmpfs удалён.
     receiptSha256: 1041ae8bed12d72bb50d74e59e1a898599941fd55916cd201bb002d0ee2e33df
+  - command: GitHub Actions 41671386290; source53e4c6cba3ee84250486b017c0a7f1e87e12eb7d
+    result: >-
+      FAIL: синхронный подсчёт списка в happyPath получил0 вместо2. Предположение о browse/search race не
+      доказано логом; отрицательный лог сохранён.
+    logSha256: 60d19e6d8b6a47196f3506819da2ed6dab5d2fddf1c802c0b3760b2dfe4ca76d
+  - command: pnpm test:web-operator
+    result: >-
+      PASS115.48s под shared heavy lock:10 realtime scenarios, затем happyPath с ожиданием HTTP200 нужного
+      поиска и DOM из2строк. После старта прогона удалён только дублирующий синхронныйassert; финальная точная
+      версия ожидаетCI.
+    logSha256: 651c0d8e84ec24ea5cae609376be611a4d84c4070279526e2dc7615f853f2116
 limitations:
   - CI, G12 и normal cutover этого source ещё не выполнены; на сервере пока работает прежний7b019e3.
   - >-
