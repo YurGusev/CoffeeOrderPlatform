@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
+import { writeFileSync } from "node:fs";
+import fsPromises from "node:fs/promises";
+import { syncBuiltinESMExports } from "node:module";
 import {
   chmod,
   lstat,
@@ -11,6 +14,7 @@ import {
   truncate,
   readFile,
   readdir,
+  rename,
   rm,
   writeFile,
 } from "node:fs/promises";
@@ -1406,6 +1410,22 @@ void test("G12 scanner arguments constrain the input and include lockfile dev de
   );
   assert.equal(args[args.indexOf("--env") + 1], "TMPDIR=/cache");
   assert.ok(
+    args.includes("type=bind,src=/private/cache/db,dst=/cache/db,readonly"),
+  );
+  assert.ok(
+    args.includes(
+      "type=bind,src=/private/cache/java-db,dst=/cache/java-db,readonly",
+    ),
+  );
+  const conversion = trivyArgs({
+    network: "none",
+    cacheDir: "/private/cache",
+    outputDir: "/evidence/artifacts",
+    scannerImage: "scanner",
+    command: ["convert"],
+  });
+  assert.ok(!conversion.some((arg) => String(arg).includes("dst=/cache/db")));
+  assert.ok(
     args.includes(
       "type=bind,src=/private/one-image.tar,dst=/scan/image.tar,readonly",
     ),
@@ -1491,6 +1511,35 @@ void test("G12 scanner arguments constrain the input and include lockfile dev de
 });
 
 void test("G12 builds product images, records pinned upstream identity, and fails on findings or tampered OCI proof", async (t) => {
+  let databaseFullReads = 0;
+  let tamperAtDatabaseRead = false;
+  const originalOpen = fsPromises.open;
+  const openMock = t.mock.method(fsPromises, "open", async (path, ...args) => {
+    const handle = await originalOpen(path, ...args);
+    if (
+      typeof path === "string" &&
+      (path.endsWith("/db/trivy.db") || path.endsWith("/java-db/trivy-java.db"))
+    ) {
+      const createStream = handle.createReadStream.bind(handle);
+      handle.createReadStream = (...options) => {
+        databaseFullReads += 1;
+        const stream = createStream(...options);
+        if (tamperAtDatabaseRead) {
+          tamperAtDatabaseRead = false;
+          stream.once("data", () =>
+            writeFileSync(path, "xynthetic-vulnerability-db"),
+          );
+        }
+        return stream;
+      };
+    }
+    return handle;
+  });
+  syncBuiltinESMExports();
+  t.after(() => {
+    openMock.mock.restore();
+    syncBuiltinESMExports();
+  });
   const temp = await mkdtemp(join(tmpdir(), "image-scan-fixture-"));
   t.after(() => rm(temp, { recursive: true, force: true }));
   const registryDirectories = [];
@@ -2031,6 +2080,8 @@ void test("G12 builds product images, records pinned upstream identity, and fail
   let databaseTtlMs = 24 * 60 * 60 * 1_000;
   let tamperDbOnFirstScan = false;
   let tamperDbDuringVulnerabilityScan = false;
+  let tamperDbDuringFinalRead = false;
+  let databaseTamperKind = "contents";
   let dbTampered = false;
   let nextRunBehavior = {};
   let deadClientContainerId;
@@ -3027,15 +3078,45 @@ void test("G12 builds product images, records pinned upstream identity, and fail
             tamperDbDuringVulnerabilityScan &&
             report === `${RUNTIME_NAMES[0]}.vulnerabilities.json`
           ) {
-            await writeFile(
-              join(scanCache, "db/trivy.db"),
-              "xynthetic-vulnerability-db",
-            );
+            const path = join(scanCache, "db/trivy.db");
+            if (databaseTamperKind === "metadata") {
+              const metadataPath = join(scanCache, "db/metadata.json");
+              await writeFile(metadataPath, await readFile(metadataPath));
+            } else if (databaseTamperKind === "replace") {
+              await rename(path, `${path}.old`);
+              await writeFile(path, "synthetic-vulnerability-db");
+            } else if (databaseTamperKind === "symlink") {
+              await rename(path, `${path}.old`);
+              await symlink(`${path}.old`, path);
+            } else if (databaseTamperKind === "directory") {
+              await rm(path);
+              await mkdir(path);
+            } else {
+              const previous = await stat(path, { bigint: true });
+              await writeFile(path, "xynthetic-vulnerability-db");
+              if (databaseTamperKind === "restore-mtime") {
+                execFileSync("python3", [
+                  "-c",
+                  "import os,sys; os.utime(sys.argv[1], ns=(int(sys.argv[2]), int(sys.argv[3])))",
+                  path,
+                  String(previous.atimeNs),
+                  String(previous.mtimeNs),
+                ]);
+                const changed = await stat(path, { bigint: true });
+                assert.equal(changed.size, previous.size);
+                assert.equal(changed.mtimeNs, previous.mtimeNs);
+                assert.notEqual(changed.ctimeNs, previous.ctimeNs);
+              }
+            }
             dbTampered = true;
             tamperDbDuringVulnerabilityScan = false;
           }
         }
         reportWrites += 1;
+        if (tamperDbDuringFinalRead && report === "tempo.sbom.cdx.json") {
+          tamperAtDatabaseRead = true;
+          tamperDbDuringFinalRead = false;
+        }
         if (
           tamperDbOnFirstScan &&
           !dbTampered &&
@@ -3094,6 +3175,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
   };
   const initialFlowStart = flowEvents.length;
   const initialTimeoutStart = trivyRunTimeouts.length;
+  const readsBefore = databaseFullReads;
   databaseAdvanceMs = 5 * 60_000;
   const result = await runSecurityScan({
     materializeRegistryCredentials: fakeRegistryCredentials,
@@ -3120,6 +3202,11 @@ void test("G12 builds product images, records pinned upstream identity, and fail
     `${result.code} ${fakeError?.message ?? ""} ${fakeError?.stack ?? ""}`,
   );
   assert.equal(result.code, "G12_SCAN_CLEAN");
+  assert.equal(
+    databaseFullReads - readsBefore,
+    4,
+    "each of the two DB contents is fully hashed only initially and finally",
+  );
   assert.deepEqual(trivyRunNetworks.slice(0, 2), [
     { kind: "version", network: "none" },
     { kind: "vulnerability-database", network: "coffee_platform_build_mtu" },
@@ -4022,6 +4109,67 @@ void test("G12 builds product images, records pinned upstream identity, and fail
     stage: "image-scan",
   });
   assert.equal(dbTampered, true);
+
+  for (const kind of [
+    "restore-mtime",
+    "replace",
+    "symlink",
+    "directory",
+    "metadata",
+  ]) {
+    databaseTamperKind = kind;
+    tamperDbDuringVulnerabilityScan = true;
+    dbTampered = false;
+    const changed = await runSecurityScan({
+      materializeRegistryCredentials: fakeRegistryCredentials,
+      contextFile: contextPath,
+      outputDir: join(gateArtifactsDir, `supply-chain-db-${kind}`),
+      clock: () => fakeNow,
+      validateContext: validateSyntheticContext,
+      run: fakeRun,
+      statfsFn: async () => ({ bavail: 30 * 1024 ** 3, bsize: 1 }),
+      lockPath: join(temp, `scanner-db-${kind}.lock`),
+    });
+    assert.equal(dbTampered, true, kind);
+    assert.equal(changed.status, "FAIL", kind);
+    assert.deepEqual(
+      changed.failure,
+      { code: "VULNERABILITY_DB_CHANGED", stage: "image-scan" },
+      kind,
+    );
+  }
+  databaseTamperKind = "contents";
+
+  for (const phase of ["initial", "final"]) {
+    tamperAtDatabaseRead = phase === "initial";
+    tamperDbDuringFinalRead = phase === "final";
+    const changed = await runSecurityScan({
+      materializeRegistryCredentials: fakeRegistryCredentials,
+      contextFile: contextPath,
+      outputDir: join(gateArtifactsDir, `supply-chain-db-read-${phase}`),
+      clock: () => fakeNow,
+      validateContext: validateSyntheticContext,
+      run: fakeRun,
+      statfsFn: async () => ({ bavail: 30 * 1024 ** 3, bsize: 1 }),
+      lockPath: join(temp, `scanner-db-read-${phase}.lock`),
+    });
+    assert.equal(tamperAtDatabaseRead, false, phase);
+    assert.equal(changed.status, "FAIL", phase);
+    assert.deepEqual(
+      changed.failure,
+      {
+        code:
+          phase === "initial"
+            ? "INPUT_FILE_INVALID"
+            : "VULNERABILITY_DB_CHANGED",
+        stage:
+          phase === "initial"
+            ? "vulnerability-database"
+            : "vulnerability-db-final-check",
+      },
+      phase,
+    );
+  }
 
   tamperDbOnFirstScan = true;
   dbTampered = false;
