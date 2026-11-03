@@ -2186,6 +2186,7 @@ export async function readLocalCertificateExpiry({ root, release, config }) {
       "openssl",
       [
         "pkcs12",
+        "-legacy",
         "-in",
         join(kafka, file),
         filter,

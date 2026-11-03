@@ -28,6 +28,7 @@ Authority: [ADR-0025](ADR-0025-fastify-launch-recovery.md), [транспорт 
 - Штатный bootstrap использует существующие PostgreSQL, migrations, Compose и scoped materialization механизмы. Команда запуска проверяет точный server identity и владельцев, поднимает 14 Node roles, native nginx, Kafka и Keycloak, сохраняя существующую наблюдаемость. Повторный запуск не создаёт второе окружение и не удаляет данные.
 - Normal release имеет `databaseIsolation.enabled=false` и `kafkaNamespaceIsolation=false`, без disposable launch context. Отдельно фиксируются code SHA, config SHA, image IDs, public certificate/CA identities и версии scoped materialization в существующем release bundle.
 - Formal G00–G19 остаётся доказательством ровно своего кандидата. PASS другой конфигурации не переносится на normal release; его readiness/login/API/DB/Kafka/SSE и persistence проверяются на target отдельно. Runtime isolation guard и лимиты launch gates сохраняются.
+- Чтение существующих Kafka PKCS12 для проверки сроков использует legacy provider OpenSSL: truststore от установленного keytool содержит RC2-40-CBC. Это только декодирование с проверкой MAC и `-nokeys`; создание хранилищ, ключи и доверенные CA не меняются.
 - AROMA mutations остаются выключенными до соответствующего контролируемого допуска. Автоматические provider retries, очистка чужих данных и использование test IdP для постоянного входа не допускаются.
 
 ## Проверка и возврат
