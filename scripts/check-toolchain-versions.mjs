@@ -583,6 +583,22 @@ async function checkManifest(root) {
   if (!/^apache\/kafka:4\.3\.2@sha256:[0-9a-f]{64}$/.test(manifest.kafkaImage))
     fail("TOOLCHAIN-IMAGE", "kafkaImage must use an exact digest");
   if (
+    manifest.keycloakVersion !== "26.8.1" ||
+    manifest.keycloakDistributionImage !==
+      "dhi.io/keycloak@sha256:6c6d2363b9b3943d1c32b25b026ae12dfe392d117bd3142d747542d664c0badb" ||
+    manifest.keycloakRuntimeImage !==
+      "eclipse-temurin:21.0.13_9-jre-alpine-3.24@sha256:82cf3d9ccbe1ed46252008d51b2f2329e6b9e8a2f4394c4bebefc3ea7f4b1372" ||
+    manifest.keycloakGuavaSha256 !==
+      "b530942257fb935f8b2cfaa5f8eb5bd59c555fd8e8d01b8ce98912e077ea606c" ||
+    manifest.keycloakJavaReleaseSha256 !==
+      "f0cf3edc39eee65f0eeeb97cd39ceb8116693199f5d27ac22fcce60ca41c9525" ||
+    manifest.keycloakJavaCacertsSha256 !==
+      "628b436e6698c364c5498a32c5bff91806bea7a9b501f75e2289ddc60b4ca7ef" ||
+    manifest.keycloakJavaSecuritySha256 !==
+      "819f635801f1e89bc4c6d319e7649e516a9eac18f7b821c9ffb5e5e7764f8083"
+  )
+    fail("TOOLCHAIN-IMAGE", "Keycloak inputs must use exact digests");
+  if (
     !/^postgres:17\.11-alpine@sha256:[0-9a-f]{64}$/.test(
       manifest.postgresImage ?? "",
     )

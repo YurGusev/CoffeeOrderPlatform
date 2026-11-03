@@ -35,7 +35,7 @@ backend/fixture-проверки. Быстрый цикл не заменяет 
 
 - `/` — HTTP redirect nginx на `/app/customers`;
 - `/app/customers` — поиск и создание клиента;
-- `/app/catalog?orderRef=...&q=...&availability=...&cursor=...` — поиск persisted Catalog в контексте редактируемого Draft;
+- `/app/catalog?orderRef=...&q=...&availability=...&cursor=...` — просмотр первой страницы доступных товаров и поиск persisted Catalog; необязательный `orderRef` открывает добавление товаров в подтверждённый редактируемый Draft;
 - `/app/orders/new?customerRef=...` — явное создание Draft;
 - `/app/orders/:orderRef` — server-owned Order Card, позиции, Confirm и AROMA state.
 

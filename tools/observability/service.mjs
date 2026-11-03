@@ -1,11 +1,15 @@
 import { execFileSync } from "node:child_process";
-import { readFile, realpath, statfs } from "node:fs/promises";
+import { lstat, readFile, realpath, statfs } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
+import { homedir } from "node:os";
+import { isDeepStrictEqual } from "node:util";
+import { dump as dumpYaml, load as loadYaml } from "js-yaml";
 import { loadPlatformConfig } from "../../scripts/config-lib.mjs";
 import {
   materializeCollectorSecrets,
   materializeGrafanaAdminSecret,
+  writePrivateSecret,
 } from "../config-bootstrap/index.mjs";
 import { loadVerifiedGateImage } from "../verified-infrastructure-image.mjs";
 import { validateLaunchContext } from "../../verification/launch/v1/report.mjs";
@@ -179,6 +183,356 @@ export function inspectOwnedTelemetry({ root = ROOT, run = runDocker } = {}) {
       );
   }
   return containers;
+}
+
+export function collectorRefreshOverride(generated, existing, networks) {
+  const stable = (collector) => {
+    const copy = structuredClone(collector);
+    const configMount = copy.volumes.filter(
+      (mount) => mount.target === "/etc/alloy/config.alloy",
+    );
+    if (
+      configMount.length !== 1 ||
+      configMount[0].type !== "bind" ||
+      configMount[0].read_only !== true
+    )
+      throw new Error("Collector configuration mount is invalid");
+    configMount[0].source = "<scoped-collector-config>";
+    copy.volumes = copy.volumes.filter(
+      (mount) =>
+        !/^\/var\/lib\/docker\/containers\/[a-f0-9]{64}$/u.test(
+          mount.target ?? "",
+        ),
+    );
+    if (
+      !isDeepStrictEqual(copy.networks, ["coffee_observability"]) &&
+      !isDeepStrictEqual(copy.networks, networks)
+    )
+      throw new Error("Collector networks are invalid");
+    delete copy.networks;
+    return copy;
+  };
+  if (
+    !isDeepStrictEqual(
+      stable(existing.services["otel-collector"]),
+      stable(generated.services["otel-collector"]),
+    )
+  )
+    throw new Error(
+      "Collector specification differs from the accepted release",
+    );
+  return generated;
+}
+
+export async function readAcceptedObservabilityRelease() {
+  const unit = (property) =>
+    execFileSync(
+      "systemctl",
+      [
+        "--user",
+        "show",
+        "coffee-observability.service",
+        `--property=${property}`,
+        "--value",
+      ],
+      {
+        encoding: "utf8",
+        timeout: 10_000,
+      },
+    ).trim();
+  const root = unit("WorkingDirectory");
+  const match = unit("Environment").match(
+    /(?:^|\s)COFFEE_LAUNCH_CONTEXT_FILE=([^\s]+)(?=\s|$)/u,
+  );
+  if (
+    !root ||
+    resolve(root) !== root ||
+    (await realpath(root)) !== root ||
+    !match
+  )
+    throw new Error("accepted observability release is unavailable");
+  const releases = join(
+    homedir(),
+    ".local/share/coffee-platform/observability/releases",
+  );
+  const releaseSha = root.slice(releases.length + 1);
+  const rootInfo = await lstat(root);
+  if (
+    dirname(root) !== releases ||
+    !/^[0-9a-f]{40}$/u.test(releaseSha) ||
+    !rootInfo.isDirectory() ||
+    rootInfo.isSymbolicLink() ||
+    rootInfo.uid !== process.getuid() ||
+    (rootInfo.mode & 0o022) !== 0
+  )
+    throw new Error("observability release ownership is invalid");
+  const git = (args) =>
+    execFileSync("git", args, {
+      cwd: root,
+      encoding: "utf8",
+      timeout: 30_000,
+    }).trim();
+  if (
+    git(["rev-parse", "HEAD"]) !== releaseSha ||
+    git(["status", "--porcelain", "--untracked-files=all"])
+  )
+    throw new Error("observability source identity is not clean");
+  const old = async (path) => import(pathToFileURL(join(root, path)).href);
+  const { validateLaunchContext: validate } = await old(
+    "verification/launch/v1/report.mjs",
+  );
+  const active = await validate(match[1]);
+  if (active.candidateRoot !== root)
+    throw new Error("observability context does not bind its release");
+  if (active.context.candidateSha !== releaseSha)
+    throw new Error("observability context source differs");
+  const { loadVerifiedGateImage: verified } = await old(
+    "tools/verified-infrastructure-image.mjs",
+  );
+  const [helper, grafana] = await Promise.all([
+    verified({
+      target: "storage-helper",
+      contextFile: match[1],
+      loadImage: false,
+    }),
+    verified({ target: "grafana", contextFile: match[1], loadImage: false }),
+  ]);
+  const generator = await old("tools/observability/generate.mjs");
+  const { loadPlatformConfig: loadConfig } = await old(
+    "scripts/config-lib.mjs",
+  );
+  const config = await loadConfig(root);
+  const refs = JSON.parse(
+    await readFile(join(root, "config/toolchain-versions.json"), "utf8"),
+  );
+  await generator.verifyBootstrapProbe({
+    expectedSha256: refs.bootstrapProbeSha256,
+  });
+  return { root, helper, grafana, generator, config, refs };
+}
+
+/** Refresh only the accepted observability release's Collector log mounts. */
+export async function refreshLocalCollector({ expectedRuntimes } = {}) {
+  const { root, helper, grafana, generator, config, refs } =
+    await readAcceptedObservabilityRelease();
+  const images = JSON.parse(
+    runDocker(["image", "inspect", refs.otelCollectorImage]),
+  );
+  if (
+    images.length !== 1 ||
+    !/^sha256:[a-f0-9]{64}$/u.test(images[0]?.Id ?? "")
+  )
+    throw new Error("Collector image is unavailable");
+  const snapshot = () => {
+    const ids = inspectOwnedTelemetry({ root, run: runDocker });
+    if (ids.length !== SERVICES.length)
+      throw new Error("observability containers are incomplete");
+    const rows = ids.map((id) => JSON.parse(runDocker(["inspect", id]))[0]);
+    const entries = Object.fromEntries(
+      rows.map((row) => [
+        row.Config.Labels["com.docker.compose.service"],
+        { id: row.Id, image: row.Image },
+      ]),
+    );
+    const volumes = JSON.parse(
+      runDocker([
+        "volume",
+        "inspect",
+        ...Object.values(VOLUMES),
+        ...Object.values(VOLUMES).map((name) => `${name}-backing`),
+        `${PROJECT}_collector_checkpoints`,
+      ]),
+    );
+    return {
+      entries,
+      volumes,
+      collectorMounts: rows.find(
+        (row) =>
+          row.Config.Labels["com.docker.compose.service"] === "otel-collector",
+      )?.Mounts,
+    };
+  };
+  const before = snapshot();
+  if (before.entries["otel-collector"]?.image !== images[0].Id)
+    throw new Error("Collector image identity differs");
+  const logs = await generator.discoverContainerLogs({
+    projectName: PROJECT,
+    runDocker,
+  });
+  if (
+    logs.length !== expectedRuntimes.length ||
+    logs.some(
+      ({ service, containerId }) =>
+        !expectedRuntimes.some(
+          (entry) =>
+            entry.service === service && entry.containerId === containerId,
+        ),
+    )
+  )
+    throw new Error("runtime log sources differ from the verified containers");
+  generator.assertTelemetryNetworks({
+    projectName: PROJECT,
+    logFiles: logs,
+    runDocker,
+  });
+  const dir = "/dev/shm/coffee-platform-observability";
+  const directory = await lstat(dir);
+  if (
+    !directory.isDirectory() ||
+    directory.isSymbolicLink() ||
+    directory.uid !== process.getuid() ||
+    (directory.mode & 0o777) !== 0o700 ||
+    (await realpath(dir)) !== dir ||
+    (await statfs(dir)).type !== 0x01021994
+  )
+    throw new Error("observability scope is invalid");
+  for (const path of [
+    join(dir, "compose.override.yaml"),
+    "/dev/shm/coffee-platform-observability-secrets/collector.json",
+  ]) {
+    const info = await lstat(path);
+    if (
+      !info.isFile() ||
+      info.isSymbolicLink() ||
+      info.uid !== process.getuid() ||
+      (info.mode & 0o777) !== 0o400
+    )
+      throw new Error("observability scoped input is invalid");
+  }
+  const configPath = join(dir, "collector-runtime.alloy");
+  const overridePath = join(dir, "collector-runtime.override.yaml");
+  const secrets = JSON.parse(
+    await readFile(
+      "/dev/shm/coffee-platform-observability-secrets/collector.json",
+      "utf8",
+    ),
+  );
+  const existing = loadYaml(
+    await readFile(join(dir, "compose.override.yaml"), "utf8"),
+  );
+  const backendConfigPaths = Object.fromEntries(
+    ["datasources", "alerts", "contacts", "loki", "prometheus", "tempo"].map(
+      (name) => [
+        name,
+        join(
+          dir,
+          `${name === "alerts" || name === "contacts" ? `grafana-${name}` : name}.yaml`,
+        ),
+      ],
+    ),
+  );
+  const generated = generator.createComposeOverride({
+    config,
+    imageRefs: refs,
+    grafanaImage: grafana.imageId,
+    alertSinkImage: helper.imageId,
+    logFiles: logs,
+    collectorConfigPath: configPath,
+    storageVolumes: VOLUMES,
+    backendConfigPaths,
+    grafanaAdminSecretPath:
+      "/dev/shm/coffee-platform-grafana-bootstrap/admin-secret",
+    alertSinkPath: join(root, "tools/observability/alert-sink.mjs"),
+  });
+  for (const name of SERVICES) generated.services[name].restart = "on-failure";
+  const override = collectorRefreshOverride(
+    generated,
+    existing,
+    generator.TELEMETRY_NETWORKS,
+  );
+  await writePrivateSecret(
+    configPath,
+    generator.createAlloyConfig({ config, logFiles: logs, ...secrets }),
+  );
+  generator.ensureCollectorConfigOwnership({
+    collectorConfigPath: configPath,
+    nodeImage: helper.imageId,
+    runDocker,
+  });
+  await writePrivateSecret(
+    overridePath,
+    dumpYaml(override, { noRefs: true, lineWidth: 120 }),
+  );
+  runDocker([
+    "compose",
+    "--project-name",
+    PROJECT,
+    "--project-directory",
+    root,
+    "--file",
+    join(root, "compose.yaml"),
+    "--file",
+    overridePath,
+    "up",
+    "--remove-orphans=false",
+    "--no-deps",
+    "--force-recreate",
+    "--no-build",
+    "--pull",
+    "never",
+    "--wait",
+    "--wait-timeout",
+    String(
+      Math.ceil(
+        (config.platform.health.startupGraceMs +
+          config.platform.health.intervalMs *
+            config.platform.health.failureThreshold +
+          config.platform.shutdownGraceMs) /
+          1000,
+      ),
+    ),
+    "otel-collector",
+  ]);
+  const after = snapshot();
+  const mounted = (destination, predicate) => {
+    const matches = after.collectorMounts.filter(
+      (mount) => mount.Destination === destination,
+    );
+    return matches.length === 1 && predicate(matches[0]);
+  };
+  if (
+    after.entries["otel-collector"]?.image !== images[0].Id ||
+    SERVICES.filter((name) => name !== "otel-collector").some(
+      (name) =>
+        JSON.stringify(before.entries[name]) !==
+        JSON.stringify(after.entries[name]),
+    ) ||
+    JSON.stringify(before.volumes) !== JSON.stringify(after.volumes) ||
+    !mounted(
+      "/var/lib/alloy",
+      (mount) =>
+        mount.Type === "volume" &&
+        mount.Name === `${PROJECT}_collector_checkpoints`,
+    ) ||
+    !mounted(
+      "/etc/alloy/config.alloy",
+      (mount) =>
+        mount.Type === "bind" &&
+        mount.Source === configPath &&
+        mount.RW === false,
+    ) ||
+    Object.entries(VOLUMES).some(
+      ([name, volume]) =>
+        !mounted(
+          `/telemetry-storage/${name}`,
+          (mount) =>
+            mount.Type === "volume" &&
+            mount.Name === volume &&
+            mount.RW === false,
+        ),
+    ) ||
+    logs.some(
+      ({ containerId, logPath }) =>
+        !mounted(
+          `/var/lib/docker/containers/${containerId}`,
+          (mount) =>
+            mount.Type === "bind" &&
+            mount.Source === dirname(logPath) &&
+            mount.RW === false,
+        ),
+    )
+  )
+    throw new Error("observability identity changed during Collector refresh");
 }
 
 export async function runService(action, overrides = {}) {

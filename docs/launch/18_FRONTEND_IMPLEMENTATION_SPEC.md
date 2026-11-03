@@ -85,10 +85,18 @@ Node runtime или provider code. Package-owned inline SVG icons огранич
 
 ### `/app/catalog?orderRef=<ref>`
 
-- требует Order Card status `Draft`; иначе redirect на Order Card с alert;
+- без `orderRef` сразу показывает первую страницу доступных товаров, поиск и
+  фильтр; ссылка ведёт к выбору клиента и созданию заказа, поля количества,
+  помола и добавления отсутствуют;
+- переданный `orderRef` должен быть корректным; Order Card должен подтверждать
+  status `Draft` и `edit-items`, иначе показывается ошибка или выполняется
+  redirect на Order Card с alert;
 - CustomerRef берётся только из Order Card, не из URL/local storage;
-- URL state: `orderRef`, `q`, `availability`, optional `cursor`;
-- result row показывает owner Catalog fields, quantity input и «Добавить»;
+- URL state: optional `orderRef`, `q`, `availability`, `cursor`; пустой поиск
+  запрашивает browse без параметра `query`, поиск по названию — от двух символов;
+  изменение поиска или фильтра сбрасывает cursor;
+- result row показывает owner Catalog fields; в Draft доступны quantity, помол
+  и «Добавить»;
 - #9 запрашивает PricingQuote ровно для одной строки;
 - после quote success выполняет PUT item с generated `itemRef`, текущей
   command `Order.version` и exact quote proof; authoritative money не пересчитывается;

@@ -39,6 +39,13 @@ const unitLabels: Readonly<Record<CatalogProductSummary["unit"], string>> = {
   piece: "штука",
 };
 
+const availabilityValues: readonly string[] = [
+  "Available",
+  "Unavailable",
+  "Stopped",
+  "",
+];
+
 function isStaleQuote(error: unknown): boolean {
   return (
     error instanceof ApiError && error.problem.code === "ORDER_QUOTE_STALE"
@@ -57,19 +64,16 @@ export function CatalogPage(): ReactElement {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
+  const hasOrderRef = params.has("orderRef");
   const orderRef = params.get("orderRef") ?? "";
   const rawQuery = params.get("q") ?? "";
   const query = rawQuery.trim().slice(0, 200);
   const cursor = params.get("cursor") ?? undefined;
   const rawAvailability = params.get("availability") ?? "Available";
-  const availability: CatalogProductSummary["availability"] | "" = [
-    "Available",
-    "Unavailable",
-    "Stopped",
-    "",
-  ].includes(rawAvailability)
-    ? (rawAvailability as CatalogProductSummary["availability"] | "")
-    : "Available";
+  const availability: CatalogProductSummary["availability"] | "" =
+    availabilityValues.includes(rawAvailability)
+      ? (rawAvailability as CatalogProductSummary["availability"] | "")
+      : "Available";
   const validOrderRef = /^ord_[0-9A-HJKMNP-TV-Z]{26}$/u.test(orderRef);
   const [draftQuery, setDraftQuery] = useState(query);
   const [draftAvailability, setDraftAvailability] = useState(availability);
@@ -83,12 +87,11 @@ export function CatalogPage(): ReactElement {
   const editable =
     order.data?.status === "Draft" &&
     order.data.allowedActions.includes("edit-items");
-  const products = useCatalogSearch(session.actorRef, {
-    availability,
-    ...(cursor ? { cursor } : {}),
-    orderRef,
-    q: editable ? query : "",
-  });
+  const products = useCatalogSearch(
+    session.actorRef,
+    { availability, ...(cursor ? { cursor } : {}), orderRef, q: query },
+    !hasOrderRef || (validOrderRef && order.isSuccess && editable),
+  );
   const addItem = useQuoteAndPutItem(session.actorRef, orderRef);
   const conflictError =
     addItem.error instanceof ApiError &&
@@ -128,6 +131,21 @@ export function CatalogPage(): ReactElement {
   }, [availability]);
 
   useEffect(() => {
+    const restoreFields = (): void => {
+      const current = new URLSearchParams(window.location.search);
+      const nextAvailability = current.get("availability") ?? "Available";
+      setDraftQuery((current.get("q") ?? "").trim().slice(0, 200));
+      setDraftAvailability(
+        availabilityValues.includes(nextAvailability)
+          ? (nextAvailability as CatalogProductSummary["availability"] | "")
+          : "Available",
+      );
+    };
+    window.addEventListener("popstate", restoreFields);
+    return () => window.removeEventListener("popstate", restoreFields);
+  }, []);
+
+  useEffect(() => {
     if (rawQuery === query && rawAvailability === availability) return;
     const next = new URLSearchParams(params);
     if (query) next.set("q", query);
@@ -147,7 +165,8 @@ export function CatalogPage(): ReactElement {
     )
       return;
     const timer = window.setTimeout(() => {
-      const next = new URLSearchParams({ orderRef });
+      const next = new URLSearchParams();
+      if (hasOrderRef) next.set("orderRef", orderRef);
       if (normalized) next.set("q", normalized);
       if (draftAvailability === "") next.set("availability", "");
       else if (draftAvailability !== "Available")
@@ -155,10 +174,11 @@ export function CatalogPage(): ReactElement {
       setParams(next);
     }, 300);
     return () => window.clearTimeout(timer);
-  }, [draftAvailability, draftQuery, orderRef, query, setParams]);
+  }, [draftAvailability, draftQuery, hasOrderRef, orderRef, query, setParams]);
 
   const submitSearch = (): void => {
-    const next = new URLSearchParams({ orderRef });
+    const next = new URLSearchParams();
+    if (hasOrderRef) next.set("orderRef", orderRef);
     if (draftQuery.trim()) next.set("q", draftQuery.trim());
     if (draftAvailability === "") next.set("availability", "");
     else if (draftAvailability !== "Available")
@@ -166,24 +186,30 @@ export function CatalogPage(): ReactElement {
     setParams(next);
   };
 
-  if (!validOrderRef) {
+  if (hasOrderRef && !validOrderRef) {
     return (
-      <Alert title="Не выбран заказ" tone="warning">
+      <Alert title="Не удалось открыть каталог заказа" tone="warning">
         Откройте <Link href="/app/customers">поиск клиентов</Link> и создайте
         черновик заказа.
       </Alert>
     );
   }
-  if (order.isPending) return <Loading label="Проверяем заказ" />;
-  if (order.isError)
+  if (hasOrderRef && order.isPending)
+    return <Loading label="Проверяем заказ" />;
+  if (hasOrderRef && order.isError)
     return <ProblemAlert error={order.error} onRefresh={refreshOrder} />;
-  if (!editable) return <Loading label="Возвращаемся к карточке заказа" />;
+  if (hasOrderRef && !editable)
+    return <Loading label="Возвращаемся к карточке заказа" />;
 
   return (
     <>
       <PageHeader
-        description={`Добавление товаров в заказ ${orderRef}`}
-        eyebrow="ШАГ 3 · КАТАЛОГ"
+        description={
+          hasOrderRef
+            ? `Добавление товаров в заказ ${orderRef}`
+            : "Просмотр доступных товаров"
+        }
+        eyebrow={hasOrderRef ? "ШАГ 3 · КАТАЛОГ" : "КАТАЛОГ"}
       >
         Поиск товаров
       </PageHeader>
@@ -233,20 +259,18 @@ export function CatalogPage(): ReactElement {
           <Button onPress={submitSearch} startIcon={<Icon name="search" />}>
             Найти
           </Button>
-          <Link href={`/app/orders/${orderRef}`}>К заказу</Link>
+          {hasOrderRef ? (
+            <Link href={`/app/orders/${orderRef}`}>К заказу</Link>
+          ) : (
+            <Link href="/app/customers">Выбрать клиента и создать заказ</Link>
+          )}
         </div>
         {query.length > 0 && query.length < 2 ? (
           <Alert title="Слишком короткий запрос" tone="warning">
             Введите не менее двух символов.
           </Alert>
         ) : null}
-        {query.length === 0 ? (
-          <Empty
-            description="Введите название — поиск начнётся через 300 мс после ввода."
-            title="Начните поиск товара"
-          />
-        ) : null}
-        {products.isPending && query.length >= 2 ? (
+        {products.isPending && (query.length === 0 || query.length >= 2) ? (
           <Loading label="Ищем товары" />
         ) : null}
         {products.isError ? (
@@ -301,71 +325,75 @@ export function CatalogPage(): ReactElement {
                         ? "Привязка к AROMA доступна"
                         : "Нет привязки к AROMA"}
                     </small>
-                    <Field
-                      aria-label={`Количество для ${product.displayName}`}
-                      label="Количество"
-                      onChange={(value) =>
-                        setQuantities((current) => ({
-                          ...current,
-                          [key]: value,
-                        }))
-                      }
-                      value={quantity}
-                    />
-                    {grindOptions.length > 0 || selectedGrindUnavailable ? (
-                      <label className="select-field">
-                        Помол
-                        <select
-                          aria-label={`Помол для ${product.displayName}`}
-                          onChange={(event) =>
-                            setGrindSelections((current) => ({
+                    {hasOrderRef ? (
+                      <>
+                        <Field
+                          aria-label={`Количество для ${product.displayName}`}
+                          label="Количество"
+                          onChange={(value) =>
+                            setQuantities((current) => ({
                               ...current,
-                              [key]: event.target.value,
+                              [key]: value,
                             }))
                           }
-                          value={selectedGrindHash}
-                        >
-                          <option value="">Без выбора</option>
-                          {selectedGrindUnavailable ? (
-                            <option disabled value={selectedGrindHash}>
-                              Выбранный помол недоступен
-                            </option>
-                          ) : null}
-                          {grindOptions.map((option) => (
-                            <option
-                              key={option.sourceGrindKeyHash}
-                              value={option.sourceGrindKeyHash}
+                          value={quantity}
+                        />
+                        {grindOptions.length > 0 || selectedGrindUnavailable ? (
+                          <label className="select-field">
+                            Помол
+                            <select
+                              aria-label={`Помол для ${product.displayName}`}
+                              onChange={(event) =>
+                                setGrindSelections((current) => ({
+                                  ...current,
+                                  [key]: event.target.value,
+                                }))
+                              }
+                              value={selectedGrindHash}
                             >
-                              {option.displayName}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
+                              <option value="">Без выбора</option>
+                              {selectedGrindUnavailable ? (
+                                <option disabled value={selectedGrindHash}>
+                                  Выбранный помол недоступен
+                                </option>
+                              ) : null}
+                              {grindOptions.map((option) => (
+                                <option
+                                  key={option.sourceGrindKeyHash}
+                                  value={option.sourceGrindKeyHash}
+                                >
+                                  {option.displayName}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                        ) : null}
+                        <Button
+                          isDisabled={
+                            product.availability !== "Available" ||
+                            !product.mappingAvailable ||
+                            !quantity.trim() ||
+                            Boolean(conflictError)
+                          }
+                          isPending={addItem.isPending}
+                          onPress={() =>
+                            addItem.mutate(
+                              {
+                                itemRef: newUlidRef("itm"),
+                                product,
+                                quantity,
+                                ...(grindSelections[key]
+                                  ? { sourceGrindKeyHash: grindSelections[key] }
+                                  : {}),
+                              },
+                              { onSuccess: (next) => setAdded(next.orderRef) },
+                            )
+                          }
+                        >
+                          Добавить
+                        </Button>
+                      </>
                     ) : null}
-                    <Button
-                      isDisabled={
-                        product.availability !== "Available" ||
-                        !product.mappingAvailable ||
-                        !quantity.trim() ||
-                        Boolean(conflictError)
-                      }
-                      isPending={addItem.isPending}
-                      onPress={() =>
-                        addItem.mutate(
-                          {
-                            itemRef: newUlidRef("itm"),
-                            product,
-                            quantity,
-                            ...(grindSelections[key]
-                              ? { sourceGrindKeyHash: grindSelections[key] }
-                              : {}),
-                          },
-                          { onSuccess: (next) => setAdded(next.orderRef) },
-                        )
-                      }
-                    >
-                      Добавить
-                    </Button>
                   </article>
                 );
               })

@@ -952,6 +952,7 @@ void test("G12 binds storage helper to the Node base, receipt, index and image",
     const services = [
       ...RUNTIME_NAMES,
       "grafana",
+      "keycloak",
       "storage-helper",
       "edge-nginx",
       "kafka",

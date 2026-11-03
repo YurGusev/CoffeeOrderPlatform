@@ -1604,7 +1604,7 @@ export function buildRuntimeImages(
   runtimes = RUNTIMES,
   builtImages = [],
   buildRoot = ROOT,
-  buildNginx = true,
+  { includeNginx = true } = {},
 ) {
   const sourceRoot = resolve(buildRoot);
   for (const runtime of runtimes) {
@@ -1625,23 +1625,23 @@ export function buildRuntimeImages(
     );
     builtImages.push(`${projectName}-${runtime}:latest`);
   }
-  if (buildNginx)
-    execFileSync(
-      process.execPath,
-      [
-        join(ROOT, "tools/docker-build.mjs"),
-        "--file",
-        "apps/edge-nginx/Dockerfile",
-        "--target",
-        "edge-nginx",
-        "--load",
-        "-t",
-        `${projectName}-edge-nginx:latest`,
-        sourceRoot,
-      ],
-      { cwd: ROOT, env: process.env, stdio: "inherit" },
-    );
-  if (buildNginx) builtImages.push(`${projectName}-edge-nginx:latest`);
+  if (!includeNginx) return;
+  execFileSync(
+    process.execPath,
+    [
+      join(ROOT, "tools/docker-build.mjs"),
+      "--file",
+      "apps/edge-nginx/Dockerfile",
+      "--target",
+      "edge-nginx",
+      "--load",
+      "-t",
+      `${projectName}-edge-nginx:latest`,
+      sourceRoot,
+    ],
+    { cwd: ROOT, env: process.env, stdio: "inherit" },
+  );
+  builtImages.push(`${projectName}-edge-nginx:latest`);
 }
 
 export function removeBuiltRuntimeImages(images, options) {
@@ -3948,7 +3948,7 @@ async function inspectExternalRunDatabase(admin, database) {
   return { exists: true, owner: result.rows[0].owner };
 }
 
-async function externalOwnerMigrations(root, database) {
+export async function externalOwnerMigrations(root, database) {
   const expectedMigrationPath = {
     customer: "apps/customer-service/migrations",
     catalog: "apps/catalog-service/migrations",
@@ -10324,7 +10324,7 @@ export async function runComposeSmoke({
                     : RUNTIMES,
               builtImages,
               snapshot?.contextPath ?? ROOT,
-              !parentOwnedRuntimeImages || ownedTargets.nginx,
+              { includeNginx: !parentOwnedRuntimeImages || ownedTargets.nginx },
             );
         } finally {
           if (snapshot) await verifyBuildInputSnapshot(snapshot);

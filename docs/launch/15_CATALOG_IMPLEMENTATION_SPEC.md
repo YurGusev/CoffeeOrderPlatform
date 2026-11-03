@@ -360,10 +360,15 @@ JSON Schema требует: `mappingState=Active` только с non-null `offe
 
 `GET /api/client-v1/catalog/products`
 
-- `query`: required, trim + Unicode NFKC + lowercase, 2..200 символов;
+- `query`: optional; при наличии trim + Unicode NFKC + lowercase, 2..200 символов;
 - `availability`: optional `Available|Unavailable|Stopped`;
 - `limit`: integer 1..50, default 20;
 - `cursor`: opaque base64url, max 512.
+
+Без `query` возвращается страница активного каталога по
+[ADR-0043](../adr/ADR-0043-catalog-browse-without-query.md). Явно переданный пустой
+или пробельный `query` остаётся ошибкой; permission, лимиты и правила cursor
+сохраняются.
 
 Поиск читает ровно одну active revision. Keyset cursor подписан server key и
 содержит `snapshotRevision`, SHA-256 нормализованных query/filter, последние

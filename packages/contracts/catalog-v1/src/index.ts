@@ -124,7 +124,6 @@ const pricingInputSchema = {
 const querySchema = {
   type: "object",
   additionalProperties: false,
-  required: ["query"],
   properties: {
     query: { type: "string" },
     availability: {
@@ -191,7 +190,7 @@ export function isCatalogVariantRef(value: unknown): value is string {
 }
 
 export type CatalogSearchQuery = Readonly<{
-  query: string;
+  query?: string;
   availability?: "Available" | "Unavailable" | "Stopped";
   limit?: number;
   cursor?: string;
@@ -216,7 +215,11 @@ export function decodeCatalogSearchQuery(
     )
   )
     return undefined;
-  if (typeof raw["query"] !== "string" || !validNormalizedQuery(raw["query"]))
+  const query = raw["query"];
+  if (
+    query !== undefined &&
+    (typeof query !== "string" || !validNormalizedQuery(query))
+  )
     return undefined;
   const limitValue = raw["limit"];
   const limit =
@@ -235,7 +238,7 @@ export function decodeCatalogSearchQuery(
   if (raw["cursor"] !== undefined && typeof raw["cursor"] !== "string")
     return undefined;
   const decoded = {
-    query: raw["query"],
+    ...(query === undefined ? {} : { query }),
     ...(raw["availability"] === undefined
       ? {}
       : { availability: raw["availability"] }),

@@ -26,6 +26,7 @@ import {
 } from "../packages/platform-config/src/index.ts";
 import { RUNTIME_NAMES } from "../packages/platform-config/src/index.ts";
 import { validateLaunchContext } from "../verification/launch/v1/report.mjs";
+import { materializeBuildRegistryCredentials } from "./config-bootstrap/index.mjs";
 
 const SCANNER_IMAGE =
   "ghcr.io/aquasecurity/trivy@sha256:790fd66d1697395d8693d1acaa1ea702406a20f109b6fc7bac8db623eca6c06c";
@@ -172,8 +173,20 @@ export function verifySlsaStatement(
         ?.resolvedDependencies
     : predicate.metadata?.completeness?.materials;
   if (typeof complete !== "boolean") fail("PROVENANCE_COMPLETENESS_INVALID");
-  if (["kafka", "storage-helper", "grafana"].includes(service))
+  if (service === "keycloak") {
+    verifyBaseMaterialStatement(
+      statement,
+      baseMaterial?.distribution,
+      "keycloak-distribution",
+    );
+    verifyBaseMaterialStatement(
+      statement,
+      baseMaterial?.runtime,
+      "keycloak-runtime",
+    );
+  } else if (["kafka", "storage-helper", "grafana"].includes(service)) {
     verifyBaseMaterialStatement(statement, baseMaterial, service);
+  }
   return Object.freeze({
     service,
     manifestDigest,
@@ -190,7 +203,11 @@ function baseReference(sourceRef, target) {
       ? /^(apache\/kafka):(4\.3\.2)@(sha256:[0-9a-f]{64})$/u
       : target === "grafana"
         ? /^(grafana\/grafana):([^@/]+)@(sha256:[0-9a-f]{64})$/u
-        : /^(node):([^@/]+)@(sha256:[0-9a-f]{64})$/u;
+        : target === "keycloak-distribution"
+          ? /^(dhi\.io\/keycloak)()@(sha256:[0-9a-f]{64})$/u
+          : target === "keycloak-runtime"
+            ? /^(eclipse-temurin):(21\.0\.13_9-jre-alpine-3\.24)@(sha256:[0-9a-f]{64})$/u
+            : /^(node):([^@/]+)@(sha256:[0-9a-f]{64})$/u;
   return typeof sourceRef === "string" ? sourceRef.match(pattern) : null;
 }
 
@@ -215,11 +232,15 @@ function verifyBaseMaterialStatement(statement, baseMaterial, target) {
       ? /^pkg:docker\/(?:docker\.io\/)?apache\/kafka@/u
       : target === "grafana"
         ? /^pkg:docker\/(?:docker\.io\/)?grafana\/grafana@/u
-        : /^pkg:docker\/(?:docker\.io\/)?(?:library\/)?node@/u;
+        : target === "keycloak-distribution"
+          ? /^pkg:docker\/dhi\.io\/keycloak\?/u
+          : target === "keycloak-runtime"
+            ? /^pkg:docker\/(?:docker\.io\/)?(?:library\/)?eclipse-temurin@/u
+            : /^pkg:docker\/(?:docker\.io\/)?(?:library\/)?node@/u;
   const matches = dependencies.filter((material) =>
     packagePrefix.test(material?.uri ?? ""),
   );
-  const expectedUri = `pkg:docker/${match[1]}@${match[2]}?digest=${match[3]}&platform=linux%2Famd64`;
+  const expectedUri = `pkg:docker/${match[1]}${match[2] ? `@${match[2]}` : ""}?digest=${match[3]}&platform=linux%2Famd64`;
   if (
     matches.length !== 1 ||
     matches[0]?.uri !== expectedUri ||
@@ -720,6 +741,8 @@ async function validateInputs({
     "kafkaImage",
     "nodeImage",
     "grafanaImage",
+    "keycloakDistributionImage",
+    "keycloakRuntimeImage",
   ])
     if (!/^.+@sha256:[0-9a-f]{64}$/u.test(toolchain[key] ?? ""))
       fail("UPSTREAM_IMAGE_PIN_INVALID");
@@ -1815,7 +1838,49 @@ async function inspectBaseMaterial({ sourceRef, target, outputRoot, run }) {
     join(outputRoot, `${target}-base-index.json`),
     bytes,
   );
-  return material;
+  if (target !== "keycloak-runtime") return material;
+  const reference = `${sourceRef.slice(0, sourceRef.lastIndexOf("@"))}@${material.platformManifestDigest}`;
+  const manifestBytes = Buffer.from(
+    await run(
+      "docker",
+      ["buildx", "imagetools", "inspect", "--raw", reference],
+      {
+        capture: true,
+        trimCapture: false,
+        maxCaptureBytes: MAX_KAFKA_INDEX_BYTES + 1,
+      },
+    ),
+  );
+  const manifest = parseJson(
+    manifestBytes,
+    "KEYCLOAK_RUNTIME_BASE_MANIFEST_INVALID",
+  );
+  const descriptor = parseJson(
+    bytes,
+    "KEYCLOAK_RUNTIME_BASE_INDEX_INVALID",
+  ).manifests.find((item) => item.digest === material.platformManifestDigest);
+  if (
+    manifestBytes.length !== descriptor?.size ||
+    `sha256:${sha256(manifestBytes)}` !== material.platformManifestDigest ||
+    manifest?.schemaVersion !== 2 ||
+    !Array.isArray(manifest.layers) ||
+    manifest.layers.length < 1 ||
+    manifest.layers.some((layer) => !SHA256.test(layer?.digest ?? ""))
+  )
+    fail("KEYCLOAK_RUNTIME_BASE_MANIFEST_INVALID");
+  await writeScannerOutput(
+    join(outputRoot, `${target}-base-manifest.json`),
+    manifestBytes,
+  );
+  return {
+    ...material,
+    manifestArtifact: {
+      path: `artifacts/${target}-base-manifest.json`,
+      sha256: sha256(manifestBytes),
+      sizeBytes: manifestBytes.length,
+      layerCount: manifest.layers.length,
+    },
+  };
 }
 
 async function prepareBuildxRegistration(dockerConfig, run) {
@@ -1871,7 +1936,7 @@ async function writeDockerCompatibilityManifest({
   layout,
   archiveManifest,
 }) {
-  if (!["kafka", "storage-helper", "grafana"].includes(service))
+  if (!["kafka", "storage-helper", "grafana", "keycloak"].includes(service))
     fail("OCI_DOCKER_MANIFEST_TARGET_INVALID");
   const runTag = sha256(Buffer.from(runId)).slice(0, 12);
   const expectedTag = `coffee-g12-${runTag}-${service}:latest`;
@@ -2162,6 +2227,128 @@ print(json.dumps(rows))`;
   return files;
 }
 
+export async function verifyKeycloakImageFiles({ image, toolchain, run }) {
+  const imageConfig = parseJson(
+    await readOciJson(
+      image.imageLayoutPath,
+      image.dockerArchiveManifest.Config,
+    ),
+    "KEYCLOAK_IMAGE_CONFIG_INVALID",
+  );
+  const config = imageConfig?.config;
+  if (
+    config?.User !== "1000:1000" ||
+    config.WorkingDir !== "/opt/keycloak" ||
+    !isDeepStrictEqual(config.Entrypoint, ["/opt/keycloak/bin/kc.sh"]) ||
+    !isDeepStrictEqual(config.Cmd, ["start", "--optimized"]) ||
+    !Array.isArray(config.Env) ||
+    config.Env.filter((value) => value.startsWith("JAVA_HOME=")).join("\0") !==
+      "JAVA_HOME=/opt/java/openjdk"
+  )
+    fail("KEYCLOAK_IMAGE_CONFIG_INVALID");
+  const layers = image.dockerArchiveManifest.Layers;
+  const baseLayers = image.baseMaterial.runtime.manifestArtifact.layerCount;
+  if (
+    !Number.isSafeInteger(baseLayers) ||
+    baseLayers < 1 ||
+    layers.length <= baseLayers
+  )
+    fail("KEYCLOAK_IMAGE_BASE_LAYERS_INVALID");
+  const targets = {
+    guava: [
+      "opt/keycloak/lib/lib/main/com.google.guava.guava-33.7.2-jre.jar",
+      toolchain.keycloakGuavaSha256,
+    ],
+    javaRelease: [
+      "opt/java/openjdk/release",
+      toolchain.keycloakJavaReleaseSha256,
+    ],
+    javaCacerts: [
+      "opt/java/openjdk/lib/security/cacerts",
+      toolchain.keycloakJavaCacertsSha256,
+    ],
+    javaSecurity: [
+      "opt/java/openjdk/conf/security/java.security",
+      toolchain.keycloakJavaSecuritySha256,
+    ],
+  };
+  const inspectTar = `import hashlib,json,sys,tarfile
+layer,targets,base=sys.argv[1],json.loads(sys.argv[2]),sys.argv[3]=="1"
+ancestors=set()
+for target in targets.values():
+ parts=target.split("/")
+ for i in range(1,len(parts)): ancestors.add("/".join(parts[:i]))
+seen=[]
+with tarfile.open(layer, mode="r|*") as archive:
+ for member in archive:
+  name=member.name
+  if name.startswith("/") or ".." in name.split("/"): raise ValueError("unsafe layer path")
+  name="/".join(part for part in name.split("/") if part not in ("", "."))
+  if not name: continue
+  parts=name.split("/")
+  if any(part.startswith(".wh.") for part in parts) and (name.startswith("opt/") or name.startswith(".wh.")): raise ValueError("whiteout")
+  if name in ancestors and not member.isdir(): raise ValueError("ancestor")
+  if not base and (name=="opt/java/openjdk" or name.startswith("opt/java/openjdk/")): raise ValueError("runtime overwritten")
+  for key,target in targets.items():
+   if name==target:
+    if not member.isfile() or member.size>67108864: raise ValueError("file")
+    data=archive.extractfile(member)
+    digest=hashlib.sha256()
+    for chunk in iter(lambda:data.read(1048576),b""): digest.update(chunk)
+    seen.append([key,digest.hexdigest(),member.size])
+print(json.dumps(seen))`;
+  const files = {};
+  for (let index = 0; index < layers.length; index++) {
+    const rows = parseJson(
+      Buffer.from(
+        await run(
+          "python3",
+          [
+            "-c",
+            inspectTar,
+            join(image.imageLayoutPath, layers[index]),
+            JSON.stringify(
+              Object.fromEntries(
+                Object.entries(targets).map(([name, [path]]) => [name, path]),
+              ),
+            ),
+            index < baseLayers ? "1" : "0",
+          ],
+          { capture: true, maxCaptureBytes: MAX_GIT_OUTPUT_BYTES },
+        ),
+      ),
+      "KEYCLOAK_IMAGE_LAYER_INVALID",
+    );
+    if (!Array.isArray(rows)) fail("KEYCLOAK_IMAGE_LAYER_INVALID");
+    for (const [name, digest, sizeBytes] of rows) {
+      if (
+        !Object.hasOwn(targets, name) ||
+        files[name] ||
+        digest !== targets[name][1] ||
+        !Number.isSafeInteger(sizeBytes) ||
+        sizeBytes < 1 ||
+        (name !== "guava" && index >= baseLayers) ||
+        (name === "guava" && index < baseLayers)
+      )
+        fail("KEYCLOAK_IMAGE_FILE_INVALID");
+      files[name] = {
+        path: `/${targets[name][0]}`,
+        sha256: digest,
+        sizeBytes,
+        layerDigest: `sha256:${layers[index].split("/").at(-1)}`,
+      };
+    }
+  }
+  if (
+    !files.guava ||
+    !files.javaRelease ||
+    !files.javaCacerts ||
+    !files.javaSecurity
+  )
+    fail("KEYCLOAK_IMAGE_FILE_INVALID");
+  return files;
+}
+
 function imageBuildArgs({
   tag,
   metadataFile,
@@ -2171,6 +2358,9 @@ function imageBuildArgs({
   kafkaImage,
   nodeImage,
   grafanaImage,
+  keycloakDistributionImage,
+  keycloakRuntimeImage,
+  libexpatVersion,
   pluginContext,
 }) {
   return [
@@ -2180,27 +2370,39 @@ function imageBuildArgs({
     "coffee-platform-mtu",
     "--allow",
     "network.host",
-    ...(service === "grafana"
+    ...(["kafka", "keycloak"].includes(service)
+      ? ["--build-arg", `LIBEXPAT_VERSION=${libexpatVersion}`]
+      : []),
+    ...(service === "keycloak"
       ? [
           "--build-arg",
-          `GRAFANA_IMAGE=${grafanaImage}`,
-          "--build-context",
-          `grafana-plugins=${pluginContext}`,
+          `KEYCLOAK_DISTRIBUTION_IMAGE=${keycloakDistributionImage}`,
+          "--build-arg",
+          `KEYCLOAK_RUNTIME_IMAGE=${keycloakRuntimeImage}`,
           "--target",
-          "grafana",
+          "keycloak",
         ]
-      : service === "edge-nginx"
-        ? ["--file", "apps/edge-nginx/Dockerfile", "--target", "edge-nginx"]
-        : service === "kafka"
-          ? ["--build-arg", `KAFKA_IMAGE=${kafkaImage}`, "--target", "kafka"]
-          : service === "storage-helper"
-            ? [
-                "--build-arg",
-                `NODE_IMAGE=${nodeImage}`,
-                "--target",
-                "storage-helper",
-              ]
-            : ["--build-arg", `RUNTIME=${runtime}`, "--target", "runtime"]),
+      : service === "grafana"
+        ? [
+            "--build-arg",
+            `GRAFANA_IMAGE=${grafanaImage}`,
+            "--build-context",
+            `grafana-plugins=${pluginContext}`,
+            "--target",
+            "grafana",
+          ]
+        : service === "edge-nginx"
+          ? ["--file", "apps/edge-nginx/Dockerfile", "--target", "edge-nginx"]
+          : service === "kafka"
+            ? ["--build-arg", `KAFKA_IMAGE=${kafkaImage}`, "--target", "kafka"]
+            : service === "storage-helper"
+              ? [
+                  "--build-arg",
+                  `NODE_IMAGE=${nodeImage}`,
+                  "--target",
+                  "storage-helper",
+                ]
+              : ["--build-arg", `RUNTIME=${runtime}`, "--target", "runtime"]),
     "--platform",
     "linux/amd64",
     "--metadata-file",
@@ -2227,11 +2429,13 @@ async function buildProductImages({
   kafkaBaseMaterial,
   storageHelperBaseMaterial,
   grafanaBaseMaterial,
+  keycloakBaseMaterial,
   vendorPlugins,
 }) {
   const services = [
     ...RUNTIME_NAMES.map((runtime) => ({ service: runtime, runtime })),
     { service: "grafana", runtime: null },
+    { service: "keycloak", runtime: null },
     { service: "storage-helper", runtime: null },
     { service: "edge-nginx", runtime: null },
     { service: "kafka", runtime: null },
@@ -2253,6 +2457,9 @@ async function buildProductImages({
       kafkaImage: toolchain.kafkaImage,
       nodeImage: toolchain.nodeImage,
       grafanaImage: toolchain.grafanaImage,
+      keycloakDistributionImage: toolchain.keycloakDistributionImage,
+      keycloakRuntimeImage: toolchain.keycloakRuntimeImage,
+      libexpatVersion: toolchain.libexpatVersion,
       pluginContext: vendorPlugins?.path,
     });
     const contextPath = sourceSnapshot.contextPath;
@@ -2290,7 +2497,9 @@ async function buildProductImages({
           ? storageHelperBaseMaterial
           : service === "grafana"
             ? grafanaBaseMaterial
-            : null;
+            : service === "keycloak"
+              ? keycloakBaseMaterial
+              : null;
     const attestation = await verifyOciAttestation({
       service,
       layout: imageLayoutPath,
@@ -2342,7 +2551,14 @@ async function buildProductImages({
       image.buildInputBinding.vendorPlugins.effectiveFiles =
         await verifyGrafanaImageFiles({ image, toolchain, temporary, run });
     }
-    if (["kafka", "storage-helper", "grafana"].includes(service))
+    if (service === "keycloak") {
+      image.buildInputBinding.effectiveFiles = await verifyKeycloakImageFiles({
+        image,
+        toolchain,
+        run,
+      });
+    }
+    if (["kafka", "storage-helper", "grafana", "keycloak"].includes(service))
       await writeDockerCompatibilityManifest({
         service,
         tag: image.tag,
@@ -2728,6 +2944,7 @@ export async function runSecurityScan({
   run = runCommand,
   statfsFn = statfs,
   removeImageInput = rm,
+  materializeRegistryCredentials = materializeBuildRegistryCredentials,
   lockPath = SCAN_LOCK,
 } = {}) {
   const scanDeadlineAt = clock() + G12_SCAN_BUDGET_MS;
@@ -2875,6 +3092,7 @@ export async function runSecurityScan({
     kafka: null,
     storageHelper: null,
     grafana: null,
+    keycloak: null,
     failure: null,
     cleanupFailures: [],
     imageCleanup: [],
@@ -2883,6 +3101,7 @@ export async function runSecurityScan({
   let kafkaBuild = null;
   let storageHelperBuild = null;
   let grafanaBuild = null;
+  let keycloakBuild = null;
   const setCleanupFailure = (code, failureStage) => {
     result.status = "FAIL";
     result.cleanupFailures.push({ code, stage: failureStage });
@@ -2953,12 +3172,24 @@ export async function runSecurityScan({
     await chmod(temporary, 0o700);
     const cacheDir = join(temporary, "cache");
     const inputDir = join(temporary, "manifests");
-    dockerConfig = join(temporary, "docker-config");
+    dockerConfig = await mkdtemp("/dev/shm/coffee-image-registry-");
     await Promise.all([
       mkdir(cacheDir, { mode: 0o700 }),
       mkdir(inputDir, { mode: 0o700 }),
-      mkdir(dockerConfig, { mode: 0o700 }),
     ]);
+    stage = "registry-credentials";
+    const registryEnv = Object.fromEntries(
+      Object.entries(process.env).filter(
+        ([name]) =>
+          !(name.startsWith("COFFEE_") || name.startsWith("SOPS_")) ||
+          name === "SOPS_AGE_KEY_FILE",
+      ),
+    );
+    await materializeRegistryCredentials({
+      root: identity.candidateRoot,
+      outputDir: dockerConfig,
+      env: registryEnv,
+    });
     stage = "source-preparation";
     await prepareBuildxRegistration(dockerConfig, runBounded);
     const outputRoot = join(outputDir, "artifacts");
@@ -2995,6 +3226,21 @@ export async function runSecurityScan({
       outputRoot,
       run: runBounded,
     });
+    stage = "keycloak-base-index";
+    const keycloakBaseMaterial = {
+      distribution: await inspectBaseMaterial({
+        sourceRef: validated.toolchain.keycloakDistributionImage,
+        target: "keycloak-distribution",
+        outputRoot,
+        run: runBounded,
+      }),
+      runtime: await inspectBaseMaterial({
+        sourceRef: validated.toolchain.keycloakRuntimeImage,
+        target: "keycloak-runtime",
+        outputRoot,
+        run: runBounded,
+      }),
+    };
     stage = "grafana-plugins";
     const vendorPlugins = await prepareGrafanaPlugins({
       toolchain: validated.toolchain,
@@ -3174,7 +3420,11 @@ export async function runSecurityScan({
           databaseFingerprints,
         });
         result.reports.push(...imageReports);
-        if (["kafka", "storage-helper", "grafana"].includes(image.service)) {
+        if (
+          ["kafka", "storage-helper", "grafana", "keycloak"].includes(
+            image.service,
+          )
+        ) {
           const artifact = {
             image,
             ...(await preserveProductArtifact({
@@ -3188,7 +3438,8 @@ export async function runSecurityScan({
           if (image.service === "kafka") kafkaBuild = artifact;
           else if (image.service === "storage-helper")
             storageHelperBuild = artifact;
-          else grafanaBuild = artifact;
+          else if (image.service === "grafana") grafanaBuild = artifact;
+          else keycloakBuild = artifact;
         }
       } catch (error) {
         operationError = error;
@@ -3222,6 +3473,7 @@ export async function runSecurityScan({
       kafkaBaseMaterial,
       storageHelperBaseMaterial,
       grafanaBaseMaterial,
+      keycloakBaseMaterial,
       vendorPlugins,
       onValidatedImage: async (image) => {
         stage = "image-scan";
@@ -3259,7 +3511,7 @@ export async function runSecurityScan({
     });
     if (
       result.reports.length !==
-      (RUNTIME_NAMES.length + 4 + UPSTREAM_IMAGES.length + 1) * 2
+      (RUNTIME_NAMES.length + 5 + UPSTREAM_IMAGES.length + 1) * 2
     )
       fail("SCAN_REPORT_SET_INCOMPLETE");
     if (result.provenance) result.provenance.status = "PASS";
@@ -3346,6 +3598,12 @@ export async function runSecurityScan({
       for (const [target, build, baseImage, resultKey] of [
         ["kafka", kafkaBuild, validated.toolchain.kafkaImage, "kafka"],
         ["grafana", grafanaBuild, validated.toolchain.grafanaImage, "grafana"],
+        [
+          "keycloak",
+          keycloakBuild,
+          validated.toolchain.keycloakDistributionImage,
+          "keycloak",
+        ],
         [
           "storage-helper",
           storageHelperBuild,
@@ -3544,6 +3802,11 @@ export async function runSecurityScan({
         });
       }
     }
+    // Docker config не монтируется в проверяемые контейнеры и удаляется даже при их неоднозначной очистке.
+    if (dockerConfig)
+      await rm(dockerConfig, { recursive: true, force: true }).catch(() => {
+        setCleanupFailure("REGISTRY_CLEANUP_FAILED", "registry-cleanup");
+      });
     result.findings = summarizeFindings(result.reports);
     process.removeListener("SIGINT", onInt);
     process.removeListener("SIGTERM", onTerm);
@@ -3560,6 +3823,7 @@ export async function runSecurityScan({
           "kafka.oci.tar",
           "storage-helper.oci.tar",
           "grafana.oci.tar",
+          "keycloak.oci.tar",
         ].includes(entry.name)
           ? MAX_BUILD_CONTEXT_BYTES
           : [

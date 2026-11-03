@@ -725,6 +725,64 @@ void test("breaking guard admits a same-wire parameter ref replacement with a wi
   assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
 });
 
+void test("breaking guard admits making a query parameter optional", async () => {
+  const directory = await mkdtemp(
+    join(tmpdir(), "contracts-breaking-query-optionality-"),
+  );
+  const base = join(directory, "base");
+  const current = join(directory, "current");
+  const document = {
+    openapi: "3.2.0",
+    info: { title: "fixture", version: "1" },
+    paths: {
+      "/items": {
+        get: {
+          operationId: "getItems",
+          parameters: [
+            {
+              name: "query",
+              in: "query",
+              required: true,
+              schema: { type: "string", minLength: 2 },
+            },
+          ],
+          responses: { 200: { description: "ok" } },
+        },
+      },
+    },
+  };
+  const changed = structuredClone(document);
+  changed.paths["/items"].get.parameters[0].required = false;
+  for (const [root, value] of [
+    [base, document],
+    [current, changed],
+  ]) {
+    await mkdir(join(root, "contracts/openapi"), { recursive: true });
+    await writeFile(
+      join(root, "contracts/openapi/client-v1.yaml"),
+      yaml.dump(value),
+    );
+  }
+  const result = spawnSync(
+    process.execPath,
+    ["scripts/contracts-breaking.mjs", "--base", base, "--current", current],
+    { cwd: root, encoding: "utf8" },
+  );
+  assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+  const tightened = spawnSync(
+    process.execPath,
+    ["scripts/contracts-breaking.mjs", "--base", current, "--current", base],
+    { cwd: root, encoding: "utf8" },
+  );
+  assert.notEqual(
+    tightened.status,
+    0,
+    `${tightened.stdout}\n${tightened.stderr}`,
+  );
+  assert.match(tightened.stderr, /parameter required changed/u);
+  await rm(directory, { recursive: true, force: true });
+});
+
 void test("breaking guard rejects event schema, key and envelope changes", async () => {
   const directory = await mkdtemp(join(tmpdir(), "contracts-breaking-event-"));
   const base = join(directory, "base");

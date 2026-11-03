@@ -141,10 +141,29 @@ void test("Customer migrations are repeatable and create the exact owner schema"
   });
   t.after(async () => database.resource.stop(new AbortController().signal));
 
+  const ledger = await client.query(
+    "SELECT to_regclass('customer.platform_schema_migrations') AS relation",
+  );
+  if (ledger.rows[0].relation === null) {
+    const prefix = migrations.slice(0, 2);
+    assert.deepEqual(
+      await applyMigrations(database, prefix, { schema: "customer" }),
+      prefix.map(({ id }) => id),
+    );
+  }
   const firstRun = await applyMigrations(database, migrations, {
     schema: "customer",
   });
-  assert.ok(firstRun.length === 0 || firstRun.length === migrations.length);
+  assert.deepEqual(
+    firstRun,
+    migrations
+      .slice(
+        ledger.rows[0].relation === null
+          ? 2
+          : migrations.length - firstRun.length,
+      )
+      .map(({ id }) => id),
+  );
   const before = await snapshot(client);
   const secondRun = await applyMigrations(database, migrations, {
     schema: "customer",
@@ -152,6 +171,38 @@ void test("Customer migrations are repeatable and create the exact owner schema"
   const after = await snapshot(client);
   assert.deepEqual(secondRun, []);
   assert.deepEqual(after, before);
+
+  // Copy the actual CHECK, then set column collations: an INSERT literal's
+  // collation alone cannot reproduce a database initialized with LC_CTYPE=C.
+  await client.query("BEGIN");
+  try {
+    await client.query(`CREATE TABLE customer.customer_name_locale_probe
+      (LIKE customer.customers INCLUDING DEFAULTS INCLUDING CONSTRAINTS)`);
+    await client.query(`ALTER TABLE customer.customer_name_locale_probe
+      ALTER COLUMN display_name TYPE varchar(200) COLLATE "C",
+      ALTER COLUMN display_name_search TYPE varchar(200) COLLATE "C"`);
+    const displayName = "Проверка системы";
+    const insertName = `INSERT INTO customer.customer_name_locale_probe
+      (customer_ref, display_name, display_name_search, email_normalized,
+       created_by_actor_ref, updated_by_actor_ref)
+      VALUES ('cus_00000000000000000000000001', $1, $2,
+              'locale-probe@example.invalid', 'actor_locale_probe', 'actor_locale_probe')`;
+    await client.query(insertName, [displayName, displayName.toLowerCase()]);
+    await assert.rejects(client.query(insertName, [displayName, displayName]), {
+      code: "23514",
+      constraint: "customers_display_name_search_check",
+    });
+  } finally {
+    await client.query("ROLLBACK");
+  }
+  const collation =
+    await client.query(`SELECT collprovider, collisdeterministic,
+      collversion = pg_collation_actual_version(oid) AS version_matches
+    FROM pg_collation
+    WHERE oid = 'customer.unicode_lowercase'::regcollation`);
+  assert.deepEqual(collation.rows, [
+    { collprovider: "i", collisdeterministic: true, version_matches: true },
+  ]);
 
   assertRequiredColumns(assert, after.columns, {
     customers: [

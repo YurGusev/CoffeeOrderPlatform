@@ -1,7 +1,7 @@
 issue: 13
-baseCommit: 6e770bef48b8a9739e2a3aea3b5f9c654a53cc71
+baseCommit: 2a4f272444dd9484b0621104c300c07ee54dc2e2
 status: source-descriptor-before-formal-verification
-asOfUtc: "2026-11-02T08:35:13Z"
+asOfUtc: "2026-11-03T15:12:10Z"
 inputs:
   - issue: 2
     acceptedMergeCommit: 327638d4494269a151ee7c0ac945ac0053c3e0d4
@@ -139,6 +139,10 @@ inputs:
     acceptedMergeCommit: 6e770bef48b8a9739e2a3aea3b5f9c654a53cc71
     artifact: evidence/handoffs/issue-257.yaml
     sha256: 40d016508148fee93b8c2d3231dbc43f0c2b59703f1d552e38c0a34d6e02bb0e
+  - issue: 254
+    acceptedMergeCommit: 2a4f272444dd9484b0621104c300c07ee54dc2e2
+    artifact: evidence/handoffs/issue-254.yaml
+    sha256: 5391732611bf0473b5b71f215d25328548f9b20924cd018b7f3b8e30bc23135e
 historicalAcceptance:
   issue: 14
   acceptedMergeCommit: 9b5a320b936cecafcb74de2d6a1253e3d0a155ce
@@ -152,7 +156,7 @@ historicalAcceptance:
     не создаётся задним числом.
 outputs:
   - artifact: config/platform.yaml
-    sha256: e875ccc013d2005292bbc4cffe940c8e1875462d11d8a0da92f6e9f38bfaeccf
+    sha256: 1b68cf7fcc964ae6f2cfe1dcb0bdbe798166e663822bd706ad4a8ee3c44a6846
     consumers:
       - 1
   - artifact: docs/launch/13_DELIVERY_DEPENDENCY_GRAPH.md
@@ -188,11 +192,11 @@ outputs:
     consumers:
       - 1
   - artifact: tests/compose/topology.test.mjs
-    sha256: 8675e0b1336a46ab795f74f6331eb3f219c62bc08bb4649ececd75cc26b2fc5d
+    sha256: 2b18acc12c6bae8e69ce2150ee71d5f094044243e9de56378a5fa622c56a1798
     consumers:
       - 1
   - artifact: tests/config/observability-bootstrap.test.mjs
-    sha256: 9c48e9599d174e309d5f6bd79f0b35471db840c1e14663a6dd1ebf0d17f53885
+    sha256: 28f7cea6ead3c8f98dc31045b70255d628f9ec334dfbfdde5862924042b5fd43
     consumers:
       - 1
   - artifact: tests/observability/alerts.test.mjs
@@ -208,7 +212,7 @@ outputs:
     consumers:
       - 1
   - artifact: tools/compose-smoke.mjs
-    sha256: 816ef3331467ac2260b9d27ef202bb88f1dac108b1105cf83a6885ef892c1501
+    sha256: 245cfdcbf630eb92b9e52385f065303820ee707674722f658e7f5fc496ddd834
     consumers:
       - 1
   - artifact: tools/observability/verify.mjs
@@ -224,7 +228,7 @@ outputs:
     consumers:
       - 1
   - artifact: verification/launch/v1/runner.test.mjs
-    sha256: 363476d4a77adf7e0b8b08269b1aa5ea317854d3421a91f057d0ca0f57c6b605
+    sha256: 57ef55bb458eec7ea2f55c96bef0a208ee12592bcc68ae96bdad24c2171cfa2f
     consumers:
       - 1
   - artifact: docs/adr/ADR-0034-g16-existing-account-verification.md
@@ -244,11 +248,11 @@ outputs:
   - artifact: verification/launch/v1/scenarios/rollback.mjs
     sha256: f95227f2f0769dc06fef2088ac55eaab484fa874700b3a155ea2ece005e88271
   - artifact: tools/security-scan.mjs
-    sha256: b44e8bb849423da25f4e0f92d6a59fab5f44c3d49a9a14e5db55732483c21894
+    sha256: 3842ec62ab388cb2f3fd3cc27b1fc4c0b468afcf4d7218cea7dfd36ddf9bf18c
     consumers:
       - 1
   - artifact: tests/tools/security-scan.test.mjs
-    sha256: 9192d2d7950db0614031f523f235a6cb3bf1639ef47e2ab8d00db114c7aaae96
+    sha256: 0406d8032873013c19a7fb3aacc9dbb3209cc3848ab8c10c795b7cafa1f7d604
     consumers:
       - 1
   - artifact: evidence/launch-preparation/2026-11-01/security-database-integrity.md
@@ -260,11 +264,11 @@ outputs:
     consumers:
       - 1
   - artifact: scripts/check-toolchain-versions.mjs
-    sha256: 4cb87158f7ca327d8f4aa88cdb76a46e6322d96a31206e93583c67e48391ea83
+    sha256: e3346399fded68d5f29451b138761ef551e58d84ecfc721e13e1c99ec714ab17
     consumers:
       - 1
   - artifact: tests/architecture/checks.test.mjs
-    sha256: dec32c8ba7dfca0fe0d5a2aada1cfdbd285374fcb6c0559714471f76edb22fdd
+    sha256: ad4f7d9f38e75bd28c6a1bbfc944106ccf4916ce2f7600f19f78cc69c5bc86f9
     consumers:
       - 1
   - artifact: evidence/launch-preparation/2026-11-01/runtime-build-inputs.md
@@ -313,6 +317,10 @@ outputs:
       - 1
   - artifact: evidence/launch-preparation/2026-11-02/defects.json
     sha256: 205910dc5e73ce75c02571ca3467207498cc965b1cff15e90afedcc6f59b0ed6
+    consumers:
+      - 1
+  - artifact: secrets/platform.secrets.sops.yaml
+    sha256: bcfaa602ef270ba2f3907fd905be29064dd83e86aa5bdd7918469a6ce640e9ef
     consumers:
       - 1
 verification:
@@ -502,6 +510,42 @@ verification:
   - command: "node --test --test-name-pattern='^browser correlation executes the child lifecycle and preserves early image failure evidence$' tests/config/observability-bootstrap.test.mjs"
     result: "PASS 1/1, fail/cancel/skip 0; тест 94.408 s, всего 95.181 s, Node 26.8.1 под общим heavy lease. Синтетический failure receipt/context binding; wrapper: flock --no-fork -w 120 и timeout 120s только для diagnostic; локальная проверка, не runtime admission G18."
     logSha256: 58382edaff8ba50bce8fa7e253937c6c418734b471713d48b8757fb7928fd2ed
+  - command: node tools/config-bootstrap/index.mjs --renew-development-transport
+    result: "FAIL до записи: mode 0664 после Git merge отклонён trusted guard; encrypted SHA остался 5a82f66aaad02ab9f7feeed4032d8fc8b0eca46eba73ca42aeffd17ace1df384. Исторический receipt сохранён."
+    logSha256: 17a333c2130abf50d611e3f8a27c6a088f7e87704d2b95b301667bd285fa545c
+  - command: node tools/config-bootstrap/index.mjs --renew-development-transport
+    result: "PASS после chmod 0600: 2026-11-03 15:05:22–15:05:32 UTC, 15 certPem обновлены; CA/key/SAN сохранены обязательными assertions trusted function. Encrypted SHA bcfaa602ef270ba2f3907fd905be29064dd83e86aa5bdd7918469a6ce640e9ef; не runtime admission."
+    logSha256: 7eb327d542d75fe08ff3fe91fd7ed9d059f7ecab2004396aa1f0f7ee692cc18e
+  - command: "node --test '--test-name-pattern=G12 temporary root validates|G12 builds product images, records pinned upstream identity' tests/tools/security-scan.test.mjs"
+    result: "FAIL, 0.219 s; первичный merge; Node 26.8.1, общий heavy lock, локальный working tree до freeze. Дублирующий symlink import от автоматического merge; scanner tests не исполнились. Исправлено удалением повторного импорта; отрицательный лог сохранён."
+    logSha256: 562d850a7859f495e312b54bbff8f3c69a75781e08229f9b6571e2e3d0bc1c25
+  - command: "node --test '--test-name-pattern=smoke removes only project-scoped images built by this run|run-owned runtime image reuse rejects collisions and cleans only verified references' tests/compose/topology.test.mjs"
+    result: "PASS, 1.471 s; первичный merge; Node 26.8.1, общий heavy lock, локальный working tree до freeze. Tests 2/2, fail/cancel/skip 0; synthetic проверка, не runtime admission."
+    logSha256: a53e425bcc9683c2171386f09ef0ce28c8680fa625650886c59f264d19520f55
+  - command: "pnpm exec prettier --check tools/compose-smoke.mjs tests/compose/topology.test.mjs tests/tools/security-scan.test.mjs"
+    result: "PASS, 4.036 s; первичный merge; Node 26.8.1, общий heavy lock, локальный working tree до freeze."
+    logSha256: 17aa973d3f004560237d9a95171210b0671deff23d61628eecf7322ff5938f20
+  - command: "pnpm exec oxlint --type-aware --deny-warnings tools/compose-smoke.mjs tests/compose/topology.test.mjs tests/tools/security-scan.test.mjs"
+    result: "FAIL, 1.811 s; первичный merge; Node 26.8.1, общий heavy lock, локальный working tree до freeze. Дублирующий symlink import от автоматического merge; scanner tests не исполнились. Исправлено удалением повторного импорта; отрицательный лог сохранён."
+    logSha256: f87749447b2762213c179bc88e59688145560284610ad3c55305a63c1a0f9605
+  - command: "node --test '--test-name-pattern=G12 temporary root validates|G12 builds product images, records pinned upstream identity' tests/tools/security-scan.test.mjs"
+    result: "FAIL, 0.618 s; после удаления duplicate import; Node 26.8.1, общий heavy lock, локальный working tree до freeze. Scanner 1/2: placement caller не получил fakeRegistryCredentials и ожидал старый registry path; исправлен существующий synthetic caller, отрицательный лог сохранён."
+    logSha256: ff8861444d9839ed820a8e28a4e354695de984da8538c379f67b9f7e3be4b9a2
+  - command: "pnpm exec oxlint --type-aware --deny-warnings tools/compose-smoke.mjs tests/compose/topology.test.mjs tests/tools/security-scan.test.mjs"
+    result: "PASS, 1.687 s; после удаления duplicate import; Node 26.8.1, общий heavy lock, локальный working tree до freeze."
+    logSha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+  - command: "pnpm exec prettier --check tests/tools/security-scan.test.mjs"
+    result: "PASS, 2.049 s; после удаления duplicate import; Node 26.8.1, общий heavy lock, локальный working tree до freeze."
+    logSha256: 17aa973d3f004560237d9a95171210b0671deff23d61628eecf7322ff5938f20
+  - command: "node --test '--test-name-pattern=G12 temporary root validates|G12 builds product images, records pinned upstream identity' tests/tools/security-scan.test.mjs"
+    result: "PASS, 86.969 s; после адаптации placement caller; Node 26.8.1, общий heavy lock, локальный working tree до freeze. Tests 2/2, fail/cancel/skip 0; synthetic проверка, не runtime admission."
+    logSha256: f99948b97501d69dbf7fc13ce6c181a025cd54ec8db6163fa14697d0c234bd27
+  - command: "pnpm exec oxlint --type-aware --deny-warnings tests/tools/security-scan.test.mjs"
+    result: "PASS, 1.832 s; после адаптации placement caller; Node 26.8.1, общий heavy lock, локальный working tree до freeze."
+    logSha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+  - command: "pnpm exec prettier --check tests/tools/security-scan.test.mjs"
+    result: "PASS, 2.174 s; после адаптации placement caller; Node 26.8.1, общий heavy lock, локальный working tree до freeze."
+    logSha256: 17aa973d3f004560237d9a95171210b0671deff23d61628eecf7322ff5938f20
 consumerContract:
   consumer: 1
   admission:
@@ -530,6 +574,9 @@ consumerContract:
     policy/key/flag child и G18 baseline flag child с проверенной lineage. Лимиты и provider scope сохранены;
     exact parent G12 product images, отдельная BOM/image-ID проверка fixture PostgreSQL."
 limitations:
+  - "Transport leaves обновлены trusted config-bootstrap 2026-11-03: 15 runtime, прежние CA/key/SAN сохранены. Первая попытка отклонена до записи из-за mode 0664 после Git merge; после chmod 0600 renewal завершён. Исходный отрицательный receipt сохранён. Это не runtime admission нового candidate."
+  - "Принят #254 через PR #261: merge 2a4f272444dd9484b0621104c300c07ee54dc2e2. Его CI и компонентный G12 не переносятся на новый formal candidate; Новому SHA нужны собственные CI, matching G12, свежая SSE qualification и полный G00–G19."
+  - "Оба evidence-каталога Source 16ff43a сохранены: 20261102T085322Z-16ff43a и 20261102T100507Z-16ff43a. Производный handoff второго запуска содержит НЕ ДОПУСТИТЬ и ошибки отсутствующих evidence; неполные обязательные gates не считаются PASS. Исторические FAIL/NOT_RUN не переписаны."
   - "Приняты отдельные fixes #259 (nginx HTTPS readiness) и #257 (Customer redaction assertion), оба с успешным CI и merge в develop. Новый candidate включает их accepted handoffs; ему нужны собственные CI, matching G12, узкий Customer proof, свежая SSE qualification и полный G00–G19. Публикация G10 defect связана с #257 отдельным defects.json receipt; исходный отрицательный manifest не изменён."
   - "Full run 20261102T064519Z-4393aea: G00–G09 и G12 PASS, G10 FAIL из-за устаревшего ожидания errorCode в логе; G11 и G13–G18 NOT_RUN, G19 PASS с решением НЕ ДОПУСТИТЬ. Исправлен только assertion: классификация по именованному событию, errorCode скрыт общим logger. Новому SHA нужны собственные CI, G12, Customer proof, SSE qualification и полный G00–G19; результаты 4393aea не переносятся."
   - После объединения принятого #255 окончательный SHA ещё не создан; CI, G12, SSE qualification и полный G00–G19 для него не выполнялись.

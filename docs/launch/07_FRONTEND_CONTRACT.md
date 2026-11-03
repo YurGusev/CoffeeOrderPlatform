@@ -35,6 +35,8 @@ CoffeeOrderSystem остаётся только источником UX-набл
 
 Новые route не вводятся. Query parameters, exact page behavior и deep-link
 semantics определяет [implementation spec](18_FRONTEND_IMPLEMENTATION_SPEC.md).
+Каталог без заказа сразу показывает первую страницу доступных товаров для
+просмотра; создание заказа начинается с выбора клиента.
 
 ## Сценарий создания заказа
 
