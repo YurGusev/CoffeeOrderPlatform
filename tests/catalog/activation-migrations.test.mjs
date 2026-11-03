@@ -15,6 +15,10 @@ import {
   migrationChecksum,
 } from "../../packages/platform-migrations/dist/index.js";
 import { createSqlOutboxStore } from "../../packages/platform-outbox/dist/index.js";
+import {
+  assertForwardFixtures,
+  fixtureState,
+} from "../../verification/launch/v1/scenarios/migrations.mjs";
 
 const execFileAsync = promisify(execFile);
 const ROOT = resolve(fileURLToPath(new URL("../..", import.meta.url)));
@@ -229,9 +233,12 @@ void test(
           .stop(new AbortController().signal)
           .catch(() => {});
       await admin?.end().catch(() => {});
-      await execFileAsync("docker", ["rm", "--force", containerId]).catch(
-        () => {},
-      );
+      await execFileAsync("docker", [
+        "rm",
+        "--force",
+        "--volumes",
+        containerId,
+      ]).catch(() => {});
     });
 
     const { stdout: mappedPort } = await execFileAsync("docker", [
@@ -368,14 +375,22 @@ void test(
       await legacyCatalog.end();
     }
     assert.deepEqual(
+      await applyMigrations(migrator, migrations.slice(0, 8), migrationOptions),
+      MIGRATION_IDS.slice(7, 8),
+    );
+    const fixtureBefore = await fixtureState(migrator, "catalog");
+    assert.equal(fixtureBefore.length, 1);
+    const forwardDatabase = { owner: "catalog", instance: migrator };
+    assert.deepEqual(
       await applyMigrations(migrator, migrations, migrationOptions),
-      MIGRATION_IDS.slice(7),
+      MIGRATION_IDS.slice(8),
     );
     assert.deepEqual(
       await applyMigrations(migrator, migrations, migrationOptions),
       [],
     );
 
+    await assertForwardFixtures(forwardDatabase, fixtureBefore);
     const migrationClient = new Client({
       host: "127.0.0.1",
       port,
@@ -384,6 +399,34 @@ void test(
       database: "coffee_platform_catalog",
     });
     await migrationClient.connect();
+    await migrationClient.query(
+      "UPDATE catalog.products SET category_name='Unexpected category' WHERE product_ref='prd_00000000000000000000000009'",
+    );
+    await assert.rejects(
+      assertForwardFixtures(forwardDatabase, fixtureBefore),
+      /G08_MIGRATIONS FORWARD_FIXTURE_CHANGED: catalog/u,
+    );
+    await migrationClient.query(
+      "UPDATE catalog.products SET category_name=NULL,display_name='Changed legacy name' WHERE product_ref='prd_00000000000000000000000009'",
+    );
+    await assert.rejects(
+      assertForwardFixtures(forwardDatabase, fixtureBefore),
+      /G08_MIGRATIONS FORWARD_FIXTURE_CHANGED: catalog/u,
+    );
+    await migrationClient.query(
+      "UPDATE catalog.products SET display_name='Before upgrade' WHERE product_ref='prd_00000000000000000000000009'",
+    );
+    await migrationClient.query(
+      "DELETE FROM catalog.variants WHERE variant_ref='var_00000000000000000000000009'",
+    );
+    await assert.rejects(
+      assertForwardFixtures(forwardDatabase, fixtureBefore),
+      /G08_MIGRATIONS FORWARD_FIXTURE_CHANGED: catalog/u,
+    );
+    await migrationClient.query(
+      "INSERT INTO catalog.variants(snapshot_ref,variant_ref,product_ref,unit) VALUES ('snp_00000000000000000000000009','var_00000000000000000000000009','prd_00000000000000000000000009','piece')",
+    );
+    await assertForwardFixtures(forwardDatabase, fixtureBefore);
     assert.deepEqual(
       (
         await migrationClient.query(

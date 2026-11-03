@@ -886,11 +886,11 @@ async function seedOrders(database) {
   );
 }
 
-async function fixtureState(database, owner, afterSuffix = false) {
+export async function fixtureState(database, owner, afterSuffix = false) {
   if (owner === "catalog")
     return query(
       database,
-      `SELECT jsonb_build_object('snapshot',to_jsonb(snapshot),'product',to_jsonb(product),'variant',to_jsonb(variant),'state',to_jsonb(state)) AS row
+      `SELECT jsonb_build_object('snapshot',to_jsonb(snapshot),'product','{"category_name":null}'::jsonb || to_jsonb(product),'variant',to_jsonb(variant),'state',to_jsonb(state)) AS row
       FROM catalog.supplier_snapshots snapshot JOIN catalog.products product USING(snapshot_ref)
       JOIN catalog.variants variant USING(snapshot_ref,product_ref) CROSS JOIN catalog.catalog_state state
       WHERE snapshot.snapshot_ref='snp_00000000000000000000000009'`,
@@ -958,7 +958,7 @@ async function seedForwardFixtures(database) {
   return before;
 }
 
-async function assertForwardFixtures(database, before) {
+export async function assertForwardFixtures(database, before) {
   if (!["catalog", "pricing", "orders"].includes(database.owner)) return;
   const after = await fixtureState(database.instance, database.owner, true);
   if (
