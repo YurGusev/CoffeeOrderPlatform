@@ -177,7 +177,7 @@ export function renderLocalRuntimeUnit({
     "Type=oneshot",
     "RemainAfterExit=yes",
     "Restart=no",
-    `WorkingDirectory=${quote(root)}`,
+    `WorkingDirectory=${root.replaceAll("%", "%%")}`,
     `Environment=${quote(`PATH=${dirname(nodePath)}:${dirname(pnpmPath)}:/usr/bin:/bin`)}`,
     `Environment=${quote(`COFFEE_LAUNCH_CONTEXT_FILE=${contextFile}`)}`,
     `Environment=${quote(`COFFEE_DB_EXPECTED_SERVER_IDENTITY=${expectedServerIdentity}`)}`,

@@ -184,7 +184,7 @@ void test("failed secret preparation removes only its incomplete release and per
   }
 });
 
-void test("local boot unit binds one immutable controller and its release", () => {
+void test("local boot unit binds one immutable controller and its release", async (t) => {
   const sourceSha = "a".repeat(40);
   const root = `/home/example/coffee-platform/runtime/controllers/${sourceSha}`;
   const options = {
@@ -265,6 +265,65 @@ void test("local boot unit binds one immutable controller and its release", () =
   assert.throws(
     () => renderLocalRuntimeUnit({ ...options, ownedServiceCount: 0 }),
     /locators are invalid/u,
+  );
+  await t.test(
+    "systemd verifies the runtime and maintenance units",
+    async (t) => {
+      const available = spawnSync("systemd-analyze", ["--version"], {
+        encoding: "utf8",
+        timeout: 10000,
+      });
+      if (available.error?.code === "ENOENT") {
+        t.skip("systemd-analyze is not installed");
+        return;
+      }
+      assert.equal(available.status, 0, available.stderr);
+      const temporary = await mkdtemp(join(tmpdir(), "coffee-unit-verify-"));
+      t.after(() => rm(temporary, { recursive: true, force: true }));
+      const verificationOptions = {
+        ...options,
+        root: join(temporary, "controller %literal"),
+        nodePath: process.execPath,
+        flockPath: process.execPath,
+        certificateRenewBeforeHours: 6,
+      };
+      const certificates =
+        renderLocalCertificateMaintenanceUnits(verificationOptions);
+      const files = [
+        [
+          "coffee-platform.service",
+          renderLocalRuntimeUnit(verificationOptions),
+        ],
+        ["coffee-platform-certificates.service", certificates.service],
+        ["coffee-platform-certificates.timer", certificates.timer],
+        [
+          "coffee-observability.service",
+          `[Service]\nType=oneshot\nExecStart=${process.execPath} --version\n`,
+        ],
+      ];
+      for (const [name, contents] of files)
+        await writeFile(join(temporary, name), contents);
+      const checked = spawnSync(
+        "systemd-analyze",
+        [
+          "--user",
+          "--generators=no",
+          "--man=no",
+          "verify",
+          ...files.map(([name]) => join(temporary, name)),
+        ],
+        {
+          encoding: "utf8",
+          timeout: 30000,
+          env: {
+            ...process.env,
+            XDG_RUNTIME_DIR: temporary,
+            SYSTEMD_UNIT_PATH: `${temporary}:`,
+          },
+        },
+      );
+      assert.equal(checked.status, 0, checked.stderr);
+    },
   );
 });
 
