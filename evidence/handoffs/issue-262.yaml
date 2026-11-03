@@ -1,6 +1,6 @@
 issue: 262
 baseCommit: 2a4f272444dd9484b0621104c300c07ee54dc2e2
-status: source-ready-runtime-pending
+status: runtime-verified
 inputs:
   - issue: 254
     acceptedMergeCommit: 2a4f272444dd9484b0621104c300c07ee54dc2e2
@@ -382,7 +382,7 @@ verification:
   - command: Независимый read-only review price diff
     result:
       Blockers не обнаружено, включая окончательный общий binding predicate; категории и исправление CAT262-01
-      также ранее проверены. Runtime latency ещё не измерена.
+      также ранее проверены. На момент review runtime latency ещё не была измерена.
   - command: GitHub Actions41686517629, source4af6e254065b79cef7cfc2524a08a0af0d792d9b
     result:
       "FAIL: optional categoryName без compatibility evidence. Root добавил4 записи и примеры в правильные existing
@@ -444,12 +444,73 @@ verification:
       exact digest. Первый image run FAIL из-за private operator umask077; исправлен только child umask022. Исходный
       lint FAIL helper вне итогового diff и все setup результаты сохранены."
     receiptSha256: 6008a48d2a2abb6b00b577a4a63a980952b66a2fed4c3c75ec656a1438a9eb0c
+  - command: GitHub Actions 41697245604; pnpm install --frozen-lockfile; pnpm check
+    result:
+      "PASS на source 9c731f233ae9244c09450fe283404b5cf6491d43; финальный Node suite: 1492 PASS, 0 FAIL,
+      79 SKIP. CI проверяет source, а не будущий metadata commit."
+    url: https://github.com/YurGusev/CoffeeOrderPlatform/actions/runs/41697245604
+    receipt: /home/yurgusev/.cache/coffee-launch-delivery/catalog-list-9c731f2-ci.json
+    receiptSha256: 9ebb31880ea01c9bc93824a76fbf89bce7a4b126bcde29e989b69a62ef818c05
+    log: /home/yurgusev/.cache/coffee-launch-delivery/catalog-list-9c731f2-ci-pass.log
+    logSha256: d22e8f497be2e29fe729b4aa5b71d36e32585ba0d44de5870f2892c82ab6adb6
+  - command: /home/yurgusev/.local/lib/nodejs/node-v26.8.1-linux-x64/bin/node tools/security-scan.mjs
+    result:
+      "PASS normal-platform-component, exit 0, 1638.294s: G12_SCAN_CLEAN, 24 targets и 48 reports; 2 raw High
+      разрешены как fixed, unresolved High и Critical — 0. Formal gate admission не заявляется. TMPDIR и
+      dataTempDir — /media/yurgusev/coffee-g12-work/tmp; shared heavy lock."
+    receipt: /home/yurgusev/.cache/coffee-launch-delivery/platform-image-scan-20261103T184816Z-9c731f2.json
+    receiptSha256: 0d09d244dcafbe2c70e85499edbf503595ed7539f1fd6b9388d3dcb158cd0b6d
+    log: /home/yurgusev/.cache/coffee-launch-delivery/platform-image-scan-20261103T184816Z-9c731f2.log
+    logSha256: 10ac71500a21ae80c76221d4b3fd1b84379d2ecb8d916f1d39e70e3fcaa2652c
+    context: /home/yurgusev/coffee-platform/runtime/controllers/9c731f233ae9244c09450fe283404b5cf6491d43/evidence/launch/20261103T184816Z-9c731f2/context.json
+    contextSha256: 204040d773148b14646ad5918b5ed69b73835564cda9b561c267167d58679216
+    resultArtifact: /home/yurgusev/coffee-platform/runtime/controllers/9c731f233ae9244c09450fe283404b5cf6491d43/evidence/launch/20261103T184816Z-9c731f2/gates/G12_SUPPLY_CHAIN/artifacts/supply-chain/result.json
+    resultSha256: 3682b5b4cfee29b0ba9304c315bd374a0a326d34f21b1b932d722a3925c207a1
+  - command: node tools/platform-service.mjs start
+    result:
+      "Первая попытка FAIL, exit 1, 15.028s: G12_KAFKA_EVIDENCE_FILE_INVALID из-за modes controller input;
+      после исправления только этих modes возобновление PASS, exit 0, 1285.071s. Git bytes и G12 source не менялись;
+      удалённых volumes нет, collector readonly log rebind подтверждён."
+    firstReceipt: /home/yurgusev/.cache/coffee-launch-delivery/runtime-cutover-9c731f2-first-attempt.json
+    firstReceiptSha256: d46115e73861b336e1cbbf8cb849e27e23e8f5e31844288db6fa98fb320a6d35
+    firstLog: /home/yurgusev/.cache/coffee-launch-delivery/runtime-cutover-9c731f2-first-attempt.log
+    firstLogSha256: a48c0213946d652ae8084d7af65b8258510b3c600dcc58ef47117c0f30672b8c
+    receipt: /home/yurgusev/.cache/coffee-launch-delivery/runtime-cutover-9c731f2.json
+    receiptSha256: c279e578d704f9bf53b846e086783ae8ef7d9fda72f6ad86dd3c727ba4a44779
+    resumeLog: /home/yurgusev/.cache/coffee-launch-delivery/runtime-cutover-9c731f2-resume.log
+    resumeLogSha256: 4eaf8e8e370d7cefdd1931b1a95a6d0ec11dc01fecd30298aac30eb02a953ab2
+  - command: python3 /home/yurgusev/.cache/coffee-launch-delivery/runtime-unit-install-9c731f2.py
+    result:
+      "PASS canonical native install и adoption: node tools/platform-service.mjs install и systemctl --user start
+      coffee-platform.service, exit 0; adoption 21.731s, container IDs и StartedAt сохранены, отдельный
+      restart/renewal/recover не выполнялся; timer остался enabled."
+    receipt: /home/yurgusev/.cache/coffee-launch-delivery/runtime-unit-install-9c731f2.json
+    receiptSha256: dc7ed3fab84c80d539b4c5b01fb9ae8a6edf60a39a16477f0531efac7d37bf22
+  - command: node /home/yurgusev/.cache/coffee-launch-delivery/runtime-order-readonly-9c731f2.mjs cutover
+    result:
+      "PASS_READ_ONLY_LOGIN_SSE_PERSISTENCE, businessCommands пуст: snapshot 19; страницы 20+20; категории и обе цены
+      у 20 из 20; фильтр 35% — 12, 10% — 4; ответы 729.615ms, 240.512ms, 170.466ms соответственно;
+      поиск, пагинация, Back/Forward и сохранённый Order/Customer проверены."
+    receipt: /home/yurgusev/.cache/coffee-launch-delivery/runtime-browser-9c731f2-cutover.json
+    receiptSha256: 70f0c93f5e4421f7df440b4d5659018cdb12f0e097c2e9cb5564bb3f862fde1a
+  - command: mcp__rea__list_browser_targets; mcp__rea__inspect_web_page; mcp__rea__capture_web_screenshot
+    result:
+      "PASS_PASSIVE_CATALOG_VIEWPORT: 20 articles, один список, фильтр скидок, по 20 подписей обеих цен,
+      addButtons=0 и подпись о ценах без скидок. Доказательство переходов и запросов — отдельный browser receipt."
+    receipt: /home/yurgusev/.cache/coffee-launch-delivery/runtime-rea-9c731f2-cutover.json
+    receiptSha256: 338ea9ac1473314c99f511978c4131ea6bc5d037af69d31222e803e20bd4d206
+  - command: node /home/yurgusev/.cache/coffee-launch-delivery/runtime-cutover-9c731f2-after-snapshot.mjs after
+    result:
+      "Read-only сравнение before/after и canonical adoption — PASS_CUTOVER_PERSISTENCE: 627 volumes сохранены,
+      добавлен 1 anonymous volume; 22 protected containers
+      неизменны; 72 Kafka offsets не уменьшились. Timer сохранён, adoption без restart, CA и Customer SPKI сохранены."
+    receipt: /home/yurgusev/.cache/coffee-launch-delivery/runtime-cutover-9c731f2-comparison.json
+    receiptSha256: 0f5a4571f2b09d4de5285e4526dd85e8d4cb9aeca37124b1966f0eac2c5d3981
 limitations:
-  - CI, G12 и normal cutover окончательного source ещё не выполнены; на сервере пока runtime 7b019e3.
   - Снимки browser fixture показывают тестовые данные, не фактический supplier catalog.
-  - После normal cutover scheduler выполнит обычный импорт сразу при старте; категория появится после активации нового
-    snapshot.
-  - "Этот handoff не является полным admission issue #13: после merge нужен новый exact candidate и обязательные formal
-    gates."
-  - Актуальная привязка35%/10% к реальным товарам и latency новой страницы ещё ожидают readonly runtime приёмки; синтетические
-    tests её не заменяют.
+  - "Подтверждён только normal-platform-component admission source 9c731f2; полный formal admission issue #13
+    остаётся отдельной работой с новым exact candidate и обязательными gates."
+  - "Обе цены показаны без применения supplierPromotions; browser timings — отдельные измерения snapshot 19,
+    а не нагрузочная проверка или SLO."
+  - REA подтверждает только текущий viewport; переходы, фильтры и запросы проверены отдельным browser helper.
+  - CI и merge будущего metadata HEAD ещё предстоят; rollback прежней версии не проверялся.
