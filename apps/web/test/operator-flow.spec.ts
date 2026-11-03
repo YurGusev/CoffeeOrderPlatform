@@ -3351,17 +3351,22 @@ async function routeSemantics(context: BrowserContext): Promise<void> {
   assert.equal(telemetry.putRequests.length, 0);
 
   for (const invalid of ["invalid", ""]) {
-    const before = requests.length;
-    await page.goto(`${origin}/app/catalog?orderRef=${invalid}`, {
+    const invalidPage = await context.newPage();
+    const invalidRequests: string[] = [];
+    await installCommonMocks(invalidPage);
+    invalidPage.on("request", (request) => {
+      const url = new URL(request.url());
+      if (url.pathname.startsWith("/api/client-v1/"))
+        invalidRequests.push(
+          `${request.method()} ${url.pathname}${url.search}`,
+        );
+    });
+    await invalidPage.goto(`${origin}/app/catalog?orderRef=${invalid}`, {
       waitUntil: "networkidle",
     });
-    await page.getByText("Не удалось открыть каталог заказа").waitFor();
-    assert.equal(
-      requests
-        .slice(before)
-        .some((request) => request.url.pathname.startsWith("/api/client-v1/")),
-      false,
-    );
+    await invalidPage.getByText("Не удалось открыть каталог заказа").waitFor();
+    assert.deepEqual(invalidRequests, []);
+    await invalidPage.close();
   }
 
   await page.goto(`${origin}/app/catalog?orderRef=${orderRef}`, {
