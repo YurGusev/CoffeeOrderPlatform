@@ -1,6 +1,9 @@
 import { createHash } from "node:crypto";
 import type { Database } from "@coffee-platform/database";
 import {
+  isPricingPreviewRequest,
+  isPricingPreviewResponse,
+  type PricingPreviewRequest,
   isPricingQuoteCreateRequest,
   isPricingQuoteResponse,
   isPricingQuoteVerifyRequest,
@@ -18,6 +21,7 @@ import type {
 } from "@coffee-platform/runtime";
 import {
   createPricingQuote,
+  previewCatalogPrices,
   type CatalogPricingClient,
 } from "../application/create-pricing-quote.js";
 import { PricingStore } from "../infrastructure/database/pricing-store.js";
@@ -68,7 +72,7 @@ export type PricingSecurity = Readonly<{
   ) => boolean;
   verifyPublicDelegation: (
     token: string,
-    operation: "createPricingQuote",
+    operation: "createPricingQuote" | "previewCatalogPrices",
     signal: AbortSignal,
   ) => PublicClaims | Promise<PublicClaims>;
   verifyInternalDelegation: (
@@ -85,6 +89,10 @@ export type PricingSecurity = Readonly<{
   ) => string;
 }>;
 export type PricingOwner = Readonly<{
+  preview: (
+    request: PricingPreviewRequest,
+    context: Context,
+  ) => ReturnType<typeof previewCatalogPrices>;
   create: (
     input: Readonly<{
       request: PricingQuoteCreateRequest;
@@ -296,6 +304,80 @@ export function registerPricingRoutes(
   app: App,
   adapters: PricingHttpAdapters,
 ): void {
+  app.post("/api/client-v1/pricing/catalog-preview", {
+    config: { runtimeDeadlineProfile: "defaultMs" },
+    bodyLimit: MAX_BODY_BYTES,
+    errorHandler: (_error, request, reply) =>
+      sendProblem(request, reply, "VALIDATION_FAILED"),
+    schema: {
+      response: pricingResponseSchema(
+        pricingContractSchemas.previewResponse,
+        200,
+        [400, 401, 403, 409, 503],
+      ),
+    },
+    handler: async (request, reply) => {
+      const ctx = context(request, 1_000);
+      if (!adapters.verifyTransport(request, "api-public"))
+        return sendProblem(request, reply, "AUTHENTICATION_REQUIRED");
+      if (spoofed(request, "x-actor-context"))
+        return sendProblem(request, reply, "ACTOR_CONTEXT_INVALID");
+      const token = one(request, "x-actor-context");
+      if (!token)
+        return sendProblem(
+          request,
+          reply,
+          present(request, "x-actor-context")
+            ? "ACTOR_CONTEXT_INVALID"
+            : "AUTHENTICATION_REQUIRED",
+        );
+      let claims: PublicClaims;
+      try {
+        claims = await adapters.verifyPublicDelegation(
+          token,
+          "previewCatalogPrices",
+          ctx.signal,
+        );
+      } catch {
+        return sendProblem(request, reply, "ACTOR_CONTEXT_INVALID");
+      }
+      if (
+        !claims ||
+        claims.iss !== "api-public" ||
+        claims.aud !== "pricing-service" ||
+        claims.originalIssuer !== "edge-gateway" ||
+        claims.operationId !== "previewCatalogPrices" ||
+        !claims.sub ||
+        !Array.isArray(claims.permissions) ||
+        !claims.permissions.includes("catalog:read") ||
+        claims.correlationId !== ctx.correlationId ||
+        (ctx.traceparent !== undefined &&
+          claims.traceparent !== ctx.traceparent)
+      )
+        return sendProblem(request, reply, "ACTOR_CONTEXT_INVALID");
+      if (!validBodySize(request) || !isPricingPreviewRequest(request.body))
+        return sendProblem(request, reply, "VALIDATION_FAILED");
+      try {
+        const result = await adapters.owner.preview(request.body, ctx);
+        ctx.signal.throwIfAborted();
+        if (!isPricingPreviewResponse(result))
+          throw new Error("invalid preview");
+        return reply.header("cache-control", "no-store").code(200).send(result);
+      } catch (error) {
+        const code =
+          error instanceof Error && "code" in error ? error.code : undefined;
+        return sendProblem(
+          request,
+          reply,
+          code === "CATALOG_REVISION_CHANGED" ||
+            code === "PRICING_POLICY_UNAVAILABLE"
+            ? code
+            : "CATALOG_UNAVAILABLE",
+        );
+      }
+    },
+  });
+
   app.post(CREATE, {
     config: { runtimeDeadlineProfile: "defaultMs" },
     bodyLimit: MAX_BODY_BYTES,
@@ -498,6 +580,12 @@ export function createPricingAdapters(
   return {
     ...security,
     owner: {
+      preview: (request, context) =>
+        previewCatalogPrices(store, catalog, {
+          request,
+          ...context,
+          signDelegation: () => security.signCatalogDelegation(context),
+        }),
       create: async ({ request, identity, context }) => {
         const start = performance.now();
         try {

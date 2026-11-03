@@ -29,6 +29,25 @@ const problem = {
 
 void test("Catalog query decoder validates source-contract fields and query error classification", () => {
   assert.deepEqual(decodeCatalogSearchQuery({}), {});
+  for (const supplierDiscountBasisPoints of ["1000", "3500"])
+    assert.deepEqual(
+      decodeCatalogSearchQuery({ supplierDiscountBasisPoints }),
+      { supplierDiscountBasisPoints: Number(supplierDiscountBasisPoints) },
+    );
+  for (const supplierDiscountBasisPoints of [
+    "",
+    "35",
+    "3000",
+    "01000",
+    1000,
+    null,
+    ["1000", "3500"],
+  ])
+    assert.equal(
+      decodeCatalogSearchQuery({ supplierDiscountBasisPoints }),
+      undefined,
+    );
+
   assert.deepEqual(decodeCatalogSearchQuery({ query: "coffee" }), {
     query: "coffee",
   });
@@ -107,6 +126,54 @@ void test("Catalog product, variant, search response and pricing input validator
     nextCursor: null,
   };
   assert.equal(isCatalogSearchResponse(searchResponse), true);
+  const promotion = {
+    discountBasisPoints: 3500,
+    minimumWeightRaw: "0",
+    providerCreatedAt: "2026-09-14T04:55:24Z",
+    providerUpdatedAt: "2026-09-14T04:55:24Z",
+  };
+  for (const supplierPromotions of [
+    [],
+    [promotion],
+    [{ ...promotion, discountBasisPoints: 1000, minimumWeightRaw: "0.25" }],
+  ])
+    assert.equal(
+      isCatalogSearchResponse({
+        ...searchResponse,
+        items: [{ ...searchResponse.items[0], supplierPromotions }],
+      }),
+      true,
+    );
+  for (const supplierPromotions of [
+    null,
+    [{ ...promotion, discountBasisPoints: 10001 }],
+    [{ ...promotion, minimumWeightRaw: "-1" }],
+    [{ ...promotion, providerCreatedAt: "2026-02-30T00:00:00Z" }],
+    [{ ...promotion, expiresAt: "2026-09-21T00:00:00Z" }],
+  ])
+    assert.equal(
+      isCatalogSearchResponse({
+        ...searchResponse,
+        items: [{ ...searchResponse.items[0], supplierPromotions }],
+      }),
+      false,
+    );
+
+  assert.equal(
+    isCatalogSearchResponse({
+      ...searchResponse,
+      items: [{ ...searchResponse.items[0], categoryName: "Чай" }],
+    }),
+    true,
+  );
+  for (const categoryName of [null, "", "x".repeat(201), 42])
+    assert.equal(
+      isCatalogSearchResponse({
+        ...searchResponse,
+        items: [{ ...searchResponse.items[0], categoryName }],
+      }),
+      false,
+    );
   assert.equal(
     isCatalogSearchResponse({
       ...searchResponse,

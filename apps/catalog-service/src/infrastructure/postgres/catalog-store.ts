@@ -30,6 +30,7 @@ export class CatalogStore implements CatalogOwnerStore {
     input: Readonly<{
       query: string;
       availability: CatalogAvailability | null;
+      supplierDiscountBasisPoints: 1000 | 3500 | null;
       after: CatalogCursorPosition | null;
       limit: number;
       signal?: AbortSignal;

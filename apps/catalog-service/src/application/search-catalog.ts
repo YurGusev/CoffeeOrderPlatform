@@ -1,5 +1,7 @@
 import { createHash, sign, verify, type KeyObject } from "node:crypto";
 
+import type { CatalogProductSummary } from "@coffee-platform/contracts-catalog-v1";
+
 const MAX_CURSOR_LENGTH = 512;
 const SIGNATURE_BYTES = 64;
 const REFERENCE = /^prd_[0-9A-HJKMNP-TV-Z]{26}$/u;
@@ -11,6 +13,8 @@ export type CatalogSearchRow = Readonly<{
   productRef: string | null;
   variantRef: string | null;
   displayName: string | null;
+  categoryName?: string | null;
+  supplierPromotions?: CatalogProductSummary["supplierPromotions"] | null;
   displayNameSortKey: string | null;
   unit: "piece" | "gram" | "kilogram" | null;
   availability: CatalogAvailability | null;
@@ -29,6 +33,7 @@ export type CatalogPageStore = Readonly<{
     input: Readonly<{
       query: string;
       availability: CatalogAvailability | null;
+      supplierDiscountBasisPoints: 1000 | 3500 | null;
       after: CatalogCursorPosition | null;
       limit: number;
       signal?: AbortSignal;
@@ -94,9 +99,19 @@ function normalizeQuery(value: string | undefined): string {
 function filterHash(
   query: string,
   availability: CatalogAvailability | undefined,
+  supplierDiscountBasisPoints: 1000 | 3500 | undefined,
 ): string {
   return createHash("sha256")
-    .update(JSON.stringify([query, availability ?? null]), "utf8")
+    .update(
+      JSON.stringify([
+        query,
+        availability ?? null,
+        ...(supplierDiscountBasisPoints === undefined
+          ? []
+          : [supplierDiscountBasisPoints]),
+      ]),
+      "utf8",
+    )
     .digest("base64url");
 }
 
@@ -234,6 +249,7 @@ export async function searchCatalog(
   input: Readonly<{
     query?: string;
     availability?: CatalogAvailability;
+    supplierDiscountBasisPoints?: 1000 | 3500;
     limit?: number;
     cursor?: string;
     signal?: AbortSignal;
@@ -247,6 +263,8 @@ export async function searchCatalog(
       productRef: string;
       variantRef: string;
       displayName: string;
+      categoryName?: string;
+      supplierPromotions?: CatalogProductSummary["supplierPromotions"];
       unit: "piece" | "gram" | "kilogram";
       availability: CatalogAvailability;
       mappingAvailable: boolean;
@@ -263,7 +281,11 @@ export async function searchCatalog(
   const limit = input.limit ?? 20;
   if (!Number.isSafeInteger(limit) || limit < 1 || limit > 50)
     throw new CatalogOwnerError("VALIDATION_FAILED");
-  const hash = filterHash(query, input.availability);
+  const hash = filterHash(
+    query,
+    input.availability,
+    input.supplierDiscountBasisPoints,
+  );
   const cursor =
     input.cursor === undefined
       ? undefined
@@ -271,6 +293,7 @@ export async function searchCatalog(
   const page = await store.search({
     query,
     availability: input.availability ?? null,
+    supplierDiscountBasisPoints: input.supplierDiscountBasisPoints ?? null,
     after: cursor ?? null,
     limit: limit + 1,
     ...(input.signal === undefined ? {} : { signal: input.signal }),
@@ -295,6 +318,10 @@ export async function searchCatalog(
       productRef: row.productRef,
       variantRef: row.variantRef,
       displayName: row.displayName,
+      ...(row.categoryName ? { categoryName: row.categoryName } : {}),
+      ...(row.supplierPromotions == null
+        ? {}
+        : { supplierPromotions: row.supplierPromotions }),
       unit: row.unit,
       availability: row.availability,
       mappingAvailable: row.mappingAvailable,

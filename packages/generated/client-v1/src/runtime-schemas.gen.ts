@@ -366,6 +366,12 @@ export const clientV1Schemas = {
         "minLength": 1,
         "maxLength": 200
       },
+      "categoryName": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 200,
+        "description": "Название категории поставщика; отсутствует, если поставщик его не передал."
+      },
       "unit": {
         "type": "string",
         "enum": [
@@ -389,6 +395,80 @@ export const clientV1Schemas = {
         "type": "string",
         "format": "uri",
         "maxLength": 2048
+      },
+      "prices": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "supplierUnitMinor",
+          "saleUnitMinor",
+          "currency"
+        ],
+        "properties": {
+          "supplierUnitMinor": {
+            "allOf": [
+              {
+                "type": "string",
+                "pattern": "^-?(0|[1-9][0-9]*)$"
+              },
+              {
+                "type": "string",
+                "pattern": "^(0|[1-9][0-9]{0,18})$"
+              }
+            ]
+          },
+          "saleUnitMinor": {
+            "allOf": [
+              {
+                "type": "string",
+                "pattern": "^-?(0|[1-9][0-9]*)$"
+              },
+              {
+                "type": "string",
+                "pattern": "^(0|[1-9][0-9]{0,18})$"
+              }
+            ]
+          },
+          "currency": {
+            "type": "string",
+            "const": "RUB"
+          }
+        }
+      },
+      "supplierPromotions": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Правило поставщика из активного снимка. Даты являются фактами провайдера, а не сроком действия; minimumWeightRaw сохраняется без предположения о единице.",
+          "required": [
+            "discountBasisPoints",
+            "minimumWeightRaw",
+            "providerCreatedAt",
+            "providerUpdatedAt"
+          ],
+          "properties": {
+            "discountBasisPoints": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 10000
+            },
+            "minimumWeightRaw": {
+              "type": "string",
+              "pattern": "^(?:0|[1-9][0-9]*)(?:\\.[0-9]*[1-9])?$"
+            },
+            "providerCreatedAt": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^[0-9]{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12][0-9]|3[01])T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](?:\\.[0-9]+)?Z$"
+            },
+            "providerUpdatedAt": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^[0-9]{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12][0-9]|3[01])T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](?:\\.[0-9]+)?Z$"
+            }
+          }
+        }
       },
       "grindOptions": {
         "type": "array",
@@ -456,6 +536,12 @@ export const clientV1Schemas = {
               "minLength": 1,
               "maxLength": 200
             },
+            "categoryName": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200,
+              "description": "Название категории поставщика; отсутствует, если поставщик его не передал."
+            },
             "unit": {
               "type": "string",
               "enum": [
@@ -479,6 +565,80 @@ export const clientV1Schemas = {
               "type": "string",
               "format": "uri",
               "maxLength": 2048
+            },
+            "prices": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "supplierUnitMinor",
+                "saleUnitMinor",
+                "currency"
+              ],
+              "properties": {
+                "supplierUnitMinor": {
+                  "allOf": [
+                    {
+                      "type": "string",
+                      "pattern": "^-?(0|[1-9][0-9]*)$"
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^(0|[1-9][0-9]{0,18})$"
+                    }
+                  ]
+                },
+                "saleUnitMinor": {
+                  "allOf": [
+                    {
+                      "type": "string",
+                      "pattern": "^-?(0|[1-9][0-9]*)$"
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^(0|[1-9][0-9]{0,18})$"
+                    }
+                  ]
+                },
+                "currency": {
+                  "type": "string",
+                  "const": "RUB"
+                }
+              }
+            },
+            "supplierPromotions": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "description": "Правило поставщика из активного снимка. Даты являются фактами провайдера, а не сроком действия; minimumWeightRaw сохраняется без предположения о единице.",
+                "required": [
+                  "discountBasisPoints",
+                  "minimumWeightRaw",
+                  "providerCreatedAt",
+                  "providerUpdatedAt"
+                ],
+                "properties": {
+                  "discountBasisPoints": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 10000
+                  },
+                  "minimumWeightRaw": {
+                    "type": "string",
+                    "pattern": "^(?:0|[1-9][0-9]*)(?:\\.[0-9]*[1-9])?$"
+                  },
+                  "providerCreatedAt": {
+                    "type": "string",
+                    "format": "date-time",
+                    "pattern": "^[0-9]{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12][0-9]|3[01])T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](?:\\.[0-9]+)?Z$"
+                  },
+                  "providerUpdatedAt": {
+                    "type": "string",
+                    "format": "date-time",
+                    "pattern": "^[0-9]{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12][0-9]|3[01])T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](?:\\.[0-9]+)?Z$"
+                  }
+                }
+              }
             },
             "grindOptions": {
               "type": "array",
@@ -506,12 +666,205 @@ export const clientV1Schemas = {
           }
         }
       },
+      "policyVersionRef": {
+        "type": "string",
+        "pattern": "^pvr_[0-9A-HJKMNP-TV-Z]{26}$"
+      },
       "nextCursor": {
         "type": [
           "string",
           "null"
         ],
         "maxLength": 512
+      }
+    }
+  },
+  "CatalogPrices": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "supplierUnitMinor",
+      "saleUnitMinor",
+      "currency"
+    ],
+    "properties": {
+      "supplierUnitMinor": {
+        "allOf": [
+          {
+            "type": "string",
+            "pattern": "^-?(0|[1-9][0-9]*)$"
+          },
+          {
+            "type": "string",
+            "pattern": "^(0|[1-9][0-9]{0,18})$"
+          }
+        ]
+      },
+      "saleUnitMinor": {
+        "allOf": [
+          {
+            "type": "string",
+            "pattern": "^-?(0|[1-9][0-9]*)$"
+          },
+          {
+            "type": "string",
+            "pattern": "^(0|[1-9][0-9]{0,18})$"
+          }
+        ]
+      },
+      "currency": {
+        "type": "string",
+        "const": "RUB"
+      }
+    }
+  },
+  "CatalogSupplierPromotion": {
+    "type": "object",
+    "additionalProperties": false,
+    "description": "Правило поставщика из активного снимка. Даты являются фактами провайдера, а не сроком действия; minimumWeightRaw сохраняется без предположения о единице.",
+    "required": [
+      "discountBasisPoints",
+      "minimumWeightRaw",
+      "providerCreatedAt",
+      "providerUpdatedAt"
+    ],
+    "properties": {
+      "discountBasisPoints": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 10000
+      },
+      "minimumWeightRaw": {
+        "type": "string",
+        "pattern": "^(?:0|[1-9][0-9]*)(?:\\.[0-9]*[1-9])?$"
+      },
+      "providerCreatedAt": {
+        "type": "string",
+        "format": "date-time",
+        "pattern": "^[0-9]{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12][0-9]|3[01])T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](?:\\.[0-9]+)?Z$"
+      },
+      "providerUpdatedAt": {
+        "type": "string",
+        "format": "date-time",
+        "pattern": "^[0-9]{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12][0-9]|3[01])T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](?:\\.[0-9]+)?Z$"
+      }
+    }
+  },
+  "PricingPreviewRequest": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "snapshotRevision",
+      "items"
+    ],
+    "properties": {
+      "snapshotRevision": {
+        "type": "string",
+        "pattern": "^(0|[1-9][0-9]*)$"
+      },
+      "items": {
+        "type": "array",
+        "maxItems": 50,
+        "uniqueItems": true,
+        "items": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "productRef",
+            "variantRef"
+          ],
+          "properties": {
+            "productRef": {
+              "type": "string",
+              "pattern": "^prd_[0-9A-HJKMNP-TV-Z]{26}$"
+            },
+            "variantRef": {
+              "type": "string",
+              "pattern": "^var_[0-9A-HJKMNP-TV-Z]{26}$"
+            }
+          }
+        }
+      }
+    }
+  },
+  "PricingPreviewResponse": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "snapshotRevision",
+      "policyVersionRef",
+      "items"
+    ],
+    "properties": {
+      "snapshotRevision": {
+        "type": "string",
+        "pattern": "^(0|[1-9][0-9]*)$"
+      },
+      "policyVersionRef": {
+        "type": "string",
+        "pattern": "^pvr_[0-9A-HJKMNP-TV-Z]{26}$"
+      },
+      "items": {
+        "type": "array",
+        "maxItems": 50,
+        "items": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "productRef",
+            "variantRef",
+            "unit",
+            "supplierUnitMinor",
+            "saleUnitMinor",
+            "currency"
+          ],
+          "properties": {
+            "productRef": {
+              "type": "string",
+              "pattern": "^prd_[0-9A-HJKMNP-TV-Z]{26}$"
+            },
+            "variantRef": {
+              "type": "string",
+              "pattern": "^var_[0-9A-HJKMNP-TV-Z]{26}$"
+            },
+            "unit": {
+              "type": "string",
+              "enum": [
+                "piece",
+                "gram",
+                "kilogram"
+              ]
+            },
+            "supplierUnitMinor": {
+              "allOf": [
+                {
+                  "type": "string",
+                  "pattern": "^-?(0|[1-9][0-9]*)$"
+                },
+                {
+                  "type": "string",
+                  "pattern": "^(0|[1-9][0-9]{0,18})$"
+                }
+              ]
+            },
+            "saleUnitMinor": {
+              "allOf": [
+                {
+                  "type": "string",
+                  "pattern": "^-?(0|[1-9][0-9]*)$"
+                },
+                {
+                  "type": "string",
+                  "pattern": "^(0|[1-9][0-9]{0,18})$"
+                }
+              ]
+            },
+            "currency": {
+              "type": "string",
+              "const": "RUB"
+            }
+          }
+        }
       }
     }
   },

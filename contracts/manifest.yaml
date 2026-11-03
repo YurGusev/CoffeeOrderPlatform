@@ -60,6 +60,19 @@ contracts:
       compatibility: additive,
     }
   - {
+      id: previewCatalogPrices,
+      kind: http,
+      owner: pricing,
+      operation: "POST /api/client-v1/pricing/catalog-preview",
+      statuses: [200, 400, 401, 403, 409, 503],
+      audience: browser,
+      producers: [api-public],
+      consumers: [pricing-service, web],
+      pii: none,
+      secrets: forbidden,
+      compatibility: additive,
+    }
+  - {
       id: createPricingQuote,
       kind: http,
       owner: pricing,

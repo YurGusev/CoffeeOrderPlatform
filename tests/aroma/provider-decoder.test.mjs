@@ -104,6 +104,23 @@ void test("decoder принимает фактическую catalog page и п�
   const page = JSON.parse(pageText);
   const decoded = decodeCatalogPage(page);
   assert.equal(decoded.currentPage, 1);
+  assert.equal(decoded.products[0].categoryName, page.data[0].category.name);
+  for (const category of [undefined, null, {}, { name: null }]) {
+    const withoutCategory = decodeCatalogPage({
+      ...page,
+      data: [{ ...page.data[0], category }],
+    });
+    assert.equal(
+      Object.hasOwn(withoutCategory.products[0], "categoryName"),
+      false,
+    );
+  }
+  for (const category of ["Кофе", { name: 42 }, { name: "" }])
+    assert.throws(
+      () =>
+        decodeCatalogPage({ ...page, data: [{ ...page.data[0], category }] }),
+      { code: "ProviderDecodeInvalid" },
+    );
   assert.ok(decoded.products.length > 0);
   assert.equal(decoded.products[0].productOnStop, false);
   assert.equal(decoded.products[0].showOnWholesale, true);

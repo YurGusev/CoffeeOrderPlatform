@@ -92,11 +92,25 @@ Node runtime или provider code. Package-owned inline SVG icons огранич
   status `Draft` и `edit-items`, иначе показывается ошибка или выполняется
   redirect на Order Card с alert;
 - CustomerRef берётся только из Order Card, не из URL/local storage;
-- URL state: optional `orderRef`, `q`, `availability`, `cursor`; пустой поиск
+- URL state: optional `orderRef`, `q`, `availability`, `supplierDiscountBasisPoints`, `cursor`; пустой поиск
   запрашивает browse без параметра `query`, поиск по названию — от двух символов;
   изменение поиска или фильтра сбрасывает cursor;
-- result row показывает owner Catalog fields; в Draft доступны quantity, помол
-  и «Добавить»;
+- товары показаны компактным списком по одному в строке: название, категория
+  поставщика под названием, наличие и единица; неизвестная категория — «Не указана»;
+- отдельные выровненные колонки показывают «Цена поставщика» и «Цена продажи»
+  за единицу из server `prices`; frontend только форматирует minor units.
+  При отсутствии цен показывает «Недоступна», а не ноль;
+- фильтр «Скидка поставщика» выбирает все товары, 35% (`3500`) или 10% (`1000`);
+  фильтруется весь серверный набор до pagination, выбор входит в query key и URL;
+- `supplierPromotions` показываются как правила поставщика с фактическим процентом;
+  положительный `minimumWeightRaw` отмечается наличием условий, без предположения
+  об единицах веса или применимости к заказу. Provider timestamps не задают срок акции;
+- интерфейс явно поясняет, что обе цены показаны без применения этих скидок;
+  frontend не вычитает и не складывает проценты;
+- в Draft доступны quantity, помол и «Добавить»; отсутствие помола у товара
+  не сдвигает колонки цен. На мобильном экране строка переносится без overflow;
+- чтение цен не создаёт quote: preview справочный, а цена добавленной строки
+  определяется только результатом следующего PricingQuote;
 - #9 запрашивает PricingQuote ровно для одной строки;
 - после quote success выполняет PUT item с generated `itemRef`, текущей
   command `Order.version` и exact quote proof; authoritative money не пересчитывается;
@@ -105,6 +119,7 @@ Frontend хранит две независимые версии: `Order.version
 `expectedVersion` команд, `OrderCard.projectionVersion` — только для SSE
 dedup/refetch. Сравнивать их между собой запрещено. `MAPPING_CHANGED` показывает
 blocked state без blind retry и предлагает создать новый Draft/quote.
+
 - success принимает Order response через monotonic projectionVersion guard и показывает ссылку к Order Card;
 - кнопка «К заказу» ведёт на `/app/orders/{orderRef}`.
 
@@ -195,22 +210,22 @@ success (включая empty), recoverable error, route-fatal error. Стары
 Catalog сохраняется до успешного чтения того же query; временная ошибка не
 подтверждает доступ.
 
-| Code/ситуация | Точный UI |
-|---|---|
-| field `VALIDATION_FAILED` | inline errors по `errors[].field`, focus первого поля |
-| `IDEMPOTENCY_CONFLICT` | alert «Этот ключ уже использован для другой команды», без retry |
-| `IDEMPOTENCY_REQUEST_IN_PROGRESS` | сохранить pending key; «Проверить результат команды», без новой команды |
-| `IDEMPOTENCY_RESULT_NOT_RETAINED` | unresolved intent; owner recovery, без нового key |
-| `IDEMPOTENCY_LOOKUP_UNAVAILABLE` / `IDEMPOTENCY_RESULT_INVALID` | сохранить pending key, безопасная ошибка и correlation id |
-| `ORDER_VERSION_CONFLICT` | conflict modal и алгоритм раздела 5 |
-| `ORDER_QUOTE_STALE` / `PRICING_QUOTE_EXPIRED` | сохранить product/quantity, вернуть в Catalog, запросить новую quote только по кнопке |
-| `CATALOG_REVISION_CHANGED` | refetch Catalog, снять выбор устаревшей строки |
-| `CUSTOMER_UNAVAILABLE|CATALOG_UNAVAILABLE|PRICING_POLICY_UNAVAILABLE` | owner unavailable alert, local Draft не очищать |
-| `AROMA_PROVIDER_UNAVAILABLE` | Order Card остаётся видимым; status/blockers owner response, mutation-кнопку не добавлять |
-| 401 | перейти на configured login route с return URL |
-| 403 | экран «Недостаточно прав», без повторов |
-| 404 Order | route not-found с link к Customer flow |
-| malformed/non-Problem error | generic error + correlation id, technical body не показывать |
+| Code/ситуация                                                   | Точный UI                                                                                 |
+| --------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| field `VALIDATION_FAILED`                                       | inline errors по `errors[].field`, focus первого поля                                     |
+| `IDEMPOTENCY_CONFLICT`                                          | alert «Этот ключ уже использован для другой команды», без retry                           |
+| `IDEMPOTENCY_REQUEST_IN_PROGRESS`                               | сохранить pending key; «Проверить результат команды», без новой команды                   |
+| `IDEMPOTENCY_RESULT_NOT_RETAINED`                               | unresolved intent; owner recovery, без нового key                                         |
+| `IDEMPOTENCY_LOOKUP_UNAVAILABLE` / `IDEMPOTENCY_RESULT_INVALID` | сохранить pending key, безопасная ошибка и correlation id                                 |
+| `ORDER_VERSION_CONFLICT`                                        | conflict modal и алгоритм раздела 5                                                       |
+| `ORDER_QUOTE_STALE` / `PRICING_QUOTE_EXPIRED`                   | сохранить product/quantity, вернуть в Catalog, запросить новую quote только по кнопке     |
+| `CATALOG_REVISION_CHANGED`                                      | refetch Catalog, снять выбор устаревшей строки                                            |
+| `CUSTOMER_UNAVAILABLE                                           | CATALOG_UNAVAILABLE                                                                       | PRICING_POLICY_UNAVAILABLE` | owner unavailable alert, local Draft не очищать |
+| `AROMA_PROVIDER_UNAVAILABLE`                                    | Order Card остаётся видимым; status/blockers owner response, mutation-кнопку не добавлять |
+| 401                                                             | перейти на configured login route с return URL                                            |
+| 403                                                             | экран «Недостаточно прав», без повторов                                                   |
+| 404 Order                                                       | route not-found с link к Customer flow                                                    |
+| malformed/non-Problem error                                     | generic error + correlation id, technical body не показывать                              |
 
 ## 7. Order Card state
 

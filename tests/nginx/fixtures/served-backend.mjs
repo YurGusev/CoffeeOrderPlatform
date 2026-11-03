@@ -442,7 +442,7 @@ export async function runServedProof() {
           const expectedOperations = {
             "customer-service": ["searchCustomers", "createCustomer"],
             "catalog-service": ["searchCatalogProducts"],
-            "pricing-service": ["createPricingQuote"],
+            "pricing-service": ["createPricingQuote", "previewCatalogPrices"],
             "orders-service": [
               "getOrderCard",
               "createOrderDraft",
@@ -452,7 +452,10 @@ export async function runServedProof() {
             ],
           };
           assert.ok(expectedOperations[owner].includes(actor.operationId));
-          if ((options.method ?? "GET") !== "GET")
+          if (
+            (options.method ?? "GET") !== "GET" &&
+            actor.operationId !== "previewCatalogPrices"
+          )
             assert.match(
               headers.get("idempotency-key") ?? "",
               /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu,
@@ -531,6 +534,21 @@ export async function runServedProof() {
                 },
               ],
               nextCursor: null,
+            };
+          } else if (
+            owner === "pricing-service" &&
+            actor.operationId === "previewCatalogPrices"
+          ) {
+            body = {
+              snapshotRevision: request.snapshotRevision,
+              policyVersionRef: "pvr_01ARZ3NDEKTSV4RRFFQ69G5FAV",
+              items: request.items.map((item) => ({
+                ...item,
+                unit: "piece",
+                supplierUnitMinor: "100",
+                saleUnitMinor: "130",
+                currency: "RUB",
+              })),
             };
           } else if (owner === "pricing-service") {
             assert.equal(actor.operationId, "createPricingQuote");

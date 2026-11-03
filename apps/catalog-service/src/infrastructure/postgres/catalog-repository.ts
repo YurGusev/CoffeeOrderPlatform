@@ -18,6 +18,7 @@ type SearchParameters = readonly [
   string | null,
   string | null,
   number,
+  1000 | 3500 | null,
 ];
 type PricingParameters = readonly [string, string, number | null];
 type SearchDbRow = CatalogSearchRow & Readonly<{ cursorValid: boolean }>;
@@ -33,11 +34,11 @@ const SEARCH_SQL = `WITH metadata AS (
     JOIN catalog.active_variants AS variant ON variant.snapshot_ref = product.snapshot_ref AND variant.product_ref = product.product_ref AND variant.variant_ref = $5
 ), candidates AS (
   SELECT metadata.snapshot_revision AS "snapshotRevision", product.product_ref AS "productRef",
-         variant.variant_ref AS "variantRef", product.display_name AS "displayName",
+         variant.variant_ref AS "variantRef", product.display_name AS "displayName", product.category_name AS "categoryName",
          product.display_name_sort_key AS "displayNameSortKey", variant.unit AS "unit",
          availability.state AS "availability",
          COALESCE(mapping.mapping_state = 'Active', false) AS "mappingAvailable", variant.image_url AS "imageUrl",
-         variant.grind_options AS "grindOptions",
+         variant.grind_options AS "grindOptions", variant.supplier_promotions AS "supplierPromotions",
          mapping.offer_ref AS "offerRef", mapping.supplier_unit_minor::text AS "supplierUnitMinor",
          mapping.currency AS "currency", mapping.mapping_revision::text AS "mappingRevision"
     FROM metadata
@@ -47,6 +48,7 @@ const SEARCH_SQL = `WITH metadata AS (
     LEFT JOIN catalog.active_offer_mappings AS mapping ON mapping.snapshot_ref = variant.snapshot_ref AND mapping.variant_ref = variant.variant_ref
    WHERE strpos(lower(normalize(product.display_name, NFKC)), $1) > 0
      AND ($2::text IS NULL OR availability.state = $2)
+     AND ($7::integer IS NULL OR variant.supplier_promotions @> jsonb_build_array(jsonb_build_object('discountBasisPoints', $7::integer)))
      AND ($3::text IS NULL OR EXISTS (
        SELECT 1 FROM position WHERE position.sort_key_hash = $3
          AND (product.display_name_sort_key, product.product_ref, variant.variant_ref) > (position.sort_key, $4, $5)
@@ -57,9 +59,9 @@ const SEARCH_SQL = `WITH metadata AS (
 SELECT metadata.snapshot_revision AS "snapshotRevision",
        ($3::text IS NULL OR EXISTS (SELECT 1 FROM position WHERE position.sort_key_hash = $3)) AS "cursorValid",
        candidates."productRef", candidates."variantRef",
-       candidates."displayName", candidates."displayNameSortKey", candidates."unit", candidates."availability",
+       candidates."displayName", candidates."categoryName", candidates."displayNameSortKey", candidates."unit", candidates."availability",
        candidates."mappingAvailable", candidates."imageUrl", candidates."offerRef", candidates."supplierUnitMinor",
-       candidates."currency", candidates."mappingRevision", candidates."grindOptions"
+       candidates."currency", candidates."mappingRevision", candidates."grindOptions", candidates."supplierPromotions"
   FROM metadata LEFT JOIN candidates ON true
  ORDER BY candidates."displayNameSortKey" NULLS LAST, candidates."productRef" NULLS LAST, candidates."variantRef" NULLS LAST`;
 
@@ -101,6 +103,7 @@ export class CatalogRepository {
     input: Readonly<{
       query: string;
       availability: CatalogAvailability | null;
+      supplierDiscountBasisPoints: 1000 | 3500 | null;
       after: CatalogCursorPosition | null;
       limit: number;
     }>,
@@ -113,6 +116,7 @@ export class CatalogRepository {
       after?.productRef ?? null,
       after?.variantRef ?? null,
       input.limit,
+      input.supplierDiscountBasisPoints,
     ] as SearchParameters);
     return result.rows;
   }

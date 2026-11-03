@@ -86,6 +86,7 @@ export type CatalogOwner = Readonly<{
     input: Readonly<{
       query?: string;
       availability?: CatalogAvailability;
+      supplierDiscountBasisPoints?: 1000 | 3500;
       limit: number;
       cursor?: string;
       context: Context;
@@ -253,10 +254,21 @@ function normalizedQueryForContract(value: unknown): unknown {
   if (value === null || typeof value !== "object" || Array.isArray(value))
     return value;
   const query = value as Record<string, unknown>;
-  return typeof query["limit"] === "number" &&
+  return {
+    ...query,
+    ...(typeof query["limit"] === "number" &&
     Number.isSafeInteger(query["limit"])
-    ? { ...query, limit: String(query["limit"]) }
-    : value;
+      ? { limit: String(query["limit"]) }
+      : {}),
+    ...(typeof query["supplierDiscountBasisPoints"] === "number" &&
+    Number.isSafeInteger(query["supplierDiscountBasisPoints"])
+      ? {
+          supplierDiscountBasisPoints: String(
+            query["supplierDiscountBasisPoints"],
+          ),
+        }
+      : {}),
+  };
 }
 async function publicClaims(
   request: Request,

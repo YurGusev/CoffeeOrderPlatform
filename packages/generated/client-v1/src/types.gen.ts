@@ -83,14 +83,30 @@ export type CustomerSearchResponse = {
   nextCursor: string | null;
 };
 
+/**
+ * Правило поставщика из активного снимка. Даты являются фактами провайдера, а не сроком действия; minimumWeightRaw сохраняется без предположения о единице.
+ */
+export type CatalogSupplierPromotion = {
+  discountBasisPoints: number;
+  minimumWeightRaw: string;
+  providerCreatedAt: MoneyVersionTimeV1SchemaTimestamp;
+  providerUpdatedAt: MoneyVersionTimeV1SchemaTimestamp;
+};
+
 export type CatalogProductSummary = {
   productRef: IdentifiersV1SchemaProductRef;
   variantRef: IdentifiersV1SchemaVariantRef;
   displayName: string;
+  /**
+   * Название категории поставщика; отсутствует, если поставщик его не передал.
+   */
+  categoryName?: string;
   unit: 'piece' | 'gram' | 'kilogram';
   availability: 'Available' | 'Unavailable' | 'Stopped';
   mappingAvailable: boolean;
   imageUrl?: string;
+  prices?: CatalogPrices;
+  supplierPromotions?: Array<CatalogSupplierPromotion>;
   grindOptions?: Array<GrindOption>;
 };
 
@@ -102,7 +118,41 @@ export type GrindOption = {
 export type CatalogSearchResponse = {
   snapshotRevision: IdentifiersV1SchemaVersion;
   items: Array<CatalogProductSummary>;
+  policyVersionRef?: PolicyVersionRef;
   nextCursor: string | null;
+};
+
+export type CatalogPriceMinor = MoneyVersionTimeV1SchemaMoneyMinor & string;
+
+export type CatalogPrices = {
+  supplierUnitMinor: CatalogPriceMinor;
+  saleUnitMinor: CatalogPriceMinor;
+  currency: MoneyVersionTimeV1SchemaCurrency;
+};
+
+export type PricingPreviewItem = {
+  productRef: IdentifiersV1SchemaProductRef;
+  variantRef: IdentifiersV1SchemaVariantRef;
+};
+
+export type PricingPreviewRequest = {
+  snapshotRevision: IdentifiersV1SchemaVersion;
+  items: Array<PricingPreviewItem>;
+};
+
+export type PricingPreviewPrice = {
+  productRef: IdentifiersV1SchemaProductRef;
+  variantRef: IdentifiersV1SchemaVariantRef;
+  unit: 'piece' | 'gram' | 'kilogram';
+  supplierUnitMinor: CatalogPriceMinor;
+  saleUnitMinor: CatalogPriceMinor;
+  currency: MoneyVersionTimeV1SchemaCurrency;
+};
+
+export type PricingPreviewResponse = {
+  snapshotRevision: IdentifiersV1SchemaVersion;
+  policyVersionRef: PolicyVersionRef;
+  items: Array<PricingPreviewPrice>;
 };
 
 export type PricingQuoteCreateLine = {
@@ -494,6 +544,11 @@ export type CustomerQuery = string;
  */
 export type CatalogQuery = string;
 
+/**
+ * Наличие правила поставщика 10% или 35%; без применения скидки к цене.
+ */
+export type SupplierDiscountBasisPoints = 1000 | 3500;
+
 export type Availability = 'Available' | 'Unavailable' | 'Stopped';
 
 export type PageLimit = number;
@@ -624,6 +679,10 @@ export type SearchCatalogProductsData = {
      */
     query?: string;
     availability?: 'Available' | 'Unavailable' | 'Stopped';
+    /**
+     * Наличие правила поставщика 10% или 35%; без применения скидки к цене.
+     */
+    supplierDiscountBasisPoints?: 1000 | 3500;
     limit?: number;
     cursor?: string;
   };
@@ -659,6 +718,51 @@ export type SearchCatalogProductsResponses = {
 };
 
 export type SearchCatalogProductsResponse = SearchCatalogProductsResponses[keyof SearchCatalogProductsResponses];
+
+export type PreviewCatalogPricesData = {
+  body: PricingPreviewRequest;
+  headers?: {
+    'X-Correlation-ID'?: Uuid2;
+    traceparent?: MoneyVersionTimeV1SchemaTraceparent;
+  };
+  path?: never;
+  query?: never;
+  url: '/api/client-v1/pricing/catalog-preview';
+};
+
+export type PreviewCatalogPricesErrors = {
+  /**
+   * Request, query, or header validation failed.
+   */
+  400: ErrorValidationFailed;
+  /**
+   * No valid authenticated actor context was supplied.
+   */
+  401: ErrorAuthenticationRequired;
+  /**
+   * The trusted actor assertion is invalid or expired.
+   */
+  403: ErrorActorContextInvalid;
+  /**
+   * Revision каталога изменилась.
+   */
+  409: ErrorCatalogRevisionChanged;
+  /**
+   * Каталог или policy недоступны.
+   */
+  503: ErrorCatalogUnavailable | ErrorPricingPolicyUnavailable;
+};
+
+export type PreviewCatalogPricesError = PreviewCatalogPricesErrors[keyof PreviewCatalogPricesErrors];
+
+export type PreviewCatalogPricesResponses = {
+  /**
+   * Цены одной policy для точной revision каталога.
+   */
+  200: PricingPreviewResponse;
+};
+
+export type PreviewCatalogPricesResponse = PreviewCatalogPricesResponses[keyof PreviewCatalogPricesResponses];
 
 export type CreatePricingQuoteData = {
   body?: PricingQuoteCreateRequest;

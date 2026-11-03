@@ -70,6 +70,7 @@ async function migrations() {
     "0001_supplier_snapshots",
     "0002_snapshot_batches",
     "0003_snapshot_staging",
+    "0010_catalog_category",
   ];
   return Promise.all(
     names.map(async (id) => {
@@ -160,6 +161,7 @@ async function proveMigrations(database, adminClient, set) {
   assert.deepEqual(remaining, [
     "0002_snapshot_batches",
     "0003_snapshot_staging",
+    "0010_catalog_category",
   ]);
   const after = (
     await adminClient.query(

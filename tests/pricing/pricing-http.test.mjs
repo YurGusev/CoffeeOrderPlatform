@@ -87,6 +87,21 @@ function adapters(calls, changes = {}) {
     }),
     signCatalogDelegation: () => "signed",
     owner: {
+      async preview(request, context) {
+        calls.preview.push({ request, context });
+        if (changes.previewError) throw changes.previewError;
+        return {
+          snapshotRevision: request.snapshotRevision,
+          policyVersionRef: ref("pvr"),
+          items: request.items.map((item) => ({
+            ...item,
+            unit: "piece",
+            supplierUnitMinor: "100",
+            saleUnitMinor: "130",
+            currency: "RUB",
+          })),
+        };
+      },
       async create(input) {
         calls.create.push(input);
         if (changes.createError) throw changes.createError;
@@ -118,6 +133,7 @@ async function setup(t, changes = {}) {
   const calls = {
     transport: [],
     create: [],
+    preview: [],
     replay: [],
     verify: [],
     correlationId: randomUUID(),
@@ -449,5 +465,62 @@ void test("public and internal owner errors map only to their declared problem c
     const owner = await setup(t, { verifyError: { code } });
     problem(await owner.internal(), status, code);
     assert.equal(owner.calls.verify.length, 1);
+  }
+});
+
+void test("catalog price preview requires catalog read and never weakens quote create permission", async (t) => {
+  const request = {
+    snapshotRevision: "1",
+    items: [{ productRef: ref("prd"), variantRef: ref("var") }],
+  };
+  for (const [permissions, status] of [
+    [["catalog:read"], 200],
+    [["pricing:create"], 403],
+    [[], 403],
+  ]) {
+    const { app, calls, client } = await setup(t, { permissions });
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/client-v1/pricing/catalog-preview",
+      headers: {
+        "x-actor-context": "signed",
+        "x-correlation-id": calls.correlationId,
+      },
+      payload: request,
+    });
+    assert.equal(response.statusCode, status, response.body);
+    assert.equal(calls.preview.length, status === 200 ? 1 : 0);
+    assert.equal(calls.create.length, 0);
+    assert.equal(calls.replay.length, 0);
+    if (status === 200) {
+      assert.equal(response.json().items[0].saleUnitMinor, "130");
+      assert.equal(response.headers["cache-control"], "no-store");
+      assert.equal((await client()).statusCode, 403);
+    }
+  }
+  for (const changes of [
+    { transport: false },
+    { publicClaims: { operationId: "createPricingQuote" } },
+    { previewError: new Error("unavailable") },
+  ]) {
+    const { app, calls } = await setup(t, {
+      permissions: ["catalog:read"],
+      ...changes,
+    });
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/client-v1/pricing/catalog-preview",
+      headers: {
+        "x-actor-context": "signed",
+        "x-correlation-id": calls.correlationId,
+      },
+      payload: request,
+    });
+    assert.equal(
+      response.statusCode,
+      changes.transport === false ? 401 : changes.publicClaims ? 403 : 503,
+    );
+    assert.equal(calls.create.length, 0);
+    assert.equal(calls.replay.length, 0);
   }
 });

@@ -211,6 +211,8 @@ async function installCommonMocks(
     aromaScenario?: "Blocked" | "UnknownOutcome";
     catalogUnavailable?: boolean;
     catalogNextCursor?: boolean;
+    catalogMappingUnavailable?: boolean;
+    multipleCatalogProducts?: boolean;
     catalogRefetchFailure?: Readonly<{ query: string; status: 403 | 503 }>;
     catalogRefetchFailureSequence?: Readonly<{
       query: string;
@@ -736,11 +738,79 @@ async function installCommonMocks(
             productRef,
             variantRef,
             displayName: "Капучино",
+            ...(options.catalogNextCursor &&
+            (url.searchParams.get("supplierDiscountBasisPoints") === "1000" ||
+              url.searchParams.get("supplierDiscountBasisPoints") === "3500")
+              ? {
+                  displayName: `Товар ${url.searchParams.get("supplierDiscountBasisPoints")}${url.searchParams.has("cursor") ? " страница 2" : ""}`,
+                  supplierPromotions: [
+                    {
+                      discountBasisPoints: Number(
+                        url.searchParams.get("supplierDiscountBasisPoints"),
+                      ),
+                      minimumWeightRaw: "0",
+                      providerCreatedAt: timestamp,
+                      providerUpdatedAt: timestamp,
+                    },
+                  ],
+                }
+              : {}),
+            ...(options.multipleCatalogProducts
+              ? {
+                  categoryName: "Эспрессо-смеси",
+                  supplierPromotions: [
+                    {
+                      discountBasisPoints: 3500,
+                      minimumWeightRaw: "0",
+                      providerCreatedAt: timestamp,
+                      providerUpdatedAt: timestamp,
+                    },
+                    {
+                      discountBasisPoints: 1234,
+                      minimumWeightRaw: "1.5",
+                      providerCreatedAt: timestamp,
+                      providerUpdatedAt: timestamp,
+                    },
+                  ],
+                  prices: {
+                    supplierUnitMinor: "18015",
+                    saleUnitMinor: "23590",
+                    currency: "RUB",
+                  },
+                }
+              : {}),
             unit: "piece",
             availability: "Available",
-            mappingAvailable: true,
+            mappingAvailable: !options.catalogMappingUnavailable,
             grindOptions,
           },
+          ...(options.multipleCatalogProducts
+            ? [
+                {
+                  productRef: "prd_01ARZ3NDEKTSV4RRFFQ69G5FAW",
+                  variantRef: "var_01ARZ3NDEKTSV4RRFFQ69G5FAW",
+                  displayName: "Пуэр",
+                  categoryName: "Китайский чай",
+                  supplierPromotions: [
+                    {
+                      discountBasisPoints: 1000,
+                      minimumWeightRaw: "0.5",
+                      providerCreatedAt: timestamp,
+                      providerUpdatedAt: timestamp,
+                    },
+                  ],
+                  prices: {
+                    supplierUnitMinor: "105000",
+                    saleUnitMinor: "125000",
+                    currency: "RUB",
+                  },
+                  unit: "kilogram",
+                  availability: "Available",
+                  mappingAvailable: true,
+                  grindOptions: [],
+                },
+              ]
+            : []),
         ],
         nextCursor: options.catalogNextCursor ? "catalog-next-page" : null,
       });
@@ -990,7 +1060,9 @@ async function assertNoSeriousA11y(page: Page, label: string): Promise<void> {
 async function happyPath(context: BrowserContext): Promise<void> {
   const page = await context.newPage();
   await captureBrowserTelemetry(page);
-  const telemetry = await installCommonMocks(page);
+  const telemetry = await installCommonMocks(page, {
+    multipleCatalogProducts: true,
+  });
   await page.goto(`${origin}/`, { waitUntil: "networkidle" });
   await page.getByRole("heading", { name: "Клиенты" }).waitFor();
   assert.equal(new URL(page.url()).pathname, "/app/customers");
@@ -1075,8 +1147,17 @@ async function happyPath(context: BrowserContext): Promise<void> {
   await page.getByRole("heading", { name: "Иван Петров" }).waitFor();
   await page.getByRole("link", { name: "Открыть каталог" }).click();
   await page.getByRole("heading", { name: "Поиск товаров" }).waitFor();
+  const searchResponse = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      url.pathname === "/api/client-v1/catalog/products" &&
+      url.searchParams.get("query") === "капучино" &&
+      response.status() === 200
+    );
+  });
   await page.getByRole("textbox", { name: "Название товара" }).fill("капучино");
   await page.getByRole("button", { name: "Найти" }).click();
+  await searchResponse;
   try {
     await page
       .getByRole("heading", { name: "Капучино" })
@@ -1086,8 +1167,86 @@ async function happyPath(context: BrowserContext): Promise<void> {
       `Каталог не показал товар: ${(await page.locator("body").textContent()) ?? ""}`,
     );
   }
+  const productList = page.getByRole("list", { name: "Товары" });
+  const productRows = productList.getByRole("listitem");
+  await expect(productRows).toHaveCount(2);
+  for (const [index, name] of ["Капучино", "Пуэр"].entries()) {
+    const row = productRows.nth(index);
+    await row.getByRole("heading", { name }).waitFor();
+    await row
+      .getByText(`Категория: ${["Эспрессо-смеси", "Китайский чай"][index]}`)
+      .waitFor();
+    await row
+      .getByRole("textbox", { name: `Количество для ${name}` })
+      .waitFor();
+    if (index === 0)
+      await row.getByRole("combobox", { name: `Помол для ${name}` }).waitFor();
+    else
+      assert.equal(
+        await row.getByRole("combobox", { name: `Помол для ${name}` }).count(),
+        0,
+      );
+    assert.equal(
+      await row.getByRole("button", { name: "Добавить" }).isEnabled(),
+      true,
+    );
+  }
+  for (const [index, unit, supplier, sale] of [
+    [0, "штука", "180,15 ₽", "235,90 ₽"],
+    [1, "килограмм", "1 050,00 ₽", "1 250,00 ₽"],
+  ] as const) {
+    const row = productRows.nth(index);
+    await row.getByText(`Цена поставщика / ${unit}`).waitFor();
+    await row.getByText(`Цена продажи / ${unit}`).waitFor();
+    await row.getByText(supplier, { exact: true }).waitFor();
+    await row.getByText(sale, { exact: true }).waitFor();
+  }
+  await productRows.nth(0).getByText("Скидка поставщика:").waitFor();
+  await productRows.nth(0).getByText("35%", { exact: true }).waitFor();
+  await productRows
+    .nth(0)
+    .getByText("12,34% · есть условия", { exact: true })
+    .waitFor();
+  await productRows.nth(1).getByText("Скидка поставщика:").waitFor();
+  await productRows
+    .nth(1)
+    .getByText("10% · есть условия", { exact: true })
+    .waitFor();
+  await page.getByText("Цены показаны без скидок поставщика.").waitFor();
+  assert.equal(
+    await productList.getByText("Привязка к AROMA доступна").count(),
+    0,
+  );
+  await assertNoSeriousA11y(page, "catalog list");
   for (const width of [375, 1280]) {
     await page.setViewportSize({ width, height: 900 });
+    const headingStyle = await productRows
+      .first()
+      .getByRole("heading", { name: "Капучино" })
+      .evaluate((node) => {
+        const style = getComputedStyle(node);
+        return { fontSize: style.fontSize, margin: style.margin };
+      });
+    assert.deepEqual(headingStyle, { fontSize: "14px", margin: "0px" });
+    const firstRow = await productRows.nth(0).boundingBox();
+    const secondRow = await productRows.nth(1).boundingBox();
+    assert.ok(
+      firstRow &&
+        secondRow &&
+        Math.abs(firstRow.x - secondRow.x) <= 1 &&
+        secondRow.y >= firstRow.y + firstRow.height,
+      `catalog ${width}px rows: ${JSON.stringify([firstRow, secondRow])}`,
+    );
+    if (width === 1280) {
+      for (const selector of [".product-prices", '[data-slot="field"]']) {
+        const first = await productRows.nth(0).locator(selector).boundingBox();
+        const second = await productRows.nth(1).locator(selector).boundingBox();
+        assert.ok(
+          first && second && Math.abs(first.x - second.x) <= 1,
+          `catalog ${selector} alignment: ${JSON.stringify([first, second])}`,
+        );
+      }
+    }
     const size = await page.evaluate(() => ({
       client: document.documentElement.clientWidth,
       scroll: document.documentElement.scrollWidth,
@@ -1097,7 +1256,18 @@ async function happyPath(context: BrowserContext): Promise<void> {
       `catalog ${width}px overflow: ${JSON.stringify(size)}`,
     );
     if (width === 375) {
-      const addButton = page.getByRole("button", { name: "Добавить" });
+      const availabilityBox = await productRows
+        .first()
+        .getByText("Доступен", { exact: true })
+        .boundingBox();
+      assert.ok(
+        availabilityBox && availabilityBox.height <= 32,
+        `catalog availability wraps: ${JSON.stringify(availabilityBox)}`,
+      );
+      const addButton = productRows
+        .first()
+        .getByRole("button", { name: "Добавить" });
+      await addButton.scrollIntoViewIfNeeded();
       const box = await addButton.boundingBox();
       assert.ok(
         box && box.height >= 44 && box.x >= 0 && box.x + box.width <= width,
@@ -1130,7 +1300,16 @@ async function happyPath(context: BrowserContext): Promise<void> {
   await page
     .getByRole("textbox", { name: "Количество для Капучино" })
     .fill("2");
-  await page.getByRole("button", { name: "Добавить" }).click();
+  await productRows.first().getByRole("button", { name: "Добавить" }).click();
+  await page.getByText("Товар добавлен").waitFor();
+  assert.equal(telemetry.quoteRequests.length, 1);
+  assert.equal(telemetry.putRequests.length, 1);
+  const put = JSON.parse(telemetry.putRequests[0] ?? "{}") as {
+    quoteHash?: string;
+    quoteRef?: string;
+  };
+  assert.equal(put.quoteRef, quoteRef);
+  assert.equal(put.quoteHash, hash);
   await page.getByRole("link", { name: "К заказу" }).first().click();
   await page.getByText("500,00 ₽").first().waitFor();
   await page.getByRole("button", { name: "Удалить", exact: true }).click();
@@ -1246,6 +1425,25 @@ async function happyPath(context: BrowserContext): Promise<void> {
     false,
   );
   await page.close();
+  const uncategorizedPage = await context.newPage();
+  await installCommonMocks(uncategorizedPage, {
+    catalogMappingUnavailable: true,
+  });
+  await uncategorizedPage.goto(`${origin}/app/catalog?orderRef=${orderRef}`, {
+    waitUntil: "networkidle",
+  });
+  await uncategorizedPage.getByText("Категория: Не указана").waitFor();
+  await uncategorizedPage.getByText("Цена поставщика / штука").waitFor();
+  await uncategorizedPage.getByText("Цена продажи / штука").waitFor();
+  await expect(uncategorizedPage.getByText("Недоступна")).toHaveCount(2);
+  await uncategorizedPage.getByText("Нет привязки к AROMA").waitFor();
+  assert.equal(
+    await uncategorizedPage
+      .getByRole("button", { name: "Добавить" })
+      .isDisabled(),
+    true,
+  );
+  await uncategorizedPage.close();
 }
 
 async function ambiguousRecovery(context: BrowserContext): Promise<void> {
@@ -3300,6 +3498,101 @@ async function routeSemantics(context: BrowserContext): Promise<void> {
       ),
     )
     .toBe(true);
+  const discountFilter = page.getByLabel("Скидка поставщика");
+  await discountFilter.selectOption("3500");
+  await page.getByRole("button", { name: "Найти" }).click();
+  await expect(page).toHaveURL(
+    (url) =>
+      url.searchParams.get("supplierDiscountBasisPoints") === "3500" &&
+      !url.searchParams.has("cursor"),
+  );
+  await expect
+    .poll(() =>
+      requests.some(
+        (request) =>
+          request.url.pathname === "/api/client-v1/catalog/products" &&
+          request.url.searchParams.get("supplierDiscountBasisPoints") ===
+            "3500" &&
+          !request.url.searchParams.has("cursor"),
+      ),
+    )
+    .toBe(true);
+  await page.getByRole("heading", { name: "Товар 3500" }).waitFor();
+  await page.getByRole("button", { name: "Следующая страница" }).click();
+  await expect(page).toHaveURL(
+    (url) =>
+      url.searchParams.get("supplierDiscountBasisPoints") === "3500" &&
+      url.searchParams.get("cursor") === "catalog-next-page",
+  );
+  await expect
+    .poll(() =>
+      requests.some(
+        (request) =>
+          request.url.pathname === "/api/client-v1/catalog/products" &&
+          request.url.searchParams.get("supplierDiscountBasisPoints") ===
+            "3500" &&
+          request.url.searchParams.get("cursor") === "catalog-next-page",
+      ),
+    )
+    .toBe(true);
+  await page.getByRole("heading", { name: "Товар 3500 страница 2" }).waitFor();
+  await discountFilter.selectOption("1000");
+  await page.getByRole("button", { name: "Найти" }).click();
+  await expect(page).toHaveURL(
+    (url) =>
+      url.searchParams.get("supplierDiscountBasisPoints") === "1000" &&
+      !url.searchParams.has("cursor"),
+  );
+  await expect
+    .poll(() =>
+      requests.some(
+        (request) =>
+          request.url.pathname === "/api/client-v1/catalog/products" &&
+          request.url.searchParams.get("supplierDiscountBasisPoints") ===
+            "1000" &&
+          !request.url.searchParams.has("cursor"),
+      ),
+    )
+    .toBe(true);
+  await page.getByRole("heading", { name: "Товар 1000" }).waitFor();
+  await page.goBack({ waitUntil: "networkidle" });
+  await expect(discountFilter).toHaveValue("3500");
+  await page.getByRole("heading", { name: "Товар 3500 страница 2" }).waitFor();
+  await expect(page).toHaveURL(
+    (url) => url.searchParams.get("cursor") === "catalog-next-page",
+  );
+  await page.goForward({ waitUntil: "networkidle" });
+  await expect(discountFilter).toHaveValue("1000");
+  await page.getByRole("heading", { name: "Товар 1000" }).waitFor();
+  await page.getByRole("textbox", { name: "Название товара" }).fill("кофе");
+  await expect(page).toHaveURL(
+    (url) =>
+      url.searchParams.get("q") === "кофе" &&
+      url.searchParams.get("supplierDiscountBasisPoints") === "1000" &&
+      !url.searchParams.has("cursor"),
+  );
+  await expect
+    .poll(() =>
+      requests.some(
+        (request) =>
+          request.url.pathname === "/api/client-v1/catalog/products" &&
+          request.url.searchParams.get("query") === "кофе" &&
+          request.url.searchParams.get("supplierDiscountBasisPoints") ===
+            "1000",
+      ),
+    )
+    .toBe(true);
+  await page.getByRole("textbox", { name: "Название товара" }).fill("");
+  await expect(page).toHaveURL((url) => !url.searchParams.has("q"));
+  await discountFilter.selectOption("");
+  await page.getByRole("button", { name: "Найти" }).click();
+  await expect(page).toHaveURL(
+    (url) => !url.searchParams.has("supplierDiscountBasisPoints"),
+  );
+  await page.getByRole("button", { name: "Следующая страница" }).click();
+  await expect(page).toHaveURL(
+    (url) => url.searchParams.get("cursor") === "catalog-next-page",
+  );
   await page.getByRole("textbox", { name: "Название товара" }).fill("кофе");
   await expect(page).toHaveURL((url) => url.searchParams.get("q") === "кофе");
   await expect
