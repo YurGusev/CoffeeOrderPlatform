@@ -27,7 +27,7 @@ import { validateLaunchContext } from "../report.mjs";
 const ROOT = resolve(fileURLToPath(new URL("../../../..", import.meta.url)));
 const ACCEPTED_PREFIX_COMMIT = "e278aeb10e57d37485542f8668f078456074b038";
 const OWNERS = Object.freeze({
-  customer: { current: 2, prefix: 2 },
+  customer: { current: 3, prefix: 2 },
   catalog: { current: 9, prefix: 8 },
   pricing: { current: 5, prefix: 4 },
   orders: { current: 24, prefix: 6 },

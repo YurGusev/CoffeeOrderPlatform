@@ -59,6 +59,7 @@ apps/customer-service/
   src/infrastructure/postgres/idempotency-repository.ts
   migrations/0001_customer_schema.sql
   migrations/0002_customer_indexes.sql
+  migrations/0003_customer_unicode_search.sql
 tests/customer/customer-normalization.test.mjs
 tests/customer/customer-live.test.mjs
 tests/customer/customer-schema.test.mjs
@@ -159,6 +160,14 @@ PII и HTTP body в audit log не записываются.
 - B-tree index `(display_name_search text_pattern_ops, customer_ref)`;
 - B-tree indexes `(phone_e164, customer_ref)` и `(email_normalized, customer_ref)`;
 - index `idempotency_records(expires_at)` для удаления истёкших записей.
+
+`0003_customer_unicode_search.sql` исправляет проверку `display_name_search`
+для баз с `LC_CTYPE=C`: owner-local deterministic ICU collation
+`customer.unicode_lowercase` (`locale = 'und'`) задаёт Unicode lowercase явно.
+CHECK сохраняет точное равенство `display_name_search` и lowercase `display_name`;
+collation колонок и индексов не меняется. Миграция валидирует существующие строки
+и не переписывает данные. Версия collation определяется установленной ICU при
+создании; системные collations и ранее применённые миграции не изменяются.
 
 ## 4. Нормализация
 
