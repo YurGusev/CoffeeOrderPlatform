@@ -1,7 +1,7 @@
 issue: 13
-baseCommit: a5a5c27c7bb1ac5d563c4e7c22e1c2f4444fc7d5
+baseCommit: 0f117f3094362b670e4421c39c888de6830cc4f0
 status: source-descriptor-before-formal-verification
-asOfUtc: "2026-11-03T20:44:23.077644+00:00"
+asOfUtc: "2026-11-03T23:11:43.927Z"
 inputs:
   - issue: 2
     acceptedMergeCommit: 327638d4494269a151ee7c0ac945ac0053c3e0d4
@@ -168,7 +168,7 @@ outputs:
     consumers:
       - 1
   - artifact: docs/launch/21_LAUNCH_VERIFICATION_SPEC.md
-    sha256: 6c6f55eb0cc98b57f5b87de43b0b2545c9e5397a27b704219d9cb6c43f873fdc
+    sha256: dfb1fbde69ed4d3e865b9ee2b39ac684ecd1c7a3cf4521eaa09f441ced64abd0
     consumers:
       - 1
   - artifact: docs/operations/observability.md
@@ -605,6 +605,7 @@ consumerContract:
     policy/key/flag child и G18 baseline flag child с проверенной lineage. Лимиты и provider scope сохранены;
     exact parent G12 product images, отдельная BOM/image-ID проверка fixture PostgreSQL."
 limitations:
+  - "Full run 20261103T220615Z-26d1e2c: G00–G07 и G12 PASS, G08 clean PASS / forward FAIL (Catalog category_name=NULL изменил to_jsonb fixture), downstream NOT_RUN, G19 НЕ ДОПУСТИТЬ без evidence errors. Отрицательные report/defect опубликованы в PR249#issuecomment-6617317501 и сохранены; qualification consumed. Принят отдельный fix #264 / PR265, merge 0f117f3094362b670e4421c39c888de6830cc4f0, exact head b41cfcc CI41734287920 PASS. Existing PostgreSQL regression 3/3 PASS сохраняет отказы при actual category/legacy-field/missing-row drift. Новому frozen SHA нужны собственные CI, matching G12, свежая SSE qualification и полный G00–G19."
   - "Принят #262 через PR #263: merge a5a5c27c7bb1ac5d563c4e7c22e1c2f4444fc7d5. CI и G12 normal source 9c731f2 не являются admission нового formal candidate; ему нужны собственные CI, matching G12, свежая SSE qualification и полный G00–G19."
   - "При интеграции #262 выбран весь accepted ciphertext 01744290a8d57dbda7271e3378a985d28b15c7d1355cebba64fe50fb036afaf3 вместо исторического formal renewal bcfaa602: оба trusted renewal от одного base сохраняют CA/key/SAN и меняют только 15 transport certPem. Новое renewal при интеграции не запускалось; исторические receipts и FAIL сохранены."
   - "Customer current исправлен с 2 на 3 в G08/G09 oracles и двух fixtures; Customer prefix 2 и incoming Catalog current 12 / prefix 8 сохранены. Устаревшее изменение текста ошибки platform-config снято: product package совпадает с accepted develop."
