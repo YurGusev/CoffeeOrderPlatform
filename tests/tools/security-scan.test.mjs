@@ -2268,6 +2268,17 @@ void test("G12 builds product images, records pinned upstream identity, and fail
             0o777,
           0o755,
         );
+        assert.deepEqual(
+          args.flatMap((value, index) =>
+            value === "--build-arg" &&
+            args[index + 1].startsWith("LIBEXPAT_VERSION=")
+              ? [args[index + 1]]
+              : [],
+          ),
+          ["kafka", "keycloak"].includes(service)
+            ? [`LIBEXPAT_VERSION=${toolchain.libexpatVersion}`]
+            : [],
+        );
         if (service === "keycloak") {
           assert.ok(
             args.includes(

@@ -2330,6 +2330,7 @@ function imageBuildArgs({
   grafanaImage,
   keycloakDistributionImage,
   keycloakRuntimeImage,
+  libexpatVersion,
   pluginContext,
 }) {
   return [
@@ -2339,6 +2340,9 @@ function imageBuildArgs({
     "coffee-platform-mtu",
     "--allow",
     "network.host",
+    ...(["kafka", "keycloak"].includes(service)
+      ? ["--build-arg", `LIBEXPAT_VERSION=${libexpatVersion}`]
+      : []),
     ...(service === "keycloak"
       ? [
           "--build-arg",
@@ -2425,6 +2429,7 @@ async function buildProductImages({
       grafanaImage: toolchain.grafanaImage,
       keycloakDistributionImage: toolchain.keycloakDistributionImage,
       keycloakRuntimeImage: toolchain.keycloakRuntimeImage,
+      libexpatVersion: toolchain.libexpatVersion,
       pluginContext: vendorPlugins?.path,
     });
     const contextPath = sourceSnapshot.contextPath;

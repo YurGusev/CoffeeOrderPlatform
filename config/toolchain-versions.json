@@ -57,6 +57,7 @@
   "nodeImage": "node:26.8.1-alpine@sha256:2d984a15c9b54fd0aeb608b8e0d0d83529eb34d2966db27a1fb4f1edc3d298a3",
   "nodeBookwormSlimImage": "node:26.8.1-bookworm-slim@sha256:27f5e13512830beb5d9a574108daa6701a0a0b91528aeaf1ee84ecdcddaeeaae",
   "kafkaImage": "apache/kafka:4.3.2@sha256:852a0d49fc4e656b022e7f23785411802c9a088c78a7c5e39f33969de9c227a7",
+  "libexpatVersion": "2.10.0-r0",
   "keycloakVersion": "26.8.1",
   "keycloakDistributionImage": "dhi.io/keycloak@sha256:6c6d2363b9b3943d1c32b25b026ae12dfe392d117bd3142d747542d664c0badb",
   "keycloakRuntimeImage": "eclipse-temurin:21.0.13_9-jre-alpine-3.24@sha256:82cf3d9ccbe1ed46252008d51b2f2329e6b9e8a2f4394c4bebefc3ea7f4b1372",

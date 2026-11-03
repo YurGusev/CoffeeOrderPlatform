@@ -33,6 +33,7 @@
     "nodeImage",
     "nodeBookwormSlimImage",
     "kafkaImage",
+    "libexpatVersion",
     "keycloakVersion",
     "keycloakDistributionImage",
     "keycloakRuntimeImage",
@@ -144,6 +145,10 @@
       "const": "node:26.8.1-bookworm-slim@sha256:27f5e13512830beb5d9a574108daa6701a0a0b91528aeaf1ee84ecdcddaeeaae"
     },
     "kafkaImage": { "pattern": "^apache/kafka:4\\.3\\.2@sha256:[0-9a-f]{64}$" },
+    "libexpatVersion": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+-r[0-9]+$"
+    },
     "keycloakVersion": { "const": "26.8.1" },
     "keycloakDistributionImage": {
       "const": "dhi.io/keycloak@sha256:6c6d2363b9b3943d1c32b25b026ae12dfe392d117bd3142d747542d664c0badb"
