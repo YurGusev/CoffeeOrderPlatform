@@ -31,6 +31,7 @@ const MIGRATION_IDS = [
   "0009_active_snapshot_freshness",
   "0010_catalog_category",
   "0011_active_catalog_category",
+  "0012_active_supplier_promotions",
 ];
 const pool = {
   max: 4,
@@ -402,6 +403,20 @@ void test(
     );
     await legacyApi.connect();
     try {
+      assert.deepEqual(
+        (
+          await legacyApi.query(
+            "SELECT variant_ref,supplier_promotions FROM catalog.active_variants",
+          )
+        ).rows,
+        [
+          {
+            variant_ref: "var_00000000000000000000000009",
+            supplier_promotions: null,
+          },
+        ],
+        "0012 preserves legacy active variants and exposes unknown rules through the existing reader grant",
+      );
       assert.deepEqual(
         (
           await legacyApi.query(

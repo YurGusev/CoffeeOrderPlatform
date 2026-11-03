@@ -738,9 +738,40 @@ async function installCommonMocks(
             productRef,
             variantRef,
             displayName: "Капучино",
+            ...(options.catalogNextCursor &&
+            (url.searchParams.get("supplierDiscountBasisPoints") === "1000" ||
+              url.searchParams.get("supplierDiscountBasisPoints") === "3500")
+              ? {
+                  displayName: `Товар ${url.searchParams.get("supplierDiscountBasisPoints")}${url.searchParams.has("cursor") ? " страница 2" : ""}`,
+                  supplierPromotions: [
+                    {
+                      discountBasisPoints: Number(
+                        url.searchParams.get("supplierDiscountBasisPoints"),
+                      ),
+                      minimumWeightRaw: "0",
+                      providerCreatedAt: timestamp,
+                      providerUpdatedAt: timestamp,
+                    },
+                  ],
+                }
+              : {}),
             ...(options.multipleCatalogProducts
               ? {
                   categoryName: "Эспрессо-смеси",
+                  supplierPromotions: [
+                    {
+                      discountBasisPoints: 3500,
+                      minimumWeightRaw: "0",
+                      providerCreatedAt: timestamp,
+                      providerUpdatedAt: timestamp,
+                    },
+                    {
+                      discountBasisPoints: 1234,
+                      minimumWeightRaw: "1.5",
+                      providerCreatedAt: timestamp,
+                      providerUpdatedAt: timestamp,
+                    },
+                  ],
                   prices: {
                     supplierUnitMinor: "18015",
                     saleUnitMinor: "23590",
@@ -760,6 +791,14 @@ async function installCommonMocks(
                   variantRef: "var_01ARZ3NDEKTSV4RRFFQ69G5FAW",
                   displayName: "Пуэр",
                   categoryName: "Китайский чай",
+                  supplierPromotions: [
+                    {
+                      discountBasisPoints: 1000,
+                      minimumWeightRaw: "0.5",
+                      providerCreatedAt: timestamp,
+                      providerUpdatedAt: timestamp,
+                    },
+                  ],
                   prices: {
                     supplierUnitMinor: "105000",
                     saleUnitMinor: "125000",
@@ -1162,6 +1201,18 @@ async function happyPath(context: BrowserContext): Promise<void> {
     await row.getByText(supplier, { exact: true }).waitFor();
     await row.getByText(sale, { exact: true }).waitFor();
   }
+  await productRows.nth(0).getByText("Скидка поставщика:").waitFor();
+  await productRows.nth(0).getByText("35%", { exact: true }).waitFor();
+  await productRows
+    .nth(0)
+    .getByText("12,34% · есть условия", { exact: true })
+    .waitFor();
+  await productRows.nth(1).getByText("Скидка поставщика:").waitFor();
+  await productRows
+    .nth(1)
+    .getByText("10% · есть условия", { exact: true })
+    .waitFor();
+  await page.getByText("Цены показаны без скидок поставщика.").waitFor();
   assert.equal(
     await productList.getByText("Привязка к AROMA доступна").count(),
     0,
@@ -3447,6 +3498,101 @@ async function routeSemantics(context: BrowserContext): Promise<void> {
       ),
     )
     .toBe(true);
+  const discountFilter = page.getByLabel("Скидка поставщика");
+  await discountFilter.selectOption("3500");
+  await page.getByRole("button", { name: "Найти" }).click();
+  await expect(page).toHaveURL(
+    (url) =>
+      url.searchParams.get("supplierDiscountBasisPoints") === "3500" &&
+      !url.searchParams.has("cursor"),
+  );
+  await expect
+    .poll(() =>
+      requests.some(
+        (request) =>
+          request.url.pathname === "/api/client-v1/catalog/products" &&
+          request.url.searchParams.get("supplierDiscountBasisPoints") ===
+            "3500" &&
+          !request.url.searchParams.has("cursor"),
+      ),
+    )
+    .toBe(true);
+  await page.getByRole("heading", { name: "Товар 3500" }).waitFor();
+  await page.getByRole("button", { name: "Следующая страница" }).click();
+  await expect(page).toHaveURL(
+    (url) =>
+      url.searchParams.get("supplierDiscountBasisPoints") === "3500" &&
+      url.searchParams.get("cursor") === "catalog-next-page",
+  );
+  await expect
+    .poll(() =>
+      requests.some(
+        (request) =>
+          request.url.pathname === "/api/client-v1/catalog/products" &&
+          request.url.searchParams.get("supplierDiscountBasisPoints") ===
+            "3500" &&
+          request.url.searchParams.get("cursor") === "catalog-next-page",
+      ),
+    )
+    .toBe(true);
+  await page.getByRole("heading", { name: "Товар 3500 страница 2" }).waitFor();
+  await discountFilter.selectOption("1000");
+  await page.getByRole("button", { name: "Найти" }).click();
+  await expect(page).toHaveURL(
+    (url) =>
+      url.searchParams.get("supplierDiscountBasisPoints") === "1000" &&
+      !url.searchParams.has("cursor"),
+  );
+  await expect
+    .poll(() =>
+      requests.some(
+        (request) =>
+          request.url.pathname === "/api/client-v1/catalog/products" &&
+          request.url.searchParams.get("supplierDiscountBasisPoints") ===
+            "1000" &&
+          !request.url.searchParams.has("cursor"),
+      ),
+    )
+    .toBe(true);
+  await page.getByRole("heading", { name: "Товар 1000" }).waitFor();
+  await page.goBack({ waitUntil: "networkidle" });
+  await expect(discountFilter).toHaveValue("3500");
+  await page.getByRole("heading", { name: "Товар 3500 страница 2" }).waitFor();
+  await expect(page).toHaveURL(
+    (url) => url.searchParams.get("cursor") === "catalog-next-page",
+  );
+  await page.goForward({ waitUntil: "networkidle" });
+  await expect(discountFilter).toHaveValue("1000");
+  await page.getByRole("heading", { name: "Товар 1000" }).waitFor();
+  await page.getByRole("textbox", { name: "Название товара" }).fill("кофе");
+  await expect(page).toHaveURL(
+    (url) =>
+      url.searchParams.get("q") === "кофе" &&
+      url.searchParams.get("supplierDiscountBasisPoints") === "1000" &&
+      !url.searchParams.has("cursor"),
+  );
+  await expect
+    .poll(() =>
+      requests.some(
+        (request) =>
+          request.url.pathname === "/api/client-v1/catalog/products" &&
+          request.url.searchParams.get("query") === "кофе" &&
+          request.url.searchParams.get("supplierDiscountBasisPoints") ===
+            "1000",
+      ),
+    )
+    .toBe(true);
+  await page.getByRole("textbox", { name: "Название товара" }).fill("");
+  await expect(page).toHaveURL((url) => !url.searchParams.has("q"));
+  await discountFilter.selectOption("");
+  await page.getByRole("button", { name: "Найти" }).click();
+  await expect(page).toHaveURL(
+    (url) => !url.searchParams.has("supplierDiscountBasisPoints"),
+  );
+  await page.getByRole("button", { name: "Следующая страница" }).click();
+  await expect(page).toHaveURL(
+    (url) => url.searchParams.get("cursor") === "catalog-next-page",
+  );
   await page.getByRole("textbox", { name: "Название товара" }).fill("кофе");
   await expect(page).toHaveURL((url) => url.searchParams.get("q") === "кофе");
   await expect

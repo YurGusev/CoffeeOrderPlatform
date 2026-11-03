@@ -21,6 +21,23 @@ type CatalogRuntimeSchemas = Readonly<{
 }>;
 
 const ajv: Ajv2020 = new Ajv2020({ allErrors: true, strict: true });
+ajv.addFormat("date-time", {
+  type: "string",
+  validate: (value: string) => {
+    const temporal = (
+      globalThis as {
+        Temporal?: { Instant?: { from: (input: string) => unknown } };
+      }
+    ).Temporal;
+    if (temporal?.Instant?.from === undefined) return false;
+    try {
+      temporal.Instant.from(value);
+      return true;
+    } catch {
+      return false;
+    }
+  },
+});
 ajv.addFormat("uri-reference", {
   type: "string",
   validate: (value: string) =>
@@ -71,6 +88,10 @@ const catalogProductSummarySchema = {
     displayName: { type: "string", minLength: 1, maxLength: 200 },
     categoryName: { type: "string", minLength: 1, maxLength: 200 },
     prices: clientV1Schemas.CatalogPrices,
+    supplierPromotions: {
+      type: "array",
+      items: clientV1Schemas.CatalogSupplierPromotion,
+    },
     unit: { type: "string", enum: ["piece", "gram", "kilogram"] },
     availability: {
       type: "string",
@@ -136,6 +157,7 @@ const querySchema = {
       type: "string",
       enum: ["Available", "Unavailable", "Stopped"],
     },
+    supplierDiscountBasisPoints: { type: "integer", enum: [1000, 3500] },
     limit: { type: "integer", minimum: 1, maximum: 50, default: 20 },
     cursor: { type: "string", maxLength: 512, pattern: "^[A-Za-z0-9_-]*$" },
   },
@@ -198,6 +220,7 @@ export function isCatalogVariantRef(value: unknown): value is string {
 export type CatalogSearchQuery = Readonly<{
   query?: string;
   availability?: "Available" | "Unavailable" | "Stopped";
+  supplierDiscountBasisPoints?: 1000 | 3500;
   limit?: number;
   cursor?: string;
 }>;
@@ -217,7 +240,14 @@ export function decodeCatalogSearchQuery(
   const raw = value as Record<string, unknown>;
   if (
     Object.keys(raw).some(
-      (key) => !["query", "availability", "limit", "cursor"].includes(key),
+      (key) =>
+        ![
+          "query",
+          "availability",
+          "supplierDiscountBasisPoints",
+          "limit",
+          "cursor",
+        ].includes(key),
     )
   )
     return undefined;
@@ -225,6 +255,13 @@ export function decodeCatalogSearchQuery(
   if (
     query !== undefined &&
     (typeof query !== "string" || !validNormalizedQuery(query))
+  )
+    return undefined;
+  const discountValue = raw["supplierDiscountBasisPoints"];
+  if (
+    discountValue !== undefined &&
+    discountValue !== "1000" &&
+    discountValue !== "3500"
   )
     return undefined;
   const limitValue = raw["limit"];
@@ -248,6 +285,9 @@ export function decodeCatalogSearchQuery(
     ...(raw["availability"] === undefined
       ? {}
       : { availability: raw["availability"] }),
+    ...(discountValue === undefined
+      ? {}
+      : { supplierDiscountBasisPoints: Number(discountValue) }),
     ...(limit === undefined ? {} : { limit }),
     ...(raw["cursor"] === undefined ? {} : { cursor: raw["cursor"] }),
   };

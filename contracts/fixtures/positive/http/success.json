@@ -63,10 +63,25 @@
               "sourceGrindKeyHash": "4444444444444444444444444444444444444444444444444444444444444444",
               "displayName": "Средний помол"
             }
+          ],
+          "categoryName": "Кофе",
+          "prices": {
+            "supplierUnitMinor": "1000",
+            "saleUnitMinor": "1300",
+            "currency": "RUB"
+          },
+          "supplierPromotions": [
+            {
+              "discountBasisPoints": 3500,
+              "minimumWeightRaw": "0",
+              "providerCreatedAt": "2026-09-14T04:55:24Z",
+              "providerUpdatedAt": "2026-09-14T04:55:24Z"
+            }
           ]
         }
       ],
-      "nextCursor": null
+      "nextCursor": null,
+      "policyVersionRef": "pvr_01ARZ3NDEKTSV4RRFFQ69G5FB1"
     }
   },
   {

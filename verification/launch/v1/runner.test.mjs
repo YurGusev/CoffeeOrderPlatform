@@ -2145,7 +2145,7 @@ void test("G09 accepts only exact context-bound 10/40 runtime database evidence"
     owner,
     database: databaseByOwner[owner],
     migrationCount: {
-      catalog: 11,
+      catalog: 12,
       customer: 2,
       integration: 7,
       orders: 24,
@@ -2385,7 +2385,7 @@ void test("G08 rejects receipts without exact derived targets and cleanup", asyn
   const artifactDir = join(evidenceDir, "gates/G08_MIGRATIONS/artifacts");
   await mkdir(artifactDir, { recursive: true });
   const owners = [
-    ["catalog", 11],
+    ["catalog", 12],
     ["customer", 2],
     ["integration", 7],
     ["orders", 24],

@@ -215,6 +215,7 @@ paths:
       parameters:
         - $ref: "#/components/parameters/CatalogQuery"
         - $ref: "#/components/parameters/Availability"
+        - $ref: "#/components/parameters/SupplierDiscountBasisPoints"
         - $ref: "#/components/parameters/PageLimit"
         - $ref: "#/components/parameters/Cursor"
         - $ref: "#/components/parameters/CorrelationId"
@@ -947,6 +948,14 @@ components:
       description: Optional product-name filter. When supplied, trim and normalize with Unicode NFKC, then lowercase; the result must contain 2–200 Unicode code points.
       schema:
         type: string
+    SupplierDiscountBasisPoints:
+      name: supplierDiscountBasisPoints
+      in: query
+      required: false
+      description: Наличие правила поставщика 10% или 35%; без применения скидки к цене.
+      schema:
+        type: integer
+        enum: [1000, 3500]
     Availability:
       name: availability
       in: query
@@ -1263,6 +1272,29 @@ components:
         nextCursor:
           type: [string, "null"]
           maxLength: 2048
+    CatalogSupplierPromotion:
+      type: object
+      additionalProperties: false
+      description: Правило поставщика из активного снимка. Даты являются фактами провайдера, а не сроком действия; minimumWeightRaw сохраняется без предположения о единице.
+      required:
+        [
+          discountBasisPoints,
+          minimumWeightRaw,
+          providerCreatedAt,
+          providerUpdatedAt,
+        ]
+      properties:
+        discountBasisPoints:
+          type: integer
+          minimum: 1
+          maximum: 10000
+        minimumWeightRaw:
+          type: string
+          pattern: '^(?:0|[1-9][0-9]*)(?:\.[0-9]*[1-9])?$'
+        providerCreatedAt:
+          $ref: "#/components/schemas/Timestamp"
+        providerUpdatedAt:
+          $ref: "#/components/schemas/Timestamp"
     CatalogProductSummary:
       type: object
       additionalProperties: false
@@ -1303,6 +1335,10 @@ components:
           maxLength: 2048
         prices:
           $ref: "#/components/schemas/CatalogPrices"
+        supplierPromotions:
+          type: array
+          items:
+            $ref: "#/components/schemas/CatalogSupplierPromotion"
         grindOptions:
           type: array
           maxItems: 100

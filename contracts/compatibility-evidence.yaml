@@ -1,6 +1,26 @@
 optionalExpansions:
   - schemaPath: contracts/openapi/client-v1.yaml
     location: contracts/openapi/client-v1.yaml#CatalogProductSummary
+    property: supplierPromotions
+    fixture: contracts/fixtures/positive/http/success.json
+  - schemaPath: contracts/openapi/client-v1.yaml
+    location: contracts/openapi/client-v1.yaml#CatalogProductSummary
+    property: categoryName
+    fixture: contracts/fixtures/positive/http/success.json
+  - schemaPath: contracts/openapi/client-v1.yaml
+    location: contracts/openapi/client-v1.yaml#CatalogProductSummary
+    property: prices
+    fixture: contracts/fixtures/positive/http/success.json
+  - schemaPath: contracts/openapi/client-v1.yaml
+    location: contracts/openapi/client-v1.yaml#CatalogSearchResponse
+    property: policyVersionRef
+    fixture: contracts/fixtures/positive/http/success.json
+  - schemaPath: contracts/openapi/internal-v1.yaml
+    location: contracts/openapi/internal-v1.yaml#AromaCatalogItem
+    property: categoryName
+    fixture: contracts/fixtures/positive/ndjson/aroma-catalog-success.ndjson
+  - schemaPath: contracts/openapi/client-v1.yaml
+    location: contracts/openapi/client-v1.yaml#CatalogProductSummary
     property: grindOptions
     fixture: contracts/fixtures/positive/http/success.json
   - schemaPath: contracts/openapi/client-v1.yaml

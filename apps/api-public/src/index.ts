@@ -110,6 +110,7 @@ type ForwardResult = Readonly<{
 type CatalogSearchQuery = Readonly<{
   query?: string;
   availability?: string;
+  supplierDiscountBasisPoints?: 1000 | 3500;
   limit?: number;
   cursor?: string;
 }>;
@@ -1972,6 +1973,11 @@ export function createHttpCatalogClient(
       if (query.query !== undefined) params.set("query", query.query);
       if (query.availability !== undefined)
         params.set("availability", query.availability);
+      if (query.supplierDiscountBasisPoints !== undefined)
+        params.set(
+          "supplierDiscountBasisPoints",
+          String(query.supplierDiscountBasisPoints),
+        );
       if (query.limit !== undefined) params.set("limit", String(query.limit));
       if (query.cursor !== undefined) params.set("cursor", query.cursor);
       const headers: Record<string, string> = {

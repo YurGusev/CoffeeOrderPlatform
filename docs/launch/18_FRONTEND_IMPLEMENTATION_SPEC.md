@@ -92,7 +92,7 @@ Node runtime или provider code. Package-owned inline SVG icons огранич
   status `Draft` и `edit-items`, иначе показывается ошибка или выполняется
   redirect на Order Card с alert;
 - CustomerRef берётся только из Order Card, не из URL/local storage;
-- URL state: optional `orderRef`, `q`, `availability`, `cursor`; пустой поиск
+- URL state: optional `orderRef`, `q`, `availability`, `supplierDiscountBasisPoints`, `cursor`; пустой поиск
   запрашивает browse без параметра `query`, поиск по названию — от двух символов;
   изменение поиска или фильтра сбрасывает cursor;
 - товары показаны компактным списком по одному в строке: название, категория
@@ -100,6 +100,13 @@ Node runtime или provider code. Package-owned inline SVG icons огранич
 - отдельные выровненные колонки показывают «Цена поставщика» и «Цена продажи»
   за единицу из server `prices`; frontend только форматирует minor units.
   При отсутствии цен показывает «Недоступна», а не ноль;
+- фильтр «Скидка поставщика» выбирает все товары, 35% (`3500`) или 10% (`1000`);
+  фильтруется весь серверный набор до pagination, выбор входит в query key и URL;
+- `supplierPromotions` показываются как правила поставщика с фактическим процентом;
+  положительный `minimumWeightRaw` отмечается наличием условий, без предположения
+  об единицах веса или применимости к заказу. Provider timestamps не задают срок акции;
+- интерфейс явно поясняет, что обе цены показаны без применения этих скидок;
+  frontend не вычитает и не складывает проценты;
 - в Draft доступны quantity, помол и «Добавить»; отсутствие помола у товара
   не сдвигает колонки цен. На мобильном экране строка переносится без overflow;
 - чтение цен не создаёт quote: preview справочный, а цена добавленной строки

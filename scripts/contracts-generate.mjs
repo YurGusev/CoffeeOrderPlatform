@@ -18,6 +18,7 @@ const runtimeSchemaSelection = {
       "CatalogProductSummary",
       "CatalogSearchResponse",
       "CatalogPrices",
+      "CatalogSupplierPromotion",
       "PricingPreviewRequest",
       "PricingPreviewResponse",
       "ProblemDetails",

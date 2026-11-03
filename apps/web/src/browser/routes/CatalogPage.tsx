@@ -75,9 +75,13 @@ export function CatalogPage(): ReactElement {
     availabilityValues.includes(rawAvailability)
       ? (rawAvailability as CatalogProductSummary["availability"] | "")
       : "Available";
+  const rawDiscount = params.get("supplierDiscountBasisPoints") ?? "";
+  const discount =
+    rawDiscount === "1000" || rawDiscount === "3500" ? rawDiscount : "";
   const validOrderRef = /^ord_[0-9A-HJKMNP-TV-Z]{26}$/u.test(orderRef);
   const [draftQuery, setDraftQuery] = useState(query);
   const [draftAvailability, setDraftAvailability] = useState(availability);
+  const [draftDiscount, setDraftDiscount] = useState(discount);
   const [quantities, setQuantities] = useState<Record<string, string>>({});
   const [grindSelections, setGrindSelections] = useState<
     Record<string, string>
@@ -90,7 +94,13 @@ export function CatalogPage(): ReactElement {
     order.data.allowedActions.includes("edit-items");
   const products = useCatalogSearch(
     session.actorRef,
-    { availability, ...(cursor ? { cursor } : {}), orderRef, q: query },
+    {
+      availability,
+      ...(cursor ? { cursor } : {}),
+      orderRef,
+      q: query,
+      ...(discount ? { supplierDiscountBasisPoints: discount } : {}),
+    },
     !hasOrderRef || (validOrderRef && order.isSuccess && editable),
   );
   const addItem = useQuoteAndPutItem(session.actorRef, orderRef);
@@ -132,14 +142,22 @@ export function CatalogPage(): ReactElement {
   }, [availability]);
 
   useEffect(() => {
+    setDraftDiscount(discount);
+  }, [discount]);
+
+  useEffect(() => {
     const restoreFields = (): void => {
       const current = new URLSearchParams(window.location.search);
       const nextAvailability = current.get("availability") ?? "Available";
+      const nextDiscount = current.get("supplierDiscountBasisPoints") ?? "";
       setDraftQuery((current.get("q") ?? "").trim().slice(0, 200));
       setDraftAvailability(
         availabilityValues.includes(nextAvailability)
           ? (nextAvailability as CatalogProductSummary["availability"] | "")
           : "Available",
+      );
+      setDraftDiscount(
+        nextDiscount === "1000" || nextDiscount === "3500" ? nextDiscount : "",
       );
     };
     window.addEventListener("popstate", restoreFields);
@@ -147,16 +165,32 @@ export function CatalogPage(): ReactElement {
   }, []);
 
   useEffect(() => {
-    if (rawQuery === query && rawAvailability === availability) return;
+    if (
+      rawQuery === query &&
+      rawAvailability === availability &&
+      rawDiscount === discount
+    )
+      return;
     const next = new URLSearchParams(params);
     if (query) next.set("q", query);
     else next.delete("q");
     if (params.has("availability") || availability !== "Available")
       next.set("availability", availability);
     else next.delete("availability");
+    if (discount) next.set("supplierDiscountBasisPoints", discount);
+    else next.delete("supplierDiscountBasisPoints");
     next.delete("cursor");
     setParams(next, { replace: true });
-  }, [availability, params, query, rawAvailability, rawQuery, setParams]);
+  }, [
+    availability,
+    discount,
+    params,
+    query,
+    rawAvailability,
+    rawDiscount,
+    rawQuery,
+    setParams,
+  ]);
 
   useEffect(() => {
     const normalized = draftQuery.trim();
@@ -172,10 +206,19 @@ export function CatalogPage(): ReactElement {
       if (draftAvailability === "") next.set("availability", "");
       else if (draftAvailability !== "Available")
         next.set("availability", draftAvailability);
+      if (draftDiscount) next.set("supplierDiscountBasisPoints", draftDiscount);
       setParams(next);
     }, 300);
     return () => window.clearTimeout(timer);
-  }, [draftAvailability, draftQuery, hasOrderRef, orderRef, query, setParams]);
+  }, [
+    draftAvailability,
+    draftDiscount,
+    draftQuery,
+    hasOrderRef,
+    orderRef,
+    query,
+    setParams,
+  ]);
 
   const submitSearch = (): void => {
     const next = new URLSearchParams();
@@ -184,6 +227,7 @@ export function CatalogPage(): ReactElement {
     if (draftAvailability === "") next.set("availability", "");
     else if (draftAvailability !== "Available")
       next.set("availability", draftAvailability);
+    if (draftDiscount) next.set("supplierDiscountBasisPoints", draftDiscount);
     setParams(next);
   };
 
@@ -257,6 +301,19 @@ export function CatalogPage(): ReactElement {
               <option value="Stopped">Остановленные</option>
             </select>
           </label>
+          <label className="select-field">
+            Скидка поставщика
+            <select
+              onChange={(event) =>
+                setDraftDiscount(event.target.value as "1000" | "3500" | "")
+              }
+              value={draftDiscount}
+            >
+              <option value="">Все товары</option>
+              <option value="3500">35%</option>
+              <option value="1000">10%</option>
+            </select>
+          </label>
           <Button onPress={submitSearch} startIcon={<Icon name="search" />}>
             Найти
           </Button>
@@ -294,6 +351,9 @@ export function CatalogPage(): ReactElement {
             title="Товары не найдены"
           />
         ) : null}
+        <p className="catalog-price-note">
+          Цены показаны без скидок поставщика.
+        </p>
         <ul aria-label="Товары" className="product-list" role="list">
           {!catalogAccessDenied
             ? products.data?.items.map((product) => {
@@ -326,6 +386,24 @@ export function CatalogPage(): ReactElement {
                           </Badge>
                           <span>{unitLabels[product.unit]}</span>
                         </div>
+                        {product.supplierPromotions?.length ? (
+                          <div className="product-promotions">
+                            <span>Скидка поставщика:</span>
+                            {product.supplierPromotions.map(
+                              (promotion, index) => (
+                                <Badge key={index} tone="info">
+                                  {(
+                                    promotion.discountBasisPoints / 100
+                                  ).toLocaleString("ru-RU")}
+                                  %
+                                  {/[1-9]/u.test(promotion.minimumWeightRaw)
+                                    ? " · есть условия"
+                                    : ""}
+                                </Badge>
+                              ),
+                            )}
+                          </div>
+                        ) : null}
                         {!product.mappingAvailable ? (
                           <small>Нет привязки к AROMA</small>
                         ) : null}

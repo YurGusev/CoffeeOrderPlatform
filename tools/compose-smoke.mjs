@@ -4288,6 +4288,7 @@ async function applyCatalogMigrations(port, credentials, platformConfig) {
       "0009_active_snapshot_freshness",
       "0010_catalog_category",
       "0011_active_catalog_category",
+      "0012_active_supplier_promotions",
     ];
     const migrations = [];
     for (const id of migrationIds) {

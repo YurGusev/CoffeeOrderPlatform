@@ -377,6 +377,7 @@ JSON Schema требует: `mappingState=Active` только с non-null `offe
 
 - `query`: optional; при наличии trim + Unicode NFKC + lowercase, 2..200 символов;
 - `availability`: optional `Available|Unavailable|Stopped`;
+- `supplierDiscountBasisPoints`: optional `1000|3500`, наличие правила поставщика 10% или 35%;
 - `limit`: integer 1..50, default 20;
 - `cursor`: opaque base64url, max 512.
 
@@ -396,7 +397,7 @@ Catalog восстанавливает полный sort key по refs из то
 
 Response: `{snapshotRevision, items, nextCursor}`. Item содержит только
 `productRef`, `variantRef`, `displayName`, `unit`, `availability`,
-`mappingAvailable`, `imageUrl?`, `categoryName?`, `prices?`. `offerRef`, source hashes,
+`mappingAvailable`, `imageUrl?`, `categoryName?`, `prices?`, `supplierPromotions?`. `offerRef`, source hashes,
 provider identifiers и session data публично не возвращаются.
 
 По решению владельца #262 каталог показывает обе цены за `unit`:
@@ -421,6 +422,22 @@ Catalog хранит supplier facts, а цену продажи вычисляе
 fallback. Подпись cursor проверяется в Catalog, не в API-root. Разрешение
 позиции cursor, чтение поисковой страницы и active metadata выполняются одним
 SQL statement для исключения смешения ревизий при конкурентной активации.
+
+Правила `supplierPromotions` читаются через `active_variants`: LEFT JOIN к
+`source_identities` и immutable `snapshot_offers` того же активного поколения.
+Миграция `0012` расширяет существующий view без копии правил и новых grants.
+Поля: `discountBasisPoints`, `minimumWeightRaw`, `providerCreatedAt`,
+`providerUpdatedAt`. SQL `NULL` означает отсутствие поля в ответе; `[]` означает
+явно пустой набор. Carried Missing variant без source offer текущего поколения
+не получает акции предыдущего снимка. Provider timestamps не являются сроком
+действия; единица положительного `minimumWeightRaw` не предполагается.
+
+Фильтр проверяет наличие точного `discountBasisPoints` в owner SQL до keyset
+pagination и входит в signed cursor filter hash. Без фильтра прежний hash
+сохраняется. Смена или снятие фильтра требует нового запроса без cursor;
+несовпадающий cursor возвращает `400 INVALID_CURSOR`. UI показывает правила
+поставщика, а не рассчитанную применимую скидку. Обе цены, Pricing policy,
+quote и корзина от этого фильтра и отображения правил не меняются.
 
 ### 6.2 Pricing input
 

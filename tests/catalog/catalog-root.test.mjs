@@ -29,6 +29,14 @@ const searchResponse = {
       availability: "Available",
       mappingAvailable: true,
       imageUrl: "https://catalog.example.test/coffee.png",
+      supplierPromotions: [
+        {
+          discountBasisPoints: 3500,
+          minimumWeightRaw: "0",
+          providerCreatedAt: "2026-09-14T04:55:24Z",
+          providerUpdatedAt: "2026-09-14T04:55:24Z",
+        },
+      ],
     },
   ],
   nextCursor: null,
@@ -233,7 +241,7 @@ void test("public Catalog route validates actor/query, forwards to owner, and re
   );
   const response = await app.inject({
     method: "GET",
-    url: "/api/client-v1/catalog/products?query=coffee&availability=Available&limit=5",
+    url: "/api/client-v1/catalog/products?query=coffee&availability=Available&supplierDiscountBasisPoints=3500&limit=5",
     headers: { "x-actor-context": "signed-edge-context" },
   });
   assert.equal(response.statusCode, 200);
@@ -246,6 +254,7 @@ void test("public Catalog route validates actor/query, forwards to owner, and re
   assert.equal(state.search.query.query, "coffee");
   assert.equal(state.search.query.availability, "Available");
   assert.equal(state.search.query.limit, 5);
+  assert.equal(state.search.query.supplierDiscountBasisPoints, 3500);
   assert.equal(state.search.claims.operationId, "searchCatalogProducts");
   assert.equal(response.headers["cache-control"], "no-store");
   const browse = await app.inject({
@@ -539,7 +548,7 @@ void test("public Catalog owner client signs delegation, fixes path, and rejects
     (_actor, owner, operationId) => `delegated:${owner}:${operationId}`,
   );
   const result = await client.search(
-    { query: "coffee", limit: 5 },
+    { query: "coffee", supplierDiscountBasisPoints: 3500, limit: 5 },
     {
       actor: { iss: "edge-gateway" },
       context: {
@@ -551,7 +560,7 @@ void test("public Catalog owner client signs delegation, fixes path, and rejects
   assert.deepEqual(result, { status: 200, body: searchResponse });
   assert.equal(
     call.path,
-    "/api/client-v1/catalog/products?query=coffee&limit=5",
+    "/api/client-v1/catalog/products?query=coffee&supplierDiscountBasisPoints=3500&limit=5",
   );
   assert.equal(call.options.method, "GET");
   assert.equal(

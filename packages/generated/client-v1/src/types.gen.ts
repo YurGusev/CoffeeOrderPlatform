@@ -83,6 +83,16 @@ export type CustomerSearchResponse = {
   nextCursor: string | null;
 };
 
+/**
+ * Правило поставщика из активного снимка. Даты являются фактами провайдера, а не сроком действия; minimumWeightRaw сохраняется без предположения о единице.
+ */
+export type CatalogSupplierPromotion = {
+  discountBasisPoints: number;
+  minimumWeightRaw: string;
+  providerCreatedAt: MoneyVersionTimeV1SchemaTimestamp;
+  providerUpdatedAt: MoneyVersionTimeV1SchemaTimestamp;
+};
+
 export type CatalogProductSummary = {
   productRef: IdentifiersV1SchemaProductRef;
   variantRef: IdentifiersV1SchemaVariantRef;
@@ -96,6 +106,7 @@ export type CatalogProductSummary = {
   mappingAvailable: boolean;
   imageUrl?: string;
   prices?: CatalogPrices;
+  supplierPromotions?: Array<CatalogSupplierPromotion>;
   grindOptions?: Array<GrindOption>;
 };
 
@@ -533,6 +544,11 @@ export type CustomerQuery = string;
  */
 export type CatalogQuery = string;
 
+/**
+ * Наличие правила поставщика 10% или 35%; без применения скидки к цене.
+ */
+export type SupplierDiscountBasisPoints = 1000 | 3500;
+
 export type Availability = 'Available' | 'Unavailable' | 'Stopped';
 
 export type PageLimit = number;
@@ -663,6 +679,10 @@ export type SearchCatalogProductsData = {
      */
     query?: string;
     availability?: 'Available' | 'Unavailable' | 'Stopped';
+    /**
+     * Наличие правила поставщика 10% или 35%; без применения скидки к цене.
+     */
+    supplierDiscountBasisPoints?: 1000 | 3500;
     limit?: number;
     cursor?: string;
   };

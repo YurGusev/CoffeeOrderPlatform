@@ -206,3 +206,26 @@ normalizer выдуманными unit, availability, image или packing/grind
 
 Наличие этого документа не закрывает acceptance #10, не меняет его галочки
 и не разрешает merge, deployment или новые provider mutations.
+
+## Отображение правил в каталоге (#262)
+
+`CatalogProductSummary.supplierPromotions?` передаёт четыре уже нормализованных
+поля из полного активного snapshot: `discountBasisPoints`, `minimumWeightRaw`,
+`providerCreatedAt`, `providerUpdatedAt`. Пустой массив означает отсутствие
+правил; отсутствующее поле означает неизвестный факт, включая carried Missing
+variant без source offer текущего snapshot. Даты не означают validity.
+
+`GET /api/client-v1/catalog/products?supplierDiscountBasisPoints=1000|3500`
+фильтрует наличие правила 10% или 35% в Catalog SQL до pagination. Фильтр связан
+с подписанным cursor; при изменении фильтра клиент начинает без cursor.
+Положительный `minimumWeightRaw` сохраняется без назначения единицы. Правила
+не суммируются и не вычитаются из supplier/sale prices; Pricing не меняется.
+
+Исторический отчёт `2026-09-14-pricing-observations.json` содержит в
+`catalogScan.allDiscountRates` три значения 35%, три 30% и пять 10%. Это не
+доказательство числа товаров: подробные matches сохранены только для 10%,
+исходные bodies отсутствуют. Для 35% неизвестны связь с товаром, min_weight,
+account scope и timestamps. UI использует только правила конкретного товара
+из активного snapshot; агрегатный отчёт, категория и cart totals не являются
+источником назначения акции. Тестовые правила 35% — синтетические fixtures,
+а не новое свидетельство provider или актуальности акции.

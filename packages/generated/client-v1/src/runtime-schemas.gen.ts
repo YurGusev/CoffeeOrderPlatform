@@ -435,6 +435,41 @@ export const clientV1Schemas = {
           }
         }
       },
+      "supplierPromotions": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Правило поставщика из активного снимка. Даты являются фактами провайдера, а не сроком действия; minimumWeightRaw сохраняется без предположения о единице.",
+          "required": [
+            "discountBasisPoints",
+            "minimumWeightRaw",
+            "providerCreatedAt",
+            "providerUpdatedAt"
+          ],
+          "properties": {
+            "discountBasisPoints": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 10000
+            },
+            "minimumWeightRaw": {
+              "type": "string",
+              "pattern": "^(?:0|[1-9][0-9]*)(?:\\.[0-9]*[1-9])?$"
+            },
+            "providerCreatedAt": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^[0-9]{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12][0-9]|3[01])T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](?:\\.[0-9]+)?Z$"
+            },
+            "providerUpdatedAt": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^[0-9]{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12][0-9]|3[01])T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](?:\\.[0-9]+)?Z$"
+            }
+          }
+        }
+      },
       "grindOptions": {
         "type": "array",
         "maxItems": 100,
@@ -570,6 +605,41 @@ export const clientV1Schemas = {
                 }
               }
             },
+            "supplierPromotions": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "description": "Правило поставщика из активного снимка. Даты являются фактами провайдера, а не сроком действия; minimumWeightRaw сохраняется без предположения о единице.",
+                "required": [
+                  "discountBasisPoints",
+                  "minimumWeightRaw",
+                  "providerCreatedAt",
+                  "providerUpdatedAt"
+                ],
+                "properties": {
+                  "discountBasisPoints": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 10000
+                  },
+                  "minimumWeightRaw": {
+                    "type": "string",
+                    "pattern": "^(?:0|[1-9][0-9]*)(?:\\.[0-9]*[1-9])?$"
+                  },
+                  "providerCreatedAt": {
+                    "type": "string",
+                    "format": "date-time",
+                    "pattern": "^[0-9]{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12][0-9]|3[01])T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](?:\\.[0-9]+)?Z$"
+                  },
+                  "providerUpdatedAt": {
+                    "type": "string",
+                    "format": "date-time",
+                    "pattern": "^[0-9]{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12][0-9]|3[01])T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](?:\\.[0-9]+)?Z$"
+                  }
+                }
+              }
+            },
             "grindOptions": {
               "type": "array",
               "maxItems": 100,
@@ -645,6 +715,38 @@ export const clientV1Schemas = {
       "currency": {
         "type": "string",
         "const": "RUB"
+      }
+    }
+  },
+  "CatalogSupplierPromotion": {
+    "type": "object",
+    "additionalProperties": false,
+    "description": "Правило поставщика из активного снимка. Даты являются фактами провайдера, а не сроком действия; minimumWeightRaw сохраняется без предположения о единице.",
+    "required": [
+      "discountBasisPoints",
+      "minimumWeightRaw",
+      "providerCreatedAt",
+      "providerUpdatedAt"
+    ],
+    "properties": {
+      "discountBasisPoints": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 10000
+      },
+      "minimumWeightRaw": {
+        "type": "string",
+        "pattern": "^(?:0|[1-9][0-9]*)(?:\\.[0-9]*[1-9])?$"
+      },
+      "providerCreatedAt": {
+        "type": "string",
+        "format": "date-time",
+        "pattern": "^[0-9]{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12][0-9]|3[01])T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](?:\\.[0-9]+)?Z$"
+      },
+      "providerUpdatedAt": {
+        "type": "string",
+        "format": "date-time",
+        "pattern": "^[0-9]{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12][0-9]|3[01])T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](?:\\.[0-9]+)?Z$"
       }
     }
   },

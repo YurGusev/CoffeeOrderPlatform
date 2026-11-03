@@ -197,6 +197,7 @@ void test(
         "0008_catalog_active_read",
         "0009_active_snapshot_freshness",
         "0011_active_catalog_category",
+        "0012_active_supplier_promotions",
       ])
         await adminClient.query(
           await readFile(
@@ -398,6 +399,7 @@ void test(
         "0008_catalog_active_read",
         "0009_active_snapshot_freshness",
         "0011_active_catalog_category",
+        "0012_active_supplier_promotions",
       ])
         await adminClient.query(
           await readFile(

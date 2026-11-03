@@ -59,10 +59,11 @@ function item(n, name) {
     sourceIdentityScheme: "hmac-sha256-v1",
   };
 }
-function records(snapshotRef, name, mode = "ok") {
+function records(snapshotRef, name, mode = "ok", sourceItems) {
   const value = item(Number(snapshotRef.slice(-4)), name);
   const values =
-    mode === "category-conflict"
+    sourceItems ??
+    (mode === "category-conflict"
       ? [
           value,
           {
@@ -76,7 +77,7 @@ function records(snapshotRef, name, mode = "ok") {
             value,
             item(Number(snapshotRef.slice(-4)) + 1000, `${name} alternate`),
           ]
-        : [value];
+        : [value]);
   const batch = {
     streamVersion: "1",
     recordType: "snapshot-batch",
@@ -155,6 +156,7 @@ async function migrate(adminClient) {
     "0008_catalog_active_read",
     "0009_active_snapshot_freshness",
     "0011_active_catalog_category",
+    "0012_active_supplier_promotions",
   ])
     await adminClient.query(
       await readFile(
@@ -615,6 +617,129 @@ void test(
           "Receiving",
         );
         assert.equal(await searchRevision("Coffee new"), "3");
+        // Synthetic rules exercise display/filter semantics, not provider price applicability.
+        const promotion = (discountBasisPoints, minimumWeightRaw = "0") => ({
+          discountBasisPoints,
+          minimumWeightRaw,
+          providerCreatedAt: "2026-09-14T04:55:24Z",
+          providerUpdatedAt: "2026-09-14T04:55:24Z",
+        });
+        const legacyItem = item(3005, "Coffee promo E");
+        delete legacyItem.supplierPromotions;
+        const promotionalItems = [
+          {
+            ...item(3001, "Coffee promo A"),
+            supplierPromotions: [promotion(3500)],
+          },
+          item(3002, "Coffee promo B"),
+          {
+            ...item(3003, "Coffee promo C"),
+            supplierPromotions: [promotion(1000, "0.25")],
+          },
+          {
+            ...item(3004, "Coffee promo D"),
+            supplierPromotions: [promotion(1000), promotion(3500)],
+          },
+          legacyItem,
+        ];
+        const promotionsRef = REF(1100);
+        await importOne(1100, "promotions", "ok", {
+          exportCatalog: (snapshotRef) =>
+            ndjsonSource(
+              records(snapshotRef, "promotions", "ok", promotionalItems),
+            ),
+        });
+        assert.equal((await activated(promotionsRef)).kind, "activated");
+        const promotionPage = async (query = "") => {
+          const response = await app.inject({
+            method: "GET",
+            url: `/api/client-v1/catalog/products?query=coffee%20promo${query}`,
+            headers: { "x-actor-context": "deterministic-test-token" },
+          });
+          assert.equal(response.statusCode, 200, response.body);
+          return response.json();
+        };
+        const allPromotions = await promotionPage();
+        assert.deepEqual(
+          allPromotions.items.map((row) => row.displayName),
+          promotionalItems.map((row) => row.displayName),
+        );
+        assert.deepEqual(allPromotions.items[0].supplierPromotions, [
+          promotion(3500),
+        ]);
+        assert.deepEqual(allPromotions.items[1].supplierPromotions, []);
+        assert.equal(
+          Object.hasOwn(allPromotions.items[4], "supplierPromotions"),
+          false,
+        );
+        const firstPromotionPage = await promotionPage(
+          "&supplierDiscountBasisPoints=3500&limit=1",
+        );
+        assert.equal(firstPromotionPage.items[0].displayName, "Coffee promo A");
+        assert.ok(firstPromotionPage.nextCursor);
+        const secondPromotionPage = await promotionPage(
+          `&supplierDiscountBasisPoints=3500&limit=1&cursor=${firstPromotionPage.nextCursor}`,
+        );
+        assert.deepEqual(
+          secondPromotionPage.items.map((row) => row.displayName),
+          ["Coffee promo D"],
+        );
+        assert.equal(secondPromotionPage.nextCursor, null);
+        assert.deepEqual(
+          (await promotionPage("&supplierDiscountBasisPoints=1000")).items.map(
+            (row) => row.displayName,
+          ),
+          ["Coffee promo C", "Coffee promo D"],
+        );
+        for (const changedFilter of ["", "&supplierDiscountBasisPoints=1000"]) {
+          const mismatch = await app.inject({
+            method: "GET",
+            url: `/api/client-v1/catalog/products?query=coffee%20promo${changedFilter}&cursor=${firstPromotionPage.nextCursor}`,
+            headers: { "x-actor-context": "deterministic-test-token" },
+          });
+          assert.equal(mismatch.statusCode, 400, mismatch.body);
+          assert.equal(mismatch.json().code, "INVALID_CURSOR");
+        }
+        const replacementItems = promotionalItems
+          .filter((row) => row.displayName !== "Coffee promo D")
+          .map((row) =>
+            row.displayName === "Coffee promo A"
+              ? { ...row, supplierPromotions: [] }
+              : row,
+          );
+        await importOne(1101, "promotions removed", "ok", {
+          exportCatalog: (snapshotRef) =>
+            ndjsonSource(
+              records(
+                snapshotRef,
+                "promotions removed",
+                "ok",
+                replacementItems,
+              ),
+            ),
+        });
+        assert.equal((await activated(REF(1101))).kind, "activated");
+        assert.deepEqual(
+          (await promotionPage("&supplierDiscountBasisPoints=3500")).items,
+          [],
+        );
+        assert.deepEqual(
+          (await promotionPage("&supplierDiscountBasisPoints=1000")).items.map(
+            (row) => row.displayName,
+          ),
+          ["Coffee promo C"],
+        );
+        const afterRemoval = await promotionPage();
+        assert.deepEqual(
+          afterRemoval.items.find((row) => row.displayName === "Coffee promo A")
+            .supplierPromotions,
+          [],
+        );
+        const missing = afterRemoval.items.find(
+          (row) => row.displayName === "Coffee promo D",
+        );
+        assert.equal(missing.availability, "Unavailable");
+        assert.equal(Object.hasOwn(missing, "supplierPromotions"), false);
         t.diagnostic(
           JSON.stringify({
             livePostgres: true,
@@ -626,7 +751,9 @@ void test(
             replayBatchCount: replayBatch,
             activeRevisionAfterFailures: oldRevision,
             concurrentApiRevisions: [...new Set(observed)],
-            finalActiveRevision: "3",
+            finalActiveRevision: "5",
+            supplierPromotionFilterBeforePagination: true,
+            removedAndMissingPromotionsCleared: true,
             timeoutRejected: true,
             cancellationState: "Receiving",
           }),

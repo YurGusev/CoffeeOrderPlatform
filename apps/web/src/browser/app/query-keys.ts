@@ -5,6 +5,7 @@ export const queryKeys = {
       cursor?: string;
       orderRef: string;
       q: string;
+      supplierDiscountBasisPoints?: "1000" | "3500";
     }>,
   ) => ["catalog", "search", { ...input, limit: 20 }] as const,
   customersSearch: (input: Readonly<{ cursor?: string; q: string }>) =>
