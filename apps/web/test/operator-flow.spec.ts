@@ -3315,6 +3315,19 @@ async function routeSemantics(context: BrowserContext): Promise<void> {
   assert.equal(new URL(page.url()).searchParams.has("cursor"), false);
   assert.equal(new URL(page.url()).searchParams.has("orderRef"), false);
   await page.getByRole("textbox", { name: "Название товара" }).fill("");
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve) => {
+        window.addEventListener("popstate", () => resolve(), { once: true });
+        window.history.pushState(window.history.state, "", "/app/catalog");
+        window.history.back();
+      }),
+  );
+  await expect(page).toHaveURL((url) => url.searchParams.get("q") === "кофе");
+  await expect(
+    page.getByRole("textbox", { name: "Название товара" }),
+  ).toHaveValue("кофе");
+  await page.getByRole("textbox", { name: "Название товара" }).fill("");
   await expect(page).toHaveURL((url) => !url.searchParams.has("q"));
   await page.goBack({ waitUntil: "networkidle" });
   await expect(page).toHaveURL((url) => url.searchParams.get("q") === "кофе");

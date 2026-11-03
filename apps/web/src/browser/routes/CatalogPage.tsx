@@ -39,6 +39,13 @@ const unitLabels: Readonly<Record<CatalogProductSummary["unit"], string>> = {
   piece: "штука",
 };
 
+const availabilityValues: readonly string[] = [
+  "Available",
+  "Unavailable",
+  "Stopped",
+  "",
+];
+
 function isStaleQuote(error: unknown): boolean {
   return (
     error instanceof ApiError && error.problem.code === "ORDER_QUOTE_STALE"
@@ -63,14 +70,10 @@ export function CatalogPage(): ReactElement {
   const query = rawQuery.trim().slice(0, 200);
   const cursor = params.get("cursor") ?? undefined;
   const rawAvailability = params.get("availability") ?? "Available";
-  const availability: CatalogProductSummary["availability"] | "" = [
-    "Available",
-    "Unavailable",
-    "Stopped",
-    "",
-  ].includes(rawAvailability)
-    ? (rawAvailability as CatalogProductSummary["availability"] | "")
-    : "Available";
+  const availability: CatalogProductSummary["availability"] | "" =
+    availabilityValues.includes(rawAvailability)
+      ? (rawAvailability as CatalogProductSummary["availability"] | "")
+      : "Available";
   const validOrderRef = /^ord_[0-9A-HJKMNP-TV-Z]{26}$/u.test(orderRef);
   const [draftQuery, setDraftQuery] = useState(query);
   const [draftAvailability, setDraftAvailability] = useState(availability);
@@ -126,6 +129,21 @@ export function CatalogPage(): ReactElement {
   useEffect(() => {
     setDraftAvailability(availability);
   }, [availability]);
+
+  useEffect(() => {
+    const restoreFields = (): void => {
+      const current = new URLSearchParams(window.location.search);
+      const nextAvailability = current.get("availability") ?? "Available";
+      setDraftQuery((current.get("q") ?? "").trim().slice(0, 200));
+      setDraftAvailability(
+        availabilityValues.includes(nextAvailability)
+          ? (nextAvailability as CatalogProductSummary["availability"] | "")
+          : "Available",
+      );
+    };
+    window.addEventListener("popstate", restoreFields);
+    return () => window.removeEventListener("popstate", restoreFields);
+  }, []);
 
   useEffect(() => {
     if (rawQuery === query && rawAvailability === availability) return;
