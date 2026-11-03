@@ -770,9 +770,18 @@ function compareParameter(
   if (!after) fail(`${at}: parameter removed`);
   const previous = resolveParameter(beforeDocument, before);
   const next = resolveParameter(afterDocument, after);
-  for (const field of ["name", "in", "required"])
+  for (const field of ["name", "in"])
     if (previous[field] !== next[field])
       fail(`${at}: parameter ${field} changed`);
+  if (
+    previous.required !== next.required &&
+    !(
+      previous.in === "query" &&
+      previous.required === true &&
+      next.required === false
+    )
+  )
+    fail(`${at}: parameter required changed`);
   compareSchema(previous.schema, next.schema, `${at}.schema`, sourcePath);
 }
 

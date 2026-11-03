@@ -6365,16 +6365,25 @@ void test(
         assert.throws(() => process.kill(pid, 0), { code: "ESRCH" });
         const descendantPid = Number(await readFile(descendantPath, "utf8"));
         assert.ok(Number.isSafeInteger(descendantPid) && descendantPid > 0);
-        const running = async () => {
-          const status = await readFile(
+        const running = async (reader = readFile) => {
+          const status = await reader(
             `/proc/${descendantPid}/stat`,
             "utf8",
           ).catch((error) => {
-            if (error.code === "ENOENT") return null;
+            if (error.code === "ENOENT" || error.code === "ESRCH") return null;
             throw error;
           });
           return status !== null && !/^\d+ \(.*\) Z /u.test(status);
         };
+        for (const code of ["ENOENT", "ESRCH", "EACCES"]) {
+          const result = running(async () => {
+            throw Object.assign(new Error("synthetic proc read failure"), {
+              code,
+            });
+          });
+          if (code === "EACCES") await assert.rejects(result, { code });
+          else assert.equal(await result, false);
+        }
         const exitDeadline = Date.now() + 2_000;
         while ((await running()) && Date.now() < exitDeadline)
           await new Promise((resolvePromise) => setTimeout(resolvePromise, 25));

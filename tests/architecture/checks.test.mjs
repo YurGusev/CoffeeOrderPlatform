@@ -764,6 +764,24 @@ void test("RED TOOLCHAIN-PIN: floating dependency specifier is rejected", async 
   }
 });
 
+void test("RED TOOLCHAIN-IMAGE: Keycloak runtime requires the pinned digest", async () => {
+  const root = await toolchainRoot();
+  try {
+    await mutateJson(
+      join(root, "config/toolchain-versions.json"),
+      (document) => {
+        document.keycloakRuntimeImage =
+          "eclipse-temurin:21.0.13_9-jre-alpine-3.24";
+      },
+    );
+    const result = run("check-toolchain-versions.mjs", root);
+    assert.notEqual(result.status, 0, output(result));
+    assert.match(output(result), /TOOLCHAIN-IMAGE|TOOLCHAIN-SCHEMA/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 void test("RED TS7-BASELINE: baseUrl compiler option is rejected", async () => {
   const root = await toolchainRoot();
   try {

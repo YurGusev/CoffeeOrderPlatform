@@ -170,6 +170,58 @@
     "browserOidc": {
       "anyOf": [{ "type": "null" }, { "$ref": "#/$defs/browserOidcProfile" }]
     },
+    "localIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "publicBaseUrl",
+        "privateBaseUrl",
+        "realm",
+        "clientId",
+        "databaseName",
+        "databaseRole",
+        "databasePoolMax",
+        "cacheMode",
+        "startupGraceMs",
+        "memoryLimitMiB",
+        "operatorUsername",
+        "actorRef",
+        "bootstrapAdminUsername"
+      ],
+      "properties": {
+        "publicBaseUrl": {
+          "type": "string",
+          "pattern": "^https://[A-Za-z0-9.-]+(:[0-9]{1,5})?$"
+        },
+        "privateBaseUrl": {
+          "type": "string",
+          "pattern": "^https://[A-Za-z0-9.-]+(:[0-9]{1,5})?$"
+        },
+        "realm": { "type": "string", "pattern": "^[a-z][a-z0-9-]{0,62}$" },
+        "clientId": { "type": "string", "pattern": "^[a-z][a-z0-9-]{0,62}$" },
+        "databaseName": {
+          "type": "string",
+          "pattern": "^coffee_platform_[a-z][a-z0-9_]{0,39}$"
+        },
+        "databaseRole": {
+          "type": "string",
+          "pattern": "^coffee_[a-z_]{1,48}_rw$"
+        },
+        "databasePoolMax": { "type": "integer", "minimum": 1, "maximum": 20 },
+        "cacheMode": { "const": "local" },
+        "startupGraceMs": { "type": "integer", "const": 90000 },
+        "memoryLimitMiB": { "type": "integer", "minimum": 512 },
+        "operatorUsername": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{0,62}$"
+        },
+        "actorRef": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "bootstrapAdminUsername": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{0,62}$"
+        }
+      }
+    },
     "services": {
       "type": "object",
       "additionalProperties": false,
@@ -1156,6 +1208,11 @@
       "properties": {
         "publicBaseUrl": { "type": "string", "pattern": "^https://[^\\s]+$" },
         "shutdownGraceMs": { "type": "integer", "const": 30000 },
+        "localRestartMaxAttempts": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10
+        },
         "requestDeadlineMs": { "type": "integer", "const": 5000 },
         "bodyLimitBytes": { "type": "integer", "const": 1048576 },
 
@@ -1355,6 +1412,8 @@
       "type": "object",
       "additionalProperties": false,
       "required": [
+        "publicAuthorityValidityHours",
+        "publicCertificateValidityHours",
         "certificateValidityHours",
         "certificateRenewBeforeHours",
         "actorContext",
@@ -1364,6 +1423,8 @@
         "delegation"
       ],
       "properties": {
+        "publicAuthorityValidityHours": { "type": "integer", "const": 8760 },
+        "publicCertificateValidityHours": { "type": "integer", "const": 2160 },
         "certificateValidityHours": { "type": "integer", "const": 24 },
         "certificateRenewBeforeHours": { "type": "integer", "const": 6 },
         "actorContext": { "$ref": "#/$defs/signingPolicy" },

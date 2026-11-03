@@ -42,6 +42,7 @@ export type EdgeAuthAuthority = Readonly<{
     state: string,
     code: string,
     loginBinding: string,
+    issuer?: string,
   ) => Promise<
     Readonly<{
       sessionId: string;
@@ -311,11 +312,19 @@ export function registerEdgeAuthRoutes(
     setNoStore(reply);
     const query = request.query as Record<string, unknown>;
     if (
-      Object.keys(query).some((key) => key !== "state" && key !== "code") ||
+      Object.keys(query).some(
+        (key) => !["state", "code", "iss", "session_state"].includes(key),
+      ) ||
       typeof query["state"] !== "string" ||
       typeof query["code"] !== "string" ||
       query["state"].length > 512 ||
-      query["code"].length > 4_096
+      query["code"].length > 4_096 ||
+      (query["iss"] !== undefined &&
+        (typeof query["iss"] !== "string" || query["iss"].length > 4_096)) ||
+      (query["session_state"] !== undefined &&
+        (typeof query["session_state"] !== "string" ||
+          query["session_state"].length > 4_096 ||
+          query["session_state"].includes(" ")))
     ) {
       reply.header("set-cookie", CLEAR_LOGIN_COOKIE);
       return sendProblem(
@@ -340,6 +349,7 @@ export function registerEdgeAuthRoutes(
         query["state"],
         query["code"],
         loginBinding,
+        query["iss"],
       );
       if (
         !result.returnTo.startsWith("/app/") ||

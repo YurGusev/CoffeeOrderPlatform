@@ -50,6 +50,14 @@ export type CompleteBrowserLoginData = {
   query?: {
     code?: string;
     state?: string;
+    /**
+     * При наличии должен точно совпадать с настроенным issuer до обмена code.
+     */
+    iss?: string;
+    /**
+     * Непрозрачное состояние сессии провайдера; не используется для авторизации.
+     */
+    session_state?: string;
   };
   url: '/auth/callback';
 };

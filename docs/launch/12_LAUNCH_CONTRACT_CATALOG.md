@@ -129,9 +129,12 @@ body/version по-прежнему невалидна. GET/SSE/provider/internal
 
 ### 3.2 Catalog
 
+[Просмотр без поискового фильтра](../adr/ADR-0043-catalog-browse-without-query.md)
+фиксирует решение о browse-запросе и его границы.
+
 `GET /api/client-v1/catalog/products`
 
-- query: `query` required 2–200; `availability` optional enum
+- query: optional `query` filter 2–200; without it, return the first page of the active snapshot; `availability` optional enum
   `Available|Unavailable|Stopped`; `limit` 1–50 default 20; `cursor` optional
   opaque string max 512;
 - `200 CatalogSearchResponse`: `{snapshotRevision, items, nextCursor}`;

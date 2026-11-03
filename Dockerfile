@@ -8,6 +8,8 @@ ARG NODE_IMAGE=node:26.8.1-alpine@sha256:2d984a15c9b54fd0aeb608b8e0d0d83529eb34d
 # inert default keeps unrelated targets parseable without enabling a fallback.
 ARG KAFKA_IMAGE=scratch
 ARG GRAFANA_IMAGE=scratch
+ARG KEYCLOAK_DISTRIBUTION_IMAGE=scratch
+ARG KEYCLOAK_RUNTIME_IMAGE=scratch
 
 FROM ${NODE_IMAGE} AS librdkafka-build
 
@@ -134,6 +136,7 @@ NODE
 # Build the exact pinned Kafka source for G12 and update only the two
 # pre-existing Alpine packages approved by the supply-chain gate.
 FROM ${KAFKA_IMAGE} AS kafka
+ARG LIBEXPAT_VERSION
 USER root
 RUN set -eu; \
     apk info -v | sort > /tmp/apk.before; \
@@ -142,10 +145,10 @@ RUN set -eu; \
     apk upgrade --no-cache brotli-libs libexpat; \
     apk info -v | sort > /tmp/apk.after; \
     grep -Fxq 'brotli-libs-1.2.1-r0' /tmp/apk.after; \
-    grep -Fxq 'libexpat-2.9.0-r0' /tmp/apk.after; \
+    grep -Fxq "libexpat-${LIBEXPAT_VERSION}" /tmp/apk.after; \
     sed \
       -e 's/^brotli-libs-1\.2\.0-r1$/brotli-libs-1.2.1-r0/' \
-      -e 's/^libexpat-2\.8\.5-r0$/libexpat-2.9.0-r0/' \
+      -e "s/^libexpat-2\.8\.5-r0$/libexpat-${LIBEXPAT_VERSION}/" \
       /tmp/apk.before > /tmp/apk.expected; \
     diff -u /tmp/apk.expected /tmp/apk.after; \
     rm -f /tmp/apk.before /tmp/apk.after /tmp/apk.expected
@@ -162,6 +165,27 @@ COPY --from=grafana-plugins --chown=472:472 /loki /opt/grafana/plugins/loki
 COPY --from=grafana-plugins --chown=472:472 /tempo /opt/grafana/plugins/tempo
 COPY --from=grafana-plugins --chown=472:472 /prometheus /opt/grafana/plugins/prometheus
 ENV GF_PATHS_PLUGINS=/opt/grafana/plugins
+
+# Package the pinned Keycloak distribution with the pinned Temurin runtime.
+FROM ${KEYCLOAK_DISTRIBUTION_IMAGE} AS keycloak-distribution
+FROM ${KEYCLOAK_RUNTIME_IMAGE} AS keycloak
+ARG LIBEXPAT_VERSION
+RUN set -eu; \
+    apk info -v | sort > /tmp/apk.before; \
+    grep -Fxq 'libexpat-2.9.0-r0' /tmp/apk.before; \
+    apk upgrade --no-cache libexpat; \
+    apk info -v | sort > /tmp/apk.after; \
+    grep -Fxq "libexpat-${LIBEXPAT_VERSION}" /tmp/apk.after; \
+    sed "s/^libexpat-2\.9\.0-r0$/libexpat-${LIBEXPAT_VERSION}/" \
+      /tmp/apk.before > /tmp/apk.expected; \
+    diff -u /tmp/apk.expected /tmp/apk.after; \
+    rm -f /tmp/apk.before /tmp/apk.after /tmp/apk.expected
+RUN addgroup -g 1000 keycloak && adduser -D -u 1000 -G keycloak keycloak
+COPY --from=keycloak-distribution --chown=1000:1000 /opt/keycloak /opt/keycloak
+WORKDIR /opt/keycloak
+USER 1000:1000
+ENTRYPOINT ["/opt/keycloak/bin/kc.sh"]
+CMD ["start", "--optimized"]
 
 FROM ${NODE_IMAGE} AS runtime
 

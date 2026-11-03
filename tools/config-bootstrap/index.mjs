@@ -2,8 +2,11 @@
 import { execFileSync } from "node:child_process";
 import {
   createHash,
+  createHmac,
   createPrivateKey,
   createPublicKey,
+  generateKeyPairSync,
+  pbkdf2Sync,
   randomBytes,
   randomUUID,
   X509Certificate,
@@ -23,6 +26,7 @@ import {
   unlink,
 } from "node:fs/promises";
 import { basename, dirname, join, resolve } from "node:path";
+import { isIP } from "node:net";
 import { isDeepStrictEqual } from "node:util";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import {
@@ -36,6 +40,8 @@ import {
 import { load as parseYaml, dump as dumpYaml } from "js-yaml";
 import {
   SERVER_IDENTITY_SQL,
+  bootstrapDatabases,
+  renderDatabaseObjectSql,
   renderDatabaseSql,
   renderRoleSql,
   validateRoleMap,
@@ -348,6 +354,23 @@ export async function materializeRuntimeSecrets({
     decryptInMemory(secretPath, env),
   );
   const environment = decrypted.environments[config.environment];
+  return materializeRuntimeProjection({
+    runtime,
+    outputDir,
+    env,
+    config,
+    environment,
+  });
+}
+
+async function materializeRuntimeProjection({
+  runtime,
+  outputDir,
+  env,
+  config,
+  environment,
+}) {
+  const nativeNginx = runtime === "edge-nginx";
   const refs = nativeNginx
     ? [
         "edge.tlsPrivateKey",
@@ -460,6 +483,10 @@ export async function materializeRuntimeSecrets({
       runtime,
       secretRefs: [...refs],
       files: Object.keys(files),
+      publicCertificateFingerprint: new X509Certificate(publicCert)
+        .fingerprint256,
+      transportCaFingerprint: new X509Certificate(transport.caPem)
+        .fingerprint256,
     };
   }
   const destination =
@@ -478,7 +505,7 @@ export async function materializeRuntimeSecrets({
   return { path: destination, runtime, secretRefs: [...refs] };
 }
 
-async function readTelemetrySecrets({ root, env, scope }) {
+async function readInfrastructureSecrets({ root, env, scope }) {
   const refs = await infrastructureSecretEntries(scope, { root });
   assertLocatorEnv(env, true);
   const config = await loadPlatformConfig(
@@ -505,6 +532,10 @@ async function readTelemetrySecrets({ root, env, scope }) {
     decryptInMemory(secretPath, env),
   );
   const environment = decrypted.environments[config.environment];
+  return { values: infrastructureValues(refs, environment), config };
+}
+
+function infrastructureValues(refs, environment) {
   const values = {};
   for (const [name, ref] of refs) {
     const value = secretValueAt(environment, ref);
@@ -525,7 +556,7 @@ export async function materializeCollectorSecrets({
 } = {}) {
   await ensurePrivateSecretDirectory(outputDir);
   const scopedPath = join(outputDir, "collector.json");
-  const values = await readTelemetrySecrets({
+  const { values } = await readInfrastructureSecrets({
     root,
     env,
     scope: "otel-collector",
@@ -541,13 +572,844 @@ export async function materializeGrafanaAdminSecret({
 } = {}) {
   await ensurePrivateSecretDirectory(outputDir);
   const path = join(outputDir, "admin-secret");
-  const values = await readTelemetrySecrets({
+  const { values } = await readInfrastructureSecrets({
     root,
     env,
     scope: "grafana-bootstrap",
   });
   await writePrivateSecret(path, `${values["admin-secret"]}\n`);
   return { path, runtime: "config-bootstrap" };
+}
+
+/** Derive the normal release config without changing the formal source config. */
+export function projectLocalRuntimeConfig(config) {
+  if (
+    config.browserOidc !== null ||
+    !config.localIdentity ||
+    config.verification.databaseIsolation.enabled !== false ||
+    config.verification.kafkaNamespaceIsolation !== false
+  )
+    fail(
+      "CONFIG-LOCAL-RELEASE",
+      "source is not the normal null-profile configuration",
+    );
+  const projected = structuredClone(config);
+  const identity = projected.localIdentity;
+  const publicRealm = `${identity.publicBaseUrl}/realms/${identity.realm}`;
+  const privateRealm = `${identity.privateBaseUrl}/realms/${identity.realm}`;
+  projected.browserOidc = {
+    issuer: publicRealm,
+    clientId: identity.clientId,
+    authorizationUrl: `${publicRealm}/protocol/openid-connect/auth`,
+    tokenUrl: `${privateRealm}/protocol/openid-connect/token`,
+    jwksUrl: `${privateRealm}/protocol/openid-connect/certs`,
+    redirectUri: `${projected.platform.publicBaseUrl}/auth/callback`,
+    allowedAlgorithms: ["RS256"],
+    actorRefClaim: "actor_ref",
+    permissionsClaim: "permissions",
+  };
+  return projected;
+}
+
+export async function materializeKeycloakRealm({
+  root = REPO_ROOT,
+  outputDir = "/dev/shm/coffee-platform-secrets/keycloak-import",
+  env = process.env,
+} = {}) {
+  const { values, config } = await readInfrastructureSecrets({
+    root,
+    env,
+    scope: "keycloak-operator",
+  });
+  return materializeKeycloakRealmProjection({
+    root,
+    outputDir,
+    values,
+    config,
+  });
+}
+
+async function materializeKeycloakRealmProjection({
+  root,
+  outputDir,
+  values,
+  config,
+}) {
+  const source = structuredClone(config);
+  source.browserOidc = null;
+  if (
+    !isDeepStrictEqual(
+      config.browserOidc,
+      projectLocalRuntimeConfig(source).browserOidc,
+    ) ||
+    !/^[A-Za-z0-9_-]{32,128}$/u.test(values["operator-password"]) ||
+    !resolve(outputDir).startsWith("/dev/shm/")
+  )
+    fail("CONFIG-IDENTITY-SECRET", "operator bootstrap inputs are invalid");
+  const { clientV1BrowserOperations } = await import(
+    pathToFileURL(join(root, "apps/edge-gateway/src/client-operations.gen.ts"))
+      .href
+  );
+  const permissions = [
+    ...new Set(
+      clientV1BrowserOperations.flatMap((operation) =>
+        "permission" in operation ? [operation.permission] : [],
+      ),
+    ),
+  ];
+  const { localIdentity: identity, browserOidc: oidc } = config;
+  const mapper = (claim, multi) => ({
+    name: claim,
+    protocol: "openid-connect",
+    protocolMapper: "oidc-usermodel-attribute-mapper",
+    config: {
+      "user.attribute": claim,
+      "claim.name": claim,
+      "jsonType.label": "String",
+      "id.token.claim": "true",
+      "access.token.claim": "false",
+      "userinfo.token.claim": "false",
+      multivalued: String(multi),
+    },
+  });
+  const realm = {
+    realm: identity.realm,
+    enabled: true,
+    registrationAllowed: false,
+    resetPasswordAllowed: false,
+    clients: [
+      {
+        clientId: identity.clientId,
+        enabled: true,
+        protocol: "openid-connect",
+        publicClient: true,
+        standardFlowEnabled: true,
+        implicitFlowEnabled: false,
+        directAccessGrantsEnabled: false,
+        serviceAccountsEnabled: false,
+        redirectUris: [oidc.redirectUri],
+        webOrigins: [new URL(oidc.redirectUri).origin],
+        attributes: { "pkce.code.challenge.method": "S256" },
+        protocolMappers: [
+          mapper(oidc.actorRefClaim, false),
+          mapper(oidc.permissionsClaim, true),
+        ],
+      },
+    ],
+    users: [
+      {
+        username: identity.operatorUsername,
+        enabled: true,
+        clientRoles: { "realm-management": ["realm-admin"] },
+        attributes: {
+          [oidc.actorRefClaim]: [identity.actorRef],
+          [oidc.permissionsClaim]: permissions,
+        },
+        credentials: [
+          {
+            type: "password",
+            value: values["operator-password"],
+            temporary: false,
+          },
+        ],
+      },
+    ],
+  };
+  await ensurePrivateSecretDirectory(outputDir);
+  if ((await statfs(outputDir)).type !== 0x01021994)
+    fail("CONFIG-IDENTITY-SECRET", "operator bootstrap requires private tmpfs");
+  const path = join(outputDir, `${identity.realm}-realm.json`);
+  await writePrivateSecret(path, `${JSON.stringify(realm)}\n`);
+  return { runtime: "keycloak", path };
+}
+
+export async function materializeKeycloakSecrets({
+  root = REPO_ROOT,
+  outputDir = "/dev/shm/coffee-platform-secrets/keycloak",
+  includeBootstrap = true,
+  env = process.env,
+} = {}) {
+  const { values, config } = await readInfrastructureSecrets({
+    root,
+    env,
+    scope: "keycloak-runtime",
+  });
+  return materializeKeycloakSecretsProjection({
+    outputDir,
+    includeBootstrap,
+    values,
+    config,
+  });
+}
+
+async function materializeKeycloakSecretsProjection({
+  outputDir,
+  includeBootstrap,
+  values,
+  config,
+}) {
+  if (
+    !config.browserOidc ||
+    ["database-password", "bootstrap-admin-password"].some(
+      (key) => !/^[A-Za-z0-9_-]{32,128}$/u.test(values[key]),
+    )
+  )
+    fail(
+      "CONFIG-IDENTITY-SECRET",
+      "identity profile or credentials are invalid",
+    );
+  const source = structuredClone(config);
+  source.browserOidc = null;
+  if (
+    !isDeepStrictEqual(
+      config.browserOidc,
+      projectLocalRuntimeConfig(source).browserOidc,
+    )
+  )
+    fail(
+      "CONFIG-IDENTITY-SECRET",
+      "identity OIDC profile differs from the normal release",
+    );
+  try {
+    const urls = [
+      config.browserOidc.issuer,
+      config.browserOidc.authorizationUrl,
+      config.browserOidc.tokenUrl,
+      config.browserOidc.jwksUrl,
+    ].map((value) => new URL(value));
+    const certificate = new X509Certificate(values["tls-cert"]);
+    const authority = new X509Certificate(values["tls-ca"]);
+    if (
+      urls.some(
+        (url) =>
+          url.protocol !== "https:" || !certificate.checkHost(url.hostname),
+      ) ||
+      !authority.ca ||
+      !certificate.verify(authority.publicKey) ||
+      createPublicKey(createPrivateKey(values["tls-key"]))
+        .export({ type: "spki", format: "der" })
+        .compare(
+          certificate.publicKey.export({ type: "spki", format: "der" }),
+        ) !== 0 ||
+      Date.now() < Date.parse(certificate.validFrom) ||
+      Date.now() >= Date.parse(certificate.validTo)
+    )
+      throw new Error("invalid identity certificate");
+  } catch {
+    fail("CONFIG-IDENTITY-SECRET", "identity TLS material is invalid");
+  }
+  if (!resolve(outputDir).startsWith("/dev/shm/"))
+    fail("CONFIG-IDENTITY-SECRET", "identity secrets require private tmpfs");
+  await ensurePrivateSecretDirectory(outputDir);
+  if ((await statfs(outputDir)).type !== 0x01021994)
+    fail("CONFIG-IDENTITY-SECRET", "identity secrets require private tmpfs");
+  const files = {
+    "keycloak.conf": `db-password=${values["database-password"]}\n${includeBootstrap ? `bootstrap-admin-password=${values["bootstrap-admin-password"]}\n` : ""}`,
+    "tls.key": values["tls-key"],
+    "tls.crt": values["tls-cert"],
+    "ca.crt": values["tls-ca"],
+  };
+  for (const [name, content] of Object.entries(files))
+    await writePrivateSecret(join(outputDir, name), content);
+  return {
+    runtime: "keycloak",
+    path: outputDir,
+    files: Object.keys(files),
+    publicCertificateFingerprint: new X509Certificate(values["tls-cert"])
+      .fingerprint256,
+    publicKeySha256: createHash("sha256")
+      .update(
+        new X509Certificate(values["tls-cert"]).publicKey.export({
+          type: "spki",
+          format: "der",
+        }),
+      )
+      .digest("hex"),
+    caFingerprint: new X509Certificate(values["tls-ca"]).fingerprint256,
+  };
+}
+
+export async function retireKeycloakBootstrapSecret({ outputDir } = {}) {
+  if (
+    typeof outputDir !== "string" ||
+    resolve(outputDir) !== outputDir ||
+    !outputDir.startsWith("/dev/shm/")
+  )
+    fail("CONFIG-IDENTITY-SECRET", "owned identity scope is required");
+  const directory = await lstat(outputDir);
+  const path = join(outputDir, "keycloak.conf");
+  const info = await lstat(path);
+  if (
+    !directory.isDirectory() ||
+    directory.isSymbolicLink() ||
+    directory.uid !== process.getuid() ||
+    (directory.mode & 0o777) !== 0o700 ||
+    (await realpath(outputDir)) !== outputDir ||
+    (await statfs(outputDir)).type !== 0x01021994 ||
+    !info.isFile() ||
+    info.isSymbolicLink() ||
+    info.uid !== process.getuid() ||
+    (info.mode & 0o777) !== 0o400 ||
+    info.size > 1024
+  )
+    fail("CONFIG-IDENTITY-SECRET", "identity scope is invalid");
+  const contents = await readFile(path, "utf8");
+  const match =
+    /^db-password=([A-Za-z0-9_-]{32,128})\nbootstrap-admin-password=[A-Za-z0-9_-]{32,128}\n$/u.exec(
+      contents,
+    );
+  if (!match)
+    fail(
+      "CONFIG-IDENTITY-SECRET",
+      "identity bootstrap configuration is invalid",
+    );
+  await writePrivateSecret(path, `db-password=${match[1]}\n`);
+}
+
+export async function materializeKafkaBrokerSecrets({
+  root = REPO_ROOT,
+  outputDir = "/dev/shm/coffee-platform-secrets/kafka",
+  env = process.env,
+} = {}) {
+  const { values } = await readInfrastructureSecrets({
+    root,
+    env,
+    scope: "kafka-broker",
+  });
+  return materializeKafkaBrokerSecretsProjection({ outputDir, values });
+}
+
+async function materializeKafkaBrokerSecretsProjection({ outputDir, values }) {
+  const roles = ["broker", "catalog", "orders", "realtime"];
+  if (
+    roles.some(
+      (role) =>
+        values[`${role}-user`] !== (role === "broker" ? "kafka" : role) ||
+        !/^[A-Za-z0-9_-]{32,128}$/u.test(values[`${role}-password`]),
+    ) ||
+    !/^[A-Za-z0-9_-]{32,128}$/u.test(values["store-password"])
+  )
+    fail("CONFIG-KAFKA-SECRET", "broker credentials are invalid");
+  try {
+    const certificate = new X509Certificate(values["tls-cert"]);
+    const authority = new X509Certificate(values["tls-ca"]);
+    if (
+      !authority.ca ||
+      !certificate.verify(authority.publicKey) ||
+      !certificate.checkHost("kafka") ||
+      !certificate.checkHost("localhost") ||
+      ["catalog", "orders", "realtime"].some(
+        (role) =>
+          new X509Certificate(values[`${role}-ca`]).fingerprint256 !==
+          authority.fingerprint256,
+      ) ||
+      createPublicKey(createPrivateKey(values["tls-key"]))
+        .export({ type: "spki", format: "der" })
+        .compare(
+          certificate.publicKey.export({ type: "spki", format: "der" }),
+        ) !== 0 ||
+      Date.now() < Date.parse(certificate.validFrom) ||
+      Date.now() >= Date.parse(certificate.validTo)
+    )
+      throw new Error("invalid broker certificate");
+  } catch {
+    fail("CONFIG-KAFKA-SECRET", "broker TLS material is invalid");
+  }
+  if (!resolve(outputDir).startsWith("/dev/shm/"))
+    fail("CONFIG-KAFKA-SECRET", "broker secrets require private tmpfs");
+  const parent = dirname(outputDir);
+  await ensurePrivateSecretDirectory(parent);
+  if ((await statfs(parent)).type !== 0x01021994)
+    fail("CONFIG-KAFKA-SECRET", "broker secrets require private tmpfs");
+  await mkdir(outputDir, { mode: 0o700 });
+  try {
+    const path = (name) => join(outputDir, name);
+    const passwordPath = path("kafka.keystore.password");
+    for (const [name, content] of Object.entries({
+      "kafka.keystore.password": `${values["store-password"]}\n`,
+      "server.key": values["tls-key"],
+      "server.crt": values["tls-cert"],
+      "ca.crt": values["tls-ca"],
+      "kafka_jaas.conf": [
+        "KafkaServer {",
+        "  org.apache.kafka.common.security.plain.PlainLoginModule required",
+        `  username="kafka" password="${values["broker-password"]}"`,
+        ...roles.map(
+          (role) =>
+            `  user_${values[`${role}-user`]}="${values[`${role}-password`]}"`,
+        ),
+        ";",
+        "};",
+        "",
+      ].join("\n"),
+      "client.properties": [
+        "security.protocol=SASL_SSL",
+        "sasl.mechanism=PLAIN",
+        `sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required username="kafka" password="${values["broker-password"]}";`,
+        "ssl.truststore.type=PKCS12",
+        "ssl.truststore.location=/etc/kafka/secrets/kafka.truststore.p12",
+        `ssl.truststore.password=${values["store-password"]}`,
+        "",
+      ].join("\n"),
+    }))
+      await writePrivateSecret(path(name), content);
+    execFileSync(
+      "openssl",
+      [
+        "pkcs12",
+        "-export",
+        "-name",
+        "kafka",
+        "-inkey",
+        path("server.key"),
+        "-in",
+        path("server.crt"),
+        "-certfile",
+        path("ca.crt"),
+        "-passout",
+        `file:${passwordPath}`,
+        "-out",
+        path("kafka.keystore.p12"),
+      ],
+      { stdio: "ignore", timeout: 30_000 },
+    );
+    execFileSync(
+      "keytool",
+      [
+        "-importcert",
+        "-noprompt",
+        "-alias",
+        "kafka-ca",
+        "-file",
+        path("ca.crt"),
+        "-keystore",
+        path("kafka.truststore.p12"),
+        "-storetype",
+        "PKCS12",
+        "-storepass:file",
+        passwordPath,
+      ],
+      { stdio: "ignore", timeout: 30_000 },
+    );
+    await chmod(path("kafka.keystore.p12"), 0o400);
+    await chmod(path("kafka.truststore.p12"), 0o400);
+    for (const name of ["server.key", "server.crt", "ca.crt"])
+      await unlink(path(name));
+    return { runtime: "kafka", path: outputDir };
+  } catch (error) {
+    await rm(outputDir, { recursive: true, force: true });
+    throw error;
+  }
+}
+
+function localPasswordVerifier(password) {
+  // Normal provisioning uses strong ASCII/base64url secrets; Unicode secrets
+  // remain supported by the existing general bootstrap and are not rotated here.
+  if (
+    typeof password !== "string" ||
+    !/^[A-Za-z0-9_-]{32,128}$/u.test(password)
+  )
+    fail(
+      "CONFIG-LOCAL-PASSWORD",
+      "normal bootstrap requires base64url passwords",
+    );
+  const salt = randomBytes(16);
+  const salted = pbkdf2Sync(password, salt, 4096, 32, "sha256");
+  const clientKey = createHmac("sha256", salted).update("Client Key").digest();
+  const storedKey = createHash("sha256").update(clientKey).digest("base64");
+  const serverKey = createHmac("sha256", salted)
+    .update("Server Key")
+    .digest("base64");
+  return `SCRAM-SHA-256$4096:${salt.toString("base64")}$${storedKey}:${serverKey}`;
+}
+
+/** Bootstrap only the identity-owned database on the explicitly approved server. */
+export async function bootstrapLocalIdentityDatabase({
+  adminClient,
+  connectIdentity,
+  identity,
+  roleMap,
+  password,
+  expectedServerIdentity,
+  requireExisting = false,
+  expectedDatabaseOid,
+}) {
+  const { databaseName, databaseRole } = identity;
+  if (
+    !/^coffee_platform_[a-z][a-z0-9_]{0,39}$/u.test(databaseName) ||
+    !/^coffee_[a-z_]{1,48}_rw$/u.test(databaseRole) ||
+    !/^[0-9]{10,30}$/u.test(expectedServerIdentity) ||
+    roleMap.databases.some(
+      (database) =>
+        database.name === databaseName ||
+        database.migratorRole === databaseRole ||
+        database.runtimeRoles.some((role) => role.role === databaseRole),
+    )
+  )
+    fail("CONFIG-IDENTITY-DATABASE", "identity database target is invalid");
+  const verifier = localPasswordVerifier(password);
+  await adminClient.query(
+    "SELECT pg_advisory_lock(hashtextextended('coffee-platform:database-bootstrap:v1', 0))",
+  );
+  try {
+    const probe = await adminClient.query(SERVER_IDENTITY_SQL);
+    validateServerProbe(probe.rows[0], { expectedServerIdentity });
+    const roleResult = await adminClient.query(
+      `SELECT r.rolcanlogin, r.rolinherit, r.rolsuper, r.rolcreatedb,
+              r.rolcreaterole, r.rolreplication, r.rolbypassrls,
+              r.rolconnlimit, r.rolvaliduntil,
+              shobj_description(r.oid, 'pg_authid') AS owner_marker,
+              EXISTS (SELECT 1 FROM pg_auth_members m WHERE m.member = r.oid OR m.roleid = r.oid) AS has_memberships,
+              EXISTS (SELECT 1 FROM pg_database d WHERE d.datdba = r.oid AND d.datname <> $2) AS owns_other_database
+         FROM pg_roles r WHERE r.rolname = $1`,
+      [databaseRole, databaseName],
+    );
+    const databaseResult = await adminClient.query(
+      "SELECT datname, oid::text AS database_oid, pg_get_userbyid(datdba) AS owner, shobj_description(oid, 'pg_database') AS owner_marker FROM pg_database WHERE datname = $1",
+      [databaseName],
+    );
+    const role = roleResult.rows[0];
+    const database = databaseResult.rows[0];
+    if (
+      requireExisting &&
+      (!role ||
+        !database ||
+        !/^[0-9]+$/u.test(database.database_oid ?? "") ||
+        (expectedDatabaseOid !== undefined &&
+          database.database_oid !== expectedDatabaseOid))
+    )
+      fail(
+        "CONFIG-IDENTITY-DATABASE",
+        "existing identity database binding is not proven",
+      );
+    if (requireExisting) {
+      const publicAccess = await adminClient.query(
+        `SELECT d.datname FROM pg_database d WHERE d.datname = $1 AND EXISTS (
+           SELECT 1 FROM aclexplode(COALESCE(d.datacl, acldefault('d', d.datdba))) a
+           WHERE a.grantee = 0 AND a.privilege_type = 'CONNECT'
+         )`,
+        [databaseName],
+      );
+      if (publicAccess.rows.length !== 0)
+        fail(
+          "CONFIG-IDENTITY-DATABASE",
+          "identity database permits public connections",
+        );
+    }
+    if (
+      (database &&
+        (!role ||
+          database.owner !== databaseRole ||
+          database.owner_marker !== "coffee-platform:local-identity:v1")) ||
+      (role &&
+        (role.owner_marker !== "coffee-platform:local-identity:v1" ||
+          !role.rolcanlogin ||
+          role.rolinherit ||
+          role.rolsuper ||
+          role.rolcreatedb ||
+          role.rolcreaterole ||
+          role.rolreplication ||
+          role.rolbypassrls ||
+          role.rolconnlimit !== 20 ||
+          role.rolvaliduntil !== null ||
+          role.has_memberships ||
+          role.owns_other_database))
+    )
+      fail(
+        "CONFIG-IDENTITY-DATABASE",
+        "existing identity ownership is not trusted",
+      );
+    if (role) {
+      const foreignAccess = await adminClient.query(
+        "SELECT datname FROM pg_database WHERE datname = ANY($1::text[]) AND has_database_privilege($2, oid, 'CONNECT')",
+        [roleMap.databases.map((entry) => entry.name), databaseRole],
+      );
+      if (foreignAccess.rows.length !== 0)
+        fail(
+          "CONFIG-IDENTITY-DATABASE",
+          "identity role can access a business database",
+        );
+    } else {
+      const publicAccess = await adminClient.query(
+        `SELECT d.datname FROM pg_database d
+         WHERE d.datname = ANY($1::text[]) AND EXISTS (
+           SELECT 1 FROM aclexplode(COALESCE(d.datacl, acldefault('d', d.datdba))) a
+           WHERE a.grantee = 0 AND a.privilege_type = 'CONNECT'
+         )`,
+        [roleMap.databases.map((entry) => entry.name)],
+      );
+      if (publicAccess.rows.length !== 0)
+        fail(
+          "CONFIG-IDENTITY-DATABASE",
+          "business database permits public connections",
+        );
+    }
+    if (!role) {
+      await adminClient.query(renderRoleSql(databaseRole, verifier));
+      await adminClient.query(
+        `COMMENT ON ROLE "${databaseRole}" IS 'coffee-platform:local-identity:v1'`,
+      );
+    }
+    if (!database) {
+      await adminClient.query(
+        `CREATE DATABASE "${databaseName}" OWNER "${databaseRole}" TEMPLATE template0`,
+      );
+      await adminClient.query(
+        `COMMENT ON DATABASE "${databaseName}" IS 'coffee-platform:local-identity:v1'`,
+      );
+    }
+    if (!requireExisting)
+      await adminClient.query(
+        `REVOKE ALL ON DATABASE "${databaseName}" FROM PUBLIC`,
+      );
+    const client = await connectIdentity();
+    try {
+      await client.query("SELECT 1");
+    } finally {
+      await client.end();
+    }
+    return {
+      database: databaseName,
+      role: databaseRole,
+      created: !database,
+      ...(requireExisting ? { databaseOid: database.database_oid } : {}),
+    };
+  } finally {
+    await adminClient.query(
+      "SELECT pg_advisory_unlock(hashtextextended('coffee-platform:database-bootstrap:v1', 0))",
+    );
+  }
+}
+
+export async function provisionLocalIdentityDatabase({
+  root = REPO_ROOT,
+  expectedServerIdentity,
+  requireExisting = false,
+  expectedDatabaseOid,
+  env = process.env,
+} = {}) {
+  const config = await loadPlatformConfig(
+    root,
+    join(root, "config/platform.yaml"),
+  );
+  if (!config.localIdentity)
+    fail("CONFIG-IDENTITY-DATABASE", "local identity configuration is missing");
+  const secrets = await readSandboxSecrets(root, env, config);
+  const roleMap = JSON.parse(
+    await readFile(join(root, "config/database-role-map.json"), "utf8"),
+  );
+  const ownership = JSON.parse(
+    await readFile(join(root, "config/database-ownership.json"), "utf8"),
+  );
+  validateRoleMap(roleMap, ownership);
+  const target = {
+    config,
+    adminPassword: secrets.bootstrap?.postgresAdminPassword,
+  };
+  if (
+    typeof target.adminPassword !== "string" ||
+    !target.adminPassword ||
+    target.adminPassword === secrets.identity?.databasePassword
+  )
+    fail("CONFIG-IDENTITY-DATABASE", "bootstrap credential is missing");
+  const adminClient = await openMigrationAdminClient(target);
+  const { Client } = await import("pg");
+  let stage = "identity-connect";
+  try {
+    await adminClient.connect();
+    const serverAddress = adminClient.connection.stream.remoteAddress;
+    if (!isIP(serverAddress ?? ""))
+      fail(
+        "CONFIG-IDENTITY-DATABASE",
+        "PostgreSQL peer address is unavailable",
+      );
+    stage = "identity-bootstrap";
+    return await bootstrapLocalIdentityDatabase({
+      adminClient,
+      identity: config.localIdentity,
+      roleMap,
+      password: secrets.identity?.databasePassword,
+      expectedServerIdentity,
+      requireExisting,
+      expectedDatabaseOid,
+      connectIdentity: async () => {
+        const client = new Client({
+          host: serverAddress,
+          port: config.postgres.port,
+          database: config.localIdentity.databaseName,
+          user: config.localIdentity.databaseRole,
+          password: secrets.identity.databasePassword,
+          ssl: false,
+          connectionTimeoutMillis: 3_000,
+        });
+        await client.connect();
+        return client;
+      },
+    });
+  } catch (error) {
+    const facts = migrationDatabaseFailureFacts(error, stage);
+    fail(
+      "CONFIG-IDENTITY-DATABASE",
+      `${facts.stage}: ${facts.failureCategory}`,
+    );
+  } finally {
+    await adminClient.end().catch(() => {});
+  }
+}
+
+/** Prepare the five canonical business owners with the existing migrations. */
+export async function provisionLocalBusinessDatabases({
+  root = REPO_ROOT,
+  expectedServerIdentity,
+  env = process.env,
+} = {}) {
+  const configPath = env.COFFEE_CONFIG_FILE
+    ? resolve(env.COFFEE_CONFIG_FILE)
+    : join(root, "config/platform.yaml");
+  const config = await loadPlatformConfig(root, configPath);
+  if (
+    config.verification.databaseIsolation.enabled !== false ||
+    config.verification.kafkaNamespaceIsolation !== false
+  )
+    fail(
+      "CONFIG-LOCAL-DATABASE",
+      "normal bootstrap requires canonical isolation settings",
+    );
+  const secrets = await readSandboxSecrets(root, env, config);
+  const roleMap = JSON.parse(
+    await readFile(join(root, "config/database-role-map.json"), "utf8"),
+  );
+  const ownership = JSON.parse(
+    await readFile(join(root, "config/database-ownership.json"), "utf8"),
+  );
+  validateRoleMap(roleMap, ownership);
+  const passwords = migratorRolePasswords({ ownership, roleMap, secrets });
+  const adminPassword = secrets.bootstrap?.postgresAdminPassword;
+  if (
+    typeof adminPassword !== "string" ||
+    !adminPassword ||
+    [...passwords.values()].includes(adminPassword) ||
+    secrets.identity?.databasePassword === adminPassword ||
+    !/^[0-9]{10,30}$/u.test(expectedServerIdentity)
+  )
+    fail("CONFIG-LOCAL-DATABASE", "approved PostgreSQL target is missing");
+  // Validate every new normal credential before the first DDL statement.
+  const verifiers = Object.fromEntries(
+    [...passwords].map(([role, password]) => [
+      role,
+      localPasswordVerifier(password),
+    ]),
+  );
+  localPasswordVerifier(secrets.identity?.databasePassword);
+
+  // These controller modules are loaded only for an explicitly compiled launch.
+  const {
+    databaseProofService,
+    proofDatabaseOptions,
+    externalOwnerMigrations,
+  } = await import("../compose-smoke.mjs");
+  const { createDatabase } =
+    await import("../../packages/platform-database/dist/index.js");
+  const { applyMigrations } =
+    await import("../../packages/platform-migrations/dist/index.js");
+  const { Client } = await import("pg");
+  const adminClient = await openMigrationAdminClient({ config, adminPassword });
+  let serverAddress;
+  const connectAdmin = async (database) => {
+    const client = new Client({
+      host: serverAddress,
+      port: config.postgres.port,
+      database,
+      user: config.postgres.bootstrapUsername,
+      password: adminPassword,
+      ssl: false,
+      connectionTimeoutMillis: 3_000,
+    });
+    await client.connect();
+    return client;
+  };
+  const adminUrl = new URL(
+    `postgresql://${config.postgres.host}:${config.postgres.port}/postgres`,
+  );
+  adminUrl.username = config.postgres.bootstrapUsername;
+  adminUrl.password = adminPassword;
+  let stage = "business-connect";
+  try {
+    await adminClient.connect();
+    serverAddress = adminClient.connection.stream.remoteAddress;
+    if (!isIP(serverAddress ?? ""))
+      fail("CONFIG-LOCAL-DATABASE", "PostgreSQL peer address is unavailable");
+    stage = "business-bootstrap";
+    await bootstrapDatabases({
+      adminClient,
+      adminUrl: adminUrl.toString(),
+      connectClient: connectAdmin,
+      roleMap,
+      ownership,
+      rolePasswords: verifiers,
+      expectedServerIdentity,
+    });
+    for (const database of roleMap.databases) {
+      const owner = ownership.databases.find(
+        (entry) => entry.name === database.name,
+      );
+      const claim = ownership.runtimeClaims.find(
+        (entry) => entry.database === database.name && entry.role,
+      );
+      const service = databaseProofService(config, ownership, claim.runtime);
+      stage = `migrate-${owner.owner}`;
+      const migrator = createDatabase(
+        proofDatabaseOptions(
+          `${owner.owner}-local-migrator`,
+          service,
+          config.postgres.port,
+          {
+            username: database.migratorRole,
+            password: passwords.get(database.migratorRole),
+          },
+          serverAddress,
+        ),
+      );
+      await migrator.resource.start(AbortSignal.timeout(10_000));
+      try {
+        await applyMigrations(
+          migrator,
+          await externalOwnerMigrations(root, owner),
+          {
+            schema: database.schema,
+            ledgerTable: "platform_schema_migrations",
+            lockKey: `coffee-platform:${owner.owner}:migrations:v1`,
+          },
+        );
+      } finally {
+        await migrator.resource.stop(AbortSignal.timeout(10_000));
+      }
+      stage = `grants-${owner.owner}`;
+      const ownerAdmin = await connectAdmin(database.name);
+      try {
+        const probe = (await ownerAdmin.query(SERVER_IDENTITY_SQL)).rows[0];
+        if (
+          probe.system_identifier !== expectedServerIdentity ||
+          probe.current_database !== database.name ||
+          probe.is_superuser !== true ||
+          String(probe.server_version).split(" ")[0] !== "17.11"
+        )
+          fail(
+            "CONFIG-LOCAL-DATABASE",
+            "business database server identity changed",
+          );
+        await ownerAdmin.query(renderDatabaseObjectSql(database));
+      } finally {
+        await ownerAdmin.end();
+      }
+    }
+    return { owners: ownership.databases.map((entry) => entry.owner) };
+  } catch (error) {
+    const facts = migrationDatabaseFailureFacts(error, stage);
+    fail("CONFIG-LOCAL-DATABASE", `${facts.stage}: ${facts.failureCategory}`);
+  } finally {
+    await adminClient.end().catch(() => {});
+  }
 }
 
 export async function provisionDevelopmentGrafanaAdmin({
@@ -1318,9 +2180,62 @@ async function writeMigrationEncryptedBundle(
   }
 }
 
-export async function renewDevelopmentTransportSecrets({
+function dockerHubPullAuth(value) {
+  if (
+    typeof value !== "string" ||
+    value.length > 16_384 ||
+    !/^[A-Za-z0-9+/]+={0,2}$/u.test(value)
+  )
+    fail(
+      "CONFIG-REGISTRY-AUTH",
+      "Docker Hub pull credential is missing or invalid",
+    );
+  const decoded = Buffer.from(value, "base64");
+  const separator = decoded.indexOf(58);
+  if (
+    decoded.toString("base64") !== value ||
+    separator <= 0 ||
+    separator === decoded.length - 1 ||
+    decoded.includes(0)
+  )
+    fail("CONFIG-REGISTRY-AUTH", "Docker Hub pull credential is invalid");
+  return value;
+}
+
+export async function materializeBuildRegistryCredentials({
+  root = REPO_ROOT,
+  outputDir,
+  env = process.env,
+} = {}) {
+  assertLocatorEnv(env, true);
+  if (typeof outputDir !== "string" || !outputDir.startsWith("/dev/shm/"))
+    fail("CONFIG-REGISTRY-AUTH", "registry credentials require private tmpfs");
+  await ensurePrivateSecretDirectory(outputDir);
+  if ((await statfs(outputDir)).type !== 0x01021994)
+    fail("CONFIG-REGISTRY-AUTH", "registry credentials require private tmpfs");
+  const config = await loadPlatformConfig(root);
+  const { decrypted } = await readMigrationSecretBundle(root, env);
+  const auth = dockerHubPullAuth(
+    secretValueAt(
+      decrypted.environments[config.environment],
+      "bootstrap.dockerHubPullAuth",
+    ),
+  );
+  const path = join(outputDir, "config.json");
+  await writePrivateSecret(
+    path,
+    JSON.stringify({ auths: { "https://index.docker.io/v1/": { auth } } }) +
+      "\n",
+  );
+  return { path, secretRefs: ["bootstrap.dockerHubPullAuth"] };
+}
+
+// Новый публичный CA создаётся только по явной команде; запись — только ciphertext.
+export async function prepareDevelopmentRuntimeSecrets({
   root = REPO_ROOT,
   env = process.env,
+  provisionPublicAuthority = false,
+  dockerHubAuthFile,
 } = {}) {
   assertLocatorEnv(env, true);
   const config = await loadPlatformConfig(
@@ -1331,13 +2246,496 @@ export async function renewDevelopmentTransportSecrets({
   );
   if (config.environment !== "development")
     fail(
-      "CONFIG-DEVELOPMENT-TRANSPORT",
-      "transport renewal is restricted to development",
+      "CONFIG-DEVELOPMENT-SECRET",
+      "runtime secret preparation is restricted to development",
     );
   const snapshot = await captureMigrationBundleSnapshot(root);
   const { decrypted } = await readMigrationSecretBundle(root, env);
   await assertMigrationBundleSnapshot(snapshot);
-  const secrets = decrypted.environments.development;
+  const secrets = decrypted.environments[config.environment];
+  const { authority, authorityPem, authorityKeyPem, updatedRuntimes } =
+    await renewDevelopmentTransportMaterial({ secrets, config, env });
+  const changed = updatedRuntimes.map(
+    (runtime) => `security.serviceTransportKeys.${runtime}`,
+  );
+
+  if (dockerHubAuthFile !== undefined) {
+    let auth;
+    try {
+      const metadata = await lstat(dockerHubAuthFile);
+      if (
+        !metadata.isFile() ||
+        metadata.uid !== process.getuid() ||
+        (metadata.mode & 0o077) !== 0 ||
+        (await realpath(dockerHubAuthFile)) !== resolve(dockerHubAuthFile)
+      )
+        throw new Error();
+      const supplied = JSON.parse(await readFile(dockerHubAuthFile, "utf8"));
+      auth = dockerHubPullAuth(
+        supplied.auths?.["https://index.docker.io/v1/"]?.auth,
+      );
+    } catch {
+      fail(
+        "CONFIG-REGISTRY-AUTH",
+        "owned private Docker Hub credential file is required",
+      );
+    }
+    const ref = "bootstrap.dockerHubPullAuth";
+    const existing = secretValueAt(secrets, ref);
+    if (existing !== undefined && existing !== auth)
+      fail(
+        "CONFIG-REGISTRY-AUTH",
+        "existing Docker Hub credential differs; rotation requires a separate operation",
+      );
+    if (existing === undefined) {
+      setSecretAt(secrets, ref, auth);
+      changed.push(ref);
+    }
+  }
+
+  const passwordRefs = [
+    "identity.databasePassword",
+    "identity.bootstrapAdminPassword",
+    "identity.operatorPassword",
+    "kafka.broker.password",
+    "kafka.broker.storePassword",
+  ];
+  for (const ref of passwordRefs) {
+    const value = secretValueAt(secrets, ref);
+    if (value === undefined) {
+      setSecretAt(secrets, ref, randomBytes(36).toString("base64url"));
+      changed.push(ref);
+    } else if (
+      typeof value !== "string" ||
+      !/^[A-Za-z0-9_-]{32,128}$/u.test(value)
+    ) {
+      fail(
+        "CONFIG-DEVELOPMENT-SECRET",
+        `${ref}: existing credential is invalid`,
+      );
+    }
+  }
+  const brokerUsername = secretValueAt(secrets, "kafka.broker.username");
+  if (brokerUsername === undefined) {
+    setSecretAt(secrets, "kafka.broker.username", "kafka");
+    changed.push("kafka.broker.username");
+  } else if (brokerUsername !== "kafka") {
+    fail("CONFIG-DEVELOPMENT-SECRET", "kafka.broker.username is invalid");
+  }
+  for (const role of ["catalog", "orders", "realtime"]) {
+    if (
+      secretValueAt(secrets, `kafka.${role}.username`) !== role ||
+      !/^[A-Za-z0-9_-]{32,128}$/u.test(
+        secretValueAt(secrets, `kafka.${role}.password`) ?? "",
+      )
+    )
+      fail(
+        "CONFIG-DEVELOPMENT-SECRET",
+        `kafka.${role}: existing credentials are invalid`,
+      );
+    const ref = `kafka.${role}.caPem`;
+    const value = secretValueAt(secrets, ref);
+    if (value === undefined) {
+      setSecretAt(secrets, ref, authorityPem);
+      changed.push(ref);
+    } else {
+      try {
+        if (
+          new X509Certificate(value).fingerprint256 !== authority.fingerprint256
+        )
+          throw new Error();
+      } catch {
+        fail("CONFIG-DEVELOPMENT-CA", `${ref}: existing CA differs`);
+      }
+    }
+  }
+
+  changed.push(
+    ...(await prepareDevelopmentInfrastructureMaterial({
+      secrets,
+      config,
+      env,
+      authority,
+      authorityPem,
+      authorityKeyPem,
+      allowProvision: true,
+      provisionPublicAuthority,
+    })),
+  );
+  if (!changed.length) {
+    await assertMigrationBundleSnapshot(snapshot);
+    return { changed: false, authorityFingerprint: authority.fingerprint256 };
+  }
+  const ciphertext = encryptMigrationSecretBundle(
+    root,
+    env,
+    snapshot,
+    decrypted,
+  );
+  const result = await writeMigrationEncryptedBundle(snapshot, ciphertext, {
+    root,
+    env,
+    expectedPlaintext: decrypted,
+  });
+  return {
+    changed: true,
+    updatedRefs: changed,
+    authorityFingerprint: authority.fingerprint256,
+    encryptedSha256: result.sha256,
+  };
+}
+
+async function prepareDevelopmentInfrastructureMaterial({
+  secrets,
+  config,
+  env,
+  authority,
+  authorityPem,
+  authorityKeyPem,
+  allowProvision,
+  provisionPublicAuthority = false,
+}) {
+  const now = Date.now();
+  const threshold = config.security.certificateRenewBeforeHours * 3_600_000;
+  const exactDns = { subject: "never", wildcards: false };
+  const changed = [];
+  const publicKey = secretValueAt(secrets, "edge.tlsPrivateKey");
+  const publicCertificate = secretValueAt(secrets, "edge.tlsCertificate");
+  let publicLeaf;
+  try {
+    publicLeaf = new X509Certificate(publicCertificate);
+    if (
+      publicLeaf.ca ||
+      !publicLeaf.checkPrivateKey(createPrivateKey(publicKey)) ||
+      !publicLeaf.checkHost(config.nginxTransport.publicHost, exactDns) ||
+      now < Date.parse(publicLeaf.validFrom)
+    )
+      throw new Error();
+  } catch (error) {
+    if (error instanceof ConfigError) throw error;
+    fail(
+      "CONFIG-DEVELOPMENT-LEAF",
+      "public edge certificate identity or key is invalid",
+    );
+  }
+
+  if (!allowProvision && Date.now() >= Date.parse(publicLeaf.validTo))
+    fail("CONFIG-DEVELOPMENT-LEAF", "public edge certificate is expired");
+
+  const hosts = [
+    config.localIdentity.publicBaseUrl,
+    config.localIdentity.privateBaseUrl,
+  ].map((value) => {
+    const url = new URL(value);
+    if (url.protocol !== "https:" || !/^[a-z0-9.-]+$/u.test(url.hostname))
+      fail("CONFIG-DEVELOPMENT-LEAF", "identity HTTPS host is invalid");
+    return url.hostname;
+  });
+  const temporary = await mkdtemp("/dev/shm/coffee-development-pki-");
+  try {
+    await ensurePrivateSecretDirectory(temporary);
+    if ((await statfs(temporary)).type !== 0x01021994)
+      fail("CONFIG-DEVELOPMENT-PKI", "private tmpfs is required");
+    const caPath = join(temporary, "ca.pem");
+    const caKeyPath = join(temporary, "ca.key");
+    const keyPath = join(temporary, "leaf.key");
+    const certPath = join(temporary, "leaf.crt");
+    const csrPath = join(temporary, "leaf.csr");
+    const resultPath = join(temporary, "signed.crt");
+    const openssl = (args) =>
+      execFileSync("openssl", args, { env, stdio: "ignore", timeout: 30_000 });
+    const serviceIssuer = { authority, authorityPem, authorityKeyPem };
+    const publicAuthorityRef = "security.publicTransportAuthority";
+    let publicMaterial = secretValueAt(secrets, publicAuthorityRef);
+    const replacePublicIssuer =
+      publicMaterial === undefined && provisionPublicAuthority;
+    if (replacePublicIssuer) {
+      const { privateKey } = generateKeyPairSync("rsa", {
+        modulusLength: 3072,
+        privateKeyEncoding: { type: "pkcs8", format: "pem" },
+        publicKeyEncoding: { type: "spki", format: "pem" },
+      });
+      await writePrivateSecret(caKeyPath, privateKey);
+      openssl([
+        "req",
+        "-x509",
+        "-new",
+        "-key",
+        caKeyPath,
+        "-sha256",
+        "-out",
+        caPath,
+        "-subj",
+        "/CN=Coffee Platform Public TLS CA",
+        "-days",
+        String(config.security.publicAuthorityValidityHours / 24),
+        "-addext",
+        "basicConstraints=critical,CA:TRUE,pathlen:0",
+        "-addext",
+        "keyUsage=critical,keyCertSign,cRLSign",
+      ]);
+      publicMaterial = JSON.stringify({
+        certificatePem: await readFile(caPath, "utf8"),
+        privateKeyPem: privateKey,
+      });
+      setSecretAt(secrets, publicAuthorityRef, publicMaterial);
+      changed.push(publicAuthorityRef);
+    }
+    let publicIssuer = serviceIssuer;
+    if (publicMaterial !== undefined) {
+      try {
+        const material = JSON.parse(publicMaterial);
+        if (
+          !material ||
+          Object.keys(material).sort().join(",") !==
+            "certificatePem,privateKeyPem"
+        )
+          throw new Error();
+        const certificate = new X509Certificate(material.certificatePem);
+        const key = createPrivateKey(material.privateKeyPem);
+        if (
+          !certificate.ca ||
+          key.asymmetricKeyType !== "rsa" ||
+          key.asymmetricKeyDetails.modulusLength < 2048 ||
+          !certificate.checkPrivateKey(key) ||
+          !certificate.checkIssued(certificate) ||
+          !certificate.verify(certificate.publicKey) ||
+          now < Date.parse(certificate.validFrom) ||
+          now >= Date.parse(certificate.validTo)
+        )
+          throw new Error();
+        publicIssuer = {
+          authority: certificate,
+          authorityPem: material.certificatePem,
+          authorityKeyPem: material.privateKeyPem,
+        };
+      } catch {
+        fail("CONFIG-DEVELOPMENT-CA", "public CA key or validity is invalid");
+      }
+    }
+    if (
+      publicMaterial !== undefined &&
+      createPrivateKey(publicKey).asymmetricKeyType !== "rsa"
+    )
+      fail("CONFIG-DEVELOPMENT-LEAF", "public HTTPS requires an RSA leaf key");
+    if (
+      !replacePublicIssuer &&
+      (publicMaterial !== undefined ||
+        (allowProvision &&
+          Date.parse(publicLeaf.validTo) - now <= threshold)) &&
+      (!publicLeaf.checkIssued(publicIssuer.authority) ||
+        !publicLeaf.verify(publicIssuer.authority.publicKey))
+    )
+      fail(
+        "CONFIG-DEVELOPMENT-CA",
+        "public edge renewal requires its existing trusted issuer",
+      );
+    if (publicMaterial !== undefined && !replacePublicIssuer) {
+      const ca = secretValueAt(secrets, "edge.tlsCaBundle");
+      if (
+        typeof ca !== "string" ||
+        new X509Certificate(ca).fingerprint256 !==
+          publicIssuer.authority.fingerprint256
+      )
+        fail("CONFIG-DEVELOPMENT-CA", "public edge CA bundle differs");
+    }
+    const sign = async ({
+      key,
+      certificate,
+      names,
+      issuer = serviceIssuer,
+      validityHours = config.security.certificateValidityHours,
+    }) => {
+      const { authority, authorityPem, authorityKeyPem } = issuer;
+      if (
+        Date.parse(authority.validTo) - now <
+        validityHours * 3_600_000 + 60_000
+      )
+        fail(
+          "CONFIG-DEVELOPMENT-CA",
+          "development CA expires too soon to issue a leaf",
+        );
+      await writePrivateSecret(caPath, authorityPem);
+      await writePrivateSecret(caKeyPath, authorityKeyPem);
+      await writePrivateSecret(keyPath, key);
+      if (certificate) {
+        await writePrivateSecret(certPath, certificate);
+        openssl([
+          "x509",
+          "-in",
+          certPath,
+          "-x509toreq",
+          "-signkey",
+          keyPath,
+          "-copy_extensions",
+          "copy",
+          "-out",
+          csrPath,
+        ]);
+      } else {
+        openssl([
+          "req",
+          "-new",
+          "-key",
+          keyPath,
+          "-subj",
+          `/CN=${names[0]}`,
+          "-addext",
+          `subjectAltName=${names.map((name) => `DNS:${name}`).join(",")}`,
+          "-addext",
+          "basicConstraints=critical,CA:FALSE",
+          "-addext",
+          "extendedKeyUsage=serverAuth",
+          "-out",
+          csrPath,
+        ]);
+      }
+      openssl([
+        "x509",
+        "-req",
+        "-in",
+        csrPath,
+        "-CA",
+        caPath,
+        "-CAkey",
+        caKeyPath,
+        "-set_serial",
+        `0x${randomBytes(16).toString("hex")}`,
+        "-days",
+        String(validityHours / 24),
+        "-copy_extensions",
+        "copy",
+        "-out",
+        resultPath,
+      ]);
+      const result = await readFile(resultPath, "utf8");
+      const signed = new X509Certificate(result);
+      const issuedNow = Date.now();
+      if (
+        signed.ca ||
+        !signed.checkIssued(authority) ||
+        !signed.verify(authority.publicKey) ||
+        !signed.checkPrivateKey(createPrivateKey(key)) ||
+        issuedNow < Date.parse(signed.validFrom) ||
+        issuedNow >= Date.parse(signed.validTo) ||
+        Date.parse(signed.validTo) - Date.parse(signed.validFrom) !==
+          validityHours * 3_600_000 ||
+        Date.parse(signed.validTo) > Date.parse(authority.validTo) ||
+        (certificate &&
+          signed.subjectAltName !==
+            new X509Certificate(certificate).subjectAltName) ||
+        (names && names.some((name) => !signed.checkHost(name, exactDns)))
+      )
+        fail("CONFIG-DEVELOPMENT-LEAF", "issued leaf failed verification");
+      return result;
+    };
+
+    if (
+      replacePublicIssuer ||
+      (allowProvision && Date.parse(publicLeaf.validTo) - now <= threshold)
+    ) {
+      setSecretAt(
+        secrets,
+        "edge.tlsCertificate",
+        await sign({
+          key: publicKey,
+          certificate: publicCertificate,
+          issuer: publicIssuer,
+          validityHours:
+            publicMaterial === undefined
+              ? config.security.certificateValidityHours
+              : config.security.publicCertificateValidityHours,
+        }),
+      );
+      changed.push("edge.tlsCertificate");
+      if (replacePublicIssuer) {
+        setSecretAt(secrets, "edge.tlsCaBundle", publicIssuer.authorityPem);
+        changed.push("edge.tlsCaBundle");
+      }
+    }
+    for (const [prefix, names] of [
+      ["identity", hosts],
+      ["kafka.broker", ["kafka", "localhost"]],
+    ]) {
+      const issuer = prefix === "identity" ? publicIssuer : serviceIssuer;
+      const { authority, authorityPem } = issuer;
+      const refs = [
+        `${prefix}.tlsPrivateKey`,
+        `${prefix}.tlsCertificate`,
+        `${prefix}.tlsCaBundle`,
+      ];
+      const values = refs.map((ref) => secretValueAt(secrets, ref));
+      if (values.every((value) => value === undefined)) {
+        if (!allowProvision)
+          fail(
+            "CONFIG-DEVELOPMENT-LEAF",
+            `${prefix}: existing TLS material is missing`,
+          );
+        const { privateKey } = generateKeyPairSync("rsa", {
+          modulusLength: 2048,
+          privateKeyEncoding: { type: "pkcs8", format: "pem" },
+          publicKeyEncoding: { type: "spki", format: "pem" },
+        });
+        const certificate = await sign({ key: privateKey, names, issuer });
+        [privateKey, certificate, authorityPem].forEach((value, index) =>
+          setSecretAt(secrets, refs[index], value),
+        );
+        changed.push(...refs);
+      } else {
+        try {
+          const certificate = new X509Certificate(values[1]);
+          const ca = new X509Certificate(values[2]);
+          if (
+            (!(replacePublicIssuer && prefix === "identity") &&
+              (ca.fingerprint256 !== authority.fingerprint256 ||
+                !certificate.checkIssued(authority) ||
+                !certificate.verify(authority.publicKey))) ||
+            certificate.ca ||
+            !certificate.checkPrivateKey(createPrivateKey(values[0])) ||
+            (prefix === "identity" &&
+              publicMaterial !== undefined &&
+              createPrivateKey(values[0]).asymmetricKeyType !== "rsa") ||
+            names.some((name) => !certificate.checkHost(name, exactDns)) ||
+            now < Date.parse(certificate.validFrom)
+          )
+            throw new Error();
+          if (
+            (replacePublicIssuer && prefix === "identity") ||
+            Date.parse(certificate.validTo) - now <= threshold
+          ) {
+            setSecretAt(
+              secrets,
+              refs[1],
+              await sign({ key: values[0], certificate: values[1], issuer }),
+            );
+            changed.push(refs[1]);
+            if (replacePublicIssuer && prefix === "identity") {
+              setSecretAt(secrets, refs[2], authorityPem);
+              changed.push(refs[2]);
+            }
+          }
+        } catch (error) {
+          if (error instanceof ConfigError) throw error;
+          fail(
+            "CONFIG-DEVELOPMENT-LEAF",
+            `${prefix}: existing TLS material is invalid`,
+          );
+        }
+      }
+    }
+  } catch (error) {
+    if (error instanceof ConfigError) throw error;
+    fail(
+      "CONFIG-DEVELOPMENT-PKI",
+      "development certificate preparation failed",
+    );
+  } finally {
+    await rm(temporary, { recursive: true, force: true });
+  }
+  return changed;
+}
+
+async function renewDevelopmentTransportMaterial({ secrets, config, env }) {
   const materials = [];
   const upstreamNames = Object.fromEntries(
     Object.values(config.nginxTransport.upstreams).map(
@@ -1433,14 +2831,8 @@ export async function renewDevelopmentTransportSecrets({
       Date.parse(certificate.validTo) - Date.now() <=
       config.security.certificateRenewBeforeHours * 3_600_000,
   );
-  if (due.length === 0) {
-    await assertMigrationBundleSnapshot(snapshot);
-    return {
-      changed: false,
-      authorityFingerprint: authority.fingerprint256,
-      updatedRuntimes: [],
-    };
-  }
+  if (due.length === 0)
+    return { authority, authorityPem, authorityKeyPem, updatedRuntimes: [] };
   if (
     Date.parse(authority.validTo) - Date.now() <
     config.security.certificateValidityHours * 3_600_000 + 60_000
@@ -1524,6 +2916,142 @@ export async function renewDevelopmentTransportSecrets({
   } finally {
     await rm(temporary, { recursive: true, force: true });
   }
+  return {
+    authority,
+    authorityPem,
+    authorityKeyPem,
+    updatedRuntimes: due.map(({ runtime }) => runtime),
+  };
+}
+
+export async function materializeLocalRuntimeSecrets({
+  root = REPO_ROOT,
+  outputDir,
+  includeBootstrap = true,
+  env = process.env,
+} = {}) {
+  assertLocatorEnv(env, true);
+  if (typeof outputDir !== "string" || resolve(outputDir) !== outputDir)
+    fail("CONFIG-LOCAL-SECRET", "owned private tmpfs directory is required");
+  const directory = resolve(outputDir);
+  const info = await lstat(directory);
+  if (
+    !directory.startsWith("/dev/shm/") ||
+    !info.isDirectory() ||
+    info.isSymbolicLink() ||
+    info.uid !== process.getuid() ||
+    (info.mode & 0o777) !== 0o700 ||
+    (await realpath(directory)) !== directory ||
+    (await statfs(directory)).type !== 0x01021994
+  )
+    fail("CONFIG-LOCAL-SECRET", "owned private tmpfs directory is required");
+  const config = await loadPlatformConfig(
+    root,
+    env.COFFEE_CONFIG_FILE
+      ? resolve(env.COFFEE_CONFIG_FILE)
+      : join(root, "config/platform.yaml"),
+  );
+  if (config.environment !== "development")
+    fail(
+      "CONFIG-LOCAL-SECRET",
+      "local materialization is restricted to development",
+    );
+  const snapshot = await captureMigrationBundleSnapshot(root);
+  const { decrypted } = await readMigrationSecretBundle(root, env);
+  await assertMigrationBundleSnapshot(snapshot);
+  const environment = decrypted.environments.development;
+  const { authority, authorityPem, authorityKeyPem, updatedRuntimes } =
+    await renewDevelopmentTransportMaterial({
+      secrets: environment,
+      config,
+      env,
+    });
+  await prepareDevelopmentInfrastructureMaterial({
+    secrets: environment,
+    config,
+    env,
+    authority,
+    authorityPem,
+    authorityKeyPem,
+    allowProvision: false,
+  });
+  let nginxIdentity;
+  for (const runtime of [...Object.keys(config.services), "edge-nginx"]) {
+    const runtimeEnv = {
+      ...env,
+      COFFEE_RUNTIME_SECRETS_FILE: join(
+        directory,
+        runtime === "edge-nginx" ? runtime : `${runtime}.yaml`,
+      ),
+    };
+    const identity = await materializeRuntimeProjection({
+      runtime,
+      outputDir: directory,
+      env: runtimeEnv,
+      config,
+      environment,
+    });
+    if (runtime === "edge-nginx") nginxIdentity = identity;
+  }
+  const valuesFor = async (scope) =>
+    infrastructureValues(
+      await infrastructureSecretEntries(scope, { root }),
+      environment,
+    );
+  await materializeKafkaBrokerSecretsProjection({
+    outputDir: join(directory, "kafka"),
+    values: await valuesFor("kafka-broker"),
+  });
+  const keycloakIdentity = await materializeKeycloakSecretsProjection({
+    outputDir: join(directory, "keycloak"),
+    includeBootstrap,
+    values: await valuesFor("keycloak-runtime"),
+    config,
+  });
+  if (includeBootstrap)
+    await materializeKeycloakRealmProjection({
+      root,
+      outputDir: join(directory, "keycloak-import"),
+      values: await valuesFor("keycloak-operator"),
+      config,
+    });
+  await assertMigrationBundleSnapshot(snapshot);
+  return { nginxIdentity, keycloakIdentity, updatedRuntimes };
+}
+
+export async function renewDevelopmentTransportSecrets({
+  root = REPO_ROOT,
+  env = process.env,
+} = {}) {
+  assertLocatorEnv(env, true);
+  const config = await loadPlatformConfig(
+    root,
+    env.COFFEE_CONFIG_FILE
+      ? resolve(env.COFFEE_CONFIG_FILE)
+      : join(root, "config/platform.yaml"),
+  );
+  if (config.environment !== "development")
+    fail(
+      "CONFIG-DEVELOPMENT-TRANSPORT",
+      "transport renewal is restricted to development",
+    );
+  const snapshot = await captureMigrationBundleSnapshot(root);
+  const { decrypted } = await readMigrationSecretBundle(root, env);
+  await assertMigrationBundleSnapshot(snapshot);
+  const { authority, updatedRuntimes } =
+    await renewDevelopmentTransportMaterial({
+      secrets: decrypted.environments.development,
+      config,
+      env,
+    });
+  if (!updatedRuntimes.length) {
+    await assertMigrationBundleSnapshot(snapshot);
+    return {
+      changed: false,
+      authorityFingerprint: authority.fingerprint256,
+      updatedRuntimes,
+    };
+  }
   const ciphertext = encryptMigrationSecretBundle(
     root,
     env,
@@ -1538,7 +3066,7 @@ export async function renewDevelopmentTransportSecrets({
   return {
     changed: true,
     authorityFingerprint: authority.fingerprint256,
-    updatedRuntimes: due.map(({ runtime }) => runtime),
+    updatedRuntimes,
     encryptedSha256: result.sha256,
   };
 }
@@ -4223,15 +5751,57 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const renewDevelopmentTransport = process.argv.includes(
     "--renew-development-transport",
   );
+  const prepareDevelopmentRuntime = process.argv.includes(
+    "--prepare-development-runtime",
+  );
+  const dockerHubAuthIndex = process.argv.indexOf("--import-docker-hub-auth");
+  const dockerHubAuthFile =
+    dockerHubAuthIndex >= 0 ? process.argv[dockerHubAuthIndex + 1] : undefined;
+  const provisionPublicAuthority = process.argv.includes(
+    "--provision-public-authority",
+  );
   try {
-    if (renewDevelopmentTransport && runtimeIndex >= 0) {
+    if (
+      dockerHubAuthIndex >= 0 &&
+      (!prepareDevelopmentRuntime ||
+        !dockerHubAuthFile ||
+        dockerHubAuthFile.startsWith("--"))
+    )
+      fail(
+        "CONFIG-REGISTRY-AUTH",
+        "registry import requires development preparation and an input file",
+      );
+    if (provisionPublicAuthority && !prepareDevelopmentRuntime)
+      fail(
+        "CONFIG-DEVELOPMENT-CA",
+        "public CA provisioning requires development preparation",
+      );
+    if (
+      renewDevelopmentTransport &&
+      (runtimeIndex >= 0 || prepareDevelopmentRuntime)
+    ) {
       fail(
         "CONFIG-DEVELOPMENT-TRANSPORT",
-        "renewal and runtime are separate operations",
+        "renewal and other operations are separate",
       );
     } else if (renewDevelopmentTransport) {
       console.log(
         JSON.stringify(await renewDevelopmentTransportSecrets({ root })),
+      );
+    } else if (prepareDevelopmentRuntime && runtimeIndex >= 0) {
+      fail(
+        "CONFIG-DEVELOPMENT-SECRET",
+        "preparation and runtime are separate operations",
+      );
+    } else if (prepareDevelopmentRuntime) {
+      console.log(
+        JSON.stringify(
+          await prepareDevelopmentRuntimeSecrets({
+            root,
+            provisionPublicAuthority,
+            dockerHubAuthFile,
+          }),
+        ),
       );
     } else if (!runtime) {
       await checkBootstrap(root);

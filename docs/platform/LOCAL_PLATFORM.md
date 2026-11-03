@@ -101,6 +101,137 @@ SAN и остальные секреты сохраняются. Срок servic
 `config/platform.yaml`. После обновления требуется перезапустить затронутые
 runtime. Автоматический scheduler эта команда не создаёт.
 
+Для первоначальной подготовки локального окружения trusted bootstrap принимает
+`node tools/config-bootstrap/index.mjs --prepare-development-runtime`. Команда
+работает только в `development`, добавляет недостающие scoped credentials и
+использует действующую development CA из зашифрованного
+`security.serviceTransportAuthority`. Действующие пароли не перезаписываются. Для создания
+совместимого с браузером публичного RSA CA после отдельного решения владельца
+к этой команде добавляется `--provision-public-authority`. Ключ издателя остаётся
+только в SOPS (`security.publicTransportAuthority`); runtime его не получает.
+Команда сохраняет leaf keys и SAN, меняет издателя только у edge и Keycloak;
+внутренний mTLS и Kafka сохраняются. Повторная команда не создаёт другой CA.
+Доверие ОС/браузера команда не изменяет: импорт проверенного публичного CA
+выполняется отдельно. Срок CA — 8760 часов, edge certificate — 2160 часов,
+согласно `security.publicAuthorityValidityHours` и `publicCertificateValidityHours`.
+
+DHI требует доступ Docker Hub. Существующую учётную запись однократно импортирует
+trusted bootstrap: `node tools/config-bootstrap/index.mjs --prepare-development-runtime --import-docker-hub-auth /home/yurgusev/.docker/config.json`.
+Источник должен принадлежать пользователю и иметь закрытые права. Команда
+записывает только encrypted `bootstrap.dockerHubPullAuth`, не заменяет отличающуюся
+существующую credential и не меняет Docker login. G12 материализует только эту
+credential в собственный `/dev/shm/coffee-image-registry-*` и удаляет каталог
+после успеха или ошибки; build context, evidence и runtime её не получают.
+
+Постоянная локальная установка располагается в `~/coffee-platform`: чистые
+контроллеры — в `runtime/controllers/<commit>`, immutable release bundles — в
+`runtime/releases/<release>`, состояние identity — в `runtime/state`.
+Имена каталогов и постоянных Compose-ресурсов не содержат номеров задач или
+проверочных запусков; release определяется commit и хешами config/secrets.
+
+Срок service certificates — `security.certificateValidityHours: 24`, подготовка
+обновления начинается за `security.certificateRenewBeforeHours: 6`. Проверяются
+ключ, доверенный издатель и точные DNS SAN. Публичный edge certificate сохраняет
+отдельную пару и своего издателя. Если издатель публичного edge
+certificate не соответствует доступной CA, команда завершится с ошибкой без
+смены корня доверия. Для обычного release контроллер подготавливает user timer,
+который каждые три часа проверяет срок действующих scoped certificates и при
+остатке не более шести часов выполняет последовательный холодный перезапуск
+своих сервисов. Публичный edge certificate продлевается отдельно у своего
+издателя. До включения timer необходимо измерить недоступность и проверить
+пересоздание, доставку телеметрии и сохранность данных; установка unit сама
+timer не включает. Обслуживание не создаёт новый CA или службу подписи.
+При неудачном запуске или обслуживании основной user unit не перезапускается
+автоматически: требуется проверить состояние и выполнить recovery. Ограниченные
+Docker restart для отдельных контейнеров остаются действующими.
+Предупреждения об истекающем публичном сертификате и ошибке обслуживания
+доставляются в Loki как события `coffee-platform-maintenance`; они доступны в
+Grafana Explore, datasource `loki`, по запросу
+`{service_name="coffee-platform-maintenance"}`. Это не alert episode и не push.
+Перед включением timer необходимо проверить реальную доставку и отображение.
+
+### Постоянный локальный запуск
+
+Контроллер работает из чистого detached checkout
+`~/coffee-platform/runtime/controllers/<commit>`. Ему передают сохранённый
+`COFFEE_LAUNCH_CONTEXT_FILE` с успешным G12 для того же commit и точных image IDs,
+`COFFEE_DB_EXPECTED_SERVER_IDENTITY` утверждённого PostgreSQL и
+`SOPS_AGE_KEY_FILE` существующего age identity. Эти переменные содержат только
+локаторы и проверяемый идентификатор, не пароли. Образы другого commit или
+неполный scan не допускаются. `browserOidc: null` исходной normal config
+преобразуется в локальный HTTPS OIDC profile; оба isolation flags должны быть
+`false`. Итоговый config и его SHA сохраняются в immutable release bundle.
+
+Из этого checkout выполнить `node tools/platform-service.mjs start`:
+контроллер проверяет существующую наблюдаемость и PostgreSQL, подготавливает
+scoped tmpfs secrets, владельческие БД и миграции, Kafka и identity, затем
+запускает бизнес-сервисы и nginx. Все 17 product containers получают общую
+bounded non-blocking logging policy из `config/platform.yaml`.
+
+Перед запуском бизнес-сервисов контроллер проверяет committed offsets всех
+разделов durable consumer groups из config. Если позиций нет, `start` останавливается
+с `RECOVERY_REQUIRED`; Kafka и identity остаются доступны для проверки.
+Автоматического reset нет: `auto.offset.reset=none` сохраняет требование
+[явного операторского решения](../CoffeeOrderSystem_CANONICAL_Architecture_EndToEndHardened_RU_2026-08-19/M06_KAFKA_EVENT_PLATFORM/09_REPLAY_DLQ_AND_CONSUMER_RECOVERY.md#7-offset-reset-policy).
+
+При самом первом включении сначала сохранить вывод `--describe --state` и
+`--describe --offsets` для каждой durable group, beginning/end offsets её topics
+через `kafka-get-offsets.sh --time -2` / `--time -1` и историю создания broker.
+Проверить, что groups не активны, committed offsets отсутствуют, а начало
+каждого раздела равно 0. Одного отсутствия offsets недостаточно для вывода,
+что группа новая: у старой группы они могли истечь. После явного решения
+оператора для подтверждённых новых group/topic пар выполнить dry-run:
+
+```sh
+docker exec coffee-platform-kafka-1 /opt/kafka/bin/kafka-consumer-groups.sh \
+  --bootstrap-server kafka:9092 \
+  --command-config /etc/kafka/secrets/client.properties \
+  --group <group-from-config> --topic <topic-from-config> \
+  --reset-offsets --to-earliest --dry-run
+```
+
+Проверить точный набор разделов и `NEW-OFFSET=0`; только после одобрения
+заменить `--dry-run` на `--execute`. Существующие committed offsets не менять.
+Затем повторно проверить `--describe --offsets`, выполнить `stop` и `start`.
+Накопленные сообщения будут обработаны с начала через обычные Inbox guards;
+`latest` для этого bootstrap запрещён. При повторном запуске и обслуживании
+позиции сохраняются, перечисленные reset-команды не выполняются.
+
+До отзыва bootstrap-admin контроллер согласует User Profile локального realm:
+`email`, `firstName` и `lastName` необязательны для владельца, созданного с логином.
+Существующие validators, permissions и остальные настройки профиля сохраняются;
+`VERIFY_PROFILE`, пароль и PKCE остаются включены. Контроллер читает профиль,
+меняет только обязательность этих трёх полей и проверяет сохранённый результат.
+Повторный запуск не переписывает уже согласованный профиль; персональные данные
+владельца не подставляются. После отзыва временного администратора этот шаг
+больше не выполняется.
+
+После фактического входа `owner` в HTTPS UI выполнить
+`node tools/platform-service.mjs recover`: контроллер проверяет живую сессию
+владельца и его административные права в identity, затем отзывает временный
+bootstrap-admin. `node tools/platform-service.mjs install` устанавливает user
+unit для этого release. Последующий штатный запуск —
+`systemctl --user start coffee-platform.service`, остановка —
+`systemctl --user stop coffee-platform.service`; `status` контроллера показывает
+фактическое состояние и принадлежность контейнеров. БД и volumes при остановке
+не удаляются. Автоматический certificate timer включается отдельно после
+проверки обслуживания на target.
+
+Сервер PostgreSQL не перенастраивается: budget 96 включает 54 Node connections,
+2 identity connections, 8 на serial rollout и резерв 32. Пул AROMA Gateway — 6;
+остальные Node pools сохранены. Реальные login, readiness, API→DB→Kafka→SSE и
+restart с сохранением данных обязательны до приёмки установки. Такой запуск
+сам по себе не является formal G00–G19 admission.
+
+Для единственного локального экземпляра Keycloak профиль development задаёт
+`localIdentity.cacheMode: local`. Контроллер передаёт его как `KC_CACHE` при
+обычном `start`: кластерный `jdbc-ping` требует минимум 4 DB connections и
+не соответствует выделенному пулу 2. Этот профиль не предоставляет кластерную
+отказоустойчивость; identity и пользовательские сессии сохраняются в PostgreSQL.
+Первичная инициализация БД на target заняла около 61 секунды до readiness,
+поэтому `localIdentity.startupGraceMs: 90000` задаёт отдельный startup grace.
+Общие health timeout, interval и failure threshold сохраняются.
+
 ### Постоянные age identities и резервная копия на этом сервере
 
 Для локального CoffeeOrderPlatform используются три age identities:

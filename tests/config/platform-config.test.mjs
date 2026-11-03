@@ -29,6 +29,7 @@ import {
 } from "../../scripts/config-lib.mjs";
 import { readRoutes, render } from "../../tools/nginx/generate.mjs";
 import { validateAllPermissionManifests } from "../../scripts/permission-audit.mjs";
+import { projectLocalRuntimeConfig } from "../../tools/config-bootstrap/index.mjs";
 
 const REPO_ROOT = resolve(fileURLToPath(new URL("../..", import.meta.url)));
 
@@ -104,6 +105,8 @@ void test("transport certificate policy enforces the 24-hour lifetime and 6-hour
     6,
   );
   for (const [field, invalidValues] of [
+    ["publicAuthorityValidityHours", [undefined, 0, 8759, 8761, "8760"]],
+    ["publicCertificateValidityHours", [undefined, 0, 2159, 2161, "2160"]],
     ["certificateValidityHours", [undefined, 0, 23, 25, "24"]],
     ["certificateRenewBeforeHours", [undefined, 0, 5, 7, "6"]],
   ]) {
@@ -154,6 +157,107 @@ void test("GREEN: platform parser preserves a null or fully explicit browser OID
         browserOidc: { ...profile, allowedAlgorithms: ["none"] },
       }),
     PlatformConfigError,
+  );
+});
+
+void test("local identity settings preserve the formal null browser profile", async () => {
+  const document = parseYaml(
+    await readFile(join(REPO_ROOT, "config/platform.yaml"), "utf8"),
+    { json: true },
+  );
+  const schema = JSON.parse(
+    await readFile(join(REPO_ROOT, "config/platform.schema.json"), "utf8"),
+  );
+  const nginxSchema = JSON.parse(
+    await readFile(join(REPO_ROOT, "config/nginx-profile.schema.json"), "utf8"),
+  );
+  const ajv = new Ajv2020({ allErrors: true, strict: true });
+  ajv.addSchema(nginxSchema);
+  const validate = ajv.compile(schema);
+  assert.equal(validate(document), true, JSON.stringify(validate.errors));
+  const missing = structuredClone(document);
+  delete missing.localIdentity;
+  assert.equal(validate(missing), true);
+  assert.throws(
+    () => projectLocalRuntimeConfig(missing),
+    /CONFIG-LOCAL-RELEASE/u,
+  );
+  assert.equal(document.browserOidc, null);
+  assert.equal(document.localIdentity.actorRef, "actor:owner");
+  assert.equal(document.localIdentity.databasePoolMax, 2);
+  assert.equal(document.localIdentity.cacheMode, "local");
+  assert.equal(document.localIdentity.startupGraceMs, 90000);
+  for (const cacheMode of [undefined, "ispn"]) {
+    const invalidCache = structuredClone(document);
+    invalidCache.localIdentity.cacheMode = cacheMode;
+    assert.equal(validate(invalidCache), false);
+  }
+  for (const startupGraceMs of [undefined, 30000]) {
+    const invalidGrace = structuredClone(document);
+    invalidGrace.localIdentity.startupGraceMs = startupGraceMs;
+    assert.equal(validate(invalidGrace), false);
+  }
+  const overloaded = structuredClone(document);
+  overloaded.localIdentity.databasePoolMax = 10;
+  assert.throws(
+    () => parsePlatformConfig(overloaded),
+    /DB admission budget 106 exceeds maxConnections 96/u,
+  );
+  const root = await configRoot();
+  try {
+    await writeFile(join(root, "config/platform.yaml"), dumpYaml(overloaded));
+    await assert.rejects(loadPlatformConfig(root), /CONFIG-DB-ADMISSION/u);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+  assert.equal(document.localIdentity.memoryLimitMiB, 2048);
+  assert.equal(document.security.certificateValidityHours, 24);
+  assert.equal(document.security.certificateRenewBeforeHours, 6);
+  for (const [field, invalidValues] of [
+    ["publicAuthorityValidityHours", [undefined, 0, 8759, 8761, "8760"]],
+    ["publicCertificateValidityHours", [undefined, 0, 2159, 2161, "2160"]],
+    ["certificateValidityHours", [undefined, 0, 23, 25, "24"]],
+    ["certificateRenewBeforeHours", [undefined, 0, 5, 7, "6"]],
+  ]) {
+    for (const value of invalidValues) {
+      const candidate = structuredClone(document);
+      candidate.security[field] = value;
+      assert.equal(validate(candidate), false);
+      assert.throws(() => parsePlatformConfig(candidate), PlatformConfigError);
+    }
+  }
+  assert.equal(document.platform.localRestartMaxAttempts, 3);
+  assert.equal(parsePlatformConfig(document).browserOidc, null);
+  const projected = projectLocalRuntimeConfig(document);
+  assert.equal(document.browserOidc, null);
+  assert.equal(
+    projected.browserOidc.issuer,
+    "https://identity.localhost:9443/realms/coffee",
+  );
+  assert.equal(
+    projected.browserOidc.tokenUrl,
+    "https://keycloak:8443/realms/coffee/protocol/openid-connect/token",
+  );
+  assert.equal(
+    projected.browserOidc.redirectUri,
+    "https://localhost:8443/auth/callback",
+  );
+  assert.equal(projected.verification.databaseIsolation.enabled, false);
+  assert.equal(projected.verification.kafkaNamespaceIsolation, false);
+  const invalid = structuredClone(document);
+  invalid.localIdentity.privateBaseUrl = "http://keycloak:8443";
+  assert.equal(validate(invalid), false);
+  invalid.localIdentity.privateBaseUrl =
+    "https://trusted.invalid@keycloak:8443";
+  assert.equal(validate(invalid), false);
+  invalid.localIdentity.privateBaseUrl = document.localIdentity.privateBaseUrl;
+  invalid.localIdentity.databaseRole = "postgres";
+  assert.equal(validate(invalid), false);
+  const isolated = structuredClone(document);
+  isolated.verification.databaseIsolation.enabled = true;
+  assert.throws(
+    () => projectLocalRuntimeConfig(isolated),
+    /CONFIG-LOCAL-RELEASE/u,
   );
 });
 
@@ -1644,6 +1748,108 @@ void test("GREEN: canonical config and optional encrypted Tasty and OpenAI crede
       /CONFIG-SCHEMA/,
     );
   }
+});
+
+void test("Kafka credentials accept an encrypted CA without widening PostgreSQL scope", async () => {
+  const document = parseYaml(
+    await readFile(
+      join(REPO_ROOT, "secrets/platform.secrets.sops.yaml"),
+      "utf8",
+    ),
+    { json: true },
+  );
+  const development = document.environments.development;
+  const encrypted = "ENC[AES256_GCM,data:Y2E=,iv:aQ==,tag:dA==,type:str]";
+  development.kafka.catalog.caPem = encrypted;
+  await validateEncryptedSecretsDocument(REPO_ROOT, document);
+  development.kafka.catalog.caPem = "plaintext-ca";
+  await assert.rejects(
+    validateEncryptedSecretsDocument(REPO_ROOT, document),
+    /CONFIG-SCHEMA/,
+  );
+  development.kafka.catalog.caPem = encrypted;
+  development.postgres.customer.caPem = encrypted;
+  await assert.rejects(
+    validateEncryptedSecretsDocument(REPO_ROOT, document),
+    /CONFIG-SCHEMA/,
+  );
+});
+
+void test("local identity secrets are optional but must be complete and encrypted", async () => {
+  const document = parseYaml(
+    await readFile(
+      join(REPO_ROOT, "secrets/platform.secrets.sops.yaml"),
+      "utf8",
+    ),
+    { json: true },
+  );
+  const development = document.environments.development;
+  await validateEncryptedSecretsDocument(REPO_ROOT, document);
+  const encrypted = "ENC[AES256_GCM,data:eA==,iv:aQ==,tag:dA==,type:str]";
+  const identity = {
+    databasePassword: encrypted,
+    bootstrapAdminPassword: encrypted,
+    operatorPassword: encrypted,
+    tlsPrivateKey: encrypted,
+    tlsCertificate: encrypted,
+    tlsCaBundle: encrypted,
+  };
+  development.identity = identity;
+  await validateEncryptedSecretsDocument(REPO_ROOT, document);
+  development.identity = { ...identity, databasePassword: "plaintext" };
+  await assert.rejects(
+    validateEncryptedSecretsDocument(REPO_ROOT, document),
+    /CONFIG-SCHEMA/,
+  );
+  development.identity = { ...identity };
+  delete development.identity.operatorPassword;
+  await assert.rejects(
+    validateEncryptedSecretsDocument(REPO_ROOT, document),
+    /CONFIG-SCHEMA/,
+  );
+  development.identity = { ...identity, other: encrypted };
+  await assert.rejects(
+    validateEncryptedSecretsDocument(REPO_ROOT, document),
+    /CONFIG-SCHEMA/,
+  );
+});
+
+void test("Kafka broker credentials are optional, scoped and encrypted", async () => {
+  const document = parseYaml(
+    await readFile(
+      join(REPO_ROOT, "secrets/platform.secrets.sops.yaml"),
+      "utf8",
+    ),
+    { json: true },
+  );
+  const kafka = document.environments.development.kafka;
+  const encrypted = "ENC[AES256_GCM,data:eA==,iv:aQ==,tag:dA==,type:str]";
+  const broker = {
+    username: "kafka",
+    password: encrypted,
+    storePassword: encrypted,
+    tlsPrivateKey: encrypted,
+    tlsCertificate: encrypted,
+    tlsCaBundle: encrypted,
+  };
+  kafka.broker = broker;
+  await validateEncryptedSecretsDocument(REPO_ROOT, document);
+  kafka.broker = { ...broker, password: "plaintext" };
+  await assert.rejects(
+    validateEncryptedSecretsDocument(REPO_ROOT, document),
+    /CONFIG-SCHEMA/,
+  );
+  kafka.broker = { ...broker, username: "other" };
+  await assert.rejects(
+    validateEncryptedSecretsDocument(REPO_ROOT, document),
+    /CONFIG-SCHEMA/,
+  );
+  kafka.broker = { ...broker };
+  delete kafka.broker.tlsPrivateKey;
+  await assert.rejects(
+    validateEncryptedSecretsDocument(REPO_ROOT, document),
+    /CONFIG-SCHEMA/,
+  );
 });
 
 void test("Tasty local input retries empty fields and sends credentials only to SOPS stdin", () => {
