@@ -123,6 +123,39 @@ void test("GREEN: accepted manifests pass all direct checkers deterministically"
   }
 });
 
+void test("RED BOUND-CATALOG: Pricing HTTP inventory requires the accepted preview and rejects unapproved routes", async () => {
+  const preview = "POST /api/client-v1/pricing/catalog-preview";
+  for (const change of ["remove-preview", "add-unapproved"]) {
+    const root = await authorityRoot();
+    try {
+      await mutateJson(
+        join(root, "config/service-catalog.json"),
+        (document) => {
+          const pricing = document.runtimes.find(
+            (runtime) => runtime.name === "pricing-service",
+          );
+          assert.ok(pricing.incomingHttp.includes(preview));
+          pricing.incomingHttp =
+            change === "remove-preview"
+              ? pricing.incomingHttp.filter((route) => route !== preview)
+              : [
+                  ...pricing.incomingHttp,
+                  "POST /api/client-v1/pricing/unapproved",
+                ];
+        },
+      );
+      const result = run("check-service-catalog.mjs", root);
+      assert.notEqual(result.status, 0, output(result));
+      assert.match(
+        output(result),
+        /BOUND-CATALOG.*service catalog differs from the accepted exact authority/s,
+      );
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  }
+});
+
 void test("RED BOUND-DB-CLIENT: realtime infrastructure cannot import owner database capabilities", () => {
   assert.throws(
     () =>

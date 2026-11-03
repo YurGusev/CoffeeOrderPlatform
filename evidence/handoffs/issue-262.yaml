@@ -183,6 +183,10 @@ outputs:
     sha256: 3cc6fc5ebbd7966fd8b70612dd7288d3f96fc84a2793498286e5fe88a2932a1b
     consumers:
       - 13
+  - artifact: scripts/check-service-catalog.mjs
+    sha256: 1803a750f971c5c2238ec65583830269aac25152e843ea28ebe9a7f2e58cf4da
+    consumers:
+      - 13
   - artifact: scripts/contracts-generate.mjs
     sha256: 4d11912e1045cf1c7894b7025e514796df92b22fac4c5c7c31e5ccd590c1a8ce
     consumers:
@@ -193,6 +197,10 @@ outputs:
       - 13
   - artifact: secrets/platform.secrets.sops.yaml
     sha256: 01744290a8d57dbda7271e3378a985d28b15c7d1355cebba64fe50fb036afaf3
+    consumers:
+      - 13
+  - artifact: tests/architecture/checks.test.mjs
+    sha256: 997f85d72dcb38be72635a425fd49dad800ff8c875a096caa4df2bc042a03d45
     consumers:
       - 13
   - artifact: tests/aroma/catalog-export.test.mjs
@@ -363,6 +371,17 @@ verification:
     logSha256: e9501bd5171f252a7964e539f83d5461dccc7ca3dd26511ee2fb499297a1ce31
   - command: Независимый read-only review discount diff относительно4af6e25
     result: "Blockers не обнаружено: same-snapshot view, grants, filter/keyset/cursor, UI propagation и Catalog counts12/prefix8."
+  - command: GitHub Actions41690574187; source2d0dfcd5930447a2d5dcf48664320ae7fa32fbd5
+    result:
+      "FAIL: два GREEN architecture cases отклонили устаревший exact service catalog digest. Warm/G12/cutover
+      этого source не запускались."
+    logSha256: 25ea32f54336f134199d5eb023ab9bf6be7ebb3d26907fe9a15a21e4c58e4c32
+  - command: Direct service catalog checker и2 затронутых GREEN +1 RED BOUND-CATALOG
+    result:
+      "PASS3/3. Обновлён только accepted digest: удаление согласованного readonly preview route воспроизводит
+      старый digest. Validator logic/canonical roots не менялись; удаление preview и добавление произвольного route
+      остаются запрещены. Targeted format/lint/diff PASS; root проверил двухфайловый diff."
+    receiptSha256: e9eb7569871a1ef0d7ccec51c73d65e2e04de624ecd400b8dfd9942a3145528e
 limitations:
   - CI, G12 и normal cutover окончательного source ещё не выполнены; на сервере пока runtime 7b019e3.
   - Снимки browser fixture показывают тестовые данные, не фактический supplier catalog.
