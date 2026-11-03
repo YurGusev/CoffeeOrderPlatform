@@ -1217,6 +1217,37 @@ try {
       events.some((x) => x.role === "realtime" && x.type === "disconnect"),
       "SSE client disconnect must close upstream",
     );
+    const previewPath = "/api/client-v1/pricing/catalog-preview";
+    const previewBody = '{"snapshotRevision":"1","items":[]}';
+    const preview = await request(previewPath, {
+      method: "POST",
+      headers: {
+        cookie: "__Host-coffee-session=allow",
+        "content-type": "application/json",
+      },
+      body: previewBody,
+    });
+    assert.equal(preview.status, 200, preview.body);
+    const previewApi = JSON.parse(preview.body);
+    assert.equal(previewApi.url, previewPath);
+    assert.equal(previewApi.method, "POST");
+    assert.equal(previewApi.body, previewBody);
+    assert.equal(previewApi.headers["x-actor-context"], "fixture-actor-17");
+    assert.equal(previewApi.headers["idempotency-key"], undefined);
+    assert.equal(previewApi.clientAuthorized, true);
+    assert.equal(
+      (await request(previewPath, { method: "POST", body: previewBody }))
+        .status,
+      401,
+    );
+    assert.equal(
+      (
+        await request(previewPath, {
+          headers: { cookie: "__Host-coffee-session=allow" },
+        })
+      ).status,
+      403,
+    );
     console.log(
       `PASS image-level: image=${imageId}; nginx -t; HTTPS/upstream mTLS/SNI; 200 + forged assertion rejected before API; 204 + assertion reaches API; typed 401/403/503; direct session no-store; internal/private paths blocked; static app; >5s SSE/concurrent API/disconnect; no auth retry; safe headers and exact body.`,
     );

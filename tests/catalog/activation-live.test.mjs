@@ -131,6 +131,8 @@ void test(
           "0007_catalog_grants",
           "0008_catalog_active_read",
           "0009_active_snapshot_freshness",
+          "0011_active_catalog_category",
+          "0012_active_supplier_promotions",
         ]) {
           await adminClient.query(
             await readFile(
@@ -199,6 +201,8 @@ void test(
         "0007_catalog_grants",
         "0008_catalog_active_read",
         "0009_active_snapshot_freshness",
+        "0011_active_catalog_category",
+        "0012_active_supplier_promotions",
       ])
         await adminClient.query(
           await readFile(
@@ -306,6 +310,8 @@ void test(
         "0007_catalog_grants",
         "0008_catalog_active_read",
         "0009_active_snapshot_freshness",
+        "0011_active_catalog_category",
+        "0012_active_supplier_promotions",
       ])
         await adminClient.query(
           await readFile(
@@ -401,6 +407,7 @@ void test(
         const firstPage = await catalog.search({
           query: "кофе",
           availability: null,
+          supplierDiscountBasisPoints: null,
           after: null,
           limit: 2,
         });
@@ -419,6 +426,7 @@ void test(
         const nextPage = await catalog.search({
           query: "кофе",
           availability: null,
+          supplierDiscountBasisPoints: null,
           after,
           limit: 2,
         });
@@ -427,6 +435,7 @@ void test(
         const forged = await catalog.search({
           query: "кофе",
           availability: null,
+          supplierDiscountBasisPoints: null,
           after: { ...after, sortKeyHash: "0".repeat(64) },
           limit: 2,
         });
@@ -507,6 +516,7 @@ void test(
         const emptyPage = await catalog.search({
           query: "кофе",
           availability: null,
+          supplierDiscountBasisPoints: null,
           after: null,
           limit: 2,
         });

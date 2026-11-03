@@ -330,6 +330,15 @@ void test("production normalizer uses the offer ID as the domain-separated sourc
   assert.equal(money.currency, "RUB");
   const explicitPiece = normalizeProviderCatalogOffer(product, offer);
   assert.equal(explicitPiece.unit, "piece");
+  assert.equal(explicitPiece.categoryName, capture.data[0].category.name);
+  const { categoryName: _categoryName, ...legacyProduct } = product;
+  assert.equal(
+    Object.hasOwn(
+      normalizeProviderCatalogOffer(legacyProduct, offer),
+      "categoryName",
+    ),
+    false,
+  );
   assert.deepEqual(explicitPiece.providerIdentity, {
     rawProviderProductId: product.productId,
     rawProviderVariantId: offer.offerId,

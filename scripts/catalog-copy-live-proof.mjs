@@ -1315,7 +1315,7 @@ export async function runCatalogCopyProof() {
             metrics: telemetry.render(),
           },
           migrations:
-            firstApply.length === 3 && secondApply.length === 0
+            firstApply.length === 4 && secondApply.length === 0
               ? "idempotent"
               : "invalid",
           copy: "bounded-temp-copy",

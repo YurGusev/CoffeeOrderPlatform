@@ -700,7 +700,7 @@ export function parseSecurityScanVerification(
   ) {
     throw new PlatformConfigError(
       `${path}.egressRepositories`,
-      "разрешены только закреплённые официальные Trivy vulnerability DB registries",
+      "разрешены только официальные GHCR Trivy vulnerability DB registries",
     );
   }
   return Object.freeze({

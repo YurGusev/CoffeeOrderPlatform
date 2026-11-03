@@ -1349,9 +1349,13 @@ export async function verifyGateArtifacts(
       !migrationOwners.every(
         (owner) =>
           owner.migrationCount ===
-            { catalog: 9, customer: 2, integration: 7, orders: 24, pricing: 5 }[
-              owner.owner
-            ] &&
+            {
+              catalog: 12,
+              customer: 3,
+              integration: 7,
+              orders: 24,
+              pricing: 5,
+            }[owner.owner] &&
           owner.prefixCount ===
             { catalog: 8, customer: 2, integration: 7, orders: 6, pricing: 4 }[
               owner.owner
@@ -1396,8 +1400,8 @@ export async function verifyGateArtifacts(
     if (!receipt || typeof receipt !== "object" || Array.isArray(receipt))
       return "G08 migration oracle receipt is missing or invalid";
     const expectedOwners = [
-      ["catalog", 9],
-      ["customer", 2],
+      ["catalog", 12],
+      ["customer", 3],
       ["integration", 7],
       ["orders", 24],
       ["pricing", 5],

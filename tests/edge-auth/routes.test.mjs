@@ -866,6 +866,12 @@ void test("Edge enforces every accepted client-v1 permission from the contract m
       "pricing:create",
       "createPricingQuote",
     ],
+    [
+      "POST",
+      "/api/client-v1/pricing/catalog-preview",
+      "catalog:read",
+      "previewCatalogPrices",
+    ],
   ];
   for (const [method, path, permission, operationId] of operations) {
     assert.deepEqual(resolveBrowserOperation(method, path), {

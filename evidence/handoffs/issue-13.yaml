@@ -1,7 +1,7 @@
 issue: 13
-baseCommit: 2a4f272444dd9484b0621104c300c07ee54dc2e2
+baseCommit: a5a5c27c7bb1ac5d563c4e7c22e1c2f4444fc7d5
 status: source-descriptor-before-formal-verification
-asOfUtc: "2026-11-03T15:46:44.115Z"
+asOfUtc: "2026-11-03T20:44:23.077644+00:00"
 inputs:
   - issue: 2
     acceptedMergeCommit: 327638d4494269a151ee7c0ac945ac0053c3e0d4
@@ -143,6 +143,10 @@ inputs:
     acceptedMergeCommit: 2a4f272444dd9484b0621104c300c07ee54dc2e2
     artifact: evidence/handoffs/issue-254.yaml
     sha256: 5391732611bf0473b5b71f215d25328548f9b20924cd018b7f3b8e30bc23135e
+  - issue: 262
+    acceptedMergeCommit: a5a5c27c7bb1ac5d563c4e7c22e1c2f4444fc7d5
+    artifact: evidence/handoffs/issue-262.yaml
+    sha256: dce3abd8b9c1258b15a0b29427612495127e2944837e94c5277078ac5c63146b
 historicalAcceptance:
   issue: 14
   acceptedMergeCommit: 9b5a320b936cecafcb74de2d6a1253e3d0a155ce
@@ -212,7 +216,7 @@ outputs:
     consumers:
       - 1
   - artifact: tools/compose-smoke.mjs
-    sha256: 245cfdcbf630eb92b9e52385f065303820ee707674722f658e7f5fc496ddd834
+    sha256: 62283eb2a58015ff435c3904d056dba30c12cd86671101346dc5159bcb6c3ccf
     consumers:
       - 1
   - artifact: tools/observability/verify.mjs
@@ -224,11 +228,11 @@ outputs:
     consumers:
       - 1
   - artifact: verification/launch/v1/run.mjs
-    sha256: 893ae475ed3cb83bf9200ef8a243b7d9f1550878f20f4588cf0ba65d3c080bfe
+    sha256: 8a018d20e0d3f4cbfa3d9e66381d0af783c32a46abdfa17814adfeca7edc01df
     consumers:
       - 1
   - artifact: verification/launch/v1/runner.test.mjs
-    sha256: 57ef55bb458eec7ea2f55c96bef0a208ee12592bcc68ae96bdad24c2171cfa2f
+    sha256: 36bbc58f9b6d9d51640e3ded92bc688dccecf57856ed1079b0ada1ac18899273
     consumers:
       - 1
   - artifact: docs/adr/ADR-0034-g16-existing-account-verification.md
@@ -268,7 +272,7 @@ outputs:
     consumers:
       - 1
   - artifact: tests/architecture/checks.test.mjs
-    sha256: ad4f7d9f38e75bd28c6a1bbfc944106ccf4916ce2f7600f19f78cc69c5bc86f9
+    sha256: cdf653231cfcf4e00842770a3adac57701ae9c47b63a87a7863615b096e1ae7a
     consumers:
       - 1
   - artifact: evidence/launch-preparation/2026-11-01/runtime-build-inputs.md
@@ -319,12 +323,8 @@ outputs:
     sha256: 205910dc5e73ce75c02571ca3467207498cc965b1cff15e90afedcc6f59b0ed6
     consumers:
       - 1
-  - artifact: secrets/platform.secrets.sops.yaml
-    sha256: bcfaa602ef270ba2f3907fd905be29064dd83e86aa5bdd7918469a6ce640e9ef
-    consumers:
-      - 1
   - artifact: tests/config/platform-config.test.mjs
-    sha256: 57986767182dfce511c86cfa1023ef13319e8f8910479072303b86127cd1fd0f
+    sha256: 9596879b8a9c357fd70300951a6ac545763735ff8e77a451325fb0eb03e2ef1b
     consumers:
       - 1
 verification:
@@ -571,6 +571,12 @@ verification:
   - command: "node --test --test-name-pattern='^(launch controller reaches evidence preflight without compiled services|pnpm forwards the approval-file argument after its separator to the offline CLI)$' verification/launch/v1/runner.test.mjs"
     result: "PASS 2/2, 9.921 s; Node26.8.1, heavy lock. Причины двух CI сбоев не установлены, нагрузка полного CI отдельно не воспроизводилась; source/таймауты не менялись."
     logSha256: c38b7a5f1185d7bbbcb50759eec010a8927638a75ccc3bf29b0b6403c4a009ab
+  - command: "node --test --test-concurrency=1 '--test-name-pattern=^(G09 accepts only exact context-bound 10/40 runtime database evidence|G08 rejects receipts without exact derived targets and cleanup)$' verification/launch/v1/runner.test.mjs"
+    result: "PASS, exit 0, 1.665 s; Node 26.8.1, shared heavy lock. G08/G09 существующие regressions 2/2; без запуска gates и runtime."
+    logSha256: 38acffe1e63416ee4ccf65432e1b9e7ce39b1ea7f61469320fe895f200d47eec
+  - command: "pnpm exec oxlint --type-aware --deny-warnings verification/launch/v1/run.mjs verification/launch/v1/runner.test.mjs"
+    result: "PASS, exit 0, 1.563 s; Node 26.8.1, shared heavy lock. Только два изменённых verification files; guards сохранены."
+    logSha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
 consumerContract:
   consumer: 1
   admission:
@@ -599,6 +605,9 @@ consumerContract:
     policy/key/flag child и G18 baseline flag child с проверенной lineage. Лимиты и provider scope сохранены;
     exact parent G12 product images, отдельная BOM/image-ID проверка fixture PostgreSQL."
 limitations:
+  - "Принят #262 через PR #263: merge a5a5c27c7bb1ac5d563c4e7c22e1c2f4444fc7d5. CI и G12 normal source 9c731f2 не являются admission нового formal candidate; ему нужны собственные CI, matching G12, свежая SSE qualification и полный G00–G19."
+  - "При интеграции #262 выбран весь accepted ciphertext 01744290a8d57dbda7271e3378a985d28b15c7d1355cebba64fe50fb036afaf3 вместо исторического formal renewal bcfaa602: оба trusted renewal от одного base сохраняют CA/key/SAN и меняют только 15 transport certPem. Новое renewal при интеграции не запускалось; исторические receipts и FAIL сохранены."
+  - "Customer current исправлен с 2 на 3 в G08/G09 oracles и двух fixtures; Customer prefix 2 и incoming Catalog current 12 / prefix 8 сохранены. Устаревшее изменение текста ошибки platform-config снято: product package совпадает с accepted develop."
   - "Source45a69a5 CI выявил3 normal-fixture mismatches и2 неповторившихся CLI failures. Исправлены только3 normal-path fixtures в2existingtestfiles; service guards и canonical isolation не менялись. Новый frozen SHA ещё требует собственные CI/G12/qualification/G00–G19; подготовленный45a context не использовался для runtime admission."
   - "Transport leaves обновлены trusted config-bootstrap 2026-11-03: 15 runtime, прежние CA/key/SAN сохранены. Первая попытка отклонена до записи из-за mode 0664 после Git merge; после chmod 0600 renewal завершён. Исходный отрицательный receipt сохранён. Это не runtime admission нового candidate."
   - "Принят #254 через PR #261: merge 2a4f272444dd9484b0621104c300c07ee54dc2e2. Его CI и компонентный G12 не переносятся на новый formal candidate; Новому SHA нужны собственные CI, matching G12, свежая SSE qualification и полный G00–G19."

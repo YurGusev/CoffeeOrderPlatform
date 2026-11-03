@@ -142,7 +142,8 @@ Node entrypoint, listener или service transport secret scope больше н�
 
 - **Назначение:** расчёт и хранение immutable `PricingQuote`, policy version и canonical hash.
 - **Владелец:** Pricing.
-- **Входящие HTTP:** `POST /api/client-v1/pricing/quotes`; private
+- **Входящие HTTP:** `POST /api/client-v1/pricing/quotes`; readonly
+  `POST /api/client-v1/pricing/catalog-preview` по `catalog:read`; private
   `POST /api/internal-v1/pricing/quotes:verify` для проверки сохранённого proof.
 - **Входящие события:** нет в первом срезе.
 - **Исходящие вызовы:** private HTTP к

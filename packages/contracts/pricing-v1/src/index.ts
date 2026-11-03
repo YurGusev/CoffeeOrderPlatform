@@ -1,6 +1,8 @@
 import { Ajv2020 } from "ajv/dist/2020.js";
 import type { AnySchema, ValidateFunction } from "ajv";
 import type {
+  PricingPreviewRequest,
+  PricingPreviewResponse,
   PricingQuoteCreateRequest,
   PricingQuoteResponse,
   ProblemDetails,
@@ -16,6 +18,8 @@ import type {
 import { internalV1Schemas } from "@coffee-platform/generated-internal-v1/runtime-schemas.gen.js";
 
 export type {
+  PricingPreviewRequest,
+  PricingPreviewResponse,
   PricingQuoteCreateRequest,
   PricingQuoteResponse,
 } from "@coffee-platform/generated-client-v1";
@@ -25,6 +29,8 @@ export type {
 } from "@coffee-platform/generated-internal-v1";
 
 type PricingRuntimeSchemas = Readonly<{
+  previewRequest: AnySchema;
+  previewResponse: AnySchema;
   createRequest: AnySchema;
   response: AnySchema;
   verifyRequest: AnySchema;
@@ -60,6 +66,8 @@ ajv.addFormat("uri-reference", {
 });
 
 export const pricingContractSchemas: PricingRuntimeSchemas = Object.freeze({
+  previewRequest: clientV1Schemas.PricingPreviewRequest,
+  previewResponse: clientV1Schemas.PricingPreviewResponse,
   createRequest: clientV1Schemas.PricingQuoteCreateRequest,
   response: clientV1Schemas.PricingQuoteResponse,
   verifyRequest: internalV1Schemas.PricingQuoteVerifyRequest,
@@ -69,6 +77,34 @@ export const pricingContractSchemas: PricingRuntimeSchemas = Object.freeze({
   replayOnly: clientV1ParameterSchemas.ReplayOnly,
   quoteRef: clientV1Schemas.QuoteRef,
 });
+
+const validatePreviewRequest: ValidateFunction = ajv.compile(
+  pricingContractSchemas.previewRequest,
+);
+const validatePreviewResponse: ValidateFunction = ajv.compile(
+  pricingContractSchemas.previewResponse,
+);
+
+export function isPricingPreviewRequest(
+  value: unknown,
+): value is PricingPreviewRequest {
+  return validatePreviewRequest(value) as boolean;
+}
+export function isPricingPreviewResponse(
+  value: unknown,
+): value is PricingPreviewResponse {
+  if (!validatePreviewResponse(value)) return false;
+  const items = (value as PricingPreviewResponse).items;
+  return (
+    new Set(items.map((item) => `${item.productRef}/${item.variantRef}`))
+      .size === items.length &&
+    items.every(
+      (item) =>
+        BigInt(item.supplierUnitMinor) <= 9_223_372_036_854_775_807n &&
+        BigInt(item.saleUnitMinor) <= 9_223_372_036_854_775_807n,
+    )
+  );
+}
 
 const validateCreateRequest: ValidateFunction = ajv.compile(
   pricingContractSchemas.createRequest,

@@ -37,6 +37,13 @@ export const clientV1BrowserOperations = [
     "permission": "orders:read:any"
   },
   {
+    "method": "POST",
+    "path": "/api/client-v1/pricing/catalog-preview",
+    "operationId": "previewCatalogPrices",
+    "audience": "api-public",
+    "permission": "catalog:read"
+  },
+  {
     "method": "DELETE",
     "path": "/api/client-v1/orders/{orderRef}/items/{itemRef}",
     "operationId": "removeOrderItem",

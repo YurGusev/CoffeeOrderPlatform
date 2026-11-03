@@ -41,6 +41,7 @@ export type CatalogExportFailureCode =
 /** The source boundary supplies these facts; it never supplies a provider response. */
 export type NormalizedCatalogOffer = Readonly<{
   displayName: string;
+  categoryName?: string;
   unit: CatalogUnit;
   supplierUnitMinor: string;
   currency: "RUB";
@@ -122,6 +123,7 @@ export type CatalogItem = Readonly<{
   sourceVariantKeyHash: Sha256Hash;
   sourceOfferKeyHash: Sha256Hash;
   displayName: string;
+  categoryName?: string;
   unit: CatalogUnit;
   supplierUnitMinor: string;
   currency: "RUB";
@@ -539,6 +541,15 @@ function validateNormalizedOffer(
     throw invalid("normalized offer displayName is invalid");
   }
   if (
+    value["categoryName"] !== undefined &&
+    (typeof value["categoryName"] !== "string" ||
+      value["categoryName"].length < 1 ||
+      value["categoryName"].length > 200 ||
+      !value["categoryName"].isWellFormed() ||
+      value["categoryName"].includes("\u0000"))
+  )
+    throw invalid("normalized offer categoryName is invalid");
+  if (
     value["unit"] !== "piece" &&
     value["unit"] !== "gram" &&
     value["unit"] !== "kilogram"
@@ -701,6 +712,9 @@ function outputItem(
     sourceVariantKeyHash: identity.sourceVariantKeyHash,
     sourceOfferKeyHash: identity.sourceOfferKeyHash,
     displayName: offer.displayName,
+    ...(offer.categoryName === undefined
+      ? {}
+      : { categoryName: offer.categoryName }),
     unit: offer.unit,
     supplierUnitMinor: offer.supplierUnitMinor,
     currency: offer.currency,

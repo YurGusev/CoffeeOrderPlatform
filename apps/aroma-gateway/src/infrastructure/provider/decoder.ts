@@ -50,6 +50,7 @@ export type ProviderCatalogDiscount = Readonly<{
 export type ProviderCatalogProduct = Readonly<{
   productId: string;
   name: string;
+  categoryName?: string;
   offers: readonly ProviderCatalogOffer[];
   discounts: readonly ProviderCatalogDiscount[];
   /** These are optional at decode time for legacy test doubles; production normalization requires them. */
@@ -597,6 +598,11 @@ export function decodeCatalogPage(body: unknown): ProviderCatalogPage {
         };
       },
     );
+    const category = product["category"];
+    const categoryName =
+      category === undefined || category === null
+        ? undefined
+        : record(category)["name"];
     const images = optionalProviderImages(product);
     const productOnStop = optionalBoolean(product, "product_on_stop");
     const showOnWholesale = optionalBoolean(product, "show_on_wholesale");
@@ -612,6 +618,9 @@ export function decodeCatalogPage(body: unknown): ProviderCatalogPage {
       ),
       offers,
       discounts,
+      ...(categoryName === undefined || categoryName === null
+        ? {}
+        : { categoryName: text(categoryName) }),
       ...(productOnStop === undefined ? {} : { productOnStop }),
       ...(showOnWholesale === undefined ? {} : { showOnWholesale }),
       ...(soldByPiece === undefined ? {} : { soldByPiece }),

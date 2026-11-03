@@ -123,6 +123,39 @@ void test("GREEN: accepted manifests pass all direct checkers deterministically"
   }
 });
 
+void test("RED BOUND-CATALOG: Pricing HTTP inventory requires the accepted preview and rejects unapproved routes", async () => {
+  const preview = "POST /api/client-v1/pricing/catalog-preview";
+  for (const change of ["remove-preview", "add-unapproved"]) {
+    const root = await authorityRoot();
+    try {
+      await mutateJson(
+        join(root, "config/service-catalog.json"),
+        (document) => {
+          const pricing = document.runtimes.find(
+            (runtime) => runtime.name === "pricing-service",
+          );
+          assert.ok(pricing.incomingHttp.includes(preview));
+          pricing.incomingHttp =
+            change === "remove-preview"
+              ? pricing.incomingHttp.filter((route) => route !== preview)
+              : [
+                  ...pricing.incomingHttp,
+                  "POST /api/client-v1/pricing/unapproved",
+                ];
+        },
+      );
+      const result = run("check-service-catalog.mjs", root);
+      assert.notEqual(result.status, 0, output(result));
+      assert.match(
+        output(result),
+        /BOUND-CATALOG.*service catalog differs from the accepted exact authority/s,
+      );
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  }
+});
+
 void test("RED BOUND-DB-CLIENT: realtime infrastructure cannot import owner database capabilities", () => {
   assert.throws(
     () =>
@@ -567,6 +600,33 @@ void test("RED BOUND-INTERACTION: Catalog to Orders DB edge is rejected", async 
     assert.match(
       output(result),
       /BOUND-INTERACTION.*catalog-orders-db.*forbidden mode db/s,
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+void test("RED BOUND-INTERACTION: public Pricing edge requires the accepted readonly preview", async () => {
+  const root = await authorityRoot();
+  try {
+    await mutateJson(
+      join(root, "config/service-interactions.json"),
+      (document) => {
+        const edge = document.interactions.find(
+          (interaction) => interaction.id === "public-pricing",
+        );
+        const preview = "POST /api/client-v1/pricing/catalog-preview";
+        assert.ok(edge.operations.includes(preview));
+        edge.operations = edge.operations.filter(
+          (operation) => operation !== preview,
+        );
+      },
+    );
+    const result = run("check-service-catalog.mjs", root);
+    assert.notEqual(result.status, 0, output(result));
+    assert.match(
+      output(result),
+      /BOUND-INTERACTION.*interaction matrix contains an unknown or changed edge/s,
     );
   } finally {
     await rm(root, { recursive: true, force: true });

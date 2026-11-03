@@ -1419,14 +1419,30 @@ void test("NGINX reference admission retains 512 streams and a separate full pro
     await readFile(join(REPO_ROOT, "config/platform.yaml"), "utf8"),
     { json: true },
   );
-  const routes = readRoutes(
-    parseYaml(
-      await readFile(
-        join(REPO_ROOT, "contracts/openapi/client-v1.yaml"),
-        "utf8",
-      ),
-      { json: true },
-    ),
+  const spec = parseYaml(
+    await readFile(join(REPO_ROOT, "contracts/openapi/client-v1.yaml"), "utf8"),
+    { json: true },
+  );
+  const routes = readRoutes(spec);
+  const previewPath = "/api/client-v1/pricing/catalog-preview";
+  assert.equal(routes.length, 12);
+  assert.deepEqual(
+    routes.find((route) => route.path === previewPath),
+    { path: previewPath, method: "POST" },
+  );
+  const missingPreview = structuredClone(spec);
+  delete missingPreview.paths[previewPath];
+  assert.throws(
+    () => readRoutes(missingPreview),
+    /OpenAPI W1 route inventory drift/u,
+  );
+  const unapprovedRoute = structuredClone(spec);
+  unapprovedRoute.paths["/api/client-v1/pricing/unapproved"] = {
+    post: { operationId: "unapprovedPricing" },
+  };
+  assert.throws(
+    () => readRoutes(unapprovedRoute),
+    /OpenAPI W1 route inventory drift/u,
   );
   const profile = document.nginxTransport;
   const statusEndpoint = document.telemetry.nginxStatusEndpoint;
@@ -1434,6 +1450,19 @@ void test("NGINX reference admission retains 512 streams and a separate full pro
   assert.equal(profile.limits.workerProcesses, 1);
   assert.equal(profile.limits.requestPoolBytes, 2048);
   const reference = render(profile, routes, statusEndpoint);
+  const previewLocation = reference.match(
+    /location = \/api\/client-v1\/pricing\/catalog-preview \{[\s\S]*?\n    \}/u,
+  )?.[0];
+  assert.ok(previewLocation);
+  assert.match(previewLocation, /limit_except POST \{ deny all; \}/u);
+  assert.match(previewLocation, /auth_request \/_edge\/authorize;/u);
+  assert.match(previewLocation, /proxy_pass \$api_auth_target;/u);
+  assert.ok(
+    reference.includes(
+      '~^/api/client-v1/pricing/catalog-preview$ "client.pricing.catalog-preview";',
+    ),
+  );
+
   const schema = JSON.parse(
     await readFile(join(REPO_ROOT, "config/nginx-profile.schema.json"), "utf8"),
   );

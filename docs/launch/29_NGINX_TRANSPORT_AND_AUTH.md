@@ -15,6 +15,7 @@ Browser → public TLS `edge-nginx` → для protected маршрута privat
 | `GET /api/client-v1/customers` | api-public | `searchCustomers` |
 | `GET /api/client-v1/catalog/products` | api-public | `searchCatalogProducts` |
 | `POST /api/client-v1/pricing/quotes` | api-public | `createPricingQuote` |
+| `POST /api/client-v1/pricing/catalog-preview` | api-public | `previewCatalogPrices`, readonly, `catalog:read`; обычный auth_request и mTLS |
 | `POST /api/client-v1/orders/drafts` | api-public | `createOrderDraft` |
 | `PUT /api/client-v1/orders/{orderRef}/items/{itemRef}` | api-public | `upsertOrderItem` |
 | `DELETE /api/client-v1/orders/{orderRef}/items/{itemRef}` | api-public | `removeOrderItem` |

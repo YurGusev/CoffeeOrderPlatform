@@ -119,6 +119,7 @@ type ItemRow = Readonly<{
   currency: "RUB";
   availability: CatalogItem["availability"];
   image_url: string | null;
+  category_name: string | null;
   supplier_promotions: Exclude<
     CatalogItem["supplierPromotions"],
     undefined
@@ -147,6 +148,7 @@ const TEMP_COLUMNS = [
   { name: "currency", type: "text" },
   { name: "availability", type: "text" },
   { name: "image_url", type: "text", nullable: true },
+  { name: "category_name", type: "text", nullable: true },
   { name: "supplier_promotions", type: "jsonb", nullable: true },
   { name: "grind_options", type: "jsonb", nullable: true },
   { name: "source_identity_scheme", type: "text" },
@@ -176,6 +178,7 @@ function copySource(items: readonly CatalogItem[]): Readable {
           item.currency,
           item.availability,
           item.imageUrl,
+          item.categoryName ?? null,
           item.supplierPromotions === undefined
             ? null
             : JSON.stringify(item.supplierPromotions),
@@ -200,6 +203,7 @@ function itemFromRow(row: ItemRow): CatalogItem {
     currency: row.currency,
     availability: row.availability,
     imageUrl: row.image_url,
+    ...(row.category_name ? { categoryName: row.category_name } : {}),
     ...(row.supplier_promotions === null
       ? {}
       : { supplierPromotions: row.supplier_promotions }),
@@ -333,26 +337,26 @@ export function createCatalogImportStore(
     (SELECT count(*)::int FROM catalog.snapshot_availability WHERE snapshot_ref=$1) availability_count`);
   const reconstruct =
     statement<ItemRow>(`SELECT o.item_index,o.source_offer_key_hash,o.source_variant_key_hash,v.source_product_key_hash,
-    v.display_name,v.unit,o.supplier_unit_minor,o.currency,a.availability,p.image_url,o.supplier_promotions,o.grind_options,o.source_identity_scheme
+    v.display_name,v.unit,o.supplier_unit_minor,o.currency,a.availability,p.image_url,p.category_name,o.supplier_promotions,o.grind_options,o.source_identity_scheme
     FROM catalog.snapshot_offers o JOIN catalog.snapshot_variants v USING(snapshot_ref,source_variant_key_hash)
     JOIN catalog.snapshot_products p USING(snapshot_ref,source_product_key_hash)
     JOIN catalog.snapshot_availability a USING(snapshot_ref,source_offer_key_hash)
     WHERE o.snapshot_ref=$1 AND o.batch_number=$2 ORDER BY o.item_index`);
   const collision = statement<{ collision: boolean }>(`SELECT EXISTS(
-    SELECT 1 FROM pg_temp.catalog_import_batch GROUP BY source_product_key_hash HAVING count(DISTINCT jsonb_build_array(image_url))>1
+    SELECT 1 FROM pg_temp.catalog_import_batch GROUP BY source_product_key_hash HAVING count(DISTINCT jsonb_build_array(image_url,category_name))>1
     UNION ALL SELECT 1 FROM pg_temp.catalog_import_batch GROUP BY source_variant_key_hash HAVING count(DISTINCT jsonb_build_array(source_product_key_hash,display_name,unit))>1
     UNION ALL SELECT 1 FROM pg_temp.catalog_import_batch GROUP BY source_offer_key_hash HAVING count(*)>1
     UNION ALL SELECT 1 FROM (SELECT element->>'sourceGrindKeyHash' key, element->>'displayName' name FROM pg_temp.catalog_import_batch,
       LATERAL jsonb_array_elements(COALESCE(grind_options,'[]'::jsonb)) element) grinds GROUP BY key HAVING count(DISTINCT name)>1
   ) AS collision`);
   const mergeProducts =
-    statement<never>(`INSERT INTO catalog.snapshot_products(snapshot_ref,source_product_key_hash,image_url)
-    SELECT DISTINCT ON (source_product_key_hash) $1,source_product_key_hash,image_url FROM pg_temp.catalog_import_batch
+    statement<never>(`INSERT INTO catalog.snapshot_products(snapshot_ref,source_product_key_hash,image_url,category_name)
+    SELECT DISTINCT ON (source_product_key_hash) $1,source_product_key_hash,image_url,category_name FROM pg_temp.catalog_import_batch
     ON CONFLICT DO NOTHING`);
   const productConflict = statement<{
     collision: boolean;
   }>(`SELECT EXISTS(SELECT 1 FROM pg_temp.catalog_import_batch t JOIN catalog.snapshot_products p
-    ON p.snapshot_ref=$1 AND p.source_product_key_hash=t.source_product_key_hash WHERE p.image_url IS DISTINCT FROM t.image_url) AS collision`);
+    ON p.snapshot_ref=$1 AND p.source_product_key_hash=t.source_product_key_hash WHERE p.image_url IS DISTINCT FROM t.image_url OR p.category_name IS DISTINCT FROM t.category_name) AS collision`);
   const mergeVariants =
     statement<never>(`INSERT INTO catalog.snapshot_variants(snapshot_ref,source_variant_key_hash,source_product_key_hash,display_name,unit)
     SELECT DISTINCT ON (source_variant_key_hash) $1,source_variant_key_hash,source_product_key_hash,display_name,unit FROM pg_temp.catalog_import_batch

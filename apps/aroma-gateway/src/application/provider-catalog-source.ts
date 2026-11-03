@@ -255,6 +255,9 @@ export function normalizeProviderCatalogOffer(
     return failNormalization();
   return Object.freeze({
     displayName: offer.name,
+    ...(product.categoryName === undefined
+      ? {}
+      : { categoryName: product.categoryName }),
     unit: normalizeProviderUnit(product),
     supplierUnitMinor: money.supplierUnitMinor,
     currency: money.currency,

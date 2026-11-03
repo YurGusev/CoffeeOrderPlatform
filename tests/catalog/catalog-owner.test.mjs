@@ -149,6 +149,71 @@ void test("catalog search normalizes query and binds signed keyset cursor to rev
   assert.equal("supplierUnitMinor" in first.items[0], false);
   assert.ok(first.nextCursor);
   assert.ok(first.nextCursor.length <= 512);
+  const legacyPayload = JSON.parse(
+    Buffer.from(first.nextCursor.slice(0, -86), "base64url").toString("utf8"),
+  );
+  assert.equal(
+    legacyPayload.filterHash,
+    createHash("sha256")
+      .update(JSON.stringify(["coffee", "Available"]))
+      .digest("base64url"),
+  );
+  const filtered = await searchCatalog(
+    store,
+    {
+      query: "coffee",
+      availability: "Available",
+      supplierDiscountBasisPoints: 3500,
+      limit: 1,
+    },
+    signer,
+  );
+  assert.ok(filtered.nextCursor);
+  for (const supplierDiscountBasisPoints of [undefined, 1000])
+    await assert.rejects(
+      () =>
+        searchCatalog(
+          store,
+          {
+            query: "coffee",
+            availability: "Available",
+            supplierDiscountBasisPoints,
+            cursor: filtered.nextCursor,
+          },
+          signer,
+        ),
+      { code: "INVALID_CURSOR" },
+    );
+  await assert.rejects(
+    () =>
+      searchCatalog(
+        store,
+        {
+          query: "coffee",
+          availability: "Available",
+          supplierDiscountBasisPoints: 3500,
+          cursor: first.nextCursor,
+        },
+        signer,
+      ),
+    { code: "INVALID_CURSOR" },
+  );
+  assert.equal(
+    (
+      await searchCatalog(
+        store,
+        {
+          query: "coffee",
+          availability: "Available",
+          supplierDiscountBasisPoints: 1000,
+          limit: 1,
+        },
+        signer,
+      )
+    ).items.length,
+    1,
+  );
+
   const second = await searchCatalog(
     store,
     {
@@ -794,6 +859,7 @@ void test("CatalogStore calls its repository with exact search and pricing param
   const page = await store.search({
     query: "coffee",
     availability: "Available",
+    supplierDiscountBasisPoints: null,
     after,
     limit: 5,
     signal: new AbortController().signal,
@@ -811,6 +877,7 @@ void test("CatalogStore calls its repository with exact search and pricing param
     productRef,
     variantRef,
     5,
+    null,
   ]);
   assert.match(searchCalls[0].sql, /catalog\.active_snapshot_metadata/u);
   assert.match(searchCalls[0].sql, /catalog\.active_offer_mappings/u);
@@ -867,13 +934,34 @@ void test("CatalogStore calls its repository with exact search and pricing param
     null,
     null,
     4,
+    null,
   ]);
+
+  for (const supplierDiscountBasisPoints of [1000, 3500]) {
+    await store.search({
+      query: "coffee",
+      availability: "Available",
+      supplierDiscountBasisPoints,
+      after,
+      limit: 5,
+    });
+    assert.deepEqual(searchCalls.at(-1).values, [
+      "coffee",
+      "Available",
+      after.sortKeyHash,
+      productRef,
+      variantRef,
+      5,
+      supplierDiscountBasisPoints,
+    ]);
+  }
 
   searchRows = [];
   assert.deepEqual(
     await store.search({
       query: "coffee",
       availability: null,
+      supplierDiscountBasisPoints: null,
       after: null,
       limit: 5,
     }),

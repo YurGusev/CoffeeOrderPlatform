@@ -259,6 +259,7 @@
       ],
       "incomingHttp": [
         "POST /api/client-v1/pricing/quotes",
+        "POST /api/client-v1/pricing/catalog-preview",
         "POST /api/internal-v1/pricing/quotes:verify"
       ],
       "incomingEvents": [],

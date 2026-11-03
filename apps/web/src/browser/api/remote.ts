@@ -190,6 +190,7 @@ export function useCatalogSearch(
     cursor?: string;
     orderRef: string;
     q: string;
+    supplierDiscountBasisPoints?: "1000" | "3500";
   }>,
   enabled: boolean,
 ) {
@@ -203,6 +204,7 @@ export function useCatalogSearch(
         const result = await api.searchCatalog(
           input.q,
           input.availability,
+          input.supplierDiscountBasisPoints,
           input.cursor,
           signal,
         );

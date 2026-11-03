@@ -298,3 +298,32 @@ attributes. Реальные экспортеры и production-доставка
 Discounts, loyalty/customer tiers, promotions DSL, taxes, delivery calculation,
 multi-currency, payments, invoices, dynamic repricing confirmed Orders, Kafka,
 admin UI policy editor и перенос legacy pricing не входят в #7.
+
+
+## Readonly цены каталога (#262)
+
+`POST /api/client-v1/pricing/catalog-preview`, operation `previewCatalogPrices`,
+требует `catalog:read` по обычному пути Edge → api-public → Pricing с mTLS и
+отдельным owner delegation. API-public может составить ответ существующего
+Catalog GET: исходный Edge assertion проверяется как `searchCatalogProducts`,
+затем штатная подпись api-public выпускает owner assertion для
+`previewCatalogPrices`, сохраняя actor, permissions и correlation. Исходный
+подписанный assertion не изменяется. `createPricingQuote` по-прежнему требует
+`pricing:create`; preview не создаёт quote, idempotency или audit records.
+
+Request содержит только `snapshotRevision` и `items` из 0..50 уникальных пар
+`{productRef,variantRef}`. Цена, quantity, customer и policy из запроса запрещены.
+Pricing один раз читает active policy, получает факты через существующий
+CatalogPricingClient/api-internal с concurrency ≤8, проверяет refs, availability
+и точное совпадение всех revisions с запросом. Переключение revision даёт
+`CATALOG_REVISION_CHANGED`; частичный или смешанный результат не возвращается.
+Цена продажи рассчитывается существующей `calculatePricingLine` при quantity `1`;
+bigint64 overflow остаётся отказом, а не округлением или нулевой ценой.
+
+Response: `{snapshotRevision, policyVersionRef, items}`; каждая строка содержит
+`productRef`, `variantRef`, `unit`, `supplierUnitMinor`, `saleUnitMinor`, `currency`.
+Эти две суммы явно разрешены для публичного каталога владельцем #262; прежний
+quote DTO и его скрытые supplier facts не меняются. Нет новых pricing tables,
+policy copy, cache, provider reads или межвладельческого SQL. Самостоятельный
+preview имеет deadline 1s; при композиции Catalog GET исходный AbortSignal
+ограничивает суммарное время обоих owner вызовов теми же 1000 ms.

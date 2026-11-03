@@ -528,6 +528,7 @@ export const api = {
   searchCatalog: (
     query: string,
     availability: CatalogProductSummary["availability"] | "",
+    supplierDiscountBasisPoints: "1000" | "3500" | undefined,
     cursor?: string,
     signal?: AbortSignal,
   ): Promise<CatalogSearchResponse> =>
@@ -539,6 +540,7 @@ export const api = {
         cursor,
         limit: "20",
         query: query || undefined,
+        supplierDiscountBasisPoints,
       }),
       schema: clientSchemas["CatalogSearchResponse"],
       ...(signal ? { signal } : {}),
