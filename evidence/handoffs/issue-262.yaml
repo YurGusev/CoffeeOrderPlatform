@@ -103,6 +103,10 @@ outputs:
     sha256: 7ddbaa1575de1bab5822c9cfe78d3735407a5f08bca9c52e5821762c7ba1a4da
     consumers:
       - 13
+  - artifact: config/service-interactions.json
+    sha256: d36224e937e8216f55a4064998ae902d351803317a6283a48a73b07bd8cdebc4
+    consumers:
+      - 13
   - artifact: contracts/compatibility-evidence.yaml
     sha256: 153c43fb8e3b3eb187f3ce544fd8b1dd71e891318d696eec233fe7928a394263
     consumers:
@@ -127,6 +131,18 @@ outputs:
     sha256: 0335eba42ab1f13e117771e5625550910353d2e696668e25b8f638fb0c252778
     consumers:
       - 13
+  - artifact: docs/launch/03_HTTP_API_CONTRACT.md
+    sha256: 66503e13fc08336d263c9920b291ca3c21c272a7354e3339c11aa07156950e77
+    consumers:
+      - 13
+  - artifact: docs/launch/10_RUNTIME_CATALOG.md
+    sha256: f56debc235bd0a861ecefc832ee397969d9cd85bdcf0d6908cc5d59ce05cd50e
+    consumers:
+      - 13
+  - artifact: docs/launch/12_LAUNCH_CONTRACT_CATALOG.md
+    sha256: 1d9b8de4f79117e3632a3d3bf0bc9616764d853bcea55ae6045bb6b60931c242
+    consumers:
+      - 13
   - artifact: docs/launch/15_CATALOG_IMPLEMENTATION_SPEC.md
     sha256: 58a9606172d23e05fc5f5b5749db4efa9ae6a8791c0faf334c31a2865ef82291
     consumers:
@@ -145,6 +161,10 @@ outputs:
       - 13
   - artifact: docs/launch/28_AROMA_CATALOG_PRICING_POLICY.md
     sha256: 563edcfe9dbd31903e4aa1aafa85fe35e7d5fb73a1e9045c679cb2e448b5ff4a
+    consumers:
+      - 13
+  - artifact: docs/launch/29_NGINX_TRANSPORT_AND_AUTH.md
+    sha256: 20e201d684867393c040df5df24981c53cf64e762ed544d8b310c9d3dc7feee0
     consumers:
       - 13
   - artifact: packages/contracts/catalog-v1/src/index.ts
@@ -184,7 +204,7 @@ outputs:
     consumers:
       - 13
   - artifact: scripts/check-service-catalog.mjs
-    sha256: 1803a750f971c5c2238ec65583830269aac25152e843ea28ebe9a7f2e58cf4da
+    sha256: ef22151a9e01b20d84656d9e83559a70a058ea81aa504e9c6248b8a443fba14b
     consumers:
       - 13
   - artifact: scripts/contracts-generate.mjs
@@ -200,7 +220,7 @@ outputs:
     consumers:
       - 13
   - artifact: tests/architecture/checks.test.mjs
-    sha256: 997f85d72dcb38be72635a425fd49dad800ff8c875a096caa4df2bc042a03d45
+    sha256: 29eaecf5c0be8fb0c6cb91a21f3c47e417efd28b25963ff969cd6953aaa633c5
     consumers:
       - 13
   - artifact: tests/aroma/catalog-export.test.mjs
@@ -232,7 +252,7 @@ outputs:
     consumers:
       - 13
   - artifact: tests/catalog/activation-live.test.mjs
-    sha256: 88dd4b0c790ff196b1bd25af358137e5969da88dd2aa31c2f7110a649aae31cd
+    sha256: cf31fa48d2eec370694f0b7f30a7833e5733d387decc6cdc8d9edd83f61de1a0
     consumers:
       - 13
   - artifact: tests/catalog/activation-migrations.test.mjs
@@ -240,11 +260,15 @@ outputs:
     consumers:
       - 13
   - artifact: tests/catalog/catalog-owner.test.mjs
-    sha256: e386088c4e3e51cdf76f3fa2b0e7fc7f039b0f913d10270ea8546ca4c0a3757f
+    sha256: 6db74189196125c47b172a4e202fc114b9e5ee825523ca195c63496da357c4c4
     consumers:
       - 13
   - artifact: tests/catalog/catalog-root.test.mjs
     sha256: c0d4c6aaf8dd5a6966b84ee674e566ea0f6517d7207a8ba26fe1a0d71f661241
+    consumers:
+      - 13
+  - artifact: tests/config/platform-config.test.mjs
+    sha256: 3000d36e5ae44156726dc7b3b9e092de1f03663acdf8646ddb7369f36faeed2f
     consumers:
       - 13
   - artifact: tests/contracts/catalog-http.test.mjs
@@ -255,8 +279,16 @@ outputs:
     sha256: 9b178881f031c665ffef6411f6babe98ef68c93bd3d59915a4117b311e877e81
     consumers:
       - 13
+  - artifact: tests/edge-auth/routes.test.mjs
+    sha256: e51176606224c38da3561b78a303038aa6a4d8e1bc6c1821d8f99a312ec23183
+    consumers:
+      - 13
   - artifact: tests/nginx/fixtures/served-backend.mjs
     sha256: 195a896600e9ceff7eba2625458f738a3022ae60888e2985be3cf9bb169da5b8
+    consumers:
+      - 13
+  - artifact: tests/nginx/image.test.mjs
+    sha256: bc65cbbebeac9e9cb32211c1f79d7c3fc28d19aaca87360d13a5b5a408768603
     consumers:
       - 13
   - artifact: tests/pricing/create-pricing-quote.test.mjs
@@ -269,6 +301,10 @@ outputs:
       - 13
   - artifact: tools/compose-smoke.mjs
     sha256: 02575d4cd6b5fc55e88ed83795cd52fd832a4b050a48644d05dba1187b0358c1
+    consumers:
+      - 13
+  - artifact: tools/nginx/generate.mjs
+    sha256: 78aeb358fde61f72df9618181c02057fb8e628eb76f902ddeceb62a433260fe0
     consumers:
       - 13
   - artifact: verification/launch/v1/run.mjs
@@ -382,6 +418,32 @@ verification:
       старый digest. Validator logic/canonical roots не менялись; удаление preview и добавление произвольного route
       остаются запрещены. Targeted format/lint/diff PASS; root проверил двухфайловый diff."
     receiptSha256: e9eb7569871a1ef0d7ccec51c73d65e2e04de624ecd400b8dfd9942a3145528e
+  - command: GitHub Actions41692144848; source7554e36b2bc713390e6a14632a4e84f9e75ae5ac
+    result:
+      "FAIL после успешных contracts/architecture/build/browser: устаревшие CatalogStore fixtures, отсутствующий
+      preview в NGINX inventory и отдельный Kafka timing timeout. Все отрицательные результаты сохранены; warm/G12/cutover
+      не запускались."
+    logSha256: 504f9c6677d054fa643a8845019d90754cdf4665a8b5741e01df599dae2e2c57
+  - command:
+      flock --no-fork --timeout=7200 /run/user/1000/coffee-platform-heavy.lock node --test --test-name-pattern='^runtime
+      bounds realtime DLQ wire and falls back from invalid transport keys$' tests/kafka/runtime.test.mjs
+    result:
+      PASS без изменений Kafka:160.281902ms, весь isolated run1.08s. Это не отменяет FAIL общего CI; следующий
+      полный CI выполняется при временно остановленном обычном runtime.
+    logSha256: c3fa6cc2859bf8b2cdf693177623e160120a1623e58676aa21f55fb63c02af89
+  - command: Независимый read-only review исправлений после7554
+    result:
+      "Blockers не обнаружено: required null callers, exact SQL seventh arg, strict NGINX inventory/auth/mTLS/method/log
+      label, same public-pricing edge+pin и docs. Reviewer тесты не повторял."
+  - command:
+      Full catalog-owner; affected PostgreSQL/config/Edge/authority cases; nginx generation/check, full image
+      and cutover fixtures
+    result:
+      "PASS: Catalog21/21, PostgreSQL1/1, config1/1, Edge3/3, authority4/4; NGINX12 routes, image39.48s и cutover54.36s.
+      Только согласованный preview добавлен в existing public-pricing edge; удаление операции воспроизводит старый
+      exact digest. Первый image run FAIL из-за private operator umask077; исправлен только child umask022. Исходный
+      lint FAIL helper вне итогового diff и все setup результаты сохранены."
+    receiptSha256: 6008a48d2a2abb6b00b577a4a63a980952b66a2fed4c3c75ec656a1438a9eb0c
 limitations:
   - CI, G12 и normal cutover окончательного source ещё не выполнены; на сервере пока runtime 7b019e3.
   - Снимки browser fixture показывают тестовые данные, не фактический supplier catalog.

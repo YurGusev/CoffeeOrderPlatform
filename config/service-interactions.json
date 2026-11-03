@@ -63,7 +63,10 @@
       "to": "pricing-service",
       "mode": "http",
       "contract": "pricing-v1",
-      "operations": ["POST /api/client-v1/pricing/quotes"],
+      "operations": [
+        "POST /api/client-v1/pricing/quotes",
+        "POST /api/client-v1/pricing/catalog-preview"
+      ],
       "timeout": "4.5s",
       "retryOwner": "api-public",
       "dataExposure": "delegated-actor-pricing-contract"

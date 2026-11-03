@@ -160,6 +160,17 @@ body/version по-прежнему невалидна. GET/SSE/provider/internal
 - errors: `400 VALIDATION_FAILED`, `404 CATALOG_PRODUCT_NOT_FOUND`,
   `409 CATALOG_PRODUCT_UNAVAILABLE`, `409 IDEMPOTENCY_CONFLICT`.
 
+### 3.3.1 Readonly цены каталога (#262)
+
+`POST /api/client-v1/pricing/catalog-preview`, `previewCatalogPrices`,
+permission `catalog:read`, deadline 1s; quote permission `pricing:create` не меняется.
+Request: `snapshotRevision` и 0..50 уникальных пар `productRef`/`variantRef`.
+Response: `200 PricingPreviewResponse`, `snapshotRevision`, `policyVersionRef`,
+строки с refs, unit, `supplierUnitMinor`, `saleUnitMinor`, `currency`.
+Operation не создаёт quote/idempotency/audit records, не требует Idempotency-Key.
+Owner delegation и общий бюджет составного Catalog GET определены в
+[Pricing spec](16_PRICING_IMPLEMENTATION_SPEC.md#readonly-цены-каталога-262).
+
 ### 3.4 Draft и позиции
 
 `POST /api/client-v1/orders/drafts`

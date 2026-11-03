@@ -100,6 +100,7 @@ export function readRoutes(spec) {
     "GET /api/client-v1/customers",
     "GET /api/client-v1/catalog/products",
     "POST /api/client-v1/pricing/quotes",
+    "POST /api/client-v1/pricing/catalog-preview",
     "POST /api/client-v1/orders/drafts",
     "PUT /api/client-v1/orders/{orderRef}/items/{itemRef}",
     "DELETE /api/client-v1/orders/{orderRef}/items/{itemRef}",
@@ -207,7 +208,7 @@ http {
   default_type application/octet-stream;
   log_format edge_safe escape=json '{"method":"$request_method","status":$status,"request_id":"$request_id","correlation_id":"$edge_log_correlation","traceparent":"$edge_traceparent","route":"$edge_route","request_bytes":$request_length,"response_bytes":$bytes_sent,"duration_seconds":$request_time,"request_completion":"$request_completion"}';
   access_log /dev/stdout edge_safe;
-  map $uri $edge_route { default "unmatched"; ~^/api/client-v1/customers$ "client.customers"; ~^/api/client-v1/catalog/products$ "client.catalog.products"; ~^/api/client-v1/pricing/quotes$ "client.pricing.quotes"; ~^/api/client-v1/orders/ "client.orders"; =/events "events"; =/auth/session "auth.session"; =/auth/login "auth.login"; =/auth/callback "auth.callback"; =/auth/logout "auth.logout"; }
+  map $uri $edge_route { default "unmatched"; ~^/api/client-v1/customers$ "client.customers"; ~^/api/client-v1/catalog/products$ "client.catalog.products"; ~^/api/client-v1/pricing/quotes$ "client.pricing.quotes"; ~^/api/client-v1/pricing/catalog-preview$ "client.pricing.catalog-preview"; ~^/api/client-v1/orders/ "client.orders"; =/events "events"; =/auth/session "auth.session"; =/auth/login "auth.login"; =/auth/callback "auth.callback"; =/auth/logout "auth.logout"; }
   map $http_traceparent $edge_traceparent { default ""; "~^(?!ff)[a-f0-9]{2}-(?!0{32})[a-f0-9]{32}-(?!0{16})[a-f0-9]{16}-[a-f0-9]{2}$" $http_traceparent; }
   map $http_x_correlation_id $edge_client_correlation { default ""; "~^[A-Fa-f0-9]{8}-[A-Fa-f0-9]{4}-[1-5][A-Fa-f0-9]{3}-[89ABab][A-Fa-f0-9]{3}-[A-Fa-f0-9]{12}$" $http_x_correlation_id; }
   map $edge_auth_correlation $edge_safe_auth_correlation { default ""; "~^[A-Fa-f0-9]{8}-[A-Fa-f0-9]{4}-[1-5][A-Fa-f0-9]{3}-[89ABab][A-Fa-f0-9]{3}-[A-Fa-f0-9]{12}$" $edge_auth_correlation; }
@@ -313,9 +314,10 @@ export async function generate({
   );
   const profile = await getProfile(args, root);
   validateProfile(profile, schema);
+  const routes = readRoutes(spec);
   const text = render(
     profile,
-    readRoutes(spec),
+    routes,
     platformConfig.telemetry?.nginxStatusEndpoint,
   );
   const output = resolve(
@@ -336,7 +338,7 @@ export async function generate({
   }
   return {
     output: relative(root, output),
-    routes: 11,
+    routes: routes.length,
     bytes: Buffer.byteLength(text),
     source: args.fixture ? "isolated-fixture" : "config/platform.yaml",
   };

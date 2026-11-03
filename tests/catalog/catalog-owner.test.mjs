@@ -859,6 +859,7 @@ void test("CatalogStore calls its repository with exact search and pricing param
   const page = await store.search({
     query: "coffee",
     availability: "Available",
+    supplierDiscountBasisPoints: null,
     after,
     limit: 5,
     signal: new AbortController().signal,
@@ -876,6 +877,7 @@ void test("CatalogStore calls its repository with exact search and pricing param
     productRef,
     variantRef,
     5,
+    null,
   ]);
   assert.match(searchCalls[0].sql, /catalog\.active_snapshot_metadata/u);
   assert.match(searchCalls[0].sql, /catalog\.active_offer_mappings/u);
@@ -932,13 +934,34 @@ void test("CatalogStore calls its repository with exact search and pricing param
     null,
     null,
     4,
+    null,
   ]);
+
+  for (const supplierDiscountBasisPoints of [1000, 3500]) {
+    await store.search({
+      query: "coffee",
+      availability: "Available",
+      supplierDiscountBasisPoints,
+      after,
+      limit: 5,
+    });
+    assert.deepEqual(searchCalls.at(-1).values, [
+      "coffee",
+      "Available",
+      after.sortKeyHash,
+      productRef,
+      variantRef,
+      5,
+      supplierDiscountBasisPoints,
+    ]);
+  }
 
   searchRows = [];
   assert.deepEqual(
     await store.search({
       query: "coffee",
       availability: null,
+      supplierDiscountBasisPoints: null,
       after: null,
       limit: 5,
     }),

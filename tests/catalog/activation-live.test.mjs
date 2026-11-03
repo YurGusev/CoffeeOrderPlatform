@@ -407,6 +407,7 @@ void test(
         const firstPage = await catalog.search({
           query: "кофе",
           availability: null,
+          supplierDiscountBasisPoints: null,
           after: null,
           limit: 2,
         });
@@ -425,6 +426,7 @@ void test(
         const nextPage = await catalog.search({
           query: "кофе",
           availability: null,
+          supplierDiscountBasisPoints: null,
           after,
           limit: 2,
         });
@@ -433,6 +435,7 @@ void test(
         const forged = await catalog.search({
           query: "кофе",
           availability: null,
+          supplierDiscountBasisPoints: null,
           after: { ...after, sortKeyHash: "0".repeat(64) },
           limit: 2,
         });
@@ -513,6 +516,7 @@ void test(
         const emptyPage = await catalog.search({
           query: "кофе",
           availability: null,
+          supplierDiscountBasisPoints: null,
           after: null,
           limit: 2,
         });

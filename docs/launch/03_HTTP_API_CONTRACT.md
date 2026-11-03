@@ -12,6 +12,7 @@ POST /api/client-v1/customers
 GET  /api/client-v1/customers?query=
 GET  /api/client-v1/catalog/products?query=&availability=
 POST /api/client-v1/pricing/quotes
+POST /api/client-v1/pricing/catalog-preview
 POST /api/client-v1/orders/drafts
 PUT  /api/client-v1/orders/{orderRef}/items/{itemRef}
 DELETE /api/client-v1/orders/{orderRef}/items/{itemRef}

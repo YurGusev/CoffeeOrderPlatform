@@ -606,6 +606,33 @@ void test("RED BOUND-INTERACTION: Catalog to Orders DB edge is rejected", async 
   }
 });
 
+void test("RED BOUND-INTERACTION: public Pricing edge requires the accepted readonly preview", async () => {
+  const root = await authorityRoot();
+  try {
+    await mutateJson(
+      join(root, "config/service-interactions.json"),
+      (document) => {
+        const edge = document.interactions.find(
+          (interaction) => interaction.id === "public-pricing",
+        );
+        const preview = "POST /api/client-v1/pricing/catalog-preview";
+        assert.ok(edge.operations.includes(preview));
+        edge.operations = edge.operations.filter(
+          (operation) => operation !== preview,
+        );
+      },
+    );
+    const result = run("check-service-catalog.mjs", root);
+    assert.notEqual(result.status, 0, output(result));
+    assert.match(
+      output(result),
+      /BOUND-INTERACTION.*interaction matrix contains an unknown or changed edge/s,
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 void test("RED BOUND-SECRET: api-public cannot receive a foreign Postgres secret", async () => {
   const root = await authorityRoot();
   try {
