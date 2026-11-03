@@ -1,0 +1,314 @@
+# Runtime acceptance PASS; final metadata HEAD CI / GitHub merge pending.
+issue: 254
+baseCommit: 6e770bef48b8a9739e2a3aea3b5f9c654a53cc71
+inputs:
+  - issue: 61
+    acceptedMergeCommit: d1f462838da15b25049842a241f4e3f6f75a6b4f
+    artifact: evidence/handoffs/issue-61.yaml
+    sha256: 3c83d9e42870a35baeb2f12c7dfb62901b316bab536a54a3dadd099ca172459b
+  - issue: 62
+    acceptedMergeCommit: 56b0e99275573b6bdc2461703b3221c5c678cfa6
+    artifact: evidence/handoffs/issue-62.yaml
+    sha256: 704a093a2e18fe3de8fe963ab4b56d16fa6670b87de3ac89ee6c06bc59ceab76
+  - issue: 63
+    acceptedMergeCommit: d16b41dd58db4494a1fb743fa741010249d7afa7
+    artifact: evidence/handoffs/issue-63.yaml
+    sha256: e6df7df6405c7f5da423aa151857b5791211bc2bdbde8508e808f18fd1d3e03c
+  - issue: 162
+    acceptedMergeCommit: 327474d917e1f3f1dfd9d12da8a1273775f8591f
+    artifact: evidence/handoffs/issue-162.yaml
+    sha256: f7ba488cc54b5abc44d9e160a2815baf4abfbdaa4a99db70b5946a007f843a54
+  - issue: 210
+    acceptedMergeCommit: a6cceeaa822f9641c678b5dcae521c282391dd3d
+    artifact: evidence/handoffs/issue-210.yaml
+    sha256: 93dccd8c0c978977e4e6cae852d4801415e849b595ef233a95ad2936ba10d20f
+  - issue: 252
+    acceptedMergeCommit: e06c5d478123d6dc2908739882171fbf5c06fa3a
+    artifact: evidence/handoffs/issue-252.yaml
+    sha256: 8825748ec8290b175c1cadb52a63cefa400a0e1e7914e92f7d8e33de1cfa3222
+outputs:
+  - artifact: Dockerfile
+    sha256: 569ab9b4b62c148a2029505e8568ec8ca95f6073363c1af0a38fc13b365dac45
+    consumers: [1, 13]
+  - artifact: apps/api-public/src/index.ts
+    sha256: d9926eecc1ed533aeb3e71853639cfcc4d170e365781654f1b03ae16fc84311c
+    consumers: [1, 13]
+  - artifact: apps/catalog-service/src/application/search-catalog.ts
+    sha256: 66892d401f12b83f3b0f15a40a376b8aa196e4a0fc178457a04cc66e3aafd9d8
+    consumers: [1, 13]
+  - artifact: apps/catalog-service/src/http/index.ts
+    sha256: c1be0f2fdd9d1b928962229e824825cbaae6da73176cabf9ace6112b14dfc7c8
+    consumers: [1, 13]
+  - artifact: apps/customer-service/migrations/0003_customer_unicode_search.sql
+    sha256: 4fbc8d6e884a9f7d03943104c3a0995868bcfe69b1621645ce22475fea47c31f
+    consumers: [1, 13]
+  - artifact: apps/edge-gateway/src/oidc-auth.ts
+    sha256: 4af1055c4eb951b68212585d7f223477ecbf96c8196234390032dd1ca2fdbfb9
+    consumers: [1, 13]
+  - artifact: apps/edge-gateway/src/routes.ts
+    sha256: 4618a5a008c6c4e33172821b5bacc6fc58d3d6b08c0a3d7774e995955ac7b5de
+    consumers: [1, 13]
+  - artifact: apps/web/src/browser/api/client.ts
+    sha256: bfded938ebf56cf70f034a598f2d7384b06db988b87675ea14e9bb531445dd8e
+    consumers: [1, 13]
+  - artifact: apps/web/src/browser/api/remote.ts
+    sha256: 48f6badc7c860280b0afea75d94f975b738a52a64011859cbfe49da95e98cefa
+    consumers: [1, 13]
+  - artifact: apps/web/src/browser/routes/CatalogPage.tsx
+    sha256: 2f01f7242c46207cb16bc49a2778db9bf599f6d27124547f5b4dd07da9d62381
+    consumers: [1, 13]
+  - artifact: apps/web/test/operator-flow.spec.ts
+    sha256: b231af280a0fbd845183a9d7356da4106a7845a95760f5ee8200d0fd9b6e9de2
+    consumers: [1, 13]
+  - artifact: config/platform.schema.json
+    sha256: 7fc6a5aafd2024b5ed2d1c1e4f30ccdbc5079f9fb7e79d385df8072d63e2ea05
+    consumers: [1, 13]
+  - artifact: config/platform.yaml
+    sha256: a8be1ffb6602bfa1eb3d86ef350a91f982d2030e6acf946d8248d79638bdb913
+    consumers: [1, 13]
+  - artifact: config/service-catalog.json
+    sha256: 4aa248aef9357988e319fdd95662eae55665519057b0b303dcd1c563962c791b
+    consumers: [1, 13]
+  - artifact: config/service-catalog.schema.json
+    sha256: 747f0dd83f042bd1be2deb4d07f5e708814abf6dd68a6731281d28335987c176
+    consumers: [1, 13]
+  - artifact: config/toolchain-versions.json
+    sha256: 1855aab1470b9949ba61b72ba6fb7f4a14a0b9d3072618b4fed8cdd758dae226
+    consumers: [1, 13]
+  - artifact: config/toolchain-versions.schema.json
+    sha256: 8b3c9f38de406b5ea286652a573c2df1ffcc26643d320a6b0127c6ca4a944bea
+    consumers: [1, 13]
+  - artifact: contracts/openapi/client-v1.yaml
+    sha256: ae3438600aadeeabc198cc13d272290a676093dc48595947d197e062d59934a3
+    consumers: [1, 13]
+  - artifact: contracts/openapi/edge-auth-v1.yaml
+    sha256: bef280d524f69c7edf12d3460250e766650839f35015ea9b7a4fac1c78eebc4e
+    consumers: [1, 13]
+  - artifact: docs/adr/ADR-0042-local-runtime-and-identity.md
+    sha256: 283174e5cee22e8ba6da3641cf0d8941a60eff1f041c87434545d30902841045
+    consumers: [1, 13]
+  - artifact: docs/adr/ADR-0043-catalog-browse-without-query.md
+    sha256: 4edec29854d2b56688f475ec2c533f3141c9478f3c029df2b65cb457c7af8ce3
+    consumers: [1, 13]
+  - artifact: docs/launch/07_FRONTEND_CONTRACT.md
+    sha256: da0153e7be61e5a413892dc357aa6e80567830ea4938792a066a8520964c5752
+    consumers: [1, 13]
+  - artifact: docs/launch/12_LAUNCH_CONTRACT_CATALOG.md
+    sha256: 05f5e2e9eafc226ee2f51ad6a71a0848d39c238287e68663875b4ab5b406583c
+    consumers: [1, 13]
+  - artifact: docs/launch/14_CUSTOMER_IMPLEMENTATION_SPEC.md
+    sha256: ed7c00088efc489ce48565fde23fa0337d1594c000fedd7c1cbd3d4194ae3f25
+    consumers: [1, 13]
+  - artifact: docs/launch/15_CATALOG_IMPLEMENTATION_SPEC.md
+    sha256: dc526fb9f39242d7a7bfda8f3e09574072e6a23918bcceec05c031a4dc2dcd2f
+    consumers: [1, 13]
+  - artifact: docs/launch/18_FRONTEND_IMPLEMENTATION_SPEC.md
+    sha256: 5e84ae5c66a146e9e092cc92a9933df276849f871f3c9472566234e2d36e509c
+    consumers: [1, 13]
+  - artifact: docs/launch/30_FRONTEND_OPERATOR_RUNBOOK.md
+    sha256: ca1279838a00330aca0e9ed58877095c2775962566a9d14599cf71f4e2830aef
+    consumers: [1, 13]
+  - artifact: docs/platform/LOCAL_PLATFORM.md
+    sha256: 67f3c759cd3a01980e93f3c5a6d1f0d2defbaf7efd99ccf87b4a0774fb1df696
+    consumers: [1, 13]
+  - artifact: packages/contracts/catalog-v1/src/index.ts
+    sha256: c927c5e4d1ee0ddaf11575ac49a94c2b2f2d9bd94a0ccdc691aa7d48a6a73613
+    consumers: [1, 13]
+  - artifact: packages/generated/client-v1/src/types.gen.ts
+    sha256: 4435ff3c993db75558b6ae1be27a68fd3fe1937c5e1f728d2bce317a2f1df8b5
+    consumers: [1, 13]
+  - artifact: packages/generated/edge-auth-v1/src/types.gen.ts
+    sha256: 525ad8ea7584eaa2186935410edb1f3e5302b66a7134bca2362cd985e103923e
+    consumers: [1, 13]
+  - artifact: packages/platform-config/src/index.ts
+    sha256: bc8e7f7a445063206f9862622886a7fdaa47add8ef377adbe81ba60b98e366c3
+    consumers: [1, 13]
+  - artifact: scripts/check-service-catalog.mjs
+    sha256: 0a7a949ffa43e572a88a407292e0a17749879d938cedf49a9ddc40d6fd857f55
+    consumers: [1, 13]
+  - artifact: scripts/check-toolchain-versions.mjs
+    sha256: c1834df3d0748c4808cd34c95c0fa8eef735b1c6e63b3005a9e2485cc727b1f4
+    consumers: [1, 13]
+  - artifact: scripts/config-lib.mjs
+    sha256: 16f9d4795d96a3af7b1c9fa05176a07261b4b05ae417dea4d9ce3ff728390046
+    consumers: [1, 13]
+  - artifact: scripts/contracts-breaking.mjs
+    sha256: b3fc0266b9246088001602027d1ba27914dfad9f82ca420de2dacc25736656cb
+    consumers: [1, 13]
+  - artifact: secrets/platform-secrets.schema.json
+    sha256: 1da014004aa95d73f0167151f5d09405e291bbdf820c16ae3a7d2fea87b6cd38
+    consumers: [1, 13]
+  - artifact: secrets/platform.secrets.sops.yaml
+    sha256: 5a82f66aaad02ab9f7feeed4032d8fc8b0eca46eba73ca42aeffd17ace1df384
+    consumers: [1, 13]
+  - artifact: tests/architecture/checks.test.mjs
+    sha256: 28fd8f865963ade6a0717bb5a4c9a486f97d983af15287f3966be58fc33033e9
+    consumers: [1, 13]
+  - artifact: tests/catalog/catalog-owner.test.mjs
+    sha256: 8bea20799dac38dbc342475bba4f350d3ad412a55ff428dfe3aa88cb2b95211b
+    consumers: [1, 13]
+  - artifact: tests/catalog/catalog-root.test.mjs
+    sha256: 9635b29f72d5ef135e1657bff5aac48735d3f3a52dc263f7d84d4a2297b62203
+    consumers: [1, 13]
+  - artifact: tests/compose/topology.test.mjs
+    sha256: 452c3e0d7aa41d54ddc8e5efde0a159a759eeb8eb295c382c5cf423b7e3ed7a7
+    consumers: [1, 13]
+  - artifact: tests/config/observability-bootstrap.test.mjs
+    sha256: a57d44583d6dce41bbcb92c3fa9fbc8d538e11809e843cdf3a2dfb41314ce5eb
+    consumers: [1, 13]
+  - artifact: tests/config/platform-config.test.mjs
+    sha256: 3ae7aeb1e4977f23ed9eabd08a959aa1c22cc897b5224868c9027624bbbca0ab
+    consumers: [1, 13]
+  - artifact: tests/contracts/breaking.test.mjs
+    sha256: ed9d89efab8035652827e67f3e206d9607370416fb7a220e80f4cc5552fbd2ca
+    consumers: [1, 13]
+  - artifact: tests/contracts/catalog-http.test.mjs
+    sha256: 3905ab3f6a2e7c2e09486d4d890e69606103d028d9bc6d47cb23311cd56480f3
+    consumers: [1, 13]
+  - artifact: tests/customer/customer-schema.test.mjs
+    sha256: 780da8fcb38652d4a9f05968045db25ae18156354bfd9f3cc61f478ba7d313ed
+    consumers: [1, 13]
+  - artifact: tests/database/db-bootstrap.test.mjs
+    sha256: 956f9f36a87979445f106f3090201114c59261b483d904cc4d89de14cec941c6
+    consumers: [1, 13]
+  - artifact: tests/edge-auth/oidc-auth.test.mjs
+    sha256: 953f312d183dd6d8d8213ad7e617b138eb4b6934479c11db51432c64e63fd7f8
+    consumers: [1, 13]
+  - artifact: tests/edge-auth/routes.test.mjs
+    sha256: 7aec3e58d47b4889410a8422e971f8dbc8471963695638b2135dd1f877f8b5ce
+    consumers: [1, 13]
+  - artifact: tests/observability/storage.test.mjs
+    sha256: 14138b59ef7c749dca7a274465a84541ac2d92d2b87b23e0fa470c0e35d3cc38
+    consumers: [1, 13]
+  - artifact: tests/tools/security-scan.test.mjs
+    sha256: 00ecdb4c8b1da7b82a888f05acc9d22f91f927bbcd5483a3aa59b6917d1456fa
+    consumers: [1, 13]
+  - artifact: tools/compose-smoke.mjs
+    sha256: 4b20440472c3b6dc47e3edf5e511aca52a6248244f9d80331eeba1ce300c1d67
+    consumers: [1, 13]
+  - artifact: tools/config-bootstrap/index.mjs
+    sha256: 6f6e93feaec18a428377cef2d66651ea39e708c170a3e13e6cb50f9020899f2d
+    consumers: [1, 13]
+  - artifact: tools/observability/service.mjs
+    sha256: 3276388e9894e0ec0c61b269ad190951263587fdca801d2147dd8ebdaf2cdf46
+    consumers: [1, 13]
+  - artifact: tools/platform-service.mjs
+    sha256: 40bc83bb897d312d3c2600f6b0f1405616adf7d5b249493f97f91cb7866ed30a
+    consumers: [1, 13]
+  - artifact: tools/security-scan.mjs
+    sha256: 7f729cb09b36ce27058491f8918451b42e0d41ed3f6c8bf1eb04658e1e64ff11
+    consumers: [1, 13]
+  - artifact: tools/verified-infrastructure-image.mjs
+    sha256: 39a5dde8d7149ab97281cec1911abda643424ad85863790f492b2348cd1026fc
+    consumers: [1, 13]
+  - artifact: verification/launch/v1/runner.test.mjs
+    sha256: 76e6ad62c359d53d4f29e2ec095c97569d208b0900b0bf574c447f32393e8561
+    consumers: [1, 13]
+  - artifact: verification/launch/v1/scenarios/migrations.mjs
+    sha256: 89b37167bac4dadcea9dc065c6383d73d88026b0efb7fc79f2296e7aeb2537a8
+    consumers: [1, 13]
+  - artifact: docs/reports/local-runtime-delivery.md
+    sha256: e2a5c512b8d8c1b617df3fe3fb75ad8f9b43b08b9081f2a89fd1d36036ec3a4a
+    consumers: [1, 13]
+verification:
+  - command: pnpm check
+    result:
+      PASS на frozen Source 7b019e3bbf791a3896dd280567dbc7222c43f0e8; GitHub Actions41633892098 SUCCESS. Local receipt
+      runtime-7b019e3-ci.json SHA256 5d96f15c144e0fafbb926497e850e7da213be9dcf745eb06fc28874d953652fc. G12/deployment подтверждены
+      отдельными receipts.
+  - command: node /home/yurgusev/.cache/coffee-launch-delivery/runtime-one-order.mjs --execute-authorized-once
+    result:
+      PASS_BROWSER_API_SSE на C7 Source 6fdb0ebe774749fa5d95980df3f5bff048d5d58f; после контролируемого продолжения
+      того же Draft — один Confirmed order ord_01M6FHFS4A96CR3TX6C5WKR734, customer cus_01M6FHFRWZJY5SRS6A43K3CZSN, quantity1;
+      реальный HTTPS/OIDC login и SSE. При приёмке нового source business commands не повторялись.
+  - command: node /home/yurgusev/.cache/coffee-launch-delivery/runtime-one-order-lineage.mjs --execute-read-only
+    result:
+      PASS_OWNER_LINEAGE на C7; owner-scoped DB readback связывает Confirm Outbox, preparation Inbox/projection и
+      опубликованное событие со SSE; runtime-one-order-lineage-20261103T022114340Z.json.
+  - command: node /home/yurgusev/.cache/coffee-launch-delivery/runtime-one-order-lineage.mjs --execute-customer-delta
+    result:
+      PASS_INSTALLED_CUSTOMER_DELTA на C11; runtime-customer-delta-f6ea2db.json. New CHECK validated, old CHECK absent;
+      deterministic ICU und/version matches, lowercase matches JavaScript, тот же customer. Ledger unreadable by existing
+      runtime role; privileges unchanged. Не заявляет прочитанный migration ledger.
+  - command: systemctl --user restart coffee-platform.service
+    result:
+      "C13 dd87e7ce41739a9f6ba7d4c55f524f2f57b344ff: PASS_MEASURED_RESTART/PASS_RESTART_PERSISTENCE,189.358s; сохранены
+      данные/volumes/protected containers/72offsets/retired identity/JWKS. runtime-restart-dd87e7c-comparison.json SHA256
+      b2910bc10367d55d140401b2eede14a0439a14bc21a21fb1cfb78ecaec64cff9. Не новый restart на 7b."
+  - command: systemctl --user start coffee-platform-certificates.service
+    result:
+      "C13 dd87e7ce41739a9f6ba7d4c55f524f2f57b344ff: native no-op и последующее natural renewal подтверждены раздельными
+      receipts runtime-maintenance-noop-dd87e7c.json / runtime-renewal-dd87e7c-comparison.json; latter SHA256 110c5c019ddd6bd9da236a3688a5ac8f8c7c00e6436bbdc72c8a208d4670f931.
+      Реальное renewal221.841s,15leaves,sameCA/SPKI,данные/72offsets preserved. На7b не выполнялось."
+  - command: systemctl --user enable --now coffee-platform-certificates.timer
+    result:
+      "C13 dd87e7ce41739a9f6ba7d4c55f524f2f57b344ff: PASS_NATIVE_TIMER_ENABLED; runtime-timer-dd87e7c.json SHA256
+      67787d884cf4b5fb493323c9143d93645f2dbff7ba30a2d9545230117015b0c6. Preconditions include real renewal и PASS_WARNING_DELIVERY_AND_DISPLAY
+      из runtime-maintenance-warning-dd87e7c-reconciled.json SHA256 014bcc7d6788aa8e64c6efa622e86024b67335292cf0145eaaef6836bfda0b9c:
+      realLoki/Grafana query200/visible reason/REA,тот же event,без повторной публикации."
+  - command:
+      git diff --name-only dd87e7ce41739a9f6ba7d4c55f524f2f57b344ff 7b019e3bbf791a3896dd280567dbc7222c43f0e8 --
+      Dockerfile compose.yaml pnpm-lock.yaml package.json config secrets/platform.secrets.sops.yaml tools/platform-service.mjs
+      tools/config-bootstrap tools/compose-smoke.mjs tools/verified-infrastructure-image.mjs tools/security-scan.mjs tools/observability
+      scripts/config-lib.mjs verification/launch/v1/report.mjs packages/platform-runtime packages/platform-security packages/platform-kafka-runtime
+      packages/platform-observability packages/platform-config packages/platform-database apps/edge-gateway apps/customer-service
+      apps/orders-service apps/realtime-gateway
+    result:
+      "PASS: пустой diff перечисленных24 runtime/tool/config paths; дополнительно равны пары git rev-parse source:path.
+      Это source-scope equivalence maintenance components, не runtime/image admission нового source. Точные общие Git objects
+      перечислены в docs/reports/local-runtime-delivery.md."
+  - command: node tools/security-scan.mjs
+    result:
+      PASS на exact Source 7b019e3bbf791a3896dd280567dbc7222c43f0e8; run20261103T124053Z-7b019e3;1361.089s/24targets/48reports;provenancePASS,unresolvedHigh0,critical0,cleanupFailures=[].
+      Result SHA256 d713ceb9fbb672690770078aa830b414948643a35d4680d8e06a931acd05cbb7; runtime-7b019e3-scan-summary.json
+      SHA256 92e68c1d41635030c8e8ec3499199d9a37d75e93f81ab22f6c1fd1cfea7d059b. Normal component admission, не formal G00–G19.
+  - command: node /home/yurgusev/.cache/coffee-launch-delivery/runtime-cutover-snapshot.mjs before
+    result:
+      "CAPTURED_DEGRADED_BASELINE старого C13: exact3 running unhealthy (aroma-convergence,realtime-gateway,orders-aroma-preparation),other20ready,72
+      registry offsets. runtime-cutover-7b019e3-before.json SHA256 f50b1b23213678b0f53262c2b03f1d1acc90ee959ffcdc814bb74271594f51aa.
+      Это baseline capture, не readiness PASS."
+  - command: python3 /home/yurgusev/.cache/coffee-launch-delivery/runtime-measured-cutover.py
+    result:
+      PASS_MEASURED_CUTOVER, 999.309 s; CLI start 944.650 s, приложение availability gap upper 966.036 s, issuer
+      842.725 s. Один cutover; native build 10 отсутствующих app images сверил scanned IDs. Source 7b019e3bbf791a3896dd280567dbc7222c43f0e8;
+      runtime-measured-cutover-7b019e3.json, SHA256 6eba12d6aac86f98a411c2dabc163e422e482c273ac67f8aed59f2d69484d8a4.
+  - command: python3 /home/yurgusev/.cache/coffee-launch-delivery/runtime-unit-install-7b019e3.py
+    result:
+      PASS_CANONICAL_NATIVE_INSTALL_AND_ADOPTION, 18.661 s; same-source native installer, неизменные IDs/StartedAt,
+      retirement, timer bytes/enabled/active; без отдельного restart/recover/renewal. Source 7b019e3bbf791a3896dd280567dbc7222c43f0e8;
+      runtime-unit-install-7b019e3.json, SHA256 c55eda52e3cac1b721e2b5f4746eb7f10d17b2905e12845b27f1ffd9d570f021.
+  - command: node /home/yurgusev/.cache/coffee-launch-delivery/runtime-order-readonly.mjs cutover
+    result:
+      "PASS_READ_ONLY_LOGIN_SSE_PERSISTENCE: настоящий owner OAuth/HTTPS/SSE, тот же customer/Confirmed order/version
+      3/quantity 1. Standalone Catalog snapshot 12, страницы 20+20, search 20, Back/Forward. businessCommands=[]. REA viewport
+      20 articles/noAdd подтверждён отдельно, source binding — runtime/browser receipts. Source 7b019e3bbf791a3896dd280567dbc7222c43f0e8;
+      runtime-browser-7b019e3-cutover.json, SHA256 e92d9c750983c7b1349dc2fd2f775d8cf4f8fc5f84eb1d3b4daa3c70cf23f5eb."
+  - command: node /home/yurgusev/.cache/coffee-launch-delivery/runtime-cutover-snapshot.mjs after
+    result:
+      "PASS_CUTOVER_PERSISTENCE: after snapshot 23 ready / 17 product healthy; 624 прежних volumes +1 anonymous,
+      22 protected containers, 72 offsets nondecreasing; identity/OID/JWKS/CA/Customer SPKI preserved, bootstrap env/import
+      absent. Customer expiry 2026-11-04T13:27:12Z; только штатный readonly collector log rebind. Source 7b019e3bbf791a3896dd280567dbc7222c43f0e8;
+      runtime-cutover-7b019e3-comparison.json, SHA256 7966ab7d834a3511e36fb382d216bf9e55e30b43d2d73ff2836debe1aba50a0e."
+limitations:
+  - "Frozen runtime Source 7b019e3bbf791a3896dd280567dbc7222c43f0e8: CI41633892098 SUCCESS; G12 20261103T124053Z-7b019e3
+    PASS, 1361.089 s / 24 targets / 48 reports; cutover, install/adoption, fresh browser/catalog и persistence PASS. До
+    merge остаются publication/review report и handoff, CI фактического final GitHub HEAD. Self metadata commit SHA отсутствует.
+    60 outputs привязаны к frozen Git blobs, report — к своим финальным bytes; шесть accepted inputs сохранены."
+  - "Normal runtime #254 не заменяет formal #13: отдельные exact-candidate G00–G19 обязательны; formal admission не заявляется."
+  - C13 dd87e7ce41739a9f6ba7d4c55f524f2f57b344ff restart/renewal/warning/timer proofs сохраняют исходный source binding.
+    Равенство 24 runtime/tool/config blobs/trees приведено в итоговом report и позволяет переиспользовать неизменённую
+    maintenance область. Новые restart/renewal на source 7b не заявляются; image admission подтверждён его собственным G12.
+  - "Один ранее разрешённый customer/Confirmed order сохранён по информированному разрешению: Cancel/Delete API нет. AROMA
+    mutations выключены, новых бизнес-команд, Kafka resets, bootstrap-admin или повторного recover/retirement при переходе
+    не было."
+  - Installed Customer CHECK/ICU подтверждён owner-scoped readback. Migration ledger недоступен существующей runtime роли;
+    права не расширялись. Полный host reboot, rollback старого source и DB downgrade не проверены; recover означает bootstrap-admin
+    retirement, а не rollback.
+  - "Before: CAPTURED_DEGRADED_BASELINE C13, exact3 running unhealthy (aroma-convergence/realtime-gateway/orders-aroma-preparation),
+    остальные20 ready. Kafka readiness failures начались около12:21 UTC до G12; причина неизвестна. After все23 ready,
+    но cutover не доказывает устранение первопричины или длительную устойчивость."
+  - Измеренный cutover потребовал 999.309 s; app availability gap upper966.036 s, issuer842.725 s. Сборка10 отсутствующих
+    app images с проверкой scanned IDs входит в CLI start, не относится к config-bootstrap. Бесшовный переход не заявляется.
+  - REA подтверждает конкретный viewport/20 articles/noAdd. Source binding обеспечивают runtime/browser receipts; полнота
+    всех browser events/экранов не заявляется. Локальные private receipts/captures не являются опубликованными GitHub artifacts;
+    пути, SHA256 и source bindings основных proofs перечислены в report.
