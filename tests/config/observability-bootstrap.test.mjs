@@ -1273,7 +1273,11 @@ void test("development preparation preserves existing secrets and refreshes only
   const openssl = (args) => execFileSync("openssl", args, { stdio: "ignore" });
   try {
     const configPath = join(fixture.root, "config/platform.yaml");
-    const originalConfig = await readFile(configPath, "utf8");
+    const normalConfig = parseYaml(await readFile(configPath, "utf8"));
+    normalConfig.verification.databaseIsolation.enabled = false;
+    normalConfig.verification.kafkaNamespaceIsolation = false;
+    const originalConfig = dumpYaml(normalConfig, { lineWidth: -1 });
+    await writeFile(configPath, originalConfig);
     const originalCiphertext = await readFile(bundlePath);
     const initialTemporary = (await readdir("/dev/shm")).filter((name) =>
       name.startsWith("coffee-development-pki-"),
@@ -2366,6 +2370,8 @@ void test("Keycloak materialization isolates its credentials and rejects invalid
     );
     const configPath = join(fixture.root, "config/platform.yaml");
     const config = parseYaml(await readFile(configPath, "utf8"));
+    config.verification.databaseIsolation.enabled = false;
+    config.verification.kafkaNamespaceIsolation = false;
     config.browserOidc = {
       issuer: "https://identity.localhost:9443/realms/coffee",
       clientId: "coffee-platform",

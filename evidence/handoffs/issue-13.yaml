@@ -1,7 +1,7 @@
 issue: 13
 baseCommit: 2a4f272444dd9484b0621104c300c07ee54dc2e2
 status: source-descriptor-before-formal-verification
-asOfUtc: "2026-11-03T15:12:10Z"
+asOfUtc: "2026-11-03T15:46:44.115Z"
 inputs:
   - issue: 2
     acceptedMergeCommit: 327638d4494269a151ee7c0ac945ac0053c3e0d4
@@ -196,7 +196,7 @@ outputs:
     consumers:
       - 1
   - artifact: tests/config/observability-bootstrap.test.mjs
-    sha256: 28f7cea6ead3c8f98dc31045b70255d628f9ec334dfbfdde5862924042b5fd43
+    sha256: 8b90f8331080c7abf21cec294fc5762ef8317f9aa63ad61de73464d273980c84
     consumers:
       - 1
   - artifact: tests/observability/alerts.test.mjs
@@ -321,6 +321,10 @@ outputs:
       - 1
   - artifact: secrets/platform.secrets.sops.yaml
     sha256: bcfaa602ef270ba2f3907fd905be29064dd83e86aa5bdd7918469a6ce640e9ef
+    consumers:
+      - 1
+  - artifact: tests/config/platform-config.test.mjs
+    sha256: 57986767182dfce511c86cfa1023ef13319e8f8910479072303b86127cd1fd0f
     consumers:
       - 1
 verification:
@@ -546,6 +550,27 @@ verification:
   - command: "pnpm exec prettier --check tests/tools/security-scan.test.mjs"
     result: "PASS, 2.174 s; после адаптации placement caller; Node 26.8.1, общий heavy lock, локальный working tree до freeze."
     logSha256: 17aa973d3f004560237d9a95171210b0671deff23d61628eecf7322ff5938f20
+  - command: "gh run view 41662677651 --repo YurGusev/CoffeeOrderPlatform --log-failed"
+    result: "FAIL на Source45a69a5: 5 tests. Три normal-path fixtures наследовали formal isolation true/true; две CLI ошибки отдельно не воспроизведены. Warm/G12/qualification/full для45a не запускались."
+    logSha256: 3616c7db5f877d982351329776015b803a64ce083ebc4368ee7e84cf4240053d
+  - command: "node --test --test-concurrency=1 '--test-name-pattern=^(development preparation preserves existing secrets and refreshes only trusted certificate identities|Keycloak materialization isolates its credentials and rejects invalid TLS or secret syntax|local identity settings preserve the formal null browser profile)$' tests/config/observability-bootstrap.test.mjs tests/config/platform-config.test.mjs"
+    result: "PARTIAL: 2/3 PASS после явного normal false/false в fixtures; local identity FAIL из-за устаревшего ignored platform-config/dist на authoring host. Исходный FAIL сохранён; это не CI failure mechanism."
+    logSha256: 8d7766e8d82275fa22b19dbbd9b8a92c9c9cb07c3883531ff12e8968761b62d4
+  - command: "pnpm exec prettier --check tests/config/observability-bootstrap.test.mjs tests/config/platform-config.test.mjs"
+    result: "PASS, 3.154 s; только затронутые test files."
+    logSha256: 17aa973d3f004560237d9a95171210b0671deff23d61628eecf7322ff5938f20
+  - command: "pnpm exec oxlint --type-aware --deny-warnings tests/config/observability-bootstrap.test.mjs tests/config/platform-config.test.mjs"
+    result: "PASS, 3.261 s; только затронутые test files."
+    logSha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+  - command: "pnpm exec tsc -b packages/platform-config --pretty false"
+    result: "PASS, 2.206 s; обновлён только ignored platform-config/dist."
+    logSha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+  - command: "node --test '--test-name-pattern=^local identity settings preserve the formal null browser profile$' tests/config/platform-config.test.mjs"
+    result: "PASS, 1.512 s; local identity 1/1 после scoped build; в сумме все3 исправленных сценария PASS."
+    logSha256: d21ed521453eb2eb0e7544666ec019d9b70c2e2da85982ec765aa975da28d91a
+  - command: "node --test --test-name-pattern='^(launch controller reaches evidence preflight without compiled services|pnpm forwards the approval-file argument after its separator to the offline CLI)$' verification/launch/v1/runner.test.mjs"
+    result: "PASS 2/2, 9.921 s; Node26.8.1, heavy lock. Причины двух CI сбоев не установлены, нагрузка полного CI отдельно не воспроизводилась; source/таймауты не менялись."
+    logSha256: c38b7a5f1185d7bbbcb50759eec010a8927638a75ccc3bf29b0b6403c4a009ab
 consumerContract:
   consumer: 1
   admission:
@@ -574,6 +599,7 @@ consumerContract:
     policy/key/flag child и G18 baseline flag child с проверенной lineage. Лимиты и provider scope сохранены;
     exact parent G12 product images, отдельная BOM/image-ID проверка fixture PostgreSQL."
 limitations:
+  - "Source45a69a5 CI выявил3 normal-fixture mismatches и2 неповторившихся CLI failures. Исправлены только3 normal-path fixtures в2existingtestfiles; service guards и canonical isolation не менялись. Новый frozen SHA ещё требует собственные CI/G12/qualification/G00–G19; подготовленный45a context не использовался для runtime admission."
   - "Transport leaves обновлены trusted config-bootstrap 2026-11-03: 15 runtime, прежние CA/key/SAN сохранены. Первая попытка отклонена до записи из-за mode 0664 после Git merge; после chmod 0600 renewal завершён. Исходный отрицательный receipt сохранён. Это не runtime admission нового candidate."
   - "Принят #254 через PR #261: merge 2a4f272444dd9484b0621104c300c07ee54dc2e2. Его CI и компонентный G12 не переносятся на новый formal candidate; Новому SHA нужны собственные CI, matching G12, свежая SSE qualification и полный G00–G19."
   - "Оба evidence-каталога Source 16ff43a сохранены: 20261102T085322Z-16ff43a и 20261102T100507Z-16ff43a. Производный handoff второго запуска содержит НЕ ДОПУСТИТЬ и ошибки отсутствующих evidence; неполные обязательные gates не считаются PASS. Исторические FAIL/NOT_RUN не переписаны."

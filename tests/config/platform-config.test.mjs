@@ -165,6 +165,8 @@ void test("local identity settings preserve the formal null browser profile", as
     await readFile(join(REPO_ROOT, "config/platform.yaml"), "utf8"),
     { json: true },
   );
+  document.verification.databaseIsolation.enabled = false;
+  document.verification.kafkaNamespaceIsolation = false;
   const schema = JSON.parse(
     await readFile(join(REPO_ROOT, "config/platform.schema.json"), "utf8"),
   );
