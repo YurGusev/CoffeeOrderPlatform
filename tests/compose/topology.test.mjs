@@ -3335,7 +3335,7 @@ void test("verified infrastructure image loader accepts only context-bound Kafka
           approvedFixed: [],
           egressRepositories: [
             "ghcr.io/aquasecurity/trivy-db",
-            "ghcr.io/aquasecurity/trivy-java-db",
+            "mirror.gcr.io/aquasec/trivy-java-db",
           ],
         },
       },
