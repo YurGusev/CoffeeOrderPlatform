@@ -1398,6 +1398,34 @@ void test("G15 child failure receipt keeps only scoped hashes and fixed source l
     error: childFailure,
     operationDiagnostic: operationDiagnosticInput,
   });
+  const aggregateDiagnostic = createBrowserChildFailureDiagnostic({
+    ...childContext,
+    error: new AggregateError(
+      [childFailure, new Error(`cleanup ${canary}`)],
+      `aggregate ${canary}`,
+      { cause: childFailure },
+    ),
+    operationDiagnostic: operationDiagnosticInput,
+  });
+  assert.deepEqual(aggregateDiagnostic, diagnostic);
+  assert.equal(diagnostic.errorName, "TypeError");
+  assert.equal(
+    diagnostic.messageSha256,
+    createHash("sha256").update(canary).digest("hex"),
+  );
+  assert.doesNotMatch(
+    JSON.stringify(aggregateDiagnostic),
+    new RegExp(canary, "u"),
+  );
+  const fallbackDiagnostic = createBrowserChildFailureDiagnostic({
+    ...childContext,
+    error: new AggregateError([childFailure], "aggregate", { cause: canary }),
+  });
+  assert.equal(fallbackDiagnostic.errorName, "AggregateError");
+  assert.equal(
+    fallbackDiagnostic.messageSha256,
+    createHash("sha256").update("aggregate").digest("hex"),
+  );
   assert.equal(
     validateBrowserChildFailureDiagnostic(diagnostic, childContext),
     true,

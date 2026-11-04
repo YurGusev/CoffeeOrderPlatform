@@ -227,6 +227,7 @@ export function createBrowserChildFailureDiagnostic({
   let errorName = "Error";
   let message = "G15_CHILD_FAILED";
   try {
+    if (error?.cause instanceof Error) error = error.cause;
     if (BROWSER_FAILURE_ERROR_NAMES.has(error?.name)) errorName = error.name;
     if (typeof error?.message === "string") message = error.message;
   } catch {
