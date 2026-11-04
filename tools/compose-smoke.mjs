@@ -242,7 +242,37 @@ export function createBrowserChildFailureDiagnostic({
     errorName,
     messageSha256: createHash("sha256").update(message).digest("hex"),
   };
-  const sourceLocation = rollbackComposeSourceLocation(error);
+  let stack;
+  try {
+    stack = error?.stack;
+  } catch {
+    // Keep the diagnostic closed if the stack cannot be read.
+  }
+  let sourceLocation;
+  if (typeof stack === "string" && stack.length <= 131_072) {
+    const sourcePath = join(ROOT, "tools/browser-proof.mjs");
+    for (const frame of stack.split(/\r?\n/u).slice(1, 257)) {
+      const match = /^\s*at (?:(?:.*) \()?(.+?):(\d+):(\d+)\)?$/u.exec(frame);
+      if (
+        !match ||
+        ![sourcePath, pathToFileURL(sourcePath).href].includes(match[1])
+      )
+        continue;
+      const line = Number(match[2]);
+      const column = Number(match[3]);
+      if (
+        Number.isSafeInteger(line) &&
+        line > 0 &&
+        line <= 1_000_000 &&
+        Number.isSafeInteger(column) &&
+        column > 0 &&
+        column <= 1_000_000
+      )
+        sourceLocation = { source: "tools/browser-proof.mjs", line, column };
+      break;
+    }
+  }
+  sourceLocation ??= rollbackComposeSourceLocation(error);
   if (sourceLocation) diagnostic.sourceLocation = sourceLocation;
   const operationFailure =
     projectBrowserRuntimeStackDiagnostic(operationDiagnostic);

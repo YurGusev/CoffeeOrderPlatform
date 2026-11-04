@@ -12,6 +12,7 @@ import {
   writeFile,
 } from "node:fs/promises";
 import { spawnSync } from "node:child_process";
+import { registerHooks } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -747,6 +748,174 @@ void test("G15 browser proof requires the Compose stop capability", async () => 
     }),
     /G15_BROWSER_RUNTIME_CONTEXT_INVALID/u,
   );
+});
+
+void test("G15 retains the primary browser error after all cleanup attempts", async () => {
+  const canary = "browser-private-canary";
+  const primary = new TypeError(`selector=${canary}`);
+  primary.stack = [
+    `TypeError: selector=${canary}`,
+    `    at browserStep (${pathToFileURL(join(REPO_ROOT, "tools/browser-proof.mjs")).href}:1234:17)`,
+  ].join("\n");
+  const calls = [];
+  let thrown = primary;
+  const cdp = {
+    async send() {
+      throw thrown;
+    },
+    async detach() {
+      calls.push("detach");
+      throw new Error(`cleanup=${canary}`);
+    },
+  };
+  const context = {
+    async newPage() {
+      return {};
+    },
+    async newCDPSession() {
+      return cdp;
+    },
+    async close() {
+      calls.push("context.close");
+    },
+  };
+  const driver = {
+    browser: {
+      async newContext() {
+        return context;
+      },
+    },
+    witness: { status: "READY" },
+    async close() {
+      calls.push("driver.close");
+      return "EXACT_OWNED_CONTAINER_REMOVED";
+    },
+  };
+  const key = Symbol.for("coffee.g15-primary-error-regression");
+  globalThis[key] = async () => driver;
+  const url = `data:text/javascript,${encodeURIComponent('export const startBrowser=globalThis[Symbol.for("coffee.g15-primary-error-regression")];')}`;
+  const hook = registerHooks({
+    resolve(specifier, context, next) {
+      return specifier === "./browser-driver.mjs" &&
+        context.parentURL?.includes("?g15-primary-error-regression")
+        ? { url, shortCircuit: true }
+        : next(specifier, context);
+    },
+  });
+  try {
+    const { proveBrowser: proveWithDriver } =
+      await import("../../tools/browser-proof.mjs?g15-primary-error-regression");
+    const runtimeContext = {
+      projectName: "coffee-g15-proof",
+      runId: RUN_ID,
+      candidateSha: CANDIDATE_SHA,
+      throwIfStopRequested() {},
+      ownerEvidence: {
+        snapshot() {},
+        assertAbsent() {},
+        seedInProgress() {},
+        withLookupUnavailable() {},
+      },
+      readRealtimeAuthCloseCount() {},
+      restartCustomerService() {},
+    };
+    await assert.rejects(
+      proveWithDriver(runtimeContext),
+      (error) => error === primary,
+    );
+    assert.deepEqual(calls, ["detach", "context.close", "driver.close"]);
+    calls.length = 0;
+    thrown = { secret: canary };
+    await assert.rejects(proveWithDriver(runtimeContext), {
+      message: "G15_BROWSER_PROOF_FAILED",
+    });
+    assert.deepEqual(calls, ["detach", "context.close", "driver.close"]);
+    const { createBrowserChildFailureDiagnostic } =
+      await import("../../tools/compose-smoke.mjs");
+    const identity = {
+      runId: RUN_ID,
+      candidateSha: `${RUN_ID.slice(-7)}${"a".repeat(33)}`,
+    };
+    const diagnostic = createBrowserChildFailureDiagnostic({
+      ...identity,
+      error: primary,
+    });
+    assert.equal(diagnostic.errorName, "TypeError");
+    assert.equal(
+      diagnostic.messageSha256,
+      createHash("sha256").update(primary.message).digest("hex"),
+    );
+    assert.deepEqual(diagnostic.sourceLocation, {
+      source: "tools/browser-proof.mjs",
+      line: 1234,
+      column: 17,
+    });
+    assert.equal(
+      validateBrowserChildFailureDiagnostic(diagnostic, identity),
+      true,
+    );
+    const parentContext = {
+      runId: "20261025T130001Z-1111111",
+      candidateSha: "1".repeat(40),
+    };
+    assert.equal(
+      validateBrowserFailureReceipt(
+        {
+          schemaVersion: diagnostic.schemaVersion,
+          gateId: diagnostic.gateId,
+          outcome: diagnostic.outcome,
+          parentRunId: parentContext.runId,
+          parentCandidateSha: parentContext.candidateSha,
+          childRunId: identity.runId,
+          childCandidateSha: identity.candidateSha,
+          errorName: diagnostic.errorName,
+          messageSha256: diagnostic.messageSha256,
+          sourceLocation: diagnostic.sourceLocation,
+        },
+        { parentContext, childContext: identity },
+      ),
+      true,
+    );
+    assert.doesNotMatch(
+      JSON.stringify(diagnostic),
+      /browser-private-canary|selector|stack/u,
+    );
+    assert.throws(
+      () =>
+        validateBrowserChildFailureDiagnostic(
+          {
+            ...diagnostic,
+            sourceLocation: {
+              ...diagnostic.sourceLocation,
+              source: "tools/foreign.mjs",
+            },
+          },
+          identity,
+        ),
+      { code: "G15_CHILD_FAILURE_DIAGNOSTIC_INVALID" },
+    );
+    const localPath = join(REPO_ROOT, "tools/browser-proof.mjs");
+    const projection = (stack) =>
+      createBrowserChildFailureDiagnostic({
+        ...identity,
+        error: Object.assign(new Error(canary), { stack }),
+      }).sourceLocation;
+    assert.deepEqual(projection(`Error\n    at f (${localPath}:9:2)`), {
+      source: "tools/browser-proof.mjs",
+      line: 9,
+      column: 2,
+    });
+    for (const stack of [
+      `Error\n    at f (/tmp/tools/browser-proof.mjs:9:2)`,
+      `Error\n    at f (${localPath}:1000001:2)`,
+      `Error\n${"    at x (node:internal/test:1:1)\n".repeat(256)}    at f (${localPath}:9:2)`,
+      `Error\n${"x".repeat(131_072)}\n    at f (${localPath}:9:2)`,
+    ])
+      assert.equal(projection(stack), undefined);
+  } finally {
+    hook.deregister();
+    delete globalThis[key];
+  }
 });
 
 void test("G15 completed-response faults admit only the actual operation statuses", () => {

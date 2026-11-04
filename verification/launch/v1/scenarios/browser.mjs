@@ -339,7 +339,9 @@ function lastJsonLine(stdout) {
 function failureSourceLocationIsValid(value) {
   return (
     exactKeys(value, ["source", "line", "column"]) &&
-    value.source === "tools/compose-smoke.mjs" &&
+    ["tools/compose-smoke.mjs", "tools/browser-proof.mjs"].includes(
+      value.source,
+    ) &&
     Number.isSafeInteger(value.line) &&
     value.line > 0 &&
     value.line <= 1_000_000 &&
