@@ -20,7 +20,7 @@ import { execFileSync, spawn } from "node:child_process";
 import { request as httpsRequest } from "node:https";
 import { dirname, join, resolve } from "node:path";
 import { createHash, generateKeyPairSync, randomUUID } from "node:crypto";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { tmpdir } from "node:os";
 import { dump as dumpYaml, load as parseYaml } from "js-yaml";
 import { parsePublicTlsHostname } from "../packages/platform-security/src/index.ts";
@@ -2291,10 +2291,26 @@ export async function readExternalRecoveryProofCredentials(
     candidateRoot: configRoot,
     postgres,
     g08PreparationContextPath: browserPreparationContextPath,
+    browserParentRoot: hasPreparationContextPath
+      ? resources.g15ParentCheckoutRoot
+      : undefined,
     admin,
     rolePasswords,
     databaseCredentialsByRuntime,
   };
+}
+
+export async function loadVerifiedBrowserParentModules(parentRoot) {
+  const [images, report] = await Promise.all([
+    import(
+      pathToFileURL(join(parentRoot, "tools/verified-infrastructure-image.mjs"))
+        .href
+    ),
+    import(
+      pathToFileURL(join(parentRoot, "verification/launch/v1/report.mjs")).href
+    ),
+  ]);
+  return { images, validateLaunchContext: report.validateLaunchContext };
 }
 
 export function projectRecoveryPlatformConfig(platformConfig, ownership) {
@@ -9317,6 +9333,11 @@ export async function runComposeSmoke({
             )
           : await readRecoveryProofCredentials(proofLaunchIdentity)
         : undefined;
+    const browserParentModules = recoveryProofCredentials?.browserParentRoot
+      ? await loadVerifiedBrowserParentModules(
+          recoveryProofCredentials.browserParentRoot,
+        )
+      : undefined;
     if (!(
       options.databaseProof ||
       options.customerProof ||
@@ -9328,7 +9349,10 @@ export async function runComposeSmoke({
         "Kafka requires a launch context and G12 artifact",
       );
       // G08 already checks the exact G15 parent and its OIDC-only lineage.
-      verifiedKafka = await loadVerifiedGateImage({
+      verifiedKafka = await (
+        browserParentModules?.images.loadVerifiedGateImage ??
+        loadVerifiedGateImage
+      )({
         target: "kafka",
         contextFile:
           recoveryProofCredentials?.g08PreparationContextPath ??
@@ -9780,7 +9804,7 @@ export async function runComposeSmoke({
       ? recoveryProofCredentials?.g08PreparationContextPath
       : launchContextPath;
     const imageIdentity = g14Browser
-      ? await validateLaunchContext(imageContextPath)
+      ? await browserParentModules.validateLaunchContext(imageContextPath)
       : launchIdentity;
     if (!options.noBuild) {
       let temporary;
@@ -9814,7 +9838,10 @@ export async function runComposeSmoke({
       }
     }
     if (bindRuntimeImages) {
-      const verifiedImages = await readVerifiedRuntimeImages({
+      const verifiedImages = await (
+        browserParentModules?.images.readVerifiedRuntimeImages ??
+        readVerifiedRuntimeImages
+      )({
         contextFile: imageContextPath,
       });
       assertVerifiedRuntimeImages({
