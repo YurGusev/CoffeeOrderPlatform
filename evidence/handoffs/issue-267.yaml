@@ -1,0 +1,79 @@
+issue: 267
+baseCommit: 0f117f3094362b670e4421c39c888de6830cc4f0
+status: verified
+inputs:
+  - issue: 210
+    acceptedMergeCommit: a6cceeaa822f9641c678b5dcae521c282391dd3d
+    artifact: evidence/handoffs/issue-210.yaml
+    sha256: 93dccd8c0c978977e4e6cae852d4801415e849b595ef233a95ad2936ba10d20f
+outputs:
+  - artifact: config/platform.yaml
+    sha256: 63a1fc1507fea25e89e45339df04d82a96e6995de51d8cf83b5036200cf8e055
+    consumers:
+      - 13
+      - 266
+  - artifact: config/platform.schema.json
+    sha256: d159def70bc6afd6ce700e28894b3f5b542a1d3f80f58545a2ad21d02642aaba
+    consumers:
+      - 13
+      - 266
+  - artifact: packages/platform-config/src/index.ts
+    sha256: 5a8090aeb230c1fa3de73f0ca04a8926ec7f96e44f7f43950b24dfdcfd29c279
+    consumers:
+      - 13
+      - 266
+  - artifact: docs/operations/runtime-images.md
+    sha256: bd05d96803afa860a77bbb3c8c77515f9e1e79ca19716fd32f2269f3965476d1
+    consumers:
+      - 13
+      - 266
+  - artifact: evidence/launch-preparation/2026-11-04/java-db-mirror/download.json
+    sha256: 58e4eb59725398221c39ea70df34ade10cdeee016e52ed93f866635ed8ae17a0
+    consumers:
+      - 13
+      - 266
+  - artifact: evidence/launch-preparation/2026-11-04/java-db-mirror/validation.json
+    sha256: 78136aacb4a901b3ad408f8db50bc529a3cc4269ce65c06b410c639c0be73dc7
+    consumers:
+      - 13
+      - 266
+  - artifact: evidence/launch-preparation/2026-11-04/java-db-mirror/download.stderr.log
+    sha256: 968e7bfbeee5c036db201422b2ea3cb11cd86db187a8c867824684268f5f6ec2
+    consumers:
+      - 13
+      - 266
+  - artifact: evidence/launch-preparation/2026-11-04/java-db-mirror/cache-cleanup.json
+    sha256: 84155057f1489d71236c33d694fb4abf351573f46aab8e3a69c86a9fb8c5c7b6
+    consumers:
+      - 13
+      - 266
+verification:
+  - command: pnpm install --offline --frozen-lockfile
+    result: passed
+  - command: pnpm exec tsc -b --pretty false
+    result: passed
+  - command: pnpm config:check
+    result: passed
+  - command: node --test --test-name-pattern='G12 scanner policy is strict verification-only configuration|verified infrastructure image loader accepts only context-bound Kafka artifacts|G12 binds storage helper to the Node base, receipt, index and image' tests/config/platform-config.test.mjs tests/compose/topology.test.mjs tests/observability/storage.test.mjs
+    result: passed; 3 tests, 0 failures, 0 skips
+  - command: node --test tests/tools/security-scan.test.mjs
+    result: passed; 18 tests, 0 failures, 0 skips
+  - command: pnpm exec oxlint --type-aware --deny-warnings -- packages/platform-config/src/index.ts tests/config/platform-config.test.mjs tests/compose/topology.test.mjs tests/observability/storage.test.mjs
+    result: passed
+  - command: pnpm exec prettier --check -- config/platform.yaml config/platform.schema.json packages/platform-config/src/index.ts tests/config/platform-config.test.mjs tests/compose/topology.test.mjs tests/observability/storage.test.mjs docs/operations/runtime-images.md
+    result: passed
+  - command: python3 /home/yurgusev/.cache/coffee-launch-delivery/issue267-java-db-proof.py --execute
+    result: "Trivy exit 0, download 116.026 s; wrapper FAIL: Docker absence message prefix; original negative receipt preserved"
+  - command: python3 /home/yurgusev/.cache/coffee-launch-delivery/issue267-java-db-proof-completion.py --execute
+    result: passed; native metadata validation, schema 1, freshness 24h, content SHA-256 and owned resource cleanup
+  - command: git diff --check
+    result: passed
+  - command: python3 /home/yurgusev/.cache/coffee-launch-delivery/issue267-java-db-proof-cache-cleanup.py
+    result: passed; only owned public cache removed, 1571012608 bytes freed
+limitations:
+  - Фактическая загрузка выполнена на code commit 4e74b2a71bc47a8721793a20b3c2973eed5242e7; следующие изменения только evidence/handoff. Exact-head CI проверяется отдельно в PR.
+  - "Это targeted transport proof, не полный G12 и не admission #13. Новый frozen candidate требует собственный G12, fresh qualification и G00–G19; прежние отрицательные runs сохраняются."
+  - Исходный wrapper FAIL сохранён в download.json; validation.json отдельно подтверждает уже скачанные байты и cleanup без повторной загрузки. Недоступные системные FD указаны в validation.json; глобальное отсутствие FD не заявляется.
+  - download.json отличается от raw receipt только форматированием JSON; восстановление json.dumps(value, ensure_ascii=False, indent=2) с завершающим LF даёт originalReceiptSha256 из validation.json.
+  - Последующие обновления доверяются утверждённому Google mirror и проходят прежние OCI/content/freshness проверки; текущее совпадение layer digest с GHCR не закрепляет будущие обновления.
+  - После подтверждения hashes собственный public DB cache удалён; metadata, hashes и результаты cleanup сохранены в репозитории. Полный G12 использует новую загрузку и не переиспользует этот cache.
