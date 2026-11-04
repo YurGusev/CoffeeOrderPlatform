@@ -1,0 +1,46 @@
+{
+  "scope": "completion of isolated Java DB download evidence; not G12 or admission",
+  "originalStatus": "FAIL",
+  "originalReceipt": "/home/yurgusev/.cache/coffee-launch-delivery/issue267-java-db-proof.json",
+  "originalReceiptSha256": "26290c4f9755089f756eec50cf531e60eb8bf1c557e7405b54d05b12985a5e74",
+  "sourceSha": "4e74b2a71bc47a8721793a20b3c2973eed5242e7",
+  "runId": "diagnostic-java-bda0c9b74f514ab3a3167f0a0818d4da",
+  "nonce": "a8051ace-849e-4f28-bfb7-7e1d0ac60c5b",
+  "status": "PASS_COMPLETION",
+  "startedAtUtc": "2026-11-04T18:03:13.360424+00:00",
+  "stdout": {
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "sizeBytes": 0
+  },
+  "stderr": {
+    "sha256": "968e7bfbeee5c036db201422b2ea3cb11cd86db187a8c867824684268f5f6ec2",
+    "sizeBytes": 592
+  },
+  "downloadExitCode": 0,
+  "ownedContainerAbsent": true,
+  "activeG12ContainerCount": 0,
+  "lockFdObservation": {
+    "matchingAccessibleFds": 0,
+    "inaccessibleProcessFdDirectories": 295,
+    "inaccessibleFds": 91,
+    "limit": "No global FD-absence claim. Cleanup is bound to the original exclusive lock inode and timestamps, the exited original client and the held shared heavy lock."
+  },
+  "javaDbMetadata": {
+    "version": 1,
+    "updatedAt": "2026-11-04T01:07:50.003Z",
+    "nextUpdate": "2026-11-07T01:07:50.003Z",
+    "downloadedAt": "2026-11-04T17:56:43.017Z"
+  },
+  "javaDbMetadataFile": {
+    "sha256": "a9d3a42e46dce5032dc2f1fbc290eb722aa44fa5b0e869bb6425bb5ac202eb6c",
+    "sizeBytes": 153
+  },
+  "javaDb": {
+    "sha256": "201ecb44f8774b1690b38c740dd188562ca371a5f0e267a3f8bb9c2269299283",
+    "sizeBytes": 1570979840
+  },
+  "cachePath": "/media/yurgusev/coffee-g12-work/tmp/issue267-java-db-proof-tlowqc5f/cache",
+  "cacheRetainedReadOnly": true,
+  "orphanScanLockRemoved": true,
+  "completedAtUtc": "2026-11-04T18:03:38.745635+00:00"
+}

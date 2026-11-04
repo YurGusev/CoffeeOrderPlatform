@@ -31,6 +31,12 @@ Node и deployed package links, а не pnpm installer. Состав завис�
 экспорт и qualification подтверждаются фактическим runtime evidence;
 само наличие exporter options не является PASS.
 
+G12 получает CVE DB из `ghcr.io/aquasecurity/trivy-db`, а Java DB — из
+`mirror.gcr.io/aquasec/trivy-java-db`. Другие repositories и fallback не
+разрешены; остальные требования к сканированию остаются прежними.
+Источник Java DB отдельно согласован владельцем 4 ноября 2026 и указан в
+[исходниках Trivy 0.76.1](https://github.com/aquasecurity/trivy/blob/v0.76.1/pkg/javadb/client.go#L27-L33).
+
 Основание: [pnpm #9474](https://github.com/pnpm/pnpm/issues/9474),
 [modules manifest pnpm 11.24.0](https://github.com/pnpm/pnpm/blob/v11.24.0/pnpm11/installing/modules-yaml/src/index.ts),
 [BuildKit 0.32.2 exporter options](https://github.com/moby/buildkit/blob/v0.32.2/exporter/containerimage/opts.go)
