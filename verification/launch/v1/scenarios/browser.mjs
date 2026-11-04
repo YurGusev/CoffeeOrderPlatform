@@ -797,6 +797,116 @@ export async function prepareBrowserChildCheckout(childRoot) {
   }
 }
 
+export function validateOwnerBrowserProofHashes(hashes) {
+  const scenarios = ["positive", "private-eof", "reauth"];
+  if (
+    !exactKeys(hashes, scenarios) ||
+    !scenarios.every((name) => SHA256.test(hashes[name] ?? ""))
+  )
+    fail("G15_OWNER_BROWSER_PROOF_INVALID");
+  return scenarios;
+}
+
+export function validateOwnerBrowserReceipt(
+  receipt,
+  scenario,
+  identity,
+  lineageSha256,
+) {
+  if (
+    !exactKeys(receipt, [
+      "launchIdentity",
+      "manifest",
+      "cleanup",
+      "externalCleanup",
+      "proof",
+      "manifestSha256",
+      "cleanupSha256",
+      "proofSha256",
+    ]) ||
+    !isDeepStrictEqual(receipt.launchIdentity, identity) ||
+    ![receipt.manifest, receipt.cleanup, receipt.proof].every(
+      (value) => typeof value === "string",
+    ) ||
+    sha256(Buffer.from(receipt.manifest)) !== receipt.manifestSha256 ||
+    sha256(Buffer.from(receipt.cleanup)) !== receipt.cleanupSha256 ||
+    sha256(Buffer.from(receipt.proof)) !== receipt.proofSha256
+  )
+    fail("G15_OWNER_BROWSER_RECEIPT_INVALID");
+  let manifest, cleanup, proof;
+  try {
+    manifest = JSON.parse(receipt.manifest);
+    cleanup = JSON.parse(receipt.cleanup);
+    proof = JSON.parse(receipt.proof);
+  } catch {
+    fail("G15_OWNER_BROWSER_RECEIPT_INVALID");
+  }
+  const roles = [
+    "kafka",
+    "idp",
+    "edge-gateway",
+    "api-public",
+    "realtime-gateway",
+    "edge-nginx",
+    "driver",
+  ];
+  const changed = Object.keys(proof.compiledIntegrity?.before ?? {}).filter(
+    (path) =>
+      proof.compiledIntegrity.before[path] !==
+      proof.compiledIntegrity.after?.[path],
+  );
+  if (
+    !isDeepStrictEqual(manifest.launchIdentity, identity) ||
+    manifest.configSha256 !== identity.baseConfigSha256 ||
+    manifest.lineageReceiptSha256 !== lineageSha256 ||
+    cleanup.verified !== true ||
+    cleanup.network?.created !== true ||
+    cleanup.network?.removed !== true ||
+    cleanup.network?.name !== `${manifest.runId}-net` ||
+    cleanup.owner?.removed !== true ||
+    cleanup.syntheticPrivateMaterialRemoved !== true ||
+    !Array.isArray(cleanup.receipts) ||
+    cleanup.receipts.length !== roles.length ||
+    !roles.every(
+      (role) =>
+        cleanup.receipts.filter(
+          (entry) =>
+            entry.role === role &&
+            entry.removed === true &&
+            entry.logsCaptured === true,
+        ).length === 1,
+    ) ||
+    receipt.externalCleanup?.verified !== true ||
+    receipt.externalCleanup.databases?.verified !== true ||
+    proof.verified !== true ||
+    proof.scenario !== scenario ||
+    proof.launchProof !== false ||
+    proof.sourceIntegrity?.unchanged !== true ||
+    !isDeepStrictEqual(proof.sourceIntegrity?.before, manifest.sources) ||
+    !isDeepStrictEqual(proof.sourceIntegrity?.after, manifest.sources) ||
+    !isDeepStrictEqual(proof.compiledIntegrity?.before, manifest.compiled) ||
+    !isDeepStrictEqual(
+      Object.keys(proof.compiledIntegrity?.after ?? {}).sort(),
+      Object.keys(manifest.compiled ?? {}).sort(),
+    ) ||
+    (scenario === "private-eof"
+      ? proof.compiledIntegrity.unchanged !== false ||
+        changed.length !== 1 ||
+        changed[0] !== "apps/realtime-gateway/dist/runtime-composition.js" ||
+        proof.privateFraming?.triggered !== true ||
+        proof.privateFraming.sourceManifestSha256 !== receipt.manifestSha256 ||
+        proof.privateFraming.originalSha256 !== manifest.compiled[changed[0]] ||
+        proof.privateFraming.transformedSha256 !==
+          proof.compiledIntegrity.after[changed[0]]
+      : proof.compiledIntegrity?.unchanged !== true ||
+        changed.length !== 0 ||
+        proof.privateFraming !== undefined) ||
+    (scenario === "reauth" && proof.reauth?.authCloseDelta !== 1)
+  )
+    fail("G15_OWNER_BROWSER_PROOF_INVALID");
+  return receipt;
+}
+
 export async function validateBrowserParentRuntime({
   evidenceDir,
   parentContext,
@@ -841,6 +951,7 @@ export async function validateBrowserParentRuntime({
       "bundleSha256",
       "baseConfigSha256Artifact",
       "childConfigSha256Artifact",
+      "ownerProofs",
     ]) ||
     child.baseCandidateSha !== parent.candidateSha ||
     !SHA.test(child.candidateSha ?? "") ||
@@ -909,6 +1020,27 @@ export async function validateBrowserParentRuntime({
     child.childConfigSha256Artifact !== sha256(childConfigBytes)
   )
     fail("G15_CHILD_ARTIFACT_HASH_MISMATCH");
+  const identity = {
+    schemaVersion: childContext.schemaVersion,
+    runId: childContext.runId,
+    candidateSha: childContext.candidateSha,
+    baseConfigSha256: childContext.baseConfigSha256,
+  };
+  for (const scenario of validateOwnerBrowserProofHashes(child.ownerProofs)) {
+    const bytes = await assertPrivateFile(
+      join(artifactsDir, `owner-${scenario}.json`),
+      0o600,
+      8 * 1024 * 1024,
+    );
+    if (child.ownerProofs[scenario] !== sha256(bytes))
+      fail("G15_OWNER_BROWSER_PROOF_INVALID");
+    validateOwnerBrowserReceipt(
+      JSON.parse(bytes),
+      scenario,
+      identity,
+      sha256(lineageBytes),
+    );
+  }
   validateBrowserRuntimeArtifact(childRuntime, {
     runId: childContext.runId,
     candidateSha: childContext.candidateSha,
@@ -1554,6 +1686,59 @@ export async function runBrowserParent({
       stdoutReceipt,
     );
 
+    const ownerResult = await runManagedRollbackChild({
+      args: [
+        "--test",
+        "--test-concurrency=1",
+        "--test-reporter=tap",
+        "tests/realtime/fixtures/owner-browser.mjs",
+      ],
+      cwd: candidateRoot,
+      env: {
+        ...process.env,
+        COFFEE_LAUNCH_CONTEXT_FILE: contextRecord.path,
+        COFFEE_G15_OWNER_BROWSER: "1",
+      },
+      timeoutMs: 1_800_000,
+      terminationGraceMs: 120_000,
+    });
+    const { parseTapSummary, tapSummaryPassed } =
+      await import("./owner-suites.mjs");
+    const counts = parseTapSummary(
+      `${ownerResult.stdout ?? ""}\n${ownerResult.stderr ?? ""}`,
+    );
+    if (
+      ownerResult.code !== 0 ||
+      ownerResult.joined !== true ||
+      ownerResult.signal !== null ||
+      !tapSummaryPassed(counts) ||
+      counts.tests !== 3
+    )
+      fail("G15_OWNER_BROWSER_PROCESS_FAILED");
+    const ownerProofs = {};
+    const identity = {
+      schemaVersion: childContext.schemaVersion,
+      runId: childContext.runId,
+      candidateSha: childContext.candidateSha,
+      baseConfigSha256: childContext.baseConfigSha256,
+    };
+    for (const scenario of ["positive", "private-eof", "reauth"]) {
+      const name = `owner-${scenario}.json`;
+      const bytes = await assertPrivateFile(
+        join(childEvidenceDir, "gates/G15_BROWSER/artifacts", name),
+        0o600,
+        8 * 1024 * 1024,
+      );
+      validateOwnerBrowserReceipt(
+        JSON.parse(bytes),
+        scenario,
+        identity,
+        sha256(lineageBytes),
+      );
+      await writePrivateFile(join(artifactsDir, name), bytes, 0o600);
+      ownerProofs[scenario] = sha256(bytes);
+    }
+
     git(childRoot, "update-ref", CHILD_REF, childContext.candidateSha);
     const artifactsDirParent = join(evidenceDir, "gates/G15_BROWSER/artifacts");
     const bundlePath = join(artifactsDirParent, ARTIFACTS.bundle);
@@ -1602,6 +1787,7 @@ export async function runBrowserParent({
       bundleSha256: sha256(await readFile(bundlePath)),
       baseConfigSha256Artifact: sha256(baseConfigBytes),
       childConfigSha256Artifact: sha256(variantBytes),
+      ownerProofs,
     };
     const parentArtifact = {
       schemaVersion: 1,

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
+import { createHash } from "node:crypto";
 import {
   chmod,
   lstat,
@@ -36,6 +37,8 @@ import {
   validateBrowserRuntimeArtifact,
 } from "../../tools/browser-proof.mjs";
 import {
+  validateOwnerBrowserProofHashes,
+  validateOwnerBrowserReceipt,
   validateBrowserChildContext,
   validateBrowserChildProcess,
   validateBrowserFailureReceipt,
@@ -1698,5 +1701,109 @@ void test("G15 evidence validator rejects extra fields and incomplete checks", (
         candidateSha: CANDIDATE_SHA,
       }),
     /G15_BROWSER_EVIDENCE_OWNER_INVALID/u,
+  );
+});
+
+void test("G15 owner proof rejects altered config, hashes, transport and cleanup", () => {
+  const hashes = {
+    positive: "1".repeat(64),
+    "private-eof": "2".repeat(64),
+    reauth: "3".repeat(64),
+  };
+  assert.deepEqual(validateOwnerBrowserProofHashes(hashes), [
+    "positive",
+    "private-eof",
+    "reauth",
+  ]);
+  const missing = {
+    positive: hashes.positive,
+    "private-eof": hashes["private-eof"],
+  };
+  assert.throws(() => validateOwnerBrowserProofHashes(missing));
+  assert.throws(() =>
+    validateOwnerBrowserProofHashes({ ...hashes, reauth: "invalid" }),
+  );
+  const identity = {
+    schemaVersion: 1,
+    runId: RUN_ID,
+    candidateSha: CANDIDATE_SHA,
+    baseConfigSha256: "a".repeat(64),
+  };
+  const lineage = "b".repeat(64);
+  const compiled = {
+    "apps/realtime-gateway/dist/runtime-composition.js": "c".repeat(64),
+  };
+  const sources = { "package.json": "d".repeat(64) };
+  const manifest = {
+    launchIdentity: identity,
+    configSha256: identity.baseConfigSha256,
+    lineageReceiptSha256: lineage,
+    runId: "proof-run",
+    compiled,
+    sources,
+  };
+  const cleanup = {
+    verified: true,
+    network: { created: true, removed: true, name: "proof-run-net" },
+    owner: { removed: true },
+    syntheticPrivateMaterialRemoved: true,
+    receipts: [
+      "kafka",
+      "idp",
+      "edge-gateway",
+      "api-public",
+      "realtime-gateway",
+      "edge-nginx",
+      "driver",
+    ].map((role) => ({ role, removed: true, logsCaptured: true })),
+  };
+  const proof = {
+    verified: true,
+    scenario: "positive",
+    launchProof: false,
+    sourceIntegrity: { before: sources, after: sources, unchanged: true },
+    compiledIntegrity: { before: compiled, after: compiled, unchanged: true },
+  };
+  const digest = (value) => createHash("sha256").update(value).digest("hex");
+  const build = (m = manifest, c = cleanup, p = proof) => {
+    const receipt = {
+      launchIdentity: identity,
+      manifest: JSON.stringify(m),
+      cleanup: JSON.stringify(c),
+      proof: JSON.stringify(p),
+      externalCleanup: { verified: true, databases: { verified: true } },
+    };
+    for (const key of ["manifest", "cleanup", "proof"])
+      receipt[`${key}Sha256`] = digest(receipt[key]);
+    return receipt;
+  };
+  assert.ok(
+    validateOwnerBrowserReceipt(build(), "positive", identity, lineage),
+  );
+  for (const receipt of [
+    build({ ...manifest, configSha256: "e".repeat(64) }),
+    build({ ...manifest, lineageReceiptSha256: "e".repeat(64) }),
+    build(manifest, { ...cleanup, receipts: cleanup.receipts.slice(1) }),
+    build(manifest, cleanup, {
+      ...proof,
+      compiledIntegrity: {
+        ...proof.compiledIntegrity,
+        after: {
+          ...compiled,
+          "apps/realtime-gateway/dist/runtime-composition.js": "e".repeat(64),
+        },
+      },
+    }),
+    { ...build(), proofSha256: "e".repeat(64) },
+    {
+      ...build(),
+      externalCleanup: { verified: false, databases: { verified: true } },
+    },
+  ])
+    assert.throws(() =>
+      validateOwnerBrowserReceipt(receipt, "positive", identity, lineage),
+    );
+  assert.throws(() =>
+    validateOwnerBrowserReceipt(build(), "reauth", identity, lineage),
   );
 });

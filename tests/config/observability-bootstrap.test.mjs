@@ -5587,8 +5587,8 @@ void test("G15 child G08 credential admission rejects non-profile config changes
     skipLineageValidation: true,
     mutateConfig: (text) =>
       text.replace(
-        "clientId: realtime-browser-fixture",
-        "clientId: unauthorized-fixture",
+        "kafkaNamespaceIsolation: false",
+        "kafkaNamespaceIsolation: true",
       ),
   });
   let connectCalls = 0;

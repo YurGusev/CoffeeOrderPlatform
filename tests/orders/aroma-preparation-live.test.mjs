@@ -206,50 +206,6 @@ void test(
   },
 );
 
-for (const scenario of ["positive", "private-eof", "reauth"])
-  void test(
-    `preparation owner realtime vertical through served browser ${scenario}`,
-    {
-      timeout: 900000,
-      skip:
-        process.env.COFFEE_DB_LIVE_PROOF !== "1" ||
-        process.env.COFFEE_REALTIME_OWNER_LIVE_PROOF !== "1"
-          ? "disposable PostgreSQL/native Kafka/served browser required"
-          : false,
-    },
-    async () => {
-      const { proveOwnerBrowser } =
-        await import("../realtime/fixtures/owner-browser.mjs");
-      await fixture(async (f) => {
-        await proveOwnerBrowser(f, {
-          scenario,
-          baseline: async () => {
-            const p = product();
-            await f.deliver(mapping(p));
-            const order = await f.seed([p]);
-            await f.deliver(order.confirmed);
-            const observation = await f.observe();
-            await f.deliver(observation.changed);
-            return { orderRef: order.order, observation };
-          },
-          // Existing f.observe()/f.proof() helpers create source-event inputs; A
-          // and B pass through the real Inbox, which alone writes their persisted
-          // RealtimeInvalidated Outbox records. No realtime envelope/row is forged.
-          change: async () => {
-            const observation = await f.observe();
-            await f.deliver(observation.changed);
-            return observation;
-          },
-          finish: async (_state, observation) => {
-            const proof = await f.proof(observation);
-            await f.deliver(proof.changed);
-            return proof;
-          },
-        });
-      });
-    },
-  );
-
 void test(
   "preparation Desired/mapping/Inbox semantics on real runtime role",
   live,

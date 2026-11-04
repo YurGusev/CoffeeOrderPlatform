@@ -170,7 +170,7 @@ if (action === "login") {
 } else if (action === "relay") {
   const runtime = "orders-aroma-preparation";
   const connection = JSON.parse(
-    await readFile("/owner-publisher.json", "utf8"),
+    await readFile("/fixture/owner-publisher.json", "utf8"),
   );
   const database = createDatabase(connection);
   const service = fixture.config.services[runtime].kafka;
