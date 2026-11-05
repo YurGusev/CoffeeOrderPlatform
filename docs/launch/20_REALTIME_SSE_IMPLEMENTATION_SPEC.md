@@ -386,9 +386,11 @@ production promotion/admission остаётся отдельной приёмк�
 
 ### Настоящий owner → served browser путь
 
-Перед capacity проверяются три отдельных сценария существующей owner/browser вертикали:
-`COFFEE_DB_LIVE_PROOF=1 COFFEE_REALTIME_OWNER_LIVE_PROOF=1 node --test --test-concurrency=1 --test-name-pattern='preparation owner realtime vertical' tests/orders/aroma-preparation-live.test.mjs`.
-Для этой команды и nested fixture harness заранее задаётся `TMPDIR` в declared
+После G14, в G15 до итогового допуска проверяются три отдельных обязательных
+сценария существующей owner/browser вертикали. G15 запускает их последовательно
+после очистки основного browser runtime с проверенным OIDC-only child context;
+отсутствие любого proof, hashes или cleanup блокирует G15.
+Для G15 и nested fixture harness заранее задаётся `TMPDIR` в declared
 scratch вне repository; локальная проверка использует
 `TMPDIR=/home/yurgusev/.hermes/cache/scratch`. Отсутствующий `TMPDIR` не меняет
 CLI guard: результат в обычном `/tmp` не считается declared scratch.

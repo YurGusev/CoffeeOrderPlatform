@@ -20,7 +20,7 @@ import { execFileSync, spawn } from "node:child_process";
 import { request as httpsRequest } from "node:https";
 import { dirname, join, resolve } from "node:path";
 import { createHash, generateKeyPairSync, randomUUID } from "node:crypto";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { tmpdir } from "node:os";
 import { dump as dumpYaml, load as parseYaml } from "js-yaml";
 import { parsePublicTlsHostname } from "../packages/platform-security/src/index.ts";
@@ -227,6 +227,7 @@ export function createBrowserChildFailureDiagnostic({
   let errorName = "Error";
   let message = "G15_CHILD_FAILED";
   try {
+    if (error?.cause instanceof Error) error = error.cause;
     if (BROWSER_FAILURE_ERROR_NAMES.has(error?.name)) errorName = error.name;
     if (typeof error?.message === "string") message = error.message;
   } catch {
@@ -241,7 +242,37 @@ export function createBrowserChildFailureDiagnostic({
     errorName,
     messageSha256: createHash("sha256").update(message).digest("hex"),
   };
-  const sourceLocation = rollbackComposeSourceLocation(error);
+  let stack;
+  try {
+    stack = error?.stack;
+  } catch {
+    // Keep the diagnostic closed if the stack cannot be read.
+  }
+  let sourceLocation;
+  if (typeof stack === "string" && stack.length <= 131_072) {
+    const sourcePath = join(ROOT, "tools/browser-proof.mjs");
+    for (const frame of stack.split(/\r?\n/u).slice(1, 257)) {
+      const match = /^\s*at (?:(?:.*) \()?(.+?):(\d+):(\d+)\)?$/u.exec(frame);
+      if (
+        !match ||
+        ![sourcePath, pathToFileURL(sourcePath).href].includes(match[1])
+      )
+        continue;
+      const line = Number(match[2]);
+      const column = Number(match[3]);
+      if (
+        Number.isSafeInteger(line) &&
+        line > 0 &&
+        line <= 1_000_000 &&
+        Number.isSafeInteger(column) &&
+        column > 0 &&
+        column <= 1_000_000
+      )
+        sourceLocation = { source: "tools/browser-proof.mjs", line, column };
+      break;
+    }
+  }
+  sourceLocation ??= rollbackComposeSourceLocation(error);
   if (sourceLocation) diagnostic.sourceLocation = sourceLocation;
   const operationFailure =
     projectBrowserRuntimeStackDiagnostic(operationDiagnostic);
@@ -2290,10 +2321,26 @@ export async function readExternalRecoveryProofCredentials(
     candidateRoot: configRoot,
     postgres,
     g08PreparationContextPath: browserPreparationContextPath,
+    browserParentRoot: hasPreparationContextPath
+      ? resources.g15ParentCheckoutRoot
+      : undefined,
     admin,
     rolePasswords,
     databaseCredentialsByRuntime,
   };
+}
+
+export async function loadVerifiedBrowserParentModules(parentRoot) {
+  const [images, report] = await Promise.all([
+    import(
+      pathToFileURL(join(parentRoot, "tools/verified-infrastructure-image.mjs"))
+        .href
+    ),
+    import(
+      pathToFileURL(join(parentRoot, "verification/launch/v1/report.mjs")).href
+    ),
+  ]);
+  return { images, validateLaunchContext: report.validateLaunchContext };
 }
 
 export function projectRecoveryPlatformConfig(platformConfig, ownership) {
@@ -9316,6 +9363,11 @@ export async function runComposeSmoke({
             )
           : await readRecoveryProofCredentials(proofLaunchIdentity)
         : undefined;
+    const browserParentModules = recoveryProofCredentials?.browserParentRoot
+      ? await loadVerifiedBrowserParentModules(
+          recoveryProofCredentials.browserParentRoot,
+        )
+      : undefined;
     if (!(
       options.databaseProof ||
       options.customerProof ||
@@ -9327,7 +9379,10 @@ export async function runComposeSmoke({
         "Kafka requires a launch context and G12 artifact",
       );
       // G08 already checks the exact G15 parent and its OIDC-only lineage.
-      verifiedKafka = await loadVerifiedGateImage({
+      verifiedKafka = await (
+        browserParentModules?.images.loadVerifiedGateImage ??
+        loadVerifiedGateImage
+      )({
         target: "kafka",
         contextFile:
           recoveryProofCredentials?.g08PreparationContextPath ??
@@ -9779,7 +9834,7 @@ export async function runComposeSmoke({
       ? recoveryProofCredentials?.g08PreparationContextPath
       : launchContextPath;
     const imageIdentity = g14Browser
-      ? await validateLaunchContext(imageContextPath)
+      ? await browserParentModules.validateLaunchContext(imageContextPath)
       : launchIdentity;
     if (!options.noBuild) {
       let temporary;
@@ -9813,7 +9868,10 @@ export async function runComposeSmoke({
       }
     }
     if (bindRuntimeImages) {
-      const verifiedImages = await readVerifiedRuntimeImages({
+      const verifiedImages = await (
+        browserParentModules?.images.readVerifiedRuntimeImages ??
+        readVerifiedRuntimeImages
+      )({
         contextFile: imageContextPath,
       });
       assertVerifiedRuntimeImages({

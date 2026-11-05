@@ -791,9 +791,9 @@ export async function runTransportFixture(options, hooks = {}) {
       if (scopedLaunchDriver)
         base.push(
           "--mount",
-          `type=bind,src=${setup.databaseOwnershipFile},dst=/fixture/database-ownership.json,readonly`,
+          `type=bind,src=${setup.databaseOwnershipFile},dst=/run/coffee-launch/database-ownership.json,readonly`,
           "--mount",
-          `type=bind,src=${setup.launchContextFile},dst=/fixture/launch-context.json,readonly`,
+          `type=bind,src=${setup.launchContextFile},dst=/run/coffee-launch/context.json,readonly`,
         );
       base.push("--workdir", "/app");
     }
@@ -1071,13 +1071,13 @@ export async function runTransportFixture(options, hooks = {}) {
         {
           Type: "bind",
           Source: setup.databaseOwnershipFile,
-          Destination: "/fixture/database-ownership.json",
+          Destination: "/run/coffee-launch/database-ownership.json",
           RW: false,
         },
         {
           Type: "bind",
           Source: setup.launchContextFile,
-          Destination: "/fixture/launch-context.json",
+          Destination: "/run/coffee-launch/context.json",
           RW: false,
         },
       ].sort((a, b) => a.Destination.localeCompare(b.Destination));
@@ -1092,13 +1092,13 @@ export async function runTransportFixture(options, hooks = {}) {
       assert.deepEqual(actualMounts, expectedMounts, "driver fixture mounts");
       const readablePaths = [
         "/fixture/platform.yaml",
-        "/fixture/database-ownership.json",
-        "/fixture/launch-context.json",
+        "/run/coffee-launch/database-ownership.json",
+        "/run/coffee-launch/context.json",
       ];
       const expectedConfigSha256 = setup.manifest.configSha256;
       const expectedOwnershipSha256 = setup.manifest.databaseOwnershipSha256;
       const expectedLaunchIdentity = setup.launchIdentity;
-      const probe = `const fs=require('node:fs/promises');const crypto=require('node:crypto');const expectedConfigSha256=${JSON.stringify(expectedConfigSha256)},expectedOwnershipSha256=${JSON.stringify(expectedOwnershipSha256)},expectedLaunchIdentity=${JSON.stringify(expectedLaunchIdentity)};(async()=>{const configSha256=crypto.createHash('sha256').update(await fs.readFile('/fixture/platform.yaml')).digest('hex');const ownershipSha256=crypto.createHash('sha256').update(await fs.readFile('/fixture/database-ownership.json')).digest('hex');const context=JSON.parse(await fs.readFile('/fixture/launch-context.json','utf8'));const launchIdentity={schemaVersion:context.schemaVersion,runId:context.runId,candidateSha:context.candidateSha,baseConfigSha256:context.baseConfigSha256};for(const key of ['schemaVersion','runId','candidateSha','baseConfigSha256'])if(launchIdentity[key]!==expectedLaunchIdentity[key])throw new Error('launch identity mismatch');if(configSha256!==expectedConfigSha256||ownershipSha256!==expectedOwnershipSha256)throw new Error('fixture digest mismatch');console.log(JSON.stringify({readablePaths:${JSON.stringify(readablePaths)},configSha256,ownershipSha256,launchIdentity}))})().catch(()=>{console.error('driver fixture mount verification failed');process.exitCode=1});`;
+      const probe = `const fs=require('node:fs/promises');const crypto=require('node:crypto');const expectedConfigSha256=${JSON.stringify(expectedConfigSha256)},expectedOwnershipSha256=${JSON.stringify(expectedOwnershipSha256)},expectedLaunchIdentity=${JSON.stringify(expectedLaunchIdentity)};(async()=>{const configSha256=crypto.createHash('sha256').update(await fs.readFile('/fixture/platform.yaml')).digest('hex');const ownershipSha256=crypto.createHash('sha256').update(await fs.readFile('/run/coffee-launch/database-ownership.json')).digest('hex');const context=JSON.parse(await fs.readFile('/run/coffee-launch/context.json','utf8'));const launchIdentity={schemaVersion:context.schemaVersion,runId:context.runId,candidateSha:context.candidateSha,baseConfigSha256:context.baseConfigSha256};for(const key of ['schemaVersion','runId','candidateSha','baseConfigSha256'])if(launchIdentity[key]!==expectedLaunchIdentity[key])throw new Error('launch identity mismatch');if(configSha256!==expectedConfigSha256||ownershipSha256!==expectedOwnershipSha256)throw new Error('fixture digest mismatch');console.log(JSON.stringify({readablePaths:${JSON.stringify(readablePaths)},configSha256,ownershipSha256,launchIdentity}))})().catch(()=>{console.error('driver fixture mount verification failed');process.exitCode=1});`;
       const scope = JSON.parse(
         await docker(
           "exec",

@@ -424,7 +424,7 @@ export async function runLaunchPath({
                     "--network",
                     "coffee_postgres_data",
                     "--env",
-                    "COFFEE_LAUNCH_CONTEXT_FILE=/fixture/launch-context.json",
+                    "COFFEE_LAUNCH_CONTEXT_FILE=/run/coffee-launch/context.json",
                   ],
                 }
               : {}),

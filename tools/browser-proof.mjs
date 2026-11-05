@@ -2264,7 +2264,7 @@ export async function proveBrowser(runtimeContext) {
   let driver;
   let browserContext;
   let cdp;
-  let failureCode;
+  let failure;
   let cleanupFailureCode;
   let proofResult;
   let driverClosed = false;
@@ -3257,7 +3257,7 @@ export async function proveBrowser(runtimeContext) {
   } catch (error) {
     evidence.status = "failed";
     evidence.failureCode = safeFailure(error);
-    failureCode = safeFailure(error);
+    failure = error instanceof Error ? error : new Error(evidence.failureCode);
   } finally {
     try {
       await cdp?.detach();
@@ -3280,7 +3280,7 @@ export async function proveBrowser(runtimeContext) {
       cleanupFailureCode ??= "G15_BROWSER_DRIVER_CLEANUP_FAILED";
     }
   }
+  if (failure) throw failure;
   if (cleanupFailureCode) throw new Error(cleanupFailureCode);
-  if (failureCode) throw new Error(failureCode);
   return proofResult;
 }

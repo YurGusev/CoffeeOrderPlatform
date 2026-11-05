@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
+import { createHash } from "node:crypto";
 import {
   chmod,
   lstat,
@@ -11,6 +12,7 @@ import {
   writeFile,
 } from "node:fs/promises";
 import { spawnSync } from "node:child_process";
+import { registerHooks } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -36,6 +38,8 @@ import {
   validateBrowserRuntimeArtifact,
 } from "../../tools/browser-proof.mjs";
 import {
+  validateOwnerBrowserProofHashes,
+  validateOwnerBrowserReceipt,
   validateBrowserChildContext,
   validateBrowserChildProcess,
   validateBrowserFailureReceipt,
@@ -746,6 +750,174 @@ void test("G15 browser proof requires the Compose stop capability", async () => 
   );
 });
 
+void test("G15 retains the primary browser error after all cleanup attempts", async () => {
+  const canary = "browser-private-canary";
+  const primary = new TypeError(`selector=${canary}`);
+  primary.stack = [
+    `TypeError: selector=${canary}`,
+    `    at browserStep (${pathToFileURL(join(REPO_ROOT, "tools/browser-proof.mjs")).href}:1234:17)`,
+  ].join("\n");
+  const calls = [];
+  let thrown = primary;
+  const cdp = {
+    async send() {
+      throw thrown;
+    },
+    async detach() {
+      calls.push("detach");
+      throw new Error(`cleanup=${canary}`);
+    },
+  };
+  const context = {
+    async newPage() {
+      return {};
+    },
+    async newCDPSession() {
+      return cdp;
+    },
+    async close() {
+      calls.push("context.close");
+    },
+  };
+  const driver = {
+    browser: {
+      async newContext() {
+        return context;
+      },
+    },
+    witness: { status: "READY" },
+    async close() {
+      calls.push("driver.close");
+      return "EXACT_OWNED_CONTAINER_REMOVED";
+    },
+  };
+  const key = Symbol.for("coffee.g15-primary-error-regression");
+  globalThis[key] = async () => driver;
+  const url = `data:text/javascript,${encodeURIComponent('export const startBrowser=globalThis[Symbol.for("coffee.g15-primary-error-regression")];')}`;
+  const hook = registerHooks({
+    resolve(specifier, context, next) {
+      return specifier === "./browser-driver.mjs" &&
+        context.parentURL?.includes("?g15-primary-error-regression")
+        ? { url, shortCircuit: true }
+        : next(specifier, context);
+    },
+  });
+  try {
+    const { proveBrowser: proveWithDriver } =
+      await import("../../tools/browser-proof.mjs?g15-primary-error-regression");
+    const runtimeContext = {
+      projectName: "coffee-g15-proof",
+      runId: RUN_ID,
+      candidateSha: CANDIDATE_SHA,
+      throwIfStopRequested() {},
+      ownerEvidence: {
+        snapshot() {},
+        assertAbsent() {},
+        seedInProgress() {},
+        withLookupUnavailable() {},
+      },
+      readRealtimeAuthCloseCount() {},
+      restartCustomerService() {},
+    };
+    await assert.rejects(
+      proveWithDriver(runtimeContext),
+      (error) => error === primary,
+    );
+    assert.deepEqual(calls, ["detach", "context.close", "driver.close"]);
+    calls.length = 0;
+    thrown = { secret: canary };
+    await assert.rejects(proveWithDriver(runtimeContext), {
+      message: "G15_BROWSER_PROOF_FAILED",
+    });
+    assert.deepEqual(calls, ["detach", "context.close", "driver.close"]);
+    const { createBrowserChildFailureDiagnostic } =
+      await import("../../tools/compose-smoke.mjs");
+    const identity = {
+      runId: RUN_ID,
+      candidateSha: `${RUN_ID.slice(-7)}${"a".repeat(33)}`,
+    };
+    const diagnostic = createBrowserChildFailureDiagnostic({
+      ...identity,
+      error: primary,
+    });
+    assert.equal(diagnostic.errorName, "TypeError");
+    assert.equal(
+      diagnostic.messageSha256,
+      createHash("sha256").update(primary.message).digest("hex"),
+    );
+    assert.deepEqual(diagnostic.sourceLocation, {
+      source: "tools/browser-proof.mjs",
+      line: 1234,
+      column: 17,
+    });
+    assert.equal(
+      validateBrowserChildFailureDiagnostic(diagnostic, identity),
+      true,
+    );
+    const parentContext = {
+      runId: "20261025T130001Z-1111111",
+      candidateSha: "1".repeat(40),
+    };
+    assert.equal(
+      validateBrowserFailureReceipt(
+        {
+          schemaVersion: diagnostic.schemaVersion,
+          gateId: diagnostic.gateId,
+          outcome: diagnostic.outcome,
+          parentRunId: parentContext.runId,
+          parentCandidateSha: parentContext.candidateSha,
+          childRunId: identity.runId,
+          childCandidateSha: identity.candidateSha,
+          errorName: diagnostic.errorName,
+          messageSha256: diagnostic.messageSha256,
+          sourceLocation: diagnostic.sourceLocation,
+        },
+        { parentContext, childContext: identity },
+      ),
+      true,
+    );
+    assert.doesNotMatch(
+      JSON.stringify(diagnostic),
+      /browser-private-canary|selector|stack/u,
+    );
+    assert.throws(
+      () =>
+        validateBrowserChildFailureDiagnostic(
+          {
+            ...diagnostic,
+            sourceLocation: {
+              ...diagnostic.sourceLocation,
+              source: "tools/foreign.mjs",
+            },
+          },
+          identity,
+        ),
+      { code: "G15_CHILD_FAILURE_DIAGNOSTIC_INVALID" },
+    );
+    const localPath = join(REPO_ROOT, "tools/browser-proof.mjs");
+    const projection = (stack) =>
+      createBrowserChildFailureDiagnostic({
+        ...identity,
+        error: Object.assign(new Error(canary), { stack }),
+      }).sourceLocation;
+    assert.deepEqual(projection(`Error\n    at f (${localPath}:9:2)`), {
+      source: "tools/browser-proof.mjs",
+      line: 9,
+      column: 2,
+    });
+    for (const stack of [
+      `Error\n    at f (/tmp/tools/browser-proof.mjs:9:2)`,
+      `Error\n    at f (${localPath}:1000001:2)`,
+      `Error\n${"    at x (node:internal/test:1:1)\n".repeat(256)}    at f (${localPath}:9:2)`,
+      `Error\n${"x".repeat(131_072)}\n    at f (${localPath}:9:2)`,
+    ])
+      assert.equal(projection(stack), undefined);
+  } finally {
+    hook.deregister();
+    delete globalThis[key];
+  }
+});
+
 void test("G15 completed-response faults admit only the actual operation statuses", () => {
   assert.equal(
     expectedBrowserCompletedResponse("customer.create", "POST", 201),
@@ -1395,6 +1567,34 @@ void test("G15 child failure receipt keeps only scoped hashes and fixed source l
     error: childFailure,
     operationDiagnostic: operationDiagnosticInput,
   });
+  const aggregateDiagnostic = createBrowserChildFailureDiagnostic({
+    ...childContext,
+    error: new AggregateError(
+      [childFailure, new Error(`cleanup ${canary}`)],
+      `aggregate ${canary}`,
+      { cause: childFailure },
+    ),
+    operationDiagnostic: operationDiagnosticInput,
+  });
+  assert.deepEqual(aggregateDiagnostic, diagnostic);
+  assert.equal(diagnostic.errorName, "TypeError");
+  assert.equal(
+    diagnostic.messageSha256,
+    createHash("sha256").update(canary).digest("hex"),
+  );
+  assert.doesNotMatch(
+    JSON.stringify(aggregateDiagnostic),
+    new RegExp(canary, "u"),
+  );
+  const fallbackDiagnostic = createBrowserChildFailureDiagnostic({
+    ...childContext,
+    error: new AggregateError([childFailure], "aggregate", { cause: canary }),
+  });
+  assert.equal(fallbackDiagnostic.errorName, "AggregateError");
+  assert.equal(
+    fallbackDiagnostic.messageSha256,
+    createHash("sha256").update("aggregate").digest("hex"),
+  );
   assert.equal(
     validateBrowserChildFailureDiagnostic(diagnostic, childContext),
     true,
@@ -1698,5 +1898,109 @@ void test("G15 evidence validator rejects extra fields and incomplete checks", (
         candidateSha: CANDIDATE_SHA,
       }),
     /G15_BROWSER_EVIDENCE_OWNER_INVALID/u,
+  );
+});
+
+void test("G15 owner proof rejects altered config, hashes, transport and cleanup", () => {
+  const hashes = {
+    positive: "1".repeat(64),
+    "private-eof": "2".repeat(64),
+    reauth: "3".repeat(64),
+  };
+  assert.deepEqual(validateOwnerBrowserProofHashes(hashes), [
+    "positive",
+    "private-eof",
+    "reauth",
+  ]);
+  const missing = {
+    positive: hashes.positive,
+    "private-eof": hashes["private-eof"],
+  };
+  assert.throws(() => validateOwnerBrowserProofHashes(missing));
+  assert.throws(() =>
+    validateOwnerBrowserProofHashes({ ...hashes, reauth: "invalid" }),
+  );
+  const identity = {
+    schemaVersion: 1,
+    runId: RUN_ID,
+    candidateSha: CANDIDATE_SHA,
+    baseConfigSha256: "a".repeat(64),
+  };
+  const lineage = "b".repeat(64);
+  const compiled = {
+    "apps/realtime-gateway/dist/runtime-composition.js": "c".repeat(64),
+  };
+  const sources = { "package.json": "d".repeat(64) };
+  const manifest = {
+    launchIdentity: identity,
+    configSha256: identity.baseConfigSha256,
+    lineageReceiptSha256: lineage,
+    runId: "proof-run",
+    compiled,
+    sources,
+  };
+  const cleanup = {
+    verified: true,
+    network: { created: true, removed: true, name: "proof-run-net" },
+    owner: { removed: true },
+    syntheticPrivateMaterialRemoved: true,
+    receipts: [
+      "kafka",
+      "idp",
+      "edge-gateway",
+      "api-public",
+      "realtime-gateway",
+      "edge-nginx",
+      "driver",
+    ].map((role) => ({ role, removed: true, logsCaptured: true })),
+  };
+  const proof = {
+    verified: true,
+    scenario: "positive",
+    launchProof: false,
+    sourceIntegrity: { before: sources, after: sources, unchanged: true },
+    compiledIntegrity: { before: compiled, after: compiled, unchanged: true },
+  };
+  const digest = (value) => createHash("sha256").update(value).digest("hex");
+  const build = (m = manifest, c = cleanup, p = proof) => {
+    const receipt = {
+      launchIdentity: identity,
+      manifest: JSON.stringify(m),
+      cleanup: JSON.stringify(c),
+      proof: JSON.stringify(p),
+      externalCleanup: { verified: true, databases: { verified: true } },
+    };
+    for (const key of ["manifest", "cleanup", "proof"])
+      receipt[`${key}Sha256`] = digest(receipt[key]);
+    return receipt;
+  };
+  assert.ok(
+    validateOwnerBrowserReceipt(build(), "positive", identity, lineage),
+  );
+  for (const receipt of [
+    build({ ...manifest, configSha256: "e".repeat(64) }),
+    build({ ...manifest, lineageReceiptSha256: "e".repeat(64) }),
+    build(manifest, { ...cleanup, receipts: cleanup.receipts.slice(1) }),
+    build(manifest, cleanup, {
+      ...proof,
+      compiledIntegrity: {
+        ...proof.compiledIntegrity,
+        after: {
+          ...compiled,
+          "apps/realtime-gateway/dist/runtime-composition.js": "e".repeat(64),
+        },
+      },
+    }),
+    { ...build(), proofSha256: "e".repeat(64) },
+    {
+      ...build(),
+      externalCleanup: { verified: false, databases: { verified: true } },
+    },
+  ])
+    assert.throws(() =>
+      validateOwnerBrowserReceipt(receipt, "positive", identity, lineage),
+    );
+  assert.throws(() =>
+    validateOwnerBrowserReceipt(build(), "reauth", identity, lineage),
   );
 });

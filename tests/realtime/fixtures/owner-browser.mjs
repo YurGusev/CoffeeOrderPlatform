@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
+import test from "node:test";
 import {
   chmod,
   mkdir,
   mkdtemp,
   readFile,
   writeFile,
-  rm,
   stat,
 } from "node:fs/promises";
 import { join } from "node:path";
@@ -82,6 +82,10 @@ export async function proveOwnerBrowser(
     "--result-dir",
     dir,
   ]);
+  if (f.launchIdentity)
+    options.launchPath = {
+      launchContextFile: process.env.COFFEE_LAUNCH_CONTEXT_FILE,
+    };
   let nginxWitness, privateFraming, runtimeRelative, runtimeTransformedSha256;
   const result = await runTransportFixture(options, {
     startOwner: async ({ setup, network, registerOwner }) => {
@@ -227,7 +231,6 @@ export async function proveOwnerBrowser(
       }
       const gateway = JSON.parse(await docker("network", "inspect", network))[0]
         .IPAM.Config[0].Gateway;
-      let privateDir;
 
       const nginxImage = `coffee-realtime-owner-browser:${options.runId}`;
       let app,
@@ -249,8 +252,14 @@ export async function proveOwnerBrowser(
             await client?.close();
           },
           async () => {
-            if (attached)
-              await docker("network", "disconnect", network, f.container);
+            if (attached) {
+              if (f.externalAttachment) {
+                const { cleanupApprovedExternalPostgresAttachment } =
+                  await import("../../../tools/compose-smoke.mjs");
+                cleanupApprovedExternalPostgresAttachment(f.externalAttachment);
+              } else
+                await docker("network", "disconnect", network, f.container);
+            }
           },
           async () => {
             if (imageBuilt) {
@@ -270,10 +279,6 @@ export async function proveOwnerBrowser(
               );
             }
           },
-          async () => {
-            if (privateDir)
-              await rm(privateDir, { recursive: true, force: true });
-          },
         ]) {
           try {
             await cleanup();
@@ -285,10 +290,7 @@ export async function proveOwnerBrowser(
           throw new AggregateError(failures, "owner fixture cleanup failed");
       };
       registerOwner({ stop });
-      privateDir = await mkdtemp(
-        join(scratchRoot(), "realtime-owner-publisher-private-"),
-      );
-      const connectionPath = join(privateDir, "database.json");
+      const connectionPath = join(setup.privateDir, "owner-publisher.json");
       const build = await run(
         "pnpm",
         [
@@ -317,18 +319,27 @@ export async function proveOwnerBrowser(
         digest,
         buildLogSha256: hash(redact(build)),
       };
-      await docker(
-        "network",
-        "connect",
-        "--alias",
-        "postgres-orders",
-        network,
-        f.container,
-      );
-      attached = true;
+      if (f.externalAttachment) {
+        const { attachApprovedExternalPostgres } =
+          await import("../../../tools/compose-smoke.mjs");
+        attached = true;
+        attachApprovedExternalPostgres(f.externalAttachment);
+      } else {
+        await docker(
+          "network",
+          "connect",
+          "--alias",
+          "postgres-orders",
+          network,
+          f.container,
+        );
+        attached = true;
+      }
       await json(
         connectionPath,
-        { ...f.publisherConnection, host: "postgres-orders", port: 5432 },
+        f.externalAttachment
+          ? f.publisherConnection
+          : { ...f.publisherConnection, host: "postgres-orders", port: 5432 },
         0o600,
       );
 
@@ -397,10 +408,14 @@ export async function proveOwnerBrowser(
       return {
         host: gateway,
         nginxImage,
-        driverArgs: [
-          "--mount",
-          `type=bind,src=${connectionPath},dst=/owner-publisher.json,readonly`,
-        ],
+        driverArgs: f.externalAttachment
+          ? [
+              "--network",
+              "coffee_postgres_data",
+              "--env",
+              "COFFEE_LAUNCH_CONTEXT_FILE=/run/coffee-launch/context.json",
+            ]
+          : [],
         stop,
       };
     },
@@ -1545,4 +1560,81 @@ export async function proveOwnerBrowser(
     }),
   );
   return result;
+}
+
+// Registered only by the G15 parent; ordinary recovery does not select these cases.
+if (process.env.COFFEE_G15_OWNER_BROWSER === "1") {
+  const contextPath = process.env.COFFEE_LAUNCH_CONTEXT_FILE;
+  const { validateLaunchContext } =
+    await import("../../../verification/launch/v1/report.mjs");
+  const { context, evidenceDir } = await validateLaunchContext(contextPath);
+  const launchIdentity = {
+    schemaVersion: context.schemaVersion,
+    runId: context.runId,
+    candidateSha: context.candidateSha,
+    baseConfigSha256: context.baseConfigSha256,
+  };
+  const { fixture, product, mapping } =
+    await import("../../observability/orders-fixture.mjs");
+  for (const scenario of ["positive", "private-eof", "reauth"])
+    void test(
+      `preparation owner realtime vertical through served browser ${scenario}`,
+      { timeout: 900000 },
+      async () => {
+        const result = await fixture(
+          async (f) =>
+            await proveOwnerBrowser(f, {
+              scenario,
+              baseline: async () => {
+                const p = product();
+                await f.deliver(mapping(p));
+                const order = await f.seed([p]);
+                await f.deliver(order.confirmed);
+                const observation = await f.observe();
+                await f.deliver(observation.changed);
+                return { orderRef: order.order, observation };
+              },
+              change: async () => {
+                const observation = await f.observe();
+                await f.deliver(observation.changed);
+                return observation;
+              },
+              finish: async (_state, observation) => {
+                const proof = await f.proof(observation);
+                await f.deliver(proof.changed);
+                return proof;
+              },
+            }),
+          { launchIdentity, launchContextFile: contextPath },
+        );
+        const manifestBytes = await readFile(
+          join(result.artifacts, "profile-manifest.json"),
+        );
+        const cleanupBytes = await readFile(
+          join(result.artifacts, "cleanup.json"),
+        );
+        const proofBytes = await readFile(
+          join(result.artifacts, "owner-browser-proof.json"),
+        );
+        const receipt = {
+          launchIdentity,
+          manifest: manifestBytes.toString("utf8"),
+          cleanup: cleanupBytes.toString("utf8"),
+          externalCleanup: result.cleanup,
+          proof: proofBytes.toString("utf8"),
+          manifestSha256: hash(manifestBytes),
+          cleanupSha256: hash(cleanupBytes),
+          proofSha256: hash(proofBytes),
+        };
+        const path = join(
+          evidenceDir,
+          "gates/G15_BROWSER/artifacts",
+          `owner-${scenario}.json`,
+        );
+        await writeFile(path, `${JSON.stringify(receipt)}\n`, {
+          flag: "wx",
+          mode: 0o600,
+        });
+      },
+    );
 }

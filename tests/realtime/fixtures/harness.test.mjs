@@ -3237,42 +3237,41 @@ void test("G15 realtime launch path binds child identity to verified parent line
     baseConfigSha256: "c".repeat(64),
     receiptPath,
   };
-  const launchPath = await runInNewContext(
-    `(async()=>{${functionSource};return await readFixtureLaunchPath({launchContextFile:contextPath})})()`,
-    {
-      assert,
-      resolve,
-      join,
-      contextPath,
-      validateLaunchContext: async (path) => {
-        if (path === contextPath) return active;
-        assert.equal(path, "/source/evidence/context.json");
-        return {
-          candidateRoot: "/source",
-          context: {
-            runId: active.context.resources.g15ParentRunId,
-            candidateSha: baseCandidateSha,
-            baseConfigSha256: lineage.baseConfigSha256,
-          },
-        };
-      },
-      stat: async () => ({ uid: 1000, mode: 0o400 }),
-      process: { getuid: () => 1000 },
-      readBrowserFixtureLineage: async (input) => {
-        assert.deepEqual(JSON.parse(JSON.stringify(input)), {
-          root: "/source",
-          contextPath,
-          baseCandidateSha,
-        });
-        return lineage;
-      },
-      readFile: async (path) => {
-        assert.equal(path, receiptPath);
-        return receiptBytes;
-      },
-      hash: (bytes) => createHash("sha256").update(bytes).digest("hex"),
+  const sandbox = {
+    assert,
+    resolve,
+    join,
+    contextPath,
+    validateLaunchContext: async (path) => {
+      if (path === contextPath) return active;
+      assert.equal(path, "/source/evidence/context.json");
+      return {
+        candidateRoot: "/source",
+        context: {
+          runId: active.context.resources.g15ParentRunId,
+          candidateSha: baseCandidateSha,
+          baseConfigSha256: lineage.baseConfigSha256,
+        },
+      };
     },
-  );
+    stat: async () => ({ uid: 1000, mode: 0o400 }),
+    process: { getuid: () => 1000 },
+    readBrowserFixtureLineage: async (input) => {
+      assert.deepEqual(JSON.parse(JSON.stringify(input)), {
+        root: "/source",
+        contextPath,
+        baseCandidateSha,
+      });
+      return lineage;
+    },
+    readFile: async (path) => {
+      assert.equal(path, receiptPath);
+      return receiptBytes;
+    },
+    hash: (bytes) => createHash("sha256").update(bytes).digest("hex"),
+  };
+  const invocation = `(async()=>{${functionSource};return await readFixtureLaunchPath({launchContextFile:contextPath})})()`;
+  const launchPath = await runInNewContext(invocation, sandbox);
   assert.equal(launchPath.parentCandidateRoot, "/source");
   assert.equal(launchPath.candidateRoot, "/child");
   assert.equal(
@@ -3283,6 +3282,8 @@ void test("G15 realtime launch path binds child identity to verified parent line
     launchPath.lineageReceiptSha256,
     createHash("sha256").update(receiptBytes).digest("hex"),
   );
+  lineage.configSha256 = "f".repeat(64);
+  await assert.rejects(runInNewContext(invocation, sandbox));
 });
 
 void test("product launch scopes fixture mounts and proves role-local read access", async () => {
@@ -3489,11 +3490,11 @@ void test("product launch scopes fixture mounts and proves role-local read acces
                 driverProbeInputs.platformBytes ?? driverPlatformBytes,
               ],
               [
-                "/fixture/database-ownership.json",
+                "/run/coffee-launch/database-ownership.json",
                 driverProbeInputs.ownershipBytes ?? driverOwnershipBytes,
               ],
               [
-                "/fixture/launch-context.json",
+                "/run/coffee-launch/context.json",
                 Buffer.from(
                   JSON.stringify(
                     driverProbeInputs.launchContext ?? driverLaunchContext,
@@ -3569,7 +3570,14 @@ void test("product launch scopes fixture mounts and proves role-local read acces
       role === "idp"
         ? ["--IMAGE--", "node", "services.mjs", "idp"]
         : role === "driver"
-          ? ["--IMAGE--", "node", "--input-type=module", "-e", "void 0"]
+          ? [
+              ...(driverProbeInputs.driverArgs ?? []),
+              "--IMAGE--",
+              "node",
+              "--input-type=module",
+              "-e",
+              "void 0",
+            ]
           : [
               ...productArgs(
                 role,
@@ -3607,13 +3615,13 @@ void test("product launch scopes fixture mounts and proves role-local read acces
         {
           Type: "bind",
           Source: "/candidate/config/database-ownership.json",
-          Destination: "/fixture/database-ownership.json",
+          Destination: "/run/coffee-launch/database-ownership.json",
           RW: false,
         },
         {
           Type: "bind",
           Source: "/evidence/context.json",
-          Destination: "/fixture/launch-context.json",
+          Destination: "/run/coffee-launch/context.json",
           RW: false,
         },
       ].sort((a, b) => a.Destination.localeCompare(b.Destination));
@@ -3832,6 +3840,35 @@ void test("product launch scopes fixture mounts and proves role-local read acces
       /fixture mount scope/u,
     );
   }
+  const ownerSource = await readFile(
+    new URL("../../observability/launch-path.mjs", import.meta.url),
+    "utf8",
+  );
+  const ownerStart = ownerSource.indexOf("          const owner = {");
+  const ownerEnd = ownerSource.indexOf(
+    "          registerOwner(owner);",
+    ownerStart,
+  );
+  assert.ok(ownerStart >= 0 && ownerEnd > ownerStart);
+  const owner = runInNewContext(
+    `(()=>{${ownerSource.slice(ownerStart, ownerEnd)}return owner;})()`,
+    { f: { externalAttachment: {} }, nginxImage: "image", stop: () => {} },
+  );
+  const externalDriver = await invoke(
+    "driver",
+    expected("driver", true),
+    true,
+    {
+      driverArgs: owner.driverArgs,
+    },
+  );
+  const contextEnv = externalDriver.calls[0].find((arg) =>
+    arg.startsWith("COFFEE_LAUNCH_CONTEXT_FILE="),
+  );
+  assert.equal(
+    contextEnv,
+    `COFFEE_LAUNCH_CONTEXT_FILE=${expected("driver", true).find((mount) => mount.Source === "/evidence/context.json").Destination}`,
+  );
   const launchDriver = await invoke("driver", expected("driver", true), true);
   assert.equal(launchDriver.execCalls.length, 1);
   assert.deepEqual(
@@ -3840,8 +3877,8 @@ void test("product launch scopes fixture mounts and proves role-local read acces
       readOnly: true,
       readablePaths: [
         "/fixture/platform.yaml",
-        "/fixture/database-ownership.json",
-        "/fixture/launch-context.json",
+        "/run/coffee-launch/database-ownership.json",
+        "/run/coffee-launch/context.json",
       ],
       configSha256: driverConfigSha256,
       databaseOwnershipSha256: driverOwnershipSha256,
@@ -3850,12 +3887,12 @@ void test("product launch scopes fixture mounts and proves role-local read acces
   );
   assert.ok(
     launchDriver.calls[0].includes(
-      "type=bind,src=/candidate/config/database-ownership.json,dst=/fixture/database-ownership.json,readonly",
+      "type=bind,src=/candidate/config/database-ownership.json,dst=/run/coffee-launch/database-ownership.json,readonly",
     ),
   );
   assert.ok(
     launchDriver.calls[0].includes(
-      "type=bind,src=/evidence/context.json,dst=/fixture/launch-context.json,readonly",
+      "type=bind,src=/evidence/context.json,dst=/run/coffee-launch/context.json,readonly",
     ),
   );
   await assert.rejects(
@@ -4042,7 +4079,6 @@ void test("cleanup receipts preserve secondary failures when the driver already 
     {
       assert,
       AggregateError,
-      privateDir: "synthetic-private",
       nginxImage: "synthetic-image",
       network: "synthetic-network",
       f: { container: "synthetic-owner" },
@@ -4066,23 +4102,19 @@ void test("cleanup receipts preserve secondary failures when the driver already 
         steps.push(args[0]);
         throw new Error(`secondary ${args[0]}`);
       },
-      rm: async () => {
-        steps.push("private");
-        throw new Error("secondary private");
-      },
     },
   );
   await assert.rejects(stop(), (error) => {
     assert.ok(error instanceof AggregateError);
     assert.equal(error.errors[0].message, "primary shutdown");
-    assert.equal(error.errors.length, 5);
+    assert.equal(error.errors.length, 4);
     return true;
   });
-  assert.deepEqual(steps, ["owner", "client", "network", "image", "private"]);
+  assert.deepEqual(steps, ["owner", "client", "network", "image"]);
   assert.ok(
     ownerSource.indexOf("registerOwner({ stop })") <
-      ownerSource.indexOf("privateDir = await mkdtemp("),
-    "owner registration precedes private directory creation",
+      ownerSource.indexOf("const connectionPath = join(setup.privateDir"),
+    "owner registration precedes publisher credential creation",
   );
   const startupStart = source.indexOf("      if (hooks.startOwner)"),
     startupEnd = source.indexOf("\n      const brokerEnv", startupStart);
