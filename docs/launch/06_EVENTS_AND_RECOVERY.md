@@ -199,6 +199,16 @@ transport; он не повторяет owner handler или unsafe provider eff
 возвращает typed `KafkaSendAck` с topic/partition/offset, а неизвестный broker
 result остаётся typed unknown.
 
+Пустой consumer poll использует короткий бюджет `10 мс` (не более
+`receiveTimeoutMs`): librdkafka доставляет commit/rebalance callbacks через
+poll, в том числе при паузе приёма. Если группа простаивает — нет записей,
+паузы приёма, revoke и незавершённых commit — runtime удваивает бюджет пустого
+poll до `250 мс` и не выше `receiveTimeoutMs`. Первая запись, пауза, revoke,
+незавершённый commit или новая фаза группы возвращают короткий бюджет, а drain
+всегда опрашивает с ним. `consume` возвращается при появлении записи, поэтому
+idle-backoff не добавляет задержку доставке сообщений; задержка dispatch
+commit/rebalance ограничена верхним бюджетом.
+
 ### SQL contract delivery tables
 
 Таблицы создаёт мигратор конкретной owner DB в owner schema. Runtime получает
