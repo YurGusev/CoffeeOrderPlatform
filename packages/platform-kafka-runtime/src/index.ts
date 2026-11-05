@@ -891,6 +891,7 @@ export function createKafkaRuntime(input: KafkaRuntimeOptions): KafkaRuntime {
   type GroupState = {
     restart: boolean;
     current: boolean;
+    paused?: boolean;
     revoked?: boolean;
     assignment?: readonly Pick<KafkaRecord, "topic" | "partition">[];
   };
@@ -1133,11 +1134,16 @@ export function createKafkaRuntime(input: KafkaRuntimeOptions): KafkaRuntime {
     let executor = initialWorkers;
     let recoveries = 0;
     while (!stopping) {
+      delete state.paused;
       try {
         while (!stopping && !state.restart) {
           const capacity = executor.metrics().capacity;
-          if (capacity === 0) await track(port.pause());
-          else await track(port.resume());
+          const paused = capacity === 0;
+          if (state.paused !== paused) {
+            if (paused) await track(port.pause());
+            else await track(port.resume());
+            state.paused = paused;
+          }
           const records = await track(
             port.poll(
               Math.max(1, Math.min(capacity, policy.maxInFlight)),
@@ -1300,6 +1306,7 @@ export function createKafkaRuntime(input: KafkaRuntimeOptions): KafkaRuntime {
       }
       try {
         executor.assign(event.partitions);
+        delete state.paused;
         void track(port.assign(event.partitions)).catch(() => {
           state.current = false;
           state.restart = true;
