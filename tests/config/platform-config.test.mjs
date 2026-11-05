@@ -25,9 +25,11 @@ import {
 } from "../../packages/platform-config/dist/index.js";
 import {
   loadPlatformConfig,
+  runtimeContainerLimits,
   validateEncryptedSecretsDocument,
 } from "../../scripts/config-lib.mjs";
 import { readRoutes, render } from "../../tools/nginx/generate.mjs";
+import { buildkitPolicy } from "../../tools/buildkit-policy.mjs";
 import { validateAllPermissionManifests } from "../../scripts/permission-audit.mjs";
 import { projectLocalRuntimeConfig } from "../../tools/config-bootstrap/index.mjs";
 
@@ -80,6 +82,87 @@ function run(root, env = {}) {
     },
   );
 }
+
+void test("BuildKit and container policies reject invalid budgets and reference Compose drift", async (t) => {
+  const root = await configRoot();
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const path = join(root, "config/platform.yaml");
+  const original = parseYaml(await readFile(path, "utf8"));
+  const valid = await loadPlatformConfig(root);
+  assert.throws(
+    () => buildkitPolicy(valid, { buildkitImage: "moby/buildkit:latest" }),
+    /immutable digest/u,
+  );
+
+  const projected = projectLocalRuntimeConfig(original);
+  assert.deepEqual(
+    projected.platform.containerLimits,
+    original.platform.containerLimits,
+  );
+  assert.equal(
+    projected.localIdentity.cpuLimit,
+    original.localIdentity.cpuLimit,
+  );
+  assert.deepEqual(runtimeContainerLimits(valid, "api-public"), {
+    cpus: 1,
+    mem_limit: "512m",
+  });
+  assert.deepEqual(runtimeContainerLimits(valid, "realtime-gateway"), {
+    cpus: 2,
+    mem_limit: "512m",
+  });
+  assert.deepEqual(runtimeContainerLimits(valid, "kafka"), {
+    cpus: 2,
+    mem_limit: "2048m",
+  });
+  for (const mutate of [
+    (config) => {
+      config.platform.buildkit.cpus = 0;
+    },
+    (config) => {
+      config.platform.buildkit.memorySwapMiB = 1024;
+    },
+    (config) => {
+      config.platform.buildkit.reservedSpaceGiB = 20;
+    },
+    (config) => {
+      config.platform.buildkit.maxParallelism = 0;
+    },
+    (config) => {
+      config.platform.containerLimits.node.memoryMiB = -1;
+    },
+    (config) => {
+      config.platform.containerLimits.kafka.memoryMiB = 1024;
+    },
+    (config) => {
+      config.platform.containerLimits.overrides.unknown = {
+        cpus: 1,
+        memoryMiB: 512,
+      };
+    },
+    (config) => {
+      config.platform.containerLimits.overrides["realtime-gateway"].cpus = 1;
+    },
+    (config) => {
+      config.localIdentity.cpuLimit = 0;
+    },
+  ]) {
+    const changed = structuredClone(original);
+    mutate(changed);
+    await writeFile(path, dumpYaml(changed));
+    await assert.rejects(
+      loadPlatformConfig(root),
+      /CONFIG-(SCHEMA|BUILDKIT|CONTAINER-LIMITS)/u,
+    );
+  }
+  await writeFile(path, dumpYaml(original));
+  const compose = parseYaml(await readFile(join(root, "compose.yaml"), "utf8"));
+  compose.services["api-public"].mem_limit = "128m";
+  await writeFile(join(root, "compose.yaml"), dumpYaml(compose));
+  const result = run(root);
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /CONFIG-CONTAINER-LIMITS/u);
+});
 
 void test("transport certificate policy enforces the 24-hour lifetime and 6-hour renewal window", async () => {
   const document = parseYaml(

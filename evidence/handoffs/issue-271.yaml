@@ -1,0 +1,86 @@
+issue: 271
+baseCommit: c5bb0e9bf66e05b75104e59d5325e1dedef6eee5
+inputs:
+  - issue: 269
+    acceptedMergeCommit: c5bb0e9bf66e05b75104e59d5325e1dedef6eee5
+    artifact: evidence/handoffs/issue-269.yaml
+    sha256: a7609561f683917b1de35754f353794729da503ea7b388f3254ceb277fa11706
+outputs:
+  - artifact: compose.yaml
+    sha256: 4334e2cc104e31e114541497517982eb5b803b6e0f4dbd635cd7469e5620d301
+    consumers: [13]
+  - artifact: config/platform.schema.json
+    sha256: 26707ee2d3aa339863c11075285a710f9230d23321e32beea30a75a6f10e5d4b
+    consumers: [13]
+  - artifact: config/platform.yaml
+    sha256: a8e5b1db70fe8aa32a964f00fb9070c6fb1c123034a87c953777a8c500aefb25
+    consumers: [13]
+  - artifact: config/toolchain-versions.json
+    sha256: bed372093503fc747d25daa61b64f5bde67885cde3b2808e485e4b621000db8d
+    consumers: [13]
+  - artifact: config/toolchain-versions.schema.json
+    sha256: c7ea802b71d54e7c7860b65c9e58503628607474a850487f243c333109bdb3cd
+    consumers: [13]
+  - artifact: docs/platform/LOCAL_PLATFORM.md
+    sha256: 0d5a1117143a5fb3da7405a5539d1505a7c9ca63c126bc52697aa7aedc724125
+    consumers: [13]
+  - artifact: evidence/platform-resources/2026-11-05/native-proof.json
+    sha256: 98f2c517a89cf2f288165e4622fe894e2807321531502b514214745a6dd8f834
+    consumers: [13]
+  - artifact: scripts/config-lib.mjs
+    sha256: 2f338ff325b7aa1bbd3d4506c140954cc28eac1adc5f78af8d6aaff4d4a6de26
+    consumers: [13]
+  - artifact: tests/compose/topology.test.mjs
+    sha256: 7945319f036dbe0f5b142325ea1813886888e44c8f11eeb5e6082e83dc2314d3
+    consumers: [13]
+  - artifact: tests/config/platform-config.test.mjs
+    sha256: 9bc87ec9c2d14a093f8a8f9616ac5ceeb9cfabe1518b82d616b802ace340930a
+    consumers: [13]
+  - artifact: tests/tools/security-scan.test.mjs
+    sha256: fe9efa6057252ea13c734d7b849bfb0a5794ed29d23c3138fa591c9a4e894501
+    consumers: [13]
+  - artifact: tools/buildkit-policy.mjs
+    sha256: 7852abd73374ee275e87ecc814f93af74466c89875363be304175c0101e15317
+    consumers: [13]
+  - artifact: tools/docker-build.mjs
+    sha256: 663d322a5c89f0cfd4edf9e879ea11b964aa99a0ed3c7a93d22504cce79c57b1
+    consumers: [13]
+  - artifact: tools/platform-service.mjs
+    sha256: 6a6c0d1575f4a6ac93cff749af475e90432c956f581d3342f0c1ed78c4bb1e36
+    consumers: [13]
+  - artifact: tools/security-scan.mjs
+    sha256: 689882cb5b2fc7319eb5310f960870a37548fa60e1158d49bfe7adc4d1709991
+    consumers: [13]
+verification:
+  - command: "pnpm install --frozen-lockfile"
+    result: "passed"
+  - command: "pnpm config:check"
+    result: "passed"
+  - command: "pnpm versions:check"
+    result: "passed"
+  - command: "pnpm typecheck"
+    result: "passed"
+  - command: "node --test tests/config/platform-config.test.mjs"
+    result: "passed: 44/44; после последних additions policy-focused test 1/1"
+  - command: "node --test --test-name-pattern='BuildKit and container policies' tests/config/platform-config.test.mjs"
+    result: "passed: 1/1, включая immutable image pin и normal config projection"
+  - command: "node --test --test-name-pattern='canonical image loads|local runtime compose binds|Compose materializes|Kafka requires the verified' tests/compose/topology.test.mjs"
+    result: "passed: 4/4"
+  - command: "node --test --test-name-pattern='G12 builds product images' tests/tools/security-scan.test.mjs"
+    result: "passed: 1/1; synthetic G12 fixture, не formal G12"
+  - command: "pnpm exec oxlint --type-aware --deny-warnings tools/buildkit-policy.mjs tools/docker-build.mjs tools/security-scan.mjs tests/tools/security-scan.test.mjs scripts/config-lib.mjs tools/platform-service.mjs tests/compose/topology.test.mjs tests/config/platform-config.test.mjs"
+    result: "passed"
+  - command: "flock --no-fork --wait 600 /run/user/1000/coffee-platform-heavy.lock node /home/yurgusev/.cache/coffee-buildkit-resource-policy/2026-11-05/native-proof.mjs /home/yurgusev/CoffeeOrderPlatform/.worktrees/buildkit-resources"
+    result: "passed: native create/recreate/cache, canonical wrapper, scoped G12 registration/async verifier, Node cgroup CPU/RAM; 25 containers and 37 volumes preserved; own resources removed"
+  - command: "pnpm exec prettier --check compose.yaml config/platform.schema.json config/platform.yaml config/toolchain-versions.json config/toolchain-versions.schema.json docs/platform/LOCAL_PLATFORM.md evidence/platform-resources/2026-11-05/native-proof.json scripts/config-lib.mjs tests/compose/topology.test.mjs tests/config/platform-config.test.mjs tests/tools/security-scan.test.mjs tools/buildkit-policy.mjs tools/docker-build.mjs tools/platform-service.mjs tools/security-scan.mjs evidence/handoffs/issue-271.yaml"
+    result: "passed"
+  - command: "git diff --check"
+    result: "passed"
+limitations:
+  - "Это поставка исходников и конфигурации; существующий frozen release и его контейнерные limits не изменялись."
+  - "Профиль Node 1 CPU/512 МиБ, realtime 2 CPU/512 МиБ, Kafka 2 CPU/2048 МиБ, Keycloak 2 CPU с прежними 2048 МиБ требует workload qualification перед deployment."
+  - "Индивидуальные потолки не резервируют память; сумма потолков с builder/desktop выше RAM хоста. Отсутствие OOM при одновременных пиках не доказано."
+  - "GC проверен по config/effective worker policy; pressure-triggered GC, полный G12, G00–G19, provider mutations и SQL integrity не проверялись."
+  - "Native Node probe запускал диагностический process в прежнем runtime image без scoped secrets и сети; это не application capacity admission."
+  - "Все 37 исходных volume metadata, включая оба CoffeeOrderDb и 33 именованных, сохранены; рабочий builder и 25 проверенных containers не пересоздавались."
+  - "Общий source WIP сохранён; #13/#266 и их статусы не изменяются. CI окончательного head подтверждается отдельно в PR после commit, без self SHA в handoff."

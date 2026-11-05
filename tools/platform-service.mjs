@@ -25,6 +25,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { isDeepStrictEqual } from "node:util";
 import { createRuntimeLoggingOverride } from "./observability/generate.mjs";
+import { runtimeContainerLimits } from "../scripts/config-lib.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const PROJECT = "coffee-platform";
@@ -420,6 +421,7 @@ export function createLocalComposeOverride({
       service,
       {
         image: images.get(service),
+        ...runtimeContainerLimits(config, service),
         pull_policy: "never",
         restart,
         volumes: [
@@ -447,7 +449,12 @@ export function createLocalComposeOverride({
     pull_policy: "never",
     restart,
   };
-  services.kafka = { image: kafkaImageId, pull_policy: "never", restart };
+  services.kafka = {
+    image: kafkaImageId,
+    pull_policy: "never",
+    restart,
+    ...runtimeContainerLimits(config, "kafka"),
+  };
   const identity = config.localIdentity;
   const publicPort = new URL(identity.publicBaseUrl).port;
   const privatePort = new URL(identity.privateBaseUrl).port;
@@ -461,6 +468,7 @@ export function createLocalComposeOverride({
     security_opt: ["no-new-privileges:true"],
     cap_drop: ["ALL"],
     mem_limit: `${identity.memoryLimitMiB}m`,
+    cpus: identity.cpuLimit,
     tmpfs: [
       "/tmp:rw,noexec,nosuid,nodev",
       "/opt/keycloak/data:rw,noexec,nosuid,nodev,uid=1000,gid=0,mode=0700",

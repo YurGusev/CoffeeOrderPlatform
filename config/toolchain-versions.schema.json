@@ -70,7 +70,8 @@
     "grafanaSigningKeyFingerprint",
     "grafanaTempoModule",
     "bootstrapProbeSha256",
-    "browserHelperNodeImage"
+    "browserHelperNodeImage",
+    "buildkitImage"
   ],
   "properties": {
     "$schema": { "type": "string" },
@@ -363,6 +364,10 @@
     "bootstrapProbeSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
     "browserHelperNodeImage": {
       "const": "node:26.8.1-trixie-slim@sha256:c0753125a3789977aefe869cbebccf70e3cfd7ea84ca48547458f02e4f1d7146"
+    },
+    "buildkitImage": {
+      "type": "string",
+      "pattern": "^moby/buildkit@sha256:[0-9a-f]{64}$"
     }
   }
 }
