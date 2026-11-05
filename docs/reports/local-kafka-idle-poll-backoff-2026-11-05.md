@@ -70,6 +70,29 @@ Fixture, baseline/candidate builds и скрипт сохранены в при�
 в одноразовом контейнере того же образа с `--network none`; рабочие контейнеры
 не перезапускались.
 
+## Live проверка собранного образа
+
+Образ `coffee-platform-orders-aroma-preparation:kafka-backoff`
+(`sha256:3d630d57b977…`, 280 MB) собран каноническим
+`node tools/docker-build.mjs --load` с `--build-arg RUNTIME=orders-aroma-preparation`.
+В образе есть `MAX_IDLE_CONSUMER_POLL_TIMEOUT_MS` в
+`/app/node_modules/@coffee-platform/kafka-runtime/dist/{native,index}.js`.
+
+Стек был остановлен до замера. Для проверки подняты только `coffee_postgres` и
+`coffee-platform-kafka-1`; контейнеры сервиса запускались по одному, с
+release-конфигом для старого образа и с текущим `config/platform.yaml` для
+нового. Healthcheck отключён; рабочие контейнеры стека не изменялись.
+
+| Образ                    | Конфиг       | CPU            | wakeups/s | level:50 |
+| ------------------------ | ------------ | -------------: | --------: | -------: |
+| старый `9b7115b0215e`    | release      |        11,83 % |       267 |        — |
+| новый `3d630d57b977`     | develop      | 4,70 % / 4,07 % | 107 / 105 |        0 |
+
+Оба запуска дошли до `runtime.phase running`. Старый образ не принимает
+текущий конфиг (`egressRepositories`), поэтому конфиги в замерах различаются;
+число consumer groups (3) и `pollIntervalMs` одинаковы. Снижение wakeups
+267 → 105 соответствует бюджету 250 мс на трёх группах.
+
 ## Ограничения
 
 - Измерение на mock cluster и одном consumer, без бизнес-сообщений,
@@ -80,17 +103,23 @@ Fixture, baseline/candidate builds и скрипт сохранены в при�
 - Задержка commit/rebalance в fixture не измерялась. Поведение бюджета
   зафиксировано новым тестом `tests/kafka/runtime.test.mjs`; callback latency
   нужно подтвердить отдельным замером.
-- Рабочие образы не пересобирались и не заменялись; live CPU после изменения
-  не измерен.
+- Live-замер сделан на остановленном стеке с поднятыми только Postgres и
+  Kafka, с разными конфигами у старого и нового образа, без бизнес-сообщений и
+  без healthcheck. Это проверка артефакта, а не deployment.
+- Образ собран и загружен локально, но не развёрнут в release: локальный
+  runtime привязан к принятому launch context и image IDs.
 
 ## Проверки
 
 ```bash
 pnpm exec tsc -b packages/platform-kafka-runtime --pretty false
 node --test tests/kafka/runtime.test.mjs
+pnpm typecheck
 pnpm exec oxlint --type-aware --deny-warnings packages/platform-kafka-runtime/src/index.ts packages/platform-kafka-runtime/src/native.ts tests/kafka/runtime.test.mjs
 pnpm exec prettier --check packages/platform-kafka-runtime/src/index.ts packages/platform-kafka-runtime/src/native.ts tests/kafka/runtime.test.mjs
+node tools/docker-build.mjs --load --file Dockerfile --build-arg RUNTIME=orders-aroma-preparation -t coffee-platform-orders-aroma-preparation:kafka-backoff .
 ```
 
-TypeScript build успешен, `tests/kafka/runtime.test.mjs` — 19/19 PASS без
-skips, включая новый тест бюджета.
+TypeScript build и полный `pnpm typecheck` успешны, `tests/kafka/runtime.test.mjs`
+— 19/19 PASS без skips, включая новый тест бюджета; образ собран и проверен на
+наличие изменения в `/app/node_modules/@coffee-platform/kafka-runtime/dist`.
