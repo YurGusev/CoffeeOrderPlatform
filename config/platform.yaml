@@ -3,7 +3,30 @@ schemaVersion: 1
 environment: development
 toolchainRef: config/toolchain-versions.json
 verification:
-  aromaSandbox: null
+  aromaSandbox:
+    mode: controlled-live-existing-account
+    origin: https://aromateacoffee.ru
+    accountFingerprint: sha256:2f8dd83aa108ac1734086d80886592520ec814ae4912bc0f0dcfc2deeceffe2f
+    credentialRefs:
+      - aroma.email
+      - aroma.password
+    existingAccountException:
+      authority: user-2026-10-23
+      origin: https://aromateacoffee.ru
+      accountFingerprint: sha256:2f8dd83aa108ac1734086d80886592520ec814ae4912bc0f0dcfc2deeceffe2f
+    productionOrigins:
+      - https://aromateacoffee.ru
+    productionAccountFingerprints: []
+    trustedApprovers:
+      - keyId: g16-owner-delegated-20261105
+        approver: owner-delegated-executor
+        publicKeyPem: |
+          -----BEGIN PUBLIC KEY-----
+          MCowBQYDK2VwAyEA8ZD4sFVwV9rzt08ufqVGQ4JdIvixGhbQyOl2zW9xagI=
+          -----END PUBLIC KEY-----
+    resourceLimits:
+      postgresMemoryMiB: 1024
+      postgresTmpfsMiB: 512
   realtimeQualification:
     budgetSeconds: 2700
     maximumAgeSeconds: 7200
