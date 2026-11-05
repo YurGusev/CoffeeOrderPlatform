@@ -2204,9 +2204,7 @@ void test("smoke accepts only runtime image IDs verified by G12 before startup",
       join(REPO_ROOT, "tools/compose-smoke.mjs"),
       "utf8",
     );
-    const binding = source.indexOf(
-      "const verifiedImages = await readVerifiedRuntimeImages(",
-    );
+    const binding = source.indexOf("const verifiedImages = await (");
     const build = source.indexOf(
       "buildRuntimeImages(",
       source.indexOf('markRollbackStage("build")'),
