@@ -1559,6 +1559,7 @@ void test("G12 scanner arguments constrain the input and include lockfile dev de
 });
 
 void test("G12 builds product images, records pinned upstream identity, and fails on findings or tampered OCI proof", async (t) => {
+  let buildkitChecks = 0;
   let databaseFullReads = 0;
   let tamperAtDatabaseRead = false;
   const originalOpen = fsPromises.open;
@@ -2227,7 +2228,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
   const fakeRun = async (
     command,
     args,
-    { capture = false, timeoutMs } = {},
+    { capture = false, timeoutMs, maxCaptureBytes } = {},
   ) => {
     let launchedContainer;
     let keepContainer = false;
@@ -2763,9 +2764,66 @@ void test("G12 builds product images, records pinned upstream identity, and fail
         return capture ? output.toString("utf8").trim() : output;
       }
       assert.equal(command, "docker");
-      assert.ok(
-        !args.some((argument) => String(argument).includes("docker.sock")),
+      assert.deepEqual(
+        args.filter((argument) => String(argument).includes("docker.sock")),
+        args[0] === "buildx" && args[1] === "create"
+          ? ["unix:///var/run/docker.sock"]
+          : [],
       );
+      if (
+        args[0] === "inspect" &&
+        args[1] === "buildx_buildkit_coffee-platform-mtu0"
+      ) {
+        assert.equal(capture, true);
+        buildkitChecks += 1;
+        return JSON.stringify([
+          {
+            Config: { Image: toolchain.buildkitImage },
+            HostConfig: {
+              Memory: 5120 * 1048576,
+              MemorySwap: 6144 * 1048576,
+              NanoCpus: 0,
+              CpuQuota: 400000,
+              CpuPeriod: 100000,
+              NetworkMode: "coffee_platform_build_mtu",
+            },
+            Mounts: [
+              {
+                Type: "volume",
+                Name: "buildx_buildkit_coffee-platform-mtu0_state",
+                Destination: "/var/lib/buildkit",
+              },
+            ],
+          },
+        ]);
+      }
+      if (
+        args[0] === "exec" &&
+        args[1] === "buildx_buildkit_coffee-platform-mtu0"
+      ) {
+        if (args[2] === "cat")
+          return [
+            "[worker.oci]",
+            "gc = true",
+            "max-parallelism = 2",
+            "reservedSpace = '2GiB'",
+            "maxUsedSpace = '10GiB'",
+            "minFreeSpace = '40GiB'",
+            "",
+          ].join("\n");
+        return JSON.stringify([
+          {
+            gcPolicy: [
+              {
+                all: true,
+                reservedSpace: 2 * 1073741824,
+                maxUsedSpace: 10 * 1073741824,
+                minFreeSpace: 40 * 1073741824,
+              },
+            ],
+          },
+        ]);
+      }
       if (args[0] === "run") {
         const conversion = args.includes("convert");
         const databaseDownload = args.includes("--download-db-only")
@@ -2819,7 +2877,24 @@ void test("G12 builds product images, records pinned upstream identity, and fail
         assert.equal(args[4], toolchain.nodeImage);
         return nodeBaseIndexBytes.toString("utf8");
       }
-      if (args[0] === "buildx" && args[1] === "inspect") return;
+      if (args[0] === "buildx" && args[1] === "create") {
+        assert.ok(args.includes(`image=${toolchain.buildkitImage}`));
+        assert.ok(args.includes("memory=5120m"));
+        assert.ok(args.includes("memory-swap=6144m"));
+        assert.ok(args.includes("cpu-quota=400000"));
+        const toml = await readFile(
+          args[args.indexOf("--buildkitd-config") + 1],
+          "utf8",
+        );
+        assert.match(toml, /gc = true/u);
+        assert.match(toml, /max-parallelism = 2/u);
+        return;
+      }
+      if (args[0] === "buildx" && args[1] === "inspect") {
+        assert.equal(capture, true);
+        assert.equal(maxCaptureBytes, 1024 * 1024);
+        return "Name: coffee-platform-mtu\nDriver: docker-container\nName: coffee-platform-mtu0";
+      }
       if (args[0] === "network" && args[1] === "inspect") return;
       if (args[0] === "image" && args[1] === "inspect") {
         if (args.includes("{{json .RepoDigests}}")) {
@@ -3542,6 +3617,10 @@ void test("G12 builds product images, records pinned upstream identity, and fail
     "utf8",
   ).then(JSON.parse);
   assert.equal(savedResult.code, "G12_SCAN_CLEAN");
+  assert.ok(
+    buildkitChecks > 0,
+    "G12 verifies effective builder policy before OCI builds",
+  );
   assert.equal(savedResult.provenance.status, "PASS");
   assert.deepEqual(Object.keys(savedResult.kafka).sort(), [
     "imageId",

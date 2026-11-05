@@ -27,6 +27,7 @@ import {
 import { RUNTIME_NAMES } from "../packages/platform-config/src/index.ts";
 import { validateLaunchContext } from "../verification/launch/v1/report.mjs";
 import { materializeBuildRegistryCredentials } from "./config-bootstrap/index.mjs";
+import { buildkitPolicy, verifyBuildkitPolicy } from "./buildkit-policy.mjs";
 
 const SCANNER_IMAGE =
   "ghcr.io/aquasecurity/trivy@sha256:790fd66d1697395d8693d1acaa1ea702406a20f109b6fc7bac8db623eca6c06c";
@@ -768,6 +769,7 @@ async function validateInputs({
     policy,
     toolchain,
     outputDir: targetOutputDir,
+    platform,
     sourceInputs: { platformBytes, toolchainBytes, lockfileBytes },
   };
 }
@@ -1883,26 +1885,18 @@ async function inspectBaseMaterial({ sourceRef, target, outputRoot, run }) {
   };
 }
 
-async function prepareBuildxRegistration(dockerConfig, run) {
-  const instances = join(dockerConfig, "buildx", "instances");
-  await mkdir(instances, { recursive: true, mode: 0o700 });
-  const registration = join(instances, "coffee-platform-mtu");
-  const bytes = Buffer.from(
-    `${JSON.stringify({
-      Name: "coffee-platform-mtu",
-      Driver: "docker-container",
-      Nodes: [
-        {
-          Name: "coffee-platform-mtu0",
-          Endpoint: "unix:///var/run/docker.sock",
-        },
-      ],
-    })}\n`,
-  );
-  await writeScannerOutput(registration, bytes);
-  await run("docker", ["buildx", "inspect", "coffee-platform-mtu"]).catch(() =>
-    fail("BUILD_BUILDER_UNAVAILABLE"),
-  );
+async function prepareBuildxRegistration(dockerConfig, run, config, versions) {
+  const policy = buildkitPolicy(config, versions);
+  const configPath = join(dockerConfig, "buildkitd.toml");
+  await writeScannerOutput(configPath, policy.toml);
+  await run("docker", [
+    ...policy.createArguments(configPath),
+    "unix:///var/run/docker.sock",
+  ]).catch(() => fail("BUILD_BUILDER_REGISTRATION_FAILED"));
+  // Buildx inspect включает public CA bundles; обычного лимита 8 КиБ недостаточно.
+  await verifyBuildkitPolicy(policy, (args) =>
+    run("docker", args, { capture: true, maxCaptureBytes: 1024 * 1024 }),
+  ).catch(() => fail("BUILD_BUILDER_POLICY_INVALID"));
   await run("docker", ["network", "inspect", BUILD_NETWORK]).catch(() =>
     fail("BUILD_NETWORK_UNAVAILABLE"),
   );
@@ -3191,7 +3185,12 @@ export async function runSecurityScan({
       env: registryEnv,
     });
     stage = "source-preparation";
-    await prepareBuildxRegistration(dockerConfig, runBounded);
+    await prepareBuildxRegistration(
+      dockerConfig,
+      runBounded,
+      validated.platform,
+      validated.toolchain,
+    );
     const outputRoot = join(outputDir, "artifacts");
     await mkdir(outputRoot, { recursive: true, mode: 0o700 });
     sourceTemporary = await mkdtemp(join(tmpdir(), "coffee-image-source-"));

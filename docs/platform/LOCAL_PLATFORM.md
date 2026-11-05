@@ -50,6 +50,66 @@ Dockerfile переносит собранный `.node` в resolved production 
 переносит. Final image получает addon, shared libraries и runtime-зависимости
 без compiler toolchain.
 
+### Воспроизводимый BuildKit и CPU/RAM
+
+`config/platform.yaml.platform.buildkit` задаёт CPU, RAM, memory+swap,
+параллелизм, GC и путь системного CA bundle. Exact image pin находится только
+в `config/toolchain-versions.json.buildkitImage`. TOML и driver options
+генерируются из этих источников общим `tools/buildkit-policy.mjs`;
+отдельный пользовательский TOML не является нормативным источником.
+
+`tools/docker-build.mjs` создаёт отсутствующий `coffee-platform-mtu` с этими
+параметрами и явно выбирает его при сборке. Перед сборкой проверяются driver,
+единственный node, фактические image/CPU/RAM/memory+swap, сеть и стандартный
+state volume, OCI GC/parallelism config и effective GC policy worker.
+Расхождение останавливает сборку; автоматического удаления или пересоздания
+существующего builder нет. Для сохранения кэша при согласованном пересоздании
+нужен `rm --keep-state` и тот же node/state volume. Произвольный `docker build`
+может использовать встроенный builder; canonical entrypoint — `pnpm image:build`.
+
+G12 создаёт регистрацию в собственном временном Docker config через тот же
+генератор CLI arguments/TOML и тот же verifier перед прямыми OCI builds.
+Endpoint остаётся локальным `unix:///var/run/docker.sock`; socket не
+монтируется в scanner. Credentials остаются в scoped tmpfs, общий Docker
+config пользователя не изменяется.
+
+`platform.containerLimits` задаёт Node/Kafka limits. Reference `compose.yaml`
+содержит проверяемую проекцию: `pnpm config:check` отклоняет расхождение CPU/RAM
+любого из 14 Node runtime и Kafka. Release controller вычисляет те же limits
+для startup и steady overrides; Keycloak получает CPU из `localIdentity.cpuLimit`
+и RAM из прежнего `localIdentity.memoryLimitMiB`.
+
+| Роль                 | CPU |                            RAM |
+| -------------------- | --: | -----------------------------: |
+| Node по умолчанию    |   1 |                        512 МиБ |
+| realtime-gateway     |   2 |                        512 МиБ |
+| Kafka                |   2 |                       2048 МиБ |
+| Keycloak             |   2 |                       2048 МиБ |
+| nginx, прежний bound |   2 |                        512 МиБ |
+| BuildKit             |   4 | 5120 МиБ; memory+swap 6144 МиБ |
+
+BuildKit max-parallelism — 2; GC reserved/max/free targets — 2/10/40 ГиБ.
+Это targets очистки cache, не гарантия жёсткого disk quota. Broker heap и
+Node heap flags не меняются; контейнерный memory limit включает native memory,
+permission launcher и healthcheck вместе с основным процессом.
+
+Это начальный профиль индивидуальных потолков, а не резервирование RAM.
+Сумма всех потолков вместе с BuildKit и desktop превышает RAM этого хоста;
+одновременное достижение всех максимумов не допускает обещания отсутствия OOM.
+Общий heavy lock сохраняется. Перед deployment требуются новый G12 и проверка
+рабочих пиков/health deadlines с этими bounds; micro/cgroup proof не заменяет
+capacity admission. Merge сам по себе не меняет запущенный frozen release.
+
+Нативная [проверка от 5 ноября 2026](../../evidence/platform-resources/2026-11-05/native-proof.json)
+подтвердила два создания собственного временного builder, сохранение worker ID
+через `rm --keep-state`, повторный `COPY CACHED`, effective CPU/RAM/GC,
+обычный wrapper и отдельную G12-регистрацию с настоящим async runner.
+В изолированном Node container проверены `cpu.max`, `memory.max` и heap sizing.
+Metadata всех 37 исходных томов, включая 33 именованных и оба CoffeeOrderDb,
+совпали; ID/PID/StartedAt/RestartCount 25 проверенных существующих контейнеров
+сохранены. Тестовый builder/state volume удалены. SQL-целостность и рабочая
+нагрузка этим не подтверждаются.
+
 ### Кэш повторной сборки
 
 Corepack/pnpm устанавливаются до копирования проекта. Установка с frozen

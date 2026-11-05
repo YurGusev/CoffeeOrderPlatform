@@ -1,0 +1,92 @@
+{
+  "status": "PASS",
+  "scope": "only owned public rebuildable completed Java DB proof cache",
+  "proofReceipt": "/home/yurgusev/.cache/coffee-launch-delivery/issue267-java-db-proof.json",
+  "proofReceiptSha256": "26290c4f9755089f756eec50cf531e60eb8bf1c557e7405b54d05b12985a5e74",
+  "completionReceipt": "/home/yurgusev/.cache/coffee-launch-delivery/issue267-java-db-proof-completion.json",
+  "completionReceiptSha256": "78136aacb4a901b3ad408f8db50bc529a3cc4269ce65c06b410c639c0be73dc7",
+  "tempRoot": "/media/yurgusev/coffee-g12-work/tmp/issue267-java-db-proof-tlowqc5f",
+  "manifest": [
+    {
+      "path": "/media/yurgusev/coffee-g12-work/tmp/issue267-java-db-proof-tlowqc5f",
+      "identity": [
+        1795, 4073989, 16832, 1000, 1000, 4, 4096, 1793814888926257632,
+        1793814888926257632
+      ],
+      "sha256": null
+    },
+    {
+      "path": "/media/yurgusev/coffee-g12-work/tmp/issue267-java-db-proof-tlowqc5f/cache",
+      "identity": [
+        1795, 4073990, 16704, 1000, 1000, 3, 4096, 1793815003045583562,
+        1793815418745067293
+      ],
+      "sha256": null
+    },
+    {
+      "path": "/media/yurgusev/coffee-g12-work/tmp/issue267-java-db-proof-tlowqc5f/cache/java-db",
+      "identity": [
+        1795, 4074005, 16704, 1000, 1000, 2, 4096, 1793815002927581156,
+        1793815418745067293
+      ],
+      "sha256": null
+    },
+    {
+      "path": "/media/yurgusev/coffee-g12-work/tmp/issue267-java-db-proof-tlowqc5f/cache/java-db/metadata.json",
+      "identity": [
+        1795, 4074008, 33024, 1000, 1000, 1, 153, 1793815003016582971,
+        1793815418745067293
+      ],
+      "sha256": "a9d3a42e46dce5032dc2f1fbc290eb722aa44fa5b0e869bb6425bb5ac202eb6c"
+    },
+    {
+      "path": "/media/yurgusev/coffee-g12-work/tmp/issue267-java-db-proof-tlowqc5f/cache/java-db/trivy-java.db",
+      "identity": [
+        1795, 4074007, 33024, 1000, 1000, 1, 1570979840, 1793754469000000000,
+        1793815418745067293
+      ],
+      "sha256": "201ecb44f8774b1690b38c740dd188562ca371a5f0e267a3f8bb9c2269299283"
+    },
+    {
+      "path": "/media/yurgusev/coffee-g12-work/tmp/issue267-java-db-proof-tlowqc5f/cid",
+      "identity": [
+        1795, 4073995, 33152, 1000, 1000, 1, 64, 1793814889046260077,
+        1793814889046260077
+      ],
+      "sha256": "e0a03d7bab23570924fc7aa783c899220e14653525346609d0ad316f95e6e460"
+    },
+    {
+      "path": "/media/yurgusev/coffee-g12-work/tmp/issue267-java-db-proof-tlowqc5f/docker-config",
+      "identity": [
+        1795, 4073991, 16832, 1000, 1000, 2, 4096, 1793814888833255737,
+        1793814888833255737
+      ],
+      "sha256": null
+    },
+    {
+      "path": "/media/yurgusev/coffee-g12-work/tmp/issue267-java-db-proof-tlowqc5f/docker-config/config.json",
+      "identity": [
+        1795, 4073992, 33152, 1000, 1000, 1, 13, 1793814888833255737,
+        1793814888833255737
+      ],
+      "sha256": "6ebbb5f958771f113c4318cdb79b52f6dcc0d01d4695fc04473a56f68f294440"
+    }
+  ],
+  "consumerCheck": {
+    "containersInspected": 40,
+    "inaccessibleOwnProcessCount": 6,
+    "lsofWarningsPresent": true,
+    "limitation": "foreign/system and inaccessible process descriptors not fully visible"
+  },
+  "freeBeforeBytes": 26918264832,
+  "preflightReceipt": "/home/yurgusev/.cache/coffee-launch-delivery/issue267-java-db-proof-cache-cleanup-preflight.json",
+  "preflightReceiptSha256": "1b920b5bf816d977b2a1e7fd3a67b7da19ffa277fa25a772dab73801b0eb71d1",
+  "readonlyDirectoriesChmod0700": [
+    "/media/yurgusev/coffee-g12-work/tmp/issue267-java-db-proof-tlowqc5f/cache",
+    "/media/yurgusev/coffee-g12-work/tmp/issue267-java-db-proof-tlowqc5f/cache/java-db"
+  ],
+  "removedFiles": 4,
+  "removedDirectories": 4,
+  "freeAfterBytes": 28489277440,
+  "actualFreeDeltaBytes": 1571012608
+}

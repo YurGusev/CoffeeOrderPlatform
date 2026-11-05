@@ -86,7 +86,7 @@
             "egressRepositories": {
               "const": [
                 "ghcr.io/aquasecurity/trivy-db",
-                "ghcr.io/aquasecurity/trivy-java-db"
+                "mirror.gcr.io/aquasec/trivy-java-db"
               ]
             }
           }
@@ -186,7 +186,8 @@
         "memoryLimitMiB",
         "operatorUsername",
         "actorRef",
-        "bootstrapAdminUsername"
+        "bootstrapAdminUsername",
+        "cpuLimit"
       ],
       "properties": {
         "publicBaseUrl": {
@@ -219,7 +220,8 @@
         "bootstrapAdminUsername": {
           "type": "string",
           "pattern": "^[a-z][a-z0-9-]{0,62}$"
-        }
+        },
+        "cpuLimit": { "type": "number", "minimum": 0.1, "maximum": 8 }
       }
     },
     "services": {
@@ -1203,7 +1205,9 @@
         "requestDeadlineMs",
         "bodyLimitBytes",
         "health",
-        "outbox"
+        "outbox",
+        "buildkit",
+        "containerLimits"
       ],
       "properties": {
         "publicBaseUrl": { "type": "string", "pattern": "^https://[^\\s]+$" },
@@ -1242,6 +1246,68 @@
             "publishedRetentionHours": { "type": "integer", "const": 168 },
             "failedRetentionHours": { "type": "integer", "const": 720 },
             "invalidSchemaAction": { "type": "string", "const": "quarantine" }
+          }
+        },
+        "buildkit": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "cpus",
+            "memoryMiB",
+            "memorySwapMiB",
+            "maxParallelism",
+            "reservedSpaceGiB",
+            "maxUsedSpaceGiB",
+            "minFreeSpaceGiB",
+            "registryCaFile"
+          ],
+          "properties": {
+            "cpus": { "type": "number", "minimum": 0.1, "maximum": 8 },
+            "memoryMiB": {
+              "type": "integer",
+              "minimum": 1024,
+              "maximum": 32768
+            },
+            "memorySwapMiB": {
+              "type": "integer",
+              "minimum": 1024,
+              "maximum": 65536
+            },
+            "maxParallelism": { "type": "integer", "minimum": 1, "maximum": 8 },
+            "reservedSpaceGiB": { "type": "integer", "minimum": 1 },
+            "maxUsedSpaceGiB": { "type": "integer", "minimum": 1 },
+            "minFreeSpaceGiB": { "type": "integer", "minimum": 1 },
+            "registryCaFile": {
+              "type": "string",
+              "pattern": "^/[^\\r\\n\\u0000]+$"
+            }
+          }
+        },
+        "containerLimits": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["node", "overrides", "kafka"],
+          "properties": {
+            "node": { "$ref": "#/$defs/containerLimit" },
+            "overrides": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["realtime-gateway"],
+              "properties": {
+                "realtime-gateway": { "$ref": "#/$defs/containerLimit" }
+              }
+            },
+            "kafka": {
+              "allOf": [
+                { "$ref": "#/$defs/containerLimit" },
+                {
+                  "type": "object",
+                  "properties": {
+                    "memoryMiB": { "type": "integer", "minimum": 1536 }
+                  }
+                }
+              ]
+            }
           }
         }
       }
@@ -1574,6 +1640,15 @@
       "properties": {
         "active": { "type": "string", "minLength": 1 },
         "previous": { "type": "string", "minLength": 1 }
+      }
+    },
+    "containerLimit": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["cpus", "memoryMiB"],
+      "properties": {
+        "cpus": { "type": "number", "minimum": 0.1, "maximum": 8 },
+        "memoryMiB": { "type": "integer", "minimum": 256, "maximum": 32768 }
       }
     }
   }

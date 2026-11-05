@@ -31,13 +31,11 @@ Node и deployed package links, а не pnpm installer. Состав завис�
 экспорт и qualification подтверждаются фактическим runtime evidence;
 само наличие exporter options не является PASS.
 
-G12 загружает основную базу Trivy и Java DB из официальных
-`ghcr.io/aquasecurity/trivy-db` и `ghcr.io/aquasecurity/trivy-java-db`.
-[Java DB публикуется ежедневно](https://github.com/aquasecurity/trivy-java-db#update-interval).
-Зеркало может отдавать прежний индекс после публикации новой версии; G12
-проверяет время обновления и загрузки обеих БД по прежнему пределу 24 часа.
-Явные repositories задают выбранный источник без автоматической смены
-маршрута. Диагностическая загрузка не заменяет полный G12.
+G12 получает CVE DB из `ghcr.io/aquasecurity/trivy-db`, а Java DB — из
+`mirror.gcr.io/aquasec/trivy-java-db`. Другие repositories и fallback не
+разрешены; остальные требования к сканированию остаются прежними.
+Источник Java DB отдельно согласован владельцем 4 ноября 2026 и указан в
+[исходниках Trivy 0.76.1](https://github.com/aquasecurity/trivy/blob/v0.76.1/pkg/javadb/client.go#L27-L33).
 
 Основание: [pnpm #9474](https://github.com/pnpm/pnpm/issues/9474),
 [modules manifest pnpm 11.24.0](https://github.com/pnpm/pnpm/blob/v11.24.0/pnpm11/installing/modules-yaml/src/index.ts),

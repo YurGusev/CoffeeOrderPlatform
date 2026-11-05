@@ -11,7 +11,7 @@ import {
   writeFile,
 } from "node:fs/promises";
 import childProcess from "node:child_process";
-import { writeFileSync, writeSync } from "node:fs";
+import { readFileSync, writeFileSync, writeSync } from "node:fs";
 import pg from "pg";
 import { spawnSync } from "node:child_process";
 import { syncBuiltinESMExports } from "node:module";
@@ -19,7 +19,9 @@ import { tmpdir } from "node:os";
 import { runInNewContext } from "node:vm";
 import { join, resolve } from "node:path";
 import test from "node:test";
+import { load as parseYaml } from "js-yaml";
 import { createRuntimeLoggingOverride } from "../../tools/observability/generate.mjs";
+import { runtimeContainerLimits } from "../../scripts/config-lib.mjs";
 import { canonicalRequestHash } from "../../packages/platform-idempotency/dist/index.js";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import {
@@ -1222,6 +1224,16 @@ void test("local runtime compose binds verified images and scoped identity mater
   const compose = createLocalComposeOverride(options);
   for (const entry of runtimeImages)
     assert.equal(compose.services[entry.service].image, entry.imageId);
+  for (const service of [...runtimes, "kafka"]) {
+    const expected = runtimeContainerLimits(config, service);
+    assert.equal(compose.services[service].cpus, expected.cpus, service);
+    assert.equal(
+      compose.services[service].mem_limit,
+      expected.mem_limit,
+      service,
+    );
+  }
+  assert.equal(compose.services.keycloak.cpus, config.localIdentity.cpuLimit);
   for (const service of [...runtimes, "edge-nginx", "kafka", "keycloak"]) {
     assert.equal(compose.services[service].restart, "on-failure:3");
     assert.deepEqual(compose.services[service].logging, {
@@ -2459,15 +2471,82 @@ void test("run-owned runtime image reuse rejects collisions and cleans only veri
   );
 });
 
-void test("canonical image loads normalize exporter timestamps without altering the caller environment", async (t) => {
+void test("canonical image loads enforce BuildKit policy and normalize exporter timestamps", async (t) => {
   const dir = await mkdtemp(join(tmpdir(), "coffee-image-wrapper-"));
   t.after(() => rm(dir, { recursive: true, force: true }));
   const capture = join(dir, "capture.json");
+  const callsPath = join(dir, "calls.jsonl");
+  const document = parseYaml(
+    await readFile(join(REPO_ROOT, "config/platform.yaml"), "utf8"),
+  );
+  const policy = document.platform.buildkit;
+  const pins = JSON.parse(
+    await readFile(join(REPO_ROOT, "config/toolchain-versions.json"), "utf8"),
+  );
+  const fixture = {
+    Config: { Image: pins.buildkitImage },
+    HostConfig: {
+      Memory: policy.memoryMiB * 1048576,
+      MemorySwap: policy.memorySwapMiB * 1048576,
+      NanoCpus: 0,
+      CpuPeriod: 100000,
+      CpuQuota: policy.cpus * 100000,
+      NetworkMode: "coffee_platform_build_mtu",
+    },
+    Mounts: [
+      {
+        Type: "volume",
+        Name: "buildx_buildkit_coffee-platform-mtu0_state",
+        Destination: "/var/lib/buildkit",
+      },
+    ],
+  };
+  const toml = `[worker]\n[worker.oci]\ngc = true\nmax-parallelism = ${policy.maxParallelism}\nmaxUsedSpace = '${policy.maxUsedSpaceGiB}GiB'\nminFreeSpace = '${policy.minFreeSpaceGiB}GiB'\nreservedSpace = '${policy.reservedSpaceGiB}GiB'\n`;
+  const workers = [
+    {
+      gcPolicy: [
+        {
+          all: true,
+          reservedSpace: policy.reservedSpaceGiB * 1073741824,
+          maxUsedSpace: policy.maxUsedSpaceGiB * 1073741824,
+          minFreeSpace: policy.minFreeSpaceGiB * 1073741824,
+        },
+      ],
+    },
+  ];
   const fakeDocker = `#!${process.execPath}
 const fs = require('node:fs');
 const args = process.argv.slice(2);
+const drift = process.env.COFFEE_WRAPPER_DRIFT;
+const call = {args};
+if (args[0] === 'buildx' && args[1] === 'create') call.config = fs.readFileSync(args[args.indexOf('--buildkitd-config') + 1], 'utf8');
+fs.appendFileSync(process.env.COFFEE_WRAPPER_CALLS, JSON.stringify(call) + '\\n');
 if (args[0] === 'network' && args[1] === 'inspect') {
   console.log(JSON.stringify([{Options: {'com.docker.network.driver.mtu': '1280'}}]));
+} else if (args[0] === 'buildx' && args[1] === 'inspect') {
+  if (process.env.COFFEE_WRAPPER_MISSING === '1' && !fs.readFileSync(process.env.COFFEE_WRAPPER_CALLS, 'utf8').includes('"create"')) {
+    console.error('ERROR: no builder "coffee-platform-mtu" found'); process.exit(1);
+  }
+  if (drift === 'unavailable') {console.error('Cannot connect to Docker'); process.exit(1);}
+  console.log('Name: coffee-platform-mtu\\nDriver: ' + (drift === 'driver' ? 'docker' : 'docker-container') + '\\nName: coffee-platform-mtu0');
+  if (drift === 'nodes') console.log('Name: foreign-node');
+} else if (args[0] === 'inspect') {
+  const row = ${JSON.stringify(fixture)};
+  if (drift === 'image') row.Config.Image = 'moby/buildkit:latest';
+  if (drift === 'memory') row.HostConfig.Memory = 0;
+  if (drift === 'swap') row.HostConfig.MemorySwap = 0;
+  if (drift === 'cpu') {row.HostConfig.CpuQuota = 0; row.HostConfig.CpuPeriod = 0;}
+  if (drift === 'network') row.HostConfig.NetworkMode = 'host';
+  if (drift === 'volume') row.Mounts[0].Name = 'foreign';
+  console.log(JSON.stringify([row]));
+} else if (args[0] === 'exec' && args[2] === 'cat') {
+  let text = ${JSON.stringify(toml)};
+  if (drift === 'parallelism') text = text.replace('max-parallelism = ${policy.maxParallelism}', 'max-parallelism = 8');
+  console.log(text);
+} else if (args[0] === 'exec' && args[2] === 'buildctl') {
+  const workers = ${JSON.stringify(workers)};
+  if (drift === 'gc') workers[0].gcPolicy[0].maxUsedSpace = 0;
+  console.log(JSON.stringify(workers));
 } else if (args[0] === 'buildx' && args[1] === 'build') {
   fs.writeFileSync(process.env.COFFEE_WRAPPER_CAPTURE, JSON.stringify({args, epoch: process.env.SOURCE_DATE_EPOCH ?? null}));
 }
@@ -2481,6 +2560,31 @@ if (args[0] === 'network' && args[1] === 'inspect') {
     if (previous === undefined) delete process.env.SOURCE_DATE_EPOCH;
     else process.env.SOURCE_DATE_EPOCH = previous;
   });
+  const runWrapper = async (args, env = {}) => {
+    await rm(capture, { force: true });
+    await writeFile(callsPath, "");
+    const result = spawnSync(
+      process.execPath,
+      [join(REPO_ROOT, "tools/docker-build.mjs"), ...args],
+      {
+        cwd: REPO_ROOT,
+        env: {
+          ...process.env,
+          PATH: `${dir}:${process.env.PATH}`,
+          COFFEE_WRAPPER_CAPTURE: capture,
+          COFFEE_WRAPPER_CALLS: callsPath,
+          ...env,
+        },
+        encoding: "utf8",
+      },
+    );
+    const calls = (await readFile(callsPath, "utf8"))
+      .trim()
+      .split("\n")
+      .filter(Boolean)
+      .map((line) => JSON.parse(line));
+    return { result, calls };
+  };
   for (const { args, normalized } of [
     {
       args: [
@@ -2509,18 +2613,9 @@ if (args[0] === 'network' && args[1] === 'inspect') {
       normalized: false,
     },
   ]) {
-    const result = spawnSync(
-      process.execPath,
-      [join(REPO_ROOT, "tools/docker-build.mjs"), ...args],
-      {
-        cwd: REPO_ROOT,
-        env: {
-          ...process.env,
-          PATH: `${dir}:${process.env.PATH}`,
-          COFFEE_WRAPPER_CAPTURE: capture,
-        },
-        encoding: "utf8",
-      },
+    const { result, calls } = await runWrapper(args);
+    assert.ok(
+      !calls.some(({ args }) => args[0] === "buildx" && args[1] === "create"),
     );
     assert.equal(result.status, 0, result.stderr);
     const actual = JSON.parse(await readFile(capture, "utf8"));
@@ -2536,6 +2631,70 @@ if (args[0] === 'network' && args[1] === 'inspect') {
     assert.ok(
       !actual.args.some((value) => value.startsWith("SOURCE_DATE_EPOCH=")),
     );
+  }
+  const created = await runWrapper(["--load", "."], {
+    COFFEE_WRAPPER_MISSING: "1",
+  });
+  assert.equal(created.result.status, 0, created.result.stderr);
+  const creation = created.calls.find(
+    ({ args }) => args[0] === "buildx" && args[1] === "create",
+  );
+  assert.ok(creation);
+  for (const value of [
+    `image=${pins.buildkitImage}`,
+    "network=coffee_platform_build_mtu",
+    `memory=${policy.memoryMiB}m`,
+    `memory-swap=${policy.memorySwapMiB}m`,
+    "cpu-period=100000",
+    `cpu-quota=${policy.cpus * 100000}`,
+  ])
+    assert.ok(creation.args.includes(value), value);
+  assert.ok(
+    creation.args.includes("--allow-insecure-entitlement=network.host"),
+  );
+  assert.match(creation.config, /\[registry\."docker\.io"\]/u);
+  assert.ok(creation.config.includes(policy.registryCaFile));
+  assert.match(creation.config, /gc = true/u);
+  assert.ok(
+    creation.config.includes(`max-parallelism = ${policy.maxParallelism}`),
+  );
+  for (const [key, value] of [
+    ["reservedSpace", policy.reservedSpaceGiB],
+    ["maxUsedSpace", policy.maxUsedSpaceGiB],
+    ["minFreeSpace", policy.minFreeSpaceGiB],
+  ])
+    assert.ok(creation.config.includes(`${key} = "${value}GiB"`));
+  await assert.rejects(
+    stat(creation.args[creation.args.indexOf("--buildkitd-config") + 1]),
+    { code: "ENOENT" },
+  );
+  for (const drift of [
+    "driver",
+    "nodes",
+    "image",
+    "memory",
+    "swap",
+    "cpu",
+    "network",
+    "volume",
+    "parallelism",
+    "gc",
+    "unavailable",
+  ]) {
+    const failed = await runWrapper(["--load", "."], {
+      COFFEE_WRAPPER_DRIFT: drift,
+    });
+    assert.notEqual(failed.result.status, 0, drift);
+    assert.match(failed.result.stderr, /BuildKit/u);
+    assert.ok(
+      !failed.calls.some(
+        ({ args }) =>
+          ["create", "build"].includes(args[1]) ||
+          ["rm", "stop", "update"].includes(args[0]),
+      ),
+      drift,
+    );
+    await assert.rejects(readFile(capture), { code: "ENOENT" });
   }
 });
 
@@ -3125,6 +3284,9 @@ function composeConfig(projectName) {
 
 void test("Compose materializes 14 Node runtimes, native nginx, and Kafka", () => {
   const config = composeConfig();
+  const platformConfig = parseYaml(
+    readFileSync(join(REPO_ROOT, "config/platform.yaml"), "utf8"),
+  );
   assert.deepEqual(
     Object.keys(config.services).sort((left, right) =>
       left.localeCompare(right),
@@ -3234,6 +3396,15 @@ void test("Compose materializes 14 Node runtimes, native nginx, and Kafka", () =
       ["CMD-SHELL"],
       runtime,
     );
+    const limits = runtimeContainerLimits(platformConfig, runtime);
+    assert.equal(service.cpus, limits.cpus, runtime);
+    assert.equal(
+      Number(service.mem_limit),
+      Number.parseInt(limits.mem_limit) * 1048576,
+      runtime,
+    );
+    assert.equal(service.healthcheck.interval, "30s", runtime);
+    assert.equal(service.healthcheck.start_interval, "5s", runtime);
     assert.equal(service.environment.RUNTIME_NAME, runtime, runtime);
     assert.equal(
       service.environment.COFFEE_CONFIG_FILE,
@@ -3387,6 +3558,8 @@ void test("Kafka requires the verified G12 artifact and preserves single-node KR
   const kafka = config.services.kafka;
   assert.equal(kafka.image, "coffee-platform-kafka:verified-artifact-required");
   assert.equal(kafka.pull_policy, "never");
+  assert.equal(kafka.cpus, 2);
+  assert.equal(Number(kafka.mem_limit), 2048 * 1048576);
   assert.equal(kafka.build, undefined);
   const toolchain = JSON.parse(
     await readFile(join(REPO_ROOT, "config/toolchain-versions.json"), "utf8"),
@@ -3413,6 +3586,23 @@ void test("Kafka requires the verified G12 artifact and preserves single-node KR
   assert.equal(kafka.environment.KAFKA_INTER_BROKER_LISTENER_NAME, "SASL_SSL");
   assert.equal(kafka.environment.KAFKA_AUTO_CREATE_TOPICS_ENABLE, "false");
   assert.match(kafka.healthcheck.test[1], /kafka-broker-api-versions/);
+  assert.match(kafka.healthcheck.test[1], /^KAFKA_JVM_PERFORMANCE_OPTS='/);
+  for (const option of [
+    "-XX:+UseSerialGC",
+    "-XX:TieredStopAtLevel=1",
+    "-XX:ActiveProcessorCount=1",
+    "-XX:SharedArchiveFile=/opt/kafka/kafka.jsa",
+    "-XX:CICompilerCount=1",
+    "-Xbatch",
+  ])
+    assert.ok(kafka.healthcheck.test[1].includes(option), option);
+  assert.match(
+    kafka.healthcheck.test[1],
+    /--command-config \/etc\/kafka\/secrets\/client\.properties/,
+  );
+  assert.equal(kafka.environment.KAFKA_JVM_PERFORMANCE_OPTS, undefined);
+  assert.equal(kafka.healthcheck.interval, "30s");
+  assert.equal(kafka.healthcheck.start_interval, "5s");
 });
 
 void test("Kafka data uses a project-scoped named volume", async () => {
@@ -3939,7 +4129,7 @@ void test("verified infrastructure image loader accepts only context-bound Kafka
           approvedFixed: [],
           egressRepositories: [
             "ghcr.io/aquasecurity/trivy-db",
-            "ghcr.io/aquasecurity/trivy-java-db",
+            "mirror.gcr.io/aquasec/trivy-java-db",
           ],
         },
       },

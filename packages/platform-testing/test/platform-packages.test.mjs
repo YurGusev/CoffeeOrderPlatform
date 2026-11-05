@@ -921,6 +921,20 @@ void test("launch config attestation accepts exact B/R bytes and only the litera
 
 void test("observability uses Pino and redacts nested request/provider/PII/error canaries", async () => {
   const canary = "must-never-escape";
+  const sensitiveKeys = [" A-P_I.Key "];
+  const customFields = {
+    "X-API_KEY": canary,
+    nested: [{ "api.key": canary, safe: "ok" }],
+  };
+  assert.deepEqual(redactLogFields(customFields, sensitiveKeys), {
+    "X-API_KEY": "[REDACTED]",
+    nested: [{ "api.key": "[REDACTED]", safe: "ok" }],
+  });
+  sensitiveKeys[0] = "safe";
+  assert.deepEqual(redactLogFields(customFields, sensitiveKeys), {
+    "X-API_KEY": canary,
+    nested: [{ "api.key": canary, safe: "[REDACTED]" }],
+  });
   assert.deepEqual(
     redactLogFields({
       actor: { token: canary, value: "ok" },

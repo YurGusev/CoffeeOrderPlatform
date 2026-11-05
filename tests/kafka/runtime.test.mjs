@@ -2424,7 +2424,10 @@ void test(
         super();
         this.config = config;
         this.number = clients.length + 1;
-        this.delivered = false;
+        this.sent = 0;
+        this.polls = 0;
+        this.pauses = 0;
+        this.resumes = 0;
         events.push(`open:${this.number}`);
         clients.push(this);
       }
@@ -2441,9 +2444,20 @@ void test(
           { topic: physicalTargets.topics[topic], partition: 0 },
         ]);
       }
-      consume(_limit, callback) {
-        const batch = this.number === 1 && !this.delivered ? [validRecord] : [];
-        this.delivered = true;
+      consume(limit, callback) {
+        this.polls++;
+        const batch =
+          this.number === 1 && this.polls >= 20
+            ? Array.from(
+                {
+                  length: Math.min(
+                    limit,
+                    config.kafka.delivery.queueCapacity - this.sent,
+                  ),
+                },
+                () => ({ ...validRecord, offset: ++this.sent }),
+              )
+            : [];
         setTimeout(() => callback(null, batch), 1);
       }
       assign() {
@@ -2455,8 +2469,12 @@ void test(
       unassign() {
         events.push("unassign");
       }
-      pause() {}
-      resume() {}
+      pause() {
+        this.pauses++;
+      }
+      resume() {
+        this.resumes++;
+      }
       commitCb(offsets, callback) {
         this.emit("offset.commit", null, offsets);
         callback(null);
@@ -2497,6 +2515,21 @@ void test(
       await runtime.resource.start(AbortSignal.timeout(5000));
       await handlerStarted;
       const original = clients[0];
+      assert.equal(
+        original.resumes,
+        1,
+        "empty polls do not repeat native resume",
+      );
+      const pauseDeadline = Date.now() + 3000;
+      while (original.polls < 32 && Date.now() < pauseDeadline)
+        await new Promise((resolve) => setTimeout(resolve, 2));
+      assert.ok(original.polls >= 32, "paused intake keeps polling callbacks");
+      assert.equal(
+        original.pauses,
+        1,
+        "full capacity pauses native intake once",
+      );
+      assert.equal(original.resumes, 1, "full capacity does not resume intake");
       original.config.rebalance_cb({ code: -174 }, [
         { topic: physicalTargets.topics[topic], partition: 0 },
       ]);
@@ -2512,7 +2545,7 @@ void test(
       releaseHandler();
       const deadline = Date.now() + 3000;
       while (
-        events.filter((event) => event === "assign:1:2").length < 1 &&
+        (!events.includes("assign:1:2") || original.resumes < 2) &&
         Date.now() < deadline
       )
         await new Promise((resolve) => setTimeout(resolve, 2));
@@ -2529,6 +2562,11 @@ void test(
         1,
         "normal rebalance keeps the existing group member",
       );
+      assert.equal(
+        original.resumes,
+        2,
+        "a new assignment resumes paused intake",
+      );
       original.config.rebalance_cb({ code: -174 }, [
         { topic: physicalTargets.topics[topic], partition: 1 },
       ]);
@@ -2537,7 +2575,7 @@ void test(
       ]);
       const recoveryDeadline = Date.now() + 3000;
       while (
-        (!events.includes("assign:2:1") || clients.length < 2) &&
+        (!events.includes("assign:2:1") || clients[1]?.polls < 5) &&
         Date.now() < recoveryDeadline
       )
         await new Promise((resolve) => setTimeout(resolve, 2));
@@ -2560,8 +2598,160 @@ void test(
         events.includes("assign:1:3"),
         "the injected old-consumer assignment failed",
       );
+      assert.equal(clients[1].resumes, 1, "replacement idle polls resume once");
     } finally {
       releaseHandler();
+      await runtime.resource
+        .stop(AbortSignal.timeout(5000))
+        .catch(() => runtime.resource.destroy());
+      hook.deregister();
+      delete globalThis[nativeKey];
+    }
+  },
+);
+
+void test(
+  "idle consumer backs off the empty poll budget and resets on work",
+  { timeout: 10000 },
+  async () => {
+    const config = parsePlatformConfig(
+      parseYaml(
+        readFileSync(
+          new URL("../../config/platform.yaml", import.meta.url),
+          "utf8",
+        ),
+      ),
+    );
+    const topic = config.kafka.topics.realtimeInvalidate.name;
+    const identity = {
+      schemaVersion: 1,
+      runId: "20261024T123456Z-1234567",
+      candidateSha: `1234567${"0".repeat(33)}`,
+      baseConfigSha256: "a".repeat(64),
+    };
+    const physicalTargets = deriveRuntimeKafkaTarget({
+      config: config.kafka,
+      service: config.services["realtime-gateway"].kafka,
+      enabled: true,
+      environment: config.environment,
+      launchIdentity: identity,
+    });
+    const validRecord = {
+      topic: physicalTargets.topics[topic],
+      partition: 0,
+      offset: 1,
+      key: Buffer.from(subject),
+      value: Buffer.from(JSON.stringify(value)),
+      headers: {},
+    };
+    const consumeTimeouts = [];
+    let handled = 0;
+    class Producer extends EventEmitter {
+      isConnected() {
+        return true;
+      }
+      connect(_options, callback) {
+        callback(null);
+      }
+      getMetadata(_options, callback) {
+        callback(null, {});
+      }
+      disconnect(callback) {
+        callback(null);
+      }
+    }
+    class Consumer extends EventEmitter {
+      constructor(consumerConfig) {
+        super();
+        this.config = consumerConfig;
+        this.polls = 0;
+      }
+      setDefaultConsumeTimeout(timeoutMs) {
+        consumeTimeouts.push(timeoutMs);
+      }
+      setDefaultIsTimeoutOnlyForFirstMessage() {}
+      isConnected() {
+        return true;
+      }
+      connect(_options, callback) {
+        callback(null);
+      }
+      subscribe() {
+        this.config.rebalance_cb(null, [
+          { topic: physicalTargets.topics[topic], partition: 0 },
+        ]);
+      }
+      consume(_limit, callback) {
+        this.polls++;
+        const batch =
+          this.polls === 8 ? [{ ...validRecord, offset: this.polls }] : [];
+        setTimeout(() => callback(null, batch), 1);
+      }
+      assign() {}
+      unassign() {}
+      pause() {}
+      resume() {}
+      commitCb(offsets, callback) {
+        this.emit("offset.commit", null, offsets);
+        callback(null);
+      }
+      disconnect(callback) {
+        callback(null);
+      }
+    }
+    const nativeKey = Symbol.for("coffee.runtime-idle-poll-backoff");
+    globalThis[nativeKey] = { Producer, KafkaConsumer: Consumer };
+    const url = `data:text/javascript,${encodeURIComponent('export const RdKafka=globalThis[Symbol.for("coffee.runtime-idle-poll-backoff")];export default {RdKafka};')}`;
+    const hook = registerHooks({
+      resolve(specifier, context, next) {
+        return specifier === "@confluentinc/kafka-javascript"
+          ? { url, shortCircuit: true }
+          : next(specifier, context);
+      },
+    });
+    const runtime = createKafkaRuntime({
+      runtime: "realtime-gateway",
+      config: config.kafka,
+      service: config.services["realtime-gateway"].kafka,
+      credentials: { username: "u", password: "p" },
+      physicalTargets,
+    });
+    try {
+      runtime.bind("realtime-gateway-v1", {
+        processing: "realtime",
+        decode: (decoded) => decoded,
+        enqueue: async () => {
+          handled += 1;
+        },
+      });
+      await runtime.resource.start(AbortSignal.timeout(5000));
+      const deadline = Date.now() + 5000;
+      while (
+        (handled === 0 ||
+          consumeTimeouts.lastIndexOf(10) < consumeTimeouts.indexOf(250)) &&
+        Date.now() < deadline
+      )
+        await new Promise((resolve) => setTimeout(resolve, 2));
+      assert.equal(handled, 1, "the idle consumer still receives work");
+      assert.deepEqual(
+        consumeTimeouts.slice(0, 6),
+        [10, 20, 40, 80, 160, 250],
+        "empty polls double the consume timeout up to the idle cap",
+      );
+      assert.equal(
+        Math.max(...consumeTimeouts),
+        250,
+        "the idle poll budget is bounded",
+      );
+      assert.ok(
+        consumeTimeouts.lastIndexOf(10) > consumeTimeouts.indexOf(250),
+        "a handled record resets the short consume budget",
+      );
+      assert.ok(
+        consumeTimeouts.every((timeoutMs) => timeoutMs >= 1),
+        "the consume budget stays positive",
+      );
+    } finally {
       await runtime.resource
         .stop(AbortSignal.timeout(5000))
         .catch(() => runtime.resource.destroy());
