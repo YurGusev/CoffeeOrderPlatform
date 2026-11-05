@@ -862,19 +862,6 @@ export async function loadEncryptedSecrets(root = REPO_ROOT) {
 export async function checkPlatformConfig(root = REPO_ROOT) {
   await checkForbiddenFiles(root);
   const config = await loadPlatformConfig(root);
-  const compose = await readYaml(join(root, "compose.yaml"));
-  for (const service of [...NODE_RUNTIMES, "kafka"]) {
-    const expected = runtimeContainerLimits(config, service);
-    const actual = compose.services[service];
-    if (
-      actual.cpus !== expected.cpus ||
-      actual.mem_limit !== expected.mem_limit
-    )
-      fail(
-        "CONFIG-CONTAINER-LIMITS",
-        `${service}: reference Compose differs from platform.yaml`,
-      );
-  }
   const seed = await readFile(
     join(
       root,
@@ -918,5 +905,6 @@ export async function checkPlatformConfig(root = REPO_ROOT) {
   return {
     runtimeCount: DEPLOYABLE_RUNTIMES.length,
     environment: config.environment,
+    config,
   };
 }
