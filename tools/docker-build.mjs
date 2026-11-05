@@ -1,11 +1,27 @@
 #!/usr/bin/env node
 import { execFileSync, spawnSync } from "node:child_process";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { loadPlatformConfig } from "../scripts/config-lib.mjs";
 import { checkToolchainVersions } from "../scripts/check-toolchain-versions.mjs";
+import {
+  buildkitPolicy,
+  verifyBuildkitPolicy,
+  BUILDKIT_NAME as BUILDER,
+  BUILDKIT_NETWORK as NETWORK,
+} from "./buildkit-policy.mjs";
 
-await checkToolchainVersions();
+const ROOT = fileURLToPath(new URL("..", import.meta.url));
+await checkToolchainVersions(ROOT);
+const config = await loadPlatformConfig(ROOT);
+const versions = JSON.parse(
+  await readFile(join(ROOT, "config/toolchain-versions.json"), "utf8"),
+);
+const policy = config.platform.buildkit;
+const buildkit = buildkitPolicy(config, versions);
 
-const NETWORK = "coffee_platform_build_mtu";
-const BUILDER = "coffee-platform-mtu";
 const DEFAULT_MTU = 1280;
 
 function output(command, args) {
@@ -59,29 +75,28 @@ function ensureNetwork(mtu) {
   }
 }
 
-function ensureBuilder() {
+async function ensureBuilder() {
   const inspect = spawnSync("docker", ["buildx", "inspect", BUILDER], {
-    stdio: "ignore",
+    encoding: "utf8",
   });
   if (inspect.status !== 0) {
-    execFileSync(
-      "docker",
-      [
-        "buildx",
-        "create",
-        "--name",
-        BUILDER,
-        "--driver",
-        "docker-container",
-        "--driver-opt",
-        `network=${NETWORK}`,
-      ],
-      { stdio: "inherit" },
-    );
+    if (!/no builder .* found/u.test(inspect.stderr ?? ""))
+      throw new Error(
+        "Не удалось проверить BuildKit; существующий builder не изменён",
+      );
+    await readFile(policy.registryCaFile);
+    const directory = await mkdtemp(join(tmpdir(), "coffee-buildkit-policy-"));
+    const path = join(directory, "buildkitd.toml");
+    try {
+      await writeFile(path, buildkit.toml, { mode: 0o600 });
+      execFileSync("docker", buildkit.createArguments(path), {
+        stdio: "inherit",
+      });
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
   }
-  execFileSync("docker", ["buildx", "inspect", BUILDER, "--bootstrap"], {
-    stdio: "inherit",
-  });
+  await verifyBuildkitPolicy(buildkit, (args) => output("docker", args));
 }
 
 const extraArgs = process.argv.slice(2);
@@ -101,7 +116,7 @@ if (nginxBuild) {
 
 const mtu = detectedMtu();
 ensureNetwork(mtu);
-ensureBuilder();
+await ensureBuilder();
 
 const hasExplicitDockerfile =
   extraArgs.includes("--file") || extraArgs.includes("-f");
