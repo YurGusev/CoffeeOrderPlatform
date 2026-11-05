@@ -1,7 +1,7 @@
 issue: 13
-baseCommit: 0f117f3094362b670e4421c39c888de6830cc4f0
+baseCommit: c1eac3dd568972d8e03e5549b00a83dd40a929d7
 status: source-descriptor-before-formal-verification
-asOfUtc: "2026-11-03T23:11:43.927Z"
+asOfUtc: "2026-11-05T18:41:02.408Z"
 inputs:
   - issue: 2
     acceptedMergeCommit: 327638d4494269a151ee7c0ac945ac0053c3e0d4
@@ -147,6 +147,26 @@ inputs:
     acceptedMergeCommit: a5a5c27c7bb1ac5d563c4e7c22e1c2f4444fc7d5
     artifact: evidence/handoffs/issue-262.yaml
     sha256: dce3abd8b9c1258b15a0b29427612495127e2944837e94c5277078ac5c63146b
+  - issue: 264
+    acceptedMergeCommit: 0f117f3094362b670e4421c39c888de6830cc4f0
+    artifact: verification/launch/v1/scenarios/migrations.mjs
+    sha256: 8c678aa369fbeb94be74ac5feee2ccd811d9619d9ab27e46a8fc81ccc822781c
+  - issue: 267
+    acceptedMergeCommit: 919fab56210056ee3cfda5b4e58d6450f330bf66
+    artifact: evidence/handoffs/issue-267.yaml
+    sha256: d6a4680f2cd251f6507e3bee6d068e37d8f6fc3efbdee32afe97702debbd8eac
+  - issue: 269
+    acceptedMergeCommit: c5bb0e9bf66e05b75104e59d5325e1dedef6eee5
+    artifact: evidence/handoffs/issue-269.yaml
+    sha256: a7609561f683917b1de35754f353794729da503ea7b388f3254ceb277fa11706
+  - issue: 271
+    acceptedMergeCommit: ae599e6e2b8122e6101595c9ef4338a769ac54d3
+    artifact: evidence/handoffs/issue-271.yaml
+    sha256: 154e0089afdea41892d64146fc8846f5a4253d761cdb5a43fe518b9c7117b117
+  - issue: 266
+    acceptedMergeCommit: c1eac3dd568972d8e03e5549b00a83dd40a929d7
+    artifact: verification/launch/v1/scenarios/browser.mjs
+    sha256: 7ab9d98cb49f24cce89805a3893d1b10d4d4176e1062f88492f9ae143490a397
 historicalAcceptance:
   issue: 14
   acceptedMergeCommit: 9b5a320b936cecafcb74de2d6a1253e3d0a155ce
@@ -160,7 +180,7 @@ historicalAcceptance:
     не создаётся задним числом.
 outputs:
   - artifact: config/platform.yaml
-    sha256: 1b68cf7fcc964ae6f2cfe1dcb0bdbe798166e663822bd706ad4a8ee3c44a6846
+    sha256: 822956bf677e3925ebfc9f867cefe030340ee15a572bdd3da5653f4f1dcbd3db
     consumers:
       - 1
   - artifact: docs/launch/13_DELIVERY_DEPENDENCY_GRAPH.md
@@ -168,7 +188,7 @@ outputs:
     consumers:
       - 1
   - artifact: docs/launch/21_LAUNCH_VERIFICATION_SPEC.md
-    sha256: dfb1fbde69ed4d3e865b9ee2b39ac684ecd1c7a3cf4521eaa09f441ced64abd0
+    sha256: 06bc141c2cbadc2713ab0aa5ce0c87328055581a8f5d3eb4d0f2538d6021016b
     consumers:
       - 1
   - artifact: docs/operations/observability.md
@@ -196,11 +216,11 @@ outputs:
     consumers:
       - 1
   - artifact: tests/compose/topology.test.mjs
-    sha256: 2b18acc12c6bae8e69ce2150ee71d5f094044243e9de56378a5fa622c56a1798
+    sha256: ff964ca472a55958019d1fda0dae15220b497a45e67305934dc34fe8e929afe9
     consumers:
       - 1
   - artifact: tests/config/observability-bootstrap.test.mjs
-    sha256: 8b90f8331080c7abf21cec294fc5762ef8317f9aa63ad61de73464d273980c84
+    sha256: 805c68032f480856f441dfcc3b6af347272efc7efde9ff48ee8d18ceb0579271
     consumers:
       - 1
   - artifact: tests/observability/alerts.test.mjs
@@ -212,11 +232,11 @@ outputs:
     consumers:
       - 1
   - artifact: tests/realtime/fixtures/harness.test.mjs
-    sha256: b825ae27a33b619c6ef43b7e29355b0a026d4f89347156ec1cb68c8e53003719
+    sha256: ed64f175d7469ad9407a5f32bd84170a58146707288304a9a9a837c71a0644cc
     consumers:
       - 1
   - artifact: tools/compose-smoke.mjs
-    sha256: 62283eb2a58015ff435c3904d056dba30c12cd86671101346dc5159bcb6c3ccf
+    sha256: 98b1960a6c85e49c21309ecf4e4601b083250156adab090d1a97057d0201a92d
     consumers:
       - 1
   - artifact: tools/observability/verify.mjs
@@ -244,7 +264,7 @@ outputs:
   - artifact: evidence/launch-preparation/2026-11-01/controlled-config-lineage.md
     sha256: 1a6922ebac4f7bcc9e0c9de1672ec49d1438c6bcd65e529962f4b3180ad5d61e
   - artifact: verification/launch/v1/scenarios/browser.mjs
-    sha256: e04ff0d9725ba4734bb50f286f59fb3469bd48654e5e32ecc54fb36a06351a61
+    sha256: 2fbc9a8ae9684b62b9b82f365a28d4fda891a6a2686071ca0d87522035ba5c53
   - artifact: verification/launch/v1/scenarios/aroma-sandbox.mjs
     sha256: 5667cdb9c0cc1244b58ad610536c28de8aed517622796a7d2dc518a77675a6d9
   - artifact: verification/launch/v1/scenarios/aroma-sandbox-resources.mjs
@@ -252,11 +272,11 @@ outputs:
   - artifact: verification/launch/v1/scenarios/rollback.mjs
     sha256: f95227f2f0769dc06fef2088ac55eaab484fa874700b3a155ea2ece005e88271
   - artifact: tools/security-scan.mjs
-    sha256: 3842ec62ab388cb2f3fd3cc27b1fc4c0b468afcf4d7218cea7dfd36ddf9bf18c
+    sha256: fe3e6828dabe5cacf269e48baa57216533cf7a0ce25c122ec2a34412e16ccf96
     consumers:
       - 1
   - artifact: tests/tools/security-scan.test.mjs
-    sha256: 0406d8032873013c19a7fb3aacc9dbb3209cc3848ab8c10c795b7cafa1f7d604
+    sha256: 4275262682fed08bb54e9c003ba93fa0f74dc163aff8f5c6046e32ab29248ef5
     consumers:
       - 1
   - artifact: evidence/launch-preparation/2026-11-01/security-database-integrity.md
@@ -324,10 +344,12 @@ outputs:
     consumers:
       - 1
   - artifact: tests/config/platform-config.test.mjs
-    sha256: 9596879b8a9c357fd70300951a6ac545763735ff8e77a451325fb0eb03e2ef1b
+    sha256: ab36423a01a345dc33f79ee2dfe11a0d7b3f121ae7b70e77589d6891acb1639f
     consumers:
       - 1
 verification:
+  - command: "gh api repos/YurGusev/CoffeeOrderPlatform/actions/runs/42083077207"
+    result: "PASS: exact-head CI исходного состояния f0334d3e4316bdb137f7bf02505a8816edcf9915, conclusion=success, completed 2026-11-05T18:30:24Z. Последующее обновление descriptor требует нового exact-head CI; это не G12, qualification или полный допуск."
   - command: pnpm test:integration
     result: "FAIL: full run 20261102T064519Z-4393aea, exit 1 за 266.541 с; Customer unknown-COMMIT proof ожидал открытый errorCode вместо штатного [REDACTED]. Именованное событие и HTTP 503 подтверждены; rollback/restart/replay после assertion не достигнуты. Отрицательный отчёт сохранён."
     logSha256: 2dd11f69727ac07b1ad7147a69086408973044ecda246855c5832033886bf779
@@ -605,6 +627,8 @@ consumerContract:
     policy/key/flag child и G18 baseline flag child с проверенной lineage. Лимиты и provider scope сохранены;
     exact parent G12 product images, отдельная BOM/image-ID проверка fixture PostgreSQL."
 limitations:
+  - "Подготовка 2026-11-05: accepted base c1eac3dd включает #267/PR268, #269/PR270, #271/PR272, PR273 и #266/PR274. #266 остаётся OPEN: три реальных owner/browser proof и полный допуск нового candidate ещё не доказаны. Для #264 и #266 входом служит точный исполнимый artifact принятого merge; отсутствующие handoffs задним числом не создаются."
+  - "Полный run 20261104T003307Z-f84f862 завершён НЕ ДОПУСТИТЬ: G00–G10 и собственный G12 PASS, G11 FAIL (192/195), G13–G18 NOT_RUN, G19 выпустил отрицательный отчёт. Evidence и публикации сохранены. Последующий компонентный G12 20261105T043836Z-c556c1f FAIL: две HIGH-находки CVE-2026-109518 в APT закреплённого Alloy. Новый source ещё не проходил собственные G12, fresh qualification и полный G00–G19. Диагностический образ без APT не является принятым fix или допуском."
   - "Full run 20261103T220615Z-26d1e2c: G00–G07 и G12 PASS, G08 clean PASS / forward FAIL (Catalog category_name=NULL изменил to_jsonb fixture), downstream NOT_RUN, G19 НЕ ДОПУСТИТЬ без evidence errors. Отрицательные report/defect опубликованы в PR249#issuecomment-6617317501 и сохранены; qualification consumed. Принят отдельный fix #264 / PR265, merge 0f117f3094362b670e4421c39c888de6830cc4f0, exact head b41cfcc CI41734287920 PASS. Existing PostgreSQL regression 3/3 PASS сохраняет отказы при actual category/legacy-field/missing-row drift. Новому frozen SHA нужны собственные CI, matching G12, свежая SSE qualification и полный G00–G19."
   - "Принят #262 через PR #263: merge a5a5c27c7bb1ac5d563c4e7c22e1c2f4444fc7d5. CI и G12 normal source 9c731f2 не являются admission нового formal candidate; ему нужны собственные CI, matching G12, свежая SSE qualification и полный G00–G19."
   - "При интеграции #262 выбран весь accepted ciphertext 01744290a8d57dbda7271e3378a985d28b15c7d1355cebba64fe50fb036afaf3 вместо исторического formal renewal bcfaa602: оба trusted renewal от одного base сохраняют CA/key/SAN и меняют только 15 transport certPem. Новое renewal при интеграции не запускалось; исторические receipts и FAIL сохранены."
