@@ -1,0 +1,85 @@
+{
+  "name": "coffee-policy-proof-c6149215",
+  "policy": {
+    "cpus": 4,
+    "memoryMiB": 5120,
+    "memorySwapMiB": 6144,
+    "maxParallelism": 2,
+    "reservedSpaceGiB": 2,
+    "maxUsedSpaceGiB": 10,
+    "minFreeSpaceGiB": 40,
+    "registryCaFile": "/etc/ssl/certs/ca-certificates.crt"
+  },
+  "image": "moby/buildkit@sha256:28a898719c18a33f4e8000685287fa36fd0dd9560c6440227d3a732d79bb41d8",
+  "phases": [
+    {
+      "pass": 1,
+      "containerId": "25641fc0dfdf6492668e8dfc29977dafa34af65664e959955dd1b8bcaff5c2e5",
+      "workerId": "0ajma5p1zzqi3w4tlwln5u0oa",
+      "memory": 5368709120,
+      "memorySwap": 6442450944,
+      "cpuQuota": 400000,
+      "cpuPeriod": 100000,
+      "gc": {
+        "all": true,
+        "filter": null,
+        "keepDuration": 0,
+        "reservedSpace": 2147483648,
+        "maxUsedSpace": 10737418240,
+        "minFreeSpace": 42949672960
+      },
+      "cached": false
+    },
+    {
+      "pass": 2,
+      "containerId": "307efceed278149aeca6c056699415b43eee8e05ad2e4c2b46da7cae57756c2c",
+      "workerId": "0ajma5p1zzqi3w4tlwln5u0oa",
+      "memory": 5368709120,
+      "memorySwap": 6442450944,
+      "cpuQuota": 400000,
+      "cpuPeriod": 100000,
+      "gc": {
+        "all": true,
+        "filter": null,
+        "keepDuration": 0,
+        "reservedSpace": 2147483648,
+        "maxUsedSpace": 10737418240,
+        "minFreeSpace": 42949672960
+      },
+      "cached": true
+    }
+  ],
+  "canonicalWrapper": "PASS",
+  "scopedRegistrationAndAsyncVerifier": "PASS",
+  "node": {
+    "memoryMax": "536870912",
+    "cpuMax": "100000 100000",
+    "heapLimit": 281018368,
+    "imageId": "sha256:f385512bc3168ccc1de5e889f95b471fad9f055c25c07153300204bb42ad8a79"
+  },
+  "completed": true,
+  "preserved": {
+    "containers": 25,
+    "volumes": 37,
+    "containersHash": "4bc2e7613a4011268bb9000d0deca76bb11921df9868e2f78cc9fd9f9b17fb5d",
+    "volumesHash": "ee5961c728f2ccaecb6b198bd747d3df97160f197fcb289bf144e2be9ff8bd31",
+    "namedVolumes": 33,
+    "coffeeOrderDbVolumes": 2
+  },
+  "cleanup": true,
+  "sourceFileSha256": {
+    "config/platform.yaml": "a8e5b1db70fe8aa32a964f00fb9070c6fb1c123034a87c953777a8c500aefb25",
+    "config/toolchain-versions.json": "bed372093503fc747d25daa61b64f5bde67885cde3b2808e485e4b621000db8d",
+    "tools/buildkit-policy.mjs": "7852abd73374ee275e87ecc814f93af74466c89875363be304175c0101e15317",
+    "tools/docker-build.mjs": "663d322a5c89f0cfd4edf9e879ea11b964aa99a0ed3c7a93d22504cce79c57b1",
+    "tools/security-scan.mjs": "689882cb5b2fc7319eb5310f960870a37548fa60e1158d49bfe7adc4d1709991"
+  },
+  "recordedAt": "2026-11-05T12:29:49.559566+00:00",
+  "harnessSha256": "4601df5f25070d0282a948c17511690e25399ad445235532aef0fd4e4a776f25",
+  "limitations": [
+    "Изолированные scratch/COPY builds и диагностический Node process; бизнес-приложение под новым профилем не запускалось.",
+    "Совпадение Docker metadata и непрерывность процессов не являются SQL/checksum проверкой бизнес-данных.",
+    "Effective GC policy проверена; pressure-triggered очистка и full workload не выполнялись.",
+    "Полный G12/G00–G19 и deployment не выполнялись."
+  ]
+}
