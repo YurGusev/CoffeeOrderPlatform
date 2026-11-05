@@ -651,6 +651,15 @@ function verifySopsMacIfRequested(path) {
   }
 }
 
+export function runtimeContainerLimits(config, service) {
+  const policy = config.platform.containerLimits;
+  const limit =
+    service === "kafka"
+      ? policy.kafka
+      : (policy.overrides[service] ?? policy.node);
+  return { cpus: limit.cpus, mem_limit: `${limit.memoryMiB}m` };
+}
+
 export async function loadPlatformConfig(
   root = REPO_ROOT,
   configPath = join(root, "config/platform.yaml"),
@@ -663,6 +672,21 @@ export async function loadPlatformConfig(
   const config = await readYaml(path);
   validate(schema, config, path, [nginxSchema]);
   checkConfigKeys(config);
+  const buildkit = config.platform.buildkit;
+  if (
+    buildkit.memorySwapMiB < buildkit.memoryMiB ||
+    buildkit.reservedSpaceGiB > buildkit.maxUsedSpaceGiB
+  )
+    fail(
+      "CONFIG-BUILDKIT",
+      "BuildKit memory/swap or GC budgets are inconsistent",
+    );
+  const realtime = runtimeContainerLimits(config, "realtime-gateway");
+  if (realtime.cpus !== 2 || realtime.mem_limit !== "512m")
+    fail(
+      "CONFIG-CONTAINER-LIMITS",
+      "realtime must retain its accepted 2 CPU / 512 MiB bound",
+    );
   exactSet(config.services, NODE_RUNTIMES, "platform.yaml Node services");
   checkKafkaConfiguration(config);
   try {
@@ -881,5 +905,6 @@ export async function checkPlatformConfig(root = REPO_ROOT) {
   return {
     runtimeCount: DEPLOYABLE_RUNTIMES.length,
     environment: config.environment,
+    config,
   };
 }

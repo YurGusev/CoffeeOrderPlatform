@@ -4,6 +4,8 @@ x-runtime-defaults: &runtime-defaults
   build:
     context: .
     dockerfile: Dockerfile
+  cpus: 1.0
+  mem_limit: 512m
   init: true
   restart: unless-stopped
   stop_grace_period: 30s
@@ -37,6 +39,8 @@ services:
     image: coffee-platform-kafka:verified-artifact-required
     pull_policy: never
     hostname: kafka
+    cpus: 2.0
+    mem_limit: 2048m
     init: true
     restart: unless-stopped
     stop_grace_period: 30s

@@ -193,6 +193,20 @@ platform:
   publicBaseUrl: https://localhost:8443
   shutdownGraceMs: 30000
   localRestartMaxAttempts: 3
+  buildkit:
+    cpus: 4
+    memoryMiB: 5120
+    memorySwapMiB: 6144
+    maxParallelism: 2
+    reservedSpaceGiB: 2
+    maxUsedSpaceGiB: 10
+    minFreeSpaceGiB: 40
+    registryCaFile: /etc/ssl/certs/ca-certificates.crt
+  containerLimits:
+    node: { cpus: 1, memoryMiB: 512 }
+    overrides:
+      realtime-gateway: { cpus: 2, memoryMiB: 512 }
+    kafka: { cpus: 2, memoryMiB: 2048 }
   requestDeadlineMs: 5000
   bodyLimitBytes: 1048576
 
@@ -235,6 +249,7 @@ localIdentity:
   cacheMode: local
   startupGraceMs: 90000
   memoryLimitMiB: 2048
+  cpuLimit: 2
   operatorUsername: owner
   actorRef: actor:owner
   bootstrapAdminUsername: bootstrap-admin
