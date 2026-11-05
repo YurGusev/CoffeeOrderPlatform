@@ -2632,6 +2632,8 @@ void test("Compose materializes 14 Node runtimes, native nginx, and Kafka", () =
       ["CMD-SHELL"],
       runtime,
     );
+    assert.equal(service.healthcheck.interval, "30s", runtime);
+    assert.equal(service.healthcheck.start_interval, "5s", runtime);
     assert.equal(service.environment.RUNTIME_NAME, runtime, runtime);
     assert.equal(
       service.environment.COFFEE_CONFIG_FILE,
@@ -2811,6 +2813,23 @@ void test("Kafka requires the verified G12 artifact and preserves single-node KR
   assert.equal(kafka.environment.KAFKA_INTER_BROKER_LISTENER_NAME, "SASL_SSL");
   assert.equal(kafka.environment.KAFKA_AUTO_CREATE_TOPICS_ENABLE, "false");
   assert.match(kafka.healthcheck.test[1], /kafka-broker-api-versions/);
+  assert.match(kafka.healthcheck.test[1], /^KAFKA_JVM_PERFORMANCE_OPTS='/);
+  for (const option of [
+    "-XX:+UseSerialGC",
+    "-XX:TieredStopAtLevel=1",
+    "-XX:ActiveProcessorCount=1",
+    "-XX:SharedArchiveFile=/opt/kafka/kafka.jsa",
+    "-XX:CICompilerCount=1",
+    "-Xbatch",
+  ])
+    assert.ok(kafka.healthcheck.test[1].includes(option), option);
+  assert.match(
+    kafka.healthcheck.test[1],
+    /--command-config \/etc\/kafka\/secrets\/client\.properties/,
+  );
+  assert.equal(kafka.environment.KAFKA_JVM_PERFORMANCE_OPTS, undefined);
+  assert.equal(kafka.healthcheck.interval, "30s");
+  assert.equal(kafka.healthcheck.start_interval, "5s");
 });
 
 void test("Kafka data uses a project-scoped named volume", async () => {

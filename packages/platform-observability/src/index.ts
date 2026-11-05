@@ -144,17 +144,23 @@ const DEFAULT_SENSITIVE_KEYS = [
   "description",
 ] as const;
 
+const NORMALIZED_SENSITIVE_KEYS = DEFAULT_SENSITIVE_KEYS.map((key) =>
+  key.replace(/[\s_.-]/gu, "").toLowerCase(),
+);
+
 function shouldRedact(key: string, sensitiveKeys: readonly string[]): boolean {
   const lower = key.replace(/[\s_.-]/gu, "").toLowerCase();
-  return sensitiveKeys.some((candidate) =>
-    lower.includes(candidate.replace(/[\s_.-]/gu, "").toLowerCase()),
-  );
+  return sensitiveKeys.some((candidate) => lower.includes(candidate));
 }
 
 export function redactLogValue(
   value: unknown,
   sensitiveKeys: readonly string[] = DEFAULT_SENSITIVE_KEYS,
 ): unknown {
+  const normalizedSensitiveKeys =
+    sensitiveKeys === DEFAULT_SENSITIVE_KEYS
+      ? NORMALIZED_SENSITIVE_KEYS
+      : sensitiveKeys.map((key) => key.replace(/[\s_.-]/gu, "").toLowerCase());
   const active = new WeakSet<object>();
   const visit = (current: unknown, depth: number): unknown => {
     if (typeof current === "function" || typeof current === "symbol")
@@ -204,7 +210,7 @@ export function redactLogValue(
                 }),
           };
         } else {
-          result[key] = shouldRedact(key, sensitiveKeys)
+          result[key] = shouldRedact(key, normalizedSensitiveKeys)
             ? "[REDACTED]"
             : visit(entry, depth + 1);
         }

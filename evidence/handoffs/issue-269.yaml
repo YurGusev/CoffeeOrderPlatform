@@ -1,0 +1,75 @@
+issue: 269
+baseCommit: 919fab56210056ee3cfda5b4e58d6450f330bf66
+inputs:
+  - issue: 63
+    acceptedMergeCommit: d16b41dd58db4494a1fb743fa741010249d7afa7
+    artifact: evidence/handoffs/issue-63.yaml
+    sha256: e6df7df6405c7f5da423aa151857b5791211bc2bdbde8508e808f18fd1d3e03c
+  - issue: 210
+    acceptedMergeCommit: a6cceeaa822f9641c678b5dcae521c282391dd3d
+    artifact: evidence/handoffs/issue-210.yaml
+    sha256: 93dccd8c0c978977e4e6cae852d4801415e849b595ef233a95ad2936ba10d20f
+outputs:
+  - artifact: compose.yaml
+    sha256: ec327afd11904371227627ae6a93b336ac33a17f25fa8dd0c176fb4dcec9f056
+    consumers: [13]
+  - artifact: packages/platform-kafka-runtime/src/index.ts
+    sha256: 7b0b9be2bd0681e95df67cb8085e7050e7bd4796c7cbbeb45c00ce7643b8d5a6
+    consumers: [13]
+  - artifact: packages/platform-observability/src/index.ts
+    sha256: 3a423eaf0ca8792ff8689c6a31b848fcd1b874c47fe5c3aa09561d5e9b4374f5
+    consumers: [13]
+  - artifact: packages/platform-testing/test/platform-packages.test.mjs
+    sha256: 364372a339e45af74d10e67c3dc9600eadbbfeb8ec763248102c8c74b4ae50ed
+    consumers: [13]
+  - artifact: tests/compose/topology.test.mjs
+    sha256: a5a8727f0442afafbbfc2f2b6b71af08bb43644a60805c80b62e0d7d6e7bce4d
+    consumers: [13]
+  - artifact: tests/kafka/runtime.test.mjs
+    sha256: a4c6e87c2fd25483124b4539f04197c32306ed88aae23860a51c42c6e29387c9
+    consumers: [13]
+  - artifact: docs/reports/local-cpu-analysis-2026-11-05.md
+    sha256: 74a153dbf12609388b81a7d2a2abcbc5f9989f3c30ba8eb0a201b31fb26e0dd0
+    consumers: [13]
+  - artifact: docs/reports/local-cpu-code-optimization-2026-11-05.md
+    sha256: 8ed96bd479ede853fdec78911c2ab305df63855f68a2a32e01175dabb1086cda
+    consumers: [13]
+  - artifact: docs/reports/local-java-cpu-optimization-2026-11-05.md
+    sha256: 0819de95a16c6d16ef1201c24b900754a745f9f8a06740ec40df417bdf6e6b88
+    consumers: [13]
+  - artifact: docs/reports/local-memory-analysis-2026-11-05.md
+    sha256: 111486a8ba048a906ded59ab5ff8f3a36ed74e8fd045aae7f0b7bbe7885b0816
+    consumers: [13]
+  - artifact: docs/reports/local-storage-recovery-2026-11-05.md
+    sha256: e8fe5ab610100ac3877c3d1d918df9befca16dfa47a676e80eecabf2f1be0c11
+    consumers: [13]
+verification:
+  - command: "pnpm install --frozen-lockfile"
+    result: "passed"
+  - command: "pnpm exec tsc -b packages/platform-observability packages/platform-kafka-runtime --pretty false"
+    result: "passed"
+  - command: "pnpm typecheck"
+    result: "passed; сборка зависимостей, импортируемых существующими тестами"
+  - command: "node --test tests/kafka/runtime.test.mjs"
+    result: "passed: 18/18, без skips"
+  - command: "node --test --test-name-pattern='observability uses Pino|observability preserves valid correlation|database, HTTP and Outbox telemetry' packages/platform-testing/test/platform-packages.test.mjs"
+    result: "passed: 3/3, без skips"
+  - command: "node --test --test-name-pattern='Compose materializes 14 Node runtimes, native nginx, and Kafka|Kafka requires the verified G12 artifact|Kafka data uses a project-scoped named volume' tests/compose/topology.test.mjs"
+    result: "passed: 3/3, без skips"
+  - command: "pnpm exec oxlint --type-aware --deny-warnings packages/platform-observability/src/index.ts packages/platform-kafka-runtime/src/index.ts packages/platform-testing/test/platform-packages.test.mjs tests/kafka/runtime.test.mjs tests/compose/topology.test.mjs"
+    result: "passed"
+  - command: "pnpm exec prettier --check compose.yaml packages/platform-kafka-runtime/src/index.ts packages/platform-observability/src/index.ts packages/platform-testing/test/platform-packages.test.mjs tests/compose/topology.test.mjs tests/kafka/runtime.test.mjs docs/reports/local-cpu-analysis-2026-11-05.md docs/reports/local-cpu-code-optimization-2026-11-05.md docs/reports/local-java-cpu-optimization-2026-11-05.md docs/reports/local-memory-analysis-2026-11-05.md docs/reports/local-storage-recovery-2026-11-05.md evidence/handoffs/issue-269.yaml"
+    result: "passed"
+  - command: "git diff --check"
+    result: "passed"
+limitations:
+  - "Изолированная ветка от develop; перенесены только оптимизации текущей беседы, чужой WIP сохранён в исходном checkout."
+  - "Датированные отчёты описывают предшествующие локальные измерения и применение на frozen release; A/B в этом PR повторно не запускался."
+  - "Оптимизации redaction и Kafka pause/resume не развёрнуты на рабочих образах. Merge не является deployment."
+  - "Host-настройки SSD BuildKit, GC и swap представлены отчётом; одноразовые административные скрипты и private cache не публикуются."
+  - "Сохранность двух CoffeeOrderDb и 33 именованных volumes зафиксирована историческим metadata comparison; SQL/checksum бизнес-данных не выполнялись."
+  - "Healthcheck 30s увеличивает время обнаружения отказа; start_interval 5s действует при старте до healthy. Broker JVM/heap, аутентификация и probe остаются прежними."
+  - "Перед сменой pinned Kafka image необходимо проверить /opt/kafka/kafka.jsa и успешность CLI; текущие flags проверены в установленном образе."
+  - "Снижение среднего CPU всей машины после Java flags не доказано. Микробенчмарки не равны выигрышу сервера под бизнес-нагрузкой."
+  - "G12, полный G00–G19, длительный workload и heap dump в этой поставке не выполнялись. #13/#266 и их статусы не изменяются."
+  - "Штатный CI проверяется по окончательному head в PR; его результат фиксируется в GitHub после commit, без self SHA в handoff."

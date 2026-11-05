@@ -26,7 +26,8 @@ x-runtime-defaults: &runtime-defaults
     test:
       - CMD-SHELL
       - node -e "import('@coffee-platform/runtime/healthcheck').then(({main}) => main(process.argv.slice(1)))" /health/ready
-    interval: 5s
+    interval: 30s
+    start_interval: 5s
     timeout: 1s
     start_period: 30s
     retries: 3
@@ -77,8 +78,9 @@ services:
     healthcheck:
       test:
         - CMD-SHELL
-        - /opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 --command-config /etc/kafka/secrets/client.properties >/dev/null 2>&1
-      interval: 5s
+        - KAFKA_JVM_PERFORMANCE_OPTS='-XX:+UseSerialGC -XX:TieredStopAtLevel=1 -XX:ActiveProcessorCount=1 -XX:SharedArchiveFile=/opt/kafka/kafka.jsa -XX:CICompilerCount=1 -Xbatch' /opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 --command-config /etc/kafka/secrets/client.properties >/dev/null 2>&1
+      interval: 30s
+      start_interval: 5s
       timeout: 5s
       start_period: 30s
       retries: 12

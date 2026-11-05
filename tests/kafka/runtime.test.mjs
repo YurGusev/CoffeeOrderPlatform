@@ -2424,7 +2424,10 @@ void test(
         super();
         this.config = config;
         this.number = clients.length + 1;
-        this.delivered = false;
+        this.sent = 0;
+        this.polls = 0;
+        this.pauses = 0;
+        this.resumes = 0;
         events.push(`open:${this.number}`);
         clients.push(this);
       }
@@ -2441,9 +2444,20 @@ void test(
           { topic: physicalTargets.topics[topic], partition: 0 },
         ]);
       }
-      consume(_limit, callback) {
-        const batch = this.number === 1 && !this.delivered ? [validRecord] : [];
-        this.delivered = true;
+      consume(limit, callback) {
+        this.polls++;
+        const batch =
+          this.number === 1 && this.polls >= 20
+            ? Array.from(
+                {
+                  length: Math.min(
+                    limit,
+                    config.kafka.delivery.queueCapacity - this.sent,
+                  ),
+                },
+                () => ({ ...validRecord, offset: ++this.sent }),
+              )
+            : [];
         setTimeout(() => callback(null, batch), 1);
       }
       assign() {
@@ -2455,8 +2469,12 @@ void test(
       unassign() {
         events.push("unassign");
       }
-      pause() {}
-      resume() {}
+      pause() {
+        this.pauses++;
+      }
+      resume() {
+        this.resumes++;
+      }
       commitCb(offsets, callback) {
         this.emit("offset.commit", null, offsets);
         callback(null);
@@ -2497,6 +2515,21 @@ void test(
       await runtime.resource.start(AbortSignal.timeout(5000));
       await handlerStarted;
       const original = clients[0];
+      assert.equal(
+        original.resumes,
+        1,
+        "empty polls do not repeat native resume",
+      );
+      const pauseDeadline = Date.now() + 3000;
+      while (original.polls < 32 && Date.now() < pauseDeadline)
+        await new Promise((resolve) => setTimeout(resolve, 2));
+      assert.ok(original.polls >= 32, "paused intake keeps polling callbacks");
+      assert.equal(
+        original.pauses,
+        1,
+        "full capacity pauses native intake once",
+      );
+      assert.equal(original.resumes, 1, "full capacity does not resume intake");
       original.config.rebalance_cb({ code: -174 }, [
         { topic: physicalTargets.topics[topic], partition: 0 },
       ]);
@@ -2512,7 +2545,7 @@ void test(
       releaseHandler();
       const deadline = Date.now() + 3000;
       while (
-        events.filter((event) => event === "assign:1:2").length < 1 &&
+        (!events.includes("assign:1:2") || original.resumes < 2) &&
         Date.now() < deadline
       )
         await new Promise((resolve) => setTimeout(resolve, 2));
@@ -2529,6 +2562,11 @@ void test(
         1,
         "normal rebalance keeps the existing group member",
       );
+      assert.equal(
+        original.resumes,
+        2,
+        "a new assignment resumes paused intake",
+      );
       original.config.rebalance_cb({ code: -174 }, [
         { topic: physicalTargets.topics[topic], partition: 1 },
       ]);
@@ -2537,7 +2575,7 @@ void test(
       ]);
       const recoveryDeadline = Date.now() + 3000;
       while (
-        (!events.includes("assign:2:1") || clients.length < 2) &&
+        (!events.includes("assign:2:1") || clients[1]?.polls < 5) &&
         Date.now() < recoveryDeadline
       )
         await new Promise((resolve) => setTimeout(resolve, 2));
@@ -2560,6 +2598,7 @@ void test(
         events.includes("assign:1:3"),
         "the injected old-consumer assignment failed",
       );
+      assert.equal(clients[1].resumes, 1, "replacement idle polls resume once");
     } finally {
       releaseHandler();
       await runtime.resource
