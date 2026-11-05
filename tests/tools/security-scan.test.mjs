@@ -2064,7 +2064,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
       },
     });
     assert.equal(observedScratch, true);
-    assert.equal(placement.code, "BUILD_BUILDER_UNAVAILABLE");
+    assert.equal(placement.code, "BUILD_BUILDER_REGISTRATION_FAILED");
     assert.deepEqual(await readdir(selectedTempRoot), []);
     await assert.rejects(lstat(distinctLock), { code: "ENOENT" });
   } finally {
