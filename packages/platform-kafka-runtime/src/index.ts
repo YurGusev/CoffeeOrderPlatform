@@ -7,6 +7,8 @@ import {
 import {
   createNativeProducer,
   createNativeConsumer,
+  consumerPollTimeout,
+  MAX_IDLE_CONSUMER_POLL_TIMEOUT_MS,
   NativeKafkaError,
   type NativeProducerPort,
   type NativeConsumerPort,
@@ -936,6 +938,11 @@ export function createKafkaRuntime(input: KafkaRuntimeOptions): KafkaRuntime {
       ? { physicalTargets: options.physicalTargets }
       : {}),
   } as const;
+  const minConsumeTimeoutMs = consumerPollTimeout(policy.receiveTimeoutMs);
+  const maxIdleConsumeTimeoutMs = Math.max(
+    minConsumeTimeoutMs,
+    Math.min(MAX_IDLE_CONSUMER_POLL_TIMEOUT_MS, policy.receiveTimeoutMs),
+  );
   function track<T>(promise: Promise<T>): Promise<T> {
     pending.add(promise);
     void promise.then(
@@ -1115,6 +1122,8 @@ export function createKafkaRuntime(input: KafkaRuntimeOptions): KafkaRuntime {
       ]);
       try {
         await track(port.pause());
+        // Drain commit callbacks at the short poll budget, not the idle backoff.
+        port.setConsumeTimeout(minConsumeTimeoutMs);
         // librdkafka serves offset_commit_cb through consumer polling, including during drain.
         while (executor.metrics().pending > 0)
           await track(port.poll(1, signal));
@@ -1135,6 +1144,8 @@ export function createKafkaRuntime(input: KafkaRuntimeOptions): KafkaRuntime {
     let recoveries = 0;
     while (!stopping) {
       delete state.paused;
+      // A new group phase starts from the short callback-dispatch budget.
+      let consumeTimeoutMs = minConsumeTimeoutMs;
       try {
         while (!stopping && !state.restart) {
           const capacity = executor.metrics().capacity;
@@ -1151,6 +1162,27 @@ export function createKafkaRuntime(input: KafkaRuntimeOptions): KafkaRuntime {
             ),
           );
           if (state.restart || stopping) break;
+          // An idle group backs off to a bounded empty-poll budget. Records,
+          // paused intake, revoke and in-flight commits keep the short budget
+          // because librdkafka dispatches their callbacks through polls.
+          const idle =
+            records.length === 0 &&
+            !paused &&
+            state.revoked !== true &&
+            executor.metrics().pending === 0;
+          if (idle) {
+            const next = Math.min(
+              consumeTimeoutMs * 2,
+              maxIdleConsumeTimeoutMs,
+            );
+            if (next !== consumeTimeoutMs) {
+              port.setConsumeTimeout(next);
+              consumeTimeoutMs = next;
+            }
+          } else if (consumeTimeoutMs !== minConsumeTimeoutMs) {
+            port.setConsumeTimeout(minConsumeTimeoutMs);
+            consumeTimeoutMs = minConsumeTimeoutMs;
+          }
           for (const record of records)
             executor.enqueue({ ...record, key: record.key ?? "" });
         }

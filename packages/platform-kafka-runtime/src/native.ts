@@ -119,6 +119,7 @@ export type NativeConsumerPort = Readonly<{
     limit: number,
     signal?: AbortSignal,
   ): Promise<readonly NativeKafkaRecord[]>;
+  setConsumeTimeout(timeoutMs: number): void;
   commit(
     topic: string,
     partition: number,
@@ -356,8 +357,10 @@ function producerConfig(options: NativeProducerOptions): NativeConfig {
   };
 }
 
-function consumerPollTimeout(options: NativeConsumerOptions): number {
-  return Math.max(1, Math.min(10, Math.floor(options.receiveTimeoutMs / 2)));
+export const MAX_IDLE_CONSUMER_POLL_TIMEOUT_MS = 250;
+
+export function consumerPollTimeout(receiveTimeoutMs: number): number {
+  return Math.max(1, Math.min(10, Math.floor(receiveTimeoutMs / 2)));
 }
 
 function consumerConfig(options: NativeConsumerOptions): NativeConfig {
@@ -370,7 +373,7 @@ function consumerConfig(options: NativeConsumerOptions): NativeConfig {
     "enable.auto.offset.store": false,
     "queued.min.messages": 1,
     "queued.max.messages.kbytes": queueBytes(options),
-    "fetch.queue.backoff.ms": consumerPollTimeout(options),
+    "fetch.queue.backoff.ms": consumerPollTimeout(options.receiveTimeoutMs),
     offset_commit_cb: true,
     "statistics.interval.ms": options.receiveTimeoutMs,
     // An idle Fetch must not hold broker health traffic for the whole receive
@@ -988,7 +991,9 @@ export async function createNativeConsumer(
     // Polls also dispatch commit/rebalance callbacks while intake is paused.
     // A receive-budget-sized empty poll would hold the available worker slots
     // behind those callbacks. Keep it short, still below the outer deadline.
-    client.setDefaultConsumeTimeout(consumerPollTimeout(options));
+    client.setDefaultConsumeTimeout(
+      consumerPollTimeout(options.receiveTimeoutMs),
+    );
     // One batch has one receive budget, not one timeout per requested record.
     client.setDefaultIsTimeoutOnlyForFirstMessage(true);
   } catch {
@@ -1371,6 +1376,12 @@ export async function createNativeConsumer(
       .catch(() => false);
   };
 
+  const setConsumeTimeout = (timeoutMs: number): void => {
+    if (!positiveSafeInteger(timeoutMs) || timeoutMs > options.receiveTimeoutMs)
+      throw error("NATIVE_CONFIG_INVALID");
+    client.setDefaultConsumeTimeout(timeoutMs);
+  };
+
   const close = (): Promise<void> => {
     if (closePromise !== undefined) return closePromise;
     state = "closing";
@@ -1399,6 +1410,7 @@ export async function createNativeConsumer(
     connect,
     subscribe,
     poll,
+    setConsumeTimeout,
     commit,
     pause,
     resume,
