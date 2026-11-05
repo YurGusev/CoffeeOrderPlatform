@@ -2768,10 +2768,7 @@ void test("smoke accepts only runtime image IDs verified by G12 before startup",
       "buildRuntimeImages(",
       source.indexOf('markRollbackStage("build")'),
     );
-    const binding = source.indexOf(
-      "const verifiedImages = await readVerifiedRuntimeImages(",
-      build,
-    );
+    const binding = source.indexOf("const verifiedImages = await (", build);
     assert.ok(build >= 0 && binding > build);
     assert.ok(
       source.indexOf("verifyBuildInputSnapshot(snapshot)", build) < binding,

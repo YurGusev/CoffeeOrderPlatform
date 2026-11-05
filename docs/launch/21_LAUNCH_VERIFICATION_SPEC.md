@@ -787,6 +787,11 @@ G15 сохраняет child context, lineage receipt, полный browser runt
 joined exit code 0, восстановленную Git lineage, owner evidence, stdout receipt
 и отсутствие child checkout/evidence, контейнеров, сетей, volumes, временных
 ключей, NSS profile и Compose override. Один exit code 0 не является PASS.
+После cleanup основного browser runtime G15 выполняет отдельные обязательные
+owner/browser сценарии `positive`, `private-eof` и `reauth` с тем же проверенным
+OIDC-only child context. Parent принимает только все три proof с привязкой к
+config и lineage, hashes и подтверждённым cleanup; пропуски не допускаются.
+Этот порядок после G14 принят владельцем и не меняет capacity qualification.
 Synthetic login не подтверждает production IdP; actual runtime status берётся
 только из результата конкретного запуска.
 

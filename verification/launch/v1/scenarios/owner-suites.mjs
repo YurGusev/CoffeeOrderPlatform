@@ -117,7 +117,7 @@ export async function resolveComposeProjectName(
   return `coffee-launch-local-${Date.now().toString(36)}-${randomBytes(4).toString("hex")}`;
 }
 
-async function runSuites(files, realtimeOwnerProof = false) {
+async function runSuites(files) {
   const argv = [
     process.execPath,
     "--test",
@@ -130,7 +130,6 @@ async function runSuites(files, realtimeOwnerProof = false) {
     env: {
       ...process.env,
       COFFEE_DB_LIVE_PROOF: "1",
-      ...(realtimeOwnerProof ? { COFFEE_REALTIME_OWNER_LIVE_PROOF: "1" } : {}),
     },
     encoding: "utf8",
     maxBuffer: 64 * 1024 * 1024,
@@ -153,7 +152,7 @@ export async function runOwnerSuites(kind) {
   const projectName = await resolveComposeProjectName();
   const files =
     kind === "integration" ? await integrationFiles() : RECOVERY_FILES;
-  await runSuites(files, kind === "recovery");
+  await runSuites(files);
   const proofs =
     kind === "integration"
       ? ["--customer-proof", "--recovery-proof"]

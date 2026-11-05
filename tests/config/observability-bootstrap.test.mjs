@@ -5595,8 +5595,8 @@ void test("G15 child G08 credential admission rejects non-profile config changes
     skipLineageValidation: true,
     mutateConfig: (text) =>
       text.replace(
-        "clientId: realtime-browser-fixture",
-        "clientId: unauthorized-fixture",
+        "kafkaNamespaceIsolation: false",
+        "kafkaNamespaceIsolation: true",
       ),
   });
   let connectCalls = 0;
@@ -10609,6 +10609,47 @@ void test("browser correlation executes the child lifecycle and preserves early 
       contextFile: contextPath,
       loadImage: false,
     });
+    const { loadVerifiedBrowserParentModules } =
+      await import("../../tools/compose-smoke.mjs");
+    const parentModules = await loadVerifiedBrowserParentModules(root);
+    const childImages = await import(
+      pathToFileURL(
+        join(child.checkoutDir, "tools/verified-infrastructure-image.mjs"),
+      ).href
+    );
+    await assert.rejects(
+      childImages.loadVerifiedGateImage({
+        target: "kafka",
+        contextFile: success.contextPath,
+        loadImage: false,
+      }),
+      /Report module не запущен из source root/u,
+    );
+    const parentKafka = await parentModules.images.loadVerifiedGateImage({
+      target: "kafka",
+      contextFile: success.contextPath,
+      loadImage: false,
+    });
+    assert.equal(parentKafka.imageId, expectedKafka.imageId);
+    const childReport = await import(
+      pathToFileURL(
+        join(child.checkoutDir, "verification/launch/v1/report.mjs"),
+      ).href
+    );
+    await assert.rejects(
+      childReport.validateLaunchContext(success.contextPath),
+      /Report module не запущен из source root/u,
+    );
+    assert.equal(
+      (await parentModules.validateLaunchContext(success.contextPath))
+        .candidateRoot,
+      root,
+    );
+    const parentRuntimeImages =
+      await parentModules.images.readVerifiedRuntimeImages({
+        contextFile: success.contextPath,
+      });
+    assert.equal(parentRuntimeImages.length, 15);
     assert.equal(image.imageId, expectedKafka.imageId);
     assert.equal(image.receiptSha256, expectedKafka.receiptSha256);
     assert.equal(image.candidateSha, sha);
