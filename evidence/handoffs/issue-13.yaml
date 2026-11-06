@@ -1,7 +1,7 @@
 issue: 13
 baseCommit: 7ee04f202054b39f47f504b1a4125e6598e59eae
 status: source-descriptor-before-formal-verification
-asOfUtc: "2026-11-06T19:21:10.887101Z"
+asOfUtc: "2026-11-06T20:50:18.601499Z"
 inputs:
   - issue: 2
     acceptedMergeCommit: 327638d4494269a151ee7c0ac945ac0053c3e0d4
@@ -256,7 +256,7 @@ outputs:
     consumers:
       - 1
   - artifact: verification/launch/v1/runner.test.mjs
-    sha256: 36bbc58f9b6d9d51640e3ded92bc688dccecf57856ed1079b0ada1ac18899273
+    sha256: ee8ac5694f804ca667e6b7f6f04dd07e070d18ebb0aaa6ea0ae69774a2b36b66
     consumers:
       - 1
   - artifact: docs/adr/ADR-0034-g16-existing-account-verification.md
@@ -274,7 +274,7 @@ outputs:
   - artifact: verification/launch/v1/scenarios/aroma-sandbox-resources.mjs
     sha256: d583229f493a23d582a37e4e020415333943207d2475a57ddc53ba433cd64304
   - artifact: verification/launch/v1/scenarios/rollback.mjs
-    sha256: f95227f2f0769dc06fef2088ac55eaab484fa874700b3a155ea2ece005e88271
+    sha256: f4f0d372272cb670e9b74b725cec4839fc9b9af86f7d7f720de26b11654882b8
   - artifact: tools/security-scan.mjs
     sha256: 73cf89195354ae6d5a36803b491020d4b679de4d0d1b0857d9aea565e3d8d448
     consumers:
@@ -887,6 +887,19 @@ verification:
       pnpm exec oxlint --type-aware --deny-warnings tools/compose-smoke.mjs tests/compose/topology.test.mjs
     result: PASS, exit 0; независимая проверка окончательных двух codefiles.
     logSha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+  - command: >-
+      node --test --test-name-pattern='controlled config checkout retains Git objects|G18 baseline child changes only|G18 validates only a clean config-only|G18 creates isolated config commits|G16 child config preserves parent' verification/launch/v1/runner.test.mjs
+    result: >-
+      PASS: 5/5, fail/cancel/skip 0, 6.833 s; независимая проверка Node 26.8.1. Новый real-Git
+      regression сначала RED на shared clone: git show после удаления parent exit 128.
+      После замены на dissociate при сохранённом no-hardlinks child читает обе ревизии и HEAD^
+      после удаления borrowed parent и его upstream. G16/G18 используют тот же existing helper;
+      cleanup и controlled config lineage сохранены. Platform runtime этим не проверен.
+    logSha256: 78f2039db23ac8ff300aae78a8684d6be187eae0e45aebe6c4d057d5db622efe
+  - command: >-
+      pnpm exec oxlint --type-aware --deny-warnings verification/launch/v1/scenarios/rollback.mjs verification/launch/v1/runner.test.mjs
+    result: PASS, exit 0; независимая проверка двух окончательных codefiles, 1.672 s.
+    logSha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
 consumerContract:
   consumer: 1
   admission: >-
@@ -915,6 +928,16 @@ consumerContract:
     G18 baseline flag child с проверенной lineage. Лимиты и provider scope сохранены; exact parent
     G12 product images, отдельная BOM/image-ID проверка fixture PostgreSQL.
 limitations:
+  - >-
+    Source 1978a159: exact-head CI PASS1530/0FAIL/76existing optionalSKIP; standalone G12 run
+    20261106T192707Z-1978a15 FAIL/HIGH_OR_CRITICAL_FINDINGS за893.195 s: rawHIGH27,
+    resolvedFixed2, unresolvedHIGH25, CRITICAL0, cleanupFailures=[]. Сохранены24SBOM и24vulnerability
+    reports; curated PASS receipts не выданы. Блокеры — CVE-2026-107891 вmusl/musl-utils (17)
+    иCVE-2026-78661 вx/net (8); опубликованы PR249#issuecomment-6694165101. Новый security rule
+    не реализован, отдельный фикс требует решения владельца. Незакрытое review о retained Git
+    checkout устранено минимально: existing shared clone заменён на dissociate, включая inherited
+    alternates. Новому source нужны собственные CI, G12, native G13, fresh SSE qualification
+    иполный G00–G19; локальные real-Git проверки не являются runtime G16/G18 admission.
   - >-
     Source c31a937d: собственные CI и standalone G12 PASS, native normal G13 FAIL при stop
     orders-aroma-preparation с KafkaRuntimeError. Отдельный контролируемый code-overlay diagnostic

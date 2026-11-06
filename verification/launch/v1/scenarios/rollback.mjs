@@ -547,7 +547,7 @@ export async function createConfigOnlyCheckout({
       [
         "clone",
         "--quiet",
-        "--shared",
+        "--dissociate",
         "--no-hardlinks",
         parent.root,
         baselineRoot,

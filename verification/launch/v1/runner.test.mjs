@@ -710,6 +710,70 @@ void test("G18 baseline child changes only the approved parent mutation flag", a
   );
 });
 
+void test("controlled config checkout retains Git objects after borrowed parent cleanup", async (t) => {
+  const fixture = await rollbackGitFixture(t);
+  const directory = await mkdtemp(join(tmpdir(), "launch-borrowed-parent-"));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const parent = join(directory, "parent");
+  execFileSync(
+    "git",
+    [
+      "clone",
+      "--quiet",
+      "--shared",
+      "--no-hardlinks",
+      fixture.roots.disabled,
+      parent,
+    ],
+    { stdio: "ignore" },
+  );
+  assert.equal(
+    (
+      await readFile(join(parent, ".git/objects/info/alternates"), "utf8")
+    ).trim(),
+    join(fixture.roots.disabled, ".git/objects"),
+  );
+  const child = await createRollbackBaseline({
+    candidateRoot: parent,
+    candidateSha: fixture.disabledSha,
+    parentDirectory: directory,
+  });
+  await rm(parent, { recursive: true, force: true });
+  assert.equal(
+    rollbackGit(child.baselineRoot, "show", `${child.baselineSha}:stable.txt`),
+    "unchanged",
+  );
+  assert.equal(
+    rollbackGit(
+      child.baselineRoot,
+      "show",
+      `${fixture.disabledSha}:stable.txt`,
+    ),
+    "unchanged",
+  );
+  await rm(fixture.roots.disabled, { recursive: true, force: true });
+  assert.equal(
+    rollbackGit(
+      child.baselineRoot,
+      "show",
+      `${fixture.disabledSha}:config/platform.yaml`,
+    ).includes("mutationsEnabled: false"),
+    true,
+  );
+  assert.equal(
+    rollbackGit(
+      child.baselineRoot,
+      "show",
+      `${child.baselineSha}:config/platform.yaml`,
+    ).includes("mutationsEnabled: true"),
+    true,
+  );
+  assert.equal(
+    rollbackGit(child.baselineRoot, "rev-parse", "HEAD^"),
+    fixture.disabledSha,
+  );
+});
+
 void test("G18 validates only a clean config-only B→D→R lineage", async (t) => {
   const good = await rollbackGitFixture(t);
   const receipt = await validateRollbackLineage({
