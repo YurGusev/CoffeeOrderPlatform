@@ -135,7 +135,12 @@ bytes. Отдельная standalone runtime проверка с disposable Post
 миграции. В `finally` он подтверждает cleanup этих БД теми же scoped helpers,
 что G10/G11: предыдущие gates удаляют свои БД и не подготавливают их для G13.
 
-Kafka topics/groups содержат run-id. AROMA mutation по умолчанию выключена.
+Kafka topics/groups содержат run-id. Для обычного изолированного G13 перед
+запуском runtimes создаётся registry и фиксируются начальные offsets только
+для durable consumer groups на новом принадлежащем запуску Kafka volume.
+Существующий volume отклоняется до изменения broker; политика offset и
+поведение постоянного не-launch окружения не меняются.
+AROMA mutation по умолчанию выключена.
 
 `environment.json`: commit/tree SHA, dirty=false, UTC/timezone, OS/arch, CPU/RAM,
 Node/pnpm/Docker/Compose/PostgreSQL/Kafka/browser versions, image digests,

@@ -4762,10 +4762,24 @@ void test("G18 Compose failure diagnostics preserve the original error and expos
   const end =
     source.indexOf("\n}\n\nfunction prepareKafkaNamespaceRegistry(", start) + 2;
   assert.ok(start >= 0 && end > start);
+  const { deriveRuntimeKafkaTarget } =
+    await import("../../packages/platform-config/src/launch-kafka-target.ts");
+  const targetStart = source.indexOf("function composeKafkaTarget(");
+  const targetEnd =
+    source.indexOf(
+      "\n}\n\nexport function captureKafkaNamespaceInventory",
+      targetStart,
+    ) + 2;
+  assert.ok(targetStart >= 0 && targetEnd > targetStart);
+  const composeKafkaTarget = runInNewContext(
+    `(${source.slice(targetStart, targetEnd)})`,
+    { deriveRuntimeKafkaTarget },
+  );
   const bootstrap = runInNewContext(`(${source.slice(start, end)})`, {
     runCompose() {
       assert.fail("bootstrap bypassed the tracked Compose operation");
     },
+    composeKafkaTarget,
     buildKafkaRegistryBootstrapScript(config, _identity, client) {
       return Object.values(config.kafka.topics).flatMap(
         ({ name, dlq, partitions }) =>
@@ -4794,7 +4808,30 @@ void test("G18 Compose failure diagnostics preserve the original error and expos
   bootstrap(
     "fixture-project",
     "/fixture-secrets",
-    { kafka: { topics: topicConfigs }, services: {} },
+    {
+      environment: "development",
+      verification: { kafkaNamespaceIsolation: true },
+      kafka: { topics: topicConfigs },
+      services: {
+        consumer: {
+          kafka: {
+            producers: [],
+            consumers: [
+              {
+                processing: "durable",
+                groupId: "durable",
+                topics: ["coffee.orders.lifecycle.v1"],
+              },
+              {
+                processing: "realtime",
+                groupId: "realtime",
+                topics: ["coffee.realtime.invalidate.v1"],
+              },
+            ],
+          },
+        },
+      },
+    },
     "/fixture-compose",
     (operation, project, secrets, args) => {
       operations.push(operation);
@@ -4802,6 +4839,12 @@ void test("G18 Compose failure diagnostics preserve the original error and expos
       assert.equal(secrets, "/fixture-secrets");
       assert.equal(args[0], operation === "kafka-up" ? "up" : "exec");
       if (operation === "kafka-offset-bootstrap") bootstrapScript = args.at(-1);
+    },
+    {
+      schemaVersion: 1,
+      runId: "20261024T120000Z-aaaaaaa",
+      candidateSha: "a".repeat(40),
+      baseConfigSha256: "b".repeat(64),
     },
   );
   assert.deepEqual(operations, ["kafka-up", "kafka-offset-bootstrap"]);
@@ -4813,6 +4856,16 @@ void test("G18 Compose failure diagnostics preserve the original error and expos
     assert.ok(bootstrapScript.includes(`--topic ${JSON.stringify(name)}`));
     assert.ok(bootstrapScript.includes(`--topic ${JSON.stringify(dlq)}`));
   }
+
+  assert.match(
+    bootstrapScript,
+    /--group "20261024T120000Z-aaaaaaa\.durable" --topic "20261024T120000Z-aaaaaaa\.coffee\.orders\.lifecycle\.v1" --reset-offsets --to-earliest --execute/u,
+  );
+  assert.doesNotMatch(
+    bootstrapScript,
+    /--group "20261024T120000Z-aaaaaaa\.realtime"/u,
+  );
+  assert.equal((bootstrapScript.match(/--reset-offsets/g) ?? []).length, 1);
 
   const directory = await mkdtemp(
     join(tmpdir(), "g18-safe-failure-diagnostic-"),
@@ -7628,6 +7681,121 @@ void test("nginx ingress uses the scoped public CA with strict TLS", async () =>
       assert.equal(request.servername, "localhost");
     }
     assert.equal(reads, mode === "canonical" ? 1 : 0);
+  }
+});
+
+void test("normal launch G13 bootstraps durable offsets only on a fresh owned Kafka volume", async () => {
+  const { isExternalRecoveryProof } =
+    await import("../../tools/compose-smoke.mjs");
+  const source = await readFile(
+    join(REPO_ROOT, "tools/compose-smoke.mjs"),
+    "utf8",
+  );
+  const part = (start, end) => {
+    const first = source.indexOf(start);
+    const last = source.indexOf(end, first);
+    assert.ok(first >= 0 && last > first);
+    return source.slice(first, last);
+  };
+  const selection = part(
+    "const launchContextPath = process.env.COFFEE_LAUNCH_CONTEXT_FILE;",
+    "\n  if (observability !== undefined)",
+  );
+  const identity = part(
+    "const isolatedDatabaseProof =",
+    "    if (proofLaunchIdentity) {",
+  );
+  const guardStart = source.lastIndexOf(
+    "    if (",
+    source.indexOf("      const kafkaVolume ="),
+  );
+  const guard = source.slice(
+    guardStart,
+    source.indexOf("    if (options.mutationDisableRollback)", guardStart),
+  );
+  const bootstrapStart = source.lastIndexOf(
+    "    if (",
+    source.indexOf("      prepareRecoveryKafkaBootstrap(", guardStart),
+  );
+  const bootstrap = source.slice(
+    bootstrapStart,
+    source.indexOf(
+      '    runTrackedRollbackCompose(\n      "runtime-stack-up"',
+      bootstrapStart,
+    ),
+  );
+  for (const [options, context, policy, existing, expected] of [
+    [{ projectName: "owned", noBuild: true }, true, true, false, "bootstrap"],
+    [{ projectName: "owned" }, true, true, true, "deny"],
+    [{ projectName: "owned" }, false, true, true, "registry"],
+    [{ projectName: "owned" }, true, false, false, "none"],
+    [{ databaseProof: true }, true, true, false, "registry"],
+    [{ customerProof: true }, true, true, false, "registry"],
+    [{ aromaBindingProof: true }, true, true, false, "registry"],
+    [{ aromaCartProof: true }, true, true, false, "registry"],
+    [{ mutationDisableRollback: true }, true, true, false, "registry"],
+    [{ stubSecrets: true }, true, true, false, "registry"],
+    [{ recoveryProof: true }, true, true, false, "bootstrap"],
+    [
+      { recoveryProof: true, observabilityFixture: true },
+      true,
+      true,
+      false,
+      "bootstrap",
+    ],
+  ]) {
+    const calls = [];
+    const run = () =>
+      runInNewContext(
+        `(() => {
+      ${selection}
+      const launchIdentity = context ? { context: { resources: {} } } : undefined;
+      ${identity}
+      ${guard}
+      ${bootstrap}
+    })()`,
+        {
+          process: {
+            env: context ? { COFFEE_LAUNCH_CONTEXT_FILE: "/context" } : {},
+          },
+          context,
+          options,
+          isExternalRecoveryProof,
+          assert,
+          platformConfig: { verification: { kafkaNamespaceIsolation: policy } },
+          launchConfigIdentity: () => ({ runId: "run" }),
+          projectName: "owned",
+          secretsDir: "/secrets",
+          composeFile: "/compose",
+          browserHook: undefined,
+          observability: undefined,
+          kafkaNamespaceIdentity: {},
+          runTrackedRollbackCompose() {},
+          runDocker(args) {
+            calls.push("guard");
+            assert.equal(args.at(-1), "name=owned_kafka_data");
+            return existing ? "owned_kafka_data\n" : "";
+          },
+          prepareRecoveryKafkaBootstrap() {
+            calls.push("bootstrap");
+          },
+          prepareKafkaNamespaceRegistry() {
+            calls.push("registry");
+          },
+        },
+      );
+    if (expected === "deny") assert.throws(run, /fresh Kafka volume/u);
+    else run();
+    assert.deepEqual(
+      calls,
+      expected === "deny"
+        ? ["guard"]
+        : expected === "bootstrap"
+          ? ["guard", "bootstrap"]
+          : expected === "registry"
+            ? ["registry"]
+            : [],
+    );
   }
 });
 

@@ -1,7 +1,7 @@
 issue: 13
 baseCommit: 7ee04f202054b39f47f504b1a4125e6598e59eae
 status: source-descriptor-before-formal-verification
-asOfUtc: "2026-11-06T16:20:25.690103Z"
+asOfUtc: "2026-11-06T19:21:10.887101Z"
 inputs:
   - issue: 2
     acceptedMergeCommit: 327638d4494269a151ee7c0ac945ac0053c3e0d4
@@ -192,7 +192,7 @@ outputs:
     consumers:
       - 1
   - artifact: docs/launch/21_LAUNCH_VERIFICATION_SPEC.md
-    sha256: 3db5d8b230e2d186cc2740294999f8cb90718d331e91e5a9e0a2923f835a2974
+    sha256: 1299dd27a9793e15974fdcd3c3a42d1c5a6b189248f69139e001199a0db7fa00
     consumers:
       - 1
   - artifact: docs/operations/observability.md
@@ -220,7 +220,7 @@ outputs:
     consumers:
       - 1
   - artifact: tests/compose/topology.test.mjs
-    sha256: 5ef847e140b165eb4958f2186b2ff565cf00dd701374b86dec8cba617c0a481b
+    sha256: fad7b810462acd41bab99de7cb474985772e57349efb155d52ac35208abcf16e
     consumers:
       - 1
   - artifact: tests/config/observability-bootstrap.test.mjs
@@ -240,7 +240,7 @@ outputs:
     consumers:
       - 1
   - artifact: tools/compose-smoke.mjs
-    sha256: 955f5a9e700b4b625856bc390cfff1315a34b17bdf0889c9691dad739f6e8029
+    sha256: 7dc42bdcd50472ea17ad2cd990b95d345bd0d4a8c01a95aa50de56db14e2ccc7
     consumers:
       - 1
   - artifact: tools/observability/verify.mjs
@@ -874,6 +874,19 @@ verification:
       fixture/recovery CA, оба ingress endpoint, TLS1.3, SNI и rejectUnauthorized=true.
       Fake transport, без runtime/SQL/HTTP; component FAIL и полный допуск этим не заменяются.
     logSha256: 5f14800e21bf9dc8a81b5740767932c83baeab894c2df346092be93b90dca429
+  - command: >-
+      node --test --test-name-pattern='normal launch G13 bootstraps durable offsets|normal launch G13 prepares and cleans|G18 Compose failure diagnostics preserve|Kafka namespace inventory proves' tests/compose/topology.test.mjs
+    result: >-
+      PASS: 4/4, fail/cancel/skip 0; независимая проверка Node 26.8.1. Реальные source chunks
+      проверяют bootstrap обычного изолированного G13 и отказ при существующем Kafka volume
+      до записи. Persistent nonlaunch с включённой namespace policy сохраняет registry path;
+      исключённые proof-режимы и bootstrap только durable consumers проверены. Fake зависимости,
+      без Docker/Kafka/SQL; новый regression сначала RED на прежнем normal caller.
+    logSha256: de72e0d66d5e4d43ed28a160bcad48a4b3837c73ab244ac3a29ddbb6a6009b48
+  - command: >-
+      pnpm exec oxlint --type-aware --deny-warnings tools/compose-smoke.mjs tests/compose/topology.test.mjs
+    result: PASS, exit 0; независимая проверка окончательных двух codefiles.
+    logSha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
 consumerContract:
   consumer: 1
   admission: >-
@@ -902,6 +915,17 @@ consumerContract:
     G18 baseline flag child с проверенной lineage. Лимиты и provider scope сохранены; exact parent
     G12 product images, отдельная BOM/image-ID проверка fixture PostgreSQL.
 limitations:
+  - >-
+    Source c31a937d: собственные CI и standalone G12 PASS, native normal G13 FAIL при stop
+    orders-aroma-preparation с KafkaRuntimeError. Отдельный контролируемый code-overlay diagnostic
+    на тех же проверенных image bytes наблюдал native code -140 (AUTO_OFFSET_RESET: отсутствует
+    начальный offset либо offset вне диапазона); его первичный FAIL — realtime-gateway readiness
+    503. Уникальная причина прежнего stop FAIL этим не доказана, diagnostic не является native
+    G13 admission. В normal isolated G13 отсутствовал существующий recovery bootstrap начальных
+    durable offsets. Verifier теперь использует этот helper и тот же fresh-volume guard до
+    любых изменений broker; persistent/nonlaunch, autoOffsetReset=error, pins и бюджеты сохранены.
+    Новому source обязательны собственные exact-head CI, G12, native normal G13, свежая SSE
+    qualification и полный G00–G19. Прежние отрицательные evidence сохранены.
   - >-
     Source b74fb10c: exact-head CI и отдельный G12 PASS; после исправления external DB lifecycle
     все 16 контейнеров normal G13 healthy. Component G13 сохранён как FAIL:

@@ -9734,6 +9734,10 @@ export async function runComposeSmoke({
       options.mutationDisableRollback ||
       options.aromaBindingProof ||
       options.aromaCartProof;
+    const bootstrapFreshKafka =
+      options.recoveryProof ||
+      (externalRecovery &&
+        platformConfig.verification?.kafkaNamespaceIsolation === true);
     const proofLaunchIdentity =
       launchIdentity && isolatedDatabaseProof && !options.observabilityFixture
         ? launchConfigIdentity(launchIdentity)
@@ -9757,7 +9761,7 @@ export async function runComposeSmoke({
         "isolated launch database proof requires the explicit database-isolation policy",
       );
     }
-    if (options.recoveryProof) {
+    if (bootstrapFreshKafka) {
       const kafkaVolume = `${projectName}_kafka_data`;
       const existingVolumes = runDocker([
         "volume",
@@ -10503,7 +10507,7 @@ export async function runComposeSmoke({
           : ["up", "--detach", "--wait", "--no-build"];
     if (options.mutationDisableRollback) markRollbackStage("up");
     composeAttempted = true;
-    if (options.recoveryProof)
+    if (bootstrapFreshKafka)
       prepareRecoveryKafkaBootstrap(
         projectName,
         secretsDir,
