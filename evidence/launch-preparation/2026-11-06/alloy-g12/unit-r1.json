@@ -1,0 +1,32 @@
+{
+  "recorded_at_utc": "2026-11-06T01:53:19.784676+00:00",
+  "worktree": "/home/yurgusev/.codex/worktrees/alloy-g12/CoffeeOrderPlatform",
+  "base": "c1eac3dd",
+  "diff_sha256_before_and_after": "2326816db58afb74ca4dd4f88a5f07432e49f08d78cbae01984665aea15fc588",
+  "environment": {
+    "node": "26.8.1",
+    "umask": "0022",
+    "PATH": "/home/yurgusev/.local/lib/nodejs/node-v26.8.1-linux-x64/bin:/home/yurgusev/.local/share/coffee-platform/tools/bin:/home/yurgusev/.local/bin:/usr/local/bin:/usr/bin:/bin:/snap/bin"
+  },
+  "checks": [
+    {
+      "command": "node --test --test-name-pattern='Collector config accepts|observability provenance includes|generated Collector and backend configs|observability overlay keeps|persistent lifecycle orders|G12 binds storage helper' tests/config/observability-bootstrap.test.mjs tests/compose/topology.test.mjs tests/observability/storage.test.mjs",
+      "exit_code": 0,
+      "passed": 6,
+      "failed": 0
+    },
+    {
+      "command": "git diff --check",
+      "exit_code": 0
+    }
+  ],
+  "prior_result": {
+    "diff_sha256": "5ab3f80d7e9b4c27ed43c9aa443e1ae4ab20ca0eca52014183bbce9f46932839",
+    "command": "node --test tests/tools/security-scan.test.mjs",
+    "exit_code": 0,
+    "passed": 18,
+    "failed": 0,
+    "note": "Before R1; scanner unchanged per parent. Negative fixture tracebacks were not saved."
+  },
+  "not_checked": ["Docker build", "runtime", "heavy checks"]
+}

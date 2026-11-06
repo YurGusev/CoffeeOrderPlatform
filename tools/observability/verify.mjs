@@ -4648,6 +4648,7 @@ export async function runObservabilityVerification({
     toolchain,
     storageHelper,
     verifiedGrafana,
+    verifiedCollector,
     launchEvidenceDir,
     formalContext,
     activePhase = "startup",
@@ -4715,6 +4716,16 @@ export async function runObservabilityVerification({
       target: "grafana",
       contextFile: process.env.COFFEE_LAUNCH_CONTEXT_FILE,
     });
+    verifiedCollector = await loadVerifiedGateImage({
+      target: "otel-collector",
+      contextFile: process.env.COFFEE_LAUNCH_CONTEXT_FILE,
+    });
+    evidence.otelCollectorImage = {
+      imageId: verifiedCollector.imageId,
+      receiptSha256: verifiedCollector.receiptSha256,
+      candidateSha: verifiedCollector.candidateSha,
+      runId: verifiedCollector.runId,
+    };
     evidence.grafanaImage = {
       imageId: verifiedGrafana.imageId,
       receiptSha256: verifiedGrafana.receiptSha256,
@@ -4855,6 +4866,7 @@ export async function runObservabilityVerification({
     const generated = createComposeOverride({
       config,
       imageRefs: toolchain,
+      otelCollectorImage: verifiedCollector.imageId,
       grafanaImage: verifiedGrafana.imageId,
       alertSinkImage: storageHelper.imageId,
       logFiles,
@@ -4918,6 +4930,8 @@ export async function runObservabilityVerification({
         throw new Error(`${name} container identity unavailable`);
       containerIds[name] = id;
       const info = JSON.parse(run(["inspect", id]))[0];
+      if (name === "otel-collector" && info.Image !== verifiedCollector.imageId)
+        throw new Error("Collector image identity differs");
       if (name === "grafana") {
         assertGrafanaGeneration(info, info);
         grafanaGeneration = info;
@@ -5038,8 +5052,9 @@ export async function runObservabilityVerification({
         },
         { timeoutMs, intervalMs: 1000, description: `${name} private health` },
       );
+    // Холодные миграции SQLite на внешнем storage могут превышать 180 с; общий бюджет G14 задаёт runner.
     for (const name of Object.keys(healthPaths))
-      await waitHealth(name, name === "grafana" ? 180000 : undefined);
+      await waitHealth(name, name === "grafana" ? 1800000 : undefined);
     await waitFor(
       async () => {
         requireRunning({ run, name: producerName, secrets });
@@ -5278,6 +5293,7 @@ export async function runObservabilityVerification({
       const override = createComposeOverride({
         config,
         imageRefs: toolchain,
+        otelCollectorImage: verifiedCollector.imageId,
         grafanaImage: verifiedGrafana.imageId,
         alertSinkImage: storageHelper.imageId,
         logFiles: selectedLogs,
@@ -5307,6 +5323,8 @@ export async function runObservabilityVerification({
       const info = JSON.parse(
         run(["inspect", containerIds["otel-collector"]]),
       )[0];
+      if (info.Image !== verifiedCollector.imageId)
+        throw new Error("recreated Collector image identity differs");
       const address =
         info?.NetworkSettings?.Networks?.[backendNetwork]?.IPAddress;
       if (!/^(?:\d{1,3}\.){3}\d{1,3}$/u.test(address ?? ""))
@@ -9265,6 +9283,16 @@ try {
         await rmdir(storageRoot);
       } catch (error) {
         cleanupErrors.push(`storage root cleanup: ${cleanError(error)}`);
+      }
+    }
+    if (verifiedCollector) {
+      try {
+        removeVerifiedGateImage({
+          target: "otel-collector",
+          image: verifiedCollector,
+        });
+      } catch (error) {
+        cleanupErrors.push(`Collector image cleanup: ${cleanError(error)}`);
       }
     }
     if (verifiedGrafana) {

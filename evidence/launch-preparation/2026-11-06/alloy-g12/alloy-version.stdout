@@ -1,0 +1,6 @@
+alloy, version v1.21.3 (branch: HEAD, revision: f2108cd)
+  build user:       root@buildkitsandbox
+  build date:       2026-10-28T17:00:34Z
+  go version:       go1.27.3
+  platform:         linux/amd64
+  tags:             gore2regex,netgo,embedalloyui,promtail_journal_enabled

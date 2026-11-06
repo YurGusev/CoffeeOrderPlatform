@@ -1,0 +1,46 @@
+{
+  "candidateSha": "ab994cb27c485ca5aa6e9cf80b0644399a47d3b9",
+  "runId": "20261106T031146Z-ab994cb",
+  "cwd": "/home/yurgusev/.cache/coffee-launch-delivery/issue275-candidate-r2",
+  "command": [
+    "/home/yurgusev/.local/lib/nodejs/node-v26.8.1-linux-x64/bin/node",
+    "/home/yurgusev/.cache/coffee-launch-delivery/issue275-runtime-component-root-tmp-ab994.mjs",
+    "--execute"
+  ],
+  "operatorSha256": "1c7f77bcb30959797c88ac1af637f0dd6bd1d918402b60e73b8095e18c14e9c2",
+  "resourceLock": "/run/user/1000/coffee-platform-heavy.lock",
+  "queueWaitSeconds": 0.0,
+  "rootFreeFloorBytes": 36541335962,
+  "builderFreeFloorBytes": 1073741824,
+  "builderDevice": 2051,
+  "processTmpdir": "/tmp",
+  "contextFile": "/home/yurgusev/.codex/worktrees/alloy-g12/CoffeeOrderPlatform/evidence/launch/20261106T031146Z-ab994cb/context.json",
+  "wrapperUmask": "0077",
+  "childUmask": "0022",
+  "budgetSeconds": 1800,
+  "cleanupGraceSeconds": 90,
+  "stoppedForDisk": false,
+  "stoppedForBuilderDisk": false,
+  "stoppedForBudget": false,
+  "log": "/home/yurgusev/.cache/coffee-launch-delivery/issue275-runtime-supervisor-root-tmp-ab994.log",
+  "startedAtUtc": "2026-11-06T03:48:23.345047+00:00",
+  "minimumObservedRootFreeBytes": 38043267072,
+  "minimumObservedBuilderFreeBytes": 38043267072,
+  "pid": 1005344,
+  "exitCode": 0,
+  "durationSeconds": 72.006,
+  "completedAtUtc": "2026-11-06T03:49:35.351901+00:00",
+  "logSha256": "c42ce1379d6fa47128c54765a543b4ad169cc9410c8c5506ef1ed90119fd0940",
+  "operatorResult": {
+    "status": "COMPONENT_PASS",
+    "receiptPath": "/home/yurgusev/.cache/coffee-launch-delivery/issue275-runtime-component-51f1935b-9d89-427e-afcc-07a3995e608e/component-receipt.json",
+    "sha256": "52b7d2174b9f4be671c3d2ae4e89469869f8d422114214d535fd380f183ef94b",
+    "nativeResult": {
+      "status": "FAIL",
+      "failure": "alerts: ISS275_COMPONENT_BOUNDARY",
+      "path": "/home/yurgusev/.cache/coffee-launch-delivery/issue275-candidate-r2/evidence/observability/25fe5a23-ce08-4870-8108-118a8c1690ae/result.json",
+      "sha256": "6fb0a322bd77fa92cd6d7545b4c6e2bbb0951dca9d2ae547e33daa16ea819d70"
+    }
+  },
+  "receiptSha256": "52b7d2174b9f4be671c3d2ae4e89469869f8d422114214d535fd380f183ef94b"
+}

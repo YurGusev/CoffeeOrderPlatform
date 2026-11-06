@@ -208,10 +208,13 @@ function hasExactDockerLogPath({ containerId, logPath }) {
   );
 }
 
+export const COLLECTOR_RECEIPT_REQUIRED = true;
+
 export async function createObservabilityProvenance({
   root = REPO_ROOT,
   config,
   imageRefs,
+  otelCollectorImage,
   grafanaImage,
   alertSinkImage,
   logFiles,
@@ -219,6 +222,17 @@ export async function createObservabilityProvenance({
   collectorConfigSha256,
   nodeHelperImage = imageRefs.nodeImage,
 } = {}) {
+  if (
+    !/^sha256:[a-f0-9]{64}$/u.test(otelCollectorImage?.imageId ?? "") ||
+    !/^[a-f0-9]{64}$/u.test(otelCollectorImage?.receiptSha256 ?? "") ||
+    !/^[a-f0-9]{40}$/u.test(otelCollectorImage?.candidateSha ?? "") ||
+    !otelCollectorImage?.runId ||
+    otelCollectorImage.candidateSha !== grafanaImage?.candidateSha ||
+    otelCollectorImage.candidateSha !== alertSinkImage?.candidateSha ||
+    otelCollectorImage.runId !== grafanaImage?.runId ||
+    otelCollectorImage.runId !== alertSinkImage?.runId
+  )
+    throw new Error("verified collector provenance identity is required");
   const sources = {
     platformConfig: "config/platform.yaml",
     platformSchema: "config/platform.schema.json",
@@ -242,12 +256,18 @@ export async function createObservabilityProvenance({
     generatedAt: new Date().toISOString(),
     sourceSha256,
     images: {
-      otelCollector: imageRefs.otelCollectorImage,
+      otelCollector: otelCollectorImage.imageId,
       grafanaBase: imageRefs.grafanaImage,
       loki: imageRefs.lokiImage,
       prometheus: imageRefs.prometheusImage,
       tempo: imageRefs.tempoImage,
       nodeHelper: nodeHelperImage,
+    },
+    otelCollectorImage: {
+      imageId: otelCollectorImage.imageId,
+      receiptSha256: otelCollectorImage.receiptSha256,
+      candidateSha: otelCollectorImage.candidateSha,
+      runId: otelCollectorImage.runId,
     },
     grafanaImage: {
       imageId: grafanaImage.imageId,
@@ -1062,6 +1082,7 @@ export function createBackendConfigs(config) {
 export function createComposeOverride({
   config,
   imageRefs,
+  otelCollectorImage,
   grafanaImage,
   alertSinkImage,
   logFiles,
@@ -1074,6 +1095,11 @@ export function createComposeOverride({
   alertEvidenceDir,
   observabilityNetworkName = "coffee_observability",
 } = {}) {
+  if (
+    typeof otelCollectorImage !== "string" ||
+    !/^sha256:[a-f0-9]{64}$/u.test(otelCollectorImage)
+  )
+    throw new Error("verified otelCollectorImage ID is required");
   if (
     typeof grafanaImage !== "string" ||
     !/^sha256:[a-f0-9]{64}$/u.test(grafanaImage)
@@ -1262,7 +1288,7 @@ export function createComposeOverride({
         LOGGED_SERVICES.map((service) => [service, { logging }]),
       ),
       "otel-collector": {
-        image: imageRefs.otelCollectorImage,
+        image: otelCollectorImage,
         command: [
           "run",
           "--storage.path=/var/lib/alloy",
@@ -1478,6 +1504,10 @@ export async function generate({
     target: "storage-helper",
     loadImage: false,
   });
+  const otelCollectorImage = await loadVerifiedGateImage({
+    target: "otel-collector",
+    loadImage: false,
+  });
   const grafanaImage = await loadVerifiedGateImage({
     target: "grafana",
     loadImage: false,
@@ -1535,6 +1565,7 @@ export async function generate({
   const composeOverride = createComposeOverride({
     config,
     imageRefs,
+    otelCollectorImage: otelCollectorImage.imageId,
     grafanaImage: grafanaImage.imageId,
     alertSinkImage: alertSinkImage.imageId,
     logFiles,
@@ -1565,6 +1596,7 @@ export async function generate({
     root,
     config,
     imageRefs,
+    otelCollectorImage,
     grafanaImage,
     alertSinkImage,
     logFiles,

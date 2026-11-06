@@ -1,0 +1,41 @@
+{
+  "candidateSha": "ab994cb27c485ca5aa6e9cf80b0644399a47d3b9",
+  "runId": "20261106T031146Z-ab994cb",
+  "cwd": "/home/yurgusev/.cache/coffee-launch-delivery/issue275-candidate-r2",
+  "command": [
+    "/home/yurgusev/.local/lib/nodejs/node-v26.8.1-linux-x64/bin/node",
+    "/home/yurgusev/.cache/coffee-launch-delivery/issue275-package-proof-ready-ab994.mjs",
+    "--execute",
+    "/home/yurgusev/.cache/coffee-launch-delivery/issue275-runtime-component-51f1935b-9d89-427e-afcc-07a3995e608e/component-receipt.json"
+  ],
+  "operatorSha256": "8a3cfe0242945cd0cd8617dbe47f987c3c6dc52459e0a0189a6990818da18e7d",
+  "resourceLock": "/run/user/1000/coffee-platform-heavy.lock",
+  "queueWaitSeconds": 0.0,
+  "rootFreeFloorBytes": 36541335962,
+  "builderFreeFloorBytes": 1073741824,
+  "builderDevice": 2051,
+  "processTmpdir": "/media/yurgusev/coffee-g12-work/tmp",
+  "contextFile": "/home/yurgusev/.codex/worktrees/alloy-g12/CoffeeOrderPlatform/evidence/launch/20261106T031146Z-ab994cb/context.json",
+  "wrapperUmask": "0077",
+  "childUmask": "0022",
+  "budgetSeconds": 1800,
+  "cleanupGraceSeconds": 90,
+  "stoppedForDisk": false,
+  "stoppedForBuilderDisk": false,
+  "stoppedForBudget": false,
+  "log": "/home/yurgusev/.cache/coffee-launch-delivery/issue275-package-supervisor-root-tmp-ab994.log",
+  "startedAtUtc": "2026-11-06T03:49:35.352611+00:00",
+  "minimumObservedRootFreeBytes": 38476103680,
+  "minimumObservedBuilderFreeBytes": 38476103680,
+  "pid": 1009722,
+  "exitCode": 0,
+  "durationSeconds": 14.001,
+  "completedAtUtc": "2026-11-06T03:49:49.354775+00:00",
+  "logSha256": "ec21f3107508b4a2767f56346511721aa8983fb692fe4cac3934b545bf69cdb5",
+  "operatorResult": {
+    "status": "PASS",
+    "receiptPath": "/home/yurgusev/.cache/coffee-launch-delivery/issue275-package-proof-867797fb-67e8-47c8-aa38-35a3c7fa711d/package-receipt.json",
+    "sha256": "b61b496d974a45d83455e3cf972ce8a494fd97246a477daae529922f45f370af"
+  },
+  "receiptSha256": "b61b496d974a45d83455e3cf972ce8a494fd97246a477daae529922f45f370af"
+}

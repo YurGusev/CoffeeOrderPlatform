@@ -1,0 +1,208 @@
+issue: 275
+baseCommit: c1eac3dd568972d8e03e5549b00a83dd40a929d7
+status: verified
+asOfUtc: "2026-11-06T03:52:39.190Z"
+inputs:
+  - issue: 210
+    acceptedMergeCommit: a6cceeaa822f9641c678b5dcae521c282391dd3d
+    artifact: evidence/handoffs/issue-210.yaml
+    sha256: 93dccd8c0c978977e4e6cae852d4801415e849b595ef233a95ad2936ba10d20f
+  - issue: 267
+    acceptedMergeCommit: 919fab56210056ee3cfda5b4e58d6450f330bf66
+    artifact: evidence/handoffs/issue-267.yaml
+    sha256: d6a4680f2cd251f6507e3bee6d068e37d8f6fc3efbdee32afe97702debbd8eac
+  - issue: 271
+    acceptedMergeCommit: ae599e6e2b8122e6101595c9ef4338a769ac54d3
+    artifact: evidence/handoffs/issue-271.yaml
+    sha256: 154e0089afdea41892d64146fc8846f5a4253d761cdb5a43fe518b9c7117b117
+outputs:
+  - artifact: Dockerfile
+    sha256: 3f7e84a32eb82e39989a01ee3ef9e0611eb0008518eba08224eaa72d43298f31
+    consumers:
+      - 13
+  - artifact: docs/operations/observability.md
+    sha256: 3daa29d8b2bf63717a78d48bc05d6f43de6625ee7302b2ca02c954a8cdfa48e5
+    consumers:
+      - 13
+  - artifact: docs/operations/runtime-images.md
+    sha256: 549afc33378d27fb516e26009f5d7608611ec4dc38651fd9e82970c8e700cd1c
+    consumers:
+      - 13
+  - artifact: tests/compose/topology.test.mjs
+    sha256: b4e7ecef6e57e8ffa3ab0d2f212cf6a9b48bac57b283bee6d3f554b852f81cbe
+    consumers:
+      - 13
+  - artifact: tests/config/observability-bootstrap.test.mjs
+    sha256: 564098642c6372947c6cd81e2317b5f9479dc28dc885b34f5c83d8385c312a45
+    consumers:
+      - 13
+  - artifact: tests/observability/storage.test.mjs
+    sha256: 2eb3b9e31d22c928eadbe0acbe929c3c29e50490022f41b52ca00134d449a855
+    consumers:
+      - 13
+  - artifact: tests/tools/security-scan.test.mjs
+    sha256: 6dbf5d8be43de50c5b6aacdbfa460516e98dc4ba0612d69005e7341a1471d028
+    consumers:
+      - 13
+  - artifact: tools/observability/generate.mjs
+    sha256: a1c10258fc6d54ec7552f70ea3c33b8985a07c777d2fe8c43234f98570affeb1
+    consumers:
+      - 13
+  - artifact: tools/observability/service.mjs
+    sha256: e20c3532490d78ea67c5b653a37871657c25a9eb24f38f0c5fda5970da3851c6
+    consumers:
+      - 13
+  - artifact: tools/observability/verify.mjs
+    sha256: 00d2a33a9780fd78372a36963ea3cc9d65e43dbf81324de0e3c9b753b7babc15
+    consumers:
+      - 13
+  - artifact: tools/security-scan.mjs
+    sha256: 9198334ecf0bb9c1637aa0d00dcd71b44c0c915234359e5e43869a85330ba8a4
+    consumers:
+      - 13
+  - artifact: tools/verified-infrastructure-image.mjs
+    sha256: f820d986e35c4c3c73708126de95f19eb9dbbd00e97553329f6a70c74c138d72
+    consumers:
+      - 13
+  - artifact: evidence/launch-preparation/2026-11-06/alloy-g12/alloy-version.stdout
+    sha256: d4cb031f401aa3cb90bdfd73bdec5ec4bbfed8537034d671c9e4c710f66a851c
+    consumers:
+      - 13
+  - artifact: evidence/launch-preparation/2026-11-06/alloy-g12/collector-receipt.json
+    sha256: e640cdd95ef833a5cd59e93ea69abe6ec6f9e54c884ef5b998ebb0bedaffa2ff
+    consumers:
+      - 13
+  - artifact: evidence/launch-preparation/2026-11-06/alloy-g12/component-receipt.json
+    sha256: 550e98d021a7d8d9efe4c5178273ffff1141b3a635d4eaa0f949df9a18c621e4
+    consumers:
+      - 13
+  - artifact: evidence/launch-preparation/2026-11-06/alloy-g12/exclusive-owned-paths.json
+    sha256: b49230944f8d2baeca47588c3e79fb1dc34ff393a0220cc2bb96ad6f3ba5e86a
+    consumers:
+      - 13
+  - artifact: evidence/launch-preparation/2026-11-06/alloy-g12/g12-checksums.json
+    sha256: e44b5fe6b6c2f23de36933132c212d2a25806eccfc8bdb47b6d2cbd55c986383
+    consumers:
+      - 13
+  - artifact: evidence/launch-preparation/2026-11-06/alloy-g12/g12-result.json
+    sha256: 4e89276607a50e9654a4af3af545e2f7ae7c38a2b88cdbf4b02347c0eaa0291a
+    consumers:
+      - 13
+  - artifact: evidence/launch-preparation/2026-11-06/alloy-g12/g12-supervisor.json
+    sha256: 7493699f0d0393b38c35dfe9bfeea63067cf74460d71089403303417cd7e33fc
+    consumers:
+      - 13
+  - artifact: evidence/launch-preparation/2026-11-06/alloy-g12/package-receipt.json
+    sha256: 5f10bd920c2cc45872440f2984edd17b42ae9eec933011ace05e2375af2ad486
+    consumers:
+      - 13
+  - artifact: evidence/launch-preparation/2026-11-06/alloy-g12/package-supervisor.json
+    sha256: aeb08f9198365a4ab8cec99376c839b3a4cbb46ea564c5f6d74664c6098b2f3d
+    consumers:
+      - 13
+  - artifact: evidence/launch-preparation/2026-11-06/alloy-g12/packages-after.json
+    sha256: be3c159607db16d0ba6bf68a4a8295402b538772c28fffd8e495adb9e76048af
+    consumers:
+      - 13
+  - artifact: evidence/launch-preparation/2026-11-06/alloy-g12/packages-before.json
+    sha256: b70a6b6351668a38e75107e3c19af9207d9e08e4f8f8957ffcb05773c2448f71
+    consumers:
+      - 13
+  - artifact: evidence/launch-preparation/2026-11-06/alloy-g12/runtime-supervisor.json
+    sha256: 32ec372defb8f3a1754e80a112470759890e4c91ef6249e4e3a416d4bfccd4c1
+    consumers:
+      - 13
+  - artifact: evidence/launch-preparation/2026-11-06/alloy-g12/unit-r1.json
+    sha256: 7799783e8329f0e093ab036c5f1a4fc945baa0d22d97dc57f4e6a4b4478a4a5c
+    consumers:
+      - 13
+  - artifact: evidence/launch-preparation/2026-11-06/alloy-g12/unit-r2.json
+    sha256: b6b3027a2bd6e800bab1ebcf42a330f98ac669acdcaa60da9ae03663f4a179f0
+    consumers:
+      - 13
+  - artifact: evidence/launch-preparation/2026-11-06/alloy-g12/verification.json
+    sha256: a3d5df00b3b720e00629d8cfcacc0765289adca947c57ccbb136f4d5c7be991a
+    consumers:
+      - 13
+verification:
+  - command: node --test tests/tools/security-scan.test.mjs
+    result: "PASS: 18/18; independent R2 verification, before commit with identical code tree"
+    artifact: evidence/launch-preparation/2026-11-06/alloy-g12/unit-r2.json
+  - command: >-
+      node --test --test-name-pattern='Collector config accepts|observability provenance
+      includes|generated Collector and backend configs|observability overlay keeps|persistent
+      lifecycle orders|G12 binds storage helper' tests/config/observability-bootstrap.test.mjs
+      tests/compose/topology.test.mjs tests/observability/storage.test.mjs
+    result: "PASS: 6/6; independent R1 verification; those paths unchanged by R2"
+    artifact: evidence/launch-preparation/2026-11-06/alloy-g12/unit-r1.json
+  - command: pnpm install --offline --frozen-lockfile
+    result: passed in frozen candidate-r2 on final code commit ab994cb
+  - command: pnpm exec tsc -b --pretty false
+    result: passed in frozen candidate-r2 on final code commit ab994cb; not formal G01
+  - command: >-
+      pnpm exec oxlint --type-aware --deny-warnings tests/compose/topology.test.mjs
+      tests/config/observability-bootstrap.test.mjs tests/observability/storage.test.mjs
+      tests/tools/security-scan.test.mjs tools/observability/generate.mjs
+      tools/observability/service.mjs tools/observability/verify.mjs tools/security-scan.mjs
+      tools/verified-infrastructure-image.mjs
+    result: passed; repeated on final code before evidence commit
+  - command: python3 /home/yurgusev/.cache/coffee-launch-delivery/issue275-r2-g12.py
+    result: >-
+      passed; own G12 ab994cb, 806.090 s, 24 vulnerability +24 SBOM, unresolved HIGH=0/CRITICAL=0,
+      five curated receipts, cleanupFailures=[]
+    artifact: evidence/launch-preparation/2026-11-06/alloy-g12/g12-result.json
+  - command: >-
+      python3
+      /home/yurgusev/.cache/coffee-launch-delivery/issue275-components-supervisor-root-tmp-ab994.py
+    result: >-
+      passed; runtime COMPONENT_PASS 72.006 s then package PASS 14.001 s; Loki/Tempo/Prometheus
+      signals, exact verified Collector ID, own cleanup and previous resource metadata preserved
+    artifact: evidence/launch-preparation/2026-11-06/alloy-g12/verification.json
+  - command: >-
+      pnpm exec prettier --check docs/operations/observability.md docs/operations/runtime-images.md
+      tests/compose/topology.test.mjs tests/config/observability-bootstrap.test.mjs
+      tests/observability/storage.test.mjs tests/tools/security-scan.test.mjs
+      tools/observability/generate.mjs tools/observability/service.mjs
+      tools/observability/verify.mjs tools/security-scan.mjs tools/verified-infrastructure-image.mjs
+      evidence/launch-preparation/2026-11-06/alloy-g12/collector-receipt.json
+      evidence/launch-preparation/2026-11-06/alloy-g12/component-receipt.json
+      evidence/launch-preparation/2026-11-06/alloy-g12/exclusive-owned-paths.json
+      evidence/launch-preparation/2026-11-06/alloy-g12/g12-checksums.json
+      evidence/launch-preparation/2026-11-06/alloy-g12/g12-result.json
+      evidence/launch-preparation/2026-11-06/alloy-g12/g12-supervisor.json
+      evidence/launch-preparation/2026-11-06/alloy-g12/package-receipt.json
+      evidence/launch-preparation/2026-11-06/alloy-g12/package-supervisor.json
+      evidence/launch-preparation/2026-11-06/alloy-g12/packages-after.json
+      evidence/launch-preparation/2026-11-06/alloy-g12/packages-before.json
+      evidence/launch-preparation/2026-11-06/alloy-g12/runtime-supervisor.json
+      evidence/launch-preparation/2026-11-06/alloy-g12/unit-r1.json
+      evidence/launch-preparation/2026-11-06/alloy-g12/unit-r2.json
+      evidence/launch-preparation/2026-11-06/alloy-g12/verification.json
+      evidence/handoffs/issue-275.yaml
+    result: passed
+  - command: git diff --check
+    result: passed
+limitations:
+  - >-
+    Native proofs выполнены на final code commit ab994cb27c485ca5aa6e9cf80b0644399a47d3b9;
+    последующее изменение только evidence/handoff. Exact-head CI проверяется отдельно в PR после
+    commit.
+  - >-
+    Runtime proof охватывает только startup/signals и cleanup. Native result остаётся FAIL с
+    намеренным alerts: ISS275_COMPONENT_BOUNDARY; поздние фазы NOT_RUN. Полный G14 и новый G00–G19
+    #13 обязательны отдельно.
+  - >-
+    Первый G1240e остановлен ROOT reserve после 15 пар; второй G12 того же кода —
+    EVIDENCE_WRITE_FAILED после 24 пар. Исправление checksum whitelist подтверждено RED/GREEN и
+    новым G12ab994; прежние FAIL сохранены.
+  - >-
+    Первый runtime FAIL вызван private operator umask0077, второй — Grafana health deadline 180 с
+    при холодных миграциях на external nested loop. Native umask0022 и TMPDIR=/tmp для component run
+    позволили выполнить проверку без изменений source/образов/таймаутов/порогов; отдельная fsync
+    latency не измерялась.
+  - >-
+    Публичные JSON — сопроводительные копии native evidence; восстановление bytes/hashes описано в
+    verification.json. Большие OCI и raw reports сохранены локально, не добавлены в Git.
+  - >-
+    Preservation проверено по container/image/mount/state metadata, volume/network names и image
+    IDs; SQL/content integrity не проверялась. Обычный runtime не заменялся новым release.
