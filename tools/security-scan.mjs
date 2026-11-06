@@ -3854,12 +3854,14 @@ export async function runSecurityScan({
           "storage-helper.oci.tar",
           "grafana.oci.tar",
           "keycloak.oci.tar",
+          "otel-collector.oci.tar",
         ].includes(entry.name)
           ? MAX_BUILD_CONTEXT_BYTES
           : [
                 "kafka-base-index.json",
                 "storage-helper-base-index.json",
                 "grafana-base-index.json",
+                "otel-collector-base-index.json",
               ].includes(entry.name)
             ? MAX_KAFKA_INDEX_BYTES
             : MAX_REPORT_BYTES;

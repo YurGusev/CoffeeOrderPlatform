@@ -3301,7 +3301,9 @@ void test("G12 builds product images, records pinned upstream identity, and fail
       if (
         command === "tar" &&
         args[0] === "-cf" &&
-        args[1].endsWith("/keycloak.oci.tar")
+        ["/keycloak.oci.tar", "/otel-collector.oci.tar"].some((suffix) =>
+          args[1].endsWith(suffix),
+        )
       )
         await truncate(args[1], 65 * 1024 * 1024);
       return output;
@@ -3566,6 +3568,10 @@ void test("G12 builds product images, records pinned upstream identity, and fail
   );
   const collectorReceiptBytes = await readFile(collectorReceiptPath);
   const collectorReceipt = JSON.parse(collectorReceiptBytes);
+  assert.ok(
+    (await stat(join(outputDir, "artifacts/otel-collector.oci.tar"))).size >
+      64 * 1024 * 1024,
+  );
   const collectorOptions = {
     target: "otel-collector",
     contextFile: contextPath,
@@ -3997,6 +4003,14 @@ void test("G12 builds product images, records pinned upstream identity, and fail
   assert.ok(
     checksumInventory.some(
       (entry) =>
+        entry.path === "artifacts/otel-collector.oci.tar" &&
+        entry.sha256 === collectorReceipt.ociArtifact.sha256 &&
+        entry.sha256 === savedResult.otelCollector.ociArtifactSha256,
+    ),
+  );
+  assert.ok(
+    checksumInventory.some(
+      (entry) =>
         entry.path === "artifacts/kafka-base-index.json" &&
         entry.sha256 === kafkaBaseMaterial.indexArtifact.sha256,
     ),
@@ -4041,6 +4055,44 @@ void test("G12 builds product images, records pinned upstream identity, and fail
   );
   assert.ok(scanCache);
   await assert.rejects(readFile(scanCache), { code: "ENOENT" });
+
+  for (const name of [
+    "unrecognized.oci.tar",
+    "unrecognized.vulnerabilities.json",
+  ]) {
+    fakeNow = now;
+    const limitedOutput = join(gateArtifactsDir, `supply-chain-limit-${name}`);
+    const limitedResult = await runSecurityScan({
+      materializeRegistryCredentials: fakeRegistryCredentials,
+      contextFile: contextPath,
+      outputDir: limitedOutput,
+      clock: () => now,
+      validateContext: validateSyntheticContext,
+      run: async (command, args, options) => {
+        const output = await fakeRun(command, args, options);
+        if (
+          command === "tar" &&
+          args[0] === "-cf" &&
+          args[1].endsWith("/otel-collector.oci.tar")
+        ) {
+          const path = join(limitedOutput, "artifacts", name);
+          await writeFile(path, "", { flag: "wx", mode: 0o600 });
+          await truncate(path, 65 * 1024 * 1024);
+        }
+        return output;
+      },
+      statfsFn: async () => ({ bavail: 30 * 1024 ** 3, bsize: 1 }),
+      lockPath: join(temp, `scanner-limit-${name}.lock`),
+    });
+    assert.equal(limitedResult.status, "FAIL", name);
+    assert.equal(limitedResult.code, "EVIDENCE_WRITE_FAILED", name);
+    assert.equal(limitedResult.reports.length, 48, name);
+    assert.equal(limitedResult.provenance.status, "PASS", name);
+    assert.ok(limitedResult.otelCollector, name);
+    await assert.rejects(readFile(join(limitedOutput, "result.json")), {
+      code: "ENOENT",
+    });
+  }
 
   fakeNow = now;
   mismatchDigestReference = toolchain.lokiImage;
