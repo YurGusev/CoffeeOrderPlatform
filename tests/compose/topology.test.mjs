@@ -1572,6 +1572,74 @@ const OBSERVABILITY_CONFIG = {
   },
 };
 
+void test("Kafka unpause waits for the next Docker health probe and still rejects unhealthy", async () => {
+  const source = await readFile(
+    join(REPO_ROOT, "tools/compose-smoke.mjs"),
+    "utf8",
+  );
+  const helperStart = source.indexOf("async function waitForDockerHealthy(");
+  const helperEnd = source.indexOf(
+    "\nasync function waitForDatabaseProofReady(",
+    helperStart,
+  );
+  const proofStart = source.indexOf("async function runKafkaBlackholeProof(");
+  const proofEnd = source.indexOf(
+    "\nasync function assertReadiness(",
+    proofStart,
+  );
+  assert.ok(
+    helperStart >= 0 &&
+      helperEnd > helperStart &&
+      proofStart >= 0 &&
+      proofEnd > proofStart,
+  );
+  const calls = [
+    ...source
+      .slice(proofStart, proofEnd)
+      .matchAll(/await waitForDockerHealthy\(kafka\.ID(?:,\s*\d[\d_]*)?\);/gu),
+  ];
+  assert.equal(calls.length, 2);
+
+  for (const [call] of calls) {
+    for (const healthy of [true, false]) {
+      let now = 0;
+      const check = runInNewContext(
+        `(${source.slice(helperStart, helperEnd)});`,
+        {
+          Date: { now: () => now },
+          setTimeout: (resolve, delay) => {
+            now += delay;
+            resolve();
+          },
+          runDocker: (args) => {
+            assert.deepEqual(Array.from(args), [
+              "inspect",
+              "--format",
+              "{{.State.Health.Status}}",
+              "kafka-id",
+            ]);
+            return healthy && now >= 32_721 ? "healthy" : "unhealthy";
+          },
+        },
+      );
+      const run = runInNewContext(`(async () => { ${call} })`, {
+        kafka: { ID: "kafka-id" },
+        waitForDockerHealthy: check,
+      });
+      if (healthy) {
+        await run();
+        assert.ok(now >= 32_721);
+      } else {
+        await assert.rejects(
+          run(),
+          /kafka-id did not become healthy: unhealthy/u,
+        );
+        assert.equal(now, 60_000);
+      }
+    }
+  }
+});
+
 void test("Customer proof preserves only the validated launch context through both harness boundaries", async () => {
   const composeSource = await readFile(
     join(REPO_ROOT, "tools/compose-smoke.mjs"),

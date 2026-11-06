@@ -1,7 +1,7 @@
 issue: 13
 baseCommit: 7ee04f202054b39f47f504b1a4125e6598e59eae
 status: source-descriptor-before-formal-verification
-asOfUtc: "2026-11-06T04:28:15.199Z"
+asOfUtc: "2026-11-06T10:47:48.823546Z"
 inputs:
   - issue: 2
     acceptedMergeCommit: 327638d4494269a151ee7c0ac945ac0053c3e0d4
@@ -192,7 +192,7 @@ outputs:
     consumers:
       - 1
   - artifact: docs/launch/21_LAUNCH_VERIFICATION_SPEC.md
-    sha256: 06bc141c2cbadc2713ab0aa5ce0c87328055581a8f5d3eb4d0f2538d6021016b
+    sha256: 0158007f0c7917aabb9b16bd1012e85eded5d335604461e72f54c46b25badeab
     consumers:
       - 1
   - artifact: docs/operations/observability.md
@@ -220,7 +220,7 @@ outputs:
     consumers:
       - 1
   - artifact: tests/compose/topology.test.mjs
-    sha256: 575d794a25444e465bd23aef8d369b2c84e0355fbba5fc91576c4d8b7c953bb7
+    sha256: c2cee563510287fc1eb574c5b7f729c454aaea4f6c3469c19b467bfd46647dd2
     consumers:
       - 1
   - artifact: tests/config/observability-bootstrap.test.mjs
@@ -240,7 +240,7 @@ outputs:
     consumers:
       - 1
   - artifact: tools/compose-smoke.mjs
-    sha256: 98b1960a6c85e49c21309ecf4e4601b083250156adab090d1a97057d0201a92d
+    sha256: 5845f149b062a8a528639e996beace84717a4fb86bc57336c0548e8d04971738
     consumers:
       - 1
   - artifact: tools/observability/verify.mjs
@@ -840,6 +840,19 @@ verification:
     result: >-
       PASS; после локального изменения окна Grafana, staged diff
       b1c590e1c8cf1f274686ad9f9eb42774638d8d3af53f0983ea8f64185cbc9201
+  - command: >-
+      node --test '--test-name-pattern=Kafka unpause waits for the next Docker health probe|Recovery
+      proof|recovery proof' tests/compose/topology.test.mjs
+    result: >-
+      PASS 2/2, fail=0, cancel=0, skip=0; Node 26.8.1. Оба Kafka post-unpause await используют
+      настоящий helper: healthy после 32,721 с принимается, постоянный unhealthy остаётся FAIL.
+      Новый regression до исправления воспроизвёл отказ прежнего окна 30 с.
+    logSha256: 19b56e89bff4506e933ba0b2f762a913153326264092d6a30416ccc35a130e27
+  - command: >-
+      pnpm exec oxlint --type-aware --deny-warnings tools/compose-smoke.mjs
+      tests/compose/topology.test.mjs
+    result: PASS, exit 0; два изменённых codefiles, независимая проверка.
+    logSha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
 consumerContract:
   consumer: 1
   admission: >-
@@ -868,6 +881,15 @@ consumerContract:
     G18 baseline flag child с проверенной lineage. Лимиты и provider scope сохранены; exact parent
     G12 product images, отдельная BOM/image-ID проверка fixture PostgreSQL.
 limitations:
+  - >-
+    Source c567e544: полный run 20261106T091002Z-c567e54 завершён НЕ ДОПУСТИТЬ, G00–G09/G12
+    PASS, G10 recovery FAIL, G11/G13–G18 NOT_RUN, G19 отрицательный PASS без evidence errors.
+    Отчёт PR249#issuecomment-6682189605, производный handoff PR249#issuecomment-6682190141.
+    Узкий native diagnostic зафиксировал Docker healthy через 32,720548 с после unpause при
+    окне verifier 30 с; Kafka API exit0 за 2686 мс, тот же container/image, restart=0/OOM=false.
+    Исправлены только два Kafka ожидания до 60 с; Docker health 30/5 с, другие deadlines и
+    общие бюджеты сохранены. Это не runtime PASS исправленного source: ему обязательны свои
+    exact-head CI, G12, свежая SSE qualification и полный G00–G19.
   - >-
     После component FAIL при холодных Grafana SQLite migrations на внешнем TMPDIR локальное окно её
     health увеличено до 1800 с; внешний storage и общий бюджет G14 1800 с сохранены. ROOT component

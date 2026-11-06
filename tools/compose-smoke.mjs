@@ -6655,7 +6655,8 @@ async function runKafkaBlackholeProof(
     if (onPaused) await onPaused(pausedAt);
     runDocker(["unpause", kafka.ID]);
     paused = false;
-    await waitForDockerHealthy(kafka.ID);
+    // Kafka's 30s health interval and 5s probe can extend beyond 30s after unpause.
+    await waitForDockerHealthy(kafka.ID, 60_000);
     await waitForKafkaApi();
     if (kafkaBefore)
       assertDependencyIdentity(projectName, "kafka", kafkaBefore);
@@ -6723,7 +6724,7 @@ async function runKafkaBlackholeProof(
     if (paused) {
       try {
         runDocker(["unpause", kafka.ID]);
-        await waitForDockerHealthy(kafka.ID);
+        await waitForDockerHealthy(kafka.ID, 60_000);
         await waitForKafkaApi();
       } catch (error) {
         restoreError = error;

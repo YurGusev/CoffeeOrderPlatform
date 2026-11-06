@@ -693,6 +693,13 @@ record читается после health recovery, а named volume сохран
 Compose project scope. Один broker и RF=1 — development limit; это не HA claim.
 Broker ack без recreate/retention evidence не считается durable delivery.
 
+В paused-broker proof оба пути восстановления после `unpause` ожидают Docker
+`healthy` не более 60 с, затем отдельно проверяют Kafka API. Окно ожидания
+учитывает интервал healthcheck 30 с и до 5 с на исполнение probe: Docker
+[планирует следующий probe после завершения предыдущего](https://docs.docker.com/reference/dockerfile/#healthcheck).
+Параметры healthcheck, границы unknown commit, Kafka API timeout 30 с и общий
+бюджет gate 1800 с сохраняются. Истечение окна без `healthy` остаётся FAIL.
+
 ### 15.3 Handoff наблюдаемости
 
 `#63` передаёт `#64` следующие bounded fields: lag по
