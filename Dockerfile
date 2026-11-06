@@ -8,6 +8,7 @@ ARG NODE_IMAGE=node:26.8.1-alpine@sha256:2d984a15c9b54fd0aeb608b8e0d0d83529eb34d
 # inert default keeps unrelated targets parseable without enabling a fallback.
 ARG KAFKA_IMAGE=scratch
 ARG GRAFANA_IMAGE=scratch
+ARG OTEL_COLLECTOR_IMAGE=scratch
 ARG KEYCLOAK_DISTRIBUTION_IMAGE=scratch
 ARG KEYCLOAK_RUNTIME_IMAGE=scratch
 
@@ -158,6 +159,10 @@ FROM ${NODE_IMAGE} AS storage-helper
 RUN --network=host apk add --no-cache --upgrade e2fsprogs util-linux libcrypto3 libssl3 \
   && rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx \
   && command -v mkfs.ext4 && command -v losetup && command -v blkid && command -v truncate
+
+# G12 supplies the pinned Alloy base.
+FROM ${OTEL_COLLECTOR_IMAGE} AS otel-collector
+RUN --network=none dpkg --purge apt libapt-pkg6.0t64
 
 # G12 supplies the verified, signed vendor plugin context and the pinned base.
 FROM ${GRAFANA_IMAGE} AS grafana

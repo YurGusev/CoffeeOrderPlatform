@@ -224,6 +224,17 @@ export function collectorRefreshOverride(generated, existing, networks) {
   return generated;
 }
 
+export async function readAcceptedCollector({
+  generator,
+  verified,
+  contextFile,
+}) {
+  if (generator.COLLECTOR_RECEIPT_REQUIRED === undefined) return null;
+  if (generator.COLLECTOR_RECEIPT_REQUIRED !== true)
+    throw new Error("invalid accepted Collector receipt contract");
+  return verified({ target: "otel-collector", contextFile, loadImage: false });
+}
+
 export async function readAcceptedObservabilityRelease() {
   const unit = (property) =>
     execFileSync(
@@ -289,15 +300,16 @@ export async function readAcceptedObservabilityRelease() {
   const { loadVerifiedGateImage: verified } = await old(
     "tools/verified-infrastructure-image.mjs",
   );
-  const [helper, grafana] = await Promise.all([
+  const generator = await old("tools/observability/generate.mjs");
+  const [helper, grafana, collector] = await Promise.all([
     verified({
       target: "storage-helper",
       contextFile: match[1],
       loadImage: false,
     }),
     verified({ target: "grafana", contextFile: match[1], loadImage: false }),
+    readAcceptedCollector({ generator, verified, contextFile: match[1] }),
   ]);
-  const generator = await old("tools/observability/generate.mjs");
   const { loadPlatformConfig: loadConfig } = await old(
     "scripts/config-lib.mjs",
   );
@@ -308,19 +320,29 @@ export async function readAcceptedObservabilityRelease() {
   await generator.verifyBootstrapProbe({
     expectedSha256: refs.bootstrapProbeSha256,
   });
-  return { root, helper, grafana, generator, config, refs };
+  return { root, helper, grafana, collector, generator, config, refs };
 }
 
 /** Refresh only the accepted observability release's Collector log mounts. */
 export async function refreshLocalCollector({ expectedRuntimes } = {}) {
-  const { root, helper, grafana, generator, config, refs } =
+  const { root, helper, grafana, collector, generator, config, refs } =
     await readAcceptedObservabilityRelease();
+  if (
+    !collector &&
+    !/@sha256:[a-f0-9]{64}$/u.test(refs.otelCollectorImage ?? "")
+  )
+    throw new Error("accepted Collector image pin is invalid");
   const images = JSON.parse(
-    runDocker(["image", "inspect", refs.otelCollectorImage]),
+    runDocker([
+      "image",
+      "inspect",
+      collector?.imageId ?? refs.otelCollectorImage,
+    ]),
   );
   if (
     images.length !== 1 ||
-    !/^sha256:[a-f0-9]{64}$/u.test(images[0]?.Id ?? "")
+    !/^sha256:[a-f0-9]{64}$/u.test(images[0]?.Id ?? "") ||
+    (collector && images[0].Id !== collector.imageId)
   )
     throw new Error("Collector image is unavailable");
   const snapshot = () => {
@@ -424,6 +446,7 @@ export async function refreshLocalCollector({ expectedRuntimes } = {}) {
   const generated = generator.createComposeOverride({
     config,
     imageRefs: refs,
+    otelCollectorImage: collector?.imageId,
     grafanaImage: grafana.imageId,
     alertSinkImage: helper.imageId,
     logFiles: logs,
@@ -584,6 +607,11 @@ export async function runService(action, overrides = {}) {
     contextFile,
     loadImage: false,
   });
+  const collector = await deps.loadVerifiedGateImage({
+    target: "otel-collector",
+    contextFile,
+    loadImage: false,
+  });
   if (action === "start") {
     const fs = await deps.statfs("/", { bigint: true });
     if (fs.bavail * fs.bsize < (fs.blocks * fs.bsize) / 5n + 536870912n)
@@ -591,7 +619,7 @@ export async function runService(action, overrides = {}) {
     for (const reference of [
       storageHelper.imageId,
       grafana.imageId,
-      imageRefs.otelCollectorImage,
+      collector.imageId,
       imageRefs.lokiImage,
       imageRefs.prometheusImage,
       imageRefs.tempoImage,

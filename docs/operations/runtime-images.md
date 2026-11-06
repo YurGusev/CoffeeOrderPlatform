@@ -37,6 +37,17 @@ G12 получает CVE DB из `ghcr.io/aquasecurity/trivy-db`, а Java DB —
 Источник Java DB отдельно согласован владельцем 4 ноября 2026 и указан в
 [исходниках Trivy 0.76.1](https://github.com/aquasecurity/trivy/blob/v0.76.1/pkg/javadb/client.go#L27-L33).
 
+6 ноября 2026 владелец согласовал сборку `otel-collector` из прежнего
+`otelCollectorImage`: удаляются только `apt` и `libapt-pkg6.0t64`, содержащие
+CVE-2026-109518. Бинарник Alloy, его команда и остальные установленные пакеты
+сохраняются; package inventory не скрывается. Новый источник образа не вводится.
+G12 сохраняет OCI archive, provenance и отдельный проверяемый receipt
+`otelCollector` тем же путём, что остальные curated infrastructure images.
+Observability generate/start/refresh и G14 используют только image ID из этого
+receipt с точной привязкой к source/run/config/BOM; прямой upstream fallback
+удаляется. Изменение формата evidence явно согласовано владельцем. Количество
+целей, HIGH/CRITICAL policy, freshness, pins и бюджеты G12 не меняются.
+
 Основание: [pnpm #9474](https://github.com/pnpm/pnpm/issues/9474),
 [modules manifest pnpm 11.24.0](https://github.com/pnpm/pnpm/blob/v11.24.0/pnpm11/installing/modules-yaml/src/index.ts),
 [BuildKit 0.32.2 exporter options](https://github.com/moby/buildkit/blob/v0.32.2/exporter/containerimage/opts.go)

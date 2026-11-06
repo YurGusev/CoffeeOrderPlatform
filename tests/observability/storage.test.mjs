@@ -1498,7 +1498,7 @@ void test("persistent lifecycle orders admission, safe replacement, storage, gen
     "prometheusImage",
     "tempoImage",
   ])
-    refs[name] = `fixture@sha256:${"d".repeat(64)}`;
+    refs[name] = `${name}@sha256:${"d".repeat(64)}`;
   const config = {
     platform: {
       shutdownGraceMs: 30000,
@@ -1522,6 +1522,8 @@ void test("persistent lifecycle orders admission, safe replacement, storage, gen
     verifyBootstrapProbe: async () => events.push("probe"),
     loadVerifiedGateImage: async (options) => {
       assert.equal(options.loadImage, false);
+      if (fail === "collector-receipt" && options.target === "otel-collector")
+        throw Error("collector receipt invalid");
       return { imageId };
     },
     statfs: async () => ({ bavail: 1000000n, bsize: 4096n, blocks: 1000000n }),
@@ -1551,6 +1553,7 @@ void test("persistent lifecycle orders admission, safe replacement, storage, gen
     },
     executeDocker: (args) => {
       if (args[0] === "image") {
+        assert.notEqual(args[2], refs.otelCollectorImage);
         if (fail === "image") throw Error("image missing");
         return JSON.stringify([{ Id: imageId }]);
       }
@@ -1583,7 +1586,12 @@ void test("persistent lifecycle orders admission, safe replacement, storage, gen
     },
   };
   try {
-    for (const failure of ["admission", "image", "identity"]) {
+    for (const failure of [
+      "admission",
+      "collector-receipt",
+      "image",
+      "identity",
+    ]) {
       fail = failure;
       events.length = 0;
       await assert.rejects(runService("start", deps));

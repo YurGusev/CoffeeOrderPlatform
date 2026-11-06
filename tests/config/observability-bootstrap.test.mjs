@@ -29,7 +29,10 @@ import { syncBuiltinESMExports } from "node:module";
 import https from "node:https";
 import { tmpdir } from "node:os";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { collectorRefreshOverride } from "../../tools/observability/service.mjs";
+import {
+  collectorRefreshOverride,
+  readAcceptedCollector,
+} from "../../tools/observability/service.mjs";
 import { dirname, join, resolve } from "node:path";
 import test from "node:test";
 import { dump as dumpYaml, load as parseYaml } from "js-yaml";
@@ -53,6 +56,7 @@ import {
   verifyBootstrapProbe,
   writeBackendConfigs,
 } from "../../tools/observability/generate.mjs";
+import * as currentGenerator from "../../tools/observability/generate.mjs";
 import {
   checkBootstrap,
   attestCanonicalMigrationPreparation,
@@ -461,7 +465,7 @@ void test("observability provenance includes all pinned images, bounded storage 
   const alertSinkImage = {
     imageId: `sha256:${"d".repeat(64)}`,
     receiptSha256: "e".repeat(64),
-    candidateSha: "f".repeat(40),
+    candidateSha: "3".repeat(40),
     runId: "fixture",
   };
   const grafanaImage = {
@@ -470,10 +474,17 @@ void test("observability provenance includes all pinned images, bounded storage 
     candidateSha: "3".repeat(40),
     runId: "fixture",
   };
+  const otelCollectorImage = {
+    imageId: `sha256:${"4".repeat(64)}`,
+    receiptSha256: "5".repeat(64),
+    candidateSha: "3".repeat(40),
+    runId: "fixture",
+  };
   const provenance = await createObservabilityProvenance({
     root: REPO_ROOT,
     config: sample,
     imageRefs,
+    otelCollectorImage,
     grafanaImage,
     alertSinkImage,
     logFiles: logs,
@@ -490,10 +501,13 @@ void test("observability provenance includes all pinned images, bounded storage 
     "nodeHelper",
   ]);
   assert.equal(provenance.images.grafanaBase, imageRefs.grafanaImage);
+  assert.equal(provenance.images.otelCollector, otelCollectorImage.imageId);
+  assert.deepEqual(provenance.otelCollectorImage, otelCollectorImage);
   const admitted = await createObservabilityProvenance({
     root: REPO_ROOT,
     config: sample,
     imageRefs,
+    otelCollectorImage,
     grafanaImage,
     alertSinkImage,
     logFiles: logs,
@@ -502,6 +516,20 @@ void test("observability provenance includes all pinned images, bounded storage 
     nodeHelperImage: alertSinkImage.imageId,
   });
   assert.equal(admitted.images.nodeHelper, alertSinkImage.imageId);
+  await assert.rejects(
+    createObservabilityProvenance({
+      root: REPO_ROOT,
+      config: sample,
+      imageRefs,
+      otelCollectorImage: { ...otelCollectorImage, runId: "other" },
+      grafanaImage,
+      alertSinkImage,
+      logFiles: logs,
+      storageVolumes,
+      collectorConfigSha256: "c".repeat(64),
+    }),
+    /verified collector provenance identity/u,
+  );
   assert.deepEqual(provenance.grafanaImage, grafanaImage);
   assert.deepEqual(provenance.alertSinkImage, alertSinkImage);
   assert.equal(provenance.limits.loki.maxDiskBytes, 1073741824);
@@ -557,7 +585,7 @@ void test("backend ownership helper refuses foreign volumes before changing owne
   );
 });
 
-void test("Collector config accepts only exact selected log files and bounds export", () => {
+void test("Collector config accepts only exact selected log files and bounds export", async () => {
   const oldId = "a".repeat(64);
   const newId = "b".repeat(64);
   const base = {
@@ -602,6 +630,53 @@ void test("Collector config accepts only exact selected log files and bounds exp
     target: `/var/lib/docker/containers/${newId}`,
     read_only: true,
   };
+  const calls = [];
+  const verified = async (options) => {
+    calls.push(options);
+    throw new Error("receipt missing");
+  };
+  const contextFile = "/accepted/context.json";
+  const pinnedRef = `grafana/alloy:v1.21.3@sha256:${"e".repeat(64)}`;
+  const legacyGenerator = {
+    createComposeOverride: ({ imageRefs }) => imageRefs.otelCollectorImage,
+  };
+  assert.equal(
+    legacyGenerator.createComposeOverride({
+      imageRefs: { otelCollectorImage: pinnedRef },
+    }),
+    pinnedRef,
+  );
+  assert.equal(
+    await readAcceptedCollector({
+      generator: legacyGenerator,
+      verified,
+      contextFile,
+    }),
+    null,
+  );
+  assert.deepEqual(calls, []);
+  let mutationStarted = false;
+  await assert.rejects(async () => {
+    await readAcceptedCollector({
+      generator: currentGenerator,
+      verified,
+      contextFile,
+    });
+    mutationStarted = true;
+  }, /receipt missing/u);
+  assert.equal(mutationStarted, false);
+  assert.deepEqual(calls, [
+    { target: "otel-collector", contextFile, loadImage: false },
+  ]);
+  const expectedImage = { imageId: `sha256:${"d".repeat(64)}` };
+  assert.equal(
+    await readAcceptedCollector({
+      generator: currentGenerator,
+      verified: async () => expectedImage,
+      contextFile,
+    }),
+    expectedImage,
+  );
   const refreshed = collectorRefreshOverride(generated, base, networks);
   assert.deepEqual(refreshed.services.grafana, { image: "unchanged" });
   assert.deepEqual(refreshed.volumes.collector_checkpoints, {});
@@ -944,9 +1019,11 @@ void test("generated Collector and backend configs preserve bounded delivery and
   );
   const alertSinkImage = `sha256:${"b".repeat(64)}`;
   const grafanaImage = `sha256:${"c".repeat(64)}`;
+  const otelCollectorImage = `sha256:${"d".repeat(64)}`;
   const compose = createComposeOverride({
     config: sample,
     imageRefs: images,
+    otelCollectorImage,
     grafanaImage,
     alertSinkImage,
     logFiles: logs,
@@ -1014,6 +1091,7 @@ void test("generated Collector and backend configs preserve bounded delivery and
   assert.deepEqual(compose.services["alert-sink"].tmpfs, [
     "/run/alerts:rw,noexec,nosuid,nodev,uid=1000,gid=1000,size=32m",
   ]);
+  assert.equal(compose.services["otel-collector"].image, otelCollectorImage);
   assert.equal(compose.services["alert-sink"].image, alertSinkImage);
   assert.notEqual(compose.services["alert-sink"].image, images.nodeImage);
   const evidenceDir = await mkdtemp("/dev/shm/coffee-alert-evidence-");
@@ -1021,6 +1099,7 @@ void test("generated Collector and backend configs preserve bounded delivery and
   const args = {
     config: sample,
     imageRefs: images,
+    otelCollectorImage,
     grafanaImage,
     alertSinkImage,
     logFiles: logs,
@@ -1039,6 +1118,11 @@ void test("generated Collector and backend configs preserve bounded delivery and
     ),
     false,
   );
+  for (const invalid of [undefined, images.otelCollectorImage, "sha256:bad"])
+    assert.throws(
+      () => createComposeOverride({ ...args, otelCollectorImage: invalid }),
+      /verified otelCollectorImage ID is required/u,
+    );
   for (const invalid of [undefined, images.grafanaImage, "sha256:bad"])
     assert.throws(
       () => createComposeOverride({ ...args, grafanaImage: invalid }),
