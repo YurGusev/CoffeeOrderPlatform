@@ -1,0 +1,117 @@
+{
+  "issue": 275,
+  "scope": "Компонентная проверка изменения Alloy/G12; не формальный допуск #13 и не полный G14",
+  "codeCommit": "ab994cb27c485ca5aa6e9cf80b0644399a47d3b9",
+  "asOfUtc": "2026-11-06T03:51:09.141790+00:00",
+  "nativeArtifacts": [
+    {
+      "artifact": "component-receipt.json",
+      "nativePath": "/home/yurgusev/.cache/coffee-launch-delivery/issue275-runtime-component-51f1935b-9d89-427e-afcc-07a3995e608e/component-receipt.json",
+      "nativeSha256": "52b7d2174b9f4be671c3d2ae4e89469869f8d422114214d535fd380f183ef94b"
+    },
+    {
+      "artifact": "package-receipt.json",
+      "nativePath": "/home/yurgusev/.cache/coffee-launch-delivery/issue275-package-proof-867797fb-67e8-47c8-aa38-35a3c7fa711d/package-receipt.json",
+      "nativeSha256": "b61b496d974a45d83455e3cf972ce8a494fd97246a477daae529922f45f370af"
+    },
+    {
+      "artifact": "runtime-supervisor.json",
+      "nativePath": "/home/yurgusev/.cache/coffee-launch-delivery/issue275-runtime-supervisor-root-tmp-ab994.json",
+      "nativeSha256": "32ec372defb8f3a1754e80a112470759890e4c91ef6249e4e3a416d4bfccd4c1"
+    },
+    {
+      "artifact": "package-supervisor.json",
+      "nativePath": "/home/yurgusev/.cache/coffee-launch-delivery/issue275-package-supervisor-root-tmp-ab994.json",
+      "nativeSha256": "aeb08f9198365a4ab8cec99376c839b3a4cbb46ea564c5f6d74664c6098b2f3d"
+    },
+    {
+      "artifact": "packages-before.json",
+      "nativePath": "/home/yurgusev/.cache/coffee-launch-delivery/issue275-package-proof-867797fb-67e8-47c8-aa38-35a3c7fa711d/packages-before.json",
+      "nativeSha256": "b70a6b6351668a38e75107e3c19af9207d9e08e4f8f8957ffcb05773c2448f71"
+    },
+    {
+      "artifact": "packages-after.json",
+      "nativePath": "/home/yurgusev/.cache/coffee-launch-delivery/issue275-package-proof-867797fb-67e8-47c8-aa38-35a3c7fa711d/packages-after.json",
+      "nativeSha256": "be3c159607db16d0ba6bf68a4a8295402b538772c28fffd8e495adb9e76048af"
+    },
+    {
+      "artifact": "exclusive-owned-paths.json",
+      "nativePath": "/home/yurgusev/.cache/coffee-launch-delivery/issue275-package-proof-867797fb-67e8-47c8-aa38-35a3c7fa711d/exclusive-owned-paths.json",
+      "nativeSha256": "b49230944f8d2baeca47588c3e79fb1dc34ff393a0220cc2bb96ad6f3ba5e86a"
+    },
+    {
+      "artifact": "alloy-version.stdout",
+      "nativePath": "/home/yurgusev/.cache/coffee-launch-delivery/issue275-package-proof-867797fb-67e8-47c8-aa38-35a3c7fa711d/alloy-version.stdout",
+      "nativeSha256": "d4cb031f401aa3cb90bdfd73bdec5ec4bbfed8537034d671c9e4c710f66a851c"
+    },
+    {
+      "artifact": "g12-result.json",
+      "nativePath": "/home/yurgusev/.codex/worktrees/alloy-g12/CoffeeOrderPlatform/evidence/launch/20261106T031146Z-ab994cb/gates/G12_SUPPLY_CHAIN/artifacts/supply-chain/result.json",
+      "nativeSha256": "4e89276607a50e9654a4af3af545e2f7ae7c38a2b88cdbf4b02347c0eaa0291a"
+    },
+    {
+      "artifact": "collector-receipt.json",
+      "nativePath": "/home/yurgusev/.codex/worktrees/alloy-g12/CoffeeOrderPlatform/evidence/launch/20261106T031146Z-ab994cb/gates/G12_SUPPLY_CHAIN/artifacts/supply-chain/artifacts/otel-collector-receipt.json",
+      "nativeSha256": "e640cdd95ef833a5cd59e93ea69abe6ec6f9e54c884ef5b998ebb0bedaffa2ff"
+    },
+    {
+      "artifact": "g12-supervisor.json",
+      "nativePath": "/home/yurgusev/.cache/coffee-launch-delivery/runtime-image-scan-20261106T031146Z-ab994cb.json",
+      "nativeSha256": "7493699f0d0393b38c35dfe9bfeea63067cf74460d71089403303417cd7e33fc"
+    },
+    {
+      "artifact": "g12-checksums.json",
+      "nativePath": "/home/yurgusev/.codex/worktrees/alloy-g12/CoffeeOrderPlatform/evidence/launch/20261106T031146Z-ab994cb/gates/G12_SUPPLY_CHAIN/artifacts/supply-chain/artifacts/checksums.json",
+      "nativeSha256": "e44b5fe6b6c2f23de36933132c212d2a25806eccfc8bdb47b6d2cbd55c986383"
+    },
+    {
+      "artifact": "unit-r1.json",
+      "nativePath": "/home/yurgusev/.cache/coffee-launch-delivery/issue275-test-verification-r1.json",
+      "nativeSha256": "9040542154b3a215521e7aa425d049600ef4984d1ba9566692bc3fa07238cfb7"
+    },
+    {
+      "artifact": "unit-r2.json",
+      "nativePath": "/home/yurgusev/.cache/coffee-launch-delivery/issue275-test-verification-r2.json",
+      "nativeSha256": "b6b3027a2bd6e800bab1ebcf42a330f98ac669acdcaa60da9ae03663f4a179f0"
+    }
+  ],
+  "nativeJsonEncoding": "Публичные JSON форматируются Prettier; json.dumps(json.loads(bytes), ensure_ascii=False, indent=2) + LF восстанавливает исходные JSON байты и nativeSha256. Файл alloy-version.stdout сохранён byte-for-byte. Относительные artifact paths внутри native result относятся к исходному native evidence, а не к этой сопроводительной копии.",
+  "preservedNegativeRuns": [
+    {
+      "path": "/home/yurgusev/.cache/coffee-launch-delivery/runtime-image-scan-20261106T015854Z-40e51dd.json",
+      "sha256": "1bffefc29281c72bf8c534aa9b9588e11444005df6b6b4aaeca93682cbb936cc"
+    },
+    {
+      "path": "/home/yurgusev/.cache/coffee-launch-delivery/runtime-image-scan-20261106T022641Z-40e51dd.json",
+      "sha256": "8e6e2cdfd21ad05a5078450a260ed0c67df3f2d1d5a544821b7d514a7fe84c83"
+    },
+    {
+      "path": "/home/yurgusev/.cache/coffee-launch-delivery/issue275-runtime-supervisor-ab994.json",
+      "sha256": "3ad9079da8ddc92a813992c91dd7d8a2073c7e50c812b338bb8564c926f4cbf3"
+    },
+    {
+      "path": "/home/yurgusev/.cache/coffee-launch-delivery/issue275-runtime-retry-negative-diagnostic-ab994.json",
+      "sha256": "07f342c0070095bc4515785c23438ce3e1455efdd0cb1a2d2f831f53dfb30c5e"
+    }
+  ],
+  "independentReview": {
+    "R1": "ALLOY-275-R1 resolved; obs6/6 on exact diff2326816db58afb74ca4dd4f88a5f07432e49f08d78cbae01984665aea15fc588",
+    "R2": "No material findings; exact two-file diff dd39ef0bdf182699e8cb7c1d16e86774afbd49b35823ea91ac0a28470bc7e1ea; scanner18/18",
+    "privateOperators": "ALLOY-275-OP1 sentinel corrected; native umask0022 and stable mount ordering reviewed; later actual TMPDIR=/tmp only for runtime, package external; same source and limits"
+  },
+  "limits": {
+    "g12Seconds": 1800,
+    "runtimeSeconds": 1800,
+    "grafanaStartupMs": 180000,
+    "rootFloorWithReserveBytes": 36541335962,
+    "builderFloorBytes": 1073741824
+  },
+  "limitations": [
+    "Native runtime result остаётся FAIL: alerts: ISS275_COMPONENT_BOUNDARY; отдельно подтверждены только startup/signals и cleanup. Остальные фазы не запускались.",
+    "Первые два G12 и первые два runtime FAIL сохранены, их результаты не переименованы в PASS.",
+    "ROOT-temp проверка прошла за 72 с после отрицательного старта Grafana на внешнем nested loop по прежнему deadline 180 с; отдельная latency fsync не измерялась.",
+    "Сохранность прежних ресурсов проверена по container/image/mount/state metadata, volume/network names и image IDs; SQL/content integrity не проверялась.",
+    "Большие OCI и raw reports сохранены в исходном native evidence локально; hash inventory опубликован. Эти копии не являются переносимым loader context.",
+    "Последующие изменения только evidence/handoff; exact-head CI подтверждается отдельно после commit. #13 требует новый own G12, fresh qualification и полный G00–G19."
+  ]
+}

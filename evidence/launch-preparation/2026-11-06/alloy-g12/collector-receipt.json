@@ -1,0 +1,55 @@
+{
+  "schemaVersion": 1,
+  "gate": "G12_SUPPLY_CHAIN",
+  "status": "PASS",
+  "runId": "20261106T031146Z-ab994cb",
+  "candidateSha": "ab994cb27c485ca5aa6e9cf80b0644399a47d3b9",
+  "treeSha": "e39cd62d87caf05f82b73515e015e826af3f2beb",
+  "configSha256": "a8e5b1db70fe8aa32a964f00fb9070c6fb1c123034a87c953777a8c500aefb25",
+  "toolchainVersionsSha256": "bed372093503fc747d25daa61b64f5bde67885cde3b2808e485e4b621000db8d",
+  "lockfileSha256": "4f0b2b76cf939fafb42d3ad80ac57caf6c5134c23e143add8b04092c812abbaa",
+  "target": "otel-collector",
+  "importTag": "coffee-g12-ca2decab4f77-otel-collector:latest",
+  "baseImage": "grafana/alloy:v1.21.3@sha256:8ab871206bd2d8f89277f53abffee5f452a293980788d52f85fa183a87a505a4",
+  "imageId": "sha256:7222c658091788eeebffde3a31489d5dfa598a139c97b43a7a90827022c149d6",
+  "manifestDigest": "sha256:0b95da668a5d3c579260dbe0e1bbe70a843da9d713c277e25937a21a7a60fa62",
+  "platformManifestDigest": "sha256:0b95da668a5d3c579260dbe0e1bbe70a843da9d713c277e25937a21a7a60fa62",
+  "provenanceStatus": "INCOMPLETE_LOCAL_CONTEXT",
+  "provenanceSha256": "b29df2daf283e9b36c2fd0d857dc88a04ce4568ba6280c5dc2cbae899fd8aa55",
+  "attestationSha256": "8214519fbb232f9cd87dd6c18f258b94e5dd58e66ad6c388e71374acf20a2ff2",
+  "buildInputBinding": {
+    "status": "OBSERVED",
+    "sourceCommit": "ab994cb27c485ca5aa6e9cf80b0644399a47d3b9",
+    "sourceTreeSha": "e39cd62d87caf05f82b73515e015e826af3f2beb",
+    "archiveSha256": "b07da7f0f7882c3c0848485928b914ce2d2275ab5e424e422fcba144fdd2924a",
+    "archiveSizeBytes": 37724160,
+    "extractedTreeSha256": "38b52239dd8a1a56f4c910641c4fc9f2094c337c967ee95c1a62d647aca2995c",
+    "extractedBytes": 36062629,
+    "sourceKind": "git-archive-local-context",
+    "buildkitMaterialsCompleteness": "INCOMPLETE_LOCAL_CONTEXT",
+    "invocation": {
+      "entryPoint": "docker buildx build",
+      "builder": "coffee-platform-mtu",
+      "target": "otel-collector",
+      "platform": "linux/amd64",
+      "provenance": "mode=min",
+      "output": "oci-layout-directory"
+    }
+  },
+  "ociArtifact": {
+    "path": "artifacts/otel-collector.oci.tar",
+    "sha256": "dc53837a46a068b710c4451fdb5e85e5d945a533ecda7da17063ce928dfbb32c",
+    "sizeBytes": 223733760,
+    "layoutTreeSha256": "07d569bc804748b415fa3d4489bec208f2617f165266b0d13198dc3daee82be6",
+    "layoutBytes": 223716187
+  },
+  "baseMaterial": {
+    "sourceRef": "grafana/alloy:v1.21.3@sha256:8ab871206bd2d8f89277f53abffee5f452a293980788d52f85fa183a87a505a4",
+    "platformManifestDigest": "sha256:5ed61e8ab102bdf590ea3d67c5e29dfb5837f5b4660a1d2a0db4b8160553e9e7",
+    "indexArtifact": {
+      "path": "artifacts/otel-collector-base-index.json",
+      "sha256": "8ab871206bd2d8f89277f53abffee5f452a293980788d52f85fa183a87a505a4",
+      "sizeBytes": 3117
+    }
+  }
+}

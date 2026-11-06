@@ -1,0 +1,30 @@
+{
+  "recorded_at_utc": "2026-11-06T03:04:01.988340+00:00",
+  "worktree": "/home/yurgusev/.codex/worktrees/alloy-g12/CoffeeOrderPlatform",
+  "head": "40e51dd625235b05529b9325cc14853df3ffb521",
+  "diff_sha256_before_and_after": "dd39ef0bdf182699e8cb7c1d16e86774afbd49b35823ea91ac0a28470bc7e1ea",
+  "environment": {
+    "node": "26.8.1",
+    "umask": "0022",
+    "PATH": "/home/yurgusev/.local/lib/nodejs/node-v26.8.1-linux-x64/bin:/home/yurgusev/.local/share/coffee-platform/tools/bin:/home/yurgusev/.local/bin:/usr/local/bin:/usr/bin:/bin:/snap/bin"
+  },
+  "checks": [
+    {
+      "command": "node --test tests/tools/security-scan.test.mjs",
+      "exit_code": 0,
+      "passed": 18,
+      "failed": 0,
+      "duration_ms": 53752.091063
+    },
+    {
+      "command": "git diff --check",
+      "exit_code": 0
+    }
+  ],
+  "not_checked": [
+    "Docker build",
+    "native G12",
+    "runtime",
+    "unchanged observability tests"
+  ]
+}
