@@ -2568,16 +2568,29 @@ async function materializeSecrets(secretsDir, options) {
       const kafkaRefs = platformConfig.services[runtime].secretRefs.filter(
         (ref) => ref.startsWith("kafka."),
       );
-      if (kafkaRefs.length > 0) {
+      const databaseCredential =
+        options.recoveryProofCredentials?.databaseCredentialsByRuntime?.[
+          runtime
+        ];
+      const databaseRefs = databaseCredential
+        ? platformConfig.services[runtime].secretRefs.filter((ref) =>
+            ref.startsWith("postgres."),
+          )
+        : [];
+      if (databaseCredential) assert.ok(databaseRefs.length > 0);
+      if (kafkaRefs.length > 0 || databaseRefs.length > 0) {
         const document = parseYaml(await readFile(path, "utf8"), {
           json: true,
         });
-        for (const ref of kafkaRefs) {
+        for (const [ref, credential] of [
+          ...kafkaRefs.map((ref) => [ref, kafkaCredential]),
+          ...databaseRefs.map((ref) => [ref, databaseCredential]),
+        ]) {
           const segments = ref.split(".");
           let target = document.secrets;
           for (const segment of segments.slice(0, -1))
             target = target[segment] ??= {};
-          target[segments.at(-1)] = kafkaCredential;
+          target[segments.at(-1)] = credential;
         }
         await chmod(path, 0o600);
         await writeFile(
@@ -9319,7 +9332,19 @@ export async function runComposeSmoke({
       "--observability-fixture requires programmatic observability hooks and isolated --recovery-proof",
     );
   }
-  const externalRecovery = isExternalRecoveryProof(options);
+  const launchContextPath = process.env.COFFEE_LAUNCH_CONTEXT_FILE;
+  const externalRecovery =
+    isExternalRecoveryProof(options) ||
+    Boolean(
+      launchContextPath &&
+      !options.stubSecrets &&
+      !options.databaseProof &&
+      !options.customerProof &&
+      !options.recoveryProof &&
+      !options.mutationDisableRollback &&
+      !options.aromaBindingProof &&
+      !options.aromaCartProof,
+    );
   if (observability !== undefined) {
     assert.ok(
       observability && typeof observability === "object",
@@ -9397,7 +9422,6 @@ export async function runComposeSmoke({
   );
   if (options.aromaBindingProof)
     assertAromaGatewaySocketAssociationRegression();
-  const launchContextPath = process.env.COFFEE_LAUNCH_CONTEXT_FILE;
   let launchIdentity;
   if (launchContextPath) {
     launchIdentity = await validateLaunchContext(launchContextPath);
@@ -9706,6 +9730,7 @@ export async function runComposeSmoke({
       options.databaseProof ||
       options.customerProof ||
       options.recoveryProof ||
+      externalRecovery ||
       options.mutationDisableRollback ||
       options.aromaBindingProof ||
       options.aromaCartProof;
@@ -9757,6 +9782,7 @@ export async function runComposeSmoke({
         ? await readDatabaseProofCredentials(proofLaunchIdentity)
         : undefined;
     recoveryProofCredentials =
+      externalRecovery ||
       options.recoveryProof ||
       options.aromaBindingProof ||
       options.aromaCartProof
@@ -10278,52 +10304,58 @@ export async function runComposeSmoke({
         launchContextPath,
         externalRunDatabaseResources,
       );
-      recoveryAdminUrl = `postgresql://${encodeURIComponent(recoveryProofCredentials.admin.username)}:${encodeURIComponent(recoveryProofCredentials.admin.password)}@${recoveryDatabaseProof.host}:${recoveryDatabaseProof.port}/postgres`;
-      const deliveryDatabase = recoveryProofCredentials.roleMap.databases.find(
-        (candidate) =>
-          candidate.name ===
-          recoveryPlatformConfig.services["orders-service"].database,
-      );
-      assert.ok(deliveryDatabase, "recovery proof orders database is missing");
-      const ordersRole = deliveryDatabase.runtimeRoles.find(
-        (candidate) => candidate.runtime === "orders-service",
-      );
-      assert.ok(ordersRole, "recovery proof orders-service role is missing");
-      await createDeliveryTables(
-        recoveryAdminUrl,
-        deliveryDatabase,
-        recoveryProofCredentials.rolePasswords,
-        ordersRole.role,
-      );
-      recoveryDeliveryDatabase = deliveryDatabase;
-      recoveryDeliveryTables = true;
-      if (browserHook) {
-        const ownedDatabaseNames = new Set(
-          recoveryProofCredentials.roleMap.databases.map(
-            (database) => database.name,
-          ),
+      if (options.recoveryProof) {
+        recoveryAdminUrl = `postgresql://${encodeURIComponent(recoveryProofCredentials.admin.username)}:${encodeURIComponent(recoveryProofCredentials.admin.password)}@${recoveryDatabaseProof.host}:${recoveryDatabaseProof.port}/postgres`;
+        const deliveryDatabase =
+          recoveryProofCredentials.roleMap.databases.find(
+            (candidate) =>
+              candidate.name ===
+              recoveryPlatformConfig.services["orders-service"].database,
+          );
+        assert.ok(
+          deliveryDatabase,
+          "recovery proof orders database is missing",
         );
-        const ownerConnections = async (database) => {
-          assert.ok(
-            ownedDatabaseNames.has(database),
-            "G15 owner evidence database is outside the run scope",
+        const ordersRole = deliveryDatabase.runtimeRoles.find(
+          (candidate) => candidate.runtime === "orders-service",
+        );
+        assert.ok(ordersRole, "recovery proof orders-service role is missing");
+        await createDeliveryTables(
+          recoveryAdminUrl,
+          deliveryDatabase,
+          recoveryProofCredentials.rolePasswords,
+          ordersRole.role,
+        );
+        recoveryDeliveryDatabase = deliveryDatabase;
+        recoveryDeliveryTables = true;
+        if (browserHook) {
+          const ownedDatabaseNames = new Set(
+            recoveryProofCredentials.roleMap.databases.map(
+              (database) => database.name,
+            ),
           );
-          return createPostgresClient(
-            replaceDatabase(recoveryAdminUrl, database),
-          );
-        };
-        browserOwnerEvidence = createBrowserOwnerEvidence({
-          connect: ownerConnections,
-          roleMap: recoveryProofCredentials.roleMap,
-          actorRef: "actor:g15-browser-fixture",
-          runId: launchIdentity.context.runId,
-        });
-        if (g14Browser)
-          g14OrderEvidence = createG14OrderEvidence({
+          const ownerConnections = async (database) => {
+            assert.ok(
+              ownedDatabaseNames.has(database),
+              "G15 owner evidence database is outside the run scope",
+            );
+            return createPostgresClient(
+              replaceDatabase(recoveryAdminUrl, database),
+            );
+          };
+          browserOwnerEvidence = createBrowserOwnerEvidence({
             connect: ownerConnections,
             roleMap: recoveryProofCredentials.roleMap,
+            actorRef: "actor:g15-browser-fixture",
             runId: launchIdentity.context.runId,
           });
+          if (g14Browser)
+            g14OrderEvidence = createG14OrderEvidence({
+              connect: ownerConnections,
+              roleMap: recoveryProofCredentials.roleMap,
+              runId: launchIdentity.context.runId,
+            });
+        }
       }
     }
     if (options.mutationDisableRollback) markRollbackStage("build");

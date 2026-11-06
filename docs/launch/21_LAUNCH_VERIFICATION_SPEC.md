@@ -130,6 +130,11 @@ config digest. G00 проверяет derived plan, runtime — те же име
 bytes. Отдельная standalone runtime проверка с disposable PostgreSQL может
 диагностировать G18, но не закрывает требование внешнего PostgreSQL для G13.
 
+Обычный G13 с launch context перед запуском Compose использует каноническую
+проекцию учётных данных, создаёт пять run-derived БД и применяет принятые
+миграции. В `finally` он подтверждает cleanup этих БД теми же scoped helpers,
+что G10/G11: предыдущие gates удаляют свои БД и не подготавливают их для G13.
+
 Kafka topics/groups содержат run-id. AROMA mutation по умолчанию выключена.
 
 `environment.json`: commit/tree SHA, dirty=false, UTC/timezone, OS/arch, CPU/RAM,

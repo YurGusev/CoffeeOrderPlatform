@@ -7551,6 +7551,217 @@ void test("G18 early database projection guard emits a finite bootstrap receipt 
   });
 });
 
+void test("normal launch G13 prepares and cleans its external run databases", async () => {
+  const { isExternalRecoveryProof } =
+    await import("../../tools/compose-smoke.mjs");
+  const source = await readFile(
+    join(REPO_ROOT, "tools/compose-smoke.mjs"),
+    "utf8",
+  );
+  const part = (start, end) => {
+    const first = source.indexOf(start);
+    const last = source.indexOf(end, first);
+    assert.ok(first >= 0 && last > first);
+    return source.slice(first, last);
+  };
+  const selection = part(
+    "const launchContextPath = process.env.COFFEE_LAUNCH_CONTEXT_FILE;",
+    "\n  if (observability !== undefined)",
+  );
+  const identity = part(
+    "const isolatedDatabaseProof =",
+    "    if (proofLaunchIdentity) {",
+  );
+  const credentials = part(
+    "    recoveryProofCredentials =\n",
+    "    const browserParentModules =",
+  );
+  const prepare =
+    part(
+      "    if (externalRecovery) {\n      recoveryDatabaseProof = await applyExternalRecoveryMigrations(",
+      "\n      if (options.recoveryProof) {",
+    ) + "\n    }";
+  const cleanup = part(
+    "      if (composeAttempted && !options.keep) {",
+    "      if (browserFixture && !retainG14Resources) {",
+  );
+  const program = `(async () => {
+    ${selection}
+    const launchIdentity = hasContext ? { candidateRoot: '/candidate', context: { resources: {} } } : undefined;
+    ${identity}
+    let recoveryProofCredentials, recoveryDatabaseProof, externalDatabaseCleanupReceipt, cleanupHookError;
+    let composeAttempted = false, composeDownComplete = false;
+    const externalRunDatabaseResources = [];
+    let primaryError;
+    try {
+      ${credentials}
+      ${prepare}
+      composeAttempted = true;
+      if (failAfterPrepare) throw new Error('synthetic startup failure');
+    } catch (error) { primaryError = error; }
+    finally { ${cleanup} }
+    if (primaryError) throw primaryError;
+    if (cleanupHookError) throw cleanupHookError;
+    return externalDatabaseCleanupReceipt;
+  })()`;
+  for (const [hasContext, failAfterPrepare, failPrepare, failDown] of [
+    [true, false, false, false],
+    [true, true, false, false],
+    [true, false, true, false],
+    [true, false, false, true],
+    [false, false, false, false],
+  ]) {
+    const calls = [];
+    const resources = [];
+    const run = runInNewContext(program, {
+      args: ["--project-name", "project"],
+      options: { projectName: "project" },
+      observability: undefined,
+      browserHook: undefined,
+      browserFixture: undefined,
+      process: {
+        env: hasContext ? { COFFEE_LAUNCH_CONTEXT_FILE: "/context.json" } : {},
+      },
+      hasContext,
+      failAfterPrepare,
+      isExternalRecoveryProof,
+      launchConfigIdentity: () => ({ runId: "run" }),
+      readExternalRecoveryProofCredentials: async (
+        identity,
+        path,
+        metadata,
+      ) => {
+        assert.equal(identity.runId, "run");
+        assert.equal(path, "/context.json");
+        assert.equal(metadata.expectedLineage, "G13");
+        calls.push("credentials");
+        return { scope: "run" };
+      },
+      readRecoveryProofCredentials: async () => {
+        throw new Error("unexpected fixture credentials");
+      },
+      applyExternalRecoveryMigrations: async (
+        credential,
+        _config,
+        path,
+        tracked,
+      ) => {
+        assert.equal(credential.scope, "run");
+        assert.equal(path, "/context.json");
+        tracked.push(...resources);
+        calls.push("prepare");
+        if (failPrepare) throw new Error("synthetic migration failure");
+        return {};
+      },
+      cleanupExternalRecoveryDatabases: async (
+        credential,
+        tracked,
+        stopped,
+      ) => {
+        assert.equal(credential.scope, "run");
+        assert.equal(stopped, true);
+        assert.equal(tracked.length, 5);
+        calls.push("cleanup");
+        return { verified: true };
+      },
+      cleanupApprovedExternalPostgresAttachment: () => calls.push("detach"),
+      externalPostgresAttachment: {},
+      platformConfig: {},
+      projectName: "project",
+      secretsDir: "/secrets",
+      composeFile: "/compose",
+      runCompose: (_project, _secrets, args) => {
+        assert.equal(args[0], "down");
+        calls.push("down");
+        if (failDown) throw new Error("synthetic compose down failure");
+      },
+    });
+    resources.push(
+      ...["customer", "catalog", "pricing", "orders", "integration"].map(
+        (name) => ({ database: { name } }),
+      ),
+    );
+    if (failAfterPrepare || failPrepare || failDown)
+      await assert.rejects(
+        run,
+        /synthetic (startup|migration|compose down) failure/u,
+      );
+    else await run;
+    assert.deepEqual(
+      calls,
+      !hasContext
+        ? ["down"]
+        : failPrepare
+          ? ["credentials", "prepare", "cleanup", "detach"]
+          : failDown
+            ? ["credentials", "prepare", "down"]
+            : ["credentials", "prepare", "down", "cleanup", "detach"],
+    );
+  }
+  for (const [options, expected] of [
+    [{ projectName: "project", noBuild: true }, true],
+    [{ stubSecrets: true }, false],
+    [{ databaseProof: true }, false],
+    [{ customerProof: true }, false],
+    [{ aromaBindingProof: true }, false],
+    [{ aromaCartProof: true }, false],
+    [{ recoveryProof: true }, true],
+    [{ recoveryProof: true, observabilityFixture: true }, false],
+    [{ recoveryProof: true, mutationDisableRollback: true }, false],
+  ]) {
+    assert.equal(
+      runInNewContext(`(() => { ${selection} return externalRecovery; })()`, {
+        process: { env: { COFFEE_LAUNCH_CONTEXT_FILE: "/context.json" } },
+        options,
+        isExternalRecoveryProof,
+      }),
+      expected,
+    );
+  }
+  const projection = part(
+    "      const kafkaRefs = platformConfig.services[runtime].secretRefs.filter(",
+    "\n    }\n    // Docker Compose's local file-secret backend",
+  );
+  for (const projected of [true, false]) {
+    let written;
+    const canonical = { username: "canonical", password: "canonical-password" };
+    const selected = { username: "run-role", password: "run-password" };
+    await runInNewContext(`(async () => { ${projection} })()`, {
+      runtime: "orders-service",
+      path: "/private/scoped.yaml",
+      options: projected
+        ? {
+            recoveryProofCredentials: {
+              databaseCredentialsByRuntime: { "orders-service": selected },
+            },
+          }
+        : {},
+      platformConfig: {
+        services: {
+          "orders-service": { secretRefs: ["postgres.orders", "kafka.client"] },
+        },
+      },
+      kafkaCredential: { username: "kafka-fixture" },
+      assert,
+      readFile: async () => "fixture",
+      parseYaml: () => ({
+        secrets: { postgres: { orders: canonical }, unrelated: "preserved" },
+      }),
+      dumpYaml: JSON.stringify,
+      chmod: async () => {},
+      writeFile: async (_path, value) => {
+        written = JSON.parse(value);
+      },
+    });
+    assert.deepEqual(
+      written.secrets.postgres.orders,
+      projected ? selected : canonical,
+    );
+    assert.equal(written.secrets.kafka.client.username, "kafka-fixture");
+    assert.equal(written.secrets.unrelated, "preserved");
+  }
+});
+
 void test("G13/G15 external PostgreSQL attachment is exact and keeps the shared data network", async (t) => {
   const {
     externalRecoveryMigrationCredentialRequest,

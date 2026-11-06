@@ -1,7 +1,7 @@
 issue: 13
 baseCommit: 7ee04f202054b39f47f504b1a4125e6598e59eae
 status: source-descriptor-before-formal-verification
-asOfUtc: "2026-11-06T10:47:48.823546Z"
+asOfUtc: "2026-11-06T14:32:01.752Z"
 inputs:
   - issue: 2
     acceptedMergeCommit: 327638d4494269a151ee7c0ac945ac0053c3e0d4
@@ -192,7 +192,7 @@ outputs:
     consumers:
       - 1
   - artifact: docs/launch/21_LAUNCH_VERIFICATION_SPEC.md
-    sha256: 0158007f0c7917aabb9b16bd1012e85eded5d335604461e72f54c46b25badeab
+    sha256: 3db5d8b230e2d186cc2740294999f8cb90718d331e91e5a9e0a2923f835a2974
     consumers:
       - 1
   - artifact: docs/operations/observability.md
@@ -220,7 +220,7 @@ outputs:
     consumers:
       - 1
   - artifact: tests/compose/topology.test.mjs
-    sha256: c2cee563510287fc1eb574c5b7f729c454aaea4f6c3469c19b467bfd46647dd2
+    sha256: 7cbf3a394c31b14670e76ff48b6cf6d78e45618a9777e334acfa156a0c1ceb2a
     consumers:
       - 1
   - artifact: tests/config/observability-bootstrap.test.mjs
@@ -240,7 +240,7 @@ outputs:
     consumers:
       - 1
   - artifact: tools/compose-smoke.mjs
-    sha256: 5845f149b062a8a528639e996beace84717a4fb86bc57336c0548e8d04971738
+    sha256: 5e5c253d6f68d0a650416de0c666b4f1792af795f8eaedea32e831ee82c100f7
     consumers:
       - 1
   - artifact: tools/observability/verify.mjs
@@ -853,6 +853,19 @@ verification:
       tests/compose/topology.test.mjs
     result: PASS, exit 0; два изменённых codefiles, независимая проверка.
     logSha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+  - command: >-
+      node --test --test-name-pattern='normal launch G13 prepares and cleans its external run databases|G13/G15 external PostgreSQL attachment|external PostgreSQL attachment cleanup|external PostgreSQL cleanup retains run databases|external recovery projection accepts canonical mapping' tests/compose/topology.test.mjs
+    result: >-
+      PASS: 5/5, fail/cancel/skip 0. Поведенческая regression сначала RED на прежнем коде:
+      отсутствовали credentials/prepare/cleanup/detach. GREEN проверяет обычный launch G13,
+      ошибки startup и миграций, запрет удаления БД при неуспешном compose down, исключения
+      proof-режимов и сохранение non-DB scoped secrets. Fake зависимости, без Docker и SQL;
+      это не runtime G13 или полный допуск.
+    logSha256: 5f7a69ee47a979a871e0c1f8b0dcb69895f68978a8223473a7e9abce12b04e85
+  - command: >-
+      node_modules/.bin/oxlint --type-aware --deny-warnings tools/compose-smoke.mjs tests/compose/topology.test.mjs
+    result: PASS; affected type-aware lint после исправления lifecycle G13.
+    logSha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
 consumerContract:
   consumer: 1
   admission: >-
@@ -881,6 +894,16 @@ consumerContract:
     G18 baseline flag child с проверенной lineage. Лимиты и provider scope сохранены; exact parent
     G12 product images, отдельная BOM/image-ID проверка fixture PostgreSQL.
 limitations:
+  - >-
+    Полный run 20261106T123050Z-78ddca0 завершён НЕ ДОПУСТИТЬ: G00–G12 PASS,
+    G13 FAIL (orders-service unhealthy), G14–G18 NOT_RUN; отрицательные G19 report/handoff
+    опубликованы в PR249#issuecomment-6686037173 и #issuecomment-6686037813 и сохранены в Obsidian.
+    Диагностика подтвердила пропуск external DB lifecycle обычного launch G13: runtime получает
+    run-derived target, но его пять БД не создаются после cleanup предыдущих gates. Реальные
+    Customer/Catalog health503 database NotReady и read-only catalog probe опубликованы как
+    PR249#issuecomment-6687024100. Исправление verifier не меняет readiness, health limits, pins
+    или product code; новому source обязательны собственные CI, G12, fresh SSE qualification и
+    полный G00–G19. Успешная runtime-аутентификация и конкретный SQLSTATE не доказаны.
   - >-
     Source c567e544: полный run 20261106T091002Z-c567e54 завершён НЕ ДОПУСТИТЬ, G00–G09/G12
     PASS, G10 recovery FAIL, G11/G13–G18 NOT_RUN, G19 отрицательный PASS без evidence errors.
