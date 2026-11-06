@@ -1,7 +1,7 @@
 issue: 13
 baseCommit: 7ee04f202054b39f47f504b1a4125e6598e59eae
 status: source-descriptor-before-formal-verification
-asOfUtc: "2026-11-06T14:32:01.752Z"
+asOfUtc: "2026-11-06T16:20:25.690103Z"
 inputs:
   - issue: 2
     acceptedMergeCommit: 327638d4494269a151ee7c0ac945ac0053c3e0d4
@@ -220,7 +220,7 @@ outputs:
     consumers:
       - 1
   - artifact: tests/compose/topology.test.mjs
-    sha256: 7cbf3a394c31b14670e76ff48b6cf6d78e45618a9777e334acfa156a0c1ceb2a
+    sha256: 5ef847e140b165eb4958f2186b2ff565cf00dd701374b86dec8cba617c0a481b
     consumers:
       - 1
   - artifact: tests/config/observability-bootstrap.test.mjs
@@ -240,7 +240,7 @@ outputs:
     consumers:
       - 1
   - artifact: tools/compose-smoke.mjs
-    sha256: 5e5c253d6f68d0a650416de0c666b4f1792af795f8eaedea32e831ee82c100f7
+    sha256: 955f5a9e700b4b625856bc390cfff1315a34b17bdf0889c9691dad739f6e8029
     consumers:
       - 1
   - artifact: tools/observability/verify.mjs
@@ -866,6 +866,14 @@ verification:
       node_modules/.bin/oxlint --type-aware --deny-warnings tools/compose-smoke.mjs tests/compose/topology.test.mjs
     result: PASS; affected type-aware lint после исправления lifecycle G13.
     logSha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+  - command: >-
+      node --test --test-name-pattern='nginx ingress uses the scoped public CA with strict TLS|normal launch G13 prepares and cleans its external run databases|programmatic observability hooks require a bounded recovery-proof run' tests/compose/topology.test.mjs
+    result: >-
+      PASS: 3/3, fail/cancel/skip 0; Node 26.8.1. Новый regression сначала RED без scoped CA,
+      затем GREEN на фактических caller и HTTPS helper: optional CA present/absent,
+      fixture/recovery CA, оба ingress endpoint, TLS1.3, SNI и rejectUnauthorized=true.
+      Fake transport, без runtime/SQL/HTTP; component FAIL и полный допуск этим не заменяются.
+    logSha256: 5f14800e21bf9dc8a81b5740767932c83baeab894c2df346092be93b90dca429
 consumerContract:
   consumer: 1
   admission: >-
@@ -894,6 +902,16 @@ consumerContract:
     G18 baseline flag child с проверенной lineage. Лимиты и provider scope сохранены; exact parent
     G12 product images, отдельная BOM/image-ID проверка fixture PostgreSQL.
 limitations:
+  - >-
+    Source b74fb10c: exact-head CI и отдельный G12 PASS; после исправления external DB lifecycle
+    все 16 контейнеров normal G13 healthy. Component G13 сохранён как FAIL:
+    assertNginxIngress не передавал существующий optional edge.tlsCaBundle и получил
+    UNABLE_TO_VERIFY_LEAF_SIGNATURE. Однократный строгий TLS1.3 GET /health/live с CA из
+    materialized scoped edge-gateway вернул 200; подпись leaf и hostname совпали, TLS verification
+    не отключалась. Receipt подтверждает cleanup пяти run-derived БД; scoped Docker resources
+    отсутствуют после завершения. Исправлен только CA wiring verifier; последующие ingress
+    проверки и полный G13 этим не доказаны. Новому source обязательны собственные exact-head CI,
+    G12, fresh SSE qualification и полный G00–G19; старый component FAIL не заменяется на PASS.
   - >-
     Полный run 20261106T123050Z-78ddca0 завершён НЕ ДОПУСТИТЬ: G00–G12 PASS,
     G13 FAIL (orders-service unhealthy), G14–G18 NOT_RUN; отрицательные G19 report/handoff

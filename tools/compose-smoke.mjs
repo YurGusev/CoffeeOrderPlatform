@@ -11041,7 +11041,12 @@ export async function runComposeSmoke({
         platformConfig.nginxTransport.publicHost,
         options.stubSecrets || options.recoveryProof
           ? materialized.transportMaterials.publicTls.caPem
-          : undefined,
+          : parseYaml(
+              await readFile(join(secretsDir, "edge-gateway.yaml"), "utf8"),
+              {
+                json: true,
+              },
+            )?.secrets?.edge?.tlsCaBundle,
       );
       if (browser) {
         throwIfRollbackTerminationRequested();

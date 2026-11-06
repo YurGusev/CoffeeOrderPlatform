@@ -7551,6 +7551,86 @@ void test("G18 early database projection guard emits a finite bootstrap receipt 
   });
 });
 
+void test("nginx ingress uses the scoped public CA with strict TLS", async () => {
+  const source = await readFile(
+    join(REPO_ROOT, "tools/compose-smoke.mjs"),
+    "utf8",
+  );
+  const helperStart = source.indexOf("async function assertNginxIngress(");
+  const helperEnd = source.indexOf(
+    "\nfunction runtimeHealthStatus(",
+    helperStart,
+  );
+  const callerStart = source.indexOf("await assertNginxIngress(", helperEnd);
+  const callerEnd = source.indexOf("\n      if (browser) {", callerStart);
+  assert.ok(
+    helperStart >= 0 &&
+      helperEnd > helperStart &&
+      callerStart > helperEnd &&
+      callerEnd > callerStart,
+  );
+  const program = `(async () => { ${source.slice(helperStart, helperEnd)} ${source.slice(callerStart, callerEnd)} })()`;
+  for (const [mode, ca] of [
+    ["canonical", "PUBLIC_CA"],
+    ["canonical", undefined],
+    ["fixture", "FIXTURE_CA"],
+    ["recovery", "FIXTURE_CA"],
+  ]) {
+    const requests = [];
+    let reads = 0;
+    await runInNewContext(program, {
+      assert,
+      platformConfig: { nginxTransport: { publicHost: "localhost" } },
+      materialized: {
+        transportMaterials: { publicTls: { caPem: "FIXTURE_CA" } },
+      },
+      options: {
+        stubSecrets: mode === "fixture",
+        recoveryProof: mode === "recovery",
+      },
+      secretsDir: "/tmp/scoped",
+      join,
+      parseYaml,
+      readFile: async (path, encoding) => {
+        assert.equal(mode, "canonical");
+        assert.equal(path, "/tmp/scoped/edge-gateway.yaml");
+        assert.equal(encoding, "utf8");
+        reads += 1;
+        return ca
+          ? "secrets:\n  edge:\n    tlsCaBundle: PUBLIC_CA\n"
+          : "secrets:\n  edge: {}\n";
+      },
+      httpsRequest: (options, onResponse) => {
+        requests.push(options);
+        return {
+          once() {
+            return this;
+          },
+          end() {
+            onResponse({
+              statusCode: options.path === "/health/live" ? 200 : 401,
+              headers: { "content-type": "application/problem+json" },
+              resume() {},
+              once(_event, callback) {
+                callback();
+              },
+            });
+          },
+        };
+      },
+    });
+    assert.equal(requests.length, 2);
+    for (const request of requests) {
+      assert.equal(request.ca, ca);
+      assert.equal(Object.hasOwn(request, "ca"), ca !== undefined);
+      assert.equal(request.rejectUnauthorized, true);
+      assert.equal(request.minVersion, "TLSv1.3");
+      assert.equal(request.servername, "localhost");
+    }
+    assert.equal(reads, mode === "canonical" ? 1 : 0);
+  }
+});
+
 void test("normal launch G13 prepares and cleans its external run databases", async () => {
   const { isExternalRecoveryProof } =
     await import("../../tools/compose-smoke.mjs");
