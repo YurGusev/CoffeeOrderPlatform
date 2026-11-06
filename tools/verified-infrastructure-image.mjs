@@ -18,7 +18,7 @@ import { validateLaunchContext } from "../verification/launch/v1/report.mjs";
 
 const IMAGE_ID = /^sha256:[a-f0-9]{64}$/u;
 const VERIFIED_TAG =
-  /^coffee-g12-[a-f0-9]{12}-(?:kafka|storage-helper|grafana|keycloak):latest$/u;
+  /^coffee-g12-[a-f0-9]{12}-(?:kafka|storage-helper|grafana|keycloak|otel-collector):latest$/u;
 const KAFKA_RUNTIME_MARKER = "coffee-platform-kafka:verified-artifact-required";
 const MAX_EVIDENCE_BYTES = 512 * 1024 * 1024;
 const MAX_METADATA_BYTES = 64 * 1024;
@@ -45,7 +45,8 @@ function exactKeys(value, expected) {
     value &&
     typeof value === "object" &&
     !Array.isArray(value) &&
-    Object.keys(value).sort().join("\0") === [...expected].sort().join("\0")
+    Object.keys(value).sort().join("\0") ===
+      [...expected].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0)).join("\0")
   );
 }
 
@@ -312,7 +313,15 @@ async function validateGateImage({
   validateContext = validateLaunchContext,
   loadImage = true,
 } = {}) {
-  if (!["kafka", "storage-helper", "grafana", "keycloak"].includes(target))
+  if (
+    ![
+      "kafka",
+      "storage-helper",
+      "grafana",
+      "keycloak",
+      "otel-collector",
+    ].includes(target)
+  )
     fail("G12_KAFKA_TARGET_INVALID");
   if (typeof contextFile !== "string" || !isAbsolute(contextFile))
     fail("G12_KAFKA_LAUNCH_CONTEXT_REQUIRED");
@@ -357,11 +366,13 @@ async function validateGateImage({
   const baseImage =
     target === "kafka"
       ? toolchain.kafkaImage
-      : target === "grafana"
-        ? toolchain.grafanaImage
-        : target === "keycloak"
-          ? toolchain.keycloakDistributionImage
-          : toolchain.nodeImage;
+      : target === "otel-collector"
+        ? toolchain.otelCollectorImage
+        : target === "grafana"
+          ? toolchain.grafanaImage
+          : target === "keycloak"
+            ? toolchain.keycloakDistributionImage
+            : toolchain.nodeImage;
   if (!/@sha256:[a-f0-9]{64}$/u.test(baseImage ?? ""))
     fail("G12_KAFKA_BASE_IMAGE_INVALID");
 
@@ -384,11 +395,13 @@ async function validateGateImage({
   const image =
     target === "kafka"
       ? result.kafka
-      : target === "grafana"
-        ? result.grafana
-        : target === "keycloak"
-          ? result.keycloak
-          : result.storageHelper;
+      : target === "otel-collector"
+        ? result.otelCollector
+        : target === "grafana"
+          ? result.grafana
+          : target === "keycloak"
+            ? result.keycloak
+            : result.storageHelper;
   if (
     !exactKeys(image, [
       "path",
@@ -934,7 +947,15 @@ export function removeVerifiedGateImage({
   image,
   run = dockerRun,
 } = {}) {
-  if (!["kafka", "storage-helper", "grafana", "keycloak"].includes(target))
+  if (
+    ![
+      "kafka",
+      "storage-helper",
+      "grafana",
+      "keycloak",
+      "otel-collector",
+    ].includes(target)
+  )
     fail("G12_KAFKA_TARGET_INVALID");
   if (!image || image.imported !== true) return false;
   if (

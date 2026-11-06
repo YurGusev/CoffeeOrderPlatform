@@ -35,7 +35,6 @@ const SCANNER_VERSION = "0.76.1";
 const G12_SCAN_BUDGET_MS = 30 * 60_000;
 const BUILD_NETWORK = "coffee_platform_build_mtu";
 const UPSTREAM_IMAGES = Object.freeze([
-  "otelCollectorImage",
   "lokiImage",
   "prometheusImage",
   "tempoImage",
@@ -163,7 +162,9 @@ export function verifySlsaStatement(
       baseMaterial?.runtime,
       "keycloak-runtime",
     );
-  } else if (["kafka", "storage-helper", "grafana"].includes(service)) {
+  } else if (
+    ["kafka", "storage-helper", "grafana", "otel-collector"].includes(service)
+  ) {
     verifyBaseMaterialStatement(statement, baseMaterial, service);
   }
   return Object.freeze({
@@ -180,13 +181,15 @@ function baseReference(sourceRef, target) {
   const pattern =
     target === "kafka"
       ? /^(apache\/kafka):(4\.3\.2)@(sha256:[0-9a-f]{64})$/u
-      : target === "grafana"
-        ? /^(grafana\/grafana):([^@/]+)@(sha256:[0-9a-f]{64})$/u
-        : target === "keycloak-distribution"
-          ? /^(dhi\.io\/keycloak)()@(sha256:[0-9a-f]{64})$/u
-          : target === "keycloak-runtime"
-            ? /^(eclipse-temurin):(21\.0\.13_9-jre-alpine-3\.24)@(sha256:[0-9a-f]{64})$/u
-            : /^(node):([^@/]+)@(sha256:[0-9a-f]{64})$/u;
+      : target === "otel-collector"
+        ? /^(grafana\/alloy):([^@/]+)@(sha256:[0-9a-f]{64})$/u
+        : target === "grafana"
+          ? /^(grafana\/grafana):([^@/]+)@(sha256:[0-9a-f]{64})$/u
+          : target === "keycloak-distribution"
+            ? /^(dhi\.io\/keycloak)()@(sha256:[0-9a-f]{64})$/u
+            : target === "keycloak-runtime"
+              ? /^(eclipse-temurin):(21\.0\.13_9-jre-alpine-3\.24)@(sha256:[0-9a-f]{64})$/u
+              : /^(node):([^@/]+)@(sha256:[0-9a-f]{64})$/u;
   return typeof sourceRef === "string" ? sourceRef.match(pattern) : null;
 }
 
@@ -209,13 +212,15 @@ function verifyBaseMaterialStatement(statement, baseMaterial, target) {
   const packagePrefix =
     target === "kafka"
       ? /^pkg:docker\/(?:docker\.io\/)?apache\/kafka@/u
-      : target === "grafana"
-        ? /^pkg:docker\/(?:docker\.io\/)?grafana\/grafana@/u
-        : target === "keycloak-distribution"
-          ? /^pkg:docker\/dhi\.io\/keycloak\?/u
-          : target === "keycloak-runtime"
-            ? /^pkg:docker\/(?:docker\.io\/)?(?:library\/)?eclipse-temurin@/u
-            : /^pkg:docker\/(?:docker\.io\/)?(?:library\/)?node@/u;
+      : target === "otel-collector"
+        ? /^pkg:docker\/(?:docker\.io\/)?grafana\/alloy@/u
+        : target === "grafana"
+          ? /^pkg:docker\/(?:docker\.io\/)?grafana\/grafana@/u
+          : target === "keycloak-distribution"
+            ? /^pkg:docker\/dhi\.io\/keycloak\?/u
+            : target === "keycloak-runtime"
+              ? /^pkg:docker\/(?:docker\.io\/)?(?:library\/)?eclipse-temurin@/u
+              : /^pkg:docker\/(?:docker\.io\/)?(?:library\/)?node@/u;
   const matches = dependencies.filter((material) =>
     packagePrefix.test(material?.uri ?? ""),
   );
@@ -717,6 +722,7 @@ async function validateInputs({
     fail("SCANNER_PIN_MISMATCH");
   for (const key of [
     ...UPSTREAM_IMAGES,
+    "otelCollectorImage",
     "kafkaImage",
     "nodeImage",
     "grafanaImage",
@@ -1908,7 +1914,15 @@ async function writeDockerCompatibilityManifest({
   layout,
   archiveManifest,
 }) {
-  if (!["kafka", "storage-helper", "grafana", "keycloak"].includes(service))
+  if (
+    ![
+      "kafka",
+      "storage-helper",
+      "grafana",
+      "keycloak",
+      "otel-collector",
+    ].includes(service)
+  )
     fail("OCI_DOCKER_MANIFEST_TARGET_INVALID");
   const runTag = sha256(Buffer.from(runId)).slice(0, 12);
   const expectedTag = `coffee-g12-${runTag}-${service}:latest`;
@@ -2330,6 +2344,7 @@ function imageBuildArgs({
   kafkaImage,
   nodeImage,
   grafanaImage,
+  otelCollectorImage,
   keycloakDistributionImage,
   keycloakRuntimeImage,
   libexpatVersion,
@@ -2354,27 +2369,39 @@ function imageBuildArgs({
           "--target",
           "keycloak",
         ]
-      : service === "grafana"
+      : service === "otel-collector"
         ? [
             "--build-arg",
-            `GRAFANA_IMAGE=${grafanaImage}`,
-            "--build-context",
-            `grafana-plugins=${pluginContext}`,
+            `OTEL_COLLECTOR_IMAGE=${otelCollectorImage}`,
             "--target",
-            "grafana",
+            "otel-collector",
           ]
-        : service === "edge-nginx"
-          ? ["--file", "apps/edge-nginx/Dockerfile", "--target", "edge-nginx"]
-          : service === "kafka"
-            ? ["--build-arg", `KAFKA_IMAGE=${kafkaImage}`, "--target", "kafka"]
-            : service === "storage-helper"
+        : service === "grafana"
+          ? [
+              "--build-arg",
+              `GRAFANA_IMAGE=${grafanaImage}`,
+              "--build-context",
+              `grafana-plugins=${pluginContext}`,
+              "--target",
+              "grafana",
+            ]
+          : service === "edge-nginx"
+            ? ["--file", "apps/edge-nginx/Dockerfile", "--target", "edge-nginx"]
+            : service === "kafka"
               ? [
                   "--build-arg",
-                  `NODE_IMAGE=${nodeImage}`,
+                  `KAFKA_IMAGE=${kafkaImage}`,
                   "--target",
-                  "storage-helper",
+                  "kafka",
                 ]
-              : ["--build-arg", `RUNTIME=${runtime}`, "--target", "runtime"]),
+              : service === "storage-helper"
+                ? [
+                    "--build-arg",
+                    `NODE_IMAGE=${nodeImage}`,
+                    "--target",
+                    "storage-helper",
+                  ]
+                : ["--build-arg", `RUNTIME=${runtime}`, "--target", "runtime"]),
     "--platform",
     "linux/amd64",
     "--metadata-file",
@@ -2401,12 +2428,14 @@ async function buildProductImages({
   kafkaBaseMaterial,
   storageHelperBaseMaterial,
   grafanaBaseMaterial,
+  otelCollectorBaseMaterial,
   keycloakBaseMaterial,
   vendorPlugins,
 }) {
   const services = [
     ...RUNTIME_NAMES.map((runtime) => ({ service: runtime, runtime })),
     { service: "grafana", runtime: null },
+    { service: "otel-collector", runtime: null },
     { service: "keycloak", runtime: null },
     { service: "storage-helper", runtime: null },
     { service: "edge-nginx", runtime: null },
@@ -2429,6 +2458,7 @@ async function buildProductImages({
       kafkaImage: toolchain.kafkaImage,
       nodeImage: toolchain.nodeImage,
       grafanaImage: toolchain.grafanaImage,
+      otelCollectorImage: toolchain.otelCollectorImage,
       keycloakDistributionImage: toolchain.keycloakDistributionImage,
       keycloakRuntimeImage: toolchain.keycloakRuntimeImage,
       libexpatVersion: toolchain.libexpatVersion,
@@ -2469,9 +2499,11 @@ async function buildProductImages({
           ? storageHelperBaseMaterial
           : service === "grafana"
             ? grafanaBaseMaterial
-            : service === "keycloak"
-              ? keycloakBaseMaterial
-              : null;
+            : service === "otel-collector"
+              ? otelCollectorBaseMaterial
+              : service === "keycloak"
+                ? keycloakBaseMaterial
+                : null;
     const attestation = await verifyOciAttestation({
       service,
       layout: imageLayoutPath,
@@ -2530,7 +2562,15 @@ async function buildProductImages({
         run,
       });
     }
-    if (["kafka", "storage-helper", "grafana", "keycloak"].includes(service))
+    if (
+      [
+        "kafka",
+        "storage-helper",
+        "grafana",
+        "keycloak",
+        "otel-collector",
+      ].includes(service)
+    )
       await writeDockerCompatibilityManifest({
         service,
         tag: image.tag,
@@ -2551,7 +2591,6 @@ async function loadUpstreamImages({
   onValidatedImage,
 }) {
   const names = {
-    otelCollectorImage: "otel-collector",
     lokiImage: "loki",
     prometheusImage: "prometheus",
     tempoImage: "tempo",
@@ -3064,6 +3103,7 @@ export async function runSecurityScan({
     storageHelper: null,
     grafana: null,
     keycloak: null,
+    otelCollector: null,
     failure: null,
     cleanupFailures: [],
     imageCleanup: [],
@@ -3073,6 +3113,7 @@ export async function runSecurityScan({
   let storageHelperBuild = null;
   let grafanaBuild = null;
   let keycloakBuild = null;
+  let otelCollectorBuild = null;
   const setCleanupFailure = (code, failureStage) => {
     result.status = "FAIL";
     result.cleanupFailures.push({ code, stage: failureStage });
@@ -3197,6 +3238,13 @@ export async function runSecurityScan({
     const grafanaBaseMaterial = await inspectBaseMaterial({
       sourceRef: validated.toolchain.grafanaImage,
       target: "grafana",
+      outputRoot,
+      run: runBounded,
+    });
+    stage = "otel-collector-base-index";
+    const otelCollectorBaseMaterial = await inspectBaseMaterial({
+      sourceRef: validated.toolchain.otelCollectorImage,
+      target: "otel-collector",
       outputRoot,
       run: runBounded,
     });
@@ -3395,9 +3443,13 @@ export async function runSecurityScan({
         });
         result.reports.push(...imageReports);
         if (
-          ["kafka", "storage-helper", "grafana", "keycloak"].includes(
-            image.service,
-          )
+          [
+            "kafka",
+            "storage-helper",
+            "grafana",
+            "keycloak",
+            "otel-collector",
+          ].includes(image.service)
         ) {
           const artifact = {
             image,
@@ -3413,7 +3465,8 @@ export async function runSecurityScan({
           else if (image.service === "storage-helper")
             storageHelperBuild = artifact;
           else if (image.service === "grafana") grafanaBuild = artifact;
-          else keycloakBuild = artifact;
+          else if (image.service === "keycloak") keycloakBuild = artifact;
+          else otelCollectorBuild = artifact;
         }
       } catch (error) {
         operationError = error;
@@ -3447,6 +3500,7 @@ export async function runSecurityScan({
       kafkaBaseMaterial,
       storageHelperBaseMaterial,
       grafanaBaseMaterial,
+      otelCollectorBaseMaterial,
       keycloakBaseMaterial,
       vendorPlugins,
       onValidatedImage: async (image) => {
@@ -3485,7 +3539,7 @@ export async function runSecurityScan({
     });
     if (
       result.reports.length !==
-      (RUNTIME_NAMES.length + 5 + UPSTREAM_IMAGES.length + 1) * 2
+      (RUNTIME_NAMES.length + 6 + UPSTREAM_IMAGES.length + 1) * 2
     )
       fail("SCAN_REPORT_SET_INCOMPLETE");
     if (result.provenance) result.provenance.status = "PASS";
@@ -3571,6 +3625,12 @@ export async function runSecurityScan({
     if (result.status === "PASS") {
       for (const [target, build, baseImage, resultKey] of [
         ["kafka", kafkaBuild, validated.toolchain.kafkaImage, "kafka"],
+        [
+          "otel-collector",
+          otelCollectorBuild,
+          validated.toolchain.otelCollectorImage,
+          "otelCollector",
+        ],
         ["grafana", grafanaBuild, validated.toolchain.grafanaImage, "grafana"],
         [
           "keycloak",
@@ -3794,12 +3854,14 @@ export async function runSecurityScan({
           "storage-helper.oci.tar",
           "grafana.oci.tar",
           "keycloak.oci.tar",
+          "otel-collector.oci.tar",
         ].includes(entry.name)
           ? MAX_BUILD_CONTEXT_BYTES
           : [
                 "kafka-base-index.json",
                 "storage-helper-base-index.json",
                 "grafana-base-index.json",
+                "otel-collector-base-index.json",
               ].includes(entry.name)
             ? MAX_KAFKA_INDEX_BYTES
             : MAX_REPORT_BYTES;

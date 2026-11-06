@@ -1,0 +1,40 @@
+{
+  "scope": "package and binary proof for the G12-verified collector; no full G14 or launch admission",
+  "status": "PASS",
+  "candidateSha": "ab994cb27c485ca5aa6e9cf80b0644399a47d3b9",
+  "runId": "20261106T031146Z-ab994cb",
+  "runtimeReceiptPath": "/home/yurgusev/.cache/coffee-launch-delivery/issue275-runtime-component-51f1935b-9d89-427e-afcc-07a3995e608e/component-receipt.json",
+  "runtimeReceiptSha256": "52b7d2174b9f4be671c3d2ae4e89469869f8d422114214d535fd380f183ef94b",
+  "nativeRuntimeFailureSha256": "6fb0a322bd77fa92cd6d7545b4c6e2bbb0951dca9d2ae547e33daa16ea819d70",
+  "observations": {
+    "baseImageId": "sha256:f203d78239ad619363d4f1aa5d5ca85424155ab36518c9bc913ceb54f4370380",
+    "baseRef": "grafana/alloy:v1.21.3@sha256:8ab871206bd2d8f89277f53abffee5f452a293980788d52f85fa183a87a505a4",
+    "baseRepoDigests": [
+      "grafana/alloy@sha256:8ab871206bd2d8f89277f53abffee5f452a293980788d52f85fa183a87a505a4"
+    ],
+    "artifacts": {
+      "packages-before.json": "b70a6b6351668a38e75107e3c19af9207d9e08e4f8f8957ffcb05773c2448f71",
+      "packages-after.json": "be3c159607db16d0ba6bf68a4a8295402b538772c28fffd8e495adb9e76048af",
+      "exclusive-owned-paths.json": "b49230944f8d2baeca47588c3e79fb1dc34ff393a0220cc2bb96ad6f3ba5e86a",
+      "alloy-version.stdout": "d4cb031f401aa3cb90bdfd73bdec5ec4bbfed8537034d671c9e4c710f66a851c"
+    },
+    "imageId": "sha256:7222c658091788eeebffde3a31489d5dfa598a139c97b43a7a90827022c149d6",
+    "receiptSha256": "e640cdd95ef833a5cd59e93ea69abe6ec6f9e54c884ef5b998ebb0bedaffa2ff",
+    "removedPackages": ["apt", "libapt-pkg6.0t64"],
+    "otherInstalledRowsUnchanged": 93,
+    "exclusiveOwnedFilesAbsent": 54,
+    "dpkgStatusPresent": true,
+    "alloySha256": "f56afc1efdc92a13ee9c90eb5f1327bf24e38a7f1a1b3b24c504ea51db252606",
+    "alloyVersionExitCode": 0,
+    "alloyVersionOutputSha256": "d4cb031f401aa3cb90bdfd73bdec5ec4bbfed8537034d671c9e4c710f66a851c",
+    "imageConfigFields": ["Entrypoint", "Cmd", "User", "Env"],
+    "imageConfigComparison": "direct pinned base image configuration"
+  },
+  "cleanup": {
+    "ownedContainersAbsent": true,
+    "imageImportedByThisOperator": true,
+    "imageRemoved": true,
+    "preexistingResourcesPreserved": true
+  },
+  "completedAtUtc": "2026-11-06T03:49:48.366Z"
+}

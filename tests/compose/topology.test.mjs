@@ -3064,6 +3064,7 @@ void test("observability overlay keeps separate backends private and bounds exac
     ],
     collectorConfigPath: "/dev/shm/observability/collector.alloy",
     grafanaAdminSecretPath: "/dev/shm/observability/admin-secret",
+    otelCollectorImage: `sha256:${"c".repeat(64)}`,
     grafanaImage: `sha256:${"b".repeat(64)}`,
     alertSinkImage: `sha256:${"a".repeat(64)}`,
     storageVolumes,
@@ -3090,7 +3091,7 @@ void test("observability overlay keeps separate backends private and bounds exac
   );
   assert.notEqual(overlay.services["alert-sink"].image, imageRefs.nodeImage);
   assert.equal(overlay.services.openobserve, undefined);
-  assert.equal(collector.image, imageRefs.otelCollectorImage);
+  assert.equal(collector.image, `sha256:${"c".repeat(64)}`);
   assert.equal(collector.user, "0:0");
   assert.ok(
     collector.command.includes("--server.http.listen-addr=127.0.0.1:13133"),

@@ -1,0 +1,278 @@
+[
+  {
+    "path": "artifacts/api-internal.sbom.cdx.json",
+    "sha256": "201756862dcb167d095a1114a3bac3b45327b47ae07bb2cd12a7b1051476fe07"
+  },
+  {
+    "path": "artifacts/api-internal.vulnerabilities.json",
+    "sha256": "5afc650fa650f0ed3db9533ef31bc8326d19376f2f6aaea125df85aab9209f6d"
+  },
+  {
+    "path": "artifacts/api-public.sbom.cdx.json",
+    "sha256": "285d9f454f0037c7ed363756543d798988604f36ecdaa42f92d8b827edc2d5da"
+  },
+  {
+    "path": "artifacts/api-public.vulnerabilities.json",
+    "sha256": "e89d42d0e51b5d8ff6009076ae5af38dca351630e8677d476b985889fe6e2298"
+  },
+  {
+    "path": "artifacts/aroma-convergence.sbom.cdx.json",
+    "sha256": "49184335eb11b878be476eb65b1238e755ad6967245a1f961e4f703655cc7721"
+  },
+  {
+    "path": "artifacts/aroma-convergence.vulnerabilities.json",
+    "sha256": "d62b3e3a014e6cae4868ed32a4b763db1833e42dd78109cf52d05818b3cc337f"
+  },
+  {
+    "path": "artifacts/aroma-gateway.sbom.cdx.json",
+    "sha256": "80a8003afe2fdcf1c9586c40ef5e4da3ee242b46d786f807bda9ad30970b9263"
+  },
+  {
+    "path": "artifacts/aroma-gateway.vulnerabilities.json",
+    "sha256": "446bb3586ef793145b3795683a19d9ba2710a1f1ff8d8279df68b0efe529a8d9"
+  },
+  {
+    "path": "artifacts/aroma-observer.sbom.cdx.json",
+    "sha256": "8a5243599a24fd37c6daa1670ade2d2f495d99f372d298f8ad3c3a88934829bf"
+  },
+  {
+    "path": "artifacts/aroma-observer.vulnerabilities.json",
+    "sha256": "e3dfab04ed6f1ff096f43654975a59d1f3ea9207539a8d1336ecd8a9a7fd7283"
+  },
+  {
+    "path": "artifacts/catalog-activation-worker.sbom.cdx.json",
+    "sha256": "1c9d161055a73af03ddb5e57028a81a72eacfe26000c131028ff77d7b59684ee"
+  },
+  {
+    "path": "artifacts/catalog-activation-worker.vulnerabilities.json",
+    "sha256": "c6a1d13cf5277f10229e246debcbd303e639f4223314a46b73f72a562d371f01"
+  },
+  {
+    "path": "artifacts/catalog-service.sbom.cdx.json",
+    "sha256": "80ec027199fdc7549d953d1f723375a99736c2248e68238dfadf0ce1e7a0f353"
+  },
+  {
+    "path": "artifacts/catalog-service.vulnerabilities.json",
+    "sha256": "4bc924375242803ac01a08d242fa0980082d36bf1af84c05ae05663048bbf609"
+  },
+  {
+    "path": "artifacts/catalog-supplier-sync.sbom.cdx.json",
+    "sha256": "afc6f93fe69d003f8fa2d4f234b9d74bcf4339b02d362cb033ac2749ceb1bd3a"
+  },
+  {
+    "path": "artifacts/catalog-supplier-sync.vulnerabilities.json",
+    "sha256": "32c5b28ef677144fdedb39c673b2c4edee48550f0ef69af4463b2b3a3f62f9f7"
+  },
+  {
+    "path": "artifacts/customer-service.sbom.cdx.json",
+    "sha256": "45e1bd35625d12be2c1bad36e45bbb2101da045d09392303a712bd4a69e8efd2"
+  },
+  {
+    "path": "artifacts/customer-service.vulnerabilities.json",
+    "sha256": "e13a5f5755938cbe23edafe617af867b78921f1c89c3daeb25181811cd87be24"
+  },
+  {
+    "path": "artifacts/edge-gateway.sbom.cdx.json",
+    "sha256": "c2aaa1eacb4679c8aa57cb6da0709450e34444485907930bc7b3825e8ea0ca17"
+  },
+  {
+    "path": "artifacts/edge-gateway.vulnerabilities.json",
+    "sha256": "76722ed1882272bf6545d9cad9b69ea255c044d355b379d4dcfda9cee031acf4"
+  },
+  {
+    "path": "artifacts/edge-nginx.sbom.cdx.json",
+    "sha256": "86a68f581d79b297253bf169e9d15830095cd3d1d1c462e1b8ef4f56269a0028"
+  },
+  {
+    "path": "artifacts/edge-nginx.vulnerabilities.json",
+    "sha256": "a04ea63d1d95a211f9244f26443638b47bce53839e7337ed0e9c23fdd03b3bb9"
+  },
+  {
+    "path": "artifacts/grafana-adjudication.json",
+    "sha256": "987d083a00b403c248ba8187535a70d60beb370b8d4d6c5f81fc6d269056e523"
+  },
+  {
+    "path": "artifacts/grafana-base-index.json",
+    "sha256": "a66f098dd9b2e1b5a19287ff176db02d895122488c6e39b3dfcd3fb897039225"
+  },
+  {
+    "path": "artifacts/grafana-loki-manifest.txt",
+    "sha256": "4f380fa2a2b68b97e4f5c079fe375a4dfbe84c63cf262a44d6795179ae5865b9"
+  },
+  {
+    "path": "artifacts/grafana-prometheus-manifest.txt",
+    "sha256": "9585b01c2a98a216e643f2be3de6f62d615c8a00c348ca046d7216b36deda692"
+  },
+  {
+    "path": "artifacts/grafana-receipt.json",
+    "sha256": "d4535da19cd11573dcda8dbb89b4c97bc0ec911c7450e9bf343e0cc6a21b2143"
+  },
+  {
+    "path": "artifacts/grafana-tempo-manifest.txt",
+    "sha256": "7c6d68297c3c30623c2f123aeef4e5163de98351af3f31557d72c6796516c9c4"
+  },
+  {
+    "path": "artifacts/grafana.oci.tar",
+    "sha256": "650a035a6cd069683359d2315f07c1badf1528568721e462e2d027e90bb30ccb"
+  },
+  {
+    "path": "artifacts/grafana.sbom.cdx.json",
+    "sha256": "15d7518f6e27d7b1e3a7c2eb5431863b9ccaa22fde94c0b557d476d7c93b9e7b"
+  },
+  {
+    "path": "artifacts/grafana.vulnerabilities.json",
+    "sha256": "cbd89293663314f297704b7ec155c0856949ce8a037bb99b605c72cc8ff6358c"
+  },
+  {
+    "path": "artifacts/kafka-base-index.json",
+    "sha256": "852a0d49fc4e656b022e7f23785411802c9a088c78a7c5e39f33969de9c227a7"
+  },
+  {
+    "path": "artifacts/kafka-receipt.json",
+    "sha256": "9d2be812b7cc4cb1b9602e6489ce45c46eb4d3949aabc66f24c7d2632a7c317d"
+  },
+  {
+    "path": "artifacts/kafka.oci.tar",
+    "sha256": "5df2f143252364b6b2e99dd286c56ad8fa83d9188214905171ea5d14af6ad175"
+  },
+  {
+    "path": "artifacts/kafka.sbom.cdx.json",
+    "sha256": "a7cc4c22b0aac61d580534983d782ad399a37d48117d8f26a7175d844db30002"
+  },
+  {
+    "path": "artifacts/kafka.vulnerabilities.json",
+    "sha256": "045461ce4be560662322acd44c036a112ff1df161791607e559321203b5335e4"
+  },
+  {
+    "path": "artifacts/keycloak-distribution-base-index.json",
+    "sha256": "6c6d2363b9b3943d1c32b25b026ae12dfe392d117bd3142d747542d664c0badb"
+  },
+  {
+    "path": "artifacts/keycloak-receipt.json",
+    "sha256": "825be20a5acffaa2ed5b935c7cd3b3ba47c7cf4fdcc268958e421aabae1fcb8e"
+  },
+  {
+    "path": "artifacts/keycloak-runtime-base-index.json",
+    "sha256": "82cf3d9ccbe1ed46252008d51b2f2329e6b9e8a2f4394c4bebefc3ea7f4b1372"
+  },
+  {
+    "path": "artifacts/keycloak-runtime-base-manifest.json",
+    "sha256": "62bf9bb9847846f8087545330db86e84dbdf5a13e7fe49a29f31d329091203c6"
+  },
+  {
+    "path": "artifacts/keycloak.oci.tar",
+    "sha256": "8dea39ae596a2e3aaf4ebb6ea9b1e3ab8a457c5df42e1a5630cbc4e7d67d3974"
+  },
+  {
+    "path": "artifacts/keycloak.sbom.cdx.json",
+    "sha256": "1c10374d031488c926cbfde807ce1b7c4064241abbf2fcc0e6a4cc2ae68399ac"
+  },
+  {
+    "path": "artifacts/keycloak.vulnerabilities.json",
+    "sha256": "b7aef4cf6e71e5103c9d08a8d42d7d6bb1b1d5e925bf92e700e71c99934a9faa"
+  },
+  {
+    "path": "artifacts/lockfile.sbom.cdx.json",
+    "sha256": "636d32ee4069cce9db99e3b7d51e5b4da574b951700f1ab2f594614f51497236"
+  },
+  {
+    "path": "artifacts/lockfile.vulnerabilities.json",
+    "sha256": "7b73e261f12ae168897f75b1d8301d4319d6c6c00cd472005de825eccf31705a"
+  },
+  {
+    "path": "artifacts/loki.sbom.cdx.json",
+    "sha256": "7a11703f5a13811ed886675844994ba0103095b702e1c6a01ba2657372fefe6a"
+  },
+  {
+    "path": "artifacts/loki.vulnerabilities.json",
+    "sha256": "4fea09d9e25df3f5b2c8c97e6e734ae6f87282dc6d4226e19704cded4324137f"
+  },
+  {
+    "path": "artifacts/orders-aroma-preparation.sbom.cdx.json",
+    "sha256": "6d2ad859d00b7e3673a5c4362d602ce13c0cb9ea5df80650015efe4db4bd187d"
+  },
+  {
+    "path": "artifacts/orders-aroma-preparation.vulnerabilities.json",
+    "sha256": "fe132ef6ca3be76545cac7e6dce2c987ee0a0bcdcf275288ed80e00da2470c87"
+  },
+  {
+    "path": "artifacts/orders-service.sbom.cdx.json",
+    "sha256": "919ad309659a2eaa3aa47ed95367a619bb7ba40528409d49521fd77a03db7b89"
+  },
+  {
+    "path": "artifacts/orders-service.vulnerabilities.json",
+    "sha256": "5e7e0dcb04108cdd67de149c7560597e1291622a95847da9f8772c63533137ab"
+  },
+  {
+    "path": "artifacts/otel-collector-base-index.json",
+    "sha256": "8ab871206bd2d8f89277f53abffee5f452a293980788d52f85fa183a87a505a4"
+  },
+  {
+    "path": "artifacts/otel-collector-receipt.json",
+    "sha256": "e640cdd95ef833a5cd59e93ea69abe6ec6f9e54c884ef5b998ebb0bedaffa2ff"
+  },
+  {
+    "path": "artifacts/otel-collector.oci.tar",
+    "sha256": "dc53837a46a068b710c4451fdb5e85e5d945a533ecda7da17063ce928dfbb32c"
+  },
+  {
+    "path": "artifacts/otel-collector.sbom.cdx.json",
+    "sha256": "d77798b1bf93cabb74c2d00e9dbccda85d504d12bd6b56a098b77b390fb3b093"
+  },
+  {
+    "path": "artifacts/otel-collector.vulnerabilities.json",
+    "sha256": "337602facd7ccc16b5f0375bc73564455b53550b2f4b72a62138c3f31158f21b"
+  },
+  {
+    "path": "artifacts/pricing-service.sbom.cdx.json",
+    "sha256": "4bbee360f8a605fda1338e3032a27a1c682fbe04c61b3ecd968a0d21443acb68"
+  },
+  {
+    "path": "artifacts/pricing-service.vulnerabilities.json",
+    "sha256": "b38a4e1864adec4ff0ea437c4c00a87ca088efb797a3a144cbc8b5afd58ea722"
+  },
+  {
+    "path": "artifacts/prometheus.sbom.cdx.json",
+    "sha256": "6c445936cec15fe18b3367f26408e8be28aac6d4fb43435cc620106438df338f"
+  },
+  {
+    "path": "artifacts/prometheus.vulnerabilities.json",
+    "sha256": "68037fb7e063b99ca9d5acc22481292b5117826afd71e7c81e7ded439fb08be3"
+  },
+  {
+    "path": "artifacts/realtime-gateway.sbom.cdx.json",
+    "sha256": "b7bec89d75b88bf57d9712df40c98b404327bea96c96f9eec9889bde912d4437"
+  },
+  {
+    "path": "artifacts/realtime-gateway.vulnerabilities.json",
+    "sha256": "7379bbf26fa0373e0a808aa961ea67990ae3b279f5a5b1f28f3c8ef1cee5a4e0"
+  },
+  {
+    "path": "artifacts/storage-helper-base-index.json",
+    "sha256": "2d984a15c9b54fd0aeb608b8e0d0d83529eb34d2966db27a1fb4f1edc3d298a3"
+  },
+  {
+    "path": "artifacts/storage-helper-receipt.json",
+    "sha256": "bef4167af683c84b9dbcc7a4d0e46eb0c7478b67531ef6582475a794404a394b"
+  },
+  {
+    "path": "artifacts/storage-helper.oci.tar",
+    "sha256": "010429f79fa22fbfe6dde4b813e20db241701c1fc736706ea722d09054ef3576"
+  },
+  {
+    "path": "artifacts/storage-helper.sbom.cdx.json",
+    "sha256": "218e6468f159978e50bfa4c8bd2ea69ee4c9c38e3e5f19e8164ba8b9f3ebf488"
+  },
+  {
+    "path": "artifacts/storage-helper.vulnerabilities.json",
+    "sha256": "8877631b388908fe555e637d147c3ea8101e4a46a3da28909e975ff8c75a0dbe"
+  },
+  {
+    "path": "artifacts/tempo.sbom.cdx.json",
+    "sha256": "5b7b7235ee0188ebf2788597cc531c8916e8fc89d15cbe262f23b899c8326c07"
+  },
+  {
+    "path": "artifacts/tempo.vulnerabilities.json",
+    "sha256": "a642804f9a2f7afe409c5279499b75a8b9a0f8d612a4f09cd61187631f5e6f67"
+  }
+]

@@ -1648,6 +1648,12 @@ void test("G12 builds product images, records pinned upstream identity, and fail
       .replace(kafkaPlatformDigest, `sha256:${"f".repeat(64)}`),
   );
   toolchainFixture.grafanaImage = `grafana/grafana:13.3.0-slim@sha256:${fakeSha(grafanaBaseIndexBytes)}`;
+  const collectorBaseIndexBytes = Buffer.from(
+    kafkaBaseIndexBytes
+      .toString()
+      .replace(kafkaPlatformDigest, `sha256:${"7".repeat(64)}`),
+  );
+  toolchainFixture.otelCollectorImage = `grafana/alloy:v1.21.3@sha256:${fakeSha(collectorBaseIndexBytes)}`;
   const keycloakRuntimeManifestBytes = Buffer.from(
     JSON.stringify({
       schemaVersion: 2,
@@ -1859,6 +1865,15 @@ void test("G12 builds product images, records pinned upstream identity, and fail
       sizeBytes: grafanaBaseIndexBytes.length,
     },
   };
+  const collectorBaseMaterial = {
+    sourceRef: toolchain.otelCollectorImage,
+    platformManifestDigest: `sha256:${"7".repeat(64)}`,
+    indexArtifact: {
+      path: "artifacts/otel-collector-base-index.json",
+      sha256: sha(collectorBaseIndexBytes),
+      sizeBytes: collectorBaseIndexBytes.length,
+    },
+  };
   const grafanaLayerRoot = join(temp, "grafana-layer-root");
   for (const [name, fixture] of Object.entries(pluginFixtures)) {
     const dir = join(grafanaLayerRoot, "opt/grafana/plugins", name);
@@ -1902,7 +1917,6 @@ void test("G12 builds product images, records pinned upstream identity, and fail
   const scannerReference =
     "ghcr.io/aquasecurity/trivy@sha256:790fd66d1697395d8693d1acaa1ea702406a20f109b6fc7bac8db623eca6c06c";
   const pinnedRefs = new Set([
-    toolchain.otelCollectorImage,
     toolchain.lokiImage,
     toolchain.prometheusImage,
     toolchain.tempoImage,
@@ -2343,6 +2357,13 @@ void test("G12 builds product images, records pinned upstream identity, and fail
             ),
           );
           assert.equal(args[args.indexOf("--target") + 1], "keycloak");
+        } else if (service === "otel-collector") {
+          assert.ok(
+            args.includes(
+              `OTEL_COLLECTOR_IMAGE=${toolchain.otelCollectorImage}`,
+            ),
+          );
+          assert.equal(args[args.indexOf("--target") + 1], "otel-collector");
         } else if (service === "grafana") {
           assert.ok(args.includes(`GRAFANA_IMAGE=${toolchain.grafanaImage}`));
           assert.ok(args.some((arg) => arg.startsWith("grafana-plugins=")));
@@ -2498,17 +2519,27 @@ void test("G12 builds product images, records pinned upstream identity, and fail
                             },
                           },
                         ]
-                      : service === "grafana"
+                      : service === "otel-collector"
                         ? [
                             {
-                              uri: `pkg:docker/grafana/grafana@13.3.0-slim?digest=sha256:${grafanaBaseMaterial.indexArtifact.sha256}&platform=linux%2Famd64`,
+                              uri: `pkg:docker/grafana/alloy@v1.21.3?digest=sha256:${collectorBaseMaterial.indexArtifact.sha256}&platform=linux%2Famd64`,
                               digest: {
                                 sha256:
-                                  grafanaBaseMaterial.indexArtifact.sha256,
+                                  collectorBaseMaterial.indexArtifact.sha256,
                               },
                             },
                           ]
-                        : [],
+                        : service === "grafana"
+                          ? [
+                              {
+                                uri: `pkg:docker/grafana/grafana@13.3.0-slim?digest=sha256:${grafanaBaseMaterial.indexArtifact.sha256}&platform=linux%2Famd64`,
+                                digest: {
+                                  sha256:
+                                    grafanaBaseMaterial.indexArtifact.sha256,
+                                },
+                              },
+                            ]
+                          : [],
             },
             runDetails: {
               metadata: {
@@ -2741,6 +2772,8 @@ void test("G12 builds product images, records pinned upstream identity, and fail
           return keycloakRuntimeManifestBytes.toString("utf8");
         if (args[4] === toolchain.kafkaImage)
           return kafkaBaseIndexBytes.toString("utf8");
+        if (args[4] === toolchain.otelCollectorImage)
+          return collectorBaseIndexBytes.toString("utf8");
         if (args[4] === toolchain.grafanaImage)
           return grafanaBaseIndexBytes.toString("utf8");
         assert.equal(args[4], toolchain.nodeImage);
@@ -3042,7 +3075,13 @@ void test("G12 builds product images, records pinned upstream identity, and fail
           analysisRuns += 1;
           const service = report.slice(0, report.indexOf("."));
           if (
-            ["kafka", "storage-helper", "grafana", "keycloak"].includes(service)
+            [
+              "kafka",
+              "storage-helper",
+              "grafana",
+              "keycloak",
+              "otel-collector",
+            ].includes(service)
           ) {
             const expectedOci = productOciExpectations.get(service);
             assert.ok(expectedOci, `${service} OCI fixture exists before scan`);
@@ -3205,7 +3244,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
         }
         if (
           replaceImageOnFirstScanReference &&
-          report === "otel-collector.sbom.cdx.json"
+          report === "loki.sbom.cdx.json"
         ) {
           replacedImageIds.set(
             replaceImageOnFirstScanReference,
@@ -3215,7 +3254,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
         }
         if (
           foreignAliasOnFirstScanReference &&
-          report === "otel-collector.sbom.cdx.json"
+          report === "loki.sbom.cdx.json"
         ) {
           const alias = "foreign.example/shared-image:latest";
           imageIdsByRef.set(
@@ -3262,7 +3301,9 @@ void test("G12 builds product images, records pinned upstream identity, and fail
       if (
         command === "tar" &&
         args[0] === "-cf" &&
-        args[1].endsWith("/keycloak.oci.tar")
+        ["/keycloak.oci.tar", "/otel-collector.oci.tar"].some((suffix) =>
+          args[1].endsWith(suffix),
+        )
       )
         await truncate(args[1], 65 * 1024 * 1024);
       return output;
@@ -3418,7 +3459,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
     );
     assert.ok(sbomIndex < boundary);
   }
-  for (const service of ["otel-collector", "loki", "prometheus", "tempo"]) {
+  for (const service of ["loki", "prometheus", "tempo"]) {
     const saveIndex = initialFlow.indexOf(`save:${service}`);
     const nextSave = initialFlow.findIndex(
       (event, index) => index > saveIndex && event.startsWith("save:"),
@@ -3435,8 +3476,8 @@ void test("G12 builds product images, records pinned upstream identity, and fail
   }
   assert.equal(lastProductLayoutPath, undefined);
   await assert.rejects(lstat(lastUpstreamTarPath), { code: "ENOENT" });
-  assert.equal(imageExports, 4);
-  assert.equal(productBuilds, 19);
+  assert.equal(imageExports, 3);
+  assert.equal(productBuilds, 20);
   assert.deepEqual(
     [...builtServices].sort((a, b) => a.localeCompare(b, "en")),
     [
@@ -3446,15 +3487,16 @@ void test("G12 builds product images, records pinned upstream identity, and fail
       "storage-helper",
       "edge-nginx",
       "kafka",
+      "otel-collector",
     ].sort((a, b) => a.localeCompare(b, "en")),
   );
-  assert.equal(upstreamPulls, 5);
-  assert.equal(imageRemovals, 5);
+  assert.equal(upstreamPulls, 4);
+  assert.equal(imageRemovals, 4);
   assert.equal(
     imageRmTargets.every((target) => /^sha256:[0-9a-f]{64}$/u.test(target)),
     true,
   );
-  assert.equal(result.imageCleanup.length, 5);
+  assert.equal(result.imageCleanup.length, 4);
   assert.ok(
     result.imageCleanup.every(
       (image) =>
@@ -3520,6 +3562,60 @@ void test("G12 builds product images, records pinned upstream identity, and fail
     );
   }
   await writeFile(join(outputDir, "result.json"), resultForRuntime);
+  const collectorReceiptPath = join(
+    outputDir,
+    "artifacts/otel-collector-receipt.json",
+  );
+  const collectorReceiptBytes = await readFile(collectorReceiptPath);
+  const collectorReceipt = JSON.parse(collectorReceiptBytes);
+  assert.ok(
+    (await stat(join(outputDir, "artifacts/otel-collector.oci.tar"))).size >
+      64 * 1024 * 1024,
+  );
+  const collectorOptions = {
+    target: "otel-collector",
+    contextFile: contextPath,
+    validateContext: validateSyntheticContext,
+    loadImage: false,
+  };
+  const verifiedCollector = await loadVerifiedGateImage(collectorOptions);
+  assert.equal(verifiedCollector.imageId, collectorReceipt.imageId);
+  assert.equal(collectorReceipt.baseImage, toolchain.otelCollectorImage);
+  assert.deepEqual(collectorReceipt.baseMaterial, collectorBaseMaterial);
+  assert.equal(
+    savedResult.otelCollector.receiptSha256,
+    sha(collectorReceiptBytes),
+  );
+  await rm(collectorReceiptPath);
+  await assert.rejects(loadVerifiedGateImage(collectorOptions));
+  await writeFile(collectorReceiptPath, Buffer.from("{}"), { mode: 0o600 });
+  await assert.rejects(loadVerifiedGateImage(collectorOptions));
+  await writeFile(collectorReceiptPath, collectorReceiptBytes);
+  const collectorResultPath = join(outputDir, "result.json");
+  const collectorResultBytes = await readFile(collectorResultPath);
+  for (const [field, value] of [
+    ["baseImage", toolchain.nodeImage],
+    ["candidateSha", "f".repeat(40)],
+    [
+      "importTag",
+      `coffee-g12-${sha(Buffer.from(runId)).slice(0, 12)}-grafana:latest`,
+    ],
+  ]) {
+    const forgedBytes = Buffer.from(
+      JSON.stringify({ ...collectorReceipt, [field]: value }),
+    );
+    const forgedResult = JSON.parse(collectorResultBytes);
+    forgedResult.otelCollector.receiptSha256 = sha(forgedBytes);
+    await writeFile(collectorReceiptPath, forgedBytes);
+    await writeFile(collectorResultPath, JSON.stringify(forgedResult));
+    await assert.rejects(
+      loadVerifiedGateImage(collectorOptions),
+      /G12_KAFKA_RECEIPT_INVALID/u,
+      field,
+    );
+  }
+  await writeFile(collectorReceiptPath, collectorReceiptBytes);
+  await writeFile(collectorResultPath, collectorResultBytes);
   const keycloakReceipt = JSON.parse(
     await readFile(join(outputDir, "artifacts/keycloak-receipt.json")),
   );
@@ -3903,7 +3999,15 @@ void test("G12 builds product images, records pinned upstream identity, and fail
   const checksumInventory = JSON.parse(
     await readFile(join(outputDir, "artifacts/checksums.json"), "utf8"),
   );
-  assert.equal(checksumInventory.length, 66);
+  assert.equal(checksumInventory.length, 69);
+  assert.ok(
+    checksumInventory.some(
+      (entry) =>
+        entry.path === "artifacts/otel-collector.oci.tar" &&
+        entry.sha256 === collectorReceipt.ociArtifact.sha256 &&
+        entry.sha256 === savedResult.otelCollector.ociArtifactSha256,
+    ),
+  );
   assert.ok(
     checksumInventory.some(
       (entry) =>
@@ -3928,7 +4032,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
     savedResult.provenance.images
       .filter((image) => image.identityStatus)
       .map((image) => [image.service, image.identityStatus]),
-    ["otel-collector", "loki", "prometheus", "tempo"].map((name) => [
+    ["loki", "prometheus", "tempo"].map((name) => [
       name,
       "PINNED_DIGEST_VERIFIED",
     ]),
@@ -3937,12 +4041,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
     savedResult.provenance.images
       .filter((image) => image.identityStatus)
       .map((image) => image.sourceReference),
-    [
-      toolchain.otelCollectorImage,
-      toolchain.lokiImage,
-      toolchain.prometheusImage,
-      toolchain.tempoImage,
-    ],
+    [toolchain.lokiImage, toolchain.prometheusImage, toolchain.tempoImage],
   );
   assert.deepEqual(
     await readFile(join(gateDir, "result.json")),
@@ -3956,6 +4055,44 @@ void test("G12 builds product images, records pinned upstream identity, and fail
   );
   assert.ok(scanCache);
   await assert.rejects(readFile(scanCache), { code: "ENOENT" });
+
+  for (const name of [
+    "unrecognized.oci.tar",
+    "unrecognized.vulnerabilities.json",
+  ]) {
+    fakeNow = now;
+    const limitedOutput = join(gateArtifactsDir, `supply-chain-limit-${name}`);
+    const limitedResult = await runSecurityScan({
+      materializeRegistryCredentials: fakeRegistryCredentials,
+      contextFile: contextPath,
+      outputDir: limitedOutput,
+      clock: () => now,
+      validateContext: validateSyntheticContext,
+      run: async (command, args, options) => {
+        const output = await fakeRun(command, args, options);
+        if (
+          command === "tar" &&
+          args[0] === "-cf" &&
+          args[1].endsWith("/otel-collector.oci.tar")
+        ) {
+          const path = join(limitedOutput, "artifacts", name);
+          await writeFile(path, "", { flag: "wx", mode: 0o600 });
+          await truncate(path, 65 * 1024 * 1024);
+        }
+        return output;
+      },
+      statfsFn: async () => ({ bavail: 30 * 1024 ** 3, bsize: 1 }),
+      lockPath: join(temp, `scanner-limit-${name}.lock`),
+    });
+    assert.equal(limitedResult.status, "FAIL", name);
+    assert.equal(limitedResult.code, "EVIDENCE_WRITE_FAILED", name);
+    assert.equal(limitedResult.reports.length, 48, name);
+    assert.equal(limitedResult.provenance.status, "PASS", name);
+    assert.ok(limitedResult.otelCollector, name);
+    await assert.rejects(readFile(join(limitedOutput, "result.json")), {
+      code: "ENOENT",
+    });
+  }
 
   fakeNow = now;
   mismatchDigestReference = toolchain.lokiImage;
@@ -4034,7 +4171,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
     code: "ENOENT",
   });
 
-  failPullReference = toolchain.otelCollectorImage;
+  failPullReference = toolchain.lokiImage;
   const removalsBeforePullFailure = imageRmTargets.length;
   const failedPullResult = await runSecurityScan({
     materializeRegistryCredentials: fakeRegistryCredentials,
@@ -4053,21 +4190,21 @@ void test("G12 builds product images, records pinned upstream identity, and fail
   });
   assert.equal(failedPullResult.code, "COMMAND_FAILED");
   assert.deepEqual(failedPullResult.cleanupFailures, []);
-  assert.equal(failedPullResult.reports.length, 40);
+  assert.equal(failedPullResult.reports.length, 42);
   assert.equal(failedPullResult.provenance.status, "PARTIAL");
   assert.equal(
     failedPullResult.provenance.images.filter((image) => !image.identityStatus)
       .length,
-    19,
+    20,
   );
   assert.equal(imageRmTargets.length, removalsBeforePullFailure + 1);
   assert.deepEqual(
     failedPullResult.imageCleanup.filter(
-      (image) => image.reference === toolchain.otelCollectorImage,
+      (image) => image.reference === toolchain.lokiImage,
     ),
     [
       {
-        reference: toolchain.otelCollectorImage,
+        reference: toolchain.lokiImage,
         expectedImageId: null,
         observedImageId: null,
         action: "inspect-reference",
@@ -4082,7 +4219,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
   assert.equal(failedPullReceipt.includes("synthetic pull failed"), false);
   failPullReference = null;
 
-  failPullReference = toolchain.otelCollectorImage;
+  failPullReference = toolchain.lokiImage;
   failPullLeavesImage = true;
   const removalsBeforePartialPullFailure = imageRmTargets.length;
   const partialPullResult = await runSecurityScan({
@@ -4106,19 +4243,19 @@ void test("G12 builds product images, records pinned upstream identity, and fail
   assert.equal(imageRmTargets.length, removalsBeforePartialPullFailure + 1);
   assert.deepEqual(
     partialPullResult.imageCleanup.filter(
-      (image) => image.reference === toolchain.otelCollectorImage,
+      (image) => image.reference === toolchain.lokiImage,
     ),
     [
       {
-        reference: toolchain.otelCollectorImage,
+        reference: toolchain.lokiImage,
         expectedImageId: null,
-        observedImageId: imageIdForReference(toolchain.otelCollectorImage),
+        observedImageId: imageIdForReference(toolchain.lokiImage),
         action: "retain",
         outcome: "ownership-unconfirmed",
       },
     ],
   );
-  assert.equal(pulledRefs.has(toolchain.otelCollectorImage), true);
+  assert.equal(pulledRefs.has(toolchain.lokiImage), true);
   const partialPullReceipt = await readFile(
     join(gateArtifactsDir, "supply-chain-partial-pull-failure", "result.json"),
     "utf8",
@@ -4130,17 +4267,17 @@ void test("G12 builds product images, records pinned upstream identity, and fail
   );
   assert.deepEqual(
     partialPullReceipt.imageCleanup.find(
-      (image) => image.reference === toolchain.otelCollectorImage,
+      (image) => image.reference === toolchain.lokiImage,
     ),
     {
-      reference: toolchain.otelCollectorImage,
+      reference: toolchain.lokiImage,
       expectedImageId: null,
-      observedImageId: imageIdForReference(toolchain.otelCollectorImage),
+      observedImageId: imageIdForReference(toolchain.lokiImage),
       action: "retain",
       outcome: "ownership-unconfirmed",
     },
   );
-  pulledRefs.delete(toolchain.otelCollectorImage);
+  pulledRefs.delete(toolchain.lokiImage);
   failPullLeavesImage = false;
   failPullReference = null;
 
@@ -4253,7 +4390,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
   tamperDbOnFirstScan = true;
   dbTampered = false;
   failImageRemovalReference = scannerReference;
-  replaceImageOnFirstScanReference = toolchain.otelCollectorImage;
+  replaceImageOnFirstScanReference = toolchain.lokiImage;
   foreignAliasOnFirstScanReference = scannerReference;
   const changedDatabaseRmStart = imageRmTargets.length;
   const changedDatabaseResult = await runSecurityScan({
@@ -4287,15 +4424,10 @@ void test("G12 builds product images, records pinned upstream identity, and fail
     ),
   );
   assert.equal(
-    changedDatabaseRmTargets.includes(
-      imageIdForReference(toolchain.otelCollectorImage),
-    ),
+    changedDatabaseRmTargets.includes(imageIdForReference(toolchain.lokiImage)),
     false,
   );
-  assert.equal(
-    changedDatabaseRmTargets.includes(toolchain.otelCollectorImage),
-    false,
-  );
+  assert.equal(changedDatabaseRmTargets.includes(toolchain.lokiImage), false);
   assert.ok(
     changedDatabaseRmTargets.includes(imageIdForReference(scannerReference)),
   );
@@ -4309,10 +4441,10 @@ void test("G12 builds product images, records pinned upstream identity, and fail
     action: "remove-image-id",
     outcome: "retained",
   });
-  assert.equal(pulledRefs.has(toolchain.otelCollectorImage), true);
+  assert.equal(pulledRefs.has(toolchain.lokiImage), true);
   assert.equal(pulledRefs.has(scannerReference), true);
   assert.equal(pulledRefs.has("foreign.example/shared-image:latest"), true);
-  pulledRefs.delete(toolchain.otelCollectorImage);
+  pulledRefs.delete(toolchain.lokiImage);
   pulledRefs.delete(scannerReference);
   pulledRefs.delete("foreign.example/shared-image:latest");
   imageIdsByRef.delete("foreign.example/shared-image:latest");

@@ -1,0 +1,51 @@
+{
+  "scope": "startup, synthetic Loki/Tempo/Prometheus signals and cleanup only; no full G14 or launch admission",
+  "status": "COMPONENT_PASS",
+  "candidateSha": "ab994cb27c485ca5aa6e9cf80b0644399a47d3b9",
+  "runId": "20261106T031146Z-ab994cb",
+  "collector": {
+    "imageId": "sha256:7222c658091788eeebffde3a31489d5dfa598a139c97b43a7a90827022c149d6",
+    "receiptSha256": "e640cdd95ef833a5cd59e93ea69abe6ec6f9e54c884ef5b998ebb0bedaffa2ff",
+    "candidateSha": "ab994cb27c485ca5aa6e9cf80b0644399a47d3b9",
+    "runId": "20261106T031146Z-ab994cb"
+  },
+  "observedRunId": "25fe5a23-ce08-4870-8108-118a8c1690ae",
+  "signalProof": {
+    "traceId": "25fe5a23ce0848708108118a8c1690ae",
+    "traceInventory": {
+      "g14-synthetic": ["HTTP POST", "g14.synthetic.request"]
+    },
+    "metricTimestampUs": 1793936957374000,
+    "metricValue": 1,
+    "logCount": 4,
+    "runId": "25fe5a23-ce08-4870-8108-118a8c1690ae"
+  },
+  "phases": {
+    "startup": "PASS",
+    "signals": "PASS",
+    "alerts": "FAIL",
+    "outage": "NOT_RUN",
+    "persistence": "NOT_RUN",
+    "backupRestore": "NOT_RUN",
+    "runtimeMatrix": "NOT_RUN",
+    "memory": "NOT_RUN",
+    "retention": "NOT_RUN",
+    "launchPath": "NOT_RUN",
+    "diskRecovery": "NOT_RUN"
+  },
+  "cleanupErrors": [],
+  "nativeResult": {
+    "status": "FAIL",
+    "failure": "alerts: ISS275_COMPONENT_BOUNDARY",
+    "path": "/home/yurgusev/.cache/coffee-launch-delivery/issue275-candidate-r2/evidence/observability/25fe5a23-ce08-4870-8108-118a8c1690ae/result.json",
+    "sha256": "6fb0a322bd77fa92cd6d7545b4c6e2bbb0951dca9d2ae547e33daa16ea819d70"
+  },
+  "snapshots": {
+    "before": "/home/yurgusev/.cache/coffee-launch-delivery/issue275-runtime-component-51f1935b-9d89-427e-afcc-07a3995e608e/before.json",
+    "beforeSha256": "9eb3e67e436442de16ef9cfd7b0aec4bc0af5f2bc29e63ab647b5740f67d9548",
+    "after": "/home/yurgusev/.cache/coffee-launch-delivery/issue275-runtime-component-51f1935b-9d89-427e-afcc-07a3995e608e/after.json",
+    "afterSha256": "9eb3e67e436442de16ef9cfd7b0aec4bc0af5f2bc29e63ab647b5740f67d9548"
+  },
+  "boundary": "reviewed immutable verify.mjs: signals PASS immediately precedes startPhase alerts; synchronous stderr hook restores original before throwing",
+  "completedAtUtc": "2026-11-06T03:49:35.232Z"
+}
