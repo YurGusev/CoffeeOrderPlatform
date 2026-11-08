@@ -60,3 +60,34 @@ receipt с точной привязкой к source/run/config/BOM; прямо�
 [modules manifest pnpm 11.24.0](https://github.com/pnpm/pnpm/blob/v11.24.0/pnpm11/installing/modules-yaml/src/index.ts),
 [BuildKit 0.32.2 exporter options](https://github.com/moby/buildkit/blob/v0.32.2/exporter/containerimage/opts.go)
 и [Docker cache invalidation](https://docs.docker.com/build/cache/invalidation/).
+
+8 ноября 2026 владелец согласовал устранение двух блокеров G12 issue #13.
+Существующие `musl`/`musl-utils` конечных Node, storage-helper и Kafka обновляются
+до `muslVersion` из `config/toolchain-versions.json` (1.2.6-r3). Kafka сохраняет
+полное сравнение package inventory с разрешённой дельтой; базы и остальные
+пакетные изменения сохраняются. Default Dockerfile ARG проверяется относительно
+BOM для обычного build path; G12 передаёт pin явно.
+
+Для CVE-2026-78661 разрешён только `not_affected` / `vulnerable_code_not_present`
+восьми исследованных Go executables: Grafana, три подписанных datasource plugins,
+Alloy, Loki, Prometheus и promtool. Закоммиченный [proof profile](../../evidence/security/cve-2026-78661.json) связывает каждый
+report target с точными image ID, binary SHA-256, слоем, package/version и finding
+fingerprint. Его integrity проверяется отдельно. Свежий G12 повторно проверяет
+identity образа и raw report; reader независимо пересчитывает decisions.
+Для curated Grafana/Alloy обязательна проверенная OCI config/platform identity;
+для Loki/Prometheus — закреплённые upstream reference/manifest и фактический
+Docker image ID. Это повторное использование доказательства байтов неизменяемого
+артефакта, а не перенос прежнего G12 PASS. Дрейф оставляет finding unresolved.
+
+Основание — отсутствие кода затронутого HTML parser в полных восьми бинарниках,
+проверенная генерация имён emitted/recorded-inline функций Go 1.26.10/1.27.3,
+исходники x/net и независимые audit/review. Сохраняется существующая trust model
+доверенного vendor и штатного Go compiler; независимая compiler attestation не
+заявляется. У Grafana/Alloy присутствуют другие HTML функции. Module-only fallback
+stripped govulncheck и exit code JSON-режима не доказывают отсутствие parser.
+Raw findings сохраняются; прежние два Tempo `fixed` и восемь `not_affected`
+учитываются отдельно. Общее CVE/package исключение не вводится.
+
+Согласованное [обоснование восьми файлов](https://github.com/YurGusev/CoffeeOrderPlatform/pull/249#issuecomment-6695171131),
+[описание CVE Go](https://pkg.go.dev/vuln/GO-2026-6860) и
+[исправление musl](https://security.alpinelinux.org/vuln/CVE-2026-107891).

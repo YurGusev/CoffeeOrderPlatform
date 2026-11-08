@@ -200,3 +200,15 @@ Git/GitHub; historical hashes проверяются на соответству
 workspace. Outputs содержат только реальные изменённые artifacts. Команды и
 ограничения описывают фактически выполненные проверки; live skip не является PASS.
 Historical handoffs не переписываются под новый protocol.
+
+## Дополнение #277: два CVE-блокера G12
+
+`#275 → #277 → #13`. #277 обновляет только существующие musl/musl-utils
+конечных Node/storage-helper/Kafka и добавляет точный proof-bound `not_affected`
+для CVE-2026-78661 восьми Go executables. Owner — Platform Supply Chain;
+правило определено в [runtime images](../operations/runtime-images.md).
+После merge обязательный дополнительный input #13 — принятый merge #277 и
+`evidence/handoffs/issue-277.yaml` с проверяемыми hashes изменённых artifacts.
+Все прежние inputs #13 сохраняются. Собственный G12 #277 проверяет этот fix;
+#13 проходит собственные CI/G12/qualification/G00–G19 на новом frozen source.
+Этот handoff не закрывает #1 или #266 и не объявляет production admission.

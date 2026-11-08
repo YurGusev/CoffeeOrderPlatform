@@ -9374,6 +9374,13 @@ async function writeSyntheticParentG12({
   context,
   indexBytes,
 }) {
+  await mkdir(join(candidateRoot, "evidence/security"), { recursive: true });
+  await writeFile(
+    join(candidateRoot, "evidence/security/cve-2026-78661.json"),
+    await readFile(
+      new URL("../../evidence/security/cve-2026-78661.json", import.meta.url),
+    ),
+  );
   const { RUNTIME_NAMES } =
     await import("../../packages/platform-config/src/index.ts");
   const hash = (bytes) => createHash("sha256").update(bytes).digest("hex");
@@ -9652,6 +9659,7 @@ async function writeSyntheticParentG12({
   result.evaluation = {
     rawHigh: 0,
     resolvedFixed: 0,
+    resolvedNotAffected: 0,
     unresolvedHigh: 0,
     critical: 0,
   };
@@ -9674,6 +9682,9 @@ async function writeSyntheticParentG12({
     vendorPlugins,
     module: toolchain.grafanaTempoModule,
     decisions: [],
+    notAffected: [],
+    proofSha256:
+      "7de1f821bfd697d66ae93da77776848e2d49a2e1665a55a9d2be3499f91a9b11",
     evaluatedAt: "2026-10-30T00:00:00.000Z",
     openVex: null,
   };
@@ -9753,9 +9764,15 @@ void test("browser correlation executes the child lifecycle and preserves early 
     "verification/launch/v1/scenarios/rollback.mjs",
     "tools/config-bootstrap/index.mjs",
     "tools/verified-infrastructure-image.mjs",
+    "tools/security-scan.mjs",
   ]) {
     await cp(join(REPO_ROOT, file), join(root, file));
   }
+  await mkdir(join(root, "evidence/security"), { recursive: true });
+  await cp(
+    join(REPO_ROOT, "evidence/security/cve-2026-78661.json"),
+    join(root, "evidence/security/cve-2026-78661.json"),
+  );
   const platformPath = join(root, "config/platform.yaml");
   const config = (await readFile(platformPath, "utf8")).replace(
     "    enabled: false\n  kafkaNamespaceIsolation: false",
@@ -9834,6 +9851,8 @@ void test("browser correlation executes the child lifecycle and preserves early 
     "verification/launch/v1/scenarios/rollback.mjs",
     "tools/config-bootstrap/index.mjs",
     "tools/verified-infrastructure-image.mjs",
+    "tools/security-scan.mjs",
+    "evidence/security/cve-2026-78661.json",
   );
   git(
     "-c",

@@ -6,6 +6,7 @@
 ARG NODE_IMAGE=node:26.8.1-alpine@sha256:2d984a15c9b54fd0aeb608b8e0d0d83529eb34d2966db27a1fb4f1edc3d298a3
 # The scanner supplies the exact pinned base only for the Kafka target. The
 # inert default keeps unrelated targets parseable without enabling a fallback.
+ARG MUSL_VERSION=1.2.6-r3
 ARG KAFKA_IMAGE=scratch
 ARG GRAFANA_IMAGE=scratch
 ARG OTEL_COLLECTOR_IMAGE=scratch
@@ -134,29 +135,37 @@ copyFileSync('node_modules/@confluentinc/kafka-javascript/build/Release/confluen
 if (typeof kafka('@confluentinc/kafka-javascript').RdKafka.Producer !== 'function') throw new Error('Deployed Kafka native addon is missing');
 NODE
 
-# Build the exact pinned Kafka source for G12 and update only the two
+# Build the exact pinned Kafka source for G12 and update only the
 # pre-existing Alpine packages approved by the supply-chain gate.
 FROM ${KAFKA_IMAGE} AS kafka
+ARG MUSL_VERSION
 ARG LIBEXPAT_VERSION
 USER root
 RUN set -eu; \
     apk info -v | sort > /tmp/apk.before; \
     grep -Fxq 'brotli-libs-1.2.0-r1' /tmp/apk.before; \
     grep -Fxq 'libexpat-2.8.5-r0' /tmp/apk.before; \
-    apk upgrade --no-cache brotli-libs libexpat; \
+    grep -Fxq 'musl-1.2.6-r2' /tmp/apk.before; \
+    grep -Fxq 'musl-utils-1.2.6-r2' /tmp/apk.before; \
+    apk upgrade --no-cache brotli-libs libexpat musl musl-utils; \
     apk info -v | sort > /tmp/apk.after; \
     grep -Fxq 'brotli-libs-1.2.1-r0' /tmp/apk.after; \
     grep -Fxq "libexpat-${LIBEXPAT_VERSION}" /tmp/apk.after; \
+    grep -Fxq "musl-${MUSL_VERSION}" /tmp/apk.after; \
+    grep -Fxq "musl-utils-${MUSL_VERSION}" /tmp/apk.after; \
     sed \
       -e 's/^brotli-libs-1\.2\.0-r1$/brotli-libs-1.2.1-r0/' \
       -e "s/^libexpat-2\.8\.5-r0$/libexpat-${LIBEXPAT_VERSION}/" \
+      -e "s/^musl-1\.2\.6-r2$/musl-${MUSL_VERSION}/" \
+      -e "s/^musl-utils-1\.2\.6-r2$/musl-utils-${MUSL_VERSION}/" \
       /tmp/apk.before > /tmp/apk.expected; \
     diff -u /tmp/apk.expected /tmp/apk.after; \
     rm -f /tmp/apk.before /tmp/apk.after /tmp/apk.expected
 USER appuser
 
 FROM ${NODE_IMAGE} AS storage-helper
-RUN --network=host apk add --no-cache --upgrade e2fsprogs util-linux libcrypto3 libssl3 \
+ARG MUSL_VERSION
+RUN --network=host apk add --no-cache --upgrade e2fsprogs util-linux libcrypto3 libssl3 "musl=${MUSL_VERSION}" "musl-utils=${MUSL_VERSION}" \
   && rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx \
   && command -v mkfs.ext4 && command -v losetup && command -v blkid && command -v truncate
 
@@ -197,13 +206,14 @@ ENTRYPOINT ["/opt/keycloak/bin/kc.sh"]
 CMD ["start", "--optimized"]
 
 FROM ${NODE_IMAGE} AS runtime
+ARG MUSL_VERSION
 
 ENV NODE_ENV=production
 ENV NODE_OPTIONS=--enable-source-maps
 ENV LD_LIBRARY_PATH=/usr/local/lib
 WORKDIR /app
 
-RUN --network=host apk add --no-cache --upgrade ca-certificates libcrypto3 libssl3 zlib zstd-libs lz4-libs libsasl libcurl \
+RUN --network=host apk add --no-cache --upgrade ca-certificates libcrypto3 libssl3 zlib zstd-libs lz4-libs libsasl libcurl "musl=${MUSL_VERSION}" "musl-utils=${MUSL_VERSION}" \
   && rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
 
 COPY --from=librdkafka-build /usr/local/lib/librdkafka.so* /usr/local/lib/
