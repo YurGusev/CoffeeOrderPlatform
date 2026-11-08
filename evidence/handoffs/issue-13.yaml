@@ -1,7 +1,7 @@
 issue: 13
-baseCommit: 7ee04f202054b39f47f504b1a4125e6598e59eae
+baseCommit: 58aacfcaa1fdc1e6fd59060587b3386fc6b33303
 status: source-descriptor-before-formal-verification
-asOfUtc: "2026-11-06T20:50:18.601499Z"
+asOfUtc: "2026-11-08T18:14:25.977931Z"
 inputs:
   - issue: 2
     acceptedMergeCommit: 327638d4494269a151ee7c0ac945ac0053c3e0d4
@@ -171,6 +171,14 @@ inputs:
     acceptedMergeCommit: 7ee04f202054b39f47f504b1a4125e6598e59eae
     artifact: evidence/handoffs/issue-275.yaml
     sha256: 72ff5e79b0cd9fa840d006c222fb86ef72a6adc491570b0df1c44faf0454dc9a
+  - issue: 277
+    acceptedMergeCommit: 58aacfcaa1fdc1e6fd59060587b3386fc6b33303
+    artifact: evidence/handoffs/issue-277.yaml
+    sha256: c4f6aecf7aec762b370a9fa2193b1edc28e37b03abae9b9a6e0eea286b82da80
+  - issue: 279
+    acceptedMergeCommit: 66c77352d1235ccf1dbb7ca8bf7ee0f743979aec
+    artifact: evidence/handoffs/issue-279.yaml
+    sha256: 88f3a6f3897490af1d602249692c1d82997a71ab88ab1d27bc9e54d1e60da54d
 historicalAcceptance:
   issue: 14
   acceptedMergeCommit: 9b5a320b936cecafcb74de2d6a1253e3d0a155ce
@@ -188,7 +196,7 @@ outputs:
     consumers:
       - 1
   - artifact: docs/launch/13_DELIVERY_DEPENDENCY_GRAPH.md
-    sha256: 9081c00f4060b0b902e3ee48b3b7f26d71b6382591ad0b3ae1057fe488017812
+    sha256: 175abb5de0dd45ede55ceaafa57931fa57b6aa393628b4f09866e0d9714fe490
     consumers:
       - 1
   - artifact: docs/launch/21_LAUNCH_VERIFICATION_SPEC.md
@@ -196,7 +204,7 @@ outputs:
     consumers:
       - 1
   - artifact: docs/operations/observability.md
-    sha256: e248ec255d59b202a52644cfaff0f1fe88df26c8f7b15a68bc6552e745fe561b
+    sha256: e86910cac18954df02ef8e79004057686a1974bd459e12f55d4042dbaf646c15
     consumers:
       - 1
   - artifact: docs/reports/launch/20261031T005704Z-a6cceea/ОТЧЁТ.md
@@ -220,11 +228,11 @@ outputs:
     consumers:
       - 1
   - artifact: tests/compose/topology.test.mjs
-    sha256: fad7b810462acd41bab99de7cb474985772e57349efb155d52ac35208abcf16e
+    sha256: e735e2e142c1bd3508a2a3c3eef83d3dc198959084a3d27371b46ccaff73578c
     consumers:
       - 1
   - artifact: tests/config/observability-bootstrap.test.mjs
-    sha256: 74e72d998d6c08b79a2c83e68787a4b66b44b37bf8b3676b2c396e05eccec75c
+    sha256: 07b76d306ebc24f02005cd0c17d560ebd8dce6d032490606c943981a9149aded
     consumers:
       - 1
   - artifact: tests/observability/alerts.test.mjs
@@ -276,11 +284,11 @@ outputs:
   - artifact: verification/launch/v1/scenarios/rollback.mjs
     sha256: f4f0d372272cb670e9b74b725cec4839fc9b9af86f7d7f720de26b11654882b8
   - artifact: tools/security-scan.mjs
-    sha256: 73cf89195354ae6d5a36803b491020d4b679de4d0d1b0857d9aea565e3d8d448
+    sha256: c249f0757808c9b38d0dab50af09414ae99223cd973710ec616204f70cfb0df0
     consumers:
       - 1
   - artifact: tests/tools/security-scan.test.mjs
-    sha256: 804d50205c78e2c7c61491563da106d2f1d7c4ce54d9f5bc0a450cd84f9970f7
+    sha256: a472566cdb8126ba92edefb2ebdf12e696c8318acdbe2135f5f29dea97376a86
     consumers:
       - 1
   - artifact: evidence/launch-preparation/2026-11-01/security-database-integrity.md
@@ -292,11 +300,11 @@ outputs:
     consumers:
       - 1
   - artifact: scripts/check-toolchain-versions.mjs
-    sha256: e3346399fded68d5f29451b138761ef551e58d84ecfc721e13e1c99ec714ab17
+    sha256: ac286b6fcb426252ab49cc7a32915d6008b4982b58dc298d4e20f909b506273b
     consumers:
       - 1
   - artifact: tests/architecture/checks.test.mjs
-    sha256: cdf653231cfcf4e00842770a3adac57701ae9c47b63a87a7863615b096e1ae7a
+    sha256: 06c38e3c4d8ffa1c790c2f7a24be268e975e406d831f665f8bddb2e28ed4d1a4
     consumers:
       - 1
   - artifact: evidence/launch-preparation/2026-11-01/runtime-build-inputs.md
