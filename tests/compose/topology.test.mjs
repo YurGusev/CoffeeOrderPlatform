@@ -3888,7 +3888,7 @@ void test("verified infrastructure image loader accepts only context-bound Kafka
     decisions: [],
     notAffected: [],
     proofSha256:
-      "bfdd89d4fef959e52f8e898be3b24b97a7e37298317f6850d7952d85e7215d50",
+      "488d3d1a0218e81017917549df3fb7824b2a5e370d37e94170ec72e024d44259",
     evaluatedAt: "2026-10-30T00:00:00.000Z",
     openVex: null,
   };
