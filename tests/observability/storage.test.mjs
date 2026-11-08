@@ -692,6 +692,13 @@ void test("G12 binds storage helper to the Node base, receipt, index and image",
       "gates/G12_SUPPLY_CHAIN/artifacts/supply-chain/artifacts",
     );
     mkdirSync(join(candidateRoot, "config"), { recursive: true });
+    mkdirSync(join(candidateRoot, "evidence/security"), { recursive: true });
+    writeFileSync(
+      join(candidateRoot, "evidence/security/cve-2026-78661.json"),
+      readFileSync(
+        new URL("../../evidence/security/cve-2026-78661.json", import.meta.url),
+      ),
+    );
     mkdirSync(artifacts, { recursive: true });
     const hash = (value) => createHash("sha256").update(value).digest("hex");
     const runId = "storage-fixture";
@@ -1024,6 +1031,7 @@ void test("G12 binds storage helper to the Node base, receipt, index and image",
     result.evaluation = {
       rawHigh: 0,
       resolvedFixed: 0,
+      resolvedNotAffected: 0,
       unresolvedHigh: 0,
       critical: 0,
     };
@@ -1046,6 +1054,9 @@ void test("G12 binds storage helper to the Node base, receipt, index and image",
       vendorPlugins,
       module: toolchainData.grafanaTempoModule,
       decisions: [],
+      notAffected: [],
+      proofSha256:
+        "bfdd89d4fef959e52f8e898be3b24b97a7e37298317f6850d7952d85e7215d50",
       evaluatedAt: "2026-10-30T00:00:00.000Z",
       openVex: null,
     };

@@ -34,6 +34,7 @@ const EXPECTED = Object.freeze({
   typesPg: "8.23.1",
   typesPgCopyStreams: "1.2.5",
   kafka: "4.3.2",
+  muslVersion: "1.2.6-r3",
   confluentKafkaJavaScript: "1.10.0",
   librdkafka: "2.15.0",
   librdkafkaSourceSha256:
@@ -532,6 +533,10 @@ async function checkManifest(root) {
   );
   for (const [key, expected] of Object.entries(EXPECTED))
     exact(manifest[key], expected, `config/toolchain-versions.json.${key}`);
+  const dockerfile = await readText(join(root, "Dockerfile"));
+  const muslDefaults = [...dockerfile.matchAll(/^ARG MUSL_VERSION=(.*)$/gmu)];
+  if (muslDefaults.length !== 1 || muslDefaults[0][1] !== manifest.muslVersion)
+    fail("TOOLCHAIN-IMAGE", "Dockerfile MUSL_VERSION must match the BOM");
   exact(
     manifest.nodeImage,
     foundation.productionImage?.reference,

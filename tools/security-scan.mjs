@@ -73,6 +73,86 @@ const APPROVED_TEMPO = Object.freeze({
   ],
 });
 const APPROVED_CVES = Object.freeze(["CVE-2026-21728", "CVE-2026-28377"]);
+const CVE_78661_PRODUCTS = Object.freeze({
+  grafana: "grafana/grafana",
+  "otel-collector": "grafana/alloy",
+  loki: "grafana/loki",
+  prometheus: "prom/prometheus",
+});
+export const CVE_78661_PROOF_SHA256 =
+  "bfdd89d4fef959e52f8e898be3b24b97a7e37298317f6850d7952d85e7215d50";
+
+export async function readCve78661Proof(candidateRoot) {
+  const bytes = await readRegular(
+    join(candidateRoot, "evidence/security/cve-2026-78661.json"),
+    MAX_METADATA_BYTES,
+  );
+  if (sha256(bytes) !== CVE_78661_PROOF_SHA256) fail("CVE_78661_PROOF_INVALID");
+  return parseJson(bytes, "CVE_78661_PROOF_INVALID");
+}
+
+export function adjudicateCve78661({ proof, reports, images, toolchain }) {
+  if (
+    proof?.cve !== "CVE-2026-78661" ||
+    proof?.severity !== "HIGH" ||
+    proof?.justification !== "vulnerable_code_not_present" ||
+    !Array.isArray(proof.binaries) ||
+    proof.binaries.length !== 8
+  )
+    return [];
+  const decisions = [];
+  for (const binary of proof.binaries) {
+    const imageRows = images.filter(
+      (entry) => entry.service === binary.service,
+    );
+    const image = imageRows[0];
+    const report = reports[binary.service];
+    if (
+      imageRows.length !== 1 ||
+      image?.imageId !== binary.imageId ||
+      image?.manifestDigest !== binary.manifestDigest ||
+      report?.Metadata?.ImageID !== image.imageId ||
+      (binary.platformManifestDigest
+        ? image.platformManifestDigest !== binary.platformManifestDigest ||
+          image.provenanceStatus !== "PASS"
+        : image.sourceReference !== binary.sourceReference ||
+          toolchain?.[`${binary.service}Image`] !== binary.sourceReference ||
+          image.identityStatus !== "PINNED_DIGEST_VERIFIED")
+    )
+      continue;
+    const rows = (report.Results ?? []).filter(
+      (row) => row?.Target === binary.target,
+    );
+    if (rows.length !== 1 || !Array.isArray(rows[0].Vulnerabilities)) continue;
+    const occurrences = report.Results.flatMap((row) =>
+      (row.Vulnerabilities ?? []).filter(
+        (finding) => finding?.Fingerprint === binary.fingerprint,
+      ),
+    );
+    const findings = rows[0].Vulnerabilities.filter(
+      (finding) => finding?.VulnerabilityID === proof.cve,
+    );
+    if (
+      occurrences.length !== 1 ||
+      findings.length !== 1 ||
+      findings[0].Fingerprint !== binary.fingerprint ||
+      findings[0].Severity !== proof.severity ||
+      findings[0].PkgName !== binary.package ||
+      findings[0].InstalledVersion !== binary.installedVersion
+    )
+      continue;
+    decisions.push({
+      vulnerabilityId: proof.cve,
+      fingerprint: binary.fingerprint,
+      status: "not_affected",
+      service: binary.service,
+      target: binary.target,
+      binarySha256: binary.binarySha256,
+      manifestDigest: binary.platformManifestDigest ?? binary.manifestDigest,
+    });
+  }
+  return decisions;
+}
 
 function fail(code) {
   throw Object.assign(new Error(code), { code });
@@ -384,12 +464,26 @@ export function adjudicateGrafanaFindings({
 // Interchange projection of the already-verified local decision, not a vendor statement.
 export function buildOpenVex({
   decisions,
+  notAffected = [],
   runId,
   candidateSha,
   platformManifestDigest,
   timestamp,
 }) {
   if (
+    !Array.isArray(notAffected) ||
+    new Set(notAffected.map((decision) => decision.fingerprint)).size !==
+      notAffected.length ||
+    notAffected.some(
+      (decision) =>
+        decision.vulnerabilityId !== "CVE-2026-78661" ||
+        decision.status !== "not_affected" ||
+        !SHA256.test(decision.fingerprint ?? "") ||
+        !SHA256.test(decision.manifestDigest ?? "") ||
+        !/^[a-f0-9]{64}$/u.test(decision.binarySha256 ?? "") ||
+        typeof decision.target !== "string" ||
+        !Object.hasOwn(CVE_78661_PRODUCTS, decision.service),
+    ) ||
     !Array.isArray(decisions) ||
     decisions.some(
       (decision) => !APPROVED_CVES.includes(decision.vulnerabilityId),
@@ -403,7 +497,7 @@ export function buildOpenVex({
     isoTime(timestamp) === null
   )
     fail("OPENVEX_INPUT_INVALID");
-  if (!decisions.length) return null;
+  if (!decisions.length && !notAffected.length) return null;
   const id = sha256(
     Buffer.from(`${runId}\0${candidateSha}\0${platformManifestDigest}`),
   );
@@ -418,12 +512,30 @@ export function buildOpenVex({
     author: "CoffeeOrderPlatform Operations",
     timestamp,
     version: 1,
-    statements: decisions.map(({ vulnerabilityId }) => ({
-      vulnerability: { name: vulnerabilityId },
-      products: [{ "@id": `pkg:oci/grafana@${platformManifestDigest}` }],
-      status: "fixed",
-      status_notes: notes,
-    })),
+    statements: [
+      ...decisions.map(({ vulnerabilityId }) => ({
+        vulnerability: { name: vulnerabilityId },
+        products: [{ "@id": `pkg:oci/grafana@${platformManifestDigest}` }],
+        status: "fixed",
+        status_notes: notes,
+      })),
+      ...notAffected.map((decision) => ({
+        vulnerability: { name: decision.vulnerabilityId },
+        products: [
+          {
+            "@id": `pkg:oci/${CVE_78661_PRODUCTS[decision.service]}@${decision.manifestDigest}`,
+            subcomponents: [
+              {
+                "@id": `urn:coffee:binary:${encodeURIComponent(decision.target)}`,
+                hashes: { "sha-256": decision.binarySha256 },
+              },
+            ],
+          },
+        ],
+        status: "not_affected",
+        justification: "vulnerable_code_not_present",
+      })),
+    ],
   };
 }
 
@@ -731,6 +843,7 @@ async function validateInputs({
   ])
     if (!/^.+@sha256:[0-9a-f]{64}$/u.test(toolchain[key] ?? ""))
       fail("UPSTREAM_IMAGE_PIN_INVALID");
+  if (toolchain.muslVersion !== "1.2.6-r3") fail("TOOLCHAIN_PIN_INVALID");
   if (
     !/^apache\/kafka:4\.3\.2@sha256:[0-9a-f]{64}$/u.test(toolchain.kafkaImage)
   )
@@ -2348,6 +2461,7 @@ function imageBuildArgs({
   keycloakDistributionImage,
   keycloakRuntimeImage,
   libexpatVersion,
+  muslVersion,
   pluginContext,
 }) {
   return [
@@ -2357,6 +2471,11 @@ function imageBuildArgs({
     "coffee-platform-mtu",
     "--allow",
     "network.host",
+    ...(!["keycloak", "grafana", "otel-collector", "edge-nginx"].includes(
+      service,
+    )
+      ? ["--build-arg", `MUSL_VERSION=${muslVersion}`]
+      : []),
     ...(["kafka", "keycloak"].includes(service)
       ? ["--build-arg", `LIBEXPAT_VERSION=${libexpatVersion}`]
       : []),
@@ -2462,6 +2581,7 @@ async function buildProductImages({
       keycloakDistributionImage: toolchain.keycloakDistributionImage,
       keycloakRuntimeImage: toolchain.keycloakRuntimeImage,
       libexpatVersion: toolchain.libexpatVersion,
+      muslVersion: toolchain.muslVersion,
       pluginContext: vendorPlugins?.path,
     });
     const contextPath = sourceSnapshot.contextPath;
@@ -3571,15 +3691,43 @@ export async function runSecurityScan({
       toolchain: validated.toolchain,
       approvedFixed: policy.approvedFixed ?? [],
     });
+    const proof = await readCve78661Proof(identity.candidateRoot);
+    const reports = { grafana: grafanaReport };
+    for (const name of ["otel-collector", "loki", "prometheus"]) {
+      const bytes = await readRegular(
+        join(outputRoot, `${name}.vulnerabilities.json`),
+        MAX_REPORT_BYTES,
+      );
+      const report = parseJson(bytes, "VULNERABILITY_REPORT_INVALID");
+      const recorded = result.reports.filter(
+        (entry) => entry.path === `${name}.vulnerabilities.json`,
+      );
+      if (
+        recorded.length !== 1 ||
+        recorded[0].sha256 !== sha256(bytes) ||
+        !isDeepStrictEqual(recorded[0].findings, inspectFindings(report))
+      )
+        fail("VULNERABILITY_REPORT_INVALID");
+      reports[name] = report;
+    }
+    const notAffected = adjudicateCve78661({
+      proof,
+      reports,
+      images: result.provenance.images,
+      toolchain: validated.toolchain,
+    });
     result.evaluation = {
       rawHigh: result.findings.high,
       resolvedFixed: decisions.length,
-      unresolvedHigh: result.findings.high - decisions.length,
+      resolvedNotAffected: notAffected.length,
+      unresolvedHigh:
+        result.findings.high - decisions.length - notAffected.length,
       critical: result.findings.critical,
     };
     const evaluatedAt = new Date(clock()).toISOString();
     const openVex = buildOpenVex({
       decisions,
+      notAffected,
       runId: identity.context.runId,
       candidateSha: identity.context.candidateSha,
       platformManifestDigest: grafanaBuild.image.platformManifestDigest,
@@ -3602,6 +3750,8 @@ export async function runSecurityScan({
       vendorPlugins: grafanaBuild.image.buildInputBinding.vendorPlugins,
       module: validated.toolchain.grafanaTempoModule,
       decisions,
+      notAffected,
+      proofSha256: CVE_78661_PROOF_SHA256,
       evaluatedAt,
       openVex,
     };

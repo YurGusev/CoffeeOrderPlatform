@@ -1,0 +1,127 @@
+issue: 277
+baseCommit: 7ee04f202054b39f47f504b1a4125e6598e59eae
+status: verified
+asOfUtc: "2026-11-08T08:35:03.281574+00:00"
+inputs:
+  - issue: 275
+    acceptedMergeCommit: 7ee04f202054b39f47f504b1a4125e6598e59eae
+    artifact: evidence/handoffs/issue-275.yaml
+    sha256: 72ff5e79b0cd9fa840d006c222fb86ef72a6adc491570b0df1c44faf0454dc9a
+outputs:
+  - artifact: Dockerfile
+    sha256: b66bb8df57373854db47006d59a0bd8f5994312a8133207d4a7e27a46b8b3a9f
+    consumers:
+      - 13
+  - artifact: config/toolchain-versions.json
+    sha256: 226b1293f73cf02c481fc2dce19e019b00fe7829e7e43eea21e0a687bb4b98a4
+    consumers:
+      - 13
+  - artifact: config/toolchain-versions.schema.json
+    sha256: 0ab758f199d44ee018c0fa8b9e3657ec2646e0dad697e79c7cc4fa15605d2d60
+    consumers:
+      - 13
+  - artifact: docs/adr/ADR-0042-local-runtime-and-identity.md
+    sha256: 3b49c2d3083cb020582faf4e31fb160eead65e609549f6bcf9f195021426aba4
+    consumers:
+      - 13
+  - artifact: docs/launch/13_DELIVERY_DEPENDENCY_GRAPH.md
+    sha256: fd22dfde179a03888231bf142a66030f66a4627274265eb3e18c2e7e584b60cf
+    consumers:
+      - 13
+  - artifact: docs/operations/observability.md
+    sha256: 8922d3a60940bb89bb245f5647a973ebc5c99eebce295e3e3d9d96e25d3a3561
+    consumers:
+      - 13
+  - artifact: docs/operations/runtime-images.md
+    sha256: 455eb9e1244db97269ca2c3435f74c82c7ea87eb7cd6f7f1d3e25ca430fdc9d0
+    consumers:
+      - 13
+  - artifact: evidence/security/cve-2026-78661.json
+    sha256: bfdd89d4fef959e52f8e898be3b24b97a7e37298317f6850d7952d85e7215d50
+    consumers:
+      - 13
+  - artifact: scripts/check-toolchain-versions.mjs
+    sha256: fb46e4b689926473182ba0b6a17409c195c9aca1bbdacaa20e5c465608fcb128
+    consumers:
+      - 13
+  - artifact: tests/architecture/checks.test.mjs
+    sha256: 4552b4f56d4e94888b8ca814838e1a8d09abe9a8b6611ce0b4e4cc9e0b9c51bd
+    consumers:
+      - 13
+  - artifact: tests/compose/topology.test.mjs
+    sha256: c75ada6037c7f8a410ca89020620e1b30b065789973412ec1a1975c5cd43108d
+    consumers:
+      - 13
+  - artifact: tests/config/observability-bootstrap.test.mjs
+    sha256: a3100945296885ed664f057741b4ef03f747e7ad2a56f84aa52591d5756dc5bb
+    consumers:
+      - 13
+  - artifact: tests/observability/storage.test.mjs
+    sha256: edc2fb71aaba22d4a8d808cc18ea6a9ca38fa15c943035c5517ba0e4129de7b6
+    consumers:
+      - 13
+  - artifact: tests/tools/security-scan.test.mjs
+    sha256: bb330014fafe8fa44342664b60f3a08db5286c88fb5f4894f5dd92d5585c2405
+    consumers:
+      - 13
+  - artifact: tools/security-scan.mjs
+    sha256: f0efc01acffc4e4ddcd0cc271b1fcb0c6b8966765fbf0ec9a9a5a88e0d1ae8ff
+    consumers:
+      - 13
+  - artifact: tools/verified-infrastructure-image.mjs
+    sha256: 51ef45e9db65971862b627e42b914a075084cb69871b336977517569fe8fe0fa
+    consumers:
+      - 13
+verification:
+  - command: pnpm install --offline --frozen-lockfile --ignore-scripts
+    result: passed
+  - command: flock --no-fork /run/user/$(id -u)/coffee-platform-heavy.lock pnpm exec tsc -b --pretty false
+    result: passed
+  - command: node --test --test-name-pattern='G12 VEX resolves only|G12 builds product images' tests/tools/security-scan.test.mjs
+    result: passed; tests=2, pass=2, fail=0, skip=0
+  - command:
+      node --test --test-name-pattern='verified infrastructure image loader accepts only context-bound
+      Kafka artifacts|G12 binds storage helper to the Node base' tests/compose/topology.test.mjs tests/observability/storage.test.mjs
+    result: passed; tests=2, pass=2, fail=0, skip=0
+  - command:
+      node --test --test-name-pattern='browser correlation executes the child lifecycle|browser correlation
+      admission verifies the sealed' tests/config/observability-bootstrap.test.mjs
+    result: passed; tests=2, pass=2, fail=0, skip=0
+  - command: pnpm versions:check
+    result: passed
+  - command: pnpm config:check
+    result: passed
+  - command:
+      pnpm exec oxlint --type-aware --deny-warnings scripts/check-toolchain-versions.mjs tools/security-scan.mjs
+      tools/verified-infrastructure-image.mjs tests/tools/security-scan.test.mjs tests/compose/topology.test.mjs
+      tests/config/observability-bootstrap.test.mjs tests/observability/storage.test.mjs
+    result: passed
+  - command: pnpm format:check
+    result: passed
+  - command:
+      node_modules/.bin/prettier --check config/toolchain-versions.json config/toolchain-versions.schema.json
+      scripts/check-toolchain-versions.mjs tools/security-scan.mjs tools/verified-infrastructure-image.mjs
+      tests/tools/security-scan.test.mjs tests/compose/topology.test.mjs tests/config/observability-bootstrap.test.mjs
+      tests/observability/storage.test.mjs evidence/security/cve-2026-78661.json
+    result: passed
+  - command: git diff --check
+    result: passed
+  - command:
+      "node --test --test-name-pattern='native librdkafka source patch|GREEN: exact TS7 toolchain
+      manifest|RED TOOLCHAIN-(PIN|IMAGE|FINAL-IMAGE)|RED TS7-(BASELINE|BACKEND|FRONTEND|REFERENCES|APP-DECLARATIONS|SINGLE-COMPILER)'
+      tests/architecture/checks.test.mjs"
+    result: passed; tests=11, pass=11, fail=0
+  - command: pnpm exec oxlint --type-aware --deny-warnings tests/architecture/checks.test.mjs
+    result: passed
+  - command: pnpm exec prettier --check tests/architecture/checks.test.mjs
+    result: passed
+limitations:
+  - "Handoff подтверждает изменённые artifacts и перечисленные локальные проверки. Exact-head CI, независимые
+    tester/reviewer и собственный G12 финального commit фиксируются отдельно в PR до merge; этот файл не
+    объявляет launch admission #13."
+  - Доказательство CVE-2026-78661 относится только к восьми SHA-bound binaries в неизменяемых образах и
+    существующей модели доверия vendor/штатному Go compiler. Независимая аттестация компилятора и отсутствие
+    всего HTML package не заявляются.
+  - "Исторический G12 1978a159 остаётся FAIL. Результат G12 fix #277 не переносится как PASS другого source:
+    #13 отдельно проходит CI/G12/qualification/G00–G19. Обычный runtime, provider и business data этим fix
+    не изменяются."
