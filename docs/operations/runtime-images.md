@@ -48,6 +48,14 @@ receipt с точной привязкой к source/run/config/BOM; прямо�
 удаляется. Изменение формата evidence явно согласовано владельцем. Количество
 целей, HIGH/CRITICAL policy, freshness, pins и бюджеты G12 не меняются.
 
+Слой `otel-collector` после `dpkg --purge` очищает `/var/log/dpkg.log`,
+`/var/log/alternatives.log`, `/var/log/apt/*` и `/var/cache/ldconfig`: dpkg
+пишет в них текущее время и пересоздаёт кеш, из-за чего image identity менялся
+при каждом повторе. После очистки две независимые сборки одного pinned base
+дают одинаковые config/manifest digests, а `usr/bin/alloy` сохраняет прежний
+`binarySha256`. Это условие проверяется до G12; ручная перепривязка proof к
+каждому новому `imageId` не допускается.
+
 Основание: [pnpm #9474](https://github.com/pnpm/pnpm/issues/9474),
 [modules manifest pnpm 11.24.0](https://github.com/pnpm/pnpm/blob/v11.24.0/pnpm11/installing/modules-yaml/src/index.ts),
 [BuildKit 0.32.2 exporter options](https://github.com/moby/buildkit/blob/v0.32.2/exporter/containerimage/opts.go)
