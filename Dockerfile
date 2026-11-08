@@ -162,7 +162,11 @@ RUN --network=host apk add --no-cache --upgrade e2fsprogs util-linux libcrypto3 
 
 # G12 supplies the pinned Alloy base.
 FROM ${OTEL_COLLECTOR_IMAGE} AS otel-collector
-RUN --network=none dpkg --purge apt libapt-pkg6.0t64
+# dpkg writes timestamps into logs and regenerates ldconfig cache, so removing
+# those volatile files keeps the layer byte-identical across rebuilds.
+RUN --network=none dpkg --purge apt libapt-pkg6.0t64 \
+ && rm -f /var/log/dpkg.log /var/log/alternatives.log /var/log/apt/history.log /var/log/apt/term.log \
+ && rm -rf /var/cache/ldconfig /var/cache/apt /var/lib/apt/lists
 
 # G12 supplies the verified, signed vendor plugin context and the pinned base.
 FROM ${GRAFANA_IMAGE} AS grafana

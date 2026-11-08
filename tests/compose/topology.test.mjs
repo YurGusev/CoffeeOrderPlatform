@@ -3263,6 +3263,24 @@ void test("Node production image is exact, non-root, and keeps build tooling out
   assert.match(dockerfile, /CMD \["--entry", "dist\/main\.js"\]/);
 });
 
+void test("otel-collector layer removes volatile dpkg state for reproducible image identity", async () => {
+  const dockerfile = await readFile(join(REPO_ROOT, "Dockerfile"), "utf8");
+  const start = dockerfile.indexOf(
+    "FROM ${OTEL_COLLECTOR_IMAGE} AS otel-collector",
+  );
+  const end = dockerfile.indexOf(
+    "# G12 supplies the verified, signed vendor plugin context",
+  );
+  assert.ok(start >= 0 && end > start);
+  const stage = dockerfile.slice(start, end);
+  assert.match(stage, /RUN --network=none dpkg --purge apt libapt-pkg6\.0t64/);
+  assert.match(
+    stage,
+    /rm -f \/var\/log\/dpkg\.log \/var\/log\/alternatives\.log \/var\/log\/apt\/history\.log \/var\/log\/apt\/term\.log/,
+  );
+  assert.match(stage, /rm -rf \/var\/cache\/ldconfig/);
+});
+
 void test("Confluent Node 26 addon links dynamically to separately pinned librdkafka", async () => {
   const dockerfile = await readFile(join(REPO_ROOT, "Dockerfile"), "utf8");
   assert.match(dockerfile, /AS librdkafka-build/);
