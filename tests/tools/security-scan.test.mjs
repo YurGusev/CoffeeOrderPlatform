@@ -23,6 +23,8 @@ import { dirname, join } from "node:path";
 import test from "node:test";
 import {
   adjudicateGrafanaFindings,
+  adjudicateCve78661,
+  readCve78661Proof,
   createBuildInputSnapshot,
   verifyBuildInputSnapshot,
   buildOpenVex,
@@ -1361,6 +1363,119 @@ void test("G12 VEX resolves only the two approved findings in the exact Grafana 
     if (kind === "status") changed.statements[0].status = "not_affected";
     assert.equal(validateOpenVex(changed, vexInput), false, kind);
   }
+  const proof = await readCve78661Proof(process.cwd());
+  const reports = {};
+  const images = [];
+  for (const binary of proof.binaries) {
+    if (!reports[binary.service]) {
+      reports[binary.service] = {
+        Metadata: { ImageID: binary.imageId },
+        Results: [],
+      };
+      images.push({
+        service: binary.service,
+        imageId: binary.imageId,
+        manifestDigest: binary.manifestDigest,
+        ...(binary.platformManifestDigest
+          ? {
+              platformManifestDigest: binary.platformManifestDigest,
+              provenanceStatus: "PASS",
+            }
+          : {
+              sourceReference: binary.sourceReference,
+              identityStatus: "PINNED_DIGEST_VERIFIED",
+            }),
+      });
+    }
+    reports[binary.service].Results.push({
+      Target: binary.target,
+      Vulnerabilities: [
+        {
+          VulnerabilityID: proof.cve,
+          Severity: proof.severity,
+          PkgName: binary.package,
+          InstalledVersion: binary.installedVersion,
+          Fingerprint: binary.fingerprint,
+        },
+      ],
+    });
+  }
+  const inputs = { proof, reports, images, toolchain };
+  const eight = adjudicateCve78661(inputs);
+  assert.equal(eight.length, 8);
+  const combined = { ...vexInput, notAffected: eight };
+  const combinedVex = buildOpenVex(combined);
+  assert.equal(combinedVex.statements.length, 10);
+  assert.equal(
+    combinedVex.statements.filter((statement) => statement.status === "fixed")
+      .length,
+    2,
+  );
+  assert.equal(
+    combinedVex.statements.filter(
+      (statement) =>
+        statement.status === "not_affected" &&
+        statement.justification === "vulnerable_code_not_present" &&
+        statement.products[0].subcomponents.length === 1,
+    ).length,
+    8,
+  );
+  assert.equal(validateOpenVex(combinedVex, combined), true);
+  for (const kind of [
+    "image",
+    "manifest",
+    "platform",
+    "reference",
+    "bom",
+    "report",
+    "target",
+    "cve",
+    "severity",
+    "package",
+    "version",
+    "fingerprint",
+    "duplicate",
+  ]) {
+    const changed = structuredClone(inputs);
+    const index = kind === "reference" || kind === "bom" ? 5 : 0;
+    const b = changed.proof.binaries[index];
+    const image = changed.images.find((value) => value.service === b.service);
+    const scan = changed.reports[b.service];
+    const row = scan.Results.find((value) => value.Target === b.target);
+    const finding = row.Vulnerabilities[0];
+    if (kind === "image") image.imageId = `sha256:${"0".repeat(64)}`;
+    if (kind === "manifest") image.manifestDigest = `sha256:${"0".repeat(64)}`;
+    if (kind === "platform")
+      image.platformManifestDigest = `sha256:${"0".repeat(64)}`;
+    if (kind === "reference") image.sourceReference = "wrong";
+    if (kind === "bom") changed.toolchain.lokiImage = "wrong";
+    if (kind === "report") scan.Metadata.ImageID = `sha256:${"0".repeat(64)}`;
+    if (kind === "target") row.Target = "other";
+    if (kind === "cve") finding.VulnerabilityID = "CVE-2026-00000";
+    if (kind === "severity") finding.Severity = "LOW";
+    if (kind === "package") finding.PkgName = "other";
+    if (kind === "version") finding.InstalledVersion = "v0.0.0";
+    if (kind === "fingerprint")
+      finding.Fingerprint = `sha256:${"0".repeat(64)}`;
+    if (kind === "duplicate")
+      row.Vulnerabilities.push(structuredClone(finding));
+    assert.ok(adjudicateCve78661(changed).length < 8, kind);
+  }
+  const tempProof = await mkdtemp(join(tmpdir(), "cve-proof-"));
+  try {
+    await mkdir(join(tempProof, "evidence/security"), { recursive: true });
+    await writeFile(
+      join(tempProof, "evidence/security/cve-2026-78661.json"),
+      "{}\n",
+    );
+    await assert.rejects(
+      readCve78661Proof(tempProof),
+      /CVE_78661_PROOF_INVALID/u,
+    );
+  } finally {
+    await rm(tempProof, { recursive: true, force: true });
+  }
+
   const before = JSON.stringify(report);
   assert.equal(adjudicateGrafanaFindings(input).length, 2);
   assert.equal(JSON.stringify(report), before);
@@ -1660,6 +1775,13 @@ void test("G12 builds product images, records pinned upstream identity, and fail
     runnerResultBytes,
   );
   await mkdir(join(candidateRoot, "config"), { recursive: true });
+  await mkdir(join(candidateRoot, "evidence/security"), { recursive: true });
+  await writeFile(
+    join(candidateRoot, "evidence/security/cve-2026-78661.json"),
+    await readFile(
+      new URL("../../evidence/security/cve-2026-78661.json", import.meta.url),
+    ),
+  );
   await mkdir(join(candidateRoot, "apps"), { recursive: true });
   await mkdir(join(candidateRoot, "packages/synthetic"), { recursive: true });
   await mkdir(join(candidateRoot, "tools"), { recursive: true });
@@ -1690,7 +1812,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
       "utf8",
     ),
   );
-  for (const name of ["loki", "prometheus", "tempo"])
+  for (const name of ["tempo"])
     toolchainFixture[`${name}Image`] =
       `registry.example/${name}:1@sha256:${createHash("sha256").update(name).digest("hex")}`;
   const kafkaPlatformDigest = `sha256:${"d".repeat(64)}`;
@@ -1832,6 +1954,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
       "add",
       "config/platform.yaml",
       "config/toolchain-versions.json",
+      "evidence/security/cve-2026-78661.json",
       "pnpm-lock.yaml",
       "pnpm-workspace.yaml",
       "package.json",
@@ -2474,6 +2597,19 @@ void test("G12 builds product images, records pinned upstream identity, and fail
             ? [`LIBEXPAT_VERSION=${toolchain.libexpatVersion}`]
             : [],
         );
+        assert.deepEqual(
+          args.flatMap((value, index) =>
+            value === "--build-arg" &&
+            args[index + 1].startsWith("MUSL_VERSION=")
+              ? [args[index + 1]]
+              : [],
+          ),
+          ["keycloak", "grafana", "otel-collector", "edge-nginx"].includes(
+            service,
+          )
+            ? []
+            : [`MUSL_VERSION=${toolchain.muslVersion}`],
+        );
         if (service === "keycloak") {
           assert.ok(
             args.includes(
@@ -2507,13 +2643,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
             ["--target", "edge-nginx"],
           );
         } else if (service === "storage-helper") {
-          assert.deepEqual(
-            args.slice(
-              args.indexOf("--build-arg"),
-              args.indexOf("--build-arg") + 2,
-            ),
-            ["--build-arg", `NODE_IMAGE=${toolchain.nodeImage}`],
-          );
+          assert.ok(args.includes(`NODE_IMAGE=${toolchain.nodeImage}`));
           assert.deepEqual(
             args.slice(args.indexOf("--target"), args.indexOf("--target") + 2),
             ["--target", "storage-helper"],
@@ -2529,13 +2659,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
             ["--target", "kafka"],
           );
         } else {
-          assert.deepEqual(
-            args.slice(
-              args.indexOf("--build-arg"),
-              args.indexOf("--build-arg") + 2,
-            ),
-            ["--build-arg", `RUNTIME=${service}`],
-          );
+          assert.ok(args.includes(`RUNTIME=${service}`));
           const buildArgs = args.flatMap((value, index) =>
             value === "--build-arg" ? [args[index + 1]] : [],
           );
@@ -3855,6 +3979,159 @@ void test("G12 builds product images, records pinned upstream identity, and fail
   const decisionPath = join(outputDir, "artifacts/grafana-adjudication.json");
   const originalResult = await readFile(grafanaResultPath);
   const originalDecision = await readFile(decisionPath);
+  {
+    const proof = await readCve78661Proof(candidateRoot);
+    const forged = JSON.parse(originalResult);
+    const decision = JSON.parse(originalDecision);
+    const backup = new Map();
+    const put = async (path, bytes) => {
+      if (!backup.has(path)) backup.set(path, await readFile(path));
+      await writeFile(path, bytes);
+    };
+    try {
+      const reports = {};
+      for (const service of [
+        "grafana",
+        "otel-collector",
+        "loki",
+        "prometheus",
+      ]) {
+        const binaries = proof.binaries.filter(
+          (binary) => binary.service === service,
+        );
+        const binary = binaries[0];
+        const image = forged.provenance.images.find(
+          (row) => row.service === service,
+        );
+        image.imageId = binary.imageId;
+        image.manifestDigest = binary.manifestDigest;
+        if (binary.platformManifestDigest)
+          image.platformManifestDigest = binary.platformManifestDigest;
+        else image.sourceReference = binary.sourceReference;
+        const path = join(
+          outputDir,
+          `artifacts/${service}.vulnerabilities.json`,
+        );
+        const report = JSON.parse(await readFile(path));
+        report.Metadata.ImageID = binary.imageId;
+        report.Results = binaries.map((row) => ({
+          Target: row.target,
+          Vulnerabilities: [
+            {
+              VulnerabilityID: proof.cve,
+              Severity: proof.severity,
+              PkgName: row.package,
+              InstalledVersion: row.installedVersion,
+              Fingerprint: row.fingerprint,
+            },
+          ],
+        }));
+        const bytes = Buffer.from(JSON.stringify(report));
+        await put(path, bytes);
+        const recorded = forged.reports.find(
+          (row) => row.path === `${service}.vulnerabilities.json`,
+        );
+        recorded.sha256 = sha(bytes);
+        recorded.findings = { high: binaries.length, critical: 0 };
+        reports[service] = report;
+        if (service === "grafana" || service === "otel-collector") {
+          const receiptPath = join(
+            outputDir,
+            `artifacts/${service}-receipt.json`,
+          );
+          const receipt = JSON.parse(await readFile(receiptPath));
+          receipt.imageId = binary.imageId;
+          receipt.manifestDigest = binary.manifestDigest;
+          receipt.platformManifestDigest = binary.platformManifestDigest;
+          const receiptBytes = Buffer.from(JSON.stringify(receipt));
+          await put(receiptPath, receiptBytes);
+          const claimed =
+            service === "grafana" ? forged.grafana : forged.otelCollector;
+          claimed.imageId = receipt.imageId;
+          claimed.manifestDigest = receipt.manifestDigest;
+          claimed.receiptSha256 = sha(receiptBytes);
+          if (service === "grafana") {
+            decision.imageId = receipt.imageId;
+            decision.manifestDigest = receipt.manifestDigest;
+            decision.platformManifestDigest = receipt.platformManifestDigest;
+            decision.rawReportSha256 = sha(bytes);
+          }
+        }
+      }
+      const notAffected = adjudicateCve78661({
+        proof,
+        reports,
+        images: forged.provenance.images,
+        toolchain,
+      });
+      assert.equal(notAffected.length, 8);
+      assert.deepEqual(decision.decisions, []);
+      decision.notAffected = notAffected;
+      decision.openVex = buildOpenVex({
+        decisions: [],
+        notAffected,
+        runId: context.runId,
+        candidateSha: context.candidateSha,
+        platformManifestDigest: decision.platformManifestDigest,
+        timestamp: decision.evaluatedAt,
+      });
+      const decisionBytes = Buffer.from(JSON.stringify(decision));
+      await put(decisionPath, decisionBytes);
+      forged.adjudication.sha256 = sha(decisionBytes);
+      forged.findings = { high: 8, critical: 0 };
+      forged.evaluation = {
+        rawHigh: 8,
+        resolvedFixed: 0,
+        resolvedNotAffected: 8,
+        unresolvedHigh: 0,
+        critical: 0,
+      };
+      await put(grafanaResultPath, Buffer.from(JSON.stringify(forged)));
+      const options = {
+        target: "kafka",
+        contextFile: contextPath,
+        validateContext: validateSyntheticContext,
+        loadImage: false,
+      };
+      assert.equal(
+        (await loadVerifiedGateImage(options)).imageId,
+        savedResult.kafka.imageId,
+      );
+      forged.evaluation.resolvedNotAffected = 7;
+      await put(grafanaResultPath, Buffer.from(JSON.stringify(forged)));
+      await assert.rejects(
+        loadVerifiedGateImage(options),
+        /G12_GRAFANA_ADJUDICATION_INVALID/u,
+      );
+      forged.evaluation.resolvedNotAffected = 8;
+      await put(grafanaResultPath, Buffer.from(JSON.stringify(forged)));
+      const proofPath = join(
+        candidateRoot,
+        "evidence/security/cve-2026-78661.json",
+      );
+      const originalProof = await readFile(proofPath);
+      await put(proofPath, Buffer.from("{}\n"));
+      await assert.rejects(
+        loadVerifiedGateImage(options),
+        /CVE_78661_PROOF_INVALID/u,
+      );
+      await put(proofPath, originalProof);
+      const lokiPath = join(outputDir, "artifacts/loki.vulnerabilities.json");
+      reports.loki.Results[0].Vulnerabilities[0].Fingerprint = `sha256:${"0".repeat(64)}`;
+      const altered = Buffer.from(JSON.stringify(reports.loki));
+      await put(lokiPath, altered);
+      forged.reports.find(
+        (row) => row.path === "loki.vulnerabilities.json",
+      ).sha256 = sha(altered);
+      await put(grafanaResultPath, Buffer.from(JSON.stringify(forged)));
+      await assert.rejects(
+        loadVerifiedGateImage(options),
+        /G12_GRAFANA_ADJUDICATION_INVALID/u,
+      );
+    } finally {
+      for (const [path, bytes] of backup) await writeFile(path, bytes);
+    }
+  }
   for (const severity of ["HIGH", "CRITICAL"]) {
     const forgedRaw = JSON.parse(rawBytes);
     forgedRaw.Results.push({

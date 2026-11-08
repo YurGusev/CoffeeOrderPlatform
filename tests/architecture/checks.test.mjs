@@ -79,6 +79,7 @@ async function toolchainRoot() {
   const root = await mkdtemp(join(tmpdir(), "coffee-toolchain-"));
   for (const file of [
     "package.json",
+    "Dockerfile",
     ".node-version",
     "pnpm-workspace.yaml",
     "pnpm-lock.yaml",
@@ -952,9 +953,16 @@ void test("RED TS7-SINGLE-COMPILER: second TypeScript package is rejected", asyn
 void test("RED TOOLCHAIN-FINAL-IMAGE: build dependencies cannot enter final image", async () => {
   const root = await toolchainRoot();
   try {
-    await cp(
+    const { muslVersion } = JSON.parse(
+      await readFile(join(root, "config/toolchain-versions.json"), "utf8"),
+    );
+    const invalid = await readFile(
       join(FIXTURES, "invalid-final-image", "Dockerfile"),
+      "utf8",
+    );
+    await writeFile(
       join(root, "Dockerfile"),
+      `ARG MUSL_VERSION=${muslVersion}\n${invalid}`,
     );
     const result = run("check-toolchain-versions.mjs", root);
     assert.notEqual(result.status, 0, output(result));
@@ -980,7 +988,18 @@ void test("TOOLCHAIN-FINAL-IMAGE excludes only browser child test fixtures", asy
       join(root, "Dockerfile"),
     ]) {
       await mkdir(dirname(path), { recursive: true });
-      await cp(fixture, path);
+      if (path === join(root, "Dockerfile")) {
+        // #278 требует, чтобы MUSL_VERSION root Dockerfile совпадал с BOM.
+        const { muslVersion } = JSON.parse(
+          await readFile(join(root, "config/toolchain-versions.json"), "utf8"),
+        );
+        await writeFile(
+          path,
+          `ARG MUSL_VERSION=${muslVersion}\n${await readFile(fixture, "utf8")}`,
+        );
+      } else {
+        await cp(fixture, path);
+      }
       const invalid = run("check-toolchain-versions.mjs", root);
       assert.notEqual(invalid.status, 0, output(invalid));
       assert.match(output(invalid), /TOOLCHAIN-FINAL-IMAGE/);

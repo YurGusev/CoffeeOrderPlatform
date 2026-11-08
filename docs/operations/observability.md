@@ -73,7 +73,16 @@ Go/Rust не компилируются. Её финальный image ID и ID 
 Policy `verification.securityScan.approvedFixed` разрешает только два указанных
 в ADR-0040 already-fixed Tempo findings для exact artifact identity. Raw scan и
 UNKNOWN сохраняются. Изменение package/version/hash, иной HIGH/CRITICAL или
-несогласованные evidence завершаются FAIL. Перед запуском G13/G14 фактические
+несогласованные evidence завершаются FAIL.
+
+Отдельное правило #277 допускает только восемь точных бинарников для
+CVE-2026-78661 как `not_affected` / `vulnerable_code_not_present` по
+[согласованному proof и identity contract](runtime-images.md). Оно не расширяет
+`approvedFixed`: raw HIGH сохраняются, `resolvedFixed` и `resolvedNotAffected`
+разделены; неизвестные или изменённые identity/finding остаются unresolved.
+Сохранённый OpenVEX не заменяет независимый пересчёт reader.
+
+Перед запуском G13/G14 фактические
 ID всех 14 Node images и nginx сравниваются с проверенными G12 IDs; rebuild
 сам по себе не доказывает равенство. Непрохождение проверки останавливает startup.
 

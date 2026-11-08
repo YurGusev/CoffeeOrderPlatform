@@ -31,6 +31,15 @@ Authority: [ADR-0025](ADR-0025-fastify-launch-recovery.md), [транспорт 
 - Чтение существующих Kafka PKCS12 для проверки сроков использует legacy provider OpenSSL: truststore от установленного keytool содержит RC2-40-CBC. Это только декодирование с проверкой MAC и `-nokeys`; создание хранилищ, ключи и доверенные CA не меняются.
 - AROMA mutations остаются выключенными до соответствующего контролируемого допуска. Автоматические provider retries, очистка чужих данных и использование test IdP для постоянного входа не допускаются.
 
+## Дополнение #277 от 8 ноября 2026
+
+Владелец согласовал точечное обновление существующих musl/musl-utils до
+`muslVersion` в BOM для конечных Node/storage-helper/Kafka и отдельный
+proof-bound `not_affected` восьми бинарников для CVE-2026-78661.
+[Контракт identity и доказательств](../operations/runtime-images.md) сохраняет
+подписи vendor, raw findings, два Tempo `fixed` и запрет остальных HIGH/CRITICAL.
+Образы и их закреплённые источники не заменяются; vendor Go не пересобирается.
+
 ## Проверка и возврат
 
 Обязательны configuration/secret-scope checks, exact image scan, HTTPS login одного пользователя с контрактными permissions, private-only listener, readiness всех ролей и сквозная цепочка с реальными владельческими БД/Kafka/SSE. Restart должен сохранить identity и данные. До cutover сохраняются текущие image/container/volume identities; при неуспехе снимаются только созданные этим запуском ресурсы, существующие данные и telemetry volumes сохраняются.

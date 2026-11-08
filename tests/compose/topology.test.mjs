@@ -3932,6 +3932,24 @@ void test("Node production image is exact, non-root, and keeps build tooling out
   assert.match(dockerfile, /CMD \["--entry", "dist\/main\.js"\]/);
 });
 
+void test("otel-collector layer removes volatile dpkg state for reproducible image identity", async () => {
+  const dockerfile = await readFile(join(REPO_ROOT, "Dockerfile"), "utf8");
+  const start = dockerfile.indexOf(
+    "FROM ${OTEL_COLLECTOR_IMAGE} AS otel-collector",
+  );
+  const end = dockerfile.indexOf(
+    "# G12 supplies the verified, signed vendor plugin context",
+  );
+  assert.ok(start >= 0 && end > start);
+  const stage = dockerfile.slice(start, end);
+  assert.match(stage, /RUN --network=none dpkg --purge apt libapt-pkg6\.0t64/);
+  assert.match(
+    stage,
+    /rm -f \/var\/log\/dpkg\.log \/var\/log\/alternatives\.log \/var\/log\/apt\/history\.log \/var\/log\/apt\/term\.log/,
+  );
+  assert.match(stage, /rm -rf \/var\/cache\/ldconfig/);
+});
+
 void test("Confluent Node 26 addon links dynamically to separately pinned librdkafka", async () => {
   const dockerfile = await readFile(join(REPO_ROOT, "Dockerfile"), "utf8");
   assert.match(dockerfile, /AS librdkafka-build/);
@@ -4172,6 +4190,13 @@ void test("verified infrastructure image loader accepts only context-bound Kafka
     "gates/G12_SUPPLY_CHAIN/artifacts/supply-chain",
   );
   await mkdir(join(candidateRoot, "config"), { recursive: true, mode: 0o700 });
+  await mkdir(join(candidateRoot, "evidence/security"), { recursive: true });
+  await writeFile(
+    join(candidateRoot, "evidence/security/cve-2026-78661.json"),
+    await readFile(
+      new URL("../../evidence/security/cve-2026-78661.json", import.meta.url),
+    ),
+  );
   await mkdir(join(supplyChainDir, "artifacts"), {
     recursive: true,
     mode: 0o700,
@@ -4509,6 +4534,7 @@ void test("verified infrastructure image loader accepts only context-bound Kafka
   result.evaluation = {
     rawHigh: 0,
     resolvedFixed: 0,
+    resolvedNotAffected: 0,
     unresolvedHigh: 0,
     critical: 0,
   };
@@ -4531,6 +4557,9 @@ void test("verified infrastructure image loader accepts only context-bound Kafka
     vendorPlugins,
     module: toolchain.grafanaTempoModule,
     decisions: [],
+    notAffected: [],
+    proofSha256:
+      "7de1f821bfd697d66ae93da77776848e2d49a2e1665a55a9d2be3499f91a9b11",
     evaluatedAt: "2026-10-30T00:00:00.000Z",
     openVex: null,
   };

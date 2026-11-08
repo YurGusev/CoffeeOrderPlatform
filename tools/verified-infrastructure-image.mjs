@@ -11,6 +11,9 @@ import {
 } from "../packages/platform-config/src/index.ts";
 import {
   adjudicateGrafanaFindings,
+  adjudicateCve78661,
+  readCve78661Proof,
+  CVE_78661_PROOF_SHA256,
   inspectFindings,
   validateOpenVex,
 } from "./security-scan.mjs";
@@ -728,6 +731,7 @@ async function validateGateImage({
     )
       fail("G12_GRAFANA_ADJUDICATION_INVALID");
     const aggregate = { high: 0, critical: 0 };
+    const reports = {};
     for (const entry of result.reports) {
       if (
         !exactKeys(entry, ["path", "sha256", "findings"]) ||
@@ -750,6 +754,9 @@ async function validateGateImage({
         fail("G12_GRAFANA_ADJUDICATION_INVALID");
       aggregate.high += findings.high;
       aggregate.critical += findings.critical;
+      if (entry.path.endsWith(".vulnerabilities.json"))
+        reports[entry.path.slice(0, -".vulnerabilities.json".length)] =
+          parseJson(bytes);
       if (
         entry.path.endsWith(".vulnerabilities.json") &&
         entry.path !== "lockfile.vulnerabilities.json"
@@ -783,6 +790,85 @@ async function validateGateImage({
       toolchain,
       approvedFixed: policy.approvedFixed ?? [],
     });
+    const proof = await readCve78661Proof(candidateRoot);
+    const expectedNotAffected = adjudicateCve78661({
+      proof,
+      reports,
+      images: result.provenance.images,
+      toolchain,
+    });
+    if (expectedNotAffected.some((item) => item.service === "otel-collector")) {
+      const collectorBytes =
+        target === "otel-collector"
+          ? receiptBytes
+          : await readEvidenceFile(
+              join(supplyChainDir, "artifacts/otel-collector-receipt.json"),
+              { maxBytes: MAX_METADATA_BYTES },
+            );
+      const collector =
+        target === "otel-collector" ? receipt : parseJson(collectorBytes);
+      const claimed = result.otelCollector;
+      const records = result.provenance.images.filter(
+        (item) => item.service === "otel-collector",
+      );
+      if (
+        !exactKeys(claimed, [
+          "path",
+          "receiptSha256",
+          "imageId",
+          "importTag",
+          "manifestDigest",
+          "ociArtifactPath",
+          "ociArtifactSha256",
+        ]) ||
+        claimed?.path !== "artifacts/otel-collector-receipt.json" ||
+        claimed.receiptSha256 !== sha256(collectorBytes) ||
+        claimed.importTag !==
+          `coffee-g12-${sha256(Buffer.from(context.runId)).slice(0, 12)}-otel-collector:latest` ||
+        collector.importTag !== claimed.importTag ||
+        collector.ociArtifact?.path !== "artifacts/otel-collector.oci.tar" ||
+        claimed.ociArtifactPath !== collector.ociArtifact.path ||
+        claimed.ociArtifactSha256 !== collector.ociArtifact.sha256 ||
+        collector.schemaVersion !== 1 ||
+        collector.gate !== "G12_SUPPLY_CHAIN" ||
+        collector.status !== "PASS" ||
+        collector.target !== "otel-collector" ||
+        collector.runId !== context.runId ||
+        collector.candidateSha !== context.candidateSha ||
+        collector.treeSha !== environment.treeSha ||
+        collector.configSha256 !== context.baseConfigSha256 ||
+        collector.toolchainVersionsSha256 !==
+          environment.toolchainVersionsSha256 ||
+        collector.lockfileSha256 !== environment.lockfileSha256 ||
+        collector.baseImage !== toolchain.otelCollectorImage ||
+        collector.provenanceStatus !== "INCOMPLETE_LOCAL_CONTEXT" ||
+        claimed.imageId !== collector.imageId ||
+        claimed.manifestDigest !== collector.manifestDigest ||
+        !validateBinding(
+          collector.buildInputBinding,
+          collector,
+          context,
+          environment,
+          "otel-collector",
+          toolchain,
+        ) ||
+        !validateBaseMaterial(
+          collector.baseMaterial,
+          toolchain.otelCollectorImage,
+          "otel-collector",
+        ) ||
+        records.length !== 1 ||
+        records[0].imageId !== collector.imageId ||
+        records[0].manifestDigest !== collector.manifestDigest ||
+        records[0].platformManifestDigest !==
+          collector.platformManifestDigest ||
+        records[0].provenanceStatus !== "PASS" ||
+        records[0].metadataSha256 !== collector.provenanceSha256 ||
+        records[0].attestationSha256 !== collector.attestationSha256 ||
+        !isDeepStrictEqual(records[0].baseMaterial, collector.baseMaterial)
+      )
+        fail("G12_GRAFANA_ADJUDICATION_INVALID");
+    }
     const evaluation = result.evaluation;
     if (
       sha256(decisionBytes) !== decisionRef.sha256 ||
@@ -807,8 +893,11 @@ async function validateGateImage({
       ) ||
       !isDeepStrictEqual(decision.module, toolchain.grafanaTempoModule) ||
       !isDeepStrictEqual(decision.decisions, expected) ||
+      !isDeepStrictEqual(decision.notAffected, expectedNotAffected) ||
+      decision.proofSha256 !== CVE_78661_PROOF_SHA256 ||
       !validateOpenVex(decision.openVex, {
         decisions: expected,
+        notAffected: expectedNotAffected,
         runId: context.runId,
         candidateSha: context.candidateSha,
         platformManifestDigest: grafanaReceipt.platformManifestDigest,
@@ -817,13 +906,16 @@ async function validateGateImage({
       !exactKeys(evaluation, [
         "rawHigh",
         "resolvedFixed",
+        "resolvedNotAffected",
         "unresolvedHigh",
         "critical",
       ]) ||
       evaluation.rawHigh !== result.findings?.high ||
       evaluation.critical !== result.findings?.critical ||
       evaluation.resolvedFixed !== expected.length ||
-      evaluation.unresolvedHigh !== evaluation.rawHigh - expected.length ||
+      evaluation.resolvedNotAffected !== expectedNotAffected.length ||
+      evaluation.unresolvedHigh !==
+        evaluation.rawHigh - expected.length - expectedNotAffected.length ||
       evaluation.unresolvedHigh !== 0 ||
       evaluation.critical !== 0
     )

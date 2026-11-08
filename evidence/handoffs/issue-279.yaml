@@ -1,0 +1,65 @@
+issue: 279
+baseCommit: 7ee04f202054b39f47f504b1a4125e6598e59eae
+status: verified
+asOfUtc: "2026-11-08T15:11:38.000Z"
+inputs:
+  - issue: 275
+    acceptedMergeCommit: 7ee04f202054b39f47f504b1a4125e6598e59eae
+    artifact: evidence/handoffs/issue-275.yaml
+    sha256: 72ff5e79b0cd9fa840d006c222fb86ef72a6adc491570b0df1c44faf0454dc9a
+outputs:
+  - artifact: Dockerfile
+    sha256: c1bcb88740cfe6a1ae49735f868a77f97451e17fc30784ca0878f53554fad128
+    consumers:
+      - 13
+      - 278
+  - artifact: docs/operations/runtime-images.md
+    sha256: 182359f1f631d111c970afc847e2edbef1b687c9159e2436520083a1cffb6a95
+    consumers:
+      - 13
+      - 278
+  - artifact: tests/compose/topology.test.mjs
+    sha256: 6f0727b485bcfe6c085f51e12a4e8c496f4811ecf1e83fda95f217a68fbc8ac4
+    consumers:
+      - 13
+  - artifact: evidence/security/cve-2026-78661-otel-determinism.json
+    sha256: 1de5348fbb4750a86a1847e38d5d363bda466239cf31cbc232a5a3bf3c8278a9
+    consumers:
+      - 278
+verification:
+  - command: >-
+      docker buildx build --builder coffee-platform-mtu
+      --build-arg OTEL_COLLECTOR_IMAGE=<pinned grafana/alloy> --target otel-collector
+      --platform linux/amd64 --provenance=mode=min
+      --output type=oci,source-date-epoch=0,rewrite-timestamp=true .
+    result: >-
+      PASS: two independent builds produced identical image manifest
+      sha256:3ecc37b655ef9c7cbdeb533920821d4ff58fe64f233982233f6728dd33b55f64
+      and config sha256:9b413a18b9c793969aa3d81d6bb7f0667df1575b697cb1da2fb5e6a18f7e2a33
+    artifact: evidence/security/cve-2026-78661-otel-determinism.json
+  - command: docker create + docker cp <image>:/usr/bin/alloy && sha256sum
+    result: >-
+      PASS: usr/bin/alloy stays
+      f56afc1efdc92a13ee9c90eb5f1327bf24e38a7f1a1b3b24c504ea51db252606,
+      совпадает с proof из #278
+  - command: node --test --test-name-pattern='otel-collector layer removes volatile dpkg state' tests/compose/topology.test.mjs
+    result: PASS
+  - command: pnpm exec tsc -b --pretty false
+    result: passed
+  - command: pnpm exec prettier --check Dockerfile docs/operations/runtime-images.md tests/compose/topology.test.mjs
+    result: passed
+  - command: pnpm exec oxlint --type-aware --deny-warnings tests/compose/topology.test.mjs
+    result: passed
+  - command: git diff --check
+    result: passed
+limitations:
+  - >-
+    Issue доказывает детерминизм otel image identity; сам G12 PASS проверяется в #278,
+    который владеет proof CVE-2026-78661 и после merge этого issue перепривязывает
+    image identity к стабильным digest.
+  - >-
+    Повторная сборка проверена на текущем pinned base; при смене base или пакетов
+    digest изменится и должен быть перепроверен тем же двумя сборками.
+  - >-
+    apt CVE-2026-109518 остаётся закрытым удалением apt/libapt-pkg6.0t64; состав
+    остальных пакетов и Alloy binary не менялись.
