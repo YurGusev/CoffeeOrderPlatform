@@ -80,7 +80,7 @@ const CVE_78661_PRODUCTS = Object.freeze({
   prometheus: "prom/prometheus",
 });
 export const CVE_78661_PROOF_SHA256 =
-  "488d3d1a0218e81017917549df3fb7824b2a5e370d37e94170ec72e024d44259";
+  "7de1f821bfd697d66ae93da77776848e2d49a2e1665a55a9d2be3499f91a9b11";
 
 export async function readCve78661Proof(candidateRoot) {
   const bytes = await readRegular(

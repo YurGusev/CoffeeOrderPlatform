@@ -37,7 +37,11 @@ outputs:
     consumers:
       - 13
   - artifact: evidence/security/cve-2026-78661.json
-    sha256: 488d3d1a0218e81017917549df3fb7824b2a5e370d37e94170ec72e024d44259
+    sha256: 7de1f821bfd697d66ae93da77776848e2d49a2e1665a55a9d2be3499f91a9b11
+    consumers:
+      - 13
+  - artifact: evidence/security/cve-2026-78661-otel-rebind.json
+    sha256: b8cc355d30165bb478a4ffbdea5808f47897848b93a89249f8d12d6373f0600f
     consumers:
       - 13
   - artifact: scripts/check-toolchain-versions.mjs
