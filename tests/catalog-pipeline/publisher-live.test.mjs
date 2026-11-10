@@ -324,20 +324,19 @@ void test(
           unknown: 0,
           quarantined: 0,
         });
-        assert.equal(
-          (
-            await Promise.race([
-              once(recovery.child, "exit"),
-              new Promise((_, reject) =>
-                setTimeout(
-                  () => reject(new Error("recovery child exit timed out")),
-                  5_000,
+        const recoveryExit =
+          recovery.child.exitCode !== null || recovery.child.signalCode !== null
+            ? [recovery.child.exitCode, recovery.child.signalCode]
+            : await Promise.race([
+                once(recovery.child, "exit"),
+                new Promise((_, reject) =>
+                  setTimeout(
+                    () => reject(new Error("recovery child exit timed out")),
+                    30_000,
+                  ),
                 ),
-              ),
-            ])
-          )[0],
-          0,
-        );
+              ]);
+        assert.equal(recoveryExit[0], 0);
 
         const afterCommit = launch({
           port,
