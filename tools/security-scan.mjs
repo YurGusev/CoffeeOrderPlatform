@@ -3079,6 +3079,7 @@ export async function runSecurityScan({
   lockPath = SCAN_LOCK,
 } = {}) {
   const scanDeadlineAt = clock() + G12_SCAN_BUDGET_MS;
+  const runStartedAt = clock();
   let identity;
   let policy;
   let temporary;
@@ -3864,9 +3865,7 @@ export async function runSecurityScan({
         };
       }
     }
-    finishTiming();
   } catch (error) {
-    finishTiming();
     if (Array.isArray(error?.completedReports))
       result.reports.push(...error.completedReports);
     const recordedTemporaryCleanupFailure =
@@ -3889,6 +3888,7 @@ export async function runSecurityScan({
       };
   } finally {
     cleaning = true;
+    markStage("cleanup");
     let containerCleanupFailed = false;
     for (const spec of [...containerCandidates]
       .reverse()
@@ -4011,6 +4011,7 @@ export async function runSecurityScan({
     result.findings = summarizeFindings(result.reports);
     process.removeListener("SIGINT", onInt);
     process.removeListener("SIGTERM", onTerm);
+    markStage("evidence-finalization");
   }
   if (outputDir && isAbsolute(outputDir) && result.runId) {
     try {
@@ -4051,11 +4052,17 @@ export async function runSecurityScan({
           join(artifactDir, "checksums.json"),
           Buffer.from(`${JSON.stringify(checksums, null, 2)}\n`),
         );
+      finishTiming();
+      result.totalDurationMs = Math.max(0, clock() - runStartedAt);
       await writeResult(outputDir, result);
     } catch {
       result.status = "FAIL";
       result.code = "EVIDENCE_WRITE_FAILED";
     }
+  }
+  if (result.timings.at(-1)?.stage !== "evidence-finalization") {
+    finishTiming();
+    result.totalDurationMs = Math.max(0, clock() - runStartedAt);
   }
   return result;
 }

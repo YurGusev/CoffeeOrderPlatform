@@ -3467,6 +3467,13 @@ void test("G12 builds product images, records pinned upstream identity, and fail
   assert.ok(
     result.timings.some((entry) => entry.stage === "product-image-build"),
   );
+  assert.ok(result.timings.some((entry) => entry.stage === "cleanup"));
+  assert.ok(
+    result.timings.some((entry) => entry.stage === "evidence-finalization"),
+  );
+  assert.ok(
+    Number.isInteger(result.totalDurationMs) && result.totalDurationMs >= 0,
+  );
   assert.ok(
     result.timings.every(
       (entry) =>
