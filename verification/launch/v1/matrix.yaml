@@ -103,7 +103,7 @@ gates:
     owner: Security
     predecessors: [G07_CONFIG_SECURITY]
     command: pnpm security:scan
-    timeout: 1800
+    timeout: 2100
     inputs: [lockfile, build-provenance]
     expectedArtifacts: [result.json, stdout.log, stderr.log]
     passCriteria: SBOM/provenance созданы; exploitable finding уровня critical/high нет

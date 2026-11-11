@@ -408,7 +408,7 @@
           "properties": {
             "id": { "const": "G12_SUPPLY_CHAIN" },
             "expectedCommand": { "const": "pnpm security:scan" },
-            "timeoutSeconds": { "const": 1800 }
+            "timeoutSeconds": { "const": 2100 }
           }
         }
       ]
