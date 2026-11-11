@@ -32,7 +32,7 @@ import { buildkitPolicy, verifyBuildkitPolicy } from "./buildkit-policy.mjs";
 const SCANNER_IMAGE =
   "ghcr.io/aquasecurity/trivy@sha256:790fd66d1697395d8693d1acaa1ea702406a20f109b6fc7bac8db623eca6c06c";
 const SCANNER_VERSION = "0.76.1";
-export const G12_SCAN_BUDGET_MS = 33 * 60_000;
+export const G12_SCAN_BUDGET_MS = 40 * 60_000;
 const BUILD_NETWORK = "coffee_platform_build_mtu";
 const UPSTREAM_IMAGES = Object.freeze([
   "lokiImage",

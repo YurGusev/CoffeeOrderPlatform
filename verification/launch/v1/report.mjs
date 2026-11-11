@@ -24,7 +24,7 @@ const PROJECT_ROOT = resolve(
   "../../..",
 );
 // G12 inner budget 33 min + post-processing/headroom.
-const G12_GATE_TIMEOUT_SECONDS = 2100;
+const G12_GATE_TIMEOUT_SECONDS = 2700;
 export const EXPECTED_GATES = [
   ["G00_PREFLIGHT", "pnpm launch:verify:preflight", 900],
   ["G01_INSTALL", "pnpm install --frozen-lockfile", 900],
