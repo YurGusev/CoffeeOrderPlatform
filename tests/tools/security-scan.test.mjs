@@ -158,6 +158,26 @@ void test("build snapshot retains committed modes, omits ignored files and detec
     verifyBuildInputSnapshot(snapshot),
     /BUILD_CONTEXT_CHANGED/u,
   );
+
+  const snapshotRoot077 = join(temporary, "snapshot-077");
+  await mkdir(snapshotRoot077);
+  const priorUmask = process.umask(0o077);
+  let snapshot077;
+  try {
+    snapshot077 = await createBuildInputSnapshot({
+      candidateRoot,
+      candidateSha,
+      temporary: snapshotRoot077,
+    });
+  } finally {
+    process.umask(priorUmask);
+  }
+  assert.equal(snapshot077.extractedTreeSha256, snapshot.extractedTreeSha256);
+  assert.equal(
+    (await stat(join(snapshot077.contextPath, "config", "platform.yaml")))
+      .mode & 0o777,
+    0o644,
+  );
 });
 
 void test("G12 accepts Buildx mode=min metadata shape and requires statement subject to match", () => {
@@ -3442,6 +3462,19 @@ void test("G12 builds product images, records pinned upstream identity, and fail
     `${result.code} ${fakeError?.message ?? ""} ${fakeError?.stack ?? ""}`,
   );
   assert.equal(result.code, "G12_SCAN_CLEAN");
+  assert.ok(Array.isArray(result.timings));
+  assert.ok(result.timings.length > 0);
+  assert.ok(
+    result.timings.some((entry) => entry.stage === "product-image-build"),
+  );
+  assert.ok(
+    result.timings.every(
+      (entry) =>
+        typeof entry.stage === "string" &&
+        Number.isInteger(entry.durationMs) &&
+        entry.durationMs >= 0,
+    ),
+  );
   assert.equal(
     databaseFullReads - readsBefore,
     4,

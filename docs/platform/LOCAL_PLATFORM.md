@@ -67,6 +67,14 @@ state volume, OCI GC/parallelism config и effective GC policy worker.
 нужен `rm --keep-state` и тот же node/state volume. Произвольный `docker build`
 может использовать встроенный builder; canonical entrypoint — `pnpm image:build`.
 
+Практически это означает: не удалять контейнер builder через `docker rm -f`;
+пересоздавать только `docker buildx rm --keep-state coffee-platform-mtu`, затем
+создавать заново и проверять, что используется тот же state volume
+`buildx_buildkit_coffee-platform-mtu0_state`. Если меняется сеть сборки (например,
+MTU `coffee_platform_build_mtu`), сначала сохранить state builder'а, затем
+пересоздать сеть; иначе G12 начинает с холодного кеша и может не уложиться в
+бюджет.
+
 G12 создаёт регистрацию в собственном временном Docker config через тот же
 генератор CLI arguments/TOML и тот же verifier перед прямыми OCI builds.
 Endpoint остаётся локальным `unix:///var/run/docker.sock`; socket не
