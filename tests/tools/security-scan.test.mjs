@@ -36,6 +36,7 @@ import {
   parseKafkaBaseIndex,
   runCommand,
   runSecurityScan,
+  G12_SCAN_BUDGET_MS,
   trivyArgs,
   trivyScanCommand,
   validateDatabaseMetadata,
@@ -3502,8 +3503,8 @@ void test("G12 builds product images, records pinned upstream identity, and fail
         ["vulnerability-database", "java-database"].includes(kind),
       ),
     [
-      { kind: "vulnerability-database", timeoutMs: 30 * 60_000 },
-      { kind: "java-database", timeoutMs: 25 * 60_000 },
+      { kind: "vulnerability-database", timeoutMs: G12_SCAN_BUDGET_MS },
+      { kind: "java-database", timeoutMs: G12_SCAN_BUDGET_MS - 5 * 60_000 },
     ],
   );
   assert.ok(
@@ -3512,7 +3513,13 @@ void test("G12 builds product images, records pinned upstream identity, and fail
         ({ kind }) =>
           !["vulnerability-database", "java-database"].includes(kind),
       )
-      .every(({ timeoutMs }) => timeoutMs === undefined),
+      .every(
+        ({ timeoutMs }) =>
+          Number.isInteger(timeoutMs) &&
+          timeoutMs > 0 &&
+          timeoutMs <= G12_SCAN_BUDGET_MS,
+      ),
+    "non-DB commands inherit the remaining scan budget instead of the 600 s default",
   );
   assert.deepEqual(
     trivyRunProfiles.filter((run) =>
@@ -4435,7 +4442,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
   mismatchDigestReference = null;
 
   fakeNow = now;
-  databaseAdvanceMs = 30 * 60_000;
+  databaseAdvanceMs = G12_SCAN_BUDGET_MS;
   const exhaustedTimeoutStart = trivyRunTimeouts.length;
   const exhaustedDatabaseStart = trivyRunNetworks.filter((run) =>
     ["vulnerability-database", "java-database"].includes(run.kind),
@@ -4465,7 +4472,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
       .filter(({ kind }) =>
         ["vulnerability-database", "java-database"].includes(kind),
       ),
-    [{ kind: "vulnerability-database", timeoutMs: 30 * 60_000 }],
+    [{ kind: "vulnerability-database", timeoutMs: G12_SCAN_BUDGET_MS }],
   );
   assert.equal(
     trivyRunNetworks.filter((run) =>

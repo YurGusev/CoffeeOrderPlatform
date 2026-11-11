@@ -32,7 +32,7 @@ import { buildkitPolicy, verifyBuildkitPolicy } from "./buildkit-policy.mjs";
 const SCANNER_IMAGE =
   "ghcr.io/aquasecurity/trivy@sha256:790fd66d1697395d8693d1acaa1ea702406a20f109b6fc7bac8db623eca6c06c";
 const SCANNER_VERSION = "0.76.1";
-const G12_SCAN_BUDGET_MS = 30 * 60_000;
+export const G12_SCAN_BUDGET_MS = 33 * 60_000;
 const BUILD_NETWORK = "coffee_platform_build_mtu";
 const UPSTREAM_IMAGES = Object.freeze([
   "lokiImage",
@@ -3191,9 +3191,13 @@ export async function runSecurityScan({
       return Promise.reject(
         Object.assign(new Error("INTERRUPTED"), { code: "INTERRUPTED" }),
       );
+    const bounded = {
+      ...options,
+      timeoutMs: options.timeoutMs ?? Math.max(1, scanDeadlineAt - clock()),
+    };
     if (command === "docker" && args[0] === "run")
-      return runOwnedContainer(args, options);
-    return run(command, args, { ...options, dockerConfig, onChild });
+      return runOwnedContainer(args, bounded);
+    return run(command, args, { ...bounded, dockerConfig, onChild });
   };
   const runDatabaseDownload = async (args) => {
     const timeoutMs = scanDeadlineAt - clock();

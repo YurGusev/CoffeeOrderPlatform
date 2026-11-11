@@ -23,6 +23,8 @@ const PROJECT_ROOT = resolve(
   dirname(fileURLToPath(import.meta.url)),
   "../../..",
 );
+// G12 inner budget 33 min + post-processing/headroom.
+const G12_GATE_TIMEOUT_SECONDS = 2100;
 export const EXPECTED_GATES = [
   ["G00_PREFLIGHT", "pnpm launch:verify:preflight", 900],
   ["G01_INSTALL", "pnpm install --frozen-lockfile", 900],
@@ -40,7 +42,7 @@ export const EXPECTED_GATES = [
     "pnpm versions:check && pnpm config:check && pnpm security:secrets",
     900,
   ],
-  ["G12_SUPPLY_CHAIN", "pnpm security:scan", 1800],
+  ["G12_SUPPLY_CHAIN", "pnpm security:scan", G12_GATE_TIMEOUT_SECONDS],
   [
     "G08_MIGRATIONS",
     "pnpm test:migrations:clean && pnpm test:migrations:forward",
