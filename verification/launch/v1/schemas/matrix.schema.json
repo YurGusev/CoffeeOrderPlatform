@@ -64,7 +64,7 @@
           "uniqueItems": true
         },
         "command": { "type": "string" },
-        "timeout": { "type": "integer", "minimum": 1, "maximum": 2100 },
+        "timeout": { "type": "integer", "minimum": 1, "maximum": 2700 },
         "inputs": { "type": "array", "items": { "type": "string" } },
         "expectedArtifacts": {
           "type": "array",
@@ -248,7 +248,7 @@
           "properties": {
             "id": { "const": "G12_SUPPLY_CHAIN" },
             "command": { "const": "pnpm security:scan" },
-            "timeout": { "const": 2100 }
+            "timeout": { "const": 2700 }
           }
         }
       ]

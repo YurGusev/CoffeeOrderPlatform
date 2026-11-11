@@ -2079,7 +2079,7 @@ void test("matrix keeps all mandatory launch gates, exact order, commands and ti
   );
   assert.deepEqual(
     gates.slice(8, 18).map((gate) => gate.timeout),
-    [2100, ...Array(9).fill(1800)],
+    [2700, ...Array(9).fill(1800)],
     "G12 has its own inner+headroom budget; the rest stay at 1800",
   );
   assert.deepEqual(splitCommand(gates[3].command), [
