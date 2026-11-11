@@ -1202,7 +1202,7 @@ export async function createBuildInputSnapshot({
     await archiveHandle.close();
   }
   await mkdir(contextPath, { mode: 0o700 });
-  await run("tar", ["-xf", archivePath, "-C", contextPath], {
+  await run("tar", ["-xpf", archivePath, "-C", contextPath], {
     timeoutMs: 120_000,
     onChild,
   });
@@ -3101,6 +3101,7 @@ export async function runSecurityScan({
   lockPath = SCAN_LOCK,
 } = {}) {
   const scanDeadlineAt = clock() + G12_SCAN_BUDGET_MS;
+  const runStartedAt = clock();
   let identity;
   let policy;
   let temporary;
@@ -3250,8 +3251,27 @@ export async function runSecurityScan({
     failure: null,
     cleanupFailures: [],
     imageCleanup: [],
+    timings: [],
   };
   let stage = "input-validation";
+  let stageStartedAt = clock();
+  const markStage = (name) => {
+    const now = clock();
+    result.timings.push({
+      stage,
+      durationMs: Math.max(0, now - stageStartedAt),
+    });
+    stage = name;
+    stageStartedAt = now;
+  };
+  const finishTiming = () => {
+    const now = clock();
+    result.timings.push({
+      stage,
+      durationMs: Math.max(0, now - stageStartedAt),
+    });
+    stageStartedAt = now;
+  };
   let kafkaBuild = null;
   let storageHelperBuild = null;
   let grafanaBuild = null;
@@ -3311,7 +3331,7 @@ export async function runSecurityScan({
     result.candidateSha = identity.context.candidateSha;
     if (stopped) fail("INTERRUPTED");
     const tempRoot = await securityScanTempRoot();
-    stage = "lock-acquisition";
+    markStage("lock-acquisition");
     lockHandle = await open(
       lockPath,
       constants.O_CREAT |
@@ -3332,7 +3352,7 @@ export async function runSecurityScan({
       mkdir(cacheDir, { mode: 0o700 }),
       mkdir(inputDir, { mode: 0o700 }),
     ]);
-    stage = "registry-credentials";
+    markStage("registry-credentials");
     const registryEnv = Object.fromEntries(
       Object.entries(process.env).filter(
         ([name]) =>
@@ -3345,7 +3365,7 @@ export async function runSecurityScan({
       outputDir: dockerConfig,
       env: registryEnv,
     });
-    stage = "source-preparation";
+    markStage("source-preparation");
     await prepareBuildxRegistration(
       dockerConfig,
       runBounded,
@@ -3364,7 +3384,7 @@ export async function runSecurityScan({
     });
     if (sourceSnapshot.sourceTreeSha !== identity.environment.treeSha)
       fail("CANDIDATE_TREE_MISMATCH");
-    stage = "kafka-base-index";
+    markStage("kafka-base-index");
     await freeSpace(outputRoot, policy, statfsFn);
     const kafkaBaseMaterial = await inspectBaseMaterial({
       sourceRef: validated.toolchain.kafkaImage,
@@ -3372,28 +3392,28 @@ export async function runSecurityScan({
       outputRoot,
       run: runBounded,
     });
-    stage = "storage-helper-base-index";
+    markStage("storage-helper-base-index");
     const storageHelperBaseMaterial = await inspectBaseMaterial({
       sourceRef: validated.toolchain.nodeImage,
       target: "storage-helper",
       outputRoot,
       run: runBounded,
     });
-    stage = "grafana-base-index";
+    markStage("grafana-base-index");
     const grafanaBaseMaterial = await inspectBaseMaterial({
       sourceRef: validated.toolchain.grafanaImage,
       target: "grafana",
       outputRoot,
       run: runBounded,
     });
-    stage = "otel-collector-base-index";
+    markStage("otel-collector-base-index");
     const otelCollectorBaseMaterial = await inspectBaseMaterial({
       sourceRef: validated.toolchain.otelCollectorImage,
       target: "otel-collector",
       outputRoot,
       run: runBounded,
     });
-    stage = "keycloak-base-index";
+    markStage("keycloak-base-index");
     const keycloakBaseMaterial = {
       distribution: await inspectBaseMaterial({
         sourceRef: validated.toolchain.keycloakDistributionImage,
@@ -3408,7 +3428,7 @@ export async function runSecurityScan({
         run: runBounded,
       }),
     };
-    stage = "grafana-plugins";
+    markStage("grafana-plugins");
     const vendorPlugins = await prepareGrafanaPlugins({
       toolchain: validated.toolchain,
       temporary,
@@ -3419,7 +3439,7 @@ export async function runSecurityScan({
     const scannerImage = SCANNER_IMAGE;
     await freeSpace(outputRoot, policy, statfsFn);
     await freeSpace(temporary, policy, statfsFn);
-    stage = "scanner-image-load";
+    markStage("scanner-image-load");
     scannerId = await inspectImageId(runBounded, scannerImage);
     if (scannerId === null) {
       const ownership = { reference: SCANNER_IMAGE, imageId: null };
@@ -3452,7 +3472,7 @@ export async function runSecurityScan({
       !scannerDigests.includes(SCANNER_IMAGE.replace(/:[^/@]+@/u, "@"))
     )
       fail("SCANNER_IMAGE_DIGEST_MISMATCH");
-    stage = "scanner-validation";
+    markStage("scanner-validation");
     const version = await runBounded(
       "docker",
       [
@@ -3506,7 +3526,7 @@ export async function runSecurityScan({
       "1",
       "image",
     ];
-    stage = "vulnerability-database";
+    markStage("vulnerability-database");
     await freeSpace(temporary, policy, statfsFn);
     await freeSpace(outputRoot, policy, statfsFn);
     await runDatabaseDownload([
@@ -3526,7 +3546,7 @@ export async function runSecurityScan({
     const databaseFingerprints = initialDatabases.fingerprints;
     await freeSpace(temporary, policy, statfsFn);
     await freeSpace(outputRoot, policy, statfsFn);
-    stage = "manifest-scan";
+    markStage("manifest-scan");
     const manifestReports = await scanTarget({
       name: "lockfile",
       inputType: "fs",
@@ -3631,7 +3651,7 @@ export async function runSecurityScan({
       if (operationError) throw operationError;
     };
 
-    stage = "product-image-build";
+    markStage("product-image-build");
     await buildProductImages({
       identity,
       toolchain: validated.toolchain,
@@ -3649,24 +3669,24 @@ export async function runSecurityScan({
       keycloakBaseMaterial,
       vendorPlugins,
       onValidatedImage: async (image) => {
-        stage = "image-scan";
+        markStage("image-scan");
         await scanValidatedImage(image);
-        stage = "product-image-build";
+        markStage("product-image-build");
       },
     });
-    stage = "upstream-image-load";
+    markStage("upstream-image-load");
     await loadUpstreamImages({
       toolchain: validated.toolchain,
       run: runBounded,
       onChild,
       ownedImages,
       onValidatedImage: async (image) => {
-        stage = "image-scan";
+        markStage("image-scan");
         await scanValidatedImage(image);
-        stage = "upstream-image-load";
+        markStage("upstream-image-load");
       },
     });
-    stage = "vulnerability-db-final-check";
+    markStage("vulnerability-db-final-check");
     await assertDatabasesUnchanged({
       cacheDir,
       clock,
@@ -3689,7 +3709,7 @@ export async function runSecurityScan({
       fail("SCAN_REPORT_SET_INCOMPLETE");
     if (result.provenance) result.provenance.status = "PASS";
     result.findings = summarizeFindings(result.reports);
-    stage = "finding-evaluation";
+    markStage("finding-evaluation");
     if (!grafanaBuild) fail("GRAFANA_ARTIFACT_MISSING");
     const grafanaReportBytes = await readRegular(
       join(outputRoot, "grafana.vulnerabilities.json"),
@@ -3893,6 +3913,7 @@ export async function runSecurityScan({
       };
   } finally {
     cleaning = true;
+    markStage("cleanup");
     let containerCleanupFailed = false;
     for (const spec of [...containerCandidates]
       .reverse()
@@ -4019,6 +4040,7 @@ export async function runSecurityScan({
     result.findings = summarizeFindings(result.reports);
     process.removeListener("SIGINT", onInt);
     process.removeListener("SIGTERM", onTerm);
+    markStage("evidence-finalization");
   }
   if (outputDir && isAbsolute(outputDir) && result.runId) {
     try {
@@ -4059,11 +4081,17 @@ export async function runSecurityScan({
           join(artifactDir, "checksums.json"),
           Buffer.from(`${JSON.stringify(checksums, null, 2)}\n`),
         );
+      finishTiming();
+      result.totalDurationMs = Math.max(0, clock() - runStartedAt);
       await writeResult(outputDir, result);
     } catch {
       result.status = "FAIL";
       result.code = "EVIDENCE_WRITE_FAILED";
     }
+  }
+  if (result.timings.at(-1)?.stage !== "evidence-finalization") {
+    finishTiming();
+    result.totalDurationMs = Math.max(0, clock() - runStartedAt);
   }
   return result;
 }
