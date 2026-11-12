@@ -136,6 +136,18 @@ const { Client } = pg;
 
 const ROOT = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const COMPOSE_FILE = join(ROOT, "compose.yaml");
+const GATE_DEADLINE_ENV = "COFFEE_LAUNCH_GATE_DEADLINE_EPOCH_MS";
+const STANDALONE_WAIT_MS = 5 * 60_000;
+// Оставляем время на finally: compose down, удаление временных секретов и БД,
+// чтобы SIGKILL от runner не прервал очистку ресурсов.
+export const COMPOSE_SMOKE_CLEANUP_RESERVE_MS = 60_000;
+export function remainingGateWaitMs(fallbackMs = STANDALONE_WAIT_MS) {
+  const raw = process.env[GATE_DEADLINE_ENV];
+  if (raw === undefined) return fallbackMs;
+  const deadline = Number(raw);
+  if (!Number.isSafeInteger(deadline) || deadline <= 0) return fallbackMs;
+  return Math.max(1, deadline - Date.now() - COMPOSE_SMOKE_CLEANUP_RESERVE_MS);
+}
 const BOOTSTRAP = join(ROOT, "tools/config-bootstrap/index.mjs");
 const SECRETS_TMPFS_ROOT = "/dev/shm";
 const EXTERNAL_POSTGRES_NETWORK = "coffee_postgres_data";
@@ -3804,7 +3816,10 @@ async function runCustomerIntegrationProof(
   }
 }
 
-async function waitForDockerHealthy(container, timeoutMs = 30_000) {
+async function waitForDockerHealthy(
+  container,
+  timeoutMs = remainingGateWaitMs(),
+) {
   const deadline = Date.now() + timeoutMs;
   let status = "unknown";
   while (Date.now() < deadline) {
@@ -3828,7 +3843,7 @@ async function waitForDatabaseProofReady(
   container,
   admin,
   databaseName = "coffee_platform_customer",
-  timeoutMs = 60_000,
+  timeoutMs = remainingGateWaitMs(),
 ) {
   const deadline = Date.now() + timeoutMs;
   let postmasterStart;
@@ -3894,7 +3909,10 @@ async function createPostgresClient(connectionString) {
   }
 }
 
-async function waitForPostgresClient(connectionString, timeoutMs = 60_000) {
+async function waitForPostgresClient(
+  connectionString,
+  timeoutMs = remainingGateWaitMs(),
+) {
   const deadline = Date.now() + timeoutMs;
   let lastError;
   while (Date.now() < deadline) {
@@ -6032,7 +6050,7 @@ let inbox = inboxModule.createSqlInboxStore(database, inboxOptions);
 let outbox = outboxModule.createSqlOutboxStore(database, outboxOptions);
 let ownerWrite = ownerModule.defineStatement(database, 'INSERT INTO orders.delivery_live_owner_effects (message_id, aggregate_ref, effect_value, applied_at) VALUES ($1, $2, $3, $4::timestamptz)');
 const countRows = ownerModule.defineStatement(database, 'SELECT (SELECT count(*)::int FROM orders.delivery_live_owner_effects WHERE aggregate_ref = $1) AS owner_count, (SELECT count(*)::int FROM orders.delivery_live_inbox_messages WHERE message_id = ANY($2::text[])) AS inbox_count, (SELECT count(*)::int FROM orders.delivery_live_outbox_messages WHERE message_id = ANY($2::text[])) AS outbox_count, (SELECT count(*)::int FROM orders.delivery_live_inbox_quarantine WHERE reason = $3 AND envelope = $4::jsonb) AS malformed_count, (SELECT count(*)::int FROM orders.delivery_live_inbox_quarantine WHERE reason = $5 AND message_id = $6) AS conflict_count');
-const waitFor = async (predicate, timeoutMs = 15000) => {
+const waitFor = async (predicate, timeoutMs = remainingGateWaitMs()) => {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     if (await predicate()) return;
@@ -6607,7 +6625,7 @@ async function runKafkaBlackholeProof(
   let proofError;
   let restoreError;
   let evidence;
-  const waitForKafkaApi = async (timeoutMs = 30_000) => {
+  const waitForKafkaApi = async (timeoutMs = remainingGateWaitMs()) => {
     const deadline = Date.now() + timeoutMs;
     let lastError;
     while (Date.now() < deadline) {
@@ -6772,7 +6790,7 @@ async function assertReadiness(
       secretsDir,
       runtime,
       200,
-      10_000,
+      remainingGateWaitMs(),
       composeFile,
     );
     runCompose(
@@ -7213,7 +7231,7 @@ async function restartBrowserFixtureCustomerService(
     secretsDir,
     "customer-service",
     200,
-    30_000,
+    remainingGateWaitMs(),
     composeFile,
   );
   assertOwnedRuntimeContainer(projectName, "customer-service", containerId);
@@ -7240,7 +7258,7 @@ async function waitForRuntimeReadiness(
   secretsDir,
   runtime,
   expected,
-  timeoutMs = 10_000,
+  timeoutMs = remainingGateWaitMs(),
   composeFile = COMPOSE_FILE,
 ) {
   const deadline = Date.now() + timeoutMs;
@@ -7286,7 +7304,7 @@ export async function waitForRollbackFacts(
   readFacts,
   predicate,
   description,
-  timeoutMs = 120_000,
+  timeoutMs = remainingGateWaitMs(),
   onTimeout,
 ) {
   const deadline = Date.now() + timeoutMs;
@@ -7821,7 +7839,7 @@ async function runMutationDisableRollbackProof({
     () => facts(true),
     (current) => current.guardedCardState === "OutOfSync",
     "INITIAL_B_DRIFT",
-    120_000,
+    remainingGateWaitMs(),
   );
   assert.equal(
     drifted.guardedCardState,
@@ -7874,7 +7892,7 @@ async function runMutationDisableRollbackProof({
         consumerName: "aroma-convergence-v1",
       }),
     "INITIAL_UNKNOWN_OUTCOME",
-    120_000,
+    remainingGateWaitMs(),
     (current) =>
       writeRollbackInitialUnknownTimeoutDiagnostic({
         launchIdentity,
@@ -8030,7 +8048,11 @@ async function runMutationDisableRollbackProof({
         "--force-recreate",
         "aroma-convergence",
       ],
-      { composeFile: disabledOverride, inherit: true, timeout: 90_000 },
+      {
+        composeFile: disabledOverride,
+        inherit: true,
+        timeout: remainingGateWaitMs(),
+      },
     );
     throwIfRollbackTerminationRequested();
     markDisabledReconcileSubstage("config-attestation");
@@ -8060,7 +8082,7 @@ async function runMutationDisableRollbackProof({
       secretsDir,
       "aroma-convergence",
       200,
-      30_000,
+      remainingGateWaitMs(),
       disabledOverride,
     );
     throwIfRollbackTerminationRequested();
@@ -8070,7 +8092,7 @@ async function runMutationDisableRollbackProof({
       secretsDir,
       "aroma-observer",
       200,
-      30_000,
+      remainingGateWaitMs(),
       disabledOverride,
     );
     throwIfRollbackTerminationRequested();
@@ -8279,7 +8301,11 @@ async function runMutationDisableRollbackProof({
         "--force-recreate",
         "aroma-convergence",
       ],
-      { composeFile: restoredOverride, inherit: true, timeout: 90_000 },
+      {
+        composeFile: restoredOverride,
+        inherit: true,
+        timeout: remainingGateWaitMs(),
+      },
     );
     throwIfRollbackTerminationRequested();
     verifyConvergenceImage(restoredOverride);
@@ -8288,7 +8314,7 @@ async function runMutationDisableRollbackProof({
       secretsDir,
       "aroma-convergence",
       200,
-      30_000,
+      remainingGateWaitMs(),
       restoredOverride,
     );
     throwIfRollbackTerminationRequested();
@@ -8434,7 +8460,7 @@ async function runMutationDisableRollbackProof({
         ),
       (card) => card.state === "InSync",
       "RESTORED_CARD_IN_SYNC",
-      120_000,
+      remainingGateWaitMs(),
       async (lastCard) => {
         const guardedCardFacts = await readRollbackGuardedCardFacts({
           port,
@@ -8582,7 +8608,7 @@ async function assertDatabaseProof(
     secretsDir,
     DATABASE_PROOF_RUNTIME,
     503,
-    10_000,
+    remainingGateWaitMs(),
     composeFile,
   );
   runDocker(["start", container]);
@@ -8592,7 +8618,7 @@ async function assertDatabaseProof(
     secretsDir,
     DATABASE_PROOF_RUNTIME,
     200,
-    10_000,
+    remainingGateWaitMs(),
     composeFile,
   );
   for (const path of ["/health/live", "/metrics"]) {
@@ -11322,7 +11348,7 @@ export async function runComposeSmoke({
             secretsDir,
             "orders-aroma-preparation",
             200,
-            30_000,
+            remainingGateWaitMs(),
             composeFile,
           );
         } catch (restoreError) {

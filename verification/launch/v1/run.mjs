@@ -741,6 +741,10 @@ export async function executeArgv(
   if (options.imageOwnershipPath)
     childEnv.COFFEE_LAUNCH_IMAGE_OWNERSHIP = options.imageOwnershipPath;
   childEnv.pnpm_config_verify_deps_before_run = "false";
+  if (Number.isSafeInteger(options.deadlineEpochMs))
+    childEnv.COFFEE_LAUNCH_GATE_DEADLINE_EPOCH_MS = String(
+      options.deadlineEpochMs,
+    );
   if (
     contextPath &&
     (argv.join(" ") === "pnpm launch:verify:preflight" ||
@@ -2169,6 +2173,7 @@ export async function runGate(
           dataTempDir,
           g16SignerPath:
             gate.id === "G16_AROMA_SANDBOX" ? g16SignerPath : undefined,
+          deadlineEpochMs: Date.now() + timeoutMs,
         },
       );
     } catch (error) {
