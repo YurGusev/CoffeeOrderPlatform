@@ -6,7 +6,11 @@ export function captureStdoutLogs(t) {
   const originalWrite = fs.write;
   t.mock.method(fs, "write", function (fd, chunk, ...args) {
     const result = Reflect.apply(originalWrite, this, [fd, chunk, ...args]);
-    if (fd === 1 && typeof chunk === "string") chunks.push(chunk);
+    if (fd === 1) {
+      if (typeof chunk === "string") chunks.push(chunk);
+      else if (Buffer.isBuffer(chunk) || chunk instanceof Uint8Array)
+        chunks.push(Buffer.from(chunk).toString("utf8"));
+    }
     return result;
   });
   return {

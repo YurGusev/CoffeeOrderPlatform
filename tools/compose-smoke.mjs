@@ -11130,7 +11130,7 @@ export async function runComposeSmoke({
             runtimeImages: rollbackRuntimeImages,
             kafkaImageId: verifiedKafka.imageId,
           };
-      } else if (options.recoveryProof && !browserHook) {
+      } else if (options.recoveryProof && (!browserHook || g14Browser)) {
         assert.ok(
           aromaCartProviderFixture,
           "recovery proof local provider fixture is missing",
