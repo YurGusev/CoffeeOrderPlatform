@@ -4747,15 +4747,20 @@ void test("G18 accepts a nullable startup wake only for the exact current cart r
 });
 
 void test("compose-smoke wait windows follow the launch gate deadline", async () => {
-  const { remainingGateWaitMs } = await import("../../tools/compose-smoke.mjs");
+  const { COMPOSE_SMOKE_CLEANUP_RESERVE_MS, remainingGateWaitMs } =
+    await import("../../tools/compose-smoke.mjs");
   const previous = process.env.COFFEE_LAUNCH_GATE_DEADLINE_EPOCH_MS;
   try {
     delete process.env.COFFEE_LAUNCH_GATE_DEADLINE_EPOCH_MS;
     assert.equal(remainingGateWaitMs(), 5 * 60_000);
-    const deadline = Date.now() + 42_000;
+    const deadline = Date.now() + COMPOSE_SMOKE_CLEANUP_RESERVE_MS + 42_000;
     process.env.COFFEE_LAUNCH_GATE_DEADLINE_EPOCH_MS = String(deadline);
     const remaining = remainingGateWaitMs();
     assert.ok(remaining > 40_000 && remaining <= 42_000);
+    process.env.COFFEE_LAUNCH_GATE_DEADLINE_EPOCH_MS = String(
+      Date.now() + COMPOSE_SMOKE_CLEANUP_RESERVE_MS - 1_000,
+    );
+    assert.equal(remainingGateWaitMs(), 1);
     process.env.COFFEE_LAUNCH_GATE_DEADLINE_EPOCH_MS = String(Date.now() - 1);
     assert.equal(remainingGateWaitMs(), 1);
     process.env.COFFEE_LAUNCH_GATE_DEADLINE_EPOCH_MS = "not-a-number";

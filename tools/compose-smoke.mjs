@@ -126,12 +126,15 @@ const ROOT = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const COMPOSE_FILE = join(ROOT, "compose.yaml");
 const GATE_DEADLINE_ENV = "COFFEE_LAUNCH_GATE_DEADLINE_EPOCH_MS";
 const STANDALONE_WAIT_MS = 5 * 60_000;
+// Оставляем время на finally: compose down, удаление временных секретов и БД,
+// чтобы SIGKILL от runner не прервал очистку ресурсов.
+export const COMPOSE_SMOKE_CLEANUP_RESERVE_MS = 60_000;
 export function remainingGateWaitMs(fallbackMs = STANDALONE_WAIT_MS) {
   const raw = process.env[GATE_DEADLINE_ENV];
   if (raw === undefined) return fallbackMs;
   const deadline = Number(raw);
   if (!Number.isSafeInteger(deadline) || deadline <= 0) return fallbackMs;
-  return Math.max(1, deadline - Date.now());
+  return Math.max(1, deadline - Date.now() - COMPOSE_SMOKE_CLEANUP_RESERVE_MS);
 }
 const BOOTSTRAP = join(ROOT, "tools/config-bootstrap/index.mjs");
 const SECRETS_TMPFS_ROOT = "/dev/shm";
