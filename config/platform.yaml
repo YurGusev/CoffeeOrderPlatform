@@ -199,7 +199,7 @@ platform:
     memorySwapMiB: 6144
     maxParallelism: 2
     reservedSpaceGiB: 2
-    maxUsedSpaceGiB: 12
+    maxUsedSpaceGiB: 18
     minFreeSpaceGiB: 12
     registryCaFile: /etc/ssl/certs/ca-certificates.crt
   containerLimits:
