@@ -196,7 +196,7 @@ Convergence helper удерживает periodic exporter до подтверж�
 
 Для изолированного G12/G14 можно задать системный `TMPDIR` на отдельном доступном
 хранилище; это operational locator временных файлов. G12 сохраняет требование
-20 GiB свободного места. G14 размещает там backing-файлы восьми disposable
+10 GiB свободного места (ниже GC-порога 12 GiB, чтобы тёплый кеш не блокировал гейт). G14 размещает там backing-файлы восьми disposable
 ext4 fixtures и backup-архивы; secret configs остаются в `/dev/shm`. Конечные
 TSDB/WAL volumes являются ограниченными ext4, NTFS не используется напрямую
 как TSDB filesystem. Production provisioning без fixture placement не меняется.
