@@ -729,7 +729,7 @@ void test("G12 binds storage helper to the Node base, receipt, index and image",
             cpu: 2,
             memoryMiB: 2048,
             parallel: 1,
-            minimumFreeDiskGiB: 20,
+            minimumFreeDiskGiB: 10,
             maximumDatabaseAgeHours: 24,
             approvedFixed: [],
             egressRepositories: [

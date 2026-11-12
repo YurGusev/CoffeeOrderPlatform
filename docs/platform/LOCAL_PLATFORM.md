@@ -96,7 +96,7 @@ config пользователя не изменяется.
 | nginx, прежний bound |   2 |                        512 МиБ |
 | BuildKit             |   4 | 5120 МиБ; memory+swap 6144 МиБ |
 
-BuildKit max-parallelism — 2; GC reserved/max/free targets — 2/10/40 ГиБ.
+BuildKit max-parallelism — 2; GC reserved/max/free targets — 2/12/12 ГиБ.
 Это targets очистки cache, не гарантия жёсткого disk quota. Broker heap и
 Node heap flags не меняются; контейнерный memory limit включает native memory,
 permission launcher и healthcheck вместе с основным процессом.

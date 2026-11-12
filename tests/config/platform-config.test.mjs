@@ -637,7 +637,7 @@ void test("G12 scanner policy is strict verification-only configuration", async 
     cpu: 2,
     memoryMiB: 2048,
     parallel: 1,
-    minimumFreeDiskGiB: 20,
+    minimumFreeDiskGiB: 10,
     maximumDatabaseAgeHours: 24,
     approvedFixed: ["CVE-2026-21728", "CVE-2026-28377"],
     egressRepositories: [
