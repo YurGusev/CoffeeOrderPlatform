@@ -10008,7 +10008,9 @@ export async function runComposeSmoke({
       assertVerifiedRuntimeImages({
         projectName,
         verifiedImages,
-        noBuild: options.noBuild,
+        // С опубликованным инвентарём edge-nginx уже лежит под тегом проекта
+        // запуска, поэтому проверяем именно его, а не локальный :local.
+        noBuild: launchImageInventory ? false : options.noBuild,
       });
     }
     throwIfRollbackTerminationRequested();

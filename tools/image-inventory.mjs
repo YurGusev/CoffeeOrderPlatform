@@ -327,7 +327,16 @@ export async function readLaunchImageInventory({
 }) {
   const path = imageInventoryPath(evidenceDir);
   const info = await lstat(path).catch(() => null);
-  if (info === null) return null;
+  if (info === null) {
+    // Если G12 в этом scope уже дал PASS-результат, инвентарь обязан быть:
+    // иначе proof-стеки, которые не сверяют G12-образ, тихо пересобрали бы его.
+    const gateResult = await lstat(
+      join(supplyChainDir(evidenceDir), "result.json"),
+    ).catch(() => null);
+    if (gateResult !== null) fail("IMAGE_INVENTORY_MISSING");
+    // Иного G12 в этом scope нет (например, дочерний run), сборка допустима.
+    return null;
+  }
   const environment = JSON.parse(
     await readFile(environmentFile ?? join(evidenceDir, "environment.json"), {
       encoding: "utf8",
