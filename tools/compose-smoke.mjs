@@ -1763,7 +1763,11 @@ export function assertPublishedRuntimeImages(inventory) {
  * Доказывает, что запущенные контейнеры используют именно опубликованные
  * G12-образы, а не пересобранные локально.
  */
-export function assertRuntimeContainersMatchInventory(projectName, inventory) {
+export function assertRuntimeContainersMatchInventory(
+  projectName,
+  inventory,
+  { requireComplete = true } = {},
+) {
   const expected = new Map(
     inventory.images.map((image) => [image.service, image.imageId]),
   );
@@ -1795,11 +1799,14 @@ export function assertRuntimeContainersMatchInventory(projectName, inventory) {
     );
     expected.delete(service);
   }
-  assert.equal(
-    expected.size,
-    0,
-    `runtime containers missing from the stack: ${[...expected.keys()].join(", ")}`,
-  );
+  // Целевые proof-стеки (--database-proof/--customer-proof/--aroma-*) поднимают
+  // только часть сервисов, поэтому полнота требуется лишь для полного стека.
+  if (requireComplete)
+    assert.equal(
+      expected.size,
+      0,
+      `runtime containers missing from the stack: ${[...expected.keys()].join(", ")}`,
+    );
 }
 
 async function writeStubSecret(
@@ -10061,7 +10068,14 @@ export async function runComposeSmoke({
     );
     throwIfRollbackTerminationRequested();
     if (launchImageInventory)
-      assertRuntimeContainersMatchInventory(projectName, launchImageInventory);
+      assertRuntimeContainersMatchInventory(projectName, launchImageInventory, {
+        requireComplete: !(
+          options.databaseProof ||
+          options.customerProof ||
+          options.aromaBindingProof ||
+          options.aromaCartProof
+        ),
+      });
     if (options.mutationDisableRollback) markRollbackStage("readiness");
     const rows =
       options.databaseProof ||

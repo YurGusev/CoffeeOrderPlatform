@@ -4364,6 +4364,27 @@ void test("G12 builds product images, records pinned upstream identity, and fail
     savedResult.imageInventory.sha256,
     createHash("sha256").update(inventoryBytes).digest("hex"),
   );
+  const { readLaunchImageInventory } =
+    await import("../../tools/image-inventory.mjs");
+  const launchInventoryInput = {
+    evidenceDir: context.evidenceDir,
+    context,
+    services: [...RUNTIME_NAMES, "edge-nginx"],
+  };
+  const boundInventory = await readLaunchImageInventory(launchInventoryInput);
+  assert.equal(
+    boundInventory.buildInputSha256,
+    imageInventory.buildInputSha256,
+  );
+  await writeFile(
+    join(outputDir, "artifacts/image-inventory.json"),
+    JSON.stringify({ ...imageInventory, candidateSha: "0".repeat(40) }),
+    { mode: 0o600 },
+  );
+  await assert.rejects(
+    readLaunchImageInventory(launchInventoryInput),
+    /IMAGE_INVENTORY/u,
+  );
   assert.ok(
     checksumInventory.some(
       (entry) =>

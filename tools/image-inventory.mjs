@@ -12,6 +12,7 @@ const SHA256 = /^[a-f0-9]{64}$/u;
 const GIT_SHA = /^[a-f0-9]{40}$/u;
 const PROJECT = /^[a-z0-9][a-z0-9_-]{0,62}$/u;
 const MAX_INVENTORY_BYTES = 256 * 1024;
+const MAX_GATE_RESULT_BYTES = 8 * 1024 * 1024;
 const INVENTORY_KEYS = [
   "schemaVersion",
   "gate",
@@ -208,6 +209,116 @@ export function serializeImageInventory(inventory) {
  * Отсутствие файла означает, что G12 ещё не публиковал образы: вызывающий
  * обязан собрать их сам (standalone/тестовый путь).
  */
+function supplyChainDir(evidenceDir) {
+  return join(evidenceDir, "gates/G12_SUPPLY_CHAIN/artifacts/supply-chain");
+}
+
+async function readEvidenceJson(path, maxBytes) {
+  const absolute = resolve(path);
+  if ((await realpath(absolute).catch(() => null)) !== absolute)
+    fail("IMAGE_INVENTORY_EVIDENCE_PATH_INVALID");
+  const info = await lstat(absolute).catch(() => null);
+  if (
+    !info?.isFile() ||
+    info.isSymbolicLink() ||
+    info.uid !== process.getuid() ||
+    (info.mode & 0o777) !== 0o600 ||
+    info.size < 1 ||
+    info.size > maxBytes
+  )
+    fail("IMAGE_INVENTORY_EVIDENCE_FILE_INVALID");
+  const handle = await open(
+    absolute,
+    constants.O_RDONLY | constants.O_NOFOLLOW,
+  );
+  try {
+    const opened = await handle.stat();
+    if (!opened.isFile() || opened.size !== info.size)
+      fail("IMAGE_INVENTORY_EVIDENCE_FILE_INVALID");
+    const bytes = await handle.readFile();
+    if (bytes.length !== info.size)
+      fail("IMAGE_INVENTORY_EVIDENCE_FILE_INVALID");
+    try {
+      return {
+        bytes,
+        value: JSON.parse(
+          new TextDecoder("utf-8", { fatal: true }).decode(bytes),
+        ),
+      };
+    } catch {
+      fail("IMAGE_INVENTORY_EVIDENCE_JSON_INVALID");
+    }
+  } finally {
+    await handle.close();
+  }
+}
+
+/**
+ * Сверяет инвентарь с независимо прочитанным evidence G12: PASS-результатом,
+ * его checksum-ссылкой и записями provenance для каждого образа. Инвентарь сам
+ * по себе не является доказательством — только согласие с этими файлами.
+ */
+async function verifyInventoryAgainstGateEvidence({
+  evidenceDir,
+  context,
+  environment,
+  inventory,
+  inventoryBytes,
+  services,
+  composeProject,
+}) {
+  const gateDir = supplyChainDir(evidenceDir);
+  const { value: result } = await readEvidenceJson(
+    join(gateDir, "result.json"),
+    MAX_GATE_RESULT_BYTES,
+  );
+  if (
+    result?.gate !== "G12_SUPPLY_CHAIN" ||
+    result?.status !== "PASS" ||
+    result?.code !== "G12_SCAN_CLEAN" ||
+    result?.runId !== context.runId ||
+    result?.candidateSha !== context.candidateSha ||
+    result?.provenance?.status !== "PASS" ||
+    result?.provenance?.sourceRevision !== context.candidateSha ||
+    result?.provenance?.treeSha !== environment.treeSha ||
+    result?.provenance?.configSha256 !== environment.configSha256 ||
+    result?.provenance?.toolchainVersionsSha256 !==
+      environment.toolchainVersionsSha256 ||
+    result?.provenance?.lockfileSha256 !== environment.lockfileSha256
+  )
+    fail("IMAGE_INVENTORY_GATE_RESULT_INVALID");
+  const reference = result?.imageInventory;
+  if (
+    !exactKeys(reference, ["path", "sha256", "sizeBytes"]) ||
+    reference.path !== IMAGE_INVENTORY_REFERENCE ||
+    reference.sha256 !== sha256(inventoryBytes) ||
+    reference.sizeBytes !== inventoryBytes.length
+  )
+    fail("IMAGE_INVENTORY_REFERENCE_INVALID");
+  const provenance = result?.provenance?.images;
+  if (!Array.isArray(provenance)) fail("IMAGE_INVENTORY_GATE_RESULT_INVALID");
+  for (const image of inventory.images) {
+    const records = provenance.filter(
+      (entry) => entry?.service === image.service,
+    );
+    if (
+      records.length !== 1 ||
+      records[0].imageId !== image.imageId ||
+      records[0].manifestDigest !== image.manifestDigest ||
+      records[0].platformManifestDigest !== image.platformManifestDigest ||
+      records[0].provenanceStatus !== "PASS" ||
+      records[0].metadataSha256 !== image.provenanceSha256 ||
+      records[0].attestationSha256 !== image.attestationSha256
+    )
+      fail("IMAGE_INVENTORY_PROVENANCE_MISMATCH");
+  }
+  if (
+    services.length !== inventory.images.length ||
+    composeProject !== inventory.composeProject
+  )
+    fail("IMAGE_INVENTORY_IMAGE_SET_INVALID");
+}
+
 export async function readLaunchImageInventory({
   evidenceDir,
   context,
@@ -228,15 +339,27 @@ export async function readLaunchImageInventory({
     environment?.dirty !== false
   )
     fail("IMAGE_INVENTORY_ENVIRONMENT_INVALID");
-  return readImageInventoryFile(path, {
+  const composeProject = context.resources?.composeProject;
+  const inventory = await readImageInventoryFile(path, {
     evidenceDir,
     expected: {
       context,
       environment,
       services,
-      composeProject: context.resources?.composeProject,
+      composeProject,
     },
   });
+  const inventoryBytes = await readFile(path);
+  await verifyInventoryAgainstGateEvidence({
+    evidenceDir,
+    context,
+    environment,
+    inventory,
+    inventoryBytes,
+    services,
+    composeProject,
+  });
+  return inventory;
 }
 
 export async function readImageInventoryFile(path, { expected, evidenceDir }) {
