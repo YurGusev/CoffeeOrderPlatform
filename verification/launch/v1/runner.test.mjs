@@ -4800,6 +4800,34 @@ void test("G04, G08, G09, G10, G11, G12, G13, G14, G17 and G18 forward the verif
   assert.equal(unit.exitCode, 53);
 });
 
+void test("gate children receive the absolute gate deadline in the environment", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "gate-deadline-env-"));
+  try {
+    const deadlineEpochMs = Date.now() + 60_000;
+    const result = await executeArgv(
+      [
+        process.execPath,
+        "-e",
+        "process.stdout.write(String(process.env.COFFEE_LAUNCH_GATE_DEADLINE_EPOCH_MS))",
+      ],
+      directory,
+      30_000,
+      join(directory, "stdout.log"),
+      join(directory, "stderr.log"),
+      null,
+      null,
+      { deadlineEpochMs },
+    );
+    assert.equal(result.exitCode, 0);
+    assert.equal(
+      await readFile(join(directory, "stdout.log"), "utf8"),
+      String(deadlineEpochMs),
+    );
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
 void test("G04 classifies changed critical source roots and enforces emitted-JS LCOV and no skipped unit tests", () => {
   const modules = [
     {

@@ -33,6 +33,16 @@ const SCANNER_IMAGE =
   "ghcr.io/aquasecurity/trivy@sha256:790fd66d1697395d8693d1acaa1ea702406a20f109b6fc7bac8db623eca6c06c";
 const SCANNER_VERSION = "0.76.1";
 export const G12_SCAN_BUDGET_MS = 40 * 60_000;
+export const G12_SCAN_RESERVE_MS = 5 * 60_000;
+const GATE_DEADLINE_ENV = "COFFEE_LAUNCH_GATE_DEADLINE_EPOCH_MS";
+export function scanBudgetMs(now = Date.now(), env = process.env) {
+  const raw = env[GATE_DEADLINE_ENV];
+  if (raw === undefined) return G12_SCAN_BUDGET_MS;
+  const deadline = Number(raw);
+  if (!Number.isSafeInteger(deadline) || deadline <= 0)
+    return G12_SCAN_BUDGET_MS;
+  return Math.max(1, deadline - now - G12_SCAN_RESERVE_MS);
+}
 const BUILD_NETWORK = "coffee_platform_build_mtu";
 const UPSTREAM_IMAGES = Object.freeze([
   "lokiImage",
@@ -3078,7 +3088,7 @@ export async function runSecurityScan({
   materializeRegistryCredentials = materializeBuildRegistryCredentials,
   lockPath = SCAN_LOCK,
 } = {}) {
-  const scanDeadlineAt = clock() + G12_SCAN_BUDGET_MS;
+  const scanDeadlineAt = clock() + scanBudgetMs(clock());
   const runStartedAt = clock();
   let identity;
   let policy;
