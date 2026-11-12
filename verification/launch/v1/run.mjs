@@ -698,6 +698,10 @@ export async function executeArgv(
   const start = Date.now();
   const childEnv = { ...process.env };
   childEnv.pnpm_config_verify_deps_before_run = "false";
+  if (Number.isSafeInteger(options.deadlineEpochMs))
+    childEnv.COFFEE_LAUNCH_GATE_DEADLINE_EPOCH_MS = String(
+      options.deadlineEpochMs,
+    );
   if (
     contextPath &&
     (argv.join(" ") === "pnpm launch:verify:preflight" ||
@@ -1984,6 +1988,7 @@ export async function runGate(
         stderrPath,
         contextPath,
         outputBudget,
+        { deadlineEpochMs: Date.now() + timeoutMs },
       );
     } catch (error) {
       run = {

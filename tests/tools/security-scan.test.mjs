@@ -37,6 +37,8 @@ import {
   runCommand,
   runSecurityScan,
   G12_SCAN_BUDGET_MS,
+  G12_SCAN_RESERVE_MS,
+  scanBudgetMs,
   trivyArgs,
   trivyScanCommand,
   validateDatabaseMetadata,
@@ -47,6 +49,7 @@ import {
   verifySlsaStatement,
   verifyKafkaBaseMaterialStatement,
 } from "../../tools/security-scan.mjs";
+import { loadMatrix } from "../../verification/launch/v1/run.mjs";
 import { RUNTIME_NAMES } from "../../packages/platform-config/src/index.ts";
 import {
   loadVerifiedGateImage,
@@ -5188,4 +5191,35 @@ void test("G12 builds product images, records pinned upstream identity, and fail
   assert.equal(productBuilds, buildsBeforeImageCleanupFailure + 1);
   assert.equal(imageCleanupFailure.reports.length, 4);
   assert.equal(imageCleanupFailure.provenance.status, "PARTIAL");
+});
+
+test("G12 scan budget derives from the launch gate deadline and keeps the reserve", () => {
+  assert.equal(scanBudgetMs(0, {}), G12_SCAN_BUDGET_MS);
+  assert.equal(
+    scanBudgetMs(0, { COFFEE_LAUNCH_GATE_DEADLINE_EPOCH_MS: "invalid" }),
+    G12_SCAN_BUDGET_MS,
+  );
+  const deadline = 3_000_000;
+  assert.equal(
+    scanBudgetMs(1_000_000, {
+      COFFEE_LAUNCH_GATE_DEADLINE_EPOCH_MS: String(deadline),
+    }),
+    deadline - 1_000_000 - G12_SCAN_RESERVE_MS,
+  );
+  assert.equal(
+    scanBudgetMs(deadline + 1, {
+      COFFEE_LAUNCH_GATE_DEADLINE_EPOCH_MS: String(deadline),
+    }),
+    1,
+  );
+});
+
+test("G12 gate timeout fits the standalone scan budget plus its reserve", async () => {
+  const { gates } = await loadMatrix();
+  const gate = gates.find(({ id }) => id === "G12_SUPPLY_CHAIN");
+  assert.ok(gate, "G12_SUPPLY_CHAIN must exist");
+  assert.ok(
+    gate.timeout * 1000 >= G12_SCAN_BUDGET_MS + G12_SCAN_RESERVE_MS,
+    `G12 timeout ${gate.timeout}s must cover scan ${G12_SCAN_BUDGET_MS}ms plus reserve ${G12_SCAN_RESERVE_MS}ms`,
+  );
 });

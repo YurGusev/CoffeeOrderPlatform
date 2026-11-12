@@ -3365,6 +3365,7 @@ void test("recovery proof preserves the body error when orders-aroma-preparation
           calls.push("readiness");
           if (readinessFails) throw readinessError;
         },
+        remainingGateWaitMs: () => 1_000,
       },
     );
     return { calls, promise };
@@ -4743,6 +4744,27 @@ void test("G18 accepts a nullable startup wake only for the exact current cart r
     false,
     "a changed Inbox envelope must fail even if its message identifiers match",
   );
+});
+
+void test("compose-smoke wait windows follow the launch gate deadline", async () => {
+  const { remainingGateWaitMs } = await import("../../tools/compose-smoke.mjs");
+  const previous = process.env.COFFEE_LAUNCH_GATE_DEADLINE_EPOCH_MS;
+  try {
+    delete process.env.COFFEE_LAUNCH_GATE_DEADLINE_EPOCH_MS;
+    assert.equal(remainingGateWaitMs(), 5 * 60_000);
+    const deadline = Date.now() + 42_000;
+    process.env.COFFEE_LAUNCH_GATE_DEADLINE_EPOCH_MS = String(deadline);
+    const remaining = remainingGateWaitMs();
+    assert.ok(remaining > 40_000 && remaining <= 42_000);
+    process.env.COFFEE_LAUNCH_GATE_DEADLINE_EPOCH_MS = String(Date.now() - 1);
+    assert.equal(remainingGateWaitMs(), 1);
+    process.env.COFFEE_LAUNCH_GATE_DEADLINE_EPOCH_MS = "not-a-number";
+    assert.equal(remainingGateWaitMs(), 5 * 60_000);
+  } finally {
+    if (previous === undefined)
+      delete process.env.COFFEE_LAUNCH_GATE_DEADLINE_EPOCH_MS;
+    else process.env.COFFEE_LAUNCH_GATE_DEADLINE_EPOCH_MS = previous;
+  }
 });
 
 void test("G18 initial-unknown timeout persists a run-bound private fact summary and preserves the timeout", async () => {
@@ -6225,6 +6247,7 @@ void test("G18 fault is armed only after B health and D recovery GET release fol
           ]);
           return readCard();
         },
+        remainingGateWaitMs: () => 1_000,
         waitForRollbackFacts: (readFacts, predicate, description) => {
           assert.equal(description, "RESTORED_CARD_IN_SYNC");
           return waitForRollbackFacts(
