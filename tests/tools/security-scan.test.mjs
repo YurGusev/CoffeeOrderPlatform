@@ -19,7 +19,7 @@ import {
   writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import test from "node:test";
 import {
   adjudicateGrafanaFindings,
@@ -2325,6 +2325,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
   let lastProductLayoutPath;
   let lastUpstreamTarPath;
   const builtTags = new Set();
+  const publishedTagIds = new Map();
   const builtServices = new Set();
   const pulledRefs = new Set();
   const productOciExpectations = new Map();
@@ -2877,6 +2878,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
           digest: imageIndexDigest,
           size: nestedIndexBytes.length,
         };
+        metadata["containerimage.config.digest"] = configDigest;
         await writeFile(metadataPath, JSON.stringify(metadata));
         await mkdir(join(ociLayout, "blobs/sha256"), { recursive: true });
         await writeFile(
@@ -3076,7 +3078,17 @@ void test("G12 builds product images, records pinned upstream identity, and fail
         return "Name: coffee-platform-mtu\nDriver: docker-container\nName: coffee-platform-mtu0";
       }
       if (args[0] === "network" && args[1] === "inspect") return;
+      if (args[0] === "image" && args[1] === "ls") return "";
+      if (args[0] === "image" && args[1] === "load") {
+        const input = args[args.indexOf("--input") + 1];
+        const service = basename(input).replace(/\.publish\.tar$/u, "");
+        const tag = `${context.resources.composeProject}-${service}:latest`;
+        publishedTagIds.set(tag, configDigest);
+        return "Loaded image\n";
+      }
       if (args[0] === "image" && args[1] === "inspect") {
+        if (publishedTagIds.has(args.at(-1)))
+          return publishedTagIds.get(args.at(-1));
         if (args.includes("{{json .RepoDigests}}")) {
           const ref = args.at(-1).replace(/:[^/@]+@/u, "@");
           return JSON.stringify(
@@ -4468,7 +4480,53 @@ void test("G12 builds product images, records pinned upstream identity, and fail
   const checksumInventory = JSON.parse(
     await readFile(join(outputDir, "artifacts/checksums.json"), "utf8"),
   );
-  assert.equal(checksumInventory.length, 69);
+  assert.equal(checksumInventory.length, 70);
+  const inventoryBytes = await readFile(
+    join(outputDir, "artifacts/image-inventory.json"),
+    "utf8",
+  );
+  const imageInventory = JSON.parse(inventoryBytes);
+  assert.equal(imageInventory.gate, "G12_SUPPLY_CHAIN");
+  assert.equal(imageInventory.status, "PASS");
+  assert.equal(imageInventory.composeProject, context.resources.composeProject);
+  assert.equal(imageInventory.images.length, RUNTIME_NAMES.length + 1);
+  assert.deepEqual(
+    imageInventory.images.map((image) => image.service).sort(),
+    [...RUNTIME_NAMES, "edge-nginx"].sort(),
+  );
+  for (const image of imageInventory.images) {
+    assert.match(image.imageId, /^sha256:[a-f0-9]{64}$/u);
+    assert.equal(
+      image.tag,
+      `${context.resources.composeProject}-${image.service}:latest`,
+    );
+    assert.equal(publishedTagIds.get(image.tag), image.imageId);
+  }
+  assert.equal(
+    savedResult.imageInventory.sha256,
+    createHash("sha256").update(inventoryBytes).digest("hex"),
+  );
+  const { readLaunchImageInventory } =
+    await import("../../tools/image-inventory.mjs");
+  const launchInventoryInput = {
+    evidenceDir: context.evidenceDir,
+    context,
+    services: [...RUNTIME_NAMES, "edge-nginx"],
+  };
+  const boundInventory = await readLaunchImageInventory(launchInventoryInput);
+  assert.equal(
+    boundInventory.buildInputSha256,
+    imageInventory.buildInputSha256,
+  );
+  await writeFile(
+    join(outputDir, "artifacts/image-inventory.json"),
+    JSON.stringify({ ...imageInventory, candidateSha: "0".repeat(40) }),
+    { mode: 0o600 },
+  );
+  await assert.rejects(
+    readLaunchImageInventory(launchInventoryInput),
+    /IMAGE_INVENTORY/u,
+  );
   assert.ok(
     checksumInventory.some(
       (entry) =>

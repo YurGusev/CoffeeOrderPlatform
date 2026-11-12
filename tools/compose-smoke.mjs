@@ -97,6 +97,7 @@ import {
   readVerifiedRuntimeImages,
   removeVerifiedGateImage,
 } from "./verified-infrastructure-image.mjs";
+import { readLaunchImageInventory } from "./image-inventory.mjs";
 import {
   deriveRuntimeDatabaseTarget,
   verifyLaunchConfigBytes,
@@ -1320,7 +1321,8 @@ const DATABASE_PROOF_IMAGE = JSON.parse(
 ).postgresFixtureImage;
 const CUSTOMER_TEST_IMAGE =
   "node:26.8.1-trixie-slim@sha256:c0753125a3789977aefe869cbebccf70e3cfd7ea84ca48547458f02e4f1d7146";
-
+// Образы, которые G12 собирает один раз и публикует под тегами проекта запуска.
+const PUBLISHED_RUNTIME_SERVICES = Object.freeze([...RUNTIMES, "edge-nginx"]);
 const ROLLBACK_CONTAINER_SERVICES = new Set([
   ...RUNTIMES,
   "edge-nginx",
@@ -1742,6 +1744,77 @@ export function assertVerifiedRuntimeImages({
       `${service} image differs from the scanned G12 artifact`,
     );
   }
+}
+
+/**
+ * Проверяет, что опубликованные G12 образы действительно лежат в daemon под
+ * тегами проекта запуска: Compose запускает именно эти неизменяемые ID.
+ */
+export function assertPublishedRuntimeImages(inventory) {
+  for (const image of inventory.images) {
+    const actual = runDocker([
+      "image",
+      "inspect",
+      "--format",
+      "{{.Id}}",
+      image.tag,
+    ]).trim();
+    assert.equal(
+      actual,
+      image.imageId,
+      `${image.service} image is missing from the published G12 inventory`,
+    );
+  }
+}
+
+/**
+ * Доказывает, что запущенные контейнеры используют именно опубликованные
+ * G12-образы, а не пересобранные локально.
+ */
+export function assertRuntimeContainersMatchInventory(
+  projectName,
+  inventory,
+  { requireComplete = true } = {},
+) {
+  const expected = new Map(
+    inventory.images.map((image) => [image.service, image.imageId]),
+  );
+  const containerIds = runDocker([
+    "ps",
+    "--all",
+    "--quiet",
+    "--filter",
+    `label=com.docker.compose.project=${projectName}`,
+  ])
+    .trim()
+    .split("\n")
+    .filter(Boolean);
+  for (const containerId of containerIds) {
+    const [service, imageId] = runDocker([
+      "inspect",
+      "--format",
+      '{{index .Config.Labels "com.docker.compose.service"}}|{{.Image}}',
+      containerId,
+    ])
+      .trim()
+      .split("|");
+    const expectedImageId = expected.get(service);
+    if (expectedImageId === undefined) continue;
+    assert.equal(
+      imageId,
+      expectedImageId,
+      `${service} container runs an image outside the published G12 inventory`,
+    );
+    expected.delete(service);
+  }
+  // Целевые proof-стеки (--database-proof/--customer-proof/--aroma-*) поднимают
+  // только часть сервисов, поэтому полнота требуется лишь для полного стека.
+  if (requireComplete)
+    assert.equal(
+      expected.size,
+      0,
+      `runtime containers missing from the stack: ${[...expected.keys()].join(", ")}`,
+    );
 }
 
 async function writeStubSecret(
@@ -3074,6 +3147,24 @@ export async function writeScopedComposeOverride(projectName, options = {}) {
     assert.match(options.kafkaImage, /^sha256:[a-f0-9]{64}$/u);
     service("kafka").image = options.kafkaImage;
     service("kafka").pull_policy = "never";
+  }
+  // Поддерживаются обе формы: карта service→tag из инвентаря G12 и массив
+  // {service, imageId} из ownership G10; Compose принимает image ID напрямую.
+  if (options.runtimeImages !== undefined) {
+    const entries = Array.isArray(options.runtimeImages)
+      ? options.runtimeImages.map(({ service: name, imageId }) => [
+          name,
+          imageId,
+        ])
+      : Object.entries(options.runtimeImages);
+    for (const [name, reference] of entries) {
+      assert.match(
+        reference,
+        /^(?:[a-z0-9][a-z0-9._/-]*:latest|sha256:[a-f0-9]{64})$/u,
+      );
+      service(name).image = reference;
+      service(name).pull_policy = "never";
+    }
   }
   if (options.edgeNginxImage)
     service("edge-nginx").image = options.edgeNginxImage;
@@ -9449,8 +9540,14 @@ export async function runComposeSmoke({
   if (options.aromaBindingProof)
     assertAromaGatewaySocketAssociationRegression();
   let launchIdentity;
+  let launchImageInventory = null;
   if (launchContextPath) {
     launchIdentity = await validateLaunchContext(launchContextPath);
+    launchImageInventory = await readLaunchImageInventory({
+      evidenceDir: launchIdentity.evidenceDir,
+      context: launchIdentity.context,
+      services: PUBLISHED_RUNTIME_SERVICES,
+    });
     await withEarlyRollbackGuardReceipt(
       {
         mutationDisableRollback: options.mutationDisableRollback,
@@ -9972,6 +10069,17 @@ export async function runComposeSmoke({
       edgeNginxImage: options.noBuild
         ? undefined
         : `${projectName}-edge-nginx:latest`,
+      // Приоритет источников образов: D/R-сборки G18 > ownership G10 > инвентарь G12.
+      ...(launchImageInventory
+        ? {
+            runtimeImages: Object.fromEntries(
+              launchImageInventory.images.map((image) => [
+                image.service,
+                image.tag,
+              ]),
+            ),
+          }
+        : {}),
       ...(rollbackRuntimeImages
         ? {
             runtimeImages: rollbackRuntimeImages,
@@ -10055,6 +10163,14 @@ export async function runComposeSmoke({
         edgeNginxImage: options.noBuild
           ? undefined
           : `${projectName}-edge-nginx:latest`,
+        runtimeImages: launchImageInventory
+          ? Object.fromEntries(
+              launchImageInventory.images.map((image) => [
+                image.service,
+                image.tag,
+              ]),
+            )
+          : undefined,
         runtimeLogging: observability ? platformConfig : undefined,
         browserFixture,
         g14Config,
@@ -10403,6 +10519,8 @@ export async function runComposeSmoke({
     const imageIdentity = g14Browser
       ? await browserParentModules.validateLaunchContext(imageContextPath)
       : launchIdentity;
+    if (launchImageInventory)
+      assertPublishedRuntimeImages(launchImageInventory);
     const ownedTargets = parentOwnedRuntimeImages
       ? runtimeImageBuildTargets(
           projectName,
@@ -10410,14 +10528,17 @@ export async function runComposeSmoke({
           options.customerProof,
         )
       : null;
+    // Опубликованный инвентарь G12 покрывает все runtime-образы, поэтому
+    // ownership-фаза не должна инициировать сборку.
     const imageMode =
+      launchImageInventory ||
       ownedImagePhase === "ready" ||
       (ownedTargets &&
         ownedTargets.runtimes.length === 0 &&
         !ownedTargets.nginx)
         ? "reuse"
         : "build";
-    if (!options.noBuild && !rollbackRuntimeImages) {
+    if (!options.noBuild && !rollbackRuntimeImages && imageMode === "build") {
       let temporary;
       let snapshot;
       const imageStart = Date.now();
@@ -10470,7 +10591,9 @@ export async function runComposeSmoke({
       assertVerifiedRuntimeImages({
         projectName,
         verifiedImages,
-        noBuild: options.noBuild,
+        // С опубликованным инвентарём edge-nginx уже лежит под тегом проекта
+        // запуска, поэтому проверяем именно его, а не локальный :local.
+        noBuild: launchImageInventory ? false : options.noBuild,
         directImageIds: parentOwnedRuntimeImages,
       });
       if (parentOwnedRuntimeImages)
@@ -10559,6 +10682,15 @@ export async function runComposeSmoke({
       databaseProofContainer,
     );
     throwIfRollbackTerminationRequested();
+    if (launchImageInventory)
+      assertRuntimeContainersMatchInventory(projectName, launchImageInventory, {
+        requireComplete: !(
+          options.databaseProof ||
+          options.customerProof ||
+          options.aromaBindingProof ||
+          options.aromaCartProof
+        ),
+      });
     if (options.mutationDisableRollback) markRollbackStage("readiness");
     const rows =
       options.databaseProof ||

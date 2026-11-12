@@ -270,6 +270,28 @@ G17 сравнивает сырые SHA-256 схем источника и во�
 подтверждённым immutable owner artifact в том же run. Полные G17 artifacts не
 переносятся в этой ветке; этот документ не объявляет G17 успешно проверенным.
 
+### Один build на запуск: image inventory
+
+G12 собирает 15 runtime-образов и `edge-nginx` ровно один раз и публикует их в
+Docker daemon под тегами проекта запуска
+`<composeProject>-<service>:latest`. Вместе с отчётами G12 пишет
+`artifacts/image-inventory.json`: run ID, SHA кандидата, tree/config/toolchain/lock
+digests, `buildInputSha256` и для каждого сервиса `imageId`, manifest digest,
+provenance и attestation hashes. Инвентарь пишется только при PASS G12.
+
+G13–G18 не собирают runtime-образы: Compose получает `image:` из инвентаря,
+`docker compose up` выполняется с `--no-build`, а после старта каждый контейнер
+проверяется по `container.Image === inventory.imageId`. Тем самым исполняется
+именно просканированный артефакт, а не пересборка «с теми же намерениями».
+Standalone-запуски без launch context и без инвентаря сохраняют прежнюю сборку.
+Устаревшие образы прошлых launch-проектов удаляются в начале G12.
+
+Требование к хосту: BuildKit GC не должен стирать кеш между сборками. Политика
+builder `coffee-platform-mtu` обязана иметь `minFreeSpace` меньше фактически
+свободного места на диске (например 10 GiB при 25+ GiB свободных) и
+`maxUsedSpace` не меньше 20 GiB; иначе каждый build холодный и бюджет G12
+расходуется на повторную компиляцию одних и тех же слоёв.
+
 Порядок обязателен: G00→G01→G02→G03→G04→G05→G06→G07→G12→G08→G09→G10→G11;
 затем G13→G14→G15→G16→G17→G18→G19. Принятая перестановка G12 по
 [ADR-0025](../adr/ADR-0025-fastify-launch-recovery.md) позволяет запускать Kafka
