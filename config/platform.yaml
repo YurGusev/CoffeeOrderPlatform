@@ -12,7 +12,7 @@ verification:
     cpu: 2
     memoryMiB: 2048
     parallel: 1
-    minimumFreeDiskGiB: 12
+    minimumFreeDiskGiB: 10
     maximumDatabaseAgeHours: 24
     approvedFixed: [CVE-2026-21728, CVE-2026-28377]
     egressRepositories:
@@ -199,8 +199,8 @@ platform:
     memorySwapMiB: 6144
     maxParallelism: 2
     reservedSpaceGiB: 2
-    maxUsedSpaceGiB: 14
-    minFreeSpaceGiB: 15
+    maxUsedSpaceGiB: 12
+    minFreeSpaceGiB: 12
     registryCaFile: /etc/ssl/certs/ca-certificates.crt
   containerLimits:
     node: { cpus: 1, memoryMiB: 512 }

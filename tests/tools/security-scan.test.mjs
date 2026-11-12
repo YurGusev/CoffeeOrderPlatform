@@ -2857,8 +2857,8 @@ void test("G12 builds product images, records pinned upstream identity, and fail
             "gc = true",
             "max-parallelism = 2",
             "reservedSpace = '2GiB'",
-            "maxUsedSpace = '14GiB'",
-            "minFreeSpace = '15GiB'",
+            "maxUsedSpace = '12GiB'",
+            "minFreeSpace = '12GiB'",
             "",
           ].join("\n");
         return JSON.stringify([
@@ -2867,8 +2867,8 @@ void test("G12 builds product images, records pinned upstream identity, and fail
               {
                 all: true,
                 reservedSpace: 2 * 1073741824,
-                maxUsedSpace: 14 * 1073741824,
-                minFreeSpace: 15 * 1073741824,
+                maxUsedSpace: 12 * 1073741824,
+                minFreeSpace: 12 * 1073741824,
               },
             ],
           },

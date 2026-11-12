@@ -402,7 +402,7 @@ export type SecurityScanVerificationConfig = Readonly<{
   cpu: 2;
   memoryMiB: 2048;
   parallel: 1;
-  minimumFreeDiskGiB: 12;
+  minimumFreeDiskGiB: 10;
   maximumDatabaseAgeHours: 24;
   approvedFixed: readonly ("CVE-2026-21728" | "CVE-2026-28377")[];
   egressRepositories: readonly [
@@ -660,7 +660,7 @@ export function parseSecurityScanVerification(
     cpu: [source["cpu"], 2],
     memoryMiB: [source["memoryMiB"], 2048],
     parallel: [source["parallel"], 1],
-    minimumFreeDiskGiB: [source["minimumFreeDiskGiB"], 12],
+    minimumFreeDiskGiB: [source["minimumFreeDiskGiB"], 10],
     maximumDatabaseAgeHours: [source["maximumDatabaseAgeHours"], 24],
   } as const;
   for (const [key, [actual, expected]] of Object.entries(constants)) {
@@ -708,7 +708,7 @@ export function parseSecurityScanVerification(
     cpu: 2,
     memoryMiB: 2048,
     parallel: 1,
-    minimumFreeDiskGiB: 12,
+    minimumFreeDiskGiB: 10,
     maximumDatabaseAgeHours: 24,
     approvedFixed: Object.freeze([
       ...approvedFixed,

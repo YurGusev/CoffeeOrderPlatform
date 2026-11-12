@@ -74,7 +74,7 @@
             "cpu": { "const": 2 },
             "memoryMiB": { "const": 2048 },
             "parallel": { "const": 1 },
-            "minimumFreeDiskGiB": { "const": 12 },
+            "minimumFreeDiskGiB": { "const": 10 },
             "maximumDatabaseAgeHours": { "const": 24 },
             "approvedFixed": {
               "enum": [
