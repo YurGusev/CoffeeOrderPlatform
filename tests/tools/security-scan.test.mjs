@@ -5193,7 +5193,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
   assert.equal(imageCleanupFailure.provenance.status, "PARTIAL");
 });
 
-test("G12 scan budget derives from the launch gate deadline and keeps the reserve", () => {
+void test("G12 scan budget derives from the launch gate deadline and keeps the reserve", () => {
   assert.equal(scanBudgetMs(0, {}), G12_SCAN_BUDGET_MS);
   assert.equal(
     scanBudgetMs(0, { COFFEE_LAUNCH_GATE_DEADLINE_EPOCH_MS: "invalid" }),
@@ -5214,7 +5214,7 @@ test("G12 scan budget derives from the launch gate deadline and keeps the reserv
   );
 });
 
-test("G12 gate timeout fits the standalone scan budget plus its reserve", async () => {
+void test("G12 gate timeout fits the standalone scan budget plus its reserve", async () => {
   const { gates } = await loadMatrix();
   const gate = gates.find(({ id }) => id === "G12_SUPPLY_CHAIN");
   assert.ok(gate, "G12_SUPPLY_CHAIN must exist");
