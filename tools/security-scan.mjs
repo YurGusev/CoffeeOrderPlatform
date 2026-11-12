@@ -28,6 +28,12 @@ import { RUNTIME_NAMES } from "../packages/platform-config/src/index.ts";
 import { validateLaunchContext } from "../verification/launch/v1/report.mjs";
 import { materializeBuildRegistryCredentials } from "./config-bootstrap/index.mjs";
 import { buildkitPolicy, verifyBuildkitPolicy } from "./buildkit-policy.mjs";
+import {
+  IMAGE_INVENTORY_REFERENCE,
+  buildImageInventory,
+  runtimeImageTag,
+  serializeImageInventory,
+} from "./image-inventory.mjs";
 
 const SCANNER_IMAGE =
   "ghcr.io/aquasecurity/trivy@sha256:790fd66d1697395d8693d1acaa1ea702406a20f109b6fc7bac8db623eca6c06c";
@@ -50,6 +56,12 @@ const UPSTREAM_IMAGES = Object.freeze([
   "tempoImage",
 ]);
 const SCAN_LOCK = join(tmpdir(), "coffee-platform-trivy.lock");
+// Эти образы запускает Compose; G12 публикует их в daemon под тегами проекта
+// запуска, чтобы G13/G14 работали по неизменяемым ID, а не собирали заново.
+const PUBLISHED_RUNTIME_SERVICES = Object.freeze([
+  ...RUNTIME_NAMES,
+  "edge-nginx",
+]);
 const MAX_METADATA_BYTES = 2 * 1024 * 1024;
 const MAX_REPORT_BYTES = 64 * 1024 * 1024;
 const MAX_ATTESTATION_BYTES = 8 * 1024 * 1024;
@@ -2033,23 +2045,18 @@ async function verifyOciContentBlob(layout, descriptor, code) {
 async function writeDockerCompatibilityManifest({
   service,
   tag,
-  runId,
   layout,
   archiveManifest,
 }) {
   if (
-    ![
-      "kafka",
-      "storage-helper",
-      "grafana",
-      "keycloak",
-      "otel-collector",
-    ].includes(service)
+    typeof service !== "string" ||
+    !/^[a-z0-9][a-z0-9-]{0,62}$/u.test(service) ||
+    typeof tag !== "string" ||
+    !/^[a-z0-9][a-z0-9._/-]*:[A-Za-z0-9._-]{1,128}$/u.test(tag) ||
+    !Array.isArray(archiveManifest?.Layers) ||
+    typeof archiveManifest?.Config !== "string"
   )
-    fail("OCI_DOCKER_MANIFEST_TARGET_INVALID");
-  const runTag = sha256(Buffer.from(runId)).slice(0, 12);
-  const expectedTag = `coffee-g12-${runTag}-${service}:latest`;
-  if (tag !== expectedTag) fail("OCI_DOCKER_MANIFEST_TAG_INVALID");
+    fail("OCI_DOCKER_MANIFEST_INVALID");
   const manifestBytes = Buffer.from(
     `${JSON.stringify([
       {
@@ -2692,19 +2699,10 @@ async function buildProductImages({
         run,
       });
     }
-    if (
-      [
-        "kafka",
-        "storage-helper",
-        "grafana",
-        "keycloak",
-        "otel-collector",
-      ].includes(service)
-    )
+    if (!PUBLISHED_RUNTIME_SERVICES.includes(service))
       await writeDockerCompatibilityManifest({
         service,
         tag: image.tag,
-        runId: identity.context.runId,
         layout: imageLayoutPath,
         archiveManifest: image.dockerArchiveManifest,
       });
@@ -3076,6 +3074,27 @@ function summarizeFindings(reports) {
   return findings;
 }
 
+async function pruneStaleLaunchImages(run, composeProject) {
+  const listed = await run(
+    "docker",
+    ["image", "ls", "--format", "{{.Repository}}:{{.Tag}}"],
+    { capture: true },
+  ).catch(() => "");
+  const stale = String(listed)
+    .split("\n")
+    .map((reference) => reference.trim())
+    .filter((reference) =>
+      /^coffee-launch-[a-z0-9_-]+-(?!latest$)[a-z0-9-]+:latest$/u.test(
+        reference,
+      ),
+    )
+    .filter((reference) => !reference.startsWith(`${composeProject}-`));
+  for (const reference of stale)
+    await run("docker", ["image", "rm", "--no-prune", reference]).catch(
+      () => {},
+    );
+}
+
 export async function runSecurityScan({
   contextFile,
   outputDir,
@@ -3364,6 +3383,13 @@ export async function runSecurityScan({
     );
     const outputRoot = join(outputDir, "artifacts");
     await mkdir(outputRoot, { recursive: true, mode: 0o700 });
+    const composeProject = identity.context.resources?.composeProject;
+    const publishesRuntimeImages =
+      typeof composeProject === "string" &&
+      /^[a-z0-9][a-z0-9_-]{0,62}$/u.test(composeProject);
+    const publishedRuntimeImages = [];
+    if (publishesRuntimeImages)
+      await pruneStaleLaunchImages(runBounded, composeProject);
     const sourceSnapshot = await createBuildInputSnapshot({
       candidateRoot: identity.candidateRoot,
       candidateSha: identity.context.candidateSha,
@@ -3554,6 +3580,44 @@ export async function runSecurityScan({
     });
     result.reports.push(...manifestReports);
 
+    const publishRuntimeImage = async (image) => {
+      const tag = runtimeImageTag(composeProject, image.service);
+      await writeDockerCompatibilityManifest({
+        service: image.service,
+        tag,
+        layout: image.imageLayoutPath,
+        archiveManifest: image.dockerArchiveManifest,
+      });
+      const archivePath = join(temporary, `${image.service}.publish.tar`);
+      try {
+        await runBounded("tar", [
+          "-cf",
+          archivePath,
+          "-C",
+          image.imageLayoutPath,
+          ".",
+        ]);
+        await runBounded("docker", ["image", "load", "--input", archivePath]);
+      } finally {
+        await rm(archivePath, { force: true });
+      }
+      const loaded = await runBounded(
+        "docker",
+        ["image", "inspect", "--format", "{{.Id}}", tag],
+        { capture: true },
+      );
+      if (String(loaded).trim() !== image.imageId)
+        fail("RUNTIME_IMAGE_LOAD_MISMATCH");
+      publishedRuntimeImages.push({
+        service: image.service,
+        imageId: image.imageId,
+        manifestDigest: image.manifestDigest,
+        platformManifestDigest: image.platformManifestDigest,
+        provenanceSha256: image.provenanceSha256,
+        attestationSha256: image.attestationSha256,
+      });
+    };
+
     const scanValidatedImage = async (image) => {
       const imageTarPath =
         image.imageLayoutPath ?? join(temporary, `${image.service}.tar`);
@@ -3622,6 +3686,11 @@ export async function runSecurityScan({
           else if (image.service === "keycloak") keycloakBuild = artifact;
           else otelCollectorBuild = artifact;
         }
+        if (
+          publishesRuntimeImages &&
+          PUBLISHED_RUNTIME_SERVICES.includes(image.service)
+        )
+          await publishRuntimeImage(image);
       } catch (error) {
         operationError = error;
       }
@@ -3806,6 +3875,27 @@ export async function runSecurityScan({
         : "G12_SCAN_CLEAN";
     result.status = result.code === "G12_SCAN_CLEAN" ? "PASS" : "FAIL";
     if (result.status === "FAIL") result.failure = { code: result.code, stage };
+    if (result.status === "PASS" && publishesRuntimeImages) {
+      markStage("image-inventory");
+      const inventoryBytes = serializeImageInventory(
+        buildImageInventory({
+          context: identity.context,
+          environment: identity.environment,
+          composeProject,
+          services: PUBLISHED_RUNTIME_SERVICES,
+          images: publishedRuntimeImages,
+        }),
+      );
+      await writeScannerOutput(
+        join(outputRoot, "image-inventory.json"),
+        inventoryBytes,
+      );
+      result.imageInventory = {
+        path: IMAGE_INVENTORY_REFERENCE,
+        sha256: sha256(inventoryBytes),
+        sizeBytes: inventoryBytes.length,
+      };
+    }
     if (result.status === "PASS") {
       for (const [target, build, baseImage, resultKey] of [
         ["kafka", kafkaBuild, validated.toolchain.kafkaImage, "kafka"],
