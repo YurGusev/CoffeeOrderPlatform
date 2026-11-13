@@ -3151,12 +3151,14 @@ export async function writeScopedComposeOverride(projectName, options = {}) {
   // Поддерживаются обе формы: карта service→tag из инвентаря G12 и массив
   // {service, imageId} из ownership G10; Compose принимает image ID напрямую.
   if (options.runtimeImages !== undefined) {
-    const entries = Array.isArray(options.runtimeImages)
-      ? options.runtimeImages.map(({ service: name, imageId }) => [
-          name,
-          imageId,
-        ])
-      : Object.entries(options.runtimeImages);
+    const entries = new Map(
+      Array.isArray(options.runtimeImages)
+        ? options.runtimeImages.map(({ service: name, imageId }) => [
+            name,
+            imageId,
+          ])
+        : Object.entries(options.runtimeImages),
+    );
     for (const [name, reference] of entries) {
       assert.match(
         reference,
@@ -3165,37 +3167,16 @@ export async function writeScopedComposeOverride(projectName, options = {}) {
       service(name).image = reference;
       service(name).pull_policy = "never";
     }
+    assert.equal(
+      entries.size,
+      RUNTIMES.length + 1,
+      "runtime image inventory must contain exact 15 services",
+    );
+    for (const name of [...RUNTIMES, "edge-nginx"])
+      assert.ok(entries.has(name), `runtime image is missing for ${name}`);
   }
   if (options.edgeNginxImage)
     service("edge-nginx").image = options.edgeNginxImage;
-  if (options.runtimeImages) {
-    assert.equal(
-      options.runtimeImages.length,
-      RUNTIMES.length + 1,
-      "runtime image inventory must contain exact 15 services",
-    );
-    const images = new Map(
-      options.runtimeImages.map(({ service: name, imageId }) => [
-        name,
-        imageId,
-      ]),
-    );
-    assert.equal(
-      images.size,
-      RUNTIMES.length + 1,
-      "runtime image inventory must contain exact 15 services",
-    );
-    for (const name of [...RUNTIMES, "edge-nginx"]) {
-      const imageId = images.get(name);
-      assert.match(
-        imageId ?? "",
-        /^sha256:[a-f0-9]{64}$/u,
-        `runtime image is missing for ${name}`,
-      );
-      service(name).image = imageId;
-      service(name).pull_policy = "never";
-    }
-  }
   if (loggingOverride) {
     for (const [name, definition] of Object.entries(loggingOverride)) {
       if (definition.logging) service(name).logging = definition.logging;

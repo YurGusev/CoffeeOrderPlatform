@@ -103,7 +103,14 @@ export function inspectLaunchRuntimeImages(
 }
 
 export function captureRuntimeImageBaseline(inventory) {
-  assert.equal(inventory.refs.size, 0, "run image reference already exists");
+  // G12 публикует проверенные образы под теми же run-ссылками до G10, поэтому
+  // существующие ссылки — это уже подтверждённое владение, а не коллизия.
+  for (const [reference, imageId] of inventory.refs)
+    assert.equal(
+      inventory.expected.get(reference),
+      imageId,
+      "run image reference does not match the verified image",
+    );
   return [...inventory.preexisting]
     .map(([imageId, references]) => ({
       imageId,
@@ -189,8 +196,14 @@ export function cleanupLaunchRuntimeImages(
       inventory.expected.get(reference),
       "run image cleanup ownership is unknown",
     );
-  if (inventory.refs.size) {
-    const references = [...inventory.refs.keys()];
+  // Образы, опубликованные G12 и вошедшие в baseline, переиспользуются
+  // следующими гейтами (G13–G18), поэтому cleanup их не удаляет.
+  const baselineIds = new Set((baseline ?? []).map(({ imageId }) => imageId));
+  const removable = [...inventory.refs].filter(
+    ([, id]) => !baselineIds.has(id),
+  );
+  if (removable.length) {
+    const references = removable.map(([reference]) => reference);
     const ids = run(["image", "inspect", "--format", "{{.Id}}", ...references])
       .trim()
       .split("\n");
@@ -202,7 +215,12 @@ export function cleanupLaunchRuntimeImages(
     run(["image", "rm", "--no-prune", ...references]);
   }
   const after = inspectLaunchRuntimeImages(projectName, verifiedImages, run);
-  assert.equal(after.refs.size, 0, "run image cleanup is incomplete");
+  // G12-owned ссылки остаются доступными для последующих гейтов запуска.
+  assert.equal(
+    [...after.refs].filter(([, id]) => !baselineIds.has(id)).length,
+    0,
+    "run image cleanup is incomplete",
+  );
   if (baseline) {
     validateRuntimeImageOwnership(after, baseline, "cleanup");
     const ids = new Set(baseline.map(({ imageId }) => imageId));
