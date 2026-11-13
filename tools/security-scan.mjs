@@ -932,6 +932,10 @@ async function cachedHttpsFile({
   args,
   cacheRoot = g12CacheRoot(),
 }) {
+  // Ожидаемый hash приходит из toolchain BOM; он обязан быть digest, иначе
+  // значение вида "../../x" изменило бы путь записи curl.
+  if (!/^[a-f0-9]{64}$/u.test(expectedSha256 ?? ""))
+    fail("G12_CACHE_DIGEST_INVALID");
   const cached = join(cacheRoot, "downloads", expectedSha256);
   await mkdir(join(cacheRoot, "downloads"), {
     recursive: true,
@@ -2896,7 +2900,10 @@ async function databaseMetadataFresh(cacheDir, now, policy) {
     const info = await lstat(join(cacheDir, name, databaseFile)).catch(
       () => null,
     );
-    if (!info?.isFile() || info.size < 1) return false;
+    // Повреждённая запись кеша (в том числе oversized) — это промах, а не hit:
+    // иначе G12 будет падать на validateDb до истечения metadata.
+    if (!info?.isFile() || info.size < 1 || info.size > MAX_DATABASE_BYTES)
+      return false;
     try {
       validateDatabaseMetadata(
         parseJson(metadataBytes, "VULNERABILITY_DB_METADATA_INVALID"),
@@ -3517,6 +3524,8 @@ export async function runSecurityScan({
       }),
     };
     markStage("grafana-plugins");
+    // Скачивания Grafana пишут в постоянный кеш, а не только в temp/outputRoot.
+    await freeSpace(cacheRoot, policy, statfsFn);
     const vendorPlugins = await prepareGrafanaPlugins({
       toolchain: validated.toolchain,
       temporary,
@@ -3618,6 +3627,7 @@ export async function runSecurityScan({
     markStage("vulnerability-database");
     await freeSpace(temporary, policy, statfsFn);
     await freeSpace(outputRoot, policy, statfsFn);
+    await freeSpace(cacheRoot, policy, statfsFn);
     // Решение о повторном использовании принимается по свежести metadata:
     // полный hash содержимого считается ровно один раз в validateDb ниже.
     const metadataFresh = await databaseMetadataFresh(
