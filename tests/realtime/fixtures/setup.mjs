@@ -830,7 +830,7 @@ export async function prepare(resultDir, options) {
       "qualification requires the verified child and full operator-1 profile",
     );
   }
-  // Validate the frozen G12 artifact before generating private credentials or
+  // Validate the frozen `supply_chain` artifact before generating private credentials or
   // starting the comparatively expensive native runtime build. This pass is
   // read-only with respect to Docker; the later import pass repeats validation.
   const kafkaArtifactProof = await loadVerifiedGateImage({
@@ -1230,7 +1230,7 @@ export async function prepare(resultDir, options) {
               )
             ).trim(),
             images[role],
-            `rebuilt image differs from G12: ${role}`,
+            `rebuilt image differs from supply_chain: ${role}`,
           );
         qualification.builtTags = tags;
       } finally {
@@ -1409,7 +1409,7 @@ export async function prepare(resultDir, options) {
       assert.equal(
         kafkaArtifact[field],
         kafkaArtifactProof[field],
-        "G12 Kafka artifact changed during fixture preparation",
+        "supply_chain Kafka artifact changed during fixture preparation",
       );
     if (launchPath) {
       assert.deepEqual(kafkaArtifact.launchIdentity, launchPath.launchIdentity);
@@ -1738,7 +1738,7 @@ export async function verifyPrepared(resultDir, approvedSha) {
     assert.equal(
       manifest.kafkaSupplyChain?.[field],
       currentKafkaArtifact[field],
-      `prepared G12 Kafka identity drift: ${field}`,
+      `prepared supply_chain Kafka identity drift: ${field}`,
     );
   if (launchPath) {
     assert.deepEqual(

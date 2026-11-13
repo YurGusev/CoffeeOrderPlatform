@@ -68,7 +68,7 @@ function within(root, path) {
 export function imageInventoryPath(evidenceDir) {
   return join(
     evidenceDir,
-    "gates/G12_SUPPLY_CHAIN/artifacts/supply-chain/artifacts",
+    "gates/supply_chain/artifacts/supply-chain/artifacts",
     IMAGE_INVENTORY_FILE,
   );
 }
@@ -129,7 +129,7 @@ export function buildImageInventory({
     fail("IMAGE_INVENTORY_IMAGE_SET_INVALID");
   const inventory = {
     schemaVersion: IMAGE_INVENTORY_SCHEMA_VERSION,
-    gate: "G12_SUPPLY_CHAIN",
+    gate: "supply_chain",
     status: "PASS",
     runId: context.runId,
     candidateSha: context.candidateSha,
@@ -166,7 +166,7 @@ export function validateImageInventory(
     fail("IMAGE_INVENTORY_SHAPE_INVALID");
   if (
     inventory.schemaVersion !== IMAGE_INVENTORY_SCHEMA_VERSION ||
-    inventory.gate !== "G12_SUPPLY_CHAIN" ||
+    inventory.gate !== "supply_chain" ||
     inventory.status !== "PASS" ||
     inventory.runId !== context.runId ||
     inventory.candidateSha !== context.candidateSha ||
@@ -205,12 +205,12 @@ export function serializeImageInventory(inventory) {
 }
 
 /**
- * Читает инвентарь образов G12 текущего запуска, если он опубликован.
- * Отсутствие файла означает, что G12 ещё не публиковал образы: вызывающий
+ * Читает инвентарь образов `supply_chain` текущего запуска, если он опубликован.
+ * Отсутствие файла означает, что `supply_chain` ещё не публиковал образы: вызывающий
  * обязан собрать их сам (standalone/тестовый путь).
  */
 function supplyChainDir(evidenceDir) {
-  return join(evidenceDir, "gates/G12_SUPPLY_CHAIN/artifacts/supply-chain");
+  return join(evidenceDir, "gates/supply_chain/artifacts/supply-chain");
 }
 
 async function readEvidenceJson(path, maxBytes) {
@@ -254,7 +254,7 @@ async function readEvidenceJson(path, maxBytes) {
 }
 
 /**
- * Сверяет инвентарь с независимо прочитанным evidence G12: PASS-результатом,
+ * Сверяет инвентарь с независимо прочитанным evidence `supply_chain`: PASS-результатом,
  * его checksum-ссылкой и записями provenance для каждого образа. Инвентарь сам
  * по себе не является доказательством — только согласие с этими файлами.
  */
@@ -273,9 +273,9 @@ async function verifyInventoryAgainstGateEvidence({
     MAX_GATE_RESULT_BYTES,
   );
   if (
-    result?.gate !== "G12_SUPPLY_CHAIN" ||
+    result?.gate !== "supply_chain" ||
     result?.status !== "PASS" ||
-    result?.code !== "G12_SCAN_CLEAN" ||
+    result?.code !== "SUPPLY_CHAIN_SCAN_CLEAN" ||
     result?.runId !== context.runId ||
     result?.candidateSha !== context.candidateSha ||
     result?.provenance?.status !== "PASS" ||
@@ -328,13 +328,13 @@ export async function readLaunchImageInventory({
   const path = imageInventoryPath(evidenceDir);
   const info = await lstat(path).catch(() => null);
   if (info === null) {
-    // Если G12 в этом scope уже дал PASS-результат, инвентарь обязан быть:
-    // иначе proof-стеки, которые не сверяют G12-образ, тихо пересобрали бы его.
+    // Если `supply_chain` в этом scope уже дал PASS-результат, инвентарь обязан быть:
+    // иначе proof-стеки, которые не сверяют образ `supply_chain`, тихо пересобрали бы его.
     const gateResult = await lstat(
       join(supplyChainDir(evidenceDir), "result.json"),
     ).catch(() => null);
     if (gateResult !== null) fail("IMAGE_INVENTORY_MISSING");
-    // Иного G12 в этом scope нет (например, дочерний run), сборка допустима.
+    // Иного `supply_chain` в этом scope нет (например, дочерний run), сборка допустима.
     return null;
   }
   const environment = JSON.parse(

@@ -968,9 +968,9 @@ export async function runLaunchPath({
             const page = await context.newPage();
             await page.addInitScript(
               ({ correlationId, parent }) => {
-                window.__g14Frames = [];
-                window.__g14OwnerFetches = [];
-                window.__g14EventSourceWitness = [];
+                window.__observabilityFrames = [];
+                window.__observabilityOwnerFetches = [];
+                window.__observabilityEventSourceWitness = [];
                 const readyStateName = (source) =>
                   source.readyState === EventSource.OPEN
                     ? "OPEN"
@@ -995,7 +995,7 @@ export async function runLaunchPath({
                       errorEvents: 0,
                       streamReadyFrames: 0,
                     };
-                    window.__g14EventSourceWitness.push(witness);
+                    window.__observabilityEventSourceWitness.push(witness);
                     this.addEventListener("open", () => {
                       witness.openEvents += 1;
                       witness.readyState = readyStateName(this);
@@ -1011,7 +1011,7 @@ export async function runLaunchPath({
                       this.addEventListener(name, (event) => {
                         if (name === "stream-ready.v1")
                           witness.streamReadyFrames += 1;
-                        window.__g14Frames.push({
+                        window.__observabilityFrames.push({
                           event: name,
                           id: event.lastEventId,
                           data: JSON.parse(event.data),
@@ -1043,14 +1043,14 @@ export async function runLaunchPath({
                       correlationId: headers.get("x-correlation-id"),
                       traceparent: headers.get("traceparent"),
                       frameId:
-                        [...window.__g14Frames]
+                        [...window.__observabilityFrames]
                           .reverse()
                           .find(
                             (frame) =>
                               frame.event === "resource-invalidated.v1",
                           )?.id ?? null,
                     };
-                    window.__g14OwnerFetches.push(witness);
+                    window.__observabilityOwnerFetches.push(witness);
                     return nativeFetch(input, { ...init, headers }).then(
                       (response) => {
                         witness.responseStatus = response.status;
@@ -1129,7 +1129,7 @@ export async function runLaunchPath({
               try {
                 browserState = await page.evaluate(() => ({
                   documentReadyState: document.readyState,
-                  eventSources: window.__g14EventSourceWitness.map(
+                  eventSources: window.__observabilityEventSourceWitness.map(
                     (source) => ({
                       route: source.route,
                       readyState: ["CONNECTING", "OPEN", "CLOSED"].includes(
@@ -1142,7 +1142,7 @@ export async function runLaunchPath({
                       streamReadyFrames: source.streamReadyFrames,
                     }),
                   ),
-                  readyFrameCount: window.__g14Frames.filter(
+                  readyFrameCount: window.__observabilityFrames.filter(
                     (frame) => frame.event === "stream-ready.v1",
                   ).length,
                 }));
@@ -1166,7 +1166,7 @@ export async function runLaunchPath({
             try {
               await page.waitForFunction(
                 () =>
-                  window.__g14Frames.some(
+                  window.__observabilityFrames.some(
                     (frame) => frame.event === "stream-ready.v1",
                   ),
                 null,
@@ -1408,7 +1408,7 @@ export async function runLaunchPath({
             try {
               await page.waitForFunction(
                 () =>
-                  window.__g14Frames.some(
+                  window.__observabilityFrames.some(
                     (frame) => frame.event === "stream-ready.v1",
                   ),
                 null,
@@ -1439,7 +1439,7 @@ export async function runLaunchPath({
                     },
                     body: JSON.stringify({
                       expectedVersion,
-                      reason: "G14 synthetic correlation proof",
+                      reason: "observability synthetic correlation proof",
                     }),
                   },
                 );
@@ -1786,7 +1786,7 @@ export async function runLaunchPath({
             );
             await page.waitForFunction(
               ({ ids, corr }) =>
-                window.__g14Frames.some(
+                window.__observabilityFrames.some(
                   (frame) =>
                     frame.event === "resource-invalidated.v1" &&
                     ids.includes(frame.id) &&
@@ -1797,7 +1797,7 @@ export async function runLaunchPath({
             );
             await page.waitForFunction(
               ({ ids, corr, parent }) =>
-                window.__g14OwnerFetches.some(
+                window.__observabilityOwnerFetches.some(
                   (entry) =>
                     ids.includes(entry.frameId) &&
                     entry.correlationId === corr &&
@@ -1814,8 +1814,8 @@ export async function runLaunchPath({
               { timeout: 15000 },
             );
             const browserWitnesses = await page.evaluate(() => ({
-              frames: window.__g14Frames,
-              fetches: window.__g14OwnerFetches,
+              frames: window.__observabilityFrames,
+              fetches: window.__observabilityOwnerFetches,
             }));
             const refetchWitness = [...browserWitnesses.fetches]
               .reverse()
@@ -1887,8 +1887,12 @@ export async function runLaunchPath({
               matchingLogLines.length > 0,
               "Orders runtime Pino logs include the actual HTTP command correlation",
             );
-            const frames = await page.evaluate(() => window.__g14Frames),
-              fetches = await page.evaluate(() => window.__g14OwnerFetches);
+            const frames = await page.evaluate(
+                () => window.__observabilityFrames,
+              ),
+              fetches = await page.evaluate(
+                () => window.__observabilityOwnerFetches,
+              );
             assert.ok(
               frames.some(
                 (frame) => frame.data?.correlationId === commandCorrelation,

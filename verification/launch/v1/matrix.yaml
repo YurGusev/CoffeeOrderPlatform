@@ -1,6 +1,6 @@
 version: 1
 gates:
-  - id: G00_PREFLIGHT
+  - id: preflight
     version: 1
     mandatory: true
     owner: Platform
@@ -13,11 +13,11 @@ gates:
     passCriteria: чистый SHA; принятые GitHub PR/handoff #14/#19/#2–#12/#16–#18/#60–#64/#210; точная authority-репозитория; без цели legacy DB
     cleanup: none
     rerunPolicy: new-run-id-only
-  - id: G01_INSTALL
+  - id: install
     version: 1
     mandatory: true
     owner: Platform
-    predecessors: [G00_PREFLIGHT]
+    predecessors: [preflight]
     command: pnpm install --frozen-lockfile
     timeout: 900
     inputs: [lockfile]
@@ -25,11 +25,11 @@ gates:
     passCriteria: lockfile не меняется; lifecycle/network действия только в allowlist
     cleanup: candidate-checkout-only
     rerunPolicy: new-run-id-only
-  - id: G02_GENERATED
+  - id: generated
     version: 1
     mandatory: true
     owner: Contracts
-    predecessors: [G01_INSTALL]
+    predecessors: [install]
     command: pnpm contracts:check-generated
     timeout: 900
     inputs: [generated-sources]
@@ -37,11 +37,11 @@ gates:
     passCriteria: generated tree побайтно совпадает; drift отсутствует
     cleanup: none
     rerunPolicy: new-run-id-only
-  - id: G03_STATIC
+  - id: static
     version: 1
     mandatory: true
     owner: Platform
-    predecessors: [G02_GENERATED]
+    predecessors: [generated]
     command: pnpm format:check && pnpm lint && pnpm typecheck
     timeout: 900
     inputs: [source-tree]
@@ -49,11 +49,11 @@ gates:
     passCriteria: все команды завершаются с кодом 0; warnings budget равен 0
     cleanup: none
     rerunPolicy: new-run-id-only
-  - id: G04_UNIT
+  - id: unit
     version: 1
     mandatory: true
     owner: Domain owners
-    predecessors: [G03_STATIC]
+    predecessors: [static]
     command: pnpm test:unit -- --coverage
     timeout: 900
     inputs: [source-tree]
@@ -61,11 +61,11 @@ gates:
     passCriteria: код выхода 0; изменённые критические модули выполняют объявленные thresholds
     cleanup: none
     rerunPolicy: new-run-id-only
-  - id: G05_CONTRACTS
+  - id: contracts
     version: 1
     mandatory: true
     owner: Contracts
-    predecessors: [G03_STATIC]
+    predecessors: [static]
     command: pnpm contracts:check-generated && pnpm contracts:breaking && pnpm contracts:test
     timeout: 900
     inputs: [contracts, fixtures]
@@ -73,11 +73,11 @@ gates:
     passCriteria: positive/negative fixtures проходят; breaking change не одобренных контрактов отсутствуют
     cleanup: none
     rerunPolicy: new-run-id-only
-  - id: G06_ARCHITECTURE
+  - id: architecture
     version: 1
     mandatory: true
     owner: Architecture
-    predecessors: [G05_CONTRACTS]
+    predecessors: [contracts]
     command: pnpm architecture:check
     timeout: 900
     inputs: [source-tree]
@@ -85,11 +85,11 @@ gates:
     passCriteria: все GREEN проходят; каждый RED показывает source/target/rule
     cleanup: none
     rerunPolicy: new-run-id-only
-  - id: G07_CONFIG_SECURITY
+  - id: config_security
     version: 1
     mandatory: true
     owner: Security
-    predecessors: [G05_CONTRACTS]
+    predecessors: [contracts]
     command: pnpm versions:check && pnpm config:check && pnpm security:secrets
     timeout: 900
     inputs: [pins, config, encrypted-secrets]
@@ -97,11 +97,11 @@ gates:
     passCriteria: точные pins/SOPS/scopes/redaction; plaintext/canary утечек нет
     cleanup: none
     rerunPolicy: new-run-id-only
-  - id: G12_SUPPLY_CHAIN
+  - id: supply_chain
     version: 1
     mandatory: true
     owner: Security
-    predecessors: [G07_CONFIG_SECURITY]
+    predecessors: [config_security]
     command: pnpm security:scan
     timeout: 2700
     inputs: [lockfile, build-provenance]
@@ -109,11 +109,11 @@ gates:
     passCriteria: SBOM/provenance созданы; exploitable finding уровня critical/high нет
     cleanup: none
     rerunPolicy: new-run-id-only
-  - id: G08_MIGRATIONS
+  - id: migrations
     version: 1
     mandatory: true
     owner: DB owners
-    predecessors: [G07_CONFIG_SECURITY]
+    predecessors: [config_security]
     command: pnpm test:migrations:clean && pnpm test:migrations:forward
     timeout: 1800
     inputs: [migration-sources, isolated-databases]
@@ -121,11 +121,11 @@ gates:
     passCriteria: пять пустых DB достигают точной schema; повторный запуск — no-op; legacy не меняется
     cleanup: exact-run-resources-only
     rerunPolicy: new-run-id-only
-  - id: G09_DB_BOUNDARIES
+  - id: db_boundaries
     version: 1
     mandatory: true
     owner: DB owners
-    predecessors: [G08_MIGRATIONS]
+    predecessors: [migrations]
     command: pnpm db:smoke
     timeout: 1800
     inputs: [isolated-databases, owner-roles]
@@ -133,11 +133,11 @@ gates:
     passCriteria: allowlisted operations проходят; любой cross-owner доступ отклоняется
     cleanup: exact-run-resources-only
     rerunPolicy: new-run-id-only
-  - id: G10_INTEGRATION
+  - id: integration
     version: 1
     mandatory: true
     owner: Service owners
-    predecessors: [G09_DB_BOUNDARIES, G12_SUPPLY_CHAIN]
+    predecessors: [db_boundaries, supply_chain]
     command: pnpm test:integration
     timeout: 1800
     inputs: [source-tree, isolated-databases, kafka-run-resources]
@@ -145,11 +145,11 @@ gates:
     passCriteria: suites HTTP/DB/Kafka/idempotency/concurrency проходят
     cleanup: exact-run-resources-only
     rerunPolicy: new-run-id-only
-  - id: G11_RECOVERY
+  - id: recovery
     version: 1
     mandatory: true
     owner: Reliability
-    predecessors: [G10_INTEGRATION]
+    predecessors: [integration]
     command: pnpm test:recovery
     timeout: 1800
     inputs: [source-tree, isolated-databases, kafka-run-resources]
@@ -157,11 +157,11 @@ gates:
     passCriteria: matrix duplicate/crash/replay/rebalance/lease/fence/reservation проходит
     cleanup: exact-run-resources-only
     rerunPolicy: new-run-id-only
-  - id: G13_COMPOSE
+  - id: compose
     version: 1
     mandatory: true
     owner: Platform
-    predecessors: [G11_RECOVERY, G12_SUPPLY_CHAIN]
+    predecessors: [recovery, supply_chain]
     command: pnpm test:compose-smoke
     timeout: 1800
     inputs: [source-tree, compose-project]
@@ -169,11 +169,11 @@ gates:
     passCriteria: все runtimes готовы; проверки отказа dependency и graceful stop проходят
     cleanup: exact-run-resources-only
     rerunPolicy: new-run-id-only
-  - id: G14_OBSERVABILITY
+  - id: observability
     version: 1
     mandatory: true
     owner: Operations
-    predecessors: [G13_COMPOSE]
+    predecessors: [compose]
     command: pnpm test:observability
     timeout: 1800
     inputs:
@@ -182,11 +182,11 @@ gates:
     passCriteria: проверки health/metrics/traces/correlation/alerts/redaction проходят
     cleanup: exact-run-resources-only
     rerunPolicy: new-run-id-only
-  - id: G15_BROWSER
+  - id: browser
     version: 1
     mandatory: true
     owner: Frontend
-    predecessors: [G14_OBSERVABILITY]
+    predecessors: [observability]
     command: pnpm test:playwright
     timeout: 1800
     inputs: [source-tree, browser]
@@ -194,11 +194,11 @@ gates:
     passCriteria: проверки Chromium critical/accessibility/deep-link/conflict/realtime проходят
     cleanup: none
     rerunPolicy: new-run-id-only
-  - id: G16_AROMA_SANDBOX
+  - id: aroma_sandbox
     version: 1
     mandatory: true
     owner: Integration+Reliability
-    predecessors: [G15_BROWSER]
+    predecessors: [browser]
     command: pnpm test:aroma-sandbox -- --approval-file "$AROMA_SANDBOX_APPROVAL_FILE"
     timeout: 1800
     inputs: [signed-sandbox-approval, scoped-sandbox-credentials]
@@ -206,11 +206,11 @@ gates:
     passCriteria: контролируемые GET→≤1 mutation→GET/lost-response/recovery/restore проходят
     cleanup: restore-baseline-required
     rerunPolicy: new-run-id-only
-  - id: G17_BACKUP_RESTORE
+  - id: backup_restore
     version: 1
     mandatory: true
     owner: DB owners
-    predecessors: [G16_AROMA_SANDBOX]
+    predecessors: [aroma_sandbox]
     command: pnpm test:backup-restore
     timeout: 1800
     inputs: [isolated-databases, encrypted-backups]
@@ -218,11 +218,11 @@ gates:
     passCriteria: пять dump восстановлены; schema/data/invariants совпадают
     cleanup: exact-run-resources-only
     rerunPolicy: new-run-id-only
-  - id: G18_ROLLBACK
+  - id: rollback
     version: 1
     mandatory: true
     owner: Operations
-    predecessors: [G17_BACKUP_RESTORE]
+    predecessors: [backup_restore]
     command: pnpm test:mutation-disable-rollback
     timeout: 1800
     inputs: [source-tree, compose-project]
@@ -230,31 +230,31 @@ gates:
     passCriteria: mutation выключена; observer/Orders/recovery healthy; потери состояния нет
     cleanup: exact-run-resources-only
     rerunPolicy: new-run-id-only
-  - id: G19_REPORT
+  - id: report
     version: 1
     mandatory: true
     owner: Release owner
     predecessors:
       [
-        G00_PREFLIGHT,
-        G01_INSTALL,
-        G02_GENERATED,
-        G03_STATIC,
-        G04_UNIT,
-        G05_CONTRACTS,
-        G06_ARCHITECTURE,
-        G07_CONFIG_SECURITY,
-        G08_MIGRATIONS,
-        G09_DB_BOUNDARIES,
-        G10_INTEGRATION,
-        G11_RECOVERY,
-        G12_SUPPLY_CHAIN,
-        G13_COMPOSE,
-        G14_OBSERVABILITY,
-        G15_BROWSER,
-        G16_AROMA_SANDBOX,
-        G17_BACKUP_RESTORE,
-        G18_ROLLBACK,
+        preflight,
+        install,
+        generated,
+        static,
+        unit,
+        contracts,
+        architecture,
+        config_security,
+        migrations,
+        db_boundaries,
+        integration,
+        recovery,
+        supply_chain,
+        compose,
+        observability,
+        browser,
+        aroma_sandbox,
+        backup_restore,
+        rollback,
       ]
     command: pnpm launch:verify:report
     timeout: 900

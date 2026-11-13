@@ -46,7 +46,7 @@ aggregate gate, но сам по себе не является доказате
 - **PARTIAL** — часть гарантии блокируется, но остаётся названный обход;
 - **GAP** — rule зарегистрирован или требование известно, но release gate его
   ещё не доказывает. `GAP` блокирует admission замены ESLint и принятие
-  `G03_STATIC`, даже если текущий `pnpm lint` возвращает `0`.
+  гейта `static`, даже если текущий `pnpm lint` возвращает `0`.
 
 ## 3. Rule-parity matrix
 
@@ -182,8 +182,8 @@ path/symbol scope, причиной, expiry/removal condition и положит�
 
 ## 5. Launch gate и обновление матрицы
 
-`G03_STATIC` принимается только когда `format:check`, `lint` и `typecheck`
-возвращают `0` при warnings budget `0`. `G06_ARCHITECTURE` отдельно требует, чтобы
+Гейт `static` принимается только когда `format:check`, `lint` и `typecheck`
+возвращают `0` при warnings budget `0`. Гейт `architecture` отдельно требует, чтобы
 каждый GREEN fixture прошёл, а каждый RED fixture завершился ненулевым кодом с
 source, target и rule id. Поэтому rule parity проверяет не только успешный
 default lint, но и scoped checker/RED fixtures для каждой blocking-гарантии.

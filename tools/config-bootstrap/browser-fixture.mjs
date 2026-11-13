@@ -20,7 +20,7 @@ import { validateLaunchContext } from "../../verification/launch/v1/report.mjs";
 import { inspectLaunchCheckout } from "../../verification/launch/v1/scenarios/rollback.mjs";
 
 const CONFIG = "config/platform.yaml";
-const RECEIPT = "gates/G15_BROWSER/artifacts/oidc-fixture-lineage.json";
+const RECEIPT = "gates/browser/artifacts/oidc-fixture-lineage.json";
 const SHA = /^[0-9a-f]{40}$/u;
 const FIXTURE_PROFILE = Object.freeze({
   issuer: "https://idp.fixture.invalid",
@@ -76,7 +76,7 @@ function exactKeys(value, expected) {
 
 export function fixtureConfigText(baseText) {
   const marker = "browserOidc: null";
-  if (baseText.split(marker).length !== 2) fail("G15_CONFIG_BASE_INVALID");
+  if (baseText.split(marker).length !== 2) fail("BROWSER_CONFIG_BASE_INVALID");
   const profile = [
     "browserOidc:",
     `  issuer: ${FIXTURE_PROFILE.issuer}`,
@@ -100,15 +100,15 @@ export async function validateBrowserFixtureGitLineage({
   runId,
   configSha256,
 }) {
-  if (!SHA.test(baseCandidateSha ?? "")) fail("G15_BASE_SHA_INVALID");
+  if (!SHA.test(baseCandidateSha ?? "")) fail("BROWSER_BASE_SHA_INVALID");
   if (
     !SHA.test(candidateSha ?? "") ||
     !/^[0-9]{8}T[0-9]{6}Z-[0-9a-f]{7}$/u.test(runId ?? "")
   )
-    fail("G15_CANDIDATE_INVALID");
+    fail("BROWSER_CANDIDATE_INVALID");
   const checkout = await inspectLaunchCheckout(candidateRoot, candidateSha);
   if (checkout.parents.length !== 1 || checkout.parents[0] !== baseCandidateSha)
-    fail("G15_BASE_NOT_DIRECT_PARENT");
+    fail("BROWSER_BASE_NOT_DIRECT_PARENT");
   git(
     candidateRoot,
     "merge-base",
@@ -127,7 +127,7 @@ export async function validateBrowserFixtureGitLineage({
     baseCandidateSha,
     checkout.commitSha,
   );
-  if (changes !== `M\t${CONFIG}`) fail("G15_CONFIG_ONLY_LINEAGE_REQUIRED");
+  if (changes !== `M\t${CONFIG}`) fail("BROWSER_CONFIG_ONLY_LINEAGE_REQUIRED");
 
   // Fetch raw Git blobs so byte comparison is independent of the worktree encoding.
   const baseBlob = execFileSync(
@@ -148,18 +148,18 @@ export async function validateBrowserFixtureGitLineage({
   );
   const sourceText = baseBlob.toString("utf8");
   if (!Buffer.from(sourceText, "utf8").equals(baseBlob))
-    fail("G15_CONFIG_UTF8_INVALID");
+    fail("BROWSER_CONFIG_UTF8_INVALID");
   if (!candidateBlob.equals(Buffer.from(fixtureConfigText(sourceText), "utf8")))
-    fail("G15_CONFIG_DELTA_INVALID");
+    fail("BROWSER_CONFIG_DELTA_INVALID");
   let baseConfig;
   try {
     baseConfig = parseYaml(sourceText, { json: true });
   } catch {
-    fail("G15_CONFIG_BASE_INVALID");
+    fail("BROWSER_CONFIG_BASE_INVALID");
   }
   const currentConfigBytes = await readFile(join(candidateRoot, CONFIG));
   if (!currentConfigBytes.equals(candidateBlob))
-    fail("G15_CONFIG_WORKTREE_MISMATCH");
+    fail("BROWSER_CONFIG_WORKTREE_MISMATCH");
   const currentConfig = await loadPlatformConfig(
     candidateRoot,
     join(candidateRoot, CONFIG),
@@ -169,27 +169,28 @@ export async function validateBrowserFixtureGitLineage({
     baseValue !== null ||
     !isDeepStrictEqual(currentConfig.browserOidc, FIXTURE_PROFILE)
   )
-    fail("G15_PROFILE_INVALID");
+    fail("BROWSER_PROFILE_INVALID");
   const baseWithoutOidc = structuredClone(baseConfig);
   const currentWithoutOidc = structuredClone(currentConfig);
   delete baseWithoutOidc.browserOidc;
   delete currentWithoutOidc.browserOidc;
   if (!isDeepStrictEqual(baseWithoutOidc, currentWithoutOidc))
-    fail("G15_CONFIG_SEMANTICS_CHANGED");
+    fail("BROWSER_CONFIG_SEMANTICS_CHANGED");
   if (
     currentConfig.environment !== "development" ||
     currentConfig.platform?.publicBaseUrl !== "https://localhost:8443"
   )
-    fail("G15_PROFILE_ENVIRONMENT_INVALID");
+    fail("BROWSER_PROFILE_ENVIRONMENT_INVALID");
   const baseHash = sha256(baseBlob);
   const configHash = sha256(candidateBlob);
-  if (configSha256 !== configHash) fail("G15_CONTEXT_CONFIG_MISMATCH");
+  if (configSha256 !== configHash) fail("BROWSER_CONTEXT_CONFIG_MISMATCH");
   const configBlobSha = git(
     candidateRoot,
     "rev-parse",
     `${checkout.commitSha}:${CONFIG}`,
   );
-  if (!/^[0-9a-f]{40}$/u.test(configBlobSha)) fail("G15_CONFIG_BLOB_INVALID");
+  if (!/^[0-9a-f]{40}$/u.test(configBlobSha))
+    fail("BROWSER_CONFIG_BLOB_INVALID");
   return {
     receipt: {
       schemaVersion: 1,
@@ -208,7 +209,7 @@ export async function validateBrowserFixtureGitLineage({
 }
 
 async function checkedLineage({ contextPath, baseCandidateSha }) {
-  if (!SHA.test(baseCandidateSha ?? "")) fail("G15_BASE_SHA_INVALID");
+  if (!SHA.test(baseCandidateSha ?? "")) fail("BROWSER_BASE_SHA_INVALID");
   const validated = await validateLaunchContext(contextPath);
   const { candidateRoot, context, sourceRoot } = validated;
   const contextInfo = await lstat(contextPath);
@@ -216,8 +217,8 @@ async function checkedLineage({ contextPath, baseCandidateSha }) {
     contextInfo.uid !== process.getuid() ||
     (contextInfo.mode & 0o777) !== 0o400
   )
-    fail("G15_CONTEXT_MODE_INVALID");
-  if (candidateRoot === sourceRoot) fail("G15_CANDIDATE_INVALID");
+    fail("BROWSER_CONTEXT_MODE_INVALID");
+  if (candidateRoot === sourceRoot) fail("BROWSER_CANDIDATE_INVALID");
   const checked = await validateBrowserFixtureGitLineage({
     candidateRoot,
     baseCandidateSha,
@@ -242,7 +243,7 @@ async function ensurePrivateDirectoryTree(root, target) {
     (rootInfo.mode & 0o077) !== 0 ||
     (await realpath(current)) !== current
   )
-    fail("G15_RECEIPT_DIRECTORY_INVALID");
+    fail("BROWSER_RECEIPT_DIRECTORY_INVALID");
   const suffix = resolve(target)
     .slice(current.length)
     .split("/")
@@ -262,7 +263,7 @@ async function ensurePrivateDirectoryTree(root, target) {
       (info.mode & 0o077) !== 0 ||
       (await realpath(current)) !== current
     )
-      fail("G15_RECEIPT_DIRECTORY_INVALID");
+      fail("BROWSER_RECEIPT_DIRECTORY_INVALID");
   }
 }
 
@@ -276,7 +277,7 @@ async function verifyPrivateDirectoryTree(root, target) {
     (rootInfo.mode & 0o077) !== 0 ||
     (await realpath(current)) !== current
   )
-    fail("G15_RECEIPT_DIRECTORY_INVALID");
+    fail("BROWSER_RECEIPT_DIRECTORY_INVALID");
   const suffix = resolve(target)
     .slice(current.length)
     .split("/")
@@ -291,7 +292,7 @@ async function verifyPrivateDirectoryTree(root, target) {
       (info.mode & 0o077) !== 0 ||
       (await realpath(current)) !== current
     )
-      fail("G15_RECEIPT_DIRECTORY_INVALID");
+      fail("BROWSER_RECEIPT_DIRECTORY_INVALID");
   }
 }
 
@@ -305,7 +306,7 @@ export async function validateBrowserFixtureLineage({
     resolve(root) !== checked.sourceRoot &&
     resolve(root) !== checked.candidateRoot
   )
-    fail("G15_SOURCE_ROOT_INVALID");
+    fail("BROWSER_SOURCE_ROOT_INVALID");
   const path = await lineageArtifactPath(checked.evidenceDir);
   const parent = dirname(path);
   await ensurePrivateDirectoryTree(checked.evidenceDir, parent);
@@ -325,7 +326,7 @@ export async function readBrowserFixtureLineage({
     resolve(root) !== checked.sourceRoot &&
     resolve(root) !== checked.candidateRoot
   )
-    fail("G15_SOURCE_ROOT_INVALID");
+    fail("BROWSER_SOURCE_ROOT_INVALID");
   const { receipt, validated } = await readVerifiedReceipt({
     contextPath,
     lineageArtifactLoc: await lineageArtifactPath(checked.evidenceDir),
@@ -334,7 +335,7 @@ export async function readBrowserFixtureLineage({
     validated.candidateRoot !== checked.candidateRoot ||
     !isDeepStrictEqual(receipt, checked.receipt)
   )
-    fail("G15_RECEIPT_STALE");
+    fail("BROWSER_RECEIPT_STALE");
   return {
     ...receipt,
     receiptPath: await lineageArtifactPath(checked.evidenceDir),
@@ -345,7 +346,7 @@ async function readVerifiedReceipt({ contextPath, lineageArtifactLoc }) {
   const validated = await validateLaunchContext(contextPath);
   const expectedPath = await lineageArtifactPath(validated.evidenceDir);
   if (resolve(lineageArtifactLoc) !== expectedPath)
-    fail("G15_RECEIPT_PATH_INVALID");
+    fail("BROWSER_RECEIPT_PATH_INVALID");
   await verifyPrivateDirectoryTree(
     validated.evidenceDir,
     dirname(expectedPath),
@@ -357,9 +358,9 @@ async function readVerifiedReceipt({ contextPath, lineageArtifactLoc }) {
     info.uid !== process.getuid() ||
     (info.mode & 0o777) !== 0o400
   )
-    fail("G15_RECEIPT_FILE_INVALID");
+    fail("BROWSER_RECEIPT_FILE_INVALID");
   const receipt = JSON.parse(await readFile(expectedPath, "utf8"));
-  if (!exactKeys(receipt, RECEIPT_KEYS)) fail("G15_RECEIPT_SCHEMA_INVALID");
+  if (!exactKeys(receipt, RECEIPT_KEYS)) fail("BROWSER_RECEIPT_SCHEMA_INVALID");
   return { validated, receipt };
 }
 
@@ -372,7 +373,7 @@ function assertPrivateFile(path, bytes, mode = 0o400) {
 async function assertTmpfsDirectory(root) {
   const canonical = resolve(root);
   if (canonical !== "/dev/shm" || (await realpath(canonical)) !== canonical)
-    fail("G15_TMPFS_REQUIRED");
+    fail("BROWSER_TMPFS_REQUIRED");
   const info = await lstat(canonical);
   const fsInfo = await statfs(canonical);
   if (
@@ -380,7 +381,7 @@ async function assertTmpfsDirectory(root) {
     info.isSymbolicLink() ||
     fsInfo.type !== 0x01021994
   )
-    fail("G15_TMPFS_REQUIRED");
+    fail("BROWSER_TMPFS_REQUIRED");
 }
 
 export async function materializeBrowserFixture({
@@ -403,20 +404,21 @@ export async function materializeBrowserFixture({
     resolve(root) !== checked.sourceRoot &&
     resolve(root) !== checked.candidateRoot
   )
-    fail("G15_SOURCE_ROOT_INVALID");
-  if (!isDeepStrictEqual(receipt, checked.receipt)) fail("G15_RECEIPT_STALE");
+    fail("BROWSER_SOURCE_ROOT_INVALID");
+  if (!isDeepStrictEqual(receipt, checked.receipt))
+    fail("BROWSER_RECEIPT_STALE");
   if (validated.candidateRoot !== checked.candidateRoot)
-    fail("G15_CANDIDATE_CHANGED");
+    fail("BROWSER_CANDIDATE_CHANGED");
   if (
     typeof publicIngressCaPem !== "string" ||
     !publicIngressCaPem.startsWith("-----BEGIN CERTIFICATE-----")
   )
-    fail("G15_INGRESS_CA_INVALID");
+    fail("BROWSER_INGRESS_CA_INVALID");
   let ingressCertificate;
   try {
     ingressCertificate = new X509Certificate(publicIngressCaPem);
   } catch {
-    fail("G15_INGRESS_CA_INVALID");
+    fail("BROWSER_INGRESS_CA_INVALID");
   }
   const now = Date.now();
   if (
@@ -424,7 +426,7 @@ export async function materializeBrowserFixture({
     Date.parse(ingressCertificate.validFrom) > now ||
     Date.parse(ingressCertificate.validTo) < now
   )
-    fail("G15_INGRESS_CA_INVALID");
+    fail("BROWSER_INGRESS_CA_INVALID");
   const canonicalIngressCaPem = ingressCertificate.toString();
 
   const fixtureRoot = await mkdtemp(
@@ -446,7 +448,7 @@ export async function materializeBrowserFixture({
       current.uid !== fixtureIdentity.uid ||
       (await realpath(fixtureRoot)) !== fixtureRoot
     )
-      fail("G15_FIXTURE_OWNERSHIP_CHANGED");
+      fail("BROWSER_FIXTURE_OWNERSHIP_CHANGED");
     await rm(fixtureRoot, { recursive: true, force: false });
   };
   try {
@@ -483,7 +485,7 @@ export async function materializeBrowserFixture({
         "-out",
         caCert,
         "-subj",
-        "/CN=Coffee G15 Fixture CA",
+        "/CN=Coffee Browser Fixture CA",
         "-addext",
         "basicConstraints=critical,CA:TRUE",
         "-addext",
@@ -602,13 +604,13 @@ export async function materializeBrowserFixture({
         { stdio: ["ignore", "pipe", "pipe"], timeout: 15000, maxBuffer: 4096 },
       );
     } catch {
-      fail("G15_NSS_IMPORT_FAILED");
+      fail("BROWSER_NSS_IMPORT_FAILED");
     }
     let nssReceipt;
     try {
       nssReceipt = JSON.parse(nssResult.toString("utf8"));
     } catch {
-      fail("G15_NSS_RECEIPT_INVALID");
+      fail("BROWSER_NSS_RECEIPT_INVALID");
     }
     if (
       !exactKeys(nssReceipt, [
@@ -622,7 +624,7 @@ export async function materializeBrowserFixture({
       nssReceipt.sslTrustedCa !== true ||
       nssReceipt.status !== "PUBLIC_CA_IMPORTED"
     )
-      fail("G15_NSS_RECEIPT_INVALID");
+      fail("BROWSER_NSS_RECEIPT_INVALID");
     for (const path of [
       caCert,
       ingressCa,
@@ -638,7 +640,7 @@ export async function materializeBrowserFixture({
         info.uid !== process.getuid() ||
         (info.mode & 0o777) !== 0o400
       )
-        fail("G15_FIXTURE_FILE_MODE_INVALID");
+        fail("BROWSER_FIXTURE_FILE_MODE_INVALID");
     }
     return {
       profile: "verification-only-pkce-jwks-v1",

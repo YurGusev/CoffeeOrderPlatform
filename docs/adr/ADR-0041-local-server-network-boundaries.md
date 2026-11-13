@@ -40,7 +40,7 @@ Supersedes: ADR-0019 только в части гарантии Node Permission
 - Provider-клиент Gateway сохраняет настроенный HTTPS origin и запрет redirect
   на другой host. Это ограничение пути приложения, а не firewall произвольных
   сокетов процесса. Provider credentials и роли остаются scoped.
-- G07 проверяет заявленные pins, конфигурацию и секреты согласно своей команде.
+- Гейт `config_security` проверяет заявленные pins, конфигурацию и секреты согласно своей команде.
   Его PASS не является доказательством per-host TCP isolation; фактические
   сетевые и authorization проверки требуют отдельного evidence.
 

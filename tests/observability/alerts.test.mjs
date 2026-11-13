@@ -36,8 +36,8 @@ import {
   queryLokiLogs,
   waitForOwnedMetricFamilySamples,
   waitForSameTraceSpans,
-  collectG14BrowserTelemetry,
-  validateG14ComponentCleanup,
+  collectObservabilityBrowserTelemetry,
+  validateObservabilityComponentCleanup,
   waitForConvergenceMetricSamples,
   readSinkEvents,
   durationMilliseconds,
@@ -1994,7 +1994,7 @@ void test("verification provenance hashes the non-ignored source tree and compil
   assert.match(identity.identityHash, /^[a-f0-9]{64}$/u);
 });
 
-void test("observability evidence distinguishes selected live roles from full 14-runtime G14 coverage", () => {
+void test("observability evidence distinguishes selected live roles from full 14-runtime observability coverage", () => {
   const coverage = observabilityVerificationCoverage({
     launchPathProof: {
       roles: [
@@ -2014,10 +2014,10 @@ void test("observability evidence distinguishes selected live roles from full 14
     },
   });
   assert.equal(coverage.verificationScope, "operations-component");
-  assert.equal(coverage.fullSystemG14.status, "NOT_RUN");
-  assert.equal(coverage.fullSystemG14.owner, "#13");
-  assert.equal(coverage.fullSystemG14.requiredNodeRuntimeCount, 14);
-  assert.deepEqual(coverage.fullSystemG14.launchPathNodeRuntimes, [
+  assert.equal(coverage.fullSystemObservability.status, "NOT_RUN");
+  assert.equal(coverage.fullSystemObservability.owner, "#13");
+  assert.equal(coverage.fullSystemObservability.requiredNodeRuntimeCount, 14);
+  assert.deepEqual(coverage.fullSystemObservability.launchPathNodeRuntimes, [
     "api-internal",
     "api-public",
     "edge-gateway",
@@ -2025,34 +2025,44 @@ void test("observability evidence distinguishes selected live roles from full 14
     "orders-service",
     "realtime-gateway",
   ]);
-  assert.equal(coverage.fullSystemG14.launchPathNativeNginx, true);
+  assert.equal(coverage.fullSystemObservability.launchPathNativeNginx, true);
   assert.equal(
-    coverage.fullSystemG14.convergenceMetricProof.processKind,
+    coverage.fullSystemObservability.convergenceMetricProof.processKind,
     "driver-container SQL-backed proof helper",
   );
-  assert.equal(coverage.fullSystemG14.convergenceMetricProof.status, "PASS");
-  assert.deepEqual(coverage.fullSystemG14.nodeRuntimesNotClaimedAsLive, [
-    "customer-service",
-    "catalog-service",
-    "catalog-supplier-sync",
-    "catalog-activation-worker",
-    "pricing-service",
-    "aroma-observer",
-    "aroma-convergence",
-    "aroma-gateway",
-  ]);
+  assert.equal(
+    coverage.fullSystemObservability.convergenceMetricProof.status,
+    "PASS",
+  );
+  assert.deepEqual(
+    coverage.fullSystemObservability.nodeRuntimesNotClaimedAsLive,
+    [
+      "customer-service",
+      "catalog-service",
+      "catalog-supplier-sync",
+      "catalog-activation-worker",
+      "pricing-service",
+      "aroma-observer",
+      "aroma-convergence",
+      "aroma-gateway",
+    ],
+  );
   const withMatrix = observabilityVerificationCoverage({
     runtimeMetricMatrix: {
       status: "PASS",
       runtimeMetrics: { roles: NODE_RUNTIME_ROLES.map((role) => ({ role })) },
     },
   });
-  assert.deepEqual(withMatrix.fullSystemG14.metricMatrixNodeRuntimes, [
-    ...NODE_RUNTIME_ROLES,
-  ]);
-  assert.deepEqual(withMatrix.fullSystemG14.nodeRuntimesNotClaimedAsLive, []);
+  assert.deepEqual(
+    withMatrix.fullSystemObservability.metricMatrixNodeRuntimes,
+    [...NODE_RUNTIME_ROLES],
+  );
+  assert.deepEqual(
+    withMatrix.fullSystemObservability.nodeRuntimesNotClaimedAsLive,
+    [],
+  );
   assert.equal(
-    withMatrix.fullSystemG14.status,
+    withMatrix.fullSystemObservability.status,
     "NOT_RUN",
     "functional telemetry coverage does not grant full-system launch acceptance",
   );
@@ -2364,7 +2374,7 @@ void test("Grafana backend queries require fresh owner samples and exact traces"
   );
 });
 
-void test("G14 component requires five child database removals before browser", () => {
+void test("observability component requires five child database removals before browser", () => {
   const runId = "20261030T120000Z-abcdef0";
   const names = ["customer", "catalog", "pricing", "orders", "integration"]
     .map(
@@ -2378,7 +2388,10 @@ void test("G14 component requires five child database removals before browser", 
     attachment: { routePreserved: true },
   };
   const component = { cleanupVerified: true, cleanup };
-  assert.equal(validateG14ComponentCleanup(component, runId), cleanup);
+  assert.equal(
+    validateObservabilityComponentCleanup(component, runId),
+    cleanup,
+  );
   for (const altered of [
     { ...component, cleanupVerified: false },
     { ...component, cleanup: { ...cleanup, verified: false } },
@@ -2402,12 +2415,12 @@ void test("G14 component requires five child database removals before browser", 
     },
   ])
     assert.throws(
-      () => validateG14ComponentCleanup(altered, runId),
+      () => validateObservabilityComponentCleanup(altered, runId),
       /cleanup is unverified/u,
     );
 });
 
-void test("G14 queries actual child telemetry before cleanup and fails closed on missing or private data", async () => {
+void test("observability queries actual child telemetry before cleanup and fails closed on missing or private data", async () => {
   const { runManagedRollbackChild } =
     await import("../../verification/launch/v1/scenarios/rollback.mjs");
   const traceId = "a".repeat(32);
@@ -2598,7 +2611,7 @@ void test("G14 queries actual child telemetry before cleanup and fails closed on
       );
     };
   const collect = (fetchImpl) =>
-    collectG14BrowserTelemetry({
+    collectObservabilityBrowserTelemetry({
       proof,
       startTimeUs,
       lokiUrl: "http://loki:3100",
@@ -3368,7 +3381,7 @@ void test("restoration preserves proof failure and reports both failures without
   }
 });
 
-void test("G14 cannot pass with a missing or incomplete required phase", () => {
+void test("observability cannot pass with a missing or incomplete required phase", () => {
   const pass = { status: "PASS" };
   const evidence = {
     cleanupErrors: [],
@@ -3634,7 +3647,7 @@ void test("Grafana hold windows use the episode start rather than delayed webhoo
   assert.ok(Number.isNaN(alertEpisodeStartMs(`invalid:${started}`)));
 });
 
-void test("G14 cannot pass when required evidence cannot be written", async () => {
+void test("observability cannot pass when required evidence cannot be written", async () => {
   const evidence = { status: "PASS" };
   await persistVerificationResult({
     root: "/fixture",
@@ -3669,7 +3682,7 @@ void test("launch observability artifacts survive removal of the temporary candi
     await writeFile(path.join(root, "config/toolchain-versions.json"), "{}\n");
     assert.equal(spawnSync("git", ["init", "-q", root]).status, 0);
     assert.equal(spawnSync("git", ["-C", root, "add", "config"]).status, 0);
-    await mkdir(path.join(evidenceDir, "gates/G14_OBSERVABILITY/artifacts"), {
+    await mkdir(path.join(evidenceDir, "gates/observability/artifacts"), {
       recursive: true,
     });
     const retained = [

@@ -61,7 +61,7 @@ function within(root, path) {
 async function readEvidenceFile(path, { maxBytes, mode = 0o600 } = {}) {
   const absolute = resolve(path);
   if ((await realpath(absolute).catch(() => null)) !== absolute)
-    fail("G12_KAFKA_EVIDENCE_PATH_INVALID");
+    fail("SUPPLY_CHAIN_KAFKA_EVIDENCE_PATH_INVALID");
   const info = await lstat(absolute).catch(() => null);
   if (
     !info?.isFile() ||
@@ -71,7 +71,7 @@ async function readEvidenceFile(path, { maxBytes, mode = 0o600 } = {}) {
     info.size < 1 ||
     info.size > maxBytes
   )
-    fail("G12_KAFKA_EVIDENCE_FILE_INVALID");
+    fail("SUPPLY_CHAIN_KAFKA_EVIDENCE_FILE_INVALID");
   const handle = await open(
     absolute,
     constants.O_RDONLY | constants.O_NOFOLLOW,
@@ -85,9 +85,10 @@ async function readEvidenceFile(path, { maxBytes, mode = 0o600 } = {}) {
       opened.size !== info.size ||
       opened.size > maxBytes
     )
-      fail("G12_KAFKA_EVIDENCE_FILE_INVALID");
+      fail("SUPPLY_CHAIN_KAFKA_EVIDENCE_FILE_INVALID");
     const bytes = await handle.readFile();
-    if (bytes.length !== info.size) fail("G12_KAFKA_EVIDENCE_FILE_INVALID");
+    if (bytes.length !== info.size)
+      fail("SUPPLY_CHAIN_KAFKA_EVIDENCE_FILE_INVALID");
     return bytes;
   } finally {
     await handle.close();
@@ -98,7 +99,7 @@ function parseJson(bytes) {
   try {
     return JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
   } catch {
-    fail("G12_KAFKA_RECEIPT_INVALID");
+    fail("SUPPLY_CHAIN_KAFKA_RECEIPT_INVALID");
   }
 }
 
@@ -136,14 +137,14 @@ export function inspectDockerImage(run, reference) {
     ]);
   } catch (error) {
     if (isMissingImage(error, reference)) return null;
-    fail("G12_KAFKA_IMAGE_INSPECT_FAILED");
+    fail("SUPPLY_CHAIN_KAFKA_IMAGE_INSPECT_FAILED");
   }
   const [imageId, rawTags, ...extra] = String(output).trim().split("|");
   let tags;
   try {
     tags = JSON.parse(rawTags);
   } catch {
-    fail("G12_KAFKA_IMAGE_INSPECT_INVALID");
+    fail("SUPPLY_CHAIN_KAFKA_IMAGE_INSPECT_INVALID");
   }
   if (
     extra.length ||
@@ -152,7 +153,7 @@ export function inspectDockerImage(run, reference) {
     (tags ?? []).some((tag) => typeof tag !== "string" || !tag) ||
     new Set(tags ?? []).size !== (tags ?? []).length
   )
-    fail("G12_KAFKA_IMAGE_INSPECT_INVALID");
+    fail("SUPPLY_CHAIN_KAFKA_IMAGE_INSPECT_INVALID");
   return Object.freeze({ imageId, tags: tags ?? [] });
 }
 
@@ -325,9 +326,9 @@ async function validateGateImage({
       "otel-collector",
     ].includes(target)
   )
-    fail("G12_KAFKA_TARGET_INVALID");
+    fail("SUPPLY_CHAIN_KAFKA_TARGET_INVALID");
   if (typeof contextFile !== "string" || !isAbsolute(contextFile))
-    fail("G12_KAFKA_LAUNCH_CONTEXT_REQUIRED");
+    fail("SUPPLY_CHAIN_KAFKA_LAUNCH_CONTEXT_REQUIRED");
   const active = await validateContext(contextFile);
   const { context, evidenceDir, candidateRoot } = active;
   const environment = parseJson(
@@ -345,7 +346,7 @@ async function validateGateImage({
     !/^[0-9a-f]{64}$/u.test(environment.toolchainVersionsSha256 ?? "") ||
     !/^[0-9a-f]{64}$/u.test(environment.lockfileSha256 ?? "")
   )
-    fail("G12_KAFKA_LAUNCH_IDENTITY_INVALID");
+    fail("SUPPLY_CHAIN_KAFKA_LAUNCH_IDENTITY_INVALID");
 
   const platformBytes = await readEvidenceFile(
     join(candidateRoot, "config/platform.yaml"),
@@ -364,7 +365,7 @@ async function validateGateImage({
     sha256(toolchainBytes) !== environment.toolchainVersionsSha256 ||
     sha256(lockfileBytes) !== environment.lockfileSha256
   )
-    fail("G12_KAFKA_SOURCE_IDENTITY_INVALID");
+    fail("SUPPLY_CHAIN_KAFKA_SOURCE_IDENTITY_INVALID");
   const toolchain = parseJson(toolchainBytes);
   const baseImage =
     target === "kafka"
@@ -377,11 +378,11 @@ async function validateGateImage({
             ? toolchain.keycloakDistributionImage
             : toolchain.nodeImage;
   if (!/@sha256:[a-f0-9]{64}$/u.test(baseImage ?? ""))
-    fail("G12_KAFKA_BASE_IMAGE_INVALID");
+    fail("SUPPLY_CHAIN_KAFKA_BASE_IMAGE_INVALID");
 
   const supplyChainDir = join(
     evidenceDir,
-    "gates/G12_SUPPLY_CHAIN/artifacts/supply-chain",
+    "gates/supply_chain/artifacts/supply-chain",
   );
   const result = parseJson(
     await readEvidenceFile(join(supplyChainDir, "result.json"), {
@@ -443,7 +444,7 @@ async function validateGateImage({
       "baseMaterial",
     ]) ||
     receipt.schemaVersion !== 1 ||
-    receipt.gate !== "G12_SUPPLY_CHAIN" ||
+    receipt.gate !== "supply_chain" ||
     receipt.status !== "PASS" ||
     receipt.runId !== context.runId ||
     receipt.candidateSha !== context.candidateSha ||
@@ -486,9 +487,9 @@ async function validateGateImage({
     image.imageId !== receipt.imageId ||
     image.manifestDigest !== receipt.manifestDigest ||
     image.ociArtifactSha256 !== receipt.ociArtifact.sha256 ||
-    result.gate !== "G12_SUPPLY_CHAIN" ||
+    result.gate !== "supply_chain" ||
     result.status !== "PASS" ||
-    result.code !== "G12_SCAN_CLEAN" ||
+    result.code !== "SUPPLY_CHAIN_SCAN_CLEAN" ||
     result.runId !== context.runId ||
     result.candidateSha !== context.candidateSha ||
     result.provenance?.status !== "PASS" ||
@@ -499,13 +500,13 @@ async function validateGateImage({
       environment.toolchainVersionsSha256 ||
     result.provenance?.lockfileSha256 !== environment.lockfileSha256
   )
-    fail("G12_KAFKA_RECEIPT_INVALID");
+    fail("SUPPLY_CHAIN_KAFKA_RECEIPT_INVALID");
 
   if (
     target === "keycloak" &&
     !exactKeys(receipt.baseMaterial, ["distribution", "runtime"])
   )
-    fail("G12_KAFKA_BASE_MATERIAL_INVALID");
+    fail("SUPPLY_CHAIN_KAFKA_BASE_MATERIAL_INVALID");
   const bases =
     target === "keycloak"
       ? [
@@ -529,7 +530,7 @@ async function validateGateImage({
       !validateBaseMaterial(baseMaterial, expectedBaseImage, baseTarget) ||
       baseMaterial.indexArtifact.sha256 !== sourceDigest
     )
-      fail("G12_KAFKA_BASE_MATERIAL_INVALID");
+      fail("SUPPLY_CHAIN_KAFKA_BASE_MATERIAL_INVALID");
     const indexBytes = await readEvidenceFile(
       join(supplyChainDir, baseMaterial.indexArtifact.path),
       { maxBytes: MAX_INDEX_BYTES },
@@ -550,7 +551,7 @@ async function validateGateImage({
           descriptor.size < 1,
       )
     )
-      fail("G12_KAFKA_BASE_MATERIAL_INVALID");
+      fail("SUPPLY_CHAIN_KAFKA_BASE_MATERIAL_INVALID");
     const platformDescriptors = index.manifests.filter(
       (descriptor) =>
         descriptor.platform?.os === "linux" &&
@@ -560,7 +561,7 @@ async function validateGateImage({
       platformDescriptors.length !== 1 ||
       platformDescriptors[0].digest !== baseMaterial.platformManifestDigest
     )
-      fail("G12_KAFKA_BASE_MATERIAL_INVALID");
+      fail("SUPPLY_CHAIN_KAFKA_BASE_MATERIAL_INVALID");
 
     if (baseTarget === "keycloak-runtime") {
       const artifact = baseMaterial.manifestArtifact;
@@ -574,7 +575,7 @@ async function validateGateImage({
         !Number.isSafeInteger(artifact.layerCount) ||
         artifact.layerCount < 1
       )
-        fail("G12_KAFKA_BASE_MATERIAL_INVALID");
+        fail("SUPPLY_CHAIN_KAFKA_BASE_MATERIAL_INVALID");
       const bytes = await readEvidenceFile(
         join(supplyChainDir, artifact.path),
         { maxBytes: MAX_INDEX_BYTES },
@@ -589,13 +590,13 @@ async function validateGateImage({
         manifest.layers.length !== artifact.layerCount ||
         manifest.layers.some((layer) => !IMAGE_ID.test(layer?.digest ?? ""))
       )
-        fail("G12_KAFKA_BASE_MATERIAL_INVALID");
+        fail("SUPPLY_CHAIN_KAFKA_BASE_MATERIAL_INVALID");
     }
   }
 
   const artifactPath = join(supplyChainDir, `artifacts/${target}.oci.tar`);
   if (!within(supplyChainDir, artifactPath))
-    fail("G12_KAFKA_ARTIFACT_PATH_INVALID");
+    fail("SUPPLY_CHAIN_KAFKA_ARTIFACT_PATH_INVALID");
   let artifactBytes;
   if (!readRuntimeImages) {
     artifactBytes = await readEvidenceFile(artifactPath, {
@@ -605,7 +606,7 @@ async function validateGateImage({
       artifactBytes.length !== receipt.ociArtifact.sizeBytes ||
       sha256(artifactBytes) !== receipt.ociArtifact.sha256
     )
-      fail("G12_KAFKA_ARTIFACT_HASH_MISMATCH");
+      fail("SUPPLY_CHAIN_KAFKA_ARTIFACT_HASH_MISMATCH");
   }
   const provenanceImages = result.provenance?.images?.filter(
     (entry) => entry.service === target,
@@ -624,7 +625,7 @@ async function validateGateImage({
     provenanceImages?.length !== 1 ||
     !isDeepStrictEqual(provenanceImages[0], expectedProvenanceImage)
   )
-    fail("G12_KAFKA_PROVENANCE_INVALID");
+    fail("SUPPLY_CHAIN_KAFKA_PROVENANCE_INVALID");
 
   {
     const grafanaBytes =
@@ -644,7 +645,7 @@ async function validateGateImage({
       grafanaImage?.path !== "artifacts/grafana-receipt.json" ||
       grafanaImage.receiptSha256 !== sha256(grafanaBytes) ||
       grafanaReceipt.schemaVersion !== 1 ||
-      grafanaReceipt.gate !== "G12_SUPPLY_CHAIN" ||
+      grafanaReceipt.gate !== "supply_chain" ||
       grafanaReceipt.status !== "PASS" ||
       grafanaReceipt.target !== "grafana" ||
       grafanaReceipt.runId !== context.runId ||
@@ -685,14 +686,14 @@ async function validateGateImage({
         grafanaReceipt.baseMaterial,
       )
     )
-      fail("G12_GRAFANA_ADJUDICATION_INVALID");
+      fail("SUPPLY_CHAIN_GRAFANA_ADJUDICATION_INVALID");
     const decisionRef = result.adjudication;
     if (
       !exactKeys(decisionRef, ["path", "sha256"]) ||
       decisionRef.path !== "artifacts/grafana-adjudication.json" ||
       !/^[a-f0-9]{64}$/u.test(decisionRef.sha256 ?? "")
     )
-      fail("G12_GRAFANA_ADJUDICATION_INVALID");
+      fail("SUPPLY_CHAIN_GRAFANA_ADJUDICATION_INVALID");
     const decisionBytes = await readEvidenceFile(
       join(supplyChainDir, decisionRef.path),
       { maxBytes: MAX_METADATA_BYTES },
@@ -729,7 +730,7 @@ async function validateGateImage({
         (path) => !result.reports.some((entry) => entry?.path === path),
       )
     )
-      fail("G12_GRAFANA_ADJUDICATION_INVALID");
+      fail("SUPPLY_CHAIN_GRAFANA_ADJUDICATION_INVALID");
     const aggregate = { high: 0, critical: 0 };
     const reports = {};
     for (const entry of result.reports) {
@@ -737,7 +738,7 @@ async function validateGateImage({
         !exactKeys(entry, ["path", "sha256", "findings"]) ||
         !/^[a-f0-9]{64}$/u.test(entry.sha256 ?? "")
       )
-        fail("G12_GRAFANA_ADJUDICATION_INVALID");
+        fail("SUPPLY_CHAIN_GRAFANA_ADJUDICATION_INVALID");
       const bytes =
         entry.path === "grafana.vulnerabilities.json"
           ? rawBytes
@@ -746,12 +747,12 @@ async function validateGateImage({
               { maxBytes: MAX_EVIDENCE_BYTES },
             );
       if (sha256(bytes) !== entry.sha256)
-        fail("G12_GRAFANA_ADJUDICATION_INVALID");
+        fail("SUPPLY_CHAIN_GRAFANA_ADJUDICATION_INVALID");
       const findings = entry.path.endsWith(".vulnerabilities.json")
         ? inspectFindings(parseJson(bytes))
         : { high: 0, critical: 0 };
       if (!isDeepStrictEqual(entry.findings, findings))
-        fail("G12_GRAFANA_ADJUDICATION_INVALID");
+        fail("SUPPLY_CHAIN_GRAFANA_ADJUDICATION_INVALID");
       aggregate.high += findings.high;
       aggregate.critical += findings.critical;
       if (entry.path.endsWith(".vulnerabilities.json"))
@@ -769,11 +770,11 @@ async function validateGateImage({
           images?.length !== 1 ||
           parseJson(bytes)?.Metadata?.ImageID !== images[0].imageId
         )
-          fail("G12_GRAFANA_ADJUDICATION_INVALID");
+          fail("SUPPLY_CHAIN_GRAFANA_ADJUDICATION_INVALID");
       }
     }
     if (!isDeepStrictEqual(result.findings, aggregate))
-      fail("G12_GRAFANA_ADJUDICATION_INVALID");
+      fail("SUPPLY_CHAIN_GRAFANA_ADJUDICATION_INVALID");
     const policy = parseSecurityScanVerification(
       parseYaml(platformBytes.toString("utf8"), { json: true })?.verification
         ?.securityScan,
@@ -830,7 +831,7 @@ async function validateGateImage({
         claimed.ociArtifactPath !== collector.ociArtifact.path ||
         claimed.ociArtifactSha256 !== collector.ociArtifact.sha256 ||
         collector.schemaVersion !== 1 ||
-        collector.gate !== "G12_SUPPLY_CHAIN" ||
+        collector.gate !== "supply_chain" ||
         collector.status !== "PASS" ||
         collector.target !== "otel-collector" ||
         collector.runId !== context.runId ||
@@ -867,13 +868,13 @@ async function validateGateImage({
         records[0].attestationSha256 !== collector.attestationSha256 ||
         !isDeepStrictEqual(records[0].baseMaterial, collector.baseMaterial)
       )
-        fail("G12_GRAFANA_ADJUDICATION_INVALID");
+        fail("SUPPLY_CHAIN_GRAFANA_ADJUDICATION_INVALID");
     }
     const evaluation = result.evaluation;
     if (
       sha256(decisionBytes) !== decisionRef.sha256 ||
       decision.schemaVersion !== 1 ||
-      decision.gate !== "G12_SUPPLY_CHAIN" ||
+      decision.gate !== "supply_chain" ||
       decision.runId !== context.runId ||
       decision.candidateSha !== context.candidateSha ||
       decision.treeSha !== environment.treeSha ||
@@ -919,7 +920,7 @@ async function validateGateImage({
       evaluation.unresolvedHigh !== 0 ||
       evaluation.critical !== 0
     )
-      fail("G12_GRAFANA_ADJUDICATION_INVALID");
+      fail("SUPPLY_CHAIN_GRAFANA_ADJUDICATION_INVALID");
   }
 
   let runtimeImages = null;
@@ -944,7 +945,7 @@ async function validateGateImage({
           !/^[a-f0-9]{64}$/u.test(entry.attestationSha256 ?? ""),
       )
     )
-      fail("G12_RUNTIME_IMAGE_PROVENANCE_INVALID");
+      fail("SUPPLY_CHAIN_RUNTIME_IMAGE_PROVENANCE_INVALID");
     runtimeImages = Object.freeze(
       services.map((service) => {
         const record = records.find((entry) => entry.service === service);
@@ -960,29 +961,29 @@ async function validateGateImage({
       try {
         runtimeMarker = inspectDockerImage(run, KAFKA_RUNTIME_MARKER);
       } catch {
-        fail("G12_KAFKA_RUNTIME_MARKER_UNKNOWN");
+        fail("SUPPLY_CHAIN_KAFKA_RUNTIME_MARKER_UNKNOWN");
       }
-      if (runtimeMarker) fail("G12_KAFKA_RUNTIME_MARKER_PRESENT");
+      if (runtimeMarker) fail("SUPPLY_CHAIN_KAFKA_RUNTIME_MARKER_PRESENT");
     }
     const priorImage = inspectDockerImage(run, receipt.imageId);
     if (priorImage) {
       if (priorImage.imageId !== receipt.imageId)
-        fail("G12_KAFKA_PREEXISTING_IMAGE_ID_INVALID");
+        fail("SUPPLY_CHAIN_KAFKA_PREEXISTING_IMAGE_ID_INVALID");
       const priorTag = inspectDockerImage(run, receipt.importTag);
       if (
         priorTag &&
         (priorTag.imageId !== receipt.imageId ||
           !priorTag.tags.includes(receipt.importTag))
       )
-        fail("G12_KAFKA_PREEXISTING_TAG_CONFLICT");
+        fail("SUPPLY_CHAIN_KAFKA_PREEXISTING_TAG_CONFLICT");
     } else {
       if (inspectDockerImage(run, receipt.importTag))
-        fail("G12_KAFKA_IMPORT_TAG_COLLISION");
+        fail("SUPPLY_CHAIN_KAFKA_IMPORT_TAG_COLLISION");
       let importOutput;
       try {
         importOutput = run(["image", "load"], { input: artifactBytes });
       } catch {
-        fail("G12_KAFKA_IMPORT_FAILED");
+        fail("SUPPLY_CHAIN_KAFKA_IMPORT_FAILED");
       }
       const loadedImage = inspectDockerImage(run, receipt.imageId);
       const loadedTag = inspectDockerImage(run, receipt.importTag);
@@ -993,7 +994,7 @@ async function validateGateImage({
         loadedImage.tags[0] !== receipt.importTag ||
         typeof importOutput !== "string"
       )
-        fail("G12_KAFKA_IMPORTED_IMAGE_IDENTITY_INVALID");
+        fail("SUPPLY_CHAIN_KAFKA_IMPORTED_IMAGE_IDENTITY_INVALID");
       imported = true;
     }
   }
@@ -1030,7 +1031,7 @@ export async function readVerifiedRuntimeImages({
     loadImage: false,
     readRuntimeImages: true,
   });
-  if (!runtimeImages) fail("G12_RUNTIME_IMAGE_PROVENANCE_INVALID");
+  if (!runtimeImages) fail("SUPPLY_CHAIN_RUNTIME_IMAGE_PROVENANCE_INVALID");
   return runtimeImages;
 }
 
@@ -1048,21 +1049,21 @@ export function removeVerifiedGateImage({
       "otel-collector",
     ].includes(target)
   )
-    fail("G12_KAFKA_TARGET_INVALID");
+    fail("SUPPLY_CHAIN_KAFKA_TARGET_INVALID");
   if (!image || image.imported !== true) return false;
   if (
     !IMAGE_ID.test(image.imageId ?? "") ||
     !VERIFIED_TAG.test(image.importTag ?? "") ||
     !image.importTag.endsWith(`-${target}:latest`)
   )
-    fail("G12_KAFKA_CLEANUP_OWNERSHIP_INVALID");
+    fail("SUPPLY_CHAIN_KAFKA_CLEANUP_OWNERSHIP_INVALID");
   const inspected = inspectDockerImage(run, image.imageId);
   if (
     inspected?.imageId !== image.imageId ||
     inspected.tags.length !== 1 ||
     inspected.tags[0] !== image.importTag
   )
-    fail("G12_KAFKA_CLEANUP_STATE_UNKNOWN");
+    fail("SUPPLY_CHAIN_KAFKA_CLEANUP_STATE_UNKNOWN");
   let containers;
   try {
     containers = String(
@@ -1077,14 +1078,14 @@ export function removeVerifiedGateImage({
       ]),
     ).trim();
   } catch {
-    fail("G12_KAFKA_CLEANUP_STATE_UNKNOWN");
+    fail("SUPPLY_CHAIN_KAFKA_CLEANUP_STATE_UNKNOWN");
   }
-  if (containers) fail("G12_KAFKA_IMAGE_IN_USE");
+  if (containers) fail("SUPPLY_CHAIN_KAFKA_IMAGE_IN_USE");
   run(["image", "rm", "--no-prune", image.imageId]);
   if (
     inspectDockerImage(run, image.imageId) !== null ||
     inspectDockerImage(run, image.importTag) !== null
   )
-    fail("G12_KAFKA_CLEANUP_RETAINED");
+    fail("SUPPLY_CHAIN_KAFKA_CLEANUP_RETAINED");
   return true;
 }

@@ -99,7 +99,9 @@ function quoteDatabaseIdentifier(value) {
     Buffer.byteLength(value, "utf8") <= 63 &&
     BACKUP_RESTORE_DATABASE.test(value);
   if (!IDENTIFIER.test(value ?? "") && !isCanonicalBackupRestore)
-    fail("database name is not a canonical identifier or G17 restore target");
+    fail(
+      "database name is not a canonical identifier or backup_restore target",
+    );
   return `"${value.replaceAll('"', '""')}"`;
 }
 

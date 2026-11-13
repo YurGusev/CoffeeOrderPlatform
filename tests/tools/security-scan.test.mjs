@@ -36,8 +36,8 @@ import {
   parseKafkaBaseIndex,
   runCommand,
   runSecurityScan,
-  G12_SCAN_BUDGET_MS,
-  G12_SCAN_RESERVE_MS,
+  _SCAN_BUDGET_MS,
+  _SCAN_RESERVE_MS,
   scanBudgetMs,
   trivyArgs,
   trivyScanCommand,
@@ -184,7 +184,7 @@ void test("build snapshot retains committed modes, omits ignored files and detec
   );
 });
 
-void test("G12 accepts Buildx mode=min metadata shape and requires statement subject to match", () => {
+void test("supply_chain accepts Buildx mode=min metadata shape and requires statement subject to match", () => {
   const metadata = buildMetadata();
   assert.deepEqual(verifyBuildxMetadata("orders", metadata, candidateSha), {
     service: "orders",
@@ -315,7 +315,7 @@ void test("G12 accepts Buildx mode=min metadata shape and requires statement sub
   );
 });
 
-void test("G12 binds both Keycloak input materials and rejects missing or foreign provenance", () => {
+void test("supply_chain binds both Keycloak input materials and rejects missing or foreign provenance", () => {
   const vendor = "1".repeat(64);
   const runtime = "2".repeat(64);
   const material = (sourceRef, sha256) => ({
@@ -394,7 +394,7 @@ void test("G12 binds both Keycloak input materials and rejects missing or foreig
   );
 });
 
-void test("G12 checks final Keycloak files and rejects Java overwrites", async (t) => {
+void test("supply_chain checks final Keycloak files and rejects Java overwrites", async (t) => {
   const root = await mkdtemp(join(tmpdir(), "keycloak-image-proof-"));
   t.after(() => rm(root, { recursive: true, force: true }));
   const base = join(root, "base");
@@ -495,7 +495,7 @@ void test("G12 checks final Keycloak files and rejects Java overwrites", async (
   await assert.rejects(verifyKeycloakImageFiles({ image, toolchain, run }));
 });
 
-void test("G12 binds Kafka provenance to the single pinned linux/amd64 base descriptor", () => {
+void test("supply_chain binds Kafka provenance to the single pinned linux/amd64 base descriptor", () => {
   const platformDigest = `sha256:${"d".repeat(64)}`;
   const indexBytes = Buffer.from(
     JSON.stringify({
@@ -688,7 +688,7 @@ void test("G12 binds Kafka provenance to the single pinned linux/amd64 base desc
   }
 });
 
-void test("G12 subprocess timeout escalates to SIGKILL and settles", async () => {
+void test("supply_chain subprocess timeout escalates to SIGKILL and settles", async () => {
   const started = Date.now();
   await assert.rejects(
     runCommand(
@@ -701,7 +701,7 @@ void test("G12 subprocess timeout escalates to SIGKILL and settles", async () =>
   assert.ok(Date.now() - started < 2_000);
 });
 
-void test("G12 failed commands expose only bounded finite stderr diagnostics", async () => {
+void test("supply_chain failed commands expose only bounded finite stderr diagnostics", async () => {
   const error = await runCommand(
     process.execPath,
     [
@@ -783,10 +783,10 @@ void test("G12 failed commands expose only bounded finite stderr diagnostics", a
   );
 });
 
-void test("G12 image inspection treats only an exact daemon not-found as absence", async (t) => {
+void test("supply_chain image inspection treats only an exact daemon not-found as absence", async (t) => {
   const temp = await mkdtemp(join(tmpdir(), "image-inspect-command-"));
   t.after(() => rm(temp, { recursive: true, force: true }));
-  t.after(() => delete process.env.COFFEE_G12_CACHE_DIR);
+  t.after(() => delete process.env.COFFEE_SCAN_CACHE_DIR);
   const dockerPath = join(temp, "docker");
   const reference = `ghcr.io/example/image@sha256:${"a".repeat(64)}`;
   await writeFile(
@@ -814,7 +814,7 @@ void test("G12 image inspection treats only an exact daemon not-found as absence
   );
 });
 
-void test("G12 candidate index checks retain tracked flags beyond the old output boundary", async (t) => {
+void test("supply_chain candidate index checks retain tracked flags beyond the old output boundary", async (t) => {
   const candidateRoot = await mkdtemp(join(tmpdir(), "image-index-flags-"));
   t.after(() => rm(candidateRoot, { recursive: true, force: true }));
   const trackedDirectory = join(candidateRoot, "many-files");
@@ -836,7 +836,7 @@ void test("G12 candidate index checks retain tracked flags beyond the old output
     "git",
     [
       "-c",
-      "user.name=G12 Test",
+      "user.name=supply_chain Test",
       "-c",
       "user.email=g12-test@example.invalid",
       "commit",
@@ -865,7 +865,7 @@ void test("G12 candidate index checks retain tracked flags beyond the old output
   assert.equal(await hasHiddenIndexFlags(candidateRoot), false);
 });
 
-void test("G12 Git output cap rejects overflow even when child can otherwise finish", async (t) => {
+void test("supply_chain Git output cap rejects overflow even when child can otherwise finish", async (t) => {
   const temp = await mkdtemp(join(tmpdir(), "git-output-cap-"));
   t.after(() => rm(temp, { recursive: true, force: true }));
   const bin = join(temp, "bin");
@@ -886,7 +886,7 @@ void test("G12 Git output cap rejects overflow even when child can otherwise fin
   }
 });
 
-void test("G12 verifies BuildKit nested OCI index and platform-manifest attestation", async (t) => {
+void test("supply_chain verifies BuildKit nested OCI index and platform-manifest attestation", async (t) => {
   const temp = await mkdtemp(join(tmpdir(), "oci-attestation-"));
   t.after(() => rm(temp, { recursive: true, force: true }));
   const { createHash } = await import("node:crypto");
@@ -1089,7 +1089,7 @@ void test("G12 verifies BuildKit nested OCI index and platform-manifest attestat
   );
 });
 
-void test("G12 flags every HIGH or CRITICAL finding", () => {
+void test("supply_chain flags every HIGH or CRITICAL finding", () => {
   assert.deepEqual(
     inspectFindings({
       Results: [
@@ -1111,7 +1111,7 @@ void test("G12 flags every HIGH or CRITICAL finding", () => {
   );
 });
 
-void test("G12 compares only Trivy package components and binds image SBOMs", () => {
+void test("supply_chain compares only Trivy package components and binds image SBOMs", () => {
   const packageRef = "pkg:generic/coffee@1.0.0";
   const extraRef = "pkg:generic/extra@2.0.0";
   const report = {
@@ -1176,7 +1176,7 @@ void test("G12 compares only Trivy package components and binds image SBOMs", ()
   );
 });
 
-void test("G12 Grafana effective binary proof rejects later links, files and whiteouts in protected paths", async (t) => {
+void test("supply_chain Grafana effective binary proof rejects later links, files and whiteouts in protected paths", async (t) => {
   const temp = await mkdtemp(join(tmpdir(), "grafana-layers-"));
   t.after(async () => rm(temp, { recursive: true, force: true }));
   const layout = join(temp, "layout");
@@ -1266,7 +1266,7 @@ with tarfile.open(sys.argv[1], "w") as a:
   }
 });
 
-void test("G12 VEX resolves only the two approved findings in the exact Grafana artifact", async () => {
+void test("supply_chain VEX resolves only the two approved findings in the exact Grafana artifact", async () => {
   const toolchain = JSON.parse(
     await readFile(
       new URL("../../config/toolchain-versions.json", import.meta.url),
@@ -1502,7 +1502,7 @@ void test("G12 VEX resolves only the two approved findings in the exact Grafana 
   );
 });
 
-void test("G12 requires fresh, internally ordered vulnerability database metadata", () => {
+void test("supply_chain requires fresh, internally ordered vulnerability database metadata", () => {
   const now = Date.parse("2026-10-24T12:00:00Z");
   const fresh = {
     Version: 2,
@@ -1529,7 +1529,7 @@ void test("G12 requires fresh, internally ordered vulnerability database metadat
   );
 });
 
-void test("G12 scanner arguments constrain the input and include lockfile dev dependencies", () => {
+void test("supply_chain scanner arguments constrain the input and include lockfile dev dependencies", () => {
   const args = trivyArgs({
     network: "none",
     cacheDir: "/private/cache",
@@ -1650,7 +1650,7 @@ void test("G12 scanner arguments constrain the input and include lockfile dev de
   assert.ok(conversionArgs.includes("none"));
 });
 
-void test("G12 builds product images, records pinned upstream identity, and fails on findings or tampered OCI proof", async (t) => {
+void test("supply_chain builds product images, records pinned upstream identity, and fails on findings or tampered OCI proof", async (t) => {
   let buildkitChecks = 0;
   let databaseFullReads = 0;
   let tamperAtDatabaseRead = false;
@@ -1684,7 +1684,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
   const temp = await mkdtemp(join(tmpdir(), "image-scan-fixture-"));
   let cacheIndex = 0;
   const nextCacheRoot = () => join(temp, `g12-cache-${cacheIndex++}`);
-  process.env.COFFEE_G12_CACHE_DIR = join(temp, "g12-cache");
+  process.env.COFFEE_SCAN_CACHE_DIR = join(temp, "scan-cache");
   t.after(() => rm(temp, { recursive: true, force: true }));
   const registryDirectories = [];
   const registryAuth = {
@@ -1714,7 +1714,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
   });
   const candidateRoot = join(temp, "candidate");
   const evidenceDir = join(temp, "evidence");
-  const gateDir = join(evidenceDir, "gates", "G12_SUPPLY_CHAIN");
+  const gateDir = join(evidenceDir, "gates", "supply_chain");
   const gateArtifactsDir = join(gateDir, "artifacts");
   const outputDir = join(gateArtifactsDir, "supply-chain");
   const contextPath = join(evidenceDir, "context.json");
@@ -1926,7 +1926,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
     "git",
     [
       "-c",
-      "user.name=G12 Test",
+      "user.name=supply_chain Test",
       "-c",
       "user.email=g12-test@example.invalid",
       "commit",
@@ -1949,7 +1949,10 @@ void test("G12 builds product images, records pinned upstream identity, and fail
   const sha = (bytes) => createHash("sha256").update(bytes).digest("hex");
   const layerSource = join(temp, "oci-layer-source");
   await mkdir(layerSource);
-  await writeFile(join(layerSource, "layer.txt"), "synthetic G12 OCI layer\n");
+  await writeFile(
+    join(layerSource, "layer.txt"),
+    "synthetic supply_chain OCI layer\n",
+  );
   const ociLayerBytes = execFileSync(
     "tar",
     [
@@ -1984,7 +1987,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
         Cmd: ["start", "--optimized"],
       },
       rootfs: { type: "layers", diff_ids: [ociLayerDiffId] },
-      history: [{ created_by: "synthetic G12 OCI fixture" }],
+      history: [{ created_by: "synthetic supply_chain OCI fixture" }],
     }),
   );
   const configDigest = `sha256:${sha(ociConfigBytes)}`;
@@ -2136,7 +2139,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
       "git",
       [
         "-c",
-        "user.name=G12 Test",
+        "user.name=supply_chain Test",
         "-c",
         "user.email=g12-test@example.invalid",
         "commit",
@@ -3483,7 +3486,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
     "PASS",
     `${result.code} ${fakeError?.message ?? ""} ${fakeError?.stack ?? ""}`,
   );
-  assert.equal(result.code, "G12_SCAN_CLEAN");
+  assert.equal(result.code, "SUPPLY_CHAIN_SCAN_CLEAN");
   assert.ok(Array.isArray(result.timings));
   assert.ok(result.timings.length > 0);
   assert.ok(
@@ -3524,8 +3527,8 @@ void test("G12 builds product images, records pinned upstream identity, and fail
         ["vulnerability-database", "java-database"].includes(kind),
       ),
     [
-      { kind: "vulnerability-database", timeoutMs: G12_SCAN_BUDGET_MS },
-      { kind: "java-database", timeoutMs: G12_SCAN_BUDGET_MS - 5 * 60_000 },
+      { kind: "vulnerability-database", timeoutMs: _SCAN_BUDGET_MS },
+      { kind: "java-database", timeoutMs: _SCAN_BUDGET_MS - 5 * 60_000 },
     ],
   );
   assert.ok(
@@ -3538,7 +3541,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
         ({ timeoutMs }) =>
           Number.isInteger(timeoutMs) &&
           timeoutMs > 0 &&
-          timeoutMs <= G12_SCAN_BUDGET_MS,
+          timeoutMs <= _SCAN_BUDGET_MS,
       ),
     "non-DB commands inherit the remaining scan budget instead of the 600 s default",
   );
@@ -3707,10 +3710,10 @@ void test("G12 builds product images, records pinned upstream identity, and fail
     join(outputDir, "result.json"),
     "utf8",
   ).then(JSON.parse);
-  assert.equal(savedResult.code, "G12_SCAN_CLEAN");
+  assert.equal(savedResult.code, "SUPPLY_CHAIN_SCAN_CLEAN");
   assert.ok(
     buildkitChecks > 0,
-    "G12 verifies effective builder policy before OCI builds",
+    "supply_chain verifies effective builder policy before OCI builds",
   );
   assert.equal(savedResult.provenance.status, "PASS");
   assert.deepEqual(Object.keys(savedResult.kafka).sort(), [
@@ -3751,7 +3754,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
         cacheRoot: nextCacheRoot(),
         validateContext: validateSyntheticContext,
       }),
-      /G12_(?:RUNTIME_IMAGE_PROVENANCE|GRAFANA_ADJUDICATION)_INVALID/u,
+      /_(?:RUNTIME_IMAGE_PROVENANCE|GRAFANA_ADJUDICATION)_INVALID/u,
       kind,
     );
   }
@@ -3805,7 +3808,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
     await writeFile(collectorResultPath, JSON.stringify(forgedResult));
     await assert.rejects(
       loadVerifiedGateImage(collectorOptions),
-      /G12_KAFKA_RECEIPT_INVALID/u,
+      /_KAFKA_RECEIPT_INVALID/u,
       field,
     );
   }
@@ -3906,7 +3909,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
       validateContext: validateSyntheticContext,
       loadImage: false,
     }),
-    /G12_GRAFANA_ADJUDICATION_INVALID/u,
+    /_GRAFANA_ADJUDICATION_INVALID/u,
   );
   await writeFile(rawPath, rawBytes);
   const grafanaResultPath = join(outputDir, "result.json");
@@ -4036,7 +4039,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
       await put(grafanaResultPath, Buffer.from(JSON.stringify(forged)));
       await assert.rejects(
         loadVerifiedGateImage(options),
-        /G12_GRAFANA_ADJUDICATION_INVALID/u,
+        /_GRAFANA_ADJUDICATION_INVALID/u,
       );
       forged.evaluation.resolvedNotAffected = 8;
       await put(grafanaResultPath, Buffer.from(JSON.stringify(forged)));
@@ -4061,7 +4064,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
       await put(grafanaResultPath, Buffer.from(JSON.stringify(forged)));
       await assert.rejects(
         loadVerifiedGateImage(options),
-        /G12_GRAFANA_ADJUDICATION_INVALID/u,
+        /_GRAFANA_ADJUDICATION_INVALID/u,
       );
     } finally {
       for (const [path, bytes] of backup) await writeFile(path, bytes);
@@ -4095,7 +4098,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
         validateContext: validateSyntheticContext,
         loadImage: false,
       }),
-      /G12_GRAFANA_ADJUDICATION_INVALID/u,
+      /_GRAFANA_ADJUDICATION_INVALID/u,
     );
     for (const target of ["kafka", "storage-helper"])
       await assert.rejects(
@@ -4106,7 +4109,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
           validateContext: validateSyntheticContext,
           loadImage: false,
         }),
-        /G12_GRAFANA_ADJUDICATION_INVALID/u,
+        /_GRAFANA_ADJUDICATION_INVALID/u,
       );
     // Matching per-report findings must still agree with the aggregate evaluation.
     forgedResult.reports.find(
@@ -4121,7 +4124,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
         validateContext: validateSyntheticContext,
         loadImage: false,
       }),
-      /G12_GRAFANA_ADJUDICATION_INVALID/u,
+      /_GRAFANA_ADJUDICATION_INVALID/u,
     );
   }
   await writeFile(rawPath, rawBytes);
@@ -4139,7 +4142,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
       validateContext: validateSyntheticContext,
       loadImage: false,
     }),
-    /G12_GRAFANA_ADJUDICATION_INVALID/u,
+    /_GRAFANA_ADJUDICATION_INVALID/u,
   );
   const otherPath = join(outputDir, "artifacts/kafka.vulnerabilities.json");
   const otherBytes = await readFile(otherPath);
@@ -4165,7 +4168,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
       validateContext: validateSyntheticContext,
       loadImage: false,
     }),
-    /G12_GRAFANA_ADJUDICATION_INVALID/u,
+    /_GRAFANA_ADJUDICATION_INVALID/u,
   );
   await writeFile(otherPath, otherBytes);
   const duplicateReport = JSON.parse(originalResult);
@@ -4179,7 +4182,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
       validateContext: validateSyntheticContext,
       loadImage: false,
     }),
-    /G12_GRAFANA_ADJUDICATION_INVALID/u,
+    /_GRAFANA_ADJUDICATION_INVALID/u,
   );
   await writeFile(grafanaResultPath, originalResult);
   const storageReceiptPath = join(
@@ -4230,7 +4233,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
       validateContext: validateSyntheticContext,
       loadImage: false,
     }),
-    /G12_KAFKA_RECEIPT_INVALID/u,
+    /_KAFKA_RECEIPT_INVALID/u,
   );
   await writeFile(storageReceiptPath, storageReceiptBytes);
   await writeFile(resultPath, resultBytes);
@@ -4369,7 +4372,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
     "utf8",
   );
   const imageInventory = JSON.parse(inventoryBytes);
-  assert.equal(imageInventory.gate, "G12_SUPPLY_CHAIN");
+  assert.equal(imageInventory.gate, "supply_chain");
   assert.equal(imageInventory.status, "PASS");
   assert.equal(imageInventory.composeProject, context.resources.composeProject);
   assert.equal(imageInventory.images.length, RUNTIME_NAMES.length + 1);
@@ -4536,7 +4539,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
   mismatchDigestReference = null;
 
   fakeNow = now;
-  databaseAdvanceMs = G12_SCAN_BUDGET_MS;
+  databaseAdvanceMs = _SCAN_BUDGET_MS;
   const exhaustedTimeoutStart = trivyRunTimeouts.length;
   const exhaustedDatabaseStart = trivyRunNetworks.filter((run) =>
     ["vulnerability-database", "java-database"].includes(run.kind),
@@ -4567,7 +4570,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
       .filter(({ kind }) =>
         ["vulnerability-database", "java-database"].includes(kind),
       ),
-    [{ kind: "vulnerability-database", timeoutMs: G12_SCAN_BUDGET_MS }],
+    [{ kind: "vulnerability-database", timeoutMs: _SCAN_BUDGET_MS }],
   );
   assert.equal(
     trivyRunNetworks.filter((run) =>
@@ -5315,18 +5318,18 @@ void test("G12 builds product images, records pinned upstream identity, and fail
   assert.equal(imageCleanupFailure.provenance.status, "PARTIAL");
 });
 
-void test("G12 scan budget derives from the launch gate deadline and keeps the reserve", () => {
-  assert.equal(scanBudgetMs(0, {}), G12_SCAN_BUDGET_MS);
+void test("supply_chain scan budget derives from the launch gate deadline and keeps the reserve", () => {
+  assert.equal(scanBudgetMs(0, {}), _SCAN_BUDGET_MS);
   assert.equal(
     scanBudgetMs(0, { COFFEE_LAUNCH_GATE_DEADLINE_EPOCH_MS: "invalid" }),
-    G12_SCAN_BUDGET_MS,
+    _SCAN_BUDGET_MS,
   );
   const deadline = 3_000_000;
   assert.equal(
     scanBudgetMs(1_000_000, {
       COFFEE_LAUNCH_GATE_DEADLINE_EPOCH_MS: String(deadline),
     }),
-    deadline - 1_000_000 - G12_SCAN_RESERVE_MS,
+    deadline - 1_000_000 - _SCAN_RESERVE_MS,
   );
   assert.equal(
     scanBudgetMs(deadline + 1, {
@@ -5336,12 +5339,12 @@ void test("G12 scan budget derives from the launch gate deadline and keeps the r
   );
 });
 
-void test("G12 gate timeout fits the standalone scan budget plus its reserve", async () => {
+void test("supply_chain gate timeout fits the standalone scan budget plus its reserve", async () => {
   const { gates } = await loadMatrix();
-  const gate = gates.find(({ id }) => id === "G12_SUPPLY_CHAIN");
-  assert.ok(gate, "G12_SUPPLY_CHAIN must exist");
+  const gate = gates.find(({ id }) => id === "supply_chain");
+  assert.ok(gate, "supply_chain must exist");
   assert.ok(
-    gate.timeout * 1000 >= G12_SCAN_BUDGET_MS + G12_SCAN_RESERVE_MS,
-    `G12 timeout ${gate.timeout}s must cover scan ${G12_SCAN_BUDGET_MS}ms plus reserve ${G12_SCAN_RESERVE_MS}ms`,
+    gate.timeout * 1000 >= _SCAN_BUDGET_MS + _SCAN_RESERVE_MS,
+    `supply_chain timeout ${gate.timeout}s must cover scan ${_SCAN_BUDGET_MS}ms plus reserve ${_SCAN_RESERVE_MS}ms`,
   );
 });

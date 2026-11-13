@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "G00 corrective accepted handoff supplement",
+  "title": "preflight corrective accepted handoff supplement",
   "type": "object",
   "additionalProperties": false,
   "required": ["schemaVersion", "purpose", "authorization", "records"],
@@ -9,7 +9,7 @@
       "const": 1
     },
     "purpose": {
-      "const": "G00_CORRECTIVE_ACCEPTED_HANDOFF_SUPPLEMENT"
+      "const": "PREFLIGHT_CORRECTIVE_ACCEPTED_HANDOFF_SUPPLEMENT"
     },
     "authorization": {
       "type": "object",

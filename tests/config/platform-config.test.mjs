@@ -388,7 +388,7 @@ void test("realtime qualification policy is strict and outside runtime config", 
   assert.throws(() => parsePlatformConfig(invalid), PlatformConfigError);
 });
 
-void test("G16 sandbox verification stays optional, strict and outside runtime config", async () => {
+void test("aroma_sandbox verification stays optional, strict and outside runtime config", async () => {
   const path = join(REPO_ROOT, "config/platform.yaml");
   const document = parseYaml(await readFile(path, "utf8"), { json: true });
   const defaultView = parsePlatformConfig(document);
@@ -552,7 +552,7 @@ void test("G16 sandbox verification stays optional, strict and outside runtime c
   }
 });
 
-void test("G17 private socket endpoint requires an isolated non-production config", async () => {
+void test("backup_restore private socket endpoint requires an isolated non-production config", async () => {
   const document = parseYaml(
     await readFile(join(REPO_ROOT, "config/platform.yaml"), "utf8"),
     { json: true },
@@ -620,7 +620,7 @@ void test("G17 private socket endpoint requires an isolated non-production confi
   );
 });
 
-void test("G12 scanner policy is strict verification-only configuration", async () => {
+void test("supply_chain scanner policy is strict verification-only configuration", async () => {
   const document = parseYaml(
     await readFile(join(REPO_ROOT, "config/platform.yaml"), "utf8"),
     { json: true },

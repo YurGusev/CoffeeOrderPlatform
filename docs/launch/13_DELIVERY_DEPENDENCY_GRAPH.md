@@ -47,9 +47,9 @@ Observability не блокирует business implementation; Operations при
 instrumentation points после #12. #64 сохраняется как producer foundation; #210
 владеет заменой OpenObserve-специфической реализации и пока проверяется.
 Исторический `evidence/handoffs/issue-64.yaml` неизменен; после приёмки #210
-полный #13 требует также его merged handoff. Component G12/G14 #210 проверяются
+полный #13 требует также его merged handoff. Компонентные проверки `supply_chain`/`observability` #210 выполняются
 до merge без зависимости от собственного будущего handoff; producer/config не
-заменяют PASS G14.
+заменяют PASS `observability`.
 [Runbook Operations](../operations/observability.md) описывает границы проверки.
 
 #136 поставляет только ADR, UX-макеты и согласованные нормативные документы.
@@ -153,7 +153,7 @@ collector.
 | #11 | #10, #16, #18, #8, #63 | этап A: backend grind contract → integration gate #9; этап B: observer/convergence/UnknownOutcome → #12, #13 |
 | #12 | #8, #9, #11, #63, #119, #160, #162 | single-instance SSE invalidation/refetch → #64, #13 |
 | #64 | #4, #61, #62, #63, #12, #162 | историческая producer foundation, Pino/OTel, native applicability и redaction → #210, #13 |
-| #210 | #64, [PR #209](https://github.com/YurGusev/CoffeeOrderPlatform/pull/209) как принятая base | миграция observability по ADR-0040; после приёмки handoff → G14 #13 |
+| #210 | #64, [PR #209](https://github.com/YurGusev/CoffeeOrderPlatform/pull/209) как принятая base | миграция observability по ADR-0040; после приёмки handoff → `observability` #13 |
 | #13 | все outputs выше, #119, #162, принятый handoff #210 | verified release evidence → закрытие #1 |
 
 Для #9/#11 действует [контракт параллельной разработки](30_AROMA_GRIND_CONTRACT_AND_PARALLEL_DELIVERY.md):
@@ -201,7 +201,7 @@ workspace. Outputs содержат только реальные изменён
 ограничения описывают фактически выполненные проверки; live skip не является PASS.
 Historical handoffs не переписываются под новый protocol.
 
-## Дополнение #277: два CVE-блокера G12
+## Дополнение #277: два CVE-блокера `supply_chain`
 
 `#275 → #277 → #13`. #277 обновляет только существующие musl/musl-utils
 конечных Node/storage-helper/Kafka и добавляет точный proof-bound `not_affected`
@@ -209,6 +209,6 @@ Historical handoffs не переписываются под новый protocol
 правило определено в [runtime images](../operations/runtime-images.md).
 После merge обязательный дополнительный input #13 — принятый merge #277 и
 `evidence/handoffs/issue-277.yaml` с проверяемыми hashes изменённых artifacts.
-Все прежние inputs #13 сохраняются. Собственный G12 #277 проверяет этот fix;
-#13 проходит собственные CI/G12/qualification/G00–G19 на новом frozen source.
+Все прежние inputs #13 сохраняются. Собственный прогон `supply_chain` #277 проверяет этот fix;
+#13 проходит собственные CI/`supply_chain`/qualification и гейты запуска на новом frozen source.
 Этот handoff не закрывает #1 или #266 и не объявляет production admission.

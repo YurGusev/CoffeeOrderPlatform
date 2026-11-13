@@ -384,7 +384,9 @@ export function removeStorage({
     storage.backingVolume !== `${storage.volumeName}-backing` ||
     !/^\/dev\/loop[0-9]+$/u.test(storage.device)
   )
-    throw new Error("Cleanup is restricted to disposable G14 storage");
+    throw new Error(
+      "Cleanup is restricted to disposable observability storage",
+    );
   if (storage.backingDirectory !== undefined) {
     const path = storage.backingDirectory;
     if (

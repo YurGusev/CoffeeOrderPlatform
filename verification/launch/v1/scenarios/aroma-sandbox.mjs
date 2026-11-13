@@ -160,7 +160,9 @@ export function validateAromaPackingWireProof(facts, receipt) {
     receipt.operationId !== operationId ||
     receipt.operationIds?.add !== `${operationId}:add` ||
     receipt.operationIds?.delete !== `${operationId}:delete` ||
-    receipt.purpose !== "bounded out-of-G16 exact-line packing probe" ||
+    receipt.purpose !==
+      // Значение из неизменяемого evidence 2026-10-24.
+      "bounded out-of-G16 exact-line packing probe" || // gate-naming: allow-historical
     receipt.offerId !== "445" ||
     receipt.requestedPacking !== "Aroma" ||
     receipt.origin !== "https://aromateacoffee.ru" ||
@@ -2102,7 +2104,7 @@ export function parseArguments(args, env = process.env) {
 
 function result(status, code, details = {}) {
   process.stdout.write(
-    `${JSON.stringify({ gate: "G16_AROMA_SANDBOX", status, code, ...details })}\n`,
+    `${JSON.stringify({ gate: "aroma_sandbox", status, code, ...details })}\n`,
   );
 }
 
@@ -3009,7 +3011,7 @@ async function runAromaSandbox({ approvalFile, env = process.env } = {}) {
     }
     process.stdout.write(
       `${JSON.stringify({
-        gate: "G16_AROMA_SANDBOX",
+        gate: "aroma_sandbox",
         status: "APPROVAL_REQUIRED",
         runId,
         candidateSha: identity.context.candidateSha,
@@ -3131,7 +3133,7 @@ async function runAromaSandbox({ approvalFile, env = process.env } = {}) {
             cartState: "UNRESOLVED_OR_NONBASELINE",
             mutationsDisabled: true,
             resourceIDs: resources.resourceIDs,
-            requiredAction: "CONTROLLED_G16_RECOVERY_BEFORE_RESOURCE_CLEANUP",
+            requiredAction: "CONTROLLED_AROMA_RECOVERY_BEFORE_RESOURCE_CLEANUP",
             cleanup: cleanupEvidence,
           },
           ...(failureEvidence ? { failureEvidence } : {}),

@@ -114,7 +114,7 @@ async function safeArtifactPath(context, contextPath) {
   const artifactDir = resolve(
     expectedEvidenceDir,
     "gates",
-    "G00_PREFLIGHT",
+    "preflight",
     "artifacts",
   );
   if (!(await ensureSafeDirectoryTree(sourceRoot, artifactDir, true)))
@@ -834,7 +834,7 @@ function acceptedHandoffSupplementValid(supplement) {
       "records",
     ]) ||
     supplement.schemaVersion !== 1 ||
-    supplement.purpose !== "G00_CORRECTIVE_ACCEPTED_HANDOFF_SUPPLEMENT" ||
+    supplement.purpose !== "PREFLIGHT_CORRECTIVE_ACCEPTED_HANDOFF_SUPPLEMENT" ||
     !hasExactKeys(supplement.authorization, [
       "date",
       "authority",
@@ -1145,7 +1145,7 @@ export async function runPreflight(context, deps = {}) {
   if (!basic)
     return {
       schemaVersion: 1,
-      gateId: "G00_PREFLIGHT",
+      gateId: "preflight",
       runId: context?.runId ?? "unknown",
       candidateSha: context?.candidateSha ?? "unknown",
       status: "FAIL",
@@ -1966,7 +1966,7 @@ export async function runPreflight(context, deps = {}) {
     ),
   );
   const limitations = [
-    "G00 проверяет read-only GitHub, Git и локальные config/evidence; Docker запускает только локальные pinned Node/nginx base images с версиями, без PostgreSQL/SQL, Compose, provider, сети, mount, secret или port.",
+    "preflight проверяет read-only GitHub, Git и локальные config/evidence; Docker запускает только локальные pinned Node/nginx base images с версиями, без PostgreSQL/SQL, Compose, provider, сети, mount, secret или port.",
   ];
   limitations.push(
     "Native base-image proof не покрывает application images и capacity; пропуск этих проверок остаётся отдельным launch blocker.",
@@ -1981,7 +1981,7 @@ export async function runPreflight(context, deps = {}) {
     );
   return {
     schemaVersion: 1,
-    gateId: "G00_PREFLIGHT",
+    gateId: "preflight",
     runId: context.runId,
     candidateSha: context.candidateSha,
     status: checks.every((item) => item.status === "PASS") ? "PASS" : "FAIL",
@@ -1995,7 +1995,7 @@ async function main() {
   const contextPath = process.env.COFFEE_LAUNCH_CONTEXT_FILE;
   if (!contextPath || !isAbsolute(contextPath)) {
     console.error(
-      "G00_PREFLIGHT FAIL: отсутствует абсолютный COFFEE_LAUNCH_CONTEXT_FILE",
+      "PREFLIGHT FAIL: отсутствует абсолютный COFFEE_LAUNCH_CONTEXT_FILE",
     );
     process.exitCode = 1;
     return;
@@ -2004,9 +2004,7 @@ async function main() {
   try {
     context = JSON.parse(await readFile(contextPath, "utf8"));
   } catch {
-    console.error(
-      "G00_PREFLIGHT FAIL: runner context недоступен или некорректен",
-    );
+    console.error("PREFLIGHT FAIL: runner context недоступен или некорректен");
     process.exitCode = 1;
     return;
   }
@@ -2021,7 +2019,7 @@ async function main() {
     ))
   ) {
     console.error(
-      "G00_PREFLIGHT FAIL: artifact path не является реальным каталогом текущего runner run-id",
+      "PREFLIGHT FAIL: artifact path не является реальным каталогом текущего runner run-id",
     );
     process.exitCode = 1;
     return;
@@ -2039,7 +2037,7 @@ async function main() {
     await artifact.writeFile(`${JSON.stringify(result, null, 2)}\n`);
   } catch {
     console.error(
-      "G00_PREFLIGHT FAIL: невозможно безопасно сохранить artifact текущего run-id",
+      "PREFLIGHT FAIL: невозможно безопасно сохранить artifact текущего run-id",
     );
     process.exitCode = 1;
     return;
@@ -2047,7 +2045,7 @@ async function main() {
     await artifact?.close().catch(() => {});
   }
   console.log(
-    `G00_PREFLIGHT ${result.status}: ${result.checks.filter((item) => item.status === "PASS").length}/${result.checks.length} checks; run=${result.runId}; sha=${result.candidateSha}`,
+    `PREFLIGHT ${result.status}: ${result.checks.filter((item) => item.status === "PASS").length}/${result.checks.length} checks; run=${result.runId}; sha=${result.candidateSha}`,
   );
   process.exitCode = result.status === "PASS" ? 0 : 1;
 }

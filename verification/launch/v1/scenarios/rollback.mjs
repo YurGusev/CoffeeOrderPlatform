@@ -37,8 +37,8 @@ export const ROLLBACK_FAILURE_STAGES = Object.freeze([
   "child-process",
 ]);
 const ROLLBACK_FAILURE_CODES = new Set([
-  "G18_PHASE_FAILED",
-  "G18_CLEANUP_FAILED",
+  "ROLLBACK_PHASE_FAILED",
+  "ROLLBACK_CLEANUP_FAILED",
   "ROLLBACK_FAILURE_RECEIPT_INVALID",
 ]);
 const ROLLBACK_ERROR_NAMES = new Set([
@@ -469,9 +469,9 @@ export async function createRollbackCheckouts({
     gitOutput(
       disabledRoot,
       "-c",
-      "user.name=Coffee G18 verifier",
+      "user.name=Coffee rollback verifier",
       "-c",
-      "user.email=coffee-g18-verifier@example.invalid",
+      "user.email=coffee-rollback-verifier@example.invalid",
       "commit",
       "--quiet",
       "-m",
@@ -502,9 +502,9 @@ export async function createRollbackCheckouts({
     gitOutput(
       restoredRoot,
       "-c",
-      "user.name=Coffee G18 verifier",
+      "user.name=Coffee rollback verifier",
       "-c",
-      "user.email=coffee-g18-verifier@example.invalid",
+      "user.email=coffee-rollback-verifier@example.invalid",
       "commit",
       "--quiet",
       "-m",
@@ -788,7 +788,7 @@ export function validateRollbackFailureArtifact(
   if (
     !artifact ||
     artifact.schemaVersion !== 1 ||
-    artifact.gateId !== "G18_ROLLBACK" ||
+    artifact.gateId !== "rollback" ||
     artifact.outcome !== "FAIL" ||
     artifact.runId !== runId ||
     artifact.candidateSha !== candidateSha ||
@@ -828,15 +828,17 @@ export function createRollbackFailureReceipt({
     ? error.name
     : "Error";
   const message =
-    typeof error?.message === "string" ? error.message : "G18_PHASE_FAILED";
+    typeof error?.message === "string"
+      ? error.message
+      : "ROLLBACK_PHASE_FAILED";
   const receipt = {
     schemaVersion: 1,
-    gateId: "G18_ROLLBACK",
+    gateId: "rollback",
     outcome: "FAIL",
     runId,
     candidateSha,
     stage: ROLLBACK_FAILURE_STAGES.includes(stage) ? stage : "child-process",
-    code: cleanupFailed ? "G18_CLEANUP_FAILED" : "G18_PHASE_FAILED",
+    code: cleanupFailed ? "ROLLBACK_CLEANUP_FAILED" : "ROLLBACK_PHASE_FAILED",
     errorName,
     messageSha256: createHash("sha256").update(message).digest("hex"),
     cleanup,
@@ -864,7 +866,7 @@ export async function writeRollbackFailureArtifact({
   validateRollbackFailureArtifact(artifact, identity);
   const artifactPath = join(
     evidenceDir,
-    "gates/G18_ROLLBACK/artifacts/mutation-disable-rollback-failure.json",
+    "gates/rollback/artifacts/mutation-disable-rollback-failure.json",
   );
   await mkdir(dirname(artifactPath), { recursive: true, mode: 0o700 });
   await writeFile(artifactPath, `${JSON.stringify(artifact, null, 2)}\n`, {
@@ -889,7 +891,7 @@ export async function persistRollbackFailureFromChild({
     const value = lastJsonLine(error?.result?.stdout ?? "");
     if (
       value?.schemaVersion !== 1 ||
-      value?.gateId !== "G18_ROLLBACK" ||
+      value?.gateId !== "rollback" ||
       value?.outcome !== "FAIL" ||
       value?.runId !== identity.runId ||
       value?.candidateSha !== identity.candidateSha ||
@@ -911,7 +913,7 @@ export async function persistRollbackFailureFromChild({
   } catch {
     failure = {
       schemaVersion: 1,
-      gateId: "G18_ROLLBACK",
+      gateId: "rollback",
       outcome: "FAIL",
       runId: identity.runId,
       candidateSha: identity.candidateSha,
@@ -951,7 +953,7 @@ export function validateRollbackRuntimeArtifact(
   if (
     !artifact ||
     artifact.schemaVersion !== 1 ||
-    artifact.gateId !== "G18_ROLLBACK" ||
+    artifact.gateId !== "rollback" ||
     artifact.runId !== runId ||
     artifact.candidateSha !== candidateSha ||
     !isDeepStrictEqual(artifact.lineage, lineage) ||
@@ -1030,7 +1032,7 @@ export async function writeRollbackRuntimeArtifact({
   validateRollbackRuntimeArtifact(artifact, identity);
   const artifactPath = join(
     evidenceDir,
-    "gates/G18_ROLLBACK/artifacts/mutation-disable-rollback.json",
+    "gates/rollback/artifacts/mutation-disable-rollback.json",
   );
   await mkdir(dirname(artifactPath), { recursive: true, mode: 0o700 });
   await writeFile(artifactPath, `${JSON.stringify(artifact, null, 2)}\n`, {
@@ -1081,7 +1083,7 @@ export async function writeRollbackLineageBundle({
   const bytes = await readFile(temporaryBundle);
   const path = join(
     evidenceDir,
-    "gates/G18_ROLLBACK/artifacts/rollback-config-lineage.bundle",
+    "gates/rollback/artifacts/rollback-config-lineage.bundle",
   );
   await mkdir(dirname(path), { recursive: true, mode: 0o700 });
   await writeFile(path, bytes, { flag: "wx", mode: 0o600 });
@@ -1175,7 +1177,7 @@ export async function runRollbackScenario(
     const composeReceipt = lastJsonLine(result.stdout);
     const artifact = {
       schemaVersion: 1,
-      gateId: "G18_ROLLBACK",
+      gateId: "rollback",
       runId: context.runId,
       candidateSha: context.candidateSha,
       lineage,

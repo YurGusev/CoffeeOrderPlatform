@@ -2402,7 +2402,7 @@ void test("development preparation preserves existing secrets and refreshes only
         root: fixture.root,
         env: fixture.env,
       }),
-      /CONFIG-G08-BUNDLE_CHANGED/u,
+      /CONFIG-MIGRATIONS-BUNDLE_CHANGED/u,
     );
     assert.equal(await readFile(bundlePath, "utf8"), "changed fixture\n");
     assert.deepEqual(
@@ -3062,7 +3062,7 @@ void test("development transport renewal preserves authority and all other secre
         root: fixture.root,
         env: fixture.env,
       }),
-      /CONFIG-G08-BUNDLE_CHANGED/u,
+      /CONFIG-MIGRATIONS-BUNDLE_CHANGED/u,
     );
     assert.equal(await readFile(bundlePath, "utf8"), "changed fixture\n");
     assert.deepEqual(
@@ -3654,7 +3654,7 @@ void test("runtime materialization fails closed on SOPS errors and malformed dec
   }
 });
 
-void test("G16 materializes only run-scoped admin and runtime secret files with owner-only permissions", async () => {
+void test("aroma_sandbox materializes only run-scoped admin and runtime secret files with owner-only permissions", async () => {
   const fixture = await createSecretMaterializationFixture();
   const outputDir = await mkdtemp("/dev/shm/coffee-g16-secrets-");
   const runId = "20261024T185000Z-abc1234";
@@ -3732,7 +3732,7 @@ void test("G16 materializes only run-scoped admin and runtime secret files with 
   }
 });
 
-void test("G16 database provisioning enforces the pinned server and cleans up only its created run databases", async (t) => {
+void test("aroma_sandbox database provisioning enforces the pinned server and cleans up only its created run databases", async (t) => {
   const fixture = await createSecretMaterializationFixture();
   const outputDir = await mkdtemp("/dev/shm/coffee-g16-secrets-");
   const runId = "20261024T185100Z-def5678";
@@ -3891,11 +3891,11 @@ void test("G16 database provisioning enforces the pinned server and cleans up on
       env: fixture.env,
     };
     for (const [override, ruleId] of [
-      [{ host: "192.0.2.1" }, "CONFIG-G16-ENDPOINT"],
-      [{ port: 0 }, "CONFIG-G16-ENDPOINT"],
-      [{ port: 65536 }, "CONFIG-G16-ENDPOINT"],
-      [{ port: 1.5 }, "CONFIG-G16-ENDPOINT"],
-      [{ outputDir: "/tmp/foreign" }, "CONFIG-G16-SECRET-PATH"],
+      [{ host: "192.0.2.1" }, "CONFIG-AROMA-ENDPOINT"],
+      [{ port: 0 }, "CONFIG-AROMA-ENDPOINT"],
+      [{ port: 65536 }, "CONFIG-AROMA-ENDPOINT"],
+      [{ port: 1.5 }, "CONFIG-AROMA-ENDPOINT"],
+      [{ outputDir: "/tmp/foreign" }, "CONFIG-AROMA-SECRET-PATH"],
     ]) {
       await assert.rejects(
         provisionAromaSandboxDatabases({ ...provisionArgs, ...override }),
@@ -3911,7 +3911,7 @@ void test("G16 database provisioning enforces the pinned server and cleans up on
     config.telemetry.releaseDigest = `sha256:${"a".repeat(64)}`;
     await writeFile(configPath, dumpYaml(config));
     try {
-      await assert.rejects(provision(), { ruleId: "CONFIG-G16-ENVIRONMENT" });
+      await assert.rejects(provision(), { ruleId: "CONFIG-AROMA-ENVIRONMENT" });
       assert.deepEqual(fake.connections, []);
     } finally {
       await writeFile(configPath, configBytes);
@@ -3925,7 +3925,7 @@ void test("G16 database provisioning enforces the pinned server and cleans up on
         { ...roleMap, databases: [] },
       ]) {
         await writeFile(roleMapPath, JSON.stringify(malformedMap));
-        await assert.rejects(provision(), { ruleId: "CONFIG-G16-ROLE-MAP" });
+        await assert.rejects(provision(), { ruleId: "CONFIG-AROMA-ROLE-MAP" });
         assert.deepEqual(fake.connections, []);
         assert.deepEqual(fake.createAttempts, []);
       }
@@ -3949,7 +3949,7 @@ void test("G16 database provisioning enforces the pinned server and cleans up on
       await writeFile(fixture.plainPath, JSON.stringify(decrypted), "utf8");
       resetObservations();
       await assert.rejects(provision(), (error) => {
-        assert.equal(error.ruleId, "CONFIG-G16-RUNTIME-SECRET", name);
+        assert.equal(error.ruleId, "CONFIG-AROMA-RUNTIME-SECRET", name);
         return true;
       });
       assert.deepEqual(fake.connections, [], name);
@@ -4003,7 +4003,7 @@ void test("G16 database provisioning enforces the pinned server and cleans up on
 
     resetObservations();
     fake.wrongServerVersion = true;
-    await assert.rejects(provision(), /CONFIG-G16-SERVER-IDENTITY/u);
+    await assert.rejects(provision(), /CONFIG-AROMA-SERVER-IDENTITY/u);
     assert.deepEqual(fake.createAttempts, []);
     assert.deepEqual(fake.droppedDatabases, []);
 
@@ -4137,7 +4137,7 @@ void test("config-bootstrap validates the synthetic encrypted config without dec
   }
 });
 
-void test("G08 canonical target probe is read-only and reports only bounded identity and role inventory", async (t) => {
+void test("migrations canonical target probe is read-only and reports only bounded identity and role inventory", async (t) => {
   const launch = await createMigrationLaunchFixture();
   const {
     fixture,
@@ -4170,7 +4170,7 @@ void test("G08 canonical target probe is read-only and reports only bounded iden
           contextPath,
           env: fixture.env,
         }),
-        /CONFIG-G08-CHECKOUT/u,
+        /CONFIG-MIGRATIONS-CHECKOUT/u,
       );
       assert.equal(
         (await readdir(fixture.bin)).includes("sops-invoked"),
@@ -4190,7 +4190,7 @@ void test("G08 canonical target probe is read-only and reports only bounded iden
     const originalConfigBytes = await readFile(configPath);
     const dirtyConfigBytes = Buffer.concat([
       originalConfigBytes,
-      Buffer.from("\n# G08 dirty checkout fixture\n"),
+      Buffer.from("\n# dirty checkout fixture\n"),
     ]);
     await writeFile(configPath, dirtyConfigBytes);
     await chmod(contextPath, 0o600);
@@ -4265,7 +4265,7 @@ void test("G08 canonical target probe is read-only and reports only bounded iden
           ],
         };
       if (sql.startsWith("SELECT rolname,")) return { rows: roleRows };
-      assert.fail(`unexpected G08 probe query: ${sql}`);
+      assert.fail(`unexpected migrations probe query: ${sql}`);
     });
 
     const absent = await probeCanonicalMigrationTarget({
@@ -4340,7 +4340,7 @@ void test("G08 canonical target probe is read-only and reports only bounded iden
         env: fixture.env,
       }),
       (error) =>
-        error.ruleId === "CONFIG-G08-PROBE" &&
+        error.ruleId === "CONFIG-MIGRATIONS-PROBE" &&
         error.facts.stage === "identity" &&
         error.facts.failureCategory === "invalid_response",
     );
@@ -4355,7 +4355,7 @@ void test("G08 canonical target probe is read-only and reports only bounded iden
         env: fixture.env,
       }),
       (error) =>
-        error.ruleId === "CONFIG-G08-PROBE" &&
+        error.ruleId === "CONFIG-MIGRATIONS-PROBE" &&
         error.facts.stage === "identity" &&
         error.facts.failureCategory === "invalid_response",
     );
@@ -4371,7 +4371,7 @@ void test("G08 canonical target probe is read-only and reports only bounded iden
   }
 });
 
-void test("G08 canonical target probe returns finite sanitized database failure facts", async (t) => {
+void test("migrations canonical target probe returns finite sanitized database failure facts", async (t) => {
   const { fixture, evidenceDir, contextPath } =
     await createMigrationLaunchFixture();
   const credentialCanary = "synthetic-pg-password-detail-canary";
@@ -4384,7 +4384,7 @@ void test("G08 canonical target probe returns finite sanitized database failure 
     });
     t.mock.method(Client.prototype, "end", async () => {});
     t.mock.method(Client.prototype, "query", async () => {
-      assert.fail("G08 connect failure must stop before SQL");
+      assert.fail("migrations connect failure must stop before SQL");
     });
 
     await assert.rejects(
@@ -4394,7 +4394,7 @@ void test("G08 canonical target probe returns finite sanitized database failure 
         env: fixture.env,
       }),
       (error) => {
-        assert.equal(error.ruleId, "CONFIG-G08-PROBE");
+        assert.equal(error.ruleId, "CONFIG-MIGRATIONS-PROBE");
         assert.deepEqual(error.facts, {
           stage: "connect",
           failureCategory: "authentication",
@@ -4412,7 +4412,7 @@ void test("G08 canonical target probe returns finite sanitized database failure 
   }
 });
 
-void test("G08 canonical target probe sanitizes identity and role-inventory query failures", async (t) => {
+void test("migrations canonical target probe sanitizes identity and role-inventory query failures", async (t) => {
   const canary = "synthetic-query-detail-canary";
   for (const scenario of [
     {
@@ -4479,7 +4479,7 @@ void test("G08 canonical target probe sanitizes identity and role-inventory quer
               ],
             };
           if (sql.startsWith("SELECT rolname,")) return { rows: [] };
-          assert.fail(`unexpected G08 ${scenario.name} query`);
+          assert.fail(`unexpected migrations ${scenario.name} query`);
         });
 
         await assert.rejects(
@@ -4489,7 +4489,7 @@ void test("G08 canonical target probe sanitizes identity and role-inventory quer
             env: fixture.env,
           }),
           (error) => {
-            assert.equal(error.ruleId, "CONFIG-G08-PROBE");
+            assert.equal(error.ruleId, "CONFIG-MIGRATIONS-PROBE");
             assert.deepEqual(error.facts, scenario.expected);
             assert.equal(error.message.includes(canary), false);
             assert.equal(JSON.stringify(error.facts).includes(canary), false);
@@ -4505,7 +4505,7 @@ void test("G08 canonical target probe sanitizes identity and role-inventory quer
     });
 });
 
-void test("G08 admin credential sync uses the configured user and does not rewrite a valid SOPS credential", async (t) => {
+void test("migrations admin credential sync uses the configured user and does not rewrite a valid SOPS credential", async (t) => {
   const { fixture, evidenceDir, contextPath, adminPassword } =
     await createMigrationLaunchFixture();
   const bundlePath = join(fixture.root, "secrets/platform.secrets.sops.yaml");
@@ -4541,7 +4541,7 @@ void test("G08 admin credential sync uses the configured user and does not rewri
           ],
         };
       if (sql.startsWith("SELECT rolname,")) return { rows: [] };
-      assert.fail("G08 admin verification must remain read-only");
+      assert.fail("migrations admin verification must remain read-only");
     });
 
     const result = await synchronizeMigrationAdminCredential({
@@ -4579,7 +4579,7 @@ void test("G08 admin credential sync uses the configured user and does not rewri
   }
 });
 
-void test("G08 admin credential sync falls back only on exact 28P01 and persists only the encrypted admin field", async (t) => {
+void test("migrations admin credential sync falls back only on exact 28P01 and persists only the encrypted admin field", async (t) => {
   const { fixture, evidenceDir, contextPath, adminPassword } =
     await createMigrationLaunchFixture();
   const bundlePath = join(fixture.root, "secrets/platform.secrets.sops.yaml");
@@ -4625,7 +4625,7 @@ void test("G08 admin credential sync falls back only on exact 28P01 and persists
           ],
         };
       if (sql.startsWith("SELECT rolname,")) return { rows: [] };
-      assert.fail("G08 credential synchronization must not execute DDL");
+      assert.fail("migrations credential synchronization must not execute DDL");
     });
 
     const result = await synchronizeMigrationAdminCredential({
@@ -4711,7 +4711,7 @@ void test("G08 admin credential sync falls back only on exact 28P01 and persists
   }
 });
 
-void test("G08 admin credential sync refuses non-auth failures, changed source identity, and rejected source credentials without bundle writes", async (t) => {
+void test("migrations admin credential sync refuses non-auth failures, changed source identity, and rejected source credentials without bundle writes", async (t) => {
   const scenarios = [
     {
       name: "non-authentication PG failure never reads Docker",
@@ -4720,7 +4720,7 @@ void test("G08 admin credential sync refuses non-auth failures, changed source i
           code: "ECONNREFUSED",
         });
       },
-      expectedRule: "CONFIG-G08-PROBE",
+      expectedRule: "CONFIG-MIGRATIONS-PROBE",
       docker: {},
     },
     {
@@ -4730,7 +4730,7 @@ void test("G08 admin credential sync refuses non-auth failures, changed source i
           code: "28P01",
         });
       },
-      expectedRule: "CONFIG-G08-ADMIN-SOURCE",
+      expectedRule: "CONFIG-MIGRATIONS-ADMIN-SOURCE",
       docker: { changeOnInspection: 2 },
       expectedStage: "container-after-extract",
       expectedDockerCalls: ["inspect", "exec", "inspect"],
@@ -4742,7 +4742,7 @@ void test("G08 admin credential sync refuses non-auth failures, changed source i
           code: "28P01",
         });
       },
-      expectedRule: "CONFIG-G08-ADMIN-SOURCE",
+      expectedRule: "CONFIG-MIGRATIONS-ADMIN-SOURCE",
       expectedStage: "container-before-extract",
       docker: { failAction: "inspect" },
       expectedDockerCalls: ["inspect"],
@@ -4754,7 +4754,7 @@ void test("G08 admin credential sync refuses non-auth failures, changed source i
           code: "28P01",
         });
       },
-      expectedRule: "CONFIG-G08-ADMIN-SOURCE",
+      expectedRule: "CONFIG-MIGRATIONS-ADMIN-SOURCE",
       expectedStage: "container-before-extract",
       docker: { malformedInspect: true },
       expectedDockerCalls: ["inspect"],
@@ -4766,7 +4766,7 @@ void test("G08 admin credential sync refuses non-auth failures, changed source i
           code: "28P01",
         });
       },
-      expectedRule: "CONFIG-G08-ADMIN-SOURCE",
+      expectedRule: "CONFIG-MIGRATIONS-ADMIN-SOURCE",
       expectedStage: "credential-extract",
       docker: { failAction: "exec" },
       expectedDockerCalls: ["inspect", "exec"],
@@ -4778,7 +4778,7 @@ void test("G08 admin credential sync refuses non-auth failures, changed source i
           code: "28P01",
         });
       },
-      expectedRule: "CONFIG-G08-ADMIN-SOURCE",
+      expectedRule: "CONFIG-MIGRATIONS-ADMIN-SOURCE",
       expectedStage: "credential-validate",
       docker: { password: Buffer.alloc(0) },
       expectedDockerCalls: ["inspect", "exec", "inspect"],
@@ -4790,7 +4790,7 @@ void test("G08 admin credential sync refuses non-auth failures, changed source i
           code: "28P01",
         });
       },
-      expectedRule: "CONFIG-G08-ADMIN-SOURCE",
+      expectedRule: "CONFIG-MIGRATIONS-ADMIN-SOURCE",
       expectedStage: "credential-validate",
       docker: { password: Buffer.from([0xc3, 0x28]) },
       expectedDockerCalls: ["inspect", "exec", "inspect"],
@@ -4802,7 +4802,7 @@ void test("G08 admin credential sync refuses non-auth failures, changed source i
           code: "28P01",
         });
       },
-      expectedRule: "CONFIG-G08-ADMIN-SOURCE_CHANGED",
+      expectedRule: "CONFIG-MIGRATIONS-ADMIN-SOURCE_CHANGED",
       expectedStage: "container-after-extract",
       docker: { changeNetworkOnInspection: 2 },
       expectedDockerCalls: ["inspect", "exec", "inspect"],
@@ -4814,7 +4814,7 @@ void test("G08 admin credential sync refuses non-auth failures, changed source i
           code: "28P01",
         });
       },
-      expectedRule: "CONFIG-G08-PROBE",
+      expectedRule: "CONFIG-MIGRATIONS-PROBE",
       docker: { password: "synthetic-wrong-source-password" },
       alwaysReject: true,
     },
@@ -4826,7 +4826,7 @@ void test("G08 admin credential sync refuses non-auth failures, changed source i
             code: "28P01",
           });
       },
-      expectedRule: "CONFIG-G08-PROBE",
+      expectedRule: "CONFIG-MIGRATIONS-PROBE",
       docker: {},
       changedServerIdentity: true,
     },
@@ -4838,7 +4838,7 @@ void test("G08 admin credential sync refuses non-auth failures, changed source i
             code: "28P01",
           });
       },
-      expectedRule: "CONFIG-G08-ROLE-PRESENT",
+      expectedRule: "CONFIG-MIGRATIONS-ROLE-PRESENT",
       docker: {},
       existingRole: true,
     },
@@ -4850,7 +4850,7 @@ void test("G08 admin credential sync refuses non-auth failures, changed source i
             code: "28P01",
           });
       },
-      expectedRule: "CONFIG-G08-SOPS-ROUNDTRIP",
+      expectedRule: "CONFIG-MIGRATIONS-SOPS-ROUNDTRIP",
       expectedStage: "admin-secret-saved",
       docker: {},
       savedBundleMutation: "foreign-field",
@@ -4917,7 +4917,7 @@ void test("G08 admin credential sync refuses non-auth failures, changed source i
                 ]
               : [],
           };
-        assert.fail("unexpected G08 admin query");
+        assert.fail("unexpected migrations admin query");
       });
       await assert.rejects(
         synchronizeMigrationAdminCredential({
@@ -4960,7 +4960,10 @@ void test("G08 admin credential sync refuses non-auth failures, changed source i
       const dockerCalls = await readFile(dockerCallsPath, "utf8").catch(
         () => "",
       );
-      if (scenario.expectedRule === "CONFIG-G08-PROBE" && connectCalls === 1)
+      if (
+        scenario.expectedRule === "CONFIG-MIGRATIONS-PROBE" &&
+        connectCalls === 1
+      )
         assert.equal(dockerCalls, "", scenario.name);
       if (scenario.docker.changeOnInspection)
         assert.equal((dockerCalls.match(/"inspect"/gu) ?? []).length, 2);
@@ -5018,7 +5021,7 @@ void test("G08 admin credential sync refuses non-auth failures, changed source i
   }
 });
 
-void test("G17 target binds readonly context, isolated config, and server identity before secret access", async (t) => {
+void test("backup_restore target binds readonly context, isolated config, and server identity before secret access", async (t) => {
   const launch = await createMigrationLaunchFixture({
     databaseIsolation: true,
   });
@@ -5032,13 +5035,13 @@ void test("G17 target binds readonly context, isolated config, and server identi
   const originalContext = await readFile(contextPath);
   const context = JSON.parse(originalContext);
   for (const [override, ruleId] of [
-    [{ contextPath: "relative" }, "CONFIG-G17-CONTEXT"],
-    [{ root: "/tmp/foreign" }, "CONFIG-G17-CONTEXT"],
-    [{ runId: "other-run" }, "CONFIG-G17-CONTEXT"],
-    [{ candidateSha: "f".repeat(40) }, "CONFIG-G17-CONTEXT"],
-    [{ host: "127.0.0.1" }, "CONFIG-G17-CONFIG"],
-    [{ port: 5433 }, "CONFIG-G17-CONFIG"],
-    [{ expectedSystemIdentifier: "not-numeric" }, "CONFIG-G17-CONFIG"],
+    [{ contextPath: "relative" }, "CONFIG-BACKUP-CONTEXT"],
+    [{ root: "/tmp/foreign" }, "CONFIG-BACKUP-CONTEXT"],
+    [{ runId: "other-run" }, "CONFIG-BACKUP-CONTEXT"],
+    [{ candidateSha: "f".repeat(40) }, "CONFIG-BACKUP-CONTEXT"],
+    [{ host: "127.0.0.1" }, "CONFIG-BACKUP-CONFIG"],
+    [{ port: 5433 }, "CONFIG-BACKUP-CONFIG"],
+    [{ expectedSystemIdentifier: "not-numeric" }, "CONFIG-BACKUP-CONFIG"],
   ]) {
     await assert.rejects(validateBackupTarget({ ...args, ...override }), {
       ruleId,
@@ -5047,12 +5050,12 @@ void test("G17 target binds readonly context, isolated config, and server identi
   await chmod(contextPath, 0o600);
   try {
     await assert.rejects(validateBackupTarget(args), {
-      ruleId: "CONFIG-G17-CONTEXT",
+      ruleId: "CONFIG-BACKUP-CONTEXT",
     });
     await writeFile(contextPath, "{invalid context");
     await chmod(contextPath, 0o400);
     await assert.rejects(validateBackupTarget(args), {
-      ruleId: "CONFIG-G17-CONTEXT",
+      ruleId: "CONFIG-BACKUP-CONTEXT",
     });
   } finally {
     await chmod(contextPath, 0o600);
@@ -5064,12 +5067,12 @@ void test("G17 target binds readonly context, isolated config, and server identi
   await writeFile(configPath, Buffer.concat([configBytes, Buffer.from("\n")]));
   try {
     await assert.rejects(validateBackupTarget(args), {
-      ruleId: "CONFIG-G17-CONFIG",
+      ruleId: "CONFIG-BACKUP-CONFIG",
     });
   } finally {
     await writeFile(configPath, configBytes);
   }
-  const artifactDir = join(evidenceDir, "gates/G00_PREFLIGHT/artifacts");
+  const artifactDir = join(evidenceDir, "gates/preflight/artifacts");
   await mkdir(artifactDir, { recursive: true, mode: 0o700 });
   const identityPath = join(artifactDir, "postgres-server-identity.json");
   const identity = {
@@ -5083,12 +5086,12 @@ void test("G17 target binds readonly context, isolated config, and server identi
   };
   await writeFile(identityPath, "{invalid identity", { mode: 0o600 });
   await assert.rejects(validateBackupTarget(args), {
-    ruleId: "CONFIG-G17-SERVER-IDENTITY",
+    ruleId: "CONFIG-BACKUP-SERVER-IDENTITY",
   });
   await writeFile(identityPath, JSON.stringify(identity));
   await assert.rejects(
     validateBackupTarget({ ...args, expectedSystemIdentifier: "999" }),
-    { ruleId: "CONFIG-G17-SERVER-IDENTITY" },
+    { ruleId: "CONFIG-BACKUP-SERVER-IDENTITY" },
   );
   const result = await validateBackupTarget(args);
   assert.deepEqual(result.target, {
@@ -5098,7 +5101,7 @@ void test("G17 target binds readonly context, isolated config, and server identi
   });
   await chmod(identityPath, 0o666);
   await assert.rejects(validateBackupTarget(args), {
-    ruleId: "CONFIG-G17-SERVER-IDENTITY",
+    ruleId: "CONFIG-BACKUP-SERVER-IDENTITY",
   });
   assert.deepEqual(JSON.parse(await readFile(identityPath, "utf8")), identity);
   assert.equal(
@@ -5107,7 +5110,7 @@ void test("G17 target binds readonly context, isolated config, and server identi
   );
 });
 
-void test("G08 credential reader rejects malformed requests before accessing secrets", async () => {
+void test("migrations credential reader rejects malformed requests before accessing secrets", async () => {
   const valid = {
     root: "/nonexistent-g08-root",
     owner: "customer",
@@ -5127,12 +5130,12 @@ void test("G08 credential reader rejects malformed requests before accessing sec
   for (const request of invalid) {
     await assert.rejects(
       readMigrationCredential({ ...valid, ...request }),
-      /CONFIG-G08-CREDENTIAL-REQUEST/u,
+      /CONFIG-MIGRATIONS-CREDENTIAL-REQUEST/u,
     );
   }
 });
 
-void test("G08 current attestation requires password authentication and unchanged canonical inputs", async (t) => {
+void test("migrations current attestation requires password authentication and unchanged canonical inputs", async (t) => {
   const launch = await createMigrationLaunchFixture({
     migratorBlock: true,
     alignedRunId: true,
@@ -5223,7 +5226,7 @@ void test("G08 current attestation requires password authentication and unchange
     const context = JSON.parse(await readFile(contextPath, "utf8"));
     const approvedPath = join(
       evidenceDir,
-      "gates/G08_MIGRATIONS/artifacts/approved-target.json",
+      "gates/migrations/artifacts/approved-target.json",
     );
     await writeFile(
       approvedPath,
@@ -5244,7 +5247,7 @@ void test("G08 current attestation requires password authentication and unchange
       await assert.rejects(
         runMigrationStage("clean", { root: fixture.root, contextPath }),
         {
-          ruleId: "CONFIG-G08-ROLE-AUTH",
+          ruleId: "CONFIG-MIGRATIONS-ROLE-AUTH",
         },
       );
       assert.equal(roleConnections, 1);
@@ -5312,21 +5315,21 @@ void test("G08 current attestation requires password authentication and unchange
             context,
             preparation.bundle.resultingSha256,
           ),
-        /CONFIG-G08-PREPARATION/u,
+        /CONFIG-MIGRATIONS-PREPARATION/u,
       );
     await assert.rejects(
       attestCanonicalMigrationPreparation({
         ...args,
         expectedSystemIdentifier: undefined,
       }),
-      { ruleId: "CONFIG-G08-IDENTITY" },
+      { ruleId: "CONFIG-MIGRATIONS-IDENTITY" },
     );
     await assert.rejects(
       attestCanonicalMigrationPreparation({
         ...args,
         expectedSystemIdentifier: "999",
       }),
-      { ruleId: "CONFIG-G08-PROBE" },
+      { ruleId: "CONFIG-MIGRATIONS-PROBE" },
     );
     mode = "md5";
     await attestCanonicalMigrationPreparation(args);
@@ -5344,17 +5347,17 @@ void test("G08 current attestation requires password authentication and unchange
       await assert.rejects(attestCanonicalMigrationPreparation(args), {
         ruleId:
           mode === "extra-role"
-            ? "CONFIG-G08-PROBE"
+            ? "CONFIG-MIGRATIONS-PROBE"
             : ["attributes", "missing-role"].includes(mode)
-              ? "CONFIG-G08-ROLE-INVENTORY"
-              : "CONFIG-G08-ROLE-AUTH",
+              ? "CONFIG-MIGRATIONS-ROLE-INVENTORY"
+              : "CONFIG-MIGRATIONS-ROLE-AUTH",
       });
       assert.equal(closed.length - start, roleConnections + 1);
     }
     for (const [change, path, ruleId] of [
-      ["config", configPath, "CONFIG-G08-CONFIG"],
-      ["bundle", bundlePath, "CONFIG-G08-BUNDLE_CHANGED"],
-      ["context", contextPath, "CONFIG-G08-CONTEXT"],
+      ["config", configPath, "CONFIG-MIGRATIONS-CONFIG"],
+      ["bundle", bundlePath, "CONFIG-MIGRATIONS-BUNDLE_CHANGED"],
+      ["context", contextPath, "CONFIG-MIGRATIONS-CONTEXT"],
     ]) {
       mode = change;
       roleConnections = 0;
@@ -5374,7 +5377,7 @@ void test("G08 current attestation requires password authentication and unchange
     delete plain.environments.development.bootstrap.migrators.customer;
     await writeFile(fixture.plainPath, JSON.stringify(plain));
     await assert.rejects(attestCanonicalMigrationPreparation(args), {
-      ruleId: "CONFIG-G08-ADMIN-SECRET",
+      ruleId: "CONFIG-MIGRATIONS-ADMIN-SECRET",
     });
     assert.equal(
       (await readdir(fixture.bin)).includes("g08-encrypt-invoked"),
@@ -5387,7 +5390,7 @@ void test("G08 current attestation requires password authentication and unchange
   }
 });
 
-void test("G15 child credentials reuse the unchanged parent G08 receipt only through exact OIDC lineage", async (t) => {
+void test("browser child credentials reuse the unchanged parent migrations receipt only through exact OIDC lineage", async (t) => {
   const parent = await createMigrationLaunchFixture({
     migratorBlock: true,
     databaseIsolation: true,
@@ -5406,7 +5409,7 @@ void test("G15 child credentials reuse the unchanged parent G08 receipt only thr
   assert.equal(childBundleInfo.mode & 0o022, 0);
   const artifactPath = join(
     parent.evidenceDir,
-    "gates/G08_MIGRATIONS/artifacts/canonical-preparation.json",
+    "gates/migrations/artifacts/canonical-preparation.json",
   );
   const parentReceipt = await readFile(artifactPath);
   const parentContextBytes = await readFile(parent.contextPath);
@@ -5466,7 +5469,9 @@ void test("G15 child credentials reuse the unchanged parent G08 receipt only thr
       }
       return result;
     }
-    assert.fail("G15 inherited preparation must use readonly identity queries");
+    assert.fail(
+      "browser inherited preparation must use readonly identity queries",
+    );
   });
 
   const identity = await readPreparedPostgresIdentity({
@@ -5503,7 +5508,7 @@ void test("G15 child credentials reuse the unchanged parent G08 receipt only thr
     readFile(
       join(
         child.evidenceDir,
-        "gates/G08_MIGRATIONS/artifacts/canonical-preparation.json",
+        "gates/migrations/artifacts/canonical-preparation.json",
       ),
     ),
     { code: "ENOENT" },
@@ -5517,7 +5522,7 @@ void test("G15 child credentials reuse the unchanged parent G08 receipt only thr
       kind: "migrator",
       env: parent.fixture.env,
     }),
-    /CONFIG-G08-G15-LINEAGE/u,
+    /CONFIG-MIGRATIONS-BROWSER-LINEAGE/u,
   );
   assert.equal(connectCalls.length, 2);
 
@@ -5537,7 +5542,7 @@ void test("G15 child credentials reuse the unchanged parent G08 receipt only thr
         kind: "migrator",
         env: parent.fixture.env,
       }),
-      { ruleId: "CONFIG-G08-G15-LINEAGE" },
+      { ruleId: "CONFIG-MIGRATIONS-BROWSER-LINEAGE" },
     );
   } finally {
     await rm(dirtyParentMarker, { force: true });
@@ -5545,7 +5550,7 @@ void test("G15 child credentials reuse the unchanged parent G08 receipt only thr
   assert.equal(
     connectCalls.length,
     connectionsBeforeDirtyParent,
-    "a dirty G15 parent checkout must be rejected before PostgreSQL access",
+    "a dirty browser parent checkout must be rejected before PostgreSQL access",
   );
 
   const trackedParent = join(parent.fixture.root, "config/platform.yaml");
@@ -5563,7 +5568,7 @@ void test("G15 child credentials reuse the unchanged parent G08 receipt only thr
         preparationContextPath: parent.contextPath,
         env: parent.fixture.env,
       }),
-      { ruleId: "CONFIG-G08-G15-LINEAGE" },
+      { ruleId: "CONFIG-MIGRATIONS-BROWSER-LINEAGE" },
     );
   } finally {
     await writeFile(trackedParent, trackedBytes);
@@ -5584,7 +5589,7 @@ void test("G15 child credentials reuse the unchanged parent G08 receipt only thr
         preparationContextPath: parent.contextPath,
         env: parent.fixture.env,
       }),
-      { ruleId: "CONFIG-G08-G15-LINEAGE" },
+      { ruleId: "CONFIG-MIGRATIONS-BROWSER-LINEAGE" },
     );
   } finally {
     execFileSync("git", [
@@ -5606,7 +5611,7 @@ void test("G15 child credentials reuse the unchanged parent G08 receipt only thr
         preparationContextPath: parent.contextPath,
         env: parent.fixture.env,
       }),
-      { ruleId: "CONFIG-G08-G15-LINEAGE" },
+      { ruleId: "CONFIG-MIGRATIONS-BROWSER-LINEAGE" },
     );
   } finally {
     await rm(sibling, { recursive: true, force: true });
@@ -5620,7 +5625,7 @@ void test("G15 child credentials reuse the unchanged parent G08 receipt only thr
         preparationContextPath: parent.contextPath,
         env: parent.fixture.env,
       }),
-      { ruleId: "CONFIG-G08-G15-LINEAGE" },
+      { ruleId: "CONFIG-MIGRATIONS-BROWSER-LINEAGE" },
     );
   } finally {
     await chmod(child.root, 0o700);
@@ -5641,7 +5646,7 @@ void test("G15 child credentials reuse the unchanged parent G08 receipt only thr
         env: parent.fixture.env,
       }),
       (error) => {
-        assert.equal(error.ruleId, "CONFIG-G08-G15-LINEAGE");
+        assert.equal(error.ruleId, "CONFIG-MIGRATIONS-BROWSER-LINEAGE");
         assert.doesNotMatch(JSON.stringify(error.facts ?? {}), /canary/u);
         return true;
       },
@@ -5661,7 +5666,7 @@ void test("G15 child credentials reuse the unchanged parent G08 receipt only thr
   assert.deepEqual(await readFile(artifactPath), parentReceipt);
 });
 
-void test("G15 child G08 credential admission rejects non-profile config changes before PostgreSQL connection", async (t) => {
+void test("browser child migrations credential admission rejects non-profile config changes before PostgreSQL connection", async (t) => {
   const parent = await createMigrationLaunchFixture({
     migratorBlock: true,
     databaseIsolation: true,
@@ -5700,12 +5705,12 @@ void test("G15 child G08 credential admission rejects non-profile config changes
       kind: "migrator",
       env: parent.fixture.env,
     }),
-    /CONFIG-G08-G15-LINEAGE/u,
+    /CONFIG-MIGRATIONS-BROWSER-LINEAGE/u,
   );
   assert.equal(connectCalls, 0);
 });
 
-void test("G08 preparation binds its committed config and permits only the approved isolation transition", () => {
+void test("migrations preparation binds its committed config and permits only the approved isolation transition", () => {
   const preparedConfigBytes = Buffer.from(
     [
       "postgres:",
@@ -5833,7 +5838,7 @@ void test("G08 preparation binds its committed config and permits only the appro
           Buffer.from(text),
           coveragePreparedConfigSha256,
         ),
-      /CONFIG-G08-PREPARATION-CONFIG/u,
+      /CONFIG-MIGRATIONS-PREPARATION-CONFIG/u,
     );
   rejectsCoverageTransition(
     coverageTransitionedText.replace(`      - ${coveragePaths[0]}\n`, ""),
@@ -5970,7 +5975,7 @@ void test("G08 preparation binds its committed config and permits only the appro
     assert.throws(
       () =>
         validateMigrationPreparationArtifact(receipt, context, bundleSha256),
-      /CONFIG-G08-PREPARATION/u,
+      /CONFIG-MIGRATIONS-PREPARATION/u,
       path,
     );
   }
@@ -5983,7 +5988,7 @@ void test("G08 preparation binds its committed config and permits only the appro
           current,
           preparedConfigSha256,
         ),
-      /CONFIG-G08-PREPARATION-CONFIG/u,
+      /CONFIG-MIGRATIONS-PREPARATION-CONFIG/u,
     );
   rejectsTransition(
     Buffer.from(
@@ -6020,7 +6025,7 @@ void test("G08 preparation binds its committed config and permits only the appro
         preparedConfigBytes,
         createHash("sha256").update(transitioned).digest("hex"),
       ),
-    /CONFIG-G08-PREPARATION-CONFIG/u,
+    /CONFIG-MIGRATIONS-PREPARATION-CONFIG/u,
   );
   assert.throws(
     () =>
@@ -6029,46 +6034,46 @@ void test("G08 preparation binds its committed config and permits only the appro
         transitioned,
         "a".repeat(64),
       ),
-    /CONFIG-G08-PREPARATION-CONFIG/u,
+    /CONFIG-MIGRATIONS-PREPARATION-CONFIG/u,
   );
 });
 
-void test("G08 credential reader rejects stale receipts, invalid identities, unsafe inventories, and unisolated configs", async (t) => {
+void test("migrations credential reader rejects stale receipts, invalid identities, unsafe inventories, and unisolated configs", async (t) => {
   const cases = [
     {
       name: "writable preparation receipt",
       artifactMode: 0o600,
-      expectedRule: "CONFIG-G08-PREPARATION",
+      expectedRule: "CONFIG-MIGRATIONS-PREPARATION",
       probe: false,
     },
     {
       name: "malformed preparation receipt",
       artifactContents: "{synthetic-invalid-json",
-      expectedRule: "CONFIG-G08-PREPARATION",
+      expectedRule: "CONFIG-MIGRATIONS-PREPARATION",
       probe: false,
     },
     {
       name: "missing launch context",
       missingContext: true,
-      expectedRule: "CONFIG-G08-CONTEXT",
+      expectedRule: "CONFIG-MIGRATIONS-CONTEXT",
       probe: false,
     },
     {
-      name: "orphan G15 parent metadata without a preparation context",
+      name: "orphan browser parent metadata without a preparation context",
       orphanPreparationMetadata: true,
-      expectedRule: "CONFIG-G08-G15-LINEAGE",
+      expectedRule: "CONFIG-MIGRATIONS-BROWSER-LINEAGE",
       probe: false,
     },
     {
       name: "missing config file",
       removeConfig: true,
-      expectedRule: "CONFIG-G08-CONFIG",
+      expectedRule: "CONFIG-MIGRATIONS-CONFIG",
       probe: false,
     },
     {
       name: "symlinked config file",
       symlinkConfig: true,
-      expectedRule: "CONFIG-G08-CONFIG",
+      expectedRule: "CONFIG-MIGRATIONS-CONFIG",
       probe: false,
     },
     {
@@ -6078,7 +6083,7 @@ void test("G08 credential reader rejects stale receipts, invalid identities, uns
           mutateWrapper: (wrapper) => ({ ...wrapper, runId: "other-run" }),
         },
       },
-      expectedRule: "CONFIG-G08-PREPARATION",
+      expectedRule: "CONFIG-MIGRATIONS-PREPARATION",
       probe: false,
     },
     {
@@ -6091,7 +6096,7 @@ void test("G08 credential reader rejects stale receipts, invalid identities, uns
           }),
         },
       },
-      expectedRule: "CONFIG-G08-PREPARATION",
+      expectedRule: "CONFIG-MIGRATIONS-PREPARATION",
       probe: false,
     },
     {
@@ -6107,7 +6112,7 @@ void test("G08 credential reader rejects stale receipts, invalid identities, uns
           }),
         },
       },
-      expectedRule: "CONFIG-G08-IDENTITY",
+      expectedRule: "CONFIG-MIGRATIONS-IDENTITY",
       probe: false,
     },
     {
@@ -6123,7 +6128,7 @@ void test("G08 credential reader rejects stale receipts, invalid identities, uns
           }),
         },
       },
-      expectedRule: "CONFIG-G08-PREPARATION",
+      expectedRule: "CONFIG-MIGRATIONS-PREPARATION",
       probe: false,
     },
     {
@@ -6136,7 +6141,7 @@ void test("G08 credential reader rejects stale receipts, invalid identities, uns
           }),
         },
       },
-      expectedRule: "CONFIG-G08-PREPARATION",
+      expectedRule: "CONFIG-MIGRATIONS-PREPARATION",
       probe: false,
     },
     {
@@ -6150,60 +6155,60 @@ void test("G08 credential reader rejects stale receipts, invalid identities, uns
           }),
         },
       },
-      expectedRule: "CONFIG-G08-PREPARATION",
+      expectedRule: "CONFIG-MIGRATIONS-PREPARATION",
       probe: false,
     },
     {
       name: "unknown owner",
       owner: "not-an-owner",
-      expectedRule: "CONFIG-G08-CREDENTIAL-OWNER",
+      expectedRule: "CONFIG-MIGRATIONS-CREDENTIAL-OWNER",
       probe: false,
     },
     {
       name: "unisolated database config",
       options: { databaseIsolation: false },
-      expectedRule: "CONFIG-G08-TARGET",
+      expectedRule: "CONFIG-MIGRATIONS-TARGET",
       probe: false,
     },
     {
       name: "wrong live server identity",
       serverIdentifier: "9999999999999999999",
-      expectedRule: "CONFIG-G08-PROBE",
+      expectedRule: "CONFIG-MIGRATIONS-PROBE",
       probe: true,
       expectedQueries: 1,
     },
     {
       name: "wrong live PostgreSQL user",
       serverOverrides: { current_user: "foreign_admin" },
-      expectedRule: "CONFIG-G08-PROBE",
+      expectedRule: "CONFIG-MIGRATIONS-PROBE",
       probe: true,
       expectedQueries: 1,
     },
     {
       name: "wrong live PostgreSQL database",
       serverOverrides: { current_database: "coffee_platform_customer" },
-      expectedRule: "CONFIG-G08-PROBE",
+      expectedRule: "CONFIG-MIGRATIONS-PROBE",
       probe: true,
       expectedQueries: 1,
     },
     {
       name: "wrong live PostgreSQL version",
       serverOverrides: { server_version_num: "170012" },
-      expectedRule: "CONFIG-G08-PROBE",
+      expectedRule: "CONFIG-MIGRATIONS-PROBE",
       probe: true,
       expectedQueries: 1,
     },
     {
       name: "missing canonical role",
       roleInventory: "missing",
-      expectedRule: "CONFIG-G08-ROLE-INVENTORY",
+      expectedRule: "CONFIG-MIGRATIONS-ROLE-INVENTORY",
       probe: true,
       expectedQueries: 2,
     },
     {
       name: "privileged canonical role",
       roleInventory: "superuser",
-      expectedRule: "CONFIG-G08-ROLE-INVENTORY",
+      expectedRule: "CONFIG-MIGRATIONS-ROLE-INVENTORY",
       probe: true,
       expectedQueries: 2,
     },
@@ -6218,35 +6223,35 @@ void test("G08 credential reader rejects stale receipts, invalid identities, uns
     ].map(([name, roleProperty, roleValue]) => ({
       name: `canonical role ${name}`,
       roleMutation: { roleProperty, roleValue },
-      expectedRule: "CONFIG-G08-ROLE-INVENTORY",
+      expectedRule: "CONFIG-MIGRATIONS-ROLE-INVENTORY",
       probe: true,
       expectedQueries: 2,
     })),
     {
       name: "preparation receipt changed during the read-only probe",
       mutateReceiptDuringProbe: true,
-      expectedRule: "CONFIG-G08-PREPARATION_CHANGED",
+      expectedRule: "CONFIG-MIGRATIONS-PREPARATION_CHANGED",
       probe: true,
       expectedQueries: 2,
     },
     {
       name: "encrypted credential bundle changed during the read-only probe",
       mutateBundleDuringProbe: true,
-      expectedRule: "CONFIG-G08-BUNDLE_CHANGED",
+      expectedRule: "CONFIG-MIGRATIONS-BUNDLE_CHANGED",
       probe: true,
       expectedQueries: 2,
     },
     {
       name: "encrypted bundle removed after its final snapshot read",
       snapshotRace: "bundle",
-      expectedRule: "CONFIG-G08-BUNDLE_CHANGED",
+      expectedRule: "CONFIG-MIGRATIONS-BUNDLE_CHANGED",
       probe: true,
       expectedQueries: 2,
     },
     {
       name: "preparation receipt removed after canonical path resolution",
       snapshotRace: "receipt",
-      expectedRule: "CONFIG-G08-PREPARATION_CHANGED",
+      expectedRule: "CONFIG-MIGRATIONS-PREPARATION_CHANGED",
       probe: true,
       expectedQueries: 2,
     },
@@ -6485,7 +6490,7 @@ void test("G08 credential reader rejects stale receipts, invalid identities, uns
   }
 });
 
-void test("G08 role preparation rechecks roles, stores only encrypted credentials and creates all roles in one transaction", async (t) => {
+void test("migrations role preparation rechecks roles, stores only encrypted credentials and creates all roles in one transaction", async (t) => {
   const launch = await createMigrationLaunchFixture();
   const { fixture, evidenceDir, contextPath, adminPassword } = launch;
   const bundlePath = join(fixture.root, "secrets/platform.secrets.sops.yaml");
@@ -6590,7 +6595,7 @@ void test("G08 role preparation rechecks roles, stores only encrypted credential
           throw new Error("fixture CREATE ROLE failed");
         return { rows: [] };
       }
-      assert.fail("unexpected G08 preparation query");
+      assert.fail("unexpected migrations preparation query");
     });
 
     systemIdentifier = "7613370342949990435";
@@ -6602,7 +6607,7 @@ void test("G08 role preparation rechecks roles, stores only encrypted credential
         expectedSystemIdentifier: "7613370342949990434",
       }),
       (error) => {
-        assert.equal(error.ruleId, "CONFIG-G08-IDENTITY");
+        assert.equal(error.ruleId, "CONFIG-MIGRATIONS-IDENTITY");
         assert.equal(error.facts.stage, "readonly-probe");
         assert.equal(
           error.facts.postgres.systemIdentifier,
@@ -6645,7 +6650,7 @@ void test("G08 role preparation rechecks roles, stores only encrypted credential
         expectedSystemIdentifier: "7613370342949990434",
       }),
       (error) => {
-        assert.equal(error.ruleId, "CONFIG-G08-IDENTITY_CHANGED");
+        assert.equal(error.ruleId, "CONFIG-MIGRATIONS-IDENTITY_CHANGED");
         assert.equal(error.facts.stage, "role-transaction");
         assert.equal(
           error.facts.postgres.systemIdentifier,
@@ -6699,7 +6704,7 @@ void test("G08 role preparation rechecks roles, stores only encrypted credential
         expectedSystemIdentifier: "7613370342949990434",
       }),
       (error) => {
-        assert.equal(error.ruleId, "CONFIG-G08-ROLE-PRESENT");
+        assert.equal(error.ruleId, "CONFIG-MIGRATIONS-ROLE-PRESENT");
         assert.deepEqual(
           error.facts.roleInventory.existing.map((role) => role.role),
           ["coffee_customer_migrator"],
@@ -6735,7 +6740,7 @@ void test("G08 role preparation rechecks roles, stores only encrypted credential
         expectedSystemIdentifier: "7613370342949990434",
       }),
       (error) => {
-        assert.equal(error.ruleId, "CONFIG-G08-ROLE_CONFLICT");
+        assert.equal(error.ruleId, "CONFIG-MIGRATIONS-ROLE_CONFLICT");
         assert.equal(error.facts.stage, "role-transaction");
         assert.equal(
           error.facts.roleInventory.existing[0].role,
@@ -6769,7 +6774,7 @@ void test("G08 role preparation rechecks roles, stores only encrypted credential
         expectedSystemIdentifier: "7613370342949990434",
       }),
       (error) => {
-        assert.equal(error.ruleId, "CONFIG-G08-TRANSACTION-PROBE");
+        assert.equal(error.ruleId, "CONFIG-MIGRATIONS-TRANSACTION-PROBE");
         assert.equal(error.facts.stage, "role-transaction-probe-failed");
         assert.equal(JSON.stringify(error).includes("canary"), false);
         return true;
@@ -6799,7 +6804,7 @@ void test("G08 role preparation rechecks roles, stores only encrypted credential
         expectedSystemIdentifier: "7613370342949990434",
       }),
       (error) => {
-        assert.equal(error.ruleId, "CONFIG-G08-BUNDLE_CHANGED");
+        assert.equal(error.ruleId, "CONFIG-MIGRATIONS-BUNDLE_CHANGED");
         assert.equal(error.facts.stage, "bundle-changed-before-role-create");
         return true;
       },
@@ -6827,7 +6832,7 @@ void test("G08 role preparation rechecks roles, stores only encrypted credential
         expectedSystemIdentifier: "7613370342949990434",
       }),
       (error) => {
-        assert.equal(error.ruleId, "CONFIG-G08-ROLE-CREATE");
+        assert.equal(error.ruleId, "CONFIG-MIGRATIONS-ROLE-CREATE");
         assert.equal(error.facts.stage, "role-transaction-rolled-back");
         return true;
       },
@@ -6859,7 +6864,7 @@ void test("G08 role preparation rechecks roles, stores only encrypted credential
         expectedSystemIdentifier: "7613370342949990434",
       }),
       (error) => {
-        assert.equal(error.ruleId, "CONFIG-G08-ROLLBACK-UNKNOWN");
+        assert.equal(error.ruleId, "CONFIG-MIGRATIONS-ROLLBACK-UNKNOWN");
         assert.equal(error.facts.stage, "rollback-outcome-unknown");
         return true;
       },
@@ -6956,7 +6961,7 @@ void test("G08 role preparation rechecks roles, stores only encrypted credential
         expectedSystemIdentifier: "7613370342949990434",
       }),
       (error) => {
-        assert.equal(error.ruleId, "CONFIG-G08-COMMIT-UNKNOWN");
+        assert.equal(error.ruleId, "CONFIG-MIGRATIONS-COMMIT-UNKNOWN");
         assert.equal(error.facts.stage, "commit-outcome-unknown");
         assert.equal(error.facts.bundleResultingSha256.length, 64);
         assert.equal(
@@ -6993,7 +6998,7 @@ void test("G08 role preparation rechecks roles, stores only encrypted credential
         expectedSystemIdentifier: "7613370342949990434",
       }),
       (error) => {
-        assert.equal(error.ruleId, "CONFIG-G08-COMMIT-CLOSE");
+        assert.equal(error.ruleId, "CONFIG-MIGRATIONS-COMMIT-CLOSE");
         assert.equal(error.facts.stage, "roles-committed-close-failed");
         assert.equal(error.facts.roleNames.length, 15);
         assert.doesNotMatch(
@@ -7022,7 +7027,7 @@ void test("G08 role preparation rechecks roles, stores only encrypted credential
   }
 });
 
-void test("G08 role preparation refuses an existing migrator block and a changed bundle snapshot", async (t) => {
+void test("migrations role preparation refuses an existing migrator block and a changed bundle snapshot", async (t) => {
   const launch = await createMigrationLaunchFixture({ migratorBlock: true });
   const { fixture, evidenceDir, contextPath } = launch;
   const bundlePath = join(fixture.root, "secrets/platform.secrets.sops.yaml");
@@ -7051,7 +7056,7 @@ void test("G08 role preparation refuses an existing migrator block and a changed
         inventoryCalls += 1;
         return { rows: roleRows };
       }
-      assert.fail("unexpected G08 preparation query");
+      assert.fail("unexpected migrations preparation query");
     });
 
     await assert.rejects(
@@ -7061,7 +7066,7 @@ void test("G08 role preparation refuses an existing migrator block and a changed
         env: fixture.env,
         expectedSystemIdentifier: "7613370342949990434",
       }),
-      /CONFIG-G08-MIGRATOR-BLOCK_PRESENT/u,
+      /CONFIG-MIGRATIONS-MIGRATOR-BLOCK_PRESENT/u,
     );
     assert.equal(inventoryCalls, 1);
     assert.equal(
@@ -7094,7 +7099,7 @@ void test("G08 role preparation refuses an existing migrator block and a changed
         env: cleanLaunch.fixture.env,
         expectedSystemIdentifier: "7613370342949990434",
       }),
-      /CONFIG-G08-BUNDLE_CHANGED/u,
+      /CONFIG-MIGRATIONS-BUNDLE_CHANGED/u,
     );
     assert.deepEqual(await readFile(cleanBundlePath), changedBundleBytes);
     assert.equal(
@@ -7115,12 +7120,12 @@ void test("G08 role preparation refuses an existing migrator block and a changed
   }
 });
 
-void test("G08 role preparation validates temporary ciphertext and plaintext before replacing secrets", async (t) => {
+void test("migrations role preparation validates temporary ciphertext and plaintext before replacing secrets", async (t) => {
   const cases = [
     {
       name: "SOPS encryption command failure",
       options: { failEncryption: true },
-      expectedRule: "CONFIG-G08-SOPS-ENCRYPT",
+      expectedRule: "CONFIG-MIGRATIONS-SOPS-ENCRYPT",
     },
     {
       name: "schema-invalid output",
@@ -7138,7 +7143,7 @@ void test("G08 role preparation validates temporary ciphertext and plaintext bef
       name: "plaintext leak in otherwise valid ciphertext",
       options: { invalidOutput: "plaintext-leak" },
       validationStage: "plaintext-leak-check",
-      ruleId: "CONFIG-G08-SOPS-OUTPUT",
+      ruleId: "CONFIG-MIGRATIONS-SOPS-OUTPUT",
     },
     {
       name: "undecryptable ciphertext",
@@ -7154,19 +7159,19 @@ void test("G08 role preparation validates temporary ciphertext and plaintext bef
       name: "bundle replacement after rename is rejected without deleting the replacement",
       options: {},
       replaceAfterRename: true,
-      expectedRule: "CONFIG-G08-BUNDLE_WRITE",
+      expectedRule: "CONFIG-MIGRATIONS-BUNDLE_WRITE",
     },
     {
       name: "saved foreign field change fails after valid temporary round-trip",
       options: { savedBundleMutation: "foreign-field" },
       savedBundleChanged: true,
-      expectedRule: "CONFIG-G08-SOPS-ROUNDTRIP",
+      expectedRule: "CONFIG-MIGRATIONS-SOPS-ROUNDTRIP",
     },
     {
       name: "saved migrator mismatch fails after valid temporary round-trip",
       options: { savedBundleMutation: "wrong-migrator-map" },
       savedBundleChanged: true,
-      expectedRule: "CONFIG-G08-SOPS-ROUNDTRIP",
+      expectedRule: "CONFIG-MIGRATIONS-SOPS-ROUNDTRIP",
     },
   ];
   const systemIdentifier = "7613370342949990434";
@@ -7235,7 +7240,7 @@ void test("G08 role preparation validates temporary ciphertext and plaintext bef
             assert.equal(error.message.includes("canary"), false);
             return true;
           }
-          assert.equal(error.ruleId, "CONFIG-G08-SOPS-OUTPUT");
+          assert.equal(error.ruleId, "CONFIG-MIGRATIONS-SOPS-OUTPUT");
           assert.equal(error.facts.validationStage, scenario.validationStage);
           assert.deepEqual(
             Object.keys(error.facts).sort((left, right) =>
@@ -7765,7 +7770,7 @@ if (process.env.FAKE_DOCKER_FAIL_USER && args[userIndex + 1] === process.env.FAK
   }
 });
 
-void test("G16 migrator and finalizer bind the run database, server identity, and canonical role before SQL effects", async (t) => {
+void test("aroma_sandbox migrator and finalizer bind the run database, server identity, and canonical role before SQL effects", async (t) => {
   const fixture = await createSecretMaterializationFixture();
   const runId = "20261024T185200Z-fac5678";
   const owner = "orders";
@@ -7889,7 +7894,7 @@ void test("G16 migrator and finalizer bind the run database, server identity, an
         env: fixture.env,
       }),
       (error) => {
-        assert.match(error.message, /CONFIG-G16-MIGRATOR_TARGET_MISMATCH/u);
+        assert.match(error.message, /CONFIG-AROMA-MIGRATOR_TARGET_MISMATCH/u);
         assert.doesNotMatch(error.message, /synthetic end failure/u);
         return true;
       },
@@ -7946,7 +7951,7 @@ void test("G16 migrator and finalizer bind the run database, server identity, an
         env: fixture.env,
       }),
       (error) => {
-        assert.match(error.message, /CONFIG-G16-FINALIZE-TARGET_MISMATCH/u);
+        assert.match(error.message, /CONFIG-AROMA-FINALIZE-TARGET_MISMATCH/u);
         assert.doesNotMatch(error.message, /synthetic end failure/u);
         return true;
       },
@@ -7988,7 +7993,7 @@ void test("G16 migrator and finalizer bind the run database, server identity, an
           env: fixture.env,
         }),
         (error) => {
-          assert.match(error.message, /CONFIG-G16-MIGRATOR_ROLE_MISMATCH/u);
+          assert.match(error.message, /CONFIG-AROMA-MIGRATOR_ROLE_MISMATCH/u);
           return true;
         },
         label,
@@ -8030,7 +8035,7 @@ void test("G16 migrator and finalizer bind the run database, server identity, an
         expectedSystemIdentifier: systemIdentifier,
         env: fixture.env,
       }),
-      /CONFIG-G16-ENVIRONMENT/u,
+      /CONFIG-AROMA-ENVIRONMENT/u,
     );
     await assert.rejects(
       finalizeAromaSandboxDatabase({
@@ -8042,7 +8047,7 @@ void test("G16 migrator and finalizer bind the run database, server identity, an
         expectedSystemIdentifier: systemIdentifier,
         env: fixture.env,
       }),
-      /CONFIG-G16-ENVIRONMENT/u,
+      /CONFIG-AROMA-ENVIRONMENT/u,
     );
     assert.equal(
       fake.connections.length,
@@ -8200,7 +8205,7 @@ async function createBrowserLaunchFixture({
     );
     execFileSync(
       "git",
-      ["commit", "-qm", "G15 verification OIDC config variant"],
+      ["commit", "-qm", "browser verification OIDC config variant"],
       {
         cwd: fixture.root,
       },
@@ -8287,12 +8292,12 @@ async function createBrowserChildMigrationLaunchFixture(
       "git",
       [
         "-c",
-        "user.name=G15 fixture",
+        "user.name=browser fixture",
         "-c",
         "user.email=g15@example.invalid",
         "commit",
         "-qm",
-        "G15 exact OIDC fixture",
+        "browser exact OIDC fixture",
       ],
       { cwd: childRoot, stdio: "ignore" },
     );
@@ -8344,7 +8349,7 @@ async function createBrowserChildMigrationLaunchFixture(
   }
 }
 
-void test("G15 generated child clone replaces its local origin before context validation", async (t) => {
+void test("browser generated child clone replaces its local origin before context validation", async (t) => {
   const launch = await createBrowserLaunchFixture();
   const runId = `${new Date().toISOString().replace(/[-:]/gu, "").slice(0, 15)}Z-${randomBytes(4).toString("hex").slice(0, 7)}`;
   const childRoot = await mkdtemp(join(tmpdir(), "g15-origin-child-"));
@@ -8403,7 +8408,7 @@ void test("G15 generated child clone replaces its local origin before context va
   assert.equal(validated.context.candidateSha, candidateSha);
 });
 
-void test("G15 fixture lineage, tmpfs trust, and PKCE account switching stay isolated", async (t) => {
+void test("browser fixture lineage, tmpfs trust, and PKCE account switching stay isolated", async (t) => {
   const launch = await createBrowserLaunchFixture();
   const ingressCaDir = await mkdtemp("/dev/shm/g15-ingress-ca-");
   let materialized;
@@ -8427,7 +8432,7 @@ void test("G15 fixture lineage, tmpfs trust, and PKCE account switching stay iso
         "-out",
         ingressCaPath,
         "-subj",
-        "/CN=G15 public ingress test CA",
+        "/CN=browser public ingress test CA",
         "-addext",
         "basicConstraints=critical,CA:TRUE",
         "-addext",
@@ -8454,7 +8459,7 @@ void test("G15 fixture lineage, tmpfs trust, and PKCE account switching stay iso
       lineage.receiptPath,
       join(
         launch.evidenceDir,
-        "gates/G15_BROWSER/artifacts/oidc-fixture-lineage.json",
+        "gates/browser/artifacts/oidc-fixture-lineage.json",
       ),
     );
     const lineageReceiptBytes = await readFile(lineage.receiptPath);
@@ -8471,7 +8476,7 @@ void test("G15 fixture lineage, tmpfs trust, and PKCE account switching stay iso
         contextPath: launch.contextPath,
         baseCandidateSha: launch.baseCandidateSha,
       }),
-      { code: "G15_RECEIPT_STALE" },
+      { code: "BROWSER_RECEIPT_STALE" },
     );
     await chmod(lineage.receiptPath, 0o600);
     await writeFile(lineage.receiptPath, lineageReceiptBytes);
@@ -8484,7 +8489,7 @@ void test("G15 fixture lineage, tmpfs trust, and PKCE account switching stay iso
         publicIngressCaPem,
         tmpfsRoot: "/tmp",
       }),
-      { code: "G15_TMPFS_REQUIRED" },
+      { code: "BROWSER_TMPFS_REQUIRED" },
     );
     await assert.rejects(
       materializeBrowserFixture({
@@ -8493,7 +8498,7 @@ void test("G15 fixture lineage, tmpfs trust, and PKCE account switching stay iso
         lineageArtifactLoc: lineage.receiptPath,
         publicIngressCaPem: "not a certificate",
       }),
-      { code: "G15_INGRESS_CA_INVALID" },
+      { code: "BROWSER_INGRESS_CA_INVALID" },
     );
     const sentinelRoot = await mkdtemp("/dev/shm/g15-nss-sentinel-");
     const sentinelPath = join(sentinelRoot, "foreign-sentinel.txt");
@@ -8547,7 +8552,7 @@ void test("G15 fixture lineage, tmpfs trust, and PKCE account switching stay iso
           lineageArtifactLoc: lineage.receiptPath,
           publicIngressCaPem,
         }),
-        { code: "G15_NSS_IMPORT_FAILED" },
+        { code: "BROWSER_NSS_IMPORT_FAILED" },
       );
       assert.equal(nssImportCalls, 1);
       assert.equal(
@@ -8584,7 +8589,7 @@ void test("G15 fixture lineage, tmpfs trust, and PKCE account switching stay iso
             lineageArtifactLoc: lineage.receiptPath,
             publicIngressCaPem,
           }),
-          { code: "G15_NSS_RECEIPT_INVALID" },
+          { code: "BROWSER_NSS_RECEIPT_INVALID" },
         );
         assert.ok(partialFixtureRoot);
         await assert.rejects(stat(partialFixtureRoot), { code: "ENOENT" });
@@ -8628,7 +8633,7 @@ void test("G15 fixture lineage, tmpfs trust, and PKCE account switching stay iso
           "utf8",
         ),
       }),
-      { code: "G15_INGRESS_CA_INVALID" },
+      { code: "BROWSER_INGRESS_CA_INVALID" },
     );
     assert.equal(
       materialized.browser.nssProfilePath.startsWith("/dev/shm/"),
@@ -8872,7 +8877,7 @@ void test("G15 fixture lineage, tmpfs trust, and PKCE account switching stay iso
     const restoredIdentity = await lstat(ownedFixtureRoot);
     assert.equal(restoredIdentity.dev, originalIdentity.dev);
     assert.equal(restoredIdentity.ino, originalIdentity.ino);
-    assert.equal(cleanupError?.code, "G15_FIXTURE_OWNERSHIP_CHANGED");
+    assert.equal(cleanupError?.code, "BROWSER_FIXTURE_OWNERSHIP_CHANGED");
     assert.equal(
       replacementCanaryContents,
       "replacement must survive cleanup\n",
@@ -8895,7 +8900,7 @@ void test("G15 fixture lineage, tmpfs trust, and PKCE account switching stay iso
   }
 });
 
-void test("G15 Compose wiring mounts only scoped fixture paths and trusts the IdP CA in Edge", async () => {
+void test("browser Compose wiring mounts only scoped fixture paths and trusts the IdP CA in Edge", async () => {
   const { writeScopedComposeOverride } =
     await import("../../tools/compose-smoke.mjs");
   const directory = await mkdtemp("/dev/shm/g15-compose-wiring-");
@@ -9016,7 +9021,7 @@ void test("G15 Compose wiring mounts only scoped fixture paths and trusts the Id
   }
 });
 
-void test("G15 programmatic browser hooks reject runs without validated context", async () => {
+void test("browser programmatic hooks reject runs without validated context", async () => {
   const { runComposeSmoke } = await import("../../tools/compose-smoke.mjs");
   const previousContext = process.env.COFFEE_LAUNCH_CONTEXT_FILE;
   delete process.env.COFFEE_LAUNCH_CONTEXT_FILE;
@@ -9030,7 +9035,7 @@ void test("G15 programmatic browser hooks reject runs without validated context"
           onCleanup: async () => {},
         },
       }),
-      /G15 browser hooks require a validated launch context/u,
+      /browser hooks require a validated launch context/u,
     );
   } finally {
     if (previousContext === undefined)
@@ -9039,7 +9044,7 @@ void test("G15 programmatic browser hooks reject runs without validated context"
   }
 });
 
-void test("G15 lineage rejects a non-profile config edit and an extra committed path", async (t) => {
+void test("browser lineage rejects a non-profile config edit and an extra committed path", async (t) => {
   const badProfile = await createBrowserLaunchFixture({
     mutateConfig: (text) =>
       text.replace(
@@ -9058,7 +9063,7 @@ void test("G15 lineage rejects a non-profile config edit and an extra committed 
       contextPath: badProfile.contextPath,
       baseCandidateSha: badProfile.baseCandidateSha,
     }),
-    { code: "G15_CONFIG_DELTA_INVALID" },
+    { code: "BROWSER_CONFIG_DELTA_INVALID" },
   );
 
   const extraPath = await createBrowserLaunchFixture({
@@ -9075,7 +9080,7 @@ void test("G15 lineage rejects a non-profile config edit and an extra committed 
       contextPath: extraPath.contextPath,
       baseCandidateSha: extraPath.baseCandidateSha,
     }),
-    { code: "G15_CONFIG_ONLY_LINEAGE_REQUIRED" },
+    { code: "BROWSER_CONFIG_ONLY_LINEAGE_REQUIRED" },
   );
 
   const staleContext = await createBrowserLaunchFixture();
@@ -9090,7 +9095,7 @@ void test("G15 lineage rejects a non-profile config edit and an extra committed 
       contextPath: staleContext.contextPath,
       baseCandidateSha: staleContext.candidateSha,
     }),
-    { code: "G15_BASE_NOT_DIRECT_PARENT" },
+    { code: "BROWSER_BASE_NOT_DIRECT_PARENT" },
   );
   const context = JSON.parse(await readFile(staleContext.contextPath, "utf8"));
   context.baseConfigSha256 = "0".repeat(64);
@@ -9105,11 +9110,11 @@ void test("G15 lineage rejects a non-profile config edit and an extra committed 
       contextPath: staleContext.contextPath,
       baseCandidateSha: staleContext.baseCandidateSha,
     }),
-    { code: "G15_CONTEXT_CONFIG_MISMATCH" },
+    { code: "BROWSER_CONTEXT_CONFIG_MISMATCH" },
   );
 });
 
-void test("G15 child Compose preamble reads the parent-sealed lineage without rewriting it", async (t) => {
+void test("browser child Compose preamble reads the parent-sealed lineage without rewriting it", async (t) => {
   const launch = await createBrowserLaunchFixture();
   t.after(async () => {
     await rm(launch.evidenceDir, { recursive: true, force: true });
@@ -9121,7 +9126,7 @@ void test("G15 child Compose preamble reads the parent-sealed lineage without re
     "browserOidc: null\nbrowserOidc: null",
   ]) {
     assert.throws(() => fixtureConfigText(baseText), {
-      code: "G15_CONFIG_BASE_INVALID",
+      code: "BROWSER_CONFIG_BASE_INVALID",
     });
   }
   const pureInputs = {
@@ -9132,9 +9137,9 @@ void test("G15 child Compose preamble reads the parent-sealed lineage without re
     configSha256: "0".repeat(64),
   };
   for (const [override, code] of [
-    [{ baseCandidateSha: "invalid" }, "G15_BASE_SHA_INVALID"],
-    [{ candidateSha: "invalid" }, "G15_CANDIDATE_INVALID"],
-    [{ runId: "invalid" }, "G15_CANDIDATE_INVALID"],
+    [{ baseCandidateSha: "invalid" }, "BROWSER_BASE_SHA_INVALID"],
+    [{ candidateSha: "invalid" }, "BROWSER_CANDIDATE_INVALID"],
+    [{ runId: "invalid" }, "BROWSER_CANDIDATE_INVALID"],
   ]) {
     await assert.rejects(
       validateBrowserFixtureGitLineage({ ...pureInputs, ...override }),
@@ -9148,20 +9153,20 @@ void test("G15 child Compose preamble reads the parent-sealed lineage without re
   };
   const expectedReceiptPath = join(
     launch.evidenceDir,
-    "gates/G15_BROWSER/artifacts/oidc-fixture-lineage.json",
+    "gates/browser/artifacts/oidc-fixture-lineage.json",
   );
   await assert.rejects(
     validateBrowserFixtureLineage({
       ...lineageArgs,
       root: "/tmp/foreign-g15-source",
     }),
-    { code: "G15_SOURCE_ROOT_INVALID" },
+    { code: "BROWSER_SOURCE_ROOT_INVALID" },
   );
   assert.equal(await lstat(expectedReceiptPath).catch(() => null), null);
   await chmod(launch.contextPath, 0o600);
   try {
     await assert.rejects(validateBrowserFixtureLineage(lineageArgs), {
-      code: "G15_CONTEXT_MODE_INVALID",
+      code: "BROWSER_CONTEXT_MODE_INVALID",
     });
     assert.equal(await lstat(expectedReceiptPath).catch(() => null), null);
   } finally {
@@ -9182,7 +9187,7 @@ void test("G15 child Compose preamble reads the parent-sealed lineage without re
       ...lineageArgs,
       root: "/tmp/foreign-g15-source",
     }),
-    { code: "G15_SOURCE_ROOT_INVALID" },
+    { code: "BROWSER_SOURCE_ROOT_INVALID" },
   );
   await assert.rejects(
     materializeBrowserFixture({
@@ -9190,13 +9195,13 @@ void test("G15 child Compose preamble reads the parent-sealed lineage without re
       lineageArtifactLoc: join(launch.evidenceDir, "foreign-receipt.json"),
       publicIngressCaPem: "unused",
     }),
-    { code: "G15_RECEIPT_PATH_INVALID" },
+    { code: "BROWSER_RECEIPT_PATH_INVALID" },
   );
   const artifactsDir = dirname(created.receiptPath);
   await chmod(artifactsDir, 0o755);
   try {
     await assert.rejects(readBrowserFixtureLineage(lineageArgs), {
-      code: "G15_RECEIPT_DIRECTORY_INVALID",
+      code: "BROWSER_RECEIPT_DIRECTORY_INVALID",
     });
     assert.deepEqual(await readFile(created.receiptPath), beforeBytes);
   } finally {
@@ -9209,7 +9214,7 @@ void test("G15 child Compose preamble reads the parent-sealed lineage without re
   await symlink(foreignPath, created.receiptPath);
   try {
     await assert.rejects(readBrowserFixtureLineage(lineageArgs), {
-      code: "G15_RECEIPT_FILE_INVALID",
+      code: "BROWSER_RECEIPT_FILE_INVALID",
     });
     assert.deepEqual(await readFile(foreignPath), foreignBytes);
   } finally {
@@ -9223,7 +9228,7 @@ void test("G15 child Compose preamble reads the parent-sealed lineage without re
       lineageArtifactLoc: created.receiptPath,
       publicIngressCaPem: "-----BEGIN CERTIFICATE-----\ninvalid",
     }),
-    { code: "G15_INGRESS_CA_INVALID" },
+    { code: "BROWSER_INGRESS_CA_INVALID" },
   );
   assert.deepEqual(await readFile(created.receiptPath), beforeBytes);
   await assert.rejects(
@@ -9232,7 +9237,7 @@ void test("G15 child Compose preamble reads the parent-sealed lineage without re
       contextPath: launch.contextPath,
       baseCandidateSha: launch.candidateSha,
     }),
-    { code: "G15_BASE_NOT_DIRECT_PARENT" },
+    { code: "BROWSER_BASE_NOT_DIRECT_PARENT" },
   );
   assert.deepEqual(await readFile(created.receiptPath), beforeBytes);
 
@@ -9250,7 +9255,7 @@ void test("G15 child Compose preamble reads the parent-sealed lineage without re
       contextPath: launch.contextPath,
       baseCandidateSha: launch.baseCandidateSha,
     }),
-    { code: "G15_RECEIPT_SCHEMA_INVALID" },
+    { code: "BROWSER_RECEIPT_SCHEMA_INVALID" },
   );
 
   await chmod(created.receiptPath, 0o600);
@@ -9262,11 +9267,11 @@ void test("G15 child Compose preamble reads the parent-sealed lineage without re
       contextPath: launch.contextPath,
       baseCandidateSha: launch.baseCandidateSha,
     }),
-    { code: "G15_RECEIPT_FILE_INVALID" },
+    { code: "BROWSER_RECEIPT_FILE_INVALID" },
   );
 });
 
-void test("G15 parent admission restores and verifies the child bundle after checkout removal", async (t) => {
+void test("browser parent admission restores and verifies the child bundle after checkout removal", async (t) => {
   const launch = await createBrowserLaunchFixture();
   const bundleDirectory = await mkdtemp(join(tmpdir(), "g15-parent-bundle-"));
   t.after(async () => {
@@ -9300,7 +9305,7 @@ void test("G15 parent admission restores and verifies the child bundle after che
       runId: launch.runId,
       configSha256: context.baseConfigSha256,
     }),
-    { code: "G15_BASE_NOT_DIRECT_PARENT" },
+    { code: "BROWSER_BASE_NOT_DIRECT_PARENT" },
   );
 
   const bundlePath = join(bundleDirectory, "child.bundle");
@@ -9364,11 +9369,11 @@ void test("G15 parent admission restores and verifies the child bundle after che
       baseConfigBytes,
       childConfigBytes,
     }),
-    { code: "G15_BUNDLE_FETCH_FAILED" },
+    { code: "BROWSER_BUNDLE_FETCH_FAILED" },
   );
 });
 
-async function writeSyntheticParentG12({
+async function writeSyntheticSupplyChainParent({
   candidateRoot,
   evidenceDir,
   context,
@@ -9387,7 +9392,7 @@ async function writeSyntheticParentG12({
   const { runId, candidateSha } = context;
   const supplyChainDir = join(
     evidenceDir,
-    "gates/G12_SUPPLY_CHAIN/artifacts/supply-chain",
+    "gates/supply_chain/artifacts/supply-chain",
   );
   await mkdir(join(supplyChainDir, "artifacts"), {
     recursive: true,
@@ -9433,7 +9438,7 @@ async function writeSyntheticParentG12({
   };
   const receipt = {
     schemaVersion: 1,
-    gate: "G12_SUPPLY_CHAIN",
+    gate: "supply_chain",
     status: "PASS",
     runId,
     candidateSha,
@@ -9480,9 +9485,9 @@ async function writeSyntheticParentG12({
   };
   const receiptBytes = Buffer.from(JSON.stringify(receipt));
   const result = {
-    gate: "G12_SUPPLY_CHAIN",
+    gate: "supply_chain",
     status: "PASS",
-    code: "G12_SCAN_CLEAN",
+    code: "SUPPLY_CHAIN_SCAN_CLEAN",
     runId,
     candidateSha,
     kafka: {
@@ -9665,7 +9670,7 @@ async function writeSyntheticParentG12({
   };
   const decision = {
     schemaVersion: 1,
-    gate: "G12_SUPPLY_CHAIN",
+    gate: "supply_chain",
     runId,
     candidateSha,
     treeSha: environment.treeSha,
@@ -9763,6 +9768,7 @@ void test("browser correlation executes the child lifecycle and preserves early 
   for (const file of [
     "verification/launch/v1/scenarios/rollback.mjs",
     "tools/config-bootstrap/index.mjs",
+    "tools/config-bootstrap/browser-fixture.mjs",
     "tools/verified-infrastructure-image.mjs",
     "tools/security-scan.mjs",
   ]) {
@@ -9850,6 +9856,7 @@ void test("browser correlation executes the child lifecycle and preserves early 
     "tools/realtime-capacity.mjs",
     "verification/launch/v1/scenarios/rollback.mjs",
     "tools/config-bootstrap/index.mjs",
+    "tools/config-bootstrap/browser-fixture.mjs",
     "tools/verified-infrastructure-image.mjs",
     "tools/security-scan.mjs",
     "evidence/security/cve-2026-78661.json",
@@ -9910,7 +9917,7 @@ void test("browser correlation executes the child lifecycle and preserves early 
   ) {
     const runId = `${stamp}-${sha.slice(0, 7)}`;
     const evidenceDir = join(contextSourceRoot, "evidence/launch", runId);
-    const artifacts = join(evidenceDir, "gates/G14_OBSERVABILITY/artifacts");
+    const artifacts = join(evidenceDir, "gates/observability/artifacts");
     await mkdir(artifacts, { recursive: true, mode: 0o700 });
     const context = {
       schemaVersion: 1,
@@ -9952,7 +9959,7 @@ void test("browser correlation executes the child lifecycle and preserves early 
         .href
     );
   const success = await makeContext("20261030T120000Z");
-  const expectedKafka = await writeSyntheticParentG12({
+  const expectedKafka = await writeSyntheticSupplyChainParent({
     candidateRoot: root,
     evidenceDir: success.evidenceDir,
     context: success.context,
@@ -9975,7 +9982,7 @@ void test("browser correlation executes the child lifecycle and preserves early 
     callbackStart,
   );
   const componentCleanup = verifierSource.indexOf(
-    "validateG14ComponentCleanup(",
+    "validateObservabilityComponentCleanup(",
     componentStart,
   );
   const browserStart = verifierSource.indexOf(
@@ -10089,7 +10096,7 @@ void test("browser correlation executes the child lifecycle and preserves early 
     const lineageBytes = await readFile(
       join(
         child.evidenceDir,
-        "gates/G15_BROWSER/artifacts/oidc-fixture-lineage.json",
+        "gates/browser/artifacts/oidc-fixture-lineage.json",
       ),
     );
     assert.equal(image.lineageReceiptSha256, hash(lineageBytes));
@@ -10103,16 +10110,16 @@ void test("browser correlation executes the child lifecycle and preserves early 
     });
     try {
       await assert.rejects(
-        ordersFixture(async () => assert.fail("unprepared G08"), {
+        ordersFixture(async () => assert.fail("unprepared migrations"), {
           launchIdentity: image.launchIdentity,
           launchContextFile: contextPath,
         }),
         (error) =>
           [
-            "CONFIG-G08-ADMIN-SECRET",
-            "CONFIG-G08-BUNDLE",
-            "CONFIG-G08-CONTEXT",
-            "CONFIG-G08-PREPARATION",
+            "CONFIG-MIGRATIONS-ADMIN-SECRET",
+            "CONFIG-MIGRATIONS-BUNDLE",
+            "CONFIG-MIGRATIONS-CONTEXT",
+            "CONFIG-MIGRATIONS-PREPARATION",
           ].includes(error.ruleId),
       );
       assert.equal(postgresConnects, 0);
@@ -10138,7 +10145,7 @@ void test("browser correlation executes the child lifecycle and preserves early 
     assert.deepEqual(admitted.launchPath.launchIdentity, image.launchIdentity);
     const reportPath = join(
       success.evidenceDir,
-      "gates/G12_SUPPLY_CHAIN/artifacts/supply-chain/artifacts/edge-gateway.vulnerabilities.json",
+      "gates/supply_chain/artifacts/supply-chain/artifacts/edge-gateway.vulnerabilities.json",
     );
     const reportBytes = await readFile(reportPath);
     await writeFile(reportPath, Buffer.concat([reportBytes, Buffer.from(" ")]));
@@ -10277,9 +10284,9 @@ void test("browser correlation executes the child lifecycle and preserves early 
             routePreserved: true,
           },
         },
-        g14BrowserProof: {
+        browserProof: {
           schemaVersion: 1,
-          purpose: "G14_BROWSER_CORRELATION",
+          purpose: "BROWSER_CORRELATION",
           runId: child.runId,
           candidateSha: child.candidateSha,
           configSha256: child.baseConfigSha256,
@@ -10715,7 +10722,7 @@ void test("browser correlation executes the child lifecycle and preserves early 
     }),
     (error) =>
       error.evidence?.status === "FAIL" &&
-      /G12_KAFKA_EVIDENCE_PATH_INVALID/u.test(error.evidence.failure),
+      /_KAFKA_EVIDENCE_PATH_INVALID/u.test(error.evidence.failure),
   );
   const saved = join(imageFailure.artifacts, "observability");
   const savedNames = [
@@ -10733,7 +10740,7 @@ void test("browser correlation executes the child lifecycle and preserves early 
     await readFile(join(saved, "result.json"), "utf8"),
   );
   assert.equal(savedResult.status, "FAIL");
-  assert.match(savedResult.failure, /G12_KAFKA_EVIDENCE_PATH_INVALID/u);
+  assert.match(savedResult.failure, /_KAFKA_EVIDENCE_PATH_INVALID/u);
 
   const foreignRoot = join(directory, "foreign");
   execReal("git", [
@@ -10870,7 +10877,7 @@ void test("browser correlation executes the child lifecycle and preserves early 
     currentRoot,
   );
   for (const run of [current, replay])
-    await writeSyntheticParentG12({
+    await writeSyntheticSupplyChainParent({
       candidateRoot: currentRoot,
       evidenceDir: run.evidenceDir,
       context: run.context,
@@ -10972,7 +10979,7 @@ void test("browser correlation admission verifies the sealed child bundle and sc
   const lineage = await readFile(
     join(
       child.evidenceDir,
-      "gates/G15_BROWSER/artifacts/oidc-fixture-lineage.json",
+      "gates/browser/artifacts/oidc-fixture-lineage.json",
     ),
   );
   const baseConfig = await readFile(
@@ -10981,7 +10988,7 @@ void test("browser correlation admission verifies the sealed child bundle and sc
   const childConfig = await readFile(join(child.root, "config/platform.yaml"));
   const directory = join(
     parentContext.evidenceDir,
-    "gates/G14_OBSERVABILITY/artifacts",
+    "gates/observability/artifacts",
   );
   await mkdir(directory, { recursive: true, mode: 0o700 });
   const bundle = join(directory, "browser-source.bundle");
@@ -11034,7 +11041,7 @@ void test("browser correlation admission verifies the sealed child bundle and sc
     evidenceRemoved: true,
     proof: {
       schemaVersion: 1,
-      purpose: "G14_BROWSER_CORRELATION",
+      purpose: "BROWSER_CORRELATION",
       runId: child.runId,
       candidateSha: child.candidateSha,
       configSha256: digest(childConfig),
@@ -11122,7 +11129,7 @@ void test("browser correlation admission verifies the sealed child bundle and sc
         evidenceDir: parentContext.evidenceDir,
         parentContext,
       }),
-      { code: "G14_BROWSER_CORRELATION_RECEIPT_INVALID" },
+      { code: "OBSERVABILITY_BROWSER_CORRELATION_RECEIPT_INVALID" },
     );
   }
   receipt.cleanup.attachment = {
@@ -11179,7 +11186,7 @@ void test("browser correlation admission verifies the sealed child bundle and sc
           },
         },
         cleanupErrors: [],
-        fullSystemG14: { status: "NOT_RUN" },
+        fullSystemObservability: { status: "NOT_RUN" },
       });
     await writeFile(join(observations, name), JSON.stringify(data), {
       mode: 0o600,
@@ -11205,7 +11212,7 @@ void test("browser correlation admission verifies the sealed child bundle and sc
   };
   assert.match(
     await verifyGateArtifacts(
-      { id: "G14_OBSERVABILITY", command: "pnpm test:observability" },
+      { id: "observability", command: "pnpm test:observability" },
       wrongCommand,
       parentContext.evidenceDir,
     ),
@@ -11224,7 +11231,7 @@ void test("browser correlation admission verifies the sealed child bundle and sc
   };
   assert.match(
     await verifyGateArtifacts(
-      { id: "G14_OBSERVABILITY", command: "pnpm test:observability" },
+      { id: "observability", command: "pnpm test:observability" },
       record,
       parentContext.evidenceDir,
     ),
@@ -11241,7 +11248,7 @@ void test("browser correlation admission verifies the sealed child bundle and sc
   const missingBackend = { ...record, artifacts: [] };
   assert.match(
     await verifyGateArtifacts(
-      { id: "G14_OBSERVABILITY", command: "pnpm test:observability" },
+      { id: "observability", command: "pnpm test:observability" },
       missingBackend,
       parentContext.evidenceDir,
     ),
@@ -11255,7 +11262,7 @@ void test("browser correlation admission verifies the sealed child bundle and sc
   );
   assert.match(
     await verifyGateArtifacts(
-      { id: "G14_OBSERVABILITY", command: "pnpm test:observability" },
+      { id: "observability", command: "pnpm test:observability" },
       { ...record, artifacts: [] },
       parentContext.evidenceDir,
     ),
@@ -11269,7 +11276,7 @@ void test("browser correlation admission verifies the sealed child bundle and sc
       evidenceDir: parentContext.evidenceDir,
       parentContext,
     }),
-    { code: "G14_BROWSER_CORRELATION_RECEIPT_INVALID" },
+    { code: "OBSERVABILITY_BROWSER_CORRELATION_RECEIPT_INVALID" },
   );
   receipt.cleanup.databases.removed = databases;
   receipt.proof.acceptedVersion = "4";
@@ -11279,7 +11286,7 @@ void test("browser correlation admission verifies the sealed child bundle and sc
       evidenceDir: parentContext.evidenceDir,
       parentContext,
     }),
-    { code: "G14_BROWSER_CORRELATION_RECEIPT_INVALID" },
+    { code: "OBSERVABILITY_BROWSER_CORRELATION_RECEIPT_INVALID" },
   );
 });
 
@@ -11339,7 +11346,7 @@ async function writeMigrationPreparationArtifact(
     baseConfigSha256: context.baseConfigSha256,
     preparation,
   });
-  const artifactDir = join(evidenceDir, "gates/G08_MIGRATIONS/artifacts");
+  const artifactDir = join(evidenceDir, "gates/migrations/artifacts");
   await mkdir(artifactDir, { recursive: true, mode: 0o700 });
   const artifactPath = join(artifactDir, "canonical-preparation.json");
   await writeFile(artifactPath, JSON.stringify(wrapper), { mode: 0o400 });
@@ -11618,7 +11625,7 @@ async function createMigrationLaunchFixture({
 
     execFileSync("git", ["init", "-q"], { cwd: fixture.root });
 
-    execFileSync("git", ["config", "user.name", "G08 fixture"], {
+    execFileSync("git", ["config", "user.name", "migrations fixture"], {
       cwd: fixture.root,
     });
     execFileSync("git", ["config", "user.email", "g08@example.invalid"], {
@@ -11639,9 +11646,13 @@ async function createMigrationLaunchFixture({
       ["add", "config", "platform", "secrets", ".sops.yaml"],
       { cwd: fixture.root },
     );
-    execFileSync("git", ["commit", "-qm", "G08 readonly probe fixture"], {
-      cwd: fixture.root,
-    });
+    execFileSync(
+      "git",
+      ["commit", "-qm", "migrations readonly probe fixture"],
+      {
+        cwd: fixture.root,
+      },
+    );
     const candidateSha = execFileSync("git", ["rev-parse", "HEAD"], {
       cwd: fixture.root,
       encoding: "utf8",
@@ -11685,8 +11696,8 @@ async function createMigrationLaunchFixture({
   }
 }
 
-void test("G14 telemetry sources require exact child networks and all G12 role images", async () => {
-  const { validateG14TelemetrySources } =
+void test("observability telemetry sources require exact child networks and all supply_chain role images", async () => {
+  const { validateObservabilityTelemetrySources } =
     await import("../../tools/observability/verify.mjs");
   const { OBSERVABILITY_TARGETS } =
     await import("../../tools/observability/generate.mjs");
@@ -11760,10 +11771,13 @@ void test("G14 telemetry sources require exact child networks and all G12 role i
     ]);
   };
   const input = { payload, projectName, verifiedImages, runDocker };
-  assert.equal((await validateG14TelemetrySources(input)).logFiles.length, 15);
+  assert.equal(
+    (await validateObservabilityTelemetrySources(input)).logFiles.length,
+    15,
+  );
   rows["orders-service"].Image = `sha256:${"f".repeat(64)}`;
   await assert.rejects(
-    validateG14TelemetrySources(input),
+    validateObservabilityTelemetrySources(input),
     /image or network invalid/u,
   );
   rows["orders-service"].Image = verifiedImages.find(
@@ -11773,14 +11787,14 @@ void test("G14 telemetry sources require exact child networks and all G12 role i
     networks.coffee_internal_api
   ].NetworkID = "b".repeat(64);
   await assert.rejects(
-    validateG14TelemetrySources(input),
+    validateObservabilityTelemetrySources(input),
     /image or network invalid/u,
   );
   rows["orders-service"].NetworkSettings.Networks[
     networks.coffee_internal_api
   ].NetworkID = "a".repeat(64);
   await assert.rejects(
-    validateG14TelemetrySources({
+    validateObservabilityTelemetrySources({
       ...input,
       payload: {
         ...payload,
@@ -11790,7 +11804,7 @@ void test("G14 telemetry sources require exact child networks and all G12 role i
     /network name invalid/u,
   );
   await assert.rejects(
-    validateG14TelemetrySources({
+    validateObservabilityTelemetrySources({
       ...input,
       payload: { ...payload, runtimes: payload.runtimes.slice(1) },
     }),

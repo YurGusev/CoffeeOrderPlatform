@@ -1562,8 +1562,9 @@ export async function proveOwnerBrowser(
   return result;
 }
 
-// Registered only by the G15 parent; ordinary recovery does not select these cases.
-if (process.env.COFFEE_G15_OWNER_BROWSER === "1") {
+// Registered only by the browser parent; ordinary recovery does not select
+// these cases.
+if (process.env.COFFEE_OWNER_BROWSER === "1") {
   const contextPath = process.env.COFFEE_LAUNCH_CONTEXT_FILE;
   const { validateLaunchContext } =
     await import("../../../verification/launch/v1/report.mjs");
@@ -1628,7 +1629,7 @@ if (process.env.COFFEE_G15_OWNER_BROWSER === "1") {
         };
         const path = join(
           evidenceDir,
-          "gates/G15_BROWSER/artifacts",
+          "gates/browser/artifacts",
           `owner-${scenario}.json`,
         );
         await writeFile(path, `${JSON.stringify(receipt)}\n`, {

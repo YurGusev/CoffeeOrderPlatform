@@ -34,7 +34,7 @@ const OWNERS = Object.freeze({
   integration: { current: 7, prefix: 7 },
 });
 const DENIED_DATABASES = new Set(["coffeeorderdb", "coffeeorder_staging"]);
-const MIGRATION_FAILURE = Symbol("G08 migration failure");
+const MIGRATION_FAILURE = Symbol("migrations failure");
 const OWNER_PHASES = new Set([
   "callerprefix",
   "seed",
@@ -54,21 +54,21 @@ const ROLE_ATTRIBUTES = Object.freeze({
 });
 
 function fail(code, message = code) {
-  const error = new Error(`G08_MIGRATIONS ${code}: ${message}`);
+  const error = new Error(`MIGRATIONS ${code}: ${message}`);
   error[MIGRATION_FAILURE] = true;
   throw error;
 }
 
 export function formatOwnerStageFailure(owner, phase, error) {
   if (!Object.hasOwn(OWNERS, owner) || !OWNER_PHASES.has(phase))
-    throw new TypeError("Invalid G08 owner stage");
+    throw new TypeError("Invalid migrations owner stage");
   if (error?.[MIGRATION_FAILURE]) return error;
   const sqlState = [error?.sqlState, error?.code].find(
     (candidate) =>
       typeof candidate === "string" && /^[0-9A-Z]{5}$/.test(candidate),
   );
   return new Error(
-    `G08_MIGRATIONS OWNER_STAGE_FAILED: ${owner}:${phase}:${sqlState ?? "UNKNOWN"}`,
+    `MIGRATIONS OWNER_STAGE_FAILED: ${owner}:${phase}:${sqlState ?? "UNKNOWN"}`,
   );
 }
 
@@ -168,7 +168,7 @@ function assertPreparationAncestor(root, prepSha, candidateSha) {
 async function readPreparation(context, evidenceDir, root) {
   const path = join(
     evidenceDir,
-    "gates/G08_MIGRATIONS/artifacts/canonical-preparation.json",
+    "gates/migrations/artifacts/canonical-preparation.json",
   );
   let info;
   let bytes;
@@ -184,7 +184,7 @@ async function readPreparation(context, evidenceDir, root) {
       fail("PREPARATION_ARTIFACT_UNTRUSTED");
     bytes = await readFile(path);
   } catch (error) {
-    if (error.message.startsWith("G08_MIGRATIONS")) throw error;
+    if (error.message.startsWith("MIGRATIONS")) throw error;
     fail("PREPARATION_ARTIFACT_MISSING");
   }
   const secretsPath = join(root, "secrets/platform.secrets.sops.yaml");
@@ -203,7 +203,7 @@ async function readPreparation(context, evidenceDir, root) {
 export async function readApprovedMigrationTarget(context, evidenceDir) {
   const path = join(
     evidenceDir,
-    "gates/G08_MIGRATIONS/artifacts/approved-target.json",
+    "gates/migrations/artifacts/approved-target.json",
   );
   let file;
   try {
@@ -1307,7 +1307,7 @@ async function runStage(
     await writeFile(
       join(
         evidenceDir,
-        "gates/G08_MIGRATIONS/artifacts/canonical-preparation.json",
+        "gates/migrations/artifacts/canonical-preparation.json",
       ),
       `${JSON.stringify({
         schemaVersion: 1,
@@ -1333,10 +1333,7 @@ async function runStage(
     JSON.stringify(sorted(preparation.prep.roleNames))
   )
     fail("PREPARATION_ROLE_SET_MISMATCH");
-  const cleanPath = join(
-    evidenceDir,
-    "gates/G08_MIGRATIONS/artifacts/clean.json",
-  );
+  const cleanPath = join(evidenceDir, "gates/migrations/artifacts/clean.json");
   let cleanReceipt = null;
   const expectedRunDatabases = plan.owners.map(({ name }) => name).sort();
   if (mode === "forward") {
@@ -1653,7 +1650,7 @@ async function runStage(
     };
     const artifactPath = join(
       evidenceDir,
-      "gates/G09_DB_BOUNDARIES/artifacts/result.json",
+      "gates/db_boundaries/artifacts/result.json",
     );
     await writeFile(
       artifactPath,
@@ -1667,7 +1664,7 @@ async function runStage(
   }
   const artifactPath = join(
     evidenceDir,
-    "gates/G08_MIGRATIONS/artifacts",
+    "gates/migrations/artifacts",
     mode === "clean" ? "clean.json" : "result.json",
   );
   await writeFile(artifactPath, `${JSON.stringify(receipt, null, 2)}\n`, {
@@ -1698,7 +1695,7 @@ if (
     await runMigrationStage(process.argv[2]);
   } catch (error) {
     process.stderr.write(
-      `${error.message.startsWith("G08_MIGRATIONS") ? error.message : "G08_MIGRATIONS FAILED"}\n`,
+      `${error.message.startsWith("MIGRATIONS") ? error.message : "MIGRATIONS FAILED"}\n`,
     );
     process.exitCode = 1;
   }

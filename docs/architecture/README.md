@@ -47,7 +47,7 @@ source: "Локальный репозиторий; точные файлы и �
 | [07_AROMA протокол](07_AROMA%20%D0%BF%D1%80%D0%BE%D1%82%D0%BE%D0%BA%D0%BE%D0%BB.md) | Session/login, export/catalog, source identity, grind/packing, safe reads и mutations |
 | [08_AROMA сходимость](08_AROMA%20%D1%81%D1%85%D0%BE%D0%B4%D0%B8%D0%BC%D0%BE%D1%81%D1%82%D1%8C.md) | Desired/Observed, lease/fence, Attempt/Reservation, journal и UnknownOutcome |
 | [09_Инфраструктура и безопасность](09_%D0%98%D0%BD%D1%84%D1%80%D0%B0%D1%81%D1%82%D1%80%D1%83%D0%BA%D1%82%D1%83%D1%80%D0%B0%20%D0%B8%20%D0%B1%D0%B5%D0%B7%D0%BE%D0%BF%D0%B0%D1%81%D0%BD%D0%BE%D1%81%D1%82%D1%8C.md) | Compose, сети, TLS/mTLS, secrets, permissions, pinned build и runtime budgets |
-| [10_Надёжность и приёмка](10_%D0%9D%D0%B0%D0%B4%D1%91%D0%B6%D0%BD%D0%BE%D1%81%D1%82%D1%8C%20%D0%B8%20%D0%BF%D1%80%D0%B8%D1%91%D0%BC%D0%BA%D0%B0.md) | Lifecycle, recovery, telemetry, G00–G19, sandbox/backup/rollback |
+| [10_Надёжность и приёмка](10_%D0%9D%D0%B0%D0%B4%D1%91%D0%B6%D0%BD%D0%BE%D1%81%D1%82%D1%8C%20%D0%B8%20%D0%BF%D1%80%D0%B8%D1%91%D0%BC%D0%BA%D0%B0.md) | Lifecycle, recovery, telemetry, гейты запуска, sandbox/backup/rollback |
 | [11_Источники и проверка](11_%D0%98%D1%81%D1%82%D0%BE%D1%87%D0%BD%D0%B8%D0%BA%D0%B8%20%D0%B8%20%D0%BF%D1%80%D0%BE%D0%B2%D0%B5%D1%80%D0%BA%D0%B0.md) | Источники с hashes, структурированные inventories, воспроизводимая проверка и обновление |
 | [12_Расхождения и незавершённое](12_%D0%A0%D0%B0%D1%81%D1%85%D0%BE%D0%B6%D0%B4%D0%B5%D0%BD%D0%B8%D1%8F%20%D0%B8%20%D0%BD%D0%B5%D0%B7%D0%B0%D0%B2%D0%B5%D1%80%D1%88%D1%91%D0%BD%D0%BD%D0%BE%D0%B5.md) | Найденные несовпадения спецификаций и кода, ограничения полноты |
 
