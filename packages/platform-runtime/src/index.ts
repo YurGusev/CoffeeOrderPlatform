@@ -1245,7 +1245,8 @@ export async function startConfiguredRuntime(
       (key.startsWith("COFFEE_") || key.startsWith("SOPS_")) &&
       key !== "COFFEE_CONFIG_FILE" &&
       key !== "COFFEE_RUNTIME_SECRETS_FILE" &&
-      key !== "COFFEE_LAUNCH_CONTEXT_FILE"
+      key !== "COFFEE_LAUNCH_CONTEXT_FILE" &&
+      key !== "COFFEE_LAUNCH_GATE_DEADLINE_EPOCH_MS"
     )
       throw new Error(
         `${key}: runtime accepts only configuration locator variables`,
