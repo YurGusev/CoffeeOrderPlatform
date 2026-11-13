@@ -833,6 +833,7 @@ void test("G12 failed commands expose only bounded finite stderr diagnostics", a
 void test("G12 image inspection treats only an exact daemon not-found as absence", async (t) => {
   const temp = await mkdtemp(join(tmpdir(), "image-inspect-command-"));
   t.after(() => rm(temp, { recursive: true, force: true }));
+  t.after(() => delete process.env.COFFEE_G12_CACHE_DIR);
   const dockerPath = join(temp, "docker");
   const reference = `ghcr.io/example/image@sha256:${"a".repeat(64)}`;
   await writeFile(
@@ -1753,6 +1754,9 @@ void test("G12 builds product images, records pinned upstream identity, and fail
       });
   });
   const temp = await mkdtemp(join(tmpdir(), "image-scan-fixture-"));
+  let cacheIndex = 0;
+  const nextCacheRoot = () => join(temp, `g12-cache-${cacheIndex++}`);
+  process.env.COFFEE_G12_CACHE_DIR = join(temp, "g12-cache");
   t.after(() => rm(temp, { recursive: true, force: true }));
   const registryDirectories = [];
   const registryAuth = {
@@ -2296,6 +2300,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
     const invalidDeclaration = await runSecurityScan({
       materializeRegistryCredentials: fakeRegistryCredentials,
       contextFile: contextPath,
+      cacheRoot: nextCacheRoot(),
       outputDir: join(gateArtifactsDir, `invalid-kafka-compose-${index}`),
       validateContext: validateSyntheticContext,
       run: async () => {
@@ -2987,7 +2992,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
             "gc = true",
             "max-parallelism = 2",
             "reservedSpace = '2GiB'",
-            "maxUsedSpace = '12GiB'",
+            "maxUsedSpace = '18GiB'",
             "minFreeSpace = '12GiB'",
             "",
           ].join("\n");
@@ -2997,7 +3002,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
               {
                 all: true,
                 reservedSpace: 2 * 1073741824,
-                maxUsedSpace: 12 * 1073741824,
+                maxUsedSpace: 18 * 1073741824,
                 minFreeSpace: 12 * 1073741824,
               },
             ],
@@ -3587,6 +3592,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
   const result = await runSecurityScan({
     materializeRegistryCredentials: fakeRegistryCredentials,
     contextFile: contextPath,
+    cacheRoot: nextCacheRoot(),
     clock: () => fakeNow,
     validateContext: validateSyntheticContext,
     run: async (command, args, options) => {
@@ -3860,6 +3866,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
   ]);
   const runtimeImages = await readVerifiedRuntimeImages({
     contextFile: contextPath,
+    cacheRoot: nextCacheRoot(),
     validateContext: validateSyntheticContext,
   });
   assert.deepEqual(
@@ -3883,6 +3890,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
     await assert.rejects(
       readVerifiedRuntimeImages({
         contextFile: contextPath,
+        cacheRoot: nextCacheRoot(),
         validateContext: validateSyntheticContext,
       }),
       /G12_(?:RUNTIME_IMAGE_PROVENANCE|GRAFANA_ADJUDICATION)_INVALID/u,
@@ -3903,6 +3911,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
   const collectorOptions = {
     target: "otel-collector",
     contextFile: contextPath,
+    cacheRoot: nextCacheRoot(),
     validateContext: validateSyntheticContext,
     loadImage: false,
   };
@@ -3954,6 +3963,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
   const verifiedKeycloak = await loadVerifiedGateImage({
     target: "keycloak",
     contextFile: contextPath,
+    cacheRoot: nextCacheRoot(),
     validateContext: validateSyntheticContext,
     loadImage: false,
   });
@@ -3979,6 +3989,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
       loadVerifiedGateImage({
         target: "keycloak",
         contextFile: contextPath,
+        cacheRoot: nextCacheRoot(),
         validateContext: validateSyntheticContext,
         loadImage: false,
       }),
@@ -3989,6 +4000,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
     loadVerifiedGateImage({
       target: "keycloak",
       contextFile: contextPath,
+      cacheRoot: nextCacheRoot(),
       validateContext: async () => ({
         context: { ...context, candidateSha: "f".repeat(40) },
         candidateRoot,
@@ -4003,6 +4015,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
   assert.deepEqual(
     await readVerifiedRuntimeImages({
       contextFile: contextPath,
+      cacheRoot: nextCacheRoot(),
       validateContext: validateSyntheticContext,
     }),
     runtimeImages,
@@ -4014,6 +4027,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
   const verifiedGrafana = await loadVerifiedGateImage({
     target: "grafana",
     contextFile: contextPath,
+    cacheRoot: nextCacheRoot(),
     validateContext: validateSyntheticContext,
     loadImage: false,
   });
@@ -4030,6 +4044,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
     loadVerifiedGateImage({
       target: "grafana",
       contextFile: contextPath,
+      cacheRoot: nextCacheRoot(),
       validateContext: validateSyntheticContext,
       loadImage: false,
     }),
@@ -4151,6 +4166,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
       const options = {
         target: "kafka",
         contextFile: contextPath,
+        cacheRoot: nextCacheRoot(),
         validateContext: validateSyntheticContext,
         loadImage: false,
       };
@@ -4217,6 +4233,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
       loadVerifiedGateImage({
         target: "grafana",
         contextFile: contextPath,
+        cacheRoot: nextCacheRoot(),
         validateContext: validateSyntheticContext,
         loadImage: false,
       }),
@@ -4227,6 +4244,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
         loadVerifiedGateImage({
           target,
           contextFile: contextPath,
+          cacheRoot: nextCacheRoot(),
           validateContext: validateSyntheticContext,
           loadImage: false,
         }),
@@ -4241,6 +4259,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
       loadVerifiedGateImage({
         target: "grafana",
         contextFile: contextPath,
+        cacheRoot: nextCacheRoot(),
         validateContext: validateSyntheticContext,
         loadImage: false,
       }),
@@ -4258,6 +4277,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
     loadVerifiedGateImage({
       target: "grafana",
       contextFile: contextPath,
+      cacheRoot: nextCacheRoot(),
       validateContext: validateSyntheticContext,
       loadImage: false,
     }),
@@ -4283,6 +4303,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
     loadVerifiedGateImage({
       target: "grafana",
       contextFile: contextPath,
+      cacheRoot: nextCacheRoot(),
       validateContext: validateSyntheticContext,
       loadImage: false,
     }),
@@ -4296,6 +4317,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
     loadVerifiedGateImage({
       target: "grafana",
       contextFile: contextPath,
+      cacheRoot: nextCacheRoot(),
       validateContext: validateSyntheticContext,
       loadImage: false,
     }),
@@ -4314,6 +4336,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
   const verifiedStorage = await loadVerifiedGateImage({
     target: "storage-helper",
     contextFile: contextPath,
+    cacheRoot: nextCacheRoot(),
     validateContext: validateSyntheticContext,
     loadImage: false,
   });
@@ -4345,6 +4368,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
     loadVerifiedGateImage({
       target: "storage-helper",
       contextFile: contextPath,
+      cacheRoot: nextCacheRoot(),
       validateContext: validateSyntheticContext,
       loadImage: false,
     }),
@@ -4365,6 +4389,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
   const verifiedKafka = await loadVerifiedGateImage({
     target: "kafka",
     contextFile: contextPath,
+    cacheRoot: nextCacheRoot(),
     validateContext: validateSyntheticContext,
     loadImage: false,
   });
@@ -4581,7 +4606,13 @@ void test("G12 builds product images, records pinned upstream identity, and fail
     runnerResultBytes,
   );
   assert.ok(scanCache);
-  await assert.rejects(readFile(scanCache), { code: "ENOENT" });
+  // Trivy DB живёт в постоянном кеше хоста между запусками: после прогона
+  // каталог существует, но в evidence попадают только проверенные метаданные.
+  assert.equal(
+    (await lstat(scanCache)).isDirectory(),
+    true,
+    "persistent Trivy cache must be retained between runs",
+  );
 
   for (const name of [
     "unrecognized.oci.tar",
@@ -4592,6 +4623,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
     const limitedResult = await runSecurityScan({
       materializeRegistryCredentials: fakeRegistryCredentials,
       contextFile: contextPath,
+      cacheRoot: nextCacheRoot(),
       outputDir: limitedOutput,
       clock: () => now,
       validateContext: validateSyntheticContext,
@@ -4626,6 +4658,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
   const mismatchedBackend = await runSecurityScan({
     materializeRegistryCredentials: fakeRegistryCredentials,
     contextFile: contextPath,
+    cacheRoot: nextCacheRoot(),
     outputDir: join(gateArtifactsDir, "supply-chain-upstream-digest-mismatch"),
     clock: () => now,
     validateContext: validateSyntheticContext,
@@ -4653,6 +4686,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
   const exhaustedResult = await runSecurityScan({
     materializeRegistryCredentials: fakeRegistryCredentials,
     contextFile: contextPath,
+    cacheRoot: nextCacheRoot(),
     outputDir: join(gateArtifactsDir, "supply-chain-db-budget-exhausted"),
     clock: () => fakeNow,
     validateContext: validateSyntheticContext,
@@ -4693,7 +4727,8 @@ void test("G12 builds product images, records pinned upstream identity, and fail
       .code,
     "COMMAND_TIMEOUT",
   );
-  await assert.rejects(lstat(scanCache), { code: "ENOENT" });
+  // Постоянный кеш Trivy переживает и неуспешный прогон: это cache, не evidence.
+  assert.equal((await lstat(scanCache)).isDirectory(), true);
   await assert.rejects(lstat(join(temp, "scanner-db-budget-exhausted.lock")), {
     code: "ENOENT",
   });
@@ -4703,6 +4738,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
   const failedPullResult = await runSecurityScan({
     materializeRegistryCredentials: fakeRegistryCredentials,
     contextFile: contextPath,
+    cacheRoot: nextCacheRoot(),
     outputDir: join(gateArtifactsDir, "supply-chain-pull-failure"),
     clock: () => now,
     validateContext: validateSyntheticContext,
@@ -4752,6 +4788,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
   const partialPullResult = await runSecurityScan({
     materializeRegistryCredentials: fakeRegistryCredentials,
     contextFile: contextPath,
+    cacheRoot: nextCacheRoot(),
     outputDir: join(gateArtifactsDir, "supply-chain-partial-pull-failure"),
     clock: () => now,
     validateContext: validateSyntheticContext,
@@ -4815,6 +4852,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
   const expiringDatabaseResult = await runSecurityScan({
     materializeRegistryCredentials: fakeRegistryCredentials,
     contextFile: contextPath,
+    cacheRoot: nextCacheRoot(),
     outputDir: join(gateArtifactsDir, "supply-chain-expiring-db"),
     clock: () => fakeNow,
     validateContext: validateSyntheticContext,
@@ -4838,6 +4876,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
   const immediateScanTamper = await runSecurityScan({
     materializeRegistryCredentials: fakeRegistryCredentials,
     contextFile: contextPath,
+    cacheRoot: nextCacheRoot(),
     outputDir: join(gateArtifactsDir, "supply-chain-db-changed-during-scan"),
     clock: () => fakeNow,
     validateContext: validateSyntheticContext,
@@ -4866,6 +4905,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
     const changed = await runSecurityScan({
       materializeRegistryCredentials: fakeRegistryCredentials,
       contextFile: contextPath,
+      cacheRoot: nextCacheRoot(),
       outputDir: join(gateArtifactsDir, `supply-chain-db-${kind}`),
       clock: () => fakeNow,
       validateContext: validateSyntheticContext,
@@ -4889,6 +4929,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
     const changed = await runSecurityScan({
       materializeRegistryCredentials: fakeRegistryCredentials,
       contextFile: contextPath,
+      cacheRoot: nextCacheRoot(),
       outputDir: join(gateArtifactsDir, `supply-chain-db-read-${phase}`),
       clock: () => fakeNow,
       validateContext: validateSyntheticContext,
@@ -4927,6 +4968,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
   const changedDatabaseResult = await runSecurityScan({
     materializeRegistryCredentials: fakeRegistryCredentials,
     contextFile: contextPath,
+    cacheRoot: nextCacheRoot(),
     outputDir: join(gateArtifactsDir, "supply-chain-db-changed"),
     clock: () => fakeNow,
     validateContext: validateSyntheticContext,
@@ -5047,6 +5089,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
   const highResult = await runSecurityScan({
     materializeRegistryCredentials: fakeRegistryCredentials,
     contextFile: contextPath,
+    cacheRoot: nextCacheRoot(),
     outputDir: join(gateArtifactsDir, "supply-chain-high"),
     clock: () => fakeNow,
     validateContext: validateSyntheticContext,
@@ -5064,6 +5107,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
   const incompleteSbomResult = await runSecurityScan({
     materializeRegistryCredentials: fakeRegistryCredentials,
     contextFile: contextPath,
+    cacheRoot: nextCacheRoot(),
     outputDir: join(gateArtifactsDir, "supply-chain-incomplete-sbom"),
     clock: () => fakeNow,
     validateContext: validateSyntheticContext,
@@ -5081,6 +5125,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
   const partialFindingResult = await runSecurityScan({
     materializeRegistryCredentials: fakeRegistryCredentials,
     contextFile: contextPath,
+    cacheRoot: nextCacheRoot(),
     outputDir: join(gateArtifactsDir, "supply-chain-partial-findings"),
     clock: () => fakeNow,
     validateContext: validateSyntheticContext,
@@ -5112,6 +5157,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
   const changedGrafanaResult = await runSecurityScan({
     materializeRegistryCredentials: fakeRegistryCredentials,
     contextFile: contextPath,
+    cacheRoot: nextCacheRoot(),
     outputDir: join(gateArtifactsDir, "supply-chain-changed-grafana"),
     run: fakeRun,
     clock: () => fakeNow,
@@ -5125,6 +5171,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
   const tamperedResult = await runSecurityScan({
     materializeRegistryCredentials: fakeRegistryCredentials,
     contextFile: contextPath,
+    cacheRoot: nextCacheRoot(),
     outputDir: join(gateArtifactsDir, "supply-chain-tampered"),
     clock: () => fakeNow,
     validateContext: validateSyntheticContext,
@@ -5142,6 +5189,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
   const timedOutResult = await runSecurityScan({
     materializeRegistryCredentials: fakeRegistryCredentials,
     contextFile: contextPath,
+    cacheRoot: nextCacheRoot(),
     outputDir: join(gateArtifactsDir, "supply-chain-client-timeout"),
     clock: () => fakeNow,
     validateContext: validateSyntheticContext,
@@ -5176,6 +5224,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
   const unwitnessedResult = await runSecurityScan({
     materializeRegistryCredentials: fakeRegistryCredentials,
     contextFile: contextPath,
+    cacheRoot: nextCacheRoot(),
     outputDir: join(gateArtifactsDir, "supply-chain-unwitnessed-container"),
     clock: () => fakeNow,
     nonceFactory: () =>
@@ -5211,12 +5260,14 @@ void test("G12 builds product images, records pinned upstream identity, and fail
   const retainedUnwitnessedRoot = dirname(
     dirname(unwitnessedContainerCandidate.cidfile),
   );
-  const retainedUnwitnessedCache = join(retainedUnwitnessedRoot, "cache");
   await assert.rejects(lstat(unwitnessedContainerCandidate.cidfile), {
     code: "ENOENT",
   });
   assert.equal((await lstat(retainedUnwitnessedRoot)).isDirectory(), true);
-  assert.equal((await lstat(retainedUnwitnessedCache)).isDirectory(), true);
+  // Trivy DB больше не лежит в per-run temp: он живёт в постоянном кеше хоста.
+  await assert.rejects(lstat(join(retainedUnwitnessedRoot, "cache")), {
+    code: "ENOENT",
+  });
   assert.equal((await lstat(unwitnessedLock)).isFile(), true);
   await rm(retainedUnwitnessedRoot, { recursive: true, force: true });
   await rm(unwitnessedLock, { force: true });
@@ -5227,6 +5278,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
   const mismatchResult = await runSecurityScan({
     materializeRegistryCredentials: fakeRegistryCredentials,
     contextFile: contextPath,
+    cacheRoot: nextCacheRoot(),
     outputDir: join(gateArtifactsDir, "supply-chain-ownership-mismatch"),
     clock: () => fakeNow,
     nonceFactory: () =>
@@ -5261,6 +5313,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
   const failedCleanupResult = await runSecurityScan({
     materializeRegistryCredentials: fakeRegistryCredentials,
     contextFile: contextPath,
+    cacheRoot: nextCacheRoot(),
     outputDir: join(gateArtifactsDir, "supply-chain-cleanup-failure"),
     clock: () => fakeNow,
     nonceFactory: () =>
@@ -5293,7 +5346,13 @@ void test("G12 builds product images, records pinned upstream identity, and fail
     retainedContainer.cachePath,
   );
   assert.equal(failedCleanupObservation[0].cacheExists, true);
-  assert.equal(retainedContainer.cachePath, join(retainedTemp, "cache"));
+  // Кеш Trivy вынесен из per-run temp в постоянный каталог хоста, поэтому
+  // retained temp содержит только артефакты прогона.
+  assert.equal(
+    retainedContainer.cachePath.startsWith(retainedTemp),
+    false,
+    "Trivy cache must not live inside the per-run temporary tree",
+  );
   assert.equal((await lstat(retainedTemp)).isDirectory(), true);
   assert.equal((await lstat(retainedContainer.cachePath)).isDirectory(), true);
   const failedCleanupLock = join(temp, "scanner-cleanup-failure.lock");
@@ -5319,6 +5378,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
   const collisionResult = await runSecurityScan({
     materializeRegistryCredentials: fakeRegistryCredentials,
     contextFile: contextPath,
+    cacheRoot: nextCacheRoot(),
     outputDir: join(gateArtifactsDir, "supply-chain-name-collision"),
     clock: () => fakeNow,
     nonceFactory: () => collisionNonce,
@@ -5346,6 +5406,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
     const failedDatabaseResult = await runSecurityScan({
       materializeRegistryCredentials: fakeRegistryCredentials,
       contextFile: contextPath,
+      cacheRoot: nextCacheRoot(),
       outputDir: output,
       clock: () => fakeNow,
       validateContext: validateSyntheticContext,
@@ -5366,7 +5427,8 @@ void test("G12 builds product images, records pinned upstream identity, and fail
     });
     assert.deepEqual(failedDatabaseResult.cleanupFailures, []);
     assert.equal(fakeContainers.size, 0);
-    await assert.rejects(lstat(scanCache), { code: "ENOENT" });
+    // Постоянный кеш Trivy переживает и неуспешный прогон: это cache, не evidence.
+    assert.equal((await lstat(scanCache)).isDirectory(), true);
     await assert.rejects(lstat(lockPath), { code: "ENOENT" });
     const failureReceipt = await readFile(join(output, "result.json"), "utf8");
     assert.equal(failureReceipt.includes("private-canary"), false);
@@ -5379,6 +5441,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
   const imageScanFailure = await runSecurityScan({
     materializeRegistryCredentials: fakeRegistryCredentials,
     contextFile: contextPath,
+    cacheRoot: nextCacheRoot(),
     outputDir: join(gateArtifactsDir, "supply-chain-image-scan-failure"),
     clock: () => fakeNow,
     validateContext: validateSyntheticContext,
@@ -5429,6 +5492,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
   const imageCleanupFailure = await runSecurityScan({
     materializeRegistryCredentials: fakeRegistryCredentials,
     contextFile: contextPath,
+    cacheRoot: nextCacheRoot(),
     outputDir: join(gateArtifactsDir, "supply-chain-image-cleanup-failure"),
     clock: () => fakeNow,
     validateContext: validateSyntheticContext,

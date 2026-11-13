@@ -3,6 +3,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { constants } from "node:fs";
 import {
   chmod,
+  copyFile,
   lstat,
   mkdir,
   mkdtemp,
@@ -15,7 +16,7 @@ import {
   writeFile,
 } from "node:fs/promises";
 import { spawn } from "node:child_process";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { isDeepStrictEqual } from "node:util";
@@ -56,6 +57,14 @@ const UPSTREAM_IMAGES = Object.freeze([
   "tempoImage",
 ]);
 const SCAN_LOCK = join(tmpdir(), "coffee-platform-trivy.lock");
+// Сетевые артефакты G12 (Trivy DB, образ сканера, плагины Grafana) неизменяемы
+// и закреплены digest/hash, поэтому кешируются между запусками на хосте.
+function g12CacheRoot() {
+  return (
+    process.env.COFFEE_G12_CACHE_DIR ??
+    join(homedir(), ".cache/coffee-platform/g12")
+  );
+}
 // Эти образы запускает Compose; G12 публикует их в daemon под тегами проекта
 // запуска, чтобы G13/G14 работали по неизменяемым ID, а не собирали заново.
 const PUBLISHED_RUNTIME_SERVICES = Object.freeze([
@@ -933,11 +942,44 @@ async function collectManifestFiles(root) {
   return [...new Set(files)].sort((a, b) => a.localeCompare(b, "en"));
 }
 
+/**
+ * Скачивает файл только если его нет в постоянном кеше или hash не совпадает.
+ * Ожидаемый sha256 задан toolchain BOM, поэтому попадание в кеш даёт ту же
+ * гарантию, что и свежая загрузка.
+ */
+async function cachedHttpsFile({
+  path,
+  expectedSha256,
+  run,
+  args,
+  cacheRoot = g12CacheRoot(),
+}) {
+  // Ожидаемый hash приходит из toolchain BOM; он обязан быть digest, иначе
+  // значение вида "../../x" изменило бы путь записи curl.
+  if (!/^[a-f0-9]{64}$/u.test(expectedSha256 ?? ""))
+    fail("G12_CACHE_DIGEST_INVALID");
+  const cached = join(cacheRoot, "downloads", expectedSha256);
+  await mkdir(join(cacheRoot, "downloads"), {
+    recursive: true,
+    mode: 0o700,
+  });
+  const cachedHash = await hashRegularFile(cached, 64 * 1024 * 1024).catch(
+    () => null,
+  );
+  if (cachedHash !== expectedSha256) {
+    await run("curl", ["--output", cached, ...args]);
+    if ((await hashRegularFile(cached, 64 * 1024 * 1024)) !== expectedSha256)
+      fail("G12_CACHE_DOWNLOAD_MISMATCH");
+  }
+  await copyFile(cached, path);
+}
+
 async function prepareGrafanaPlugins({
   toolchain,
   temporary,
   outputRoot,
   run,
+  cacheRoot,
 }) {
   const version =
     /^grafana\/grafana:(\d+\.\d+\.\d+)-slim@sha256:[a-f0-9]{64}$/u.exec(
@@ -949,19 +991,24 @@ async function prepareGrafanaPlugins({
   await mkdir(root, { mode: 0o700 });
   await mkdir(keyDir, { mode: 0o700 });
   const keySource = join(temporary, "grafana-static-retriever.go");
-  await run("curl", [
-    "--fail",
-    "--location",
-    "--proto",
-    "=https",
-    "--proto-redir",
-    "=https",
-    "--max-filesize",
-    "2097152",
-    "--output",
-    keySource,
-    `https://raw.githubusercontent.com/grafana/grafana/v${version}/pkg/plugins/manager/signature/statickey/static_retriever.go`,
-  ]);
+  // Кеш закреплён ожидаемым sha256: скачиваем только при расхождении.
+  await cachedHttpsFile({
+    path: keySource,
+    expectedSha256: toolchain.grafanaSigningKeySourceSha256,
+    run,
+    cacheRoot,
+    args: [
+      "--fail",
+      "--location",
+      "--proto",
+      "=https",
+      "--proto-redir",
+      "=https",
+      "--max-filesize",
+      "2097152",
+      `https://raw.githubusercontent.com/grafana/grafana/v${version}/pkg/plugins/manager/signature/statickey/static_retriever.go`,
+    ],
+  });
   const keyBytes = await readRegular(keySource);
   if (sha256(keyBytes) !== toolchain.grafanaSigningKeySourceSha256)
     fail("GRAFANA_KEY_SOURCE_MISMATCH");
@@ -991,19 +1038,23 @@ async function prepareGrafanaPlugins({
       fail("GRAFANA_PLUGIN_PIN_INVALID");
     const archive = join(temporary, `${name}.zip`);
     const url = `https://github.com/grafana/grafana-${name}-datasource/releases/download/v${pin.version}/${name}-${pin.version}.linux_amd64.zip`;
-    await run("curl", [
-      "--fail",
-      "--location",
-      "--proto",
-      "=https",
-      "--proto-redir",
-      "=https",
-      "--max-filesize",
-      "33554432",
-      "--output",
-      archive,
-      url,
-    ]);
+    await cachedHttpsFile({
+      path: archive,
+      expectedSha256: pin.zipSha256,
+      run,
+      cacheRoot,
+      args: [
+        "--fail",
+        "--location",
+        "--proto",
+        "=https",
+        "--proto-redir",
+        "=https",
+        "--max-filesize",
+        "33554432",
+        url,
+      ],
+    });
     if ((await hashRegularFile(archive, 33554432)) !== pin.zipSha256)
       fail("GRAFANA_PLUGIN_ZIP_MISMATCH");
     const names = (
@@ -2858,6 +2909,36 @@ async function inspectDatabaseFile(
   }
 }
 
+async function databaseMetadataFresh(cacheDir, now, policy) {
+  for (const [name, databaseFile] of [
+    ["db", "trivy.db"],
+    ["java-db", "trivy-java.db"],
+  ]) {
+    const metadataBytes = await readRegular(
+      join(cacheDir, name, "metadata.json"),
+      64 * 1024,
+    ).catch(() => null);
+    if (metadataBytes === null) return false;
+    const info = await lstat(join(cacheDir, name, databaseFile)).catch(
+      () => null,
+    );
+    // Повреждённая запись кеша (в том числе oversized) — это промах, а не hit:
+    // иначе G12 будет падать на validateDb до истечения metadata.
+    if (!info?.isFile() || info.size < 1 || info.size > MAX_DATABASE_BYTES)
+      return false;
+    try {
+      validateDatabaseMetadata(
+        parseJson(metadataBytes, "VULNERABILITY_DB_METADATA_INVALID"),
+        now,
+        policy.maximumDatabaseAgeHours * 60 * 60 * 1000,
+      );
+    } catch {
+      return false;
+    }
+  }
+  return true;
+}
+
 async function validateDb(
   cacheDir,
   now,
@@ -3120,6 +3201,7 @@ async function pruneStaleLaunchImages(run, composeProject) {
 export async function runSecurityScan({
   contextFile,
   outputDir,
+  cacheRoot = g12CacheRoot(),
   clock = Date.now,
   nonceFactory = randomUUID,
   validateContext = validateLaunchContext,
@@ -3378,13 +3460,11 @@ export async function runSecurityScan({
     await lockHandle.sync();
     temporary = await mkdtemp(join(tempRoot, "coffee-image-scan-"));
     await chmod(temporary, 0o700);
-    const cacheDir = join(temporary, "cache");
+    const cacheDir = join(cacheRoot, "trivy");
+    await mkdir(cacheDir, { recursive: true, mode: 0o700 });
     const inputDir = join(temporary, "manifests");
     dockerConfig = await mkdtemp("/dev/shm/coffee-image-registry-");
-    await Promise.all([
-      mkdir(cacheDir, { mode: 0o700 }),
-      mkdir(inputDir, { mode: 0o700 }),
-    ]);
+    await mkdir(inputDir, { mode: 0o700 });
     markStage("registry-credentials");
     const registryEnv = Object.fromEntries(
       Object.entries(process.env).filter(
@@ -3469,11 +3549,14 @@ export async function runSecurityScan({
       }),
     };
     markStage("grafana-plugins");
+    // Скачивания Grafana пишут в постоянный кеш, а не только в temp/outputRoot.
+    await freeSpace(cacheRoot, policy, statfsFn);
     const vendorPlugins = await prepareGrafanaPlugins({
       toolchain: validated.toolchain,
       temporary,
       outputRoot,
       run: runBounded,
+      cacheRoot,
     });
     await createManifestInput(sourceSnapshot.contextPath, inputDir);
     const scannerImage = SCANNER_IMAGE;
@@ -3569,18 +3652,28 @@ export async function runSecurityScan({
     markStage("vulnerability-database");
     await freeSpace(temporary, policy, statfsFn);
     await freeSpace(outputRoot, policy, statfsFn);
-    await runDatabaseDownload([
-      ...dbPrefix,
-      "--db-repository",
-      policy.egressRepositories[0],
-      "--download-db-only",
-    ]);
-    await runDatabaseDownload([
-      ...dbPrefix,
-      "--java-db-repository",
-      policy.egressRepositories[1],
-      "--download-java-db-only",
-    ]);
+    await freeSpace(cacheRoot, policy, statfsFn);
+    // Решение о повторном использовании принимается по свежести metadata:
+    // полный hash содержимого считается ровно один раз в validateDb ниже.
+    const metadataFresh = await databaseMetadataFresh(
+      cacheDir,
+      clock(),
+      policy,
+    );
+    if (!metadataFresh) {
+      await runDatabaseDownload([
+        ...dbPrefix,
+        "--db-repository",
+        policy.egressRepositories[0],
+        "--download-db-only",
+      ]);
+      await runDatabaseDownload([
+        ...dbPrefix,
+        "--java-db-repository",
+        policy.egressRepositories[1],
+        "--download-java-db-only",
+      ]);
+    }
     const initialDatabases = await validateDb(cacheDir, clock(), policy);
     result.databases = initialDatabases.records;
     const databaseFingerprints = initialDatabases.fingerprints;

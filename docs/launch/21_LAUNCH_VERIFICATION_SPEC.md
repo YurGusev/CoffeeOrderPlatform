@@ -290,10 +290,10 @@ Standalone-запуски без launch context и без инвентаря с�
 Измеренный кеш для 14 runtime-образов и `edge-nginx` — 9.07 GiB; с
 инфраструктурными целями G12 полный кеш не превышает 12 GiB. Политика builder
 `coffee-platform-mtu` фиксируется как `minFreeSpace` 12 GiB и `maxUsedSpace`
-12 GiB, а порог G12 `minimumFreeDiskGiB` — 10 GiB. Инвариант хоста:
-`maxUsedSpace + minFreeSpace` = 24 GiB ≤ документированного нижнего предела
-свободного места 26 GiB, поэтому тёплый кеш никогда не запускает GC; порог G12
-строго ниже `minFreeSpace`, поэтому гейт не блокируется раньше GC. Значения
+18 GiB, а порог G12 `minimumFreeDiskGiB` — 10 GiB. Инвариант хоста:
+`maxUsedSpace + minFreeSpace` = 30 GiB ≤ требуемых 32 GiB свободного места
+перед G12, поэтому тёплый кеш не запускает GC; порог G12 строго ниже
+`minFreeSpace`, поэтому гейт не блокируется раньше GC. Значения
 проверяются `verifyBuildkitPolicy` и не могут расходиться с конфигурацией.
 
 Порядок обязателен: G00→G01→G02→G03→G04→G05→G06→G07→G12→G08→G09→G10→G11;
