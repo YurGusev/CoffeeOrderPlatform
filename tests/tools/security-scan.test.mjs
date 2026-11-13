@@ -786,7 +786,7 @@ void test("G12 failed commands expose only bounded finite stderr diagnostics", a
 void test("G12 image inspection treats only an exact daemon not-found as absence", async (t) => {
   const temp = await mkdtemp(join(tmpdir(), "image-inspect-command-"));
   t.after(() => rm(temp, { recursive: true, force: true }));
-  t.after(() => delete process.env.COFFEE_G12_CACHE_DIR);
+  t.after(() => delete process.env.COFFEE_SCAN_CACHE_DIR);
   const dockerPath = join(temp, "docker");
   const reference = `ghcr.io/example/image@sha256:${"a".repeat(64)}`;
   await writeFile(
@@ -1684,7 +1684,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
   const temp = await mkdtemp(join(tmpdir(), "image-scan-fixture-"));
   let cacheIndex = 0;
   const nextCacheRoot = () => join(temp, `g12-cache-${cacheIndex++}`);
-  process.env.COFFEE_G12_CACHE_DIR = join(temp, "g12-cache");
+  process.env.COFFEE_SCAN_CACHE_DIR = join(temp, "scan-cache");
   t.after(() => rm(temp, { recursive: true, force: true }));
   const registryDirectories = [];
   const registryAuth = {

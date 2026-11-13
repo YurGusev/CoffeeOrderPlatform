@@ -5124,7 +5124,7 @@ void test("G04 unit child excludes bootstrap and operator locators while preserv
     AROMA_SANDBOX_APPROVAL_FILE: "/synthetic/operator-approval",
     COFFEE_LAUNCH_CONTEXT_FILE: "/synthetic/context",
     NODE_V8_COVERAGE: directory,
-    COFFEE_G04_ENV_TEST: "ordinary-value",
+    COFFEE_UNIT_ENV_PROBE: "ordinary-value",
   };
   const original = Object.fromEntries(
     Object.keys(values).map((key) => [key, process.env[key]]),
@@ -5138,7 +5138,7 @@ void test("G04 unit child excludes bootstrap and operator locators while preserv
         noApproval: !Object.hasOwn(process.env, "AROMA_SANDBOX_APPROVAL_FILE"),
         context: process.env.COFFEE_LAUNCH_CONTEXT_FILE === "/synthetic/context",
         coverage: process.env.NODE_V8_COVERAGE === ${JSON.stringify(directory)},
-        ordinary: process.env.COFFEE_G04_ENV_TEST === "ordinary-value"
+        ordinary: process.env.COFFEE_UNIT_ENV_PROBE === "ordinary-value"
       }))`,
     ]);
     assert.equal(child.status, 0);

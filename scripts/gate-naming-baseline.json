@@ -94,7 +94,6 @@
     "tests/config/observability-bootstrap.test.mjs|identifier|writeSyntheticParentG12",
     "tests/database/db-bootstrap.test.mjs|error-code|CONFIG-G08-PREPARATION",
     "tests/observability/alerts.test.mjs|identifier|fullSystemG14",
-    "tests/realtime/fixtures/owner-browser.mjs|comment|G15",
     "tests/realtime/fixtures/owner-browser.mjs|environment|COFFEE_G15_OWNER_BROWSER",
     "tests/realtime/fixtures/owner-browser.mjs|identifier|COFFEE_G15_OWNER_BROWSER",
     "tests/realtime/fixtures/setup.mjs|comment|G12",
@@ -104,8 +103,6 @@
     "tests/tools/browser-proof.test.mjs|identifier|isG14AcceptedProjection",
     "tests/tools/browser-proof.test.mjs|identifier|matchG14BrowserChain",
     "tests/tools/browser-proof.test.mjs|identifier|validateG14ChildCleanup",
-    "tests/tools/security-scan.test.mjs|environment|COFFEE_G12_CACHE_DIR",
-    "tests/tools/security-scan.test.mjs|identifier|COFFEE_G12_CACHE_DIR",
     "tools/browser-owner-evidence.mjs|identifier|createG14OrderEvidence",
     "tools/browser-proof.mjs|identifier|attestG14Safety",
     "tools/browser-proof.mjs|identifier|isG14AcceptedProjection",
@@ -204,8 +201,6 @@
     "verification/launch/v1/runner.test.mjs|comment|G16",
     "verification/launch/v1/runner.test.mjs|comment|G17",
     "verification/launch/v1/runner.test.mjs|comment|G18",
-    "verification/launch/v1/runner.test.mjs|environment|COFFEE_G04_ENV_TEST",
-    "verification/launch/v1/runner.test.mjs|identifier|COFFEE_G04_ENV_TEST",
     "verification/launch/v1/scenarios/backup-restore.test.mjs|error-code|CONFIG-G17-CONFIG",
     "verification/launch/v1/scenarios/backup-restore.test.mjs|error-code|CONFIG-G17-CONTEXT",
     "verification/launch/v1/scenarios/backup-restore.test.mjs|error-code|CONFIG-G17-DATABASE",
@@ -214,8 +209,6 @@
     "verification/launch/v1/scenarios/backup-restore.test.mjs|error-code|CONFIG-G17-SERVER-IDENTITY",
     "verification/launch/v1/scenarios/backup-restore.test.mjs|error-code|CONFIG-G17-SOCKET-OWNER",
     "verification/launch/v1/scenarios/backup-restore.test.mjs|error-code|CONFIG-G17-SOCKET-PATH",
-    "verification/launch/v1/scenarios/browser.mjs|environment|COFFEE_G15_OWNER_BROWSER",
-    "verification/launch/v1/scenarios/browser.mjs|identifier|COFFEE_G15_OWNER_BROWSER",
     "verification/launch/v1/scenarios/browser.mjs|identifier|validateG14ChildCleanup"
   ]
 }

@@ -1562,8 +1562,12 @@ export async function proveOwnerBrowser(
   return result;
 }
 
-// Registered only by the G15 parent; ordinary recovery does not select these cases.
-if (process.env.COFFEE_G15_OWNER_BROWSER === "1") {
+// Registered only by the browser parent; ordinary recovery does not select
+// these cases. Старое имя читается один релиз.
+if (
+  process.env.COFFEE_OWNER_BROWSER === "1" ||
+  process.env.COFFEE_G15_OWNER_BROWSER === "1"
+) {
   const contextPath = process.env.COFFEE_LAUNCH_CONTEXT_FILE;
   const { validateLaunchContext } =
     await import("../../../verification/launch/v1/report.mjs");

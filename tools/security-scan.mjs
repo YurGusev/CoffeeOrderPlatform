@@ -57,10 +57,12 @@ const UPSTREAM_IMAGES = Object.freeze([
   "tempoImage",
 ]);
 const SCAN_LOCK = join(tmpdir(), "coffee-platform-trivy.lock");
-// Сетевые артефакты G12 (Trivy DB, образ сканера, плагины Grafana) неизменяемы
-// и закреплены digest/hash, поэтому кешируются между запусками на хосте.
-function g12CacheRoot() {
+// Сетевые артефакты supply chain неизменяемы и закреплены digest/hash,
+// поэтому кешируются между запусками на хосте. Старое имя читается один
+// релиз, чтобы существующие окружения продолжили работать.
+function scanCacheRoot() {
   return (
+    process.env.COFFEE_SCAN_CACHE_DIR ??
     process.env.COFFEE_G12_CACHE_DIR ??
     join(homedir(), ".cache/coffee-platform/g12")
   );
@@ -930,7 +932,7 @@ async function cachedHttpsFile({
   expectedSha256,
   run,
   args,
-  cacheRoot = g12CacheRoot(),
+  cacheRoot = scanCacheRoot(),
 }) {
   // Ожидаемый hash приходит из toolchain BOM; он обязан быть digest, иначе
   // значение вида "../../x" изменило бы путь записи curl.
@@ -3179,7 +3181,7 @@ async function pruneStaleLaunchImages(run, composeProject) {
 export async function runSecurityScan({
   contextFile,
   outputDir,
-  cacheRoot = g12CacheRoot(),
+  cacheRoot = scanCacheRoot(),
   clock = Date.now,
   nonceFactory = randomUUID,
   validateContext = validateLaunchContext,

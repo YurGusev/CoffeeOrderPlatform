@@ -1699,7 +1699,7 @@ export async function runBrowserParent({
       env: {
         ...process.env,
         COFFEE_LAUNCH_CONTEXT_FILE: contextRecord.path,
-        COFFEE_G15_OWNER_BROWSER: "1",
+        COFFEE_OWNER_BROWSER: "1",
       },
       timeoutMs: 1_800_000,
       terminationGraceMs: 120_000,
