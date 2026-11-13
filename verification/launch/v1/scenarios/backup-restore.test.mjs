@@ -674,7 +674,7 @@ void test("G17 runtime credential selection is closed over canonical owner claim
         roleMap: map,
         ownership: claims,
       }),
-    /CONFIG-G17-RUNTIME/u,
+    /CONFIG-BACKUP-RUNTIME/u,
   );
   assert.throws(
     () =>
@@ -684,7 +684,7 @@ void test("G17 runtime credential selection is closed over canonical owner claim
         roleMap: map,
         ownership: claims,
       }),
-    /CONFIG-G17-RUNTIME/u,
+    /CONFIG-BACKUP-RUNTIME/u,
   );
 });
 
@@ -1558,7 +1558,7 @@ void test("G17 trusted bootstrap rejects an unbound source/restore target before
       expectedSystemIdentifier: "123456",
       env: {},
     }),
-    /CONFIG-G17-DATABASE/,
+    /CONFIG-BACKUP-DATABASE/,
   );
 });
 
@@ -1576,7 +1576,7 @@ void test("G17 trusted bootstrap requires the exact readonly launch context befo
       contextPath: "",
       env: {},
     }),
-    /CONFIG-G17-CONTEXT/,
+    /CONFIG-BACKUP-CONTEXT/,
   );
 });
 
@@ -1609,16 +1609,16 @@ void test("G17 credential reads reject missing, symlinked, and writable contexts
         ...base,
         contextPath: join(directory, "missing.json"),
       }),
-      /CONFIG-G17-PATH/,
+      /CONFIG-BACKUP-PATH/,
     );
     await assert.rejects(
       readBackupCredential({ ...base, contextPath: contextLink }),
-      /CONFIG-G17-PATH/,
+      /CONFIG-BACKUP-PATH/,
     );
     await chmod(contextFile, 0o600);
     await assert.rejects(
       readBackupCredential({ ...base, contextPath: contextFile }),
-      /CONFIG-G17-CONTEXT/,
+      /CONFIG-BACKUP-CONTEXT/,
     );
   } finally {
     await rm(directory, { recursive: true, force: true });
@@ -1878,7 +1878,7 @@ void test("G17 validates a real source/candidate context, exact config bytes, pr
     await chmod(candidateConfigPath, 0o664);
     await assert.rejects(
       readBackupCredential(credentialOptions),
-      (error) => error.ruleId === "CONFIG-G17-CONFIG",
+      (error) => error.ruleId === "CONFIG-BACKUP-CONFIG",
     );
     assert.equal(
       (await readdir(candidateRoot)).includes("sops-invoked"),
@@ -1902,7 +1902,7 @@ void test("G17 validates a real source/candidate context, exact config bytes, pr
     await rm(candidateConfigPath);
     await assert.rejects(
       readBackupCredential(credentialOptions),
-      (error) => error.ruleId === "CONFIG-G17-CONFIG",
+      (error) => error.ruleId === "CONFIG-BACKUP-CONFIG",
     );
     assert.equal(
       (await readdir(candidateRoot)).includes("sops-invoked"),
@@ -1927,7 +1927,7 @@ void test("G17 validates a real source/candidate context, exact config bytes, pr
         host: socketHost,
         port: 5432,
       }),
-      /CONFIG-G17-CONFIG/u,
+      /CONFIG-BACKUP-CONFIG/u,
     );
     await chmod(contextPath, 0o600);
     await writeFile(contextPath, `${JSON.stringify(launchContext)}\n`);
@@ -1949,7 +1949,7 @@ void test("G17 validates a real source/candidate context, exact config bytes, pr
         port: 5432,
         expectedSystemIdentifier: identity.systemIdentifier,
       }),
-      /CONFIG-G17-SERVER-IDENTITY/u,
+      /CONFIG-BACKUP-SERVER-IDENTITY/u,
     );
     await chmod(preflightIdentityPath, 0o600);
     await writeFile(preflightIdentityPath, "{ malformed G00 identity\n");
@@ -1964,12 +1964,12 @@ void test("G17 validates a real source/candidate context, exact config bytes, pr
         port: 5432,
         expectedSystemIdentifier: identity.systemIdentifier,
       }),
-      (error) => error.ruleId === "CONFIG-G17-SERVER-IDENTITY",
+      (error) => error.ruleId === "CONFIG-BACKUP-SERVER-IDENTITY",
     );
     await rm(sopsInvocationPath, { force: true });
     await assert.rejects(
       readBackupCredential(credentialOptions),
-      (error) => error.ruleId === "CONFIG-G17-SERVER-IDENTITY",
+      (error) => error.ruleId === "CONFIG-BACKUP-SERVER-IDENTITY",
     );
     assert.equal(
       (await readdir(candidateRoot)).includes("sops-invoked"),
@@ -2005,7 +2005,7 @@ void test("G17 validates a real source/candidate context, exact config bytes, pr
     try {
       await assert.rejects(
         readBackupCredential(credentialOptions),
-        (error) => error.ruleId === "CONFIG-G17-SERVER-IDENTITY",
+        (error) => error.ruleId === "CONFIG-BACKUP-SERVER-IDENTITY",
       );
       assert.equal(preflightIdentityDeletionTriggered, true);
       assert.equal(
@@ -2043,7 +2043,7 @@ void test("G17 validates a real source/candidate context, exact config bytes, pr
         host: socketHost,
         port: 5432,
       }),
-      /CONFIG-G17-CONTEXT/u,
+      /CONFIG-BACKUP-CONTEXT/u,
     );
   } finally {
     await rm(socketHost, { recursive: true, force: true });
@@ -2060,7 +2060,7 @@ void test("G17 Unix socket endpoint is restricted to private canonical directori
   await assert.rejects(stat(missing), { code: "ENOENT" });
   await assert.rejects(
     validateBackupSocketDirectory(missing),
-    /CONFIG-G17-SOCKET-PATH/,
+    /CONFIG-BACKUP-SOCKET-PATH/,
   );
   await mkdir(host, { mode: 0o700 });
   await mkdir(target, { mode: 0o700 });
@@ -2079,12 +2079,12 @@ void test("G17 Unix socket endpoint is restricted to private canonical directori
     await symlink(target, link);
     await assert.rejects(
       validateBackupSocketDirectory(link),
-      /CONFIG-G17-SOCKET-PATH/,
+      /CONFIG-BACKUP-SOCKET-PATH/,
     );
     await chmod(host, 0o755);
     await assert.rejects(
       validateBackupSocketDirectory(host),
-      /CONFIG-G17-SOCKET-OWNER/,
+      /CONFIG-BACKUP-SOCKET-OWNER/,
     );
   } finally {
     await rm(host, { recursive: true, force: true });
@@ -2163,7 +2163,7 @@ void test("G17 target identity is closed and bound to this run, candidate, and Y
         { ...context, runId: "20261024T123000Z-0000000" },
         config,
       ),
-    /CONFIG-G17-SERVER-IDENTITY/,
+    /CONFIG-BACKUP-SERVER-IDENTITY/,
   );
   for (const [key, value] of [
     ["runId", "20261024T123000Z-0000000"],
@@ -2178,7 +2178,7 @@ void test("G17 target identity is closed and bound to this run, candidate, and Y
           context,
           config,
         ),
-      /CONFIG-G17-SERVER-IDENTITY/,
+      /CONFIG-BACKUP-SERVER-IDENTITY/,
     );
   }
   assert.throws(
@@ -2188,7 +2188,7 @@ void test("G17 target identity is closed and bound to this run, candidate, and Y
         context,
         config,
       ),
-    /CONFIG-G17-SERVER-IDENTITY/,
+    /CONFIG-BACKUP-SERVER-IDENTITY/,
   );
   assert.throws(
     () =>
@@ -2196,7 +2196,7 @@ void test("G17 target identity is closed and bound to this run, candidate, and Y
         ...config,
         environment: "production",
       }),
-    /CONFIG-G17-SERVER-IDENTITY/,
+    /CONFIG-BACKUP-SERVER-IDENTITY/,
   );
   assert.throws(
     () =>
@@ -2204,6 +2204,6 @@ void test("G17 target identity is closed and bound to this run, candidate, and Y
         ...config,
         verification: { databaseIsolation: { enabled: false } },
       }),
-    /CONFIG-G17-SERVER-IDENTITY/,
+    /CONFIG-BACKUP-SERVER-IDENTITY/,
   );
 });

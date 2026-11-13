@@ -627,12 +627,12 @@ void test("G08 derives only the five run databases and validates its exact prepa
         { ...context, runId: "wrong" },
         "c".repeat(64),
       ),
-    /CONFIG-G08-PREPARATION/u,
+    /CONFIG-MIGRATIONS-PREPARATION/u,
   );
   assert.throws(
     () =>
       validateMigrationPreparationArtifact(artifact, context, "d".repeat(64)),
-    /CONFIG-G08-PREPARATION/u,
+    /CONFIG-MIGRATIONS-PREPARATION/u,
   );
   assert.throws(
     () =>

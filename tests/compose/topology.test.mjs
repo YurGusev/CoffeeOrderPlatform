@@ -7044,7 +7044,7 @@ void test("G13/G14 use current G08 context while malformed browser lineage fails
       },
     }),
     (error) =>
-      ["CONFIG-G08-BUNDLE", "CONFIG-G08-CONTEXT"].includes(error?.ruleId),
+      ["CONFIG-MIGRATIONS-BUNDLE", "CONFIG-MIGRATIONS-CONTEXT"].includes(error?.ruleId),
     "ordinary G13 must enter the current-context G08 reader",
   );
 
