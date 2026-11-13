@@ -6076,6 +6076,7 @@ export function nativeFoundationSource({
   malformedEnvelope,
   ordersDatabase,
   kafkaTargets,
+  waitMs = remainingGateWaitMs(),
 }) {
   return `import {readFile} from 'node:fs/promises';
 import {createHash} from 'node:crypto';
@@ -6133,7 +6134,7 @@ let inbox = inboxModule.createSqlInboxStore(database, inboxOptions);
 let outbox = outboxModule.createSqlOutboxStore(database, outboxOptions);
 let ownerWrite = ownerModule.defineStatement(database, 'INSERT INTO orders.delivery_live_owner_effects (message_id, aggregate_ref, effect_value, applied_at) VALUES ($1, $2, $3, $4::timestamptz)');
 const countRows = ownerModule.defineStatement(database, 'SELECT (SELECT count(*)::int FROM orders.delivery_live_owner_effects WHERE aggregate_ref = $1) AS owner_count, (SELECT count(*)::int FROM orders.delivery_live_inbox_messages WHERE message_id = ANY($2::text[])) AS inbox_count, (SELECT count(*)::int FROM orders.delivery_live_outbox_messages WHERE message_id = ANY($2::text[])) AS outbox_count, (SELECT count(*)::int FROM orders.delivery_live_inbox_quarantine WHERE reason = $3 AND envelope = $4::jsonb) AS malformed_count, (SELECT count(*)::int FROM orders.delivery_live_inbox_quarantine WHERE reason = $5 AND message_id = $6) AS conflict_count');
-const waitFor = async (predicate, timeoutMs = remainingGateWaitMs()) => {
+const waitFor = async (predicate, timeoutMs = ${waitMs}) => {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     if (await predicate()) return;
