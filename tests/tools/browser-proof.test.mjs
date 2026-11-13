@@ -178,13 +178,13 @@ void test("G14 binds a real SSE stream and later owner read to exactly one Confi
     ],
   };
   assert.equal(
-    matchBrowserChain(repeated, ORDER_REF, [...telemetry, ...telemetry])
-      ?.frame.frameId,
+    matchBrowserChain(repeated, ORDER_REF, [...telemetry, ...telemetry])?.frame
+      .frameId,
     frameId,
   );
   assert.equal(
-    matchBrowserChain(repeated, ORDER_REF, telemetry, new Set([frameId]))
-      ?.frame.frameId,
+    matchBrowserChain(repeated, ORDER_REF, telemetry, new Set([frameId]))?.frame
+      .frameId,
     secondFrame.frameId,
   );
   assert.equal(

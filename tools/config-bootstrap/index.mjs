@@ -1712,7 +1712,10 @@ async function readMigrationSecretBundle(root, env) {
     );
     assertPlainSecretDocument(encrypted, decrypted);
   } catch {
-    fail("CONFIG-MIGRATIONS-SECRET-BUNDLE", "trusted G08 secret bundle is invalid");
+    fail(
+      "CONFIG-MIGRATIONS-SECRET-BUNDLE",
+      "trusted G08 secret bundle is invalid",
+    );
   }
   return { encrypted, decrypted };
 }
@@ -1737,7 +1740,10 @@ async function assertPreparationNoSymlinkPath(path) {
     current = join(current, part);
     const info = await lstat(current).catch(() => null);
     if (!info || info.isSymbolicLink())
-      fail("CONFIG-MIGRATIONS-CONTEXT", "G08 context path is missing or symlinked");
+      fail(
+        "CONFIG-MIGRATIONS-CONTEXT",
+        "G08 context path is missing or symlinked",
+      );
   }
   if ((await realpath(absolute)) !== absolute)
     fail("CONFIG-MIGRATIONS-CONTEXT", "G08 context path is not canonical");
@@ -1781,12 +1787,18 @@ async function validateMigrationTarget({ root, contextPath, env }) {
     contextAfter.dev !== contextInfo.dev ||
     contextAfter.ino !== contextInfo.ino
   )
-    fail("CONFIG-MIGRATIONS-CONTEXT", "G08 launch context changed during validation");
+    fail(
+      "CONFIG-MIGRATIONS-CONTEXT",
+      "G08 launch context changed during validation",
+    );
   if (
     candidateRoot !== resolve(root) ||
     !/^[0-9a-f]{64}$/u.test(context.baseConfigSha256 ?? "")
   )
-    fail("CONFIG-MIGRATIONS-CONTEXT", "G08 context does not match candidate/config");
+    fail(
+      "CONFIG-MIGRATIONS-CONTEXT",
+      "G08 context does not match candidate/config",
+    );
 
   const configPath = join(root, "config/platform.yaml");
   const configStat = await lstat(configPath).catch(() => null);
@@ -1797,7 +1809,10 @@ async function validateMigrationTarget({ root, contextPath, env }) {
     (configStat.mode & 0o022) !== 0 ||
     (await realpath(configPath)) !== configPath
   )
-    fail("CONFIG-MIGRATIONS-CONFIG", "G08 config is not a canonical regular file");
+    fail(
+      "CONFIG-MIGRATIONS-CONFIG",
+      "G08 config is not a canonical regular file",
+    );
   const configBytes = await readFile(configPath);
   const configSha256 = createHash("sha256").update(configBytes).digest("hex");
   if (configSha256 !== context.baseConfigSha256)
@@ -1834,7 +1849,10 @@ async function validateMigrationTarget({ root, contextPath, env }) {
   try {
     validateRoleMap(roleMap, ownership);
   } catch {
-    fail("CONFIG-MIGRATIONS-ROLE-MAP", "canonical database role map is invalid");
+    fail(
+      "CONFIG-MIGRATIONS-ROLE-MAP",
+      "canonical database role map is invalid",
+    );
   }
   const roles = [
     ...roleMap.databases.map((database) => database.migratorRole),
@@ -1860,7 +1878,10 @@ async function validateMigrationTarget({ root, contextPath, env }) {
   try {
     secretBundle = await readMigrationSecretBundle(root, contextEnv);
   } catch {
-    fail("CONFIG-MIGRATIONS-ADMIN-SECRET", "trusted G08 admin secret is unavailable");
+    fail(
+      "CONFIG-MIGRATIONS-ADMIN-SECRET",
+      "trusted G08 admin secret is unavailable",
+    );
   }
   const secrets = secretBundle.decrypted.environments[config.environment];
   const adminPassword = secretValueAt(
@@ -1868,7 +1889,10 @@ async function validateMigrationTarget({ root, contextPath, env }) {
     "bootstrap.postgresAdminPassword",
   );
   if (typeof adminPassword !== "string" || adminPassword.length === 0)
-    fail("CONFIG-MIGRATIONS-ADMIN-SECRET", "trusted G08 admin secret is unavailable");
+    fail(
+      "CONFIG-MIGRATIONS-ADMIN-SECRET",
+      "trusted G08 admin secret is unavailable",
+    );
   return {
     context,
     contextPath,
@@ -1912,7 +1936,10 @@ async function captureMigrationBundleSnapshot(root) {
     (after.mode & 0o777) !== (info.mode & 0o777) ||
     after.size !== bytes.length
   )
-    fail("CONFIG-MIGRATIONS-BUNDLE", "G08 encrypted bundle changed during snapshot");
+    fail(
+      "CONFIG-MIGRATIONS-BUNDLE",
+      "G08 encrypted bundle changed during snapshot",
+    );
   return {
     path,
     dev: info.dev,
@@ -1977,7 +2004,10 @@ function encryptMigrationSecretBundle(root, env, snapshot, secretDocument) {
       },
     );
   } catch {
-    fail("CONFIG-MIGRATIONS-SOPS-ENCRYPT", "trusted G08 SOPS encryption failed");
+    fail(
+      "CONFIG-MIGRATIONS-SOPS-ENCRYPT",
+      "trusted G08 SOPS encryption failed",
+    );
   }
   return Buffer.from(encryptedText, "utf8");
 }
@@ -1990,7 +2020,10 @@ function assertEncryptedBundleHasNoPlaintext(ciphertext, value, path = []) {
       value.length > 0 &&
       ciphertext.includes(value)
     )
-      fail("CONFIG-MIGRATIONS-SOPS-OUTPUT", "G08 ciphertext contains plaintext");
+      fail(
+        "CONFIG-MIGRATIONS-SOPS-OUTPUT",
+        "G08 ciphertext contains plaintext",
+      );
     return;
   }
   if (Array.isArray(value)) {
@@ -2092,7 +2125,10 @@ async function validateMigrationEncryptedTemporary(
         (value) => typeof value === "string" && value.startsWith("ENC["),
       )
     )
-      fail("CONFIG-MIGRATIONS-SOPS-ROUNDTRIP", "G08 SOPS output was not decrypted");
+      fail(
+        "CONFIG-MIGRATIONS-SOPS-ROUNDTRIP",
+        "G08 SOPS output was not decrypted",
+      );
   }
 }
 
@@ -2175,7 +2211,10 @@ async function writeMigrationEncryptedBundle(
     await handle?.close().catch(() => {});
     await unlink(temporary).catch((error) => {
       if (error.code !== "ENOENT")
-        fail("CONFIG-MIGRATIONS-BUNDLE_TEMP", "G08 temporary bundle cleanup failed");
+        fail(
+          "CONFIG-MIGRATIONS-BUNDLE_TEMP",
+          "G08 temporary bundle cleanup failed",
+        );
     });
   }
 }
@@ -3093,7 +3132,10 @@ function migratorRolePasswords({ ownership, roleMap, secrets }) {
       typeof migratorPassword !== "string" ||
       migratorPassword.length === 0
     )
-      fail("CONFIG-MIGRATIONS-MIGRATOR-SECRET", "G08 migrator credential is invalid");
+      fail(
+        "CONFIG-MIGRATIONS-MIGRATOR-SECRET",
+        "G08 migrator credential is invalid",
+      );
     passwords.set(database.migratorRole, migratorPassword);
     for (const runtime of database.runtimeRoles) {
       const claim = ownership.runtimeClaims.find(
@@ -3107,12 +3149,18 @@ function migratorRolePasswords({ ownership, roleMap, secrets }) {
         typeof credential.password !== "string" ||
         credential.password.length === 0
       )
-        fail("CONFIG-MIGRATIONS-RUNTIME-SECRET", "G08 runtime credential is invalid");
+        fail(
+          "CONFIG-MIGRATIONS-RUNTIME-SECRET",
+          "G08 runtime credential is invalid",
+        );
       passwords.set(runtime.role, credential.password);
     }
   }
   if (passwords.size !== 15)
-    fail("CONFIG-MIGRATIONS-ROLE-MAP", "G08 role credential inventory is incomplete");
+    fail(
+      "CONFIG-MIGRATIONS-ROLE-MAP",
+      "G08 role credential inventory is incomplete",
+    );
   return passwords;
 }
 
@@ -3660,7 +3708,10 @@ export async function attestCanonicalMigrationPreparation({
     typeof expectedSystemIdentifier !== "string" ||
     !/^[0-9]{1,20}$/u.test(expectedSystemIdentifier)
   )
-    fail("CONFIG-MIGRATIONS-IDENTITY", "approved G08 system identifier is required");
+    fail(
+      "CONFIG-MIGRATIONS-IDENTITY",
+      "approved G08 system identifier is required",
+    );
   const snapshot = await captureMigrationBundleSnapshot(root);
   const target = await validateMigrationTarget({ root, contextPath, env });
   const contextBytes = await readFile(contextPath);
@@ -3726,7 +3777,10 @@ export async function attestCanonicalMigrationPreparation({
       });
     }
     if (!valid)
-      fail("CONFIG-MIGRATIONS-ROLE-AUTH", "G08 role password authentication failed");
+      fail(
+        "CONFIG-MIGRATIONS-ROLE-AUTH",
+        "G08 role password authentication failed",
+      );
   }
   const after = await probeMigrationTargetState(
     target,
@@ -3821,7 +3875,10 @@ export async function synchronizeMigrationAdminCredential({
     typeof expectedSystemIdentifier !== "string" ||
     !/^[0-9]{1,20}$/u.test(expectedSystemIdentifier)
   )
-    fail("CONFIG-MIGRATIONS-IDENTITY", "approved G08 system identifier is required");
+    fail(
+      "CONFIG-MIGRATIONS-IDENTITY",
+      "approved G08 system identifier is required",
+    );
 
   const contextEnv = sandboxBootstrapEnv(env);
   assertLocatorEnv(contextEnv, true);
@@ -3945,7 +4002,10 @@ export async function prepareCanonicalMigratorRoles({
     typeof expectedSystemIdentifier !== "string" ||
     !/^[0-9]{1,20}$/u.test(expectedSystemIdentifier)
   )
-    fail("CONFIG-MIGRATIONS-IDENTITY", "approved G08 system identifier is required");
+    fail(
+      "CONFIG-MIGRATIONS-IDENTITY",
+      "approved G08 system identifier is required",
+    );
 
   const contextEnv = sandboxBootstrapEnv(env);
   assertLocatorEnv(contextEnv, true);
@@ -4115,7 +4175,10 @@ export async function prepareCanonicalMigratorRoles({
       (password) => password === savedAdminPassword,
     )
   )
-    fail("CONFIG-MIGRATIONS-ROLE-SECRET", "G08 saved role credentials are invalid");
+    fail(
+      "CONFIG-MIGRATIONS-ROLE-SECRET",
+      "G08 saved role credentials are invalid",
+    );
 
   target.adminPassword = savedAdminPassword;
   const client = await openMigrationAdminClient(target);
@@ -4250,7 +4313,10 @@ export async function prepareCanonicalMigratorRoles({
     );
   }
   if (!committed)
-    fail("CONFIG-MIGRATIONS-ROLE-CREATE", "G08 canonical role preparation failed");
+    fail(
+      "CONFIG-MIGRATIONS-ROLE-CREATE",
+      "G08 canonical role preparation failed",
+    );
   if (closeFailed)
     failMigrationWithFacts(
       "CONFIG-MIGRATIONS-COMMIT-CLOSE",
@@ -4293,7 +4359,10 @@ async function readMigrationPreparationSource(
       typeof rawResources !== "object" ||
       Array.isArray(rawResources))
   )
-    fail("CONFIG-MIGRATIONS-PREPARATION", "G08 preparation metadata is invalid");
+    fail(
+      "CONFIG-MIGRATIONS-PREPARATION",
+      "G08 preparation metadata is invalid",
+    );
   const resources = rawResources ?? {};
 
   if (preparationContextPath === undefined) {
@@ -4351,7 +4420,10 @@ async function readMigrationPreparationSource(
     (contextInfo.mode & 0o777) !== 0o400 ||
     contextInfo.size > 16 * 1024
   )
-    fail("CONFIG-MIGRATIONS-BROWSER-LINEAGE", "G15 parent launch context is not trusted");
+    fail(
+      "CONFIG-MIGRATIONS-BROWSER-LINEAGE",
+      "G15 parent launch context is not trusted",
+    );
   const contextBytes = await readFile(preparationContextPath);
   let sourceContext;
   try {
@@ -4432,7 +4504,10 @@ async function readMigrationPreparationSource(
     lineage.baseConfigSha256 !== sourceContext.baseConfigSha256 ||
     lineage.configSha256 !== target.context.baseConfigSha256
   )
-    fail("CONFIG-MIGRATIONS-BROWSER-LINEAGE", "G15 config lineage does not match");
+    fail(
+      "CONFIG-MIGRATIONS-BROWSER-LINEAGE",
+      "G15 config lineage does not match",
+    );
 
   let inspectLaunchCheckout;
   try {
@@ -4471,7 +4546,10 @@ async function readMigrationPreparationSource(
       },
     );
   } catch {
-    fail("CONFIG-MIGRATIONS-BROWSER-LINEAGE", "G15 parent config blob is unavailable");
+    fail(
+      "CONFIG-MIGRATIONS-BROWSER-LINEAGE",
+      "G15 parent config blob is unavailable",
+    );
   }
   if (
     createHash("sha256").update(configBytes).digest("hex") !==
@@ -4506,7 +4584,10 @@ async function assertMigrationPreparationSource(target, root, source) {
     current.context.candidateSha !== source.context.candidateSha ||
     !current.configBytes.equals(source.configBytes)
   )
-    fail("CONFIG-MIGRATIONS-PREPARATION_CHANGED", "G15 preparation source changed");
+    fail(
+      "CONFIG-MIGRATIONS-PREPARATION_CHANGED",
+      "G15 preparation source changed",
+    );
 }
 
 async function readMigrationPreparationSnapshot(
@@ -4535,11 +4616,17 @@ async function readMigrationPreparationSnapshot(
       (info.mode & 0o777) !== 0o400 ||
       info.size > 16 * 1024
     )
-      fail("CONFIG-MIGRATIONS-PREPARATION", "G08 preparation receipt is untrusted");
+      fail(
+        "CONFIG-MIGRATIONS-PREPARATION",
+        "G08 preparation receipt is untrusted",
+      );
     bytes = await readFile(path);
   } catch (error) {
     if (error instanceof ConfigError) throw error;
-    fail("CONFIG-MIGRATIONS-PREPARATION", "G08 preparation receipt is unavailable");
+    fail(
+      "CONFIG-MIGRATIONS-PREPARATION",
+      "G08 preparation receipt is unavailable",
+    );
   }
   const after = await lstat(path).catch(() => null);
   if (
@@ -4665,7 +4752,10 @@ async function assertMigrationPreparationSnapshot(snapshot) {
       .update(bytes ?? "")
       .digest("hex") !== snapshot.sha256
   )
-    fail("CONFIG-MIGRATIONS-PREPARATION_CHANGED", "G08 preparation receipt changed");
+    fail(
+      "CONFIG-MIGRATIONS-PREPARATION_CHANGED",
+      "G08 preparation receipt changed",
+    );
 }
 
 function assertPreparedMigrationRoleInventory(state, roles) {
@@ -4722,7 +4812,10 @@ export async function readMigrationCredential({
       (typeof expectedSystemIdentifier !== "string" ||
         !/^[0-9]{1,20}$/u.test(expectedSystemIdentifier)))
   )
-    fail("CONFIG-MIGRATIONS-CREDENTIAL-REQUEST", "G08 credential request is invalid");
+    fail(
+      "CONFIG-MIGRATIONS-CREDENTIAL-REQUEST",
+      "G08 credential request is invalid",
+    );
   const bundleSnapshot = await captureMigrationBundleSnapshot(root);
   const target = await validateMigrationTarget({ root, contextPath, env });
   await assertMigrationBundleSnapshot(bundleSnapshot);
@@ -4770,7 +4863,10 @@ export async function readMigrationCredential({
     expectedSystemIdentifier !== undefined &&
     boundSystemIdentifier !== expectedSystemIdentifier
   )
-    fail("CONFIG-MIGRATIONS-IDENTITY", "G08 preparation server identity differs");
+    fail(
+      "CONFIG-MIGRATIONS-IDENTITY",
+      "G08 preparation server identity differs",
+    );
 
   const migrators = target.secrets?.bootstrap?.migrators;
   const canonicalOwners = target.ownership.databases.map(
@@ -4847,7 +4943,10 @@ export async function readMigrationCredential({
       credential.password.length === 0 ||
       credential.password.includes("\0")
     )
-      fail("CONFIG-MIGRATIONS-RUNTIME-SECRET", "G08 runtime credential is invalid");
+      fail(
+        "CONFIG-MIGRATIONS-RUNTIME-SECRET",
+        "G08 runtime credential is invalid",
+      );
     return { username: runtimeRole.role, password: credential.password };
   }
   return {
@@ -5158,7 +5257,10 @@ export async function openAromaSandboxMigrator({
   try {
     validateRoleMap(roleMap, ownership);
   } catch {
-    fail("CONFIG-AROMA-MIGRATOR-ROLE", "canonical database role map is invalid");
+    fail(
+      "CONFIG-AROMA-MIGRATOR-ROLE",
+      "canonical database role map is invalid",
+    );
   }
   const roleDatabase = roleMap.databases.find(
     (database) =>
@@ -5167,7 +5269,10 @@ export async function openAromaSandboxMigrator({
       )?.owner === owner,
   );
   if (!roleDatabase)
-    fail("CONFIG-AROMA-MIGRATOR-ROLE", "G16 canonical migrator role is missing");
+    fail(
+      "CONFIG-AROMA-MIGRATOR-ROLE",
+      "G16 canonical migrator role is missing",
+    );
   const config = await loadPlatformConfig(
     root,
     join(root, "config/platform.yaml"),
@@ -5264,7 +5369,10 @@ export async function finalizeAromaSandboxDatabase({
   try {
     validateRoleMap(roleMap, ownership);
   } catch {
-    fail("CONFIG-AROMA-FINALIZE-ROLE", "canonical database role map is invalid");
+    fail(
+      "CONFIG-AROMA-FINALIZE-ROLE",
+      "canonical database role map is invalid",
+    );
   }
   const roleDatabase = roleMap.databases.find(
     (database) =>
@@ -5273,7 +5381,10 @@ export async function finalizeAromaSandboxDatabase({
       )?.owner === owner,
   );
   if (!roleDatabase)
-    fail("CONFIG-AROMA-FINALIZE-ROLE", "G16 canonical database role is missing");
+    fail(
+      "CONFIG-AROMA-FINALIZE-ROLE",
+      "G16 canonical database role is missing",
+    );
   const config = await loadPlatformConfig(
     root,
     join(root, "config/platform.yaml"),
@@ -5615,7 +5726,10 @@ export async function validateBackupTarget({
     contextAfter.dev !== contextInfo.dev ||
     contextAfter.ino !== contextInfo.ino
   )
-    fail("CONFIG-BACKUP-CONTEXT", "G17 launch context changed during validation");
+    fail(
+      "CONFIG-BACKUP-CONTEXT",
+      "G17 launch context changed during validation",
+    );
   if (
     candidateRoot !== resolve(root) ||
     (runId !== undefined && context.runId !== runId) ||

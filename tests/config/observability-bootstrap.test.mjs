@@ -4960,7 +4960,10 @@ void test("G08 admin credential sync refuses non-auth failures, changed source i
       const dockerCalls = await readFile(dockerCallsPath, "utf8").catch(
         () => "",
       );
-      if (scenario.expectedRule === "CONFIG-MIGRATIONS-PROBE" && connectCalls === 1)
+      if (
+        scenario.expectedRule === "CONFIG-MIGRATIONS-PROBE" &&
+        connectCalls === 1
+      )
         assert.equal(dockerCalls, "", scenario.name);
       if (scenario.docker.changeOnInspection)
         assert.equal((dockerCalls.match(/"inspect"/gu) ?? []).length, 2);

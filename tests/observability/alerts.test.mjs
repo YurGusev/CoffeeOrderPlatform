@@ -2030,27 +2030,37 @@ void test("observability evidence distinguishes selected live roles from full 14
     coverage.fullSystemObservability.convergenceMetricProof.processKind,
     "driver-container SQL-backed proof helper",
   );
-  assert.equal(coverage.fullSystemObservability.convergenceMetricProof.status, "PASS");
-  assert.deepEqual(coverage.fullSystemObservability.nodeRuntimesNotClaimedAsLive, [
-    "customer-service",
-    "catalog-service",
-    "catalog-supplier-sync",
-    "catalog-activation-worker",
-    "pricing-service",
-    "aroma-observer",
-    "aroma-convergence",
-    "aroma-gateway",
-  ]);
+  assert.equal(
+    coverage.fullSystemObservability.convergenceMetricProof.status,
+    "PASS",
+  );
+  assert.deepEqual(
+    coverage.fullSystemObservability.nodeRuntimesNotClaimedAsLive,
+    [
+      "customer-service",
+      "catalog-service",
+      "catalog-supplier-sync",
+      "catalog-activation-worker",
+      "pricing-service",
+      "aroma-observer",
+      "aroma-convergence",
+      "aroma-gateway",
+    ],
+  );
   const withMatrix = observabilityVerificationCoverage({
     runtimeMetricMatrix: {
       status: "PASS",
       runtimeMetrics: { roles: NODE_RUNTIME_ROLES.map((role) => ({ role })) },
     },
   });
-  assert.deepEqual(withMatrix.fullSystemObservability.metricMatrixNodeRuntimes, [
-    ...NODE_RUNTIME_ROLES,
-  ]);
-  assert.deepEqual(withMatrix.fullSystemObservability.nodeRuntimesNotClaimedAsLive, []);
+  assert.deepEqual(
+    withMatrix.fullSystemObservability.metricMatrixNodeRuntimes,
+    [...NODE_RUNTIME_ROLES],
+  );
+  assert.deepEqual(
+    withMatrix.fullSystemObservability.nodeRuntimesNotClaimedAsLive,
+    [],
+  );
   assert.equal(
     withMatrix.fullSystemObservability.status,
     "NOT_RUN",
