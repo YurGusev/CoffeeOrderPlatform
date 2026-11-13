@@ -164,11 +164,13 @@ export function validateRuntimeImageOwnership(inventory, baseline, phase) {
           "new image appeared after baseline",
         );
   } else if (phase === "ready") {
-    assert.equal(
-      inventory.refs.size,
-      owned.length,
-      "run image references are incomplete",
-    );
+    // Опубликованные supply_chain ссылки уже в baseline, поэтому ready-фаза
+    // требует наличия всех run-owned ссылок, а не точного равенства размеров.
+    for (const [reference] of owned)
+      assert.ok(
+        inventory.refs.has(reference),
+        "run image references are incomplete",
+      );
     for (const [, imageId] of inventory.expected)
       assert.ok(
         inventory.preexisting.has(imageId),
