@@ -48,7 +48,7 @@ export type CustomerOrderInput = {
   customerRef: IdentifiersV1SchemaCustomerRef;
   customerVersion: IdentifiersV1SchemaVersion;
   displayName: string;
-  state: "Active" | "Inactive";
+  state: 'Active' | 'Inactive';
 };
 
 export type CatalogPricingInput = {
@@ -58,8 +58,8 @@ export type CatalogPricingInput = {
   snapshotRevision: IdentifiersV1SchemaVersion;
   supplierUnitMinor: MoneyVersionTimeV1SchemaMoneyMinor;
   currency: MoneyVersionTimeV1SchemaCurrency;
-  unit: "piece" | "gram" | "kilogram";
-  availability: "Available" | "Unavailable" | "Stopped";
+  unit: 'piece' | 'gram' | 'kilogram';
+  availability: 'Available' | 'Unavailable' | 'Stopped';
   mappingRevision: IdentifiersV1SchemaVersion;
   displayName: string;
   grindOptions?: Array<{
@@ -87,7 +87,7 @@ export type PricingQuoteAuthoritativeLine = {
   offerRef: IdentifiersV1SchemaOfferRef;
   mappingRevision: IdentifiersV1SchemaVersion;
   quantity: MoneyVersionTimeV1SchemaQuantityDecimal;
-  unit: "piece" | "gram" | "kilogram";
+  unit: 'piece' | 'gram' | 'kilogram';
   supplierUnitMinor: MoneyVersionTimeV1SchemaMoneyMinor;
   unitMinor: MoneyVersionTimeV1SchemaMoneyMinor;
   lineTotalMinor: MoneyVersionTimeV1SchemaMoneyMinor;
@@ -117,17 +117,17 @@ export type AromaOfferBindingRequest = {
   offerRef: IdentifiersV1SchemaOfferRef;
   supplierRef: IdentifiersV1SchemaSupplierRef;
   snapshotRef: IdentifiersV1SchemaSnapshotRef;
-  sourceIdentityScheme: "hmac-sha256-v1";
+  sourceIdentityScheme: 'hmac-sha256-v1';
   sourceOfferKeyHash: HashSha256;
 };
 
 export type AromaOfferBindingResponse = {
   offerRef: IdentifiersV1SchemaOfferRef;
   supplierRef: IdentifiersV1SchemaSupplierRef;
-  sourceIdentityScheme: "hmac-sha256-v1";
+  sourceIdentityScheme: 'hmac-sha256-v1';
   sourceOfferKeyHash: HashSha256;
   firstSnapshotRef: IdentifiersV1SchemaSnapshotRef;
-  state: "Bound";
+  state: 'Bound';
 };
 
 export type AromaSupplierPromotion = {
@@ -146,22 +146,22 @@ export type AromaCatalogItem = {
    * Название категории поставщика; отсутствует, если поставщик его не передал.
    */
   categoryName?: string;
-  unit: "piece" | "gram" | "kilogram";
+  unit: 'piece' | 'gram' | 'kilogram';
   supplierUnitMinor: MoneyVersionTimeV1SchemaMoneyMinor;
   currency: MoneyVersionTimeV1SchemaCurrency;
-  availability: "Available" | "Unavailable" | "Stopped";
+  availability: 'Available' | 'Unavailable' | 'Stopped';
   imageUrl: string | null;
   supplierPromotions?: Array<AromaSupplierPromotion>;
   grindOptions?: Array<{
     sourceGrindKeyHash: HashSha256;
     displayName: string;
   }>;
-  sourceIdentityScheme: "hmac-sha256-v1";
+  sourceIdentityScheme: 'hmac-sha256-v1';
 };
 
 export type AromaCatalogStarted = {
-  streamVersion: "1";
-  recordType: "snapshot-started";
+  streamVersion: '1';
+  recordType: 'snapshot-started';
   snapshotRef: IdentifiersV1SchemaSnapshotRef;
   supplierRef: IdentifiersV1SchemaSupplierRef;
   providerSnapshotRef: string;
@@ -169,8 +169,8 @@ export type AromaCatalogStarted = {
 };
 
 export type AromaCatalogBatch = {
-  streamVersion: "1";
-  recordType: "snapshot-batch";
+  streamVersion: '1';
+  recordType: 'snapshot-batch';
   snapshotRef: IdentifiersV1SchemaSnapshotRef;
   batchNumber: number;
   offerCount: number;
@@ -181,8 +181,8 @@ export type AromaCatalogBatch = {
 };
 
 export type AromaCatalogCompleted = {
-  streamVersion: "1";
-  recordType: "snapshot-completed";
+  streamVersion: '1';
+  recordType: 'snapshot-completed';
   snapshotRef: IdentifiersV1SchemaSnapshotRef;
   batchCount: number;
   productCount: number;
@@ -193,26 +193,17 @@ export type AromaCatalogCompleted = {
 };
 
 export type AromaCatalogFailed = {
-  streamVersion: "1";
-  recordType: "snapshot-failed";
+  streamVersion: '1';
+  recordType: 'snapshot-failed';
   snapshotRef: IdentifiersV1SchemaSnapshotRef;
-  code:
-    | "PROVIDER_UNAVAILABLE"
-    | "PROVIDER_TIMEOUT"
-    | "INVALID_STREAM"
-    | "BATCH_HASH_CONFLICT"
-    | "SOURCE_IDENTITY_COLLISION";
+  code: 'PROVIDER_UNAVAILABLE' | 'PROVIDER_TIMEOUT' | 'INVALID_STREAM' | 'BATCH_HASH_CONFLICT' | 'SOURCE_IDENTITY_COLLISION';
   failedAt: MoneyVersionTimeV1SchemaTimestamp;
 };
 
-export type AromaCatalogExportRecord =
-  | AromaCatalogStarted
-  | AromaCatalogBatch
-  | AromaCatalogCompleted
-  | AromaCatalogFailed;
+export type AromaCatalogExportRecord = AromaCatalogStarted | AromaCatalogBatch | AromaCatalogCompleted | AromaCatalogFailed;
 
 export type AromaCartSnapshotReadRequest = {
-  cartScopeRef: "aroma-primary";
+  cartScopeRef: 'aroma-primary';
 };
 
 export type AromaCartLine = {
@@ -222,7 +213,7 @@ export type AromaCartLine = {
 };
 
 export type AromaCartSnapshot = {
-  cartScopeRef: "aroma-primary";
+  cartScopeRef: 'aroma-primary';
   providerSnapshotRef: string;
   capturedAt: MoneyVersionTimeV1SchemaTimestamp;
   cartFingerprint: HashSha256;
@@ -231,142 +222,128 @@ export type AromaCartSnapshot = {
 
 export type AromaSetQuantityRequest = {
   operationRef: IdentifiersV1SchemaOperationRef;
-  cartScopeRef: "aroma-primary";
+  cartScopeRef: 'aroma-primary';
   quantity: MoneyVersionTimeV1SchemaProviderQuantity;
   sourceGrindKeyHash?: HashSha256;
 };
 
 export type AromaRemoveLineRequest = {
   operationRef: IdentifiersV1SchemaOperationRef;
-  cartScopeRef: "aroma-primary";
+  cartScopeRef: 'aroma-primary';
   sourceGrindKeyHash?: HashSha256;
 };
 
 export type AromaMutationResponse = {
   operationRef: IdentifiersV1SchemaOperationRef;
-  cartScopeRef: "aroma-primary";
+  cartScopeRef: 'aroma-primary';
   offerRef: IdentifiersV1SchemaOfferRef;
   sourceGrindKeyHash?: HashSha256;
-  state: "Acknowledged";
+  state: 'Acknowledged';
 };
 
 export type ErrorValidationFailed = ProblemDetailsV1SchemaProblemDetails & {
   status?: 400;
-  code?: "VALIDATION_FAILED";
+  code?: 'VALIDATION_FAILED';
 };
 
-export type ErrorServiceAuthenticationRequired =
-  ProblemDetailsV1SchemaProblemDetails & {
-    status?: 401;
-    code?: "SERVICE_AUTHENTICATION_REQUIRED";
-  };
+export type ErrorServiceAuthenticationRequired = ProblemDetailsV1SchemaProblemDetails & {
+  status?: 401;
+  code?: 'SERVICE_AUTHENTICATION_REQUIRED';
+};
 
-export type ErrorServiceDelegationInvalid =
-  ProblemDetailsV1SchemaProblemDetails & {
-    status?: 403;
-    code?: "SERVICE_DELEGATION_INVALID";
-  };
+export type ErrorServiceDelegationInvalid = ProblemDetailsV1SchemaProblemDetails & {
+  status?: 403;
+  code?: 'SERVICE_DELEGATION_INVALID';
+};
 
 export type ErrorCustomerNotFound = ProblemDetailsV1SchemaProblemDetails & {
   status?: 404;
-  code?: "CUSTOMER_NOT_FOUND";
+  code?: 'CUSTOMER_NOT_FOUND';
 };
 
-export type ErrorCatalogProductNotFound =
-  ProblemDetailsV1SchemaProblemDetails & {
-    status?: 404;
-    code?: "CATALOG_PRODUCT_NOT_FOUND";
-  };
+export type ErrorCatalogProductNotFound = ProblemDetailsV1SchemaProblemDetails & {
+  status?: 404;
+  code?: 'CATALOG_PRODUCT_NOT_FOUND';
+};
 
 export type ErrorPricingQuoteNotFound = ProblemDetailsV1SchemaProblemDetails & {
   status?: 404;
-  code?: "PRICING_QUOTE_NOT_FOUND";
+  code?: 'PRICING_QUOTE_NOT_FOUND';
 };
 
-export type ErrorPricingQuoteHashMismatch =
-  ProblemDetailsV1SchemaProblemDetails & {
-    status?: 409;
-    code?: "PRICING_QUOTE_HASH_MISMATCH";
-  };
+export type ErrorPricingQuoteHashMismatch = ProblemDetailsV1SchemaProblemDetails & {
+  status?: 409;
+  code?: 'PRICING_QUOTE_HASH_MISMATCH';
+};
 
 export type ErrorPricingQuoteExpired = ProblemDetailsV1SchemaProblemDetails & {
   status?: 409;
-  code?: "PRICING_QUOTE_EXPIRED";
+  code?: 'PRICING_QUOTE_EXPIRED';
 };
 
-export type ErrorPricingQuoteScopeMismatch =
-  ProblemDetailsV1SchemaProblemDetails & {
-    status?: 409;
-    code?: "PRICING_QUOTE_SCOPE_MISMATCH";
-  };
+export type ErrorPricingQuoteScopeMismatch = ProblemDetailsV1SchemaProblemDetails & {
+  status?: 409;
+  code?: 'PRICING_QUOTE_SCOPE_MISMATCH';
+};
 
-export type ErrorCatalogSnapshotIncomplete =
-  ProblemDetailsV1SchemaProblemDetails & {
-    status?: 503;
-    code?: "CATALOG_SNAPSHOT_INCOMPLETE";
-  };
+export type ErrorCatalogSnapshotIncomplete = ProblemDetailsV1SchemaProblemDetails & {
+  status?: 503;
+  code?: 'CATALOG_SNAPSHOT_INCOMPLETE';
+};
 
 export type ErrorCatalogUnavailable = ProblemDetailsV1SchemaProblemDetails & {
   status?: 503;
-  code?: "CATALOG_UNAVAILABLE";
+  code?: 'CATALOG_UNAVAILABLE';
 };
 
-export type ErrorPricingPolicyUnavailable =
-  ProblemDetailsV1SchemaProblemDetails & {
-    status?: 503;
-    code?: "PRICING_POLICY_UNAVAILABLE";
-  };
+export type ErrorPricingPolicyUnavailable = ProblemDetailsV1SchemaProblemDetails & {
+  status?: 503;
+  code?: 'PRICING_POLICY_UNAVAILABLE';
+};
 
-export type ErrorAromaProviderUnavailable =
-  ProblemDetailsV1SchemaProblemDetails & {
-    status?: 503;
-    code?: "AROMA_PROVIDER_UNAVAILABLE";
-  };
+export type ErrorAromaProviderUnavailable = ProblemDetailsV1SchemaProblemDetails & {
+  status?: 503;
+  code?: 'AROMA_PROVIDER_UNAVAILABLE';
+};
 
-export type ErrorAromaCartItemNotFound =
-  ProblemDetailsV1SchemaProblemDetails & {
-    status?: 404;
-    code?: "AROMA_CART_ITEM_NOT_FOUND";
-  };
+export type ErrorAromaCartItemNotFound = ProblemDetailsV1SchemaProblemDetails & {
+  status?: 404;
+  code?: 'AROMA_CART_ITEM_NOT_FOUND';
+};
 
-export type ErrorAromaOperationRefConflict =
-  ProblemDetailsV1SchemaProblemDetails & {
-    status?: 409;
-    code?: "AROMA_OPERATION_REF_CONFLICT";
-  };
+export type ErrorAromaOperationRefConflict = ProblemDetailsV1SchemaProblemDetails & {
+  status?: 409;
+  code?: 'AROMA_OPERATION_REF_CONFLICT';
+};
 
-export type ErrorAromaOperationInProgress =
-  ProblemDetailsV1SchemaProblemDetails & {
-    status?: 409;
-    code?: "AROMA_OPERATION_IN_PROGRESS";
-  };
+export type ErrorAromaOperationInProgress = ProblemDetailsV1SchemaProblemDetails & {
+  status?: 409;
+  code?: 'AROMA_OPERATION_IN_PROGRESS';
+};
 
-export type ErrorAromaOperationUnknownOutcome =
-  ProblemDetailsV1SchemaProblemDetails & {
-    status?: 409;
-    code?: "AROMA_OPERATION_UNKNOWN_OUTCOME";
-  };
+export type ErrorAromaOperationUnknownOutcome = ProblemDetailsV1SchemaProblemDetails & {
+  status?: 409;
+  code?: 'AROMA_OPERATION_UNKNOWN_OUTCOME';
+};
 
 export type ErrorAromaBindingConflict = ProblemDetailsV1SchemaProblemDetails & {
   status?: 409;
-  code?: "AROMA_BINDING_CONFLICT";
+  code?: 'AROMA_BINDING_CONFLICT';
 };
 
-export type ErrorAromaBindingSourceNotFound =
-  ProblemDetailsV1SchemaProblemDetails & {
-    status?: 409;
-    code?: "AROMA_BINDING_SOURCE_NOT_FOUND";
-  };
+export type ErrorAromaBindingSourceNotFound = ProblemDetailsV1SchemaProblemDetails & {
+  status?: 409;
+  code?: 'AROMA_BINDING_SOURCE_NOT_FOUND';
+};
 
-export type ErrorAromaBindingSnapshotIncomplete =
-  ProblemDetailsV1SchemaProblemDetails & {
-    status?: 409;
-    code?: "AROMA_BINDING_SNAPSHOT_INCOMPLETE";
-  };
+export type ErrorAromaBindingSnapshotIncomplete = ProblemDetailsV1SchemaProblemDetails & {
+  status?: 409;
+  code?: 'AROMA_BINDING_SNAPSHOT_INCOMPLETE';
+};
 
 export type ErrorInternalError = ProblemDetailsV1SchemaProblemDetails & {
   status?: 500;
-  code?: "INTERNAL_ERROR";
+  code?: 'INTERNAL_ERROR';
 };
 
 export type IdentifiersV1SchemaCustomerRef = string;
@@ -391,7 +368,7 @@ export type IdentifiersV1SchemaVariantRef = string;
 
 export type IdentifiersV1SchemaVersion = string;
 
-export type MoneyVersionTimeV1SchemaCurrency = "RUB";
+export type MoneyVersionTimeV1SchemaCurrency = 'RUB';
 
 export type HashSha256 = string;
 
@@ -439,14 +416,14 @@ export type Traceparent2 = MoneyVersionTimeV1SchemaTraceparent;
 export type GetCustomerOrderInputData = {
   body?: never;
   headers?: {
-    "X-Correlation-ID"?: Uuid2;
+    'X-Correlation-ID'?: Uuid2;
     traceparent?: MoneyVersionTimeV1SchemaTraceparent;
   };
   path: {
     customerRef: IdentifiersV1SchemaCustomerRef;
   };
   query?: never;
-  url: "/api/internal-v1/customers/{customerRef}/order-input";
+  url: '/api/internal-v1/customers/{customerRef}/order-input';
 };
 
 export type GetCustomerOrderInputErrors = {
@@ -472,8 +449,7 @@ export type GetCustomerOrderInputErrors = {
   500: ErrorInternalError;
 };
 
-export type GetCustomerOrderInputError =
-  GetCustomerOrderInputErrors[keyof GetCustomerOrderInputErrors];
+export type GetCustomerOrderInputError = GetCustomerOrderInputErrors[keyof GetCustomerOrderInputErrors];
 
 export type GetCustomerOrderInputResponses = {
   /**
@@ -482,13 +458,12 @@ export type GetCustomerOrderInputResponses = {
   200: CustomerOrderInput;
 };
 
-export type GetCustomerOrderInputResponse =
-  GetCustomerOrderInputResponses[keyof GetCustomerOrderInputResponses];
+export type GetCustomerOrderInputResponse = GetCustomerOrderInputResponses[keyof GetCustomerOrderInputResponses];
 
 export type GetCatalogPricingInputData = {
   body?: never;
   headers?: {
-    "X-Correlation-ID"?: Uuid2;
+    'X-Correlation-ID'?: Uuid2;
     traceparent?: MoneyVersionTimeV1SchemaTraceparent;
   };
   path: {
@@ -496,7 +471,7 @@ export type GetCatalogPricingInputData = {
     variantRef: IdentifiersV1SchemaVariantRef;
   };
   query?: never;
-  url: "/api/internal-v1/catalog/products/{productRef}/variants/{variantRef}/pricing-input";
+  url: '/api/internal-v1/catalog/products/{productRef}/variants/{variantRef}/pricing-input';
 };
 
 export type GetCatalogPricingInputErrors = {
@@ -522,8 +497,7 @@ export type GetCatalogPricingInputErrors = {
   503: ErrorCatalogSnapshotIncomplete | ErrorCatalogUnavailable;
 };
 
-export type GetCatalogPricingInputError =
-  GetCatalogPricingInputErrors[keyof GetCatalogPricingInputErrors];
+export type GetCatalogPricingInputError = GetCatalogPricingInputErrors[keyof GetCatalogPricingInputErrors];
 
 export type GetCatalogPricingInputResponses = {
   /**
@@ -532,18 +506,17 @@ export type GetCatalogPricingInputResponses = {
   200: CatalogPricingInput;
 };
 
-export type GetCatalogPricingInputResponse =
-  GetCatalogPricingInputResponses[keyof GetCatalogPricingInputResponses];
+export type GetCatalogPricingInputResponse = GetCatalogPricingInputResponses[keyof GetCatalogPricingInputResponses];
 
 export type VerifyPricingQuoteData = {
   body: PricingQuoteVerifyRequest;
   headers?: {
-    "X-Correlation-ID"?: Uuid2;
+    'X-Correlation-ID'?: Uuid2;
     traceparent?: MoneyVersionTimeV1SchemaTraceparent;
   };
   path?: never;
   query?: never;
-  url: "/api/internal-v1/pricing/quotes:verify";
+  url: '/api/internal-v1/pricing/quotes:verify';
 };
 
 export type VerifyPricingQuoteErrors = {
@@ -566,18 +539,14 @@ export type VerifyPricingQuoteErrors = {
   /**
    * Stored quote facts do not match the request or are expired.
    */
-  409:
-    | ErrorPricingQuoteHashMismatch
-    | ErrorPricingQuoteExpired
-    | ErrorPricingQuoteScopeMismatch;
+  409: ErrorPricingQuoteHashMismatch | ErrorPricingQuoteExpired | ErrorPricingQuoteScopeMismatch;
   /**
    * Pricing policy or quote owner is unavailable.
    */
   503: ErrorPricingPolicyUnavailable;
 };
 
-export type VerifyPricingQuoteError =
-  VerifyPricingQuoteErrors[keyof VerifyPricingQuoteErrors];
+export type VerifyPricingQuoteError = VerifyPricingQuoteErrors[keyof VerifyPricingQuoteErrors];
 
 export type VerifyPricingQuoteResponses = {
   /**
@@ -586,18 +555,17 @@ export type VerifyPricingQuoteResponses = {
   200: PricingQuoteVerificationResponse;
 };
 
-export type VerifyPricingQuoteResponse =
-  VerifyPricingQuoteResponses[keyof VerifyPricingQuoteResponses];
+export type VerifyPricingQuoteResponse = VerifyPricingQuoteResponses[keyof VerifyPricingQuoteResponses];
 
 export type ExportAromaCatalogData = {
   body: AromaCatalogExportRequest;
   headers?: {
-    "X-Correlation-ID"?: Uuid2;
+    'X-Correlation-ID'?: Uuid2;
     traceparent?: MoneyVersionTimeV1SchemaTraceparent;
   };
   path?: never;
   query?: never;
-  url: "/api/internal-v1/aroma/catalog-exports";
+  url: '/api/internal-v1/aroma/catalog-exports';
 };
 
 export type ExportAromaCatalogErrors = {
@@ -619,8 +587,7 @@ export type ExportAromaCatalogErrors = {
   503: ErrorAromaProviderUnavailable;
 };
 
-export type ExportAromaCatalogError =
-  ExportAromaCatalogErrors[keyof ExportAromaCatalogErrors];
+export type ExportAromaCatalogError = ExportAromaCatalogErrors[keyof ExportAromaCatalogErrors];
 
 export type ExportAromaCatalogResponses = {
   /**
@@ -629,18 +596,17 @@ export type ExportAromaCatalogResponses = {
   200: AromaCatalogExportRecord;
 };
 
-export type ExportAromaCatalogResponse =
-  ExportAromaCatalogResponses[keyof ExportAromaCatalogResponses];
+export type ExportAromaCatalogResponse = ExportAromaCatalogResponses[keyof ExportAromaCatalogResponses];
 
 export type RegisterAromaOfferBindingData = {
   body: AromaOfferBindingRequest;
   headers?: {
-    "X-Correlation-ID"?: Uuid2;
+    'X-Correlation-ID'?: Uuid2;
     traceparent?: MoneyVersionTimeV1SchemaTraceparent;
   };
   path?: never;
   query?: never;
-  url: "/api/internal-v1/aroma/offer-bindings";
+  url: '/api/internal-v1/aroma/offer-bindings';
 };
 
 export type RegisterAromaOfferBindingErrors = {
@@ -659,18 +625,14 @@ export type RegisterAromaOfferBindingErrors = {
   /**
    * Immutable source or snapshot binding conflict.
    */
-  409:
-    | ErrorAromaBindingConflict
-    | ErrorAromaBindingSourceNotFound
-    | ErrorAromaBindingSnapshotIncomplete;
+  409: ErrorAromaBindingConflict | ErrorAromaBindingSourceNotFound | ErrorAromaBindingSnapshotIncomplete;
   /**
    * Provider is unavailable or the safe typed operation timed out.
    */
   503: ErrorAromaProviderUnavailable;
 };
 
-export type RegisterAromaOfferBindingError =
-  RegisterAromaOfferBindingErrors[keyof RegisterAromaOfferBindingErrors];
+export type RegisterAromaOfferBindingError = RegisterAromaOfferBindingErrors[keyof RegisterAromaOfferBindingErrors];
 
 export type RegisterAromaOfferBindingResponses = {
   /**
@@ -679,18 +641,17 @@ export type RegisterAromaOfferBindingResponses = {
   200: AromaOfferBindingResponse;
 };
 
-export type RegisterAromaOfferBindingResponse =
-  RegisterAromaOfferBindingResponses[keyof RegisterAromaOfferBindingResponses];
+export type RegisterAromaOfferBindingResponse = RegisterAromaOfferBindingResponses[keyof RegisterAromaOfferBindingResponses];
 
 export type ReadAromaCartSnapshotData = {
   body: AromaCartSnapshotReadRequest;
   headers?: {
-    "X-Correlation-ID"?: Uuid2;
+    'X-Correlation-ID'?: Uuid2;
     traceparent?: MoneyVersionTimeV1SchemaTraceparent;
   };
   path?: never;
   query?: never;
-  url: "/api/internal-v1/aroma/cart-snapshots:read";
+  url: '/api/internal-v1/aroma/cart-snapshots:read';
 };
 
 export type ReadAromaCartSnapshotErrors = {
@@ -712,8 +673,7 @@ export type ReadAromaCartSnapshotErrors = {
   503: ErrorAromaProviderUnavailable;
 };
 
-export type ReadAromaCartSnapshotError =
-  ReadAromaCartSnapshotErrors[keyof ReadAromaCartSnapshotErrors];
+export type ReadAromaCartSnapshotError = ReadAromaCartSnapshotErrors[keyof ReadAromaCartSnapshotErrors];
 
 export type ReadAromaCartSnapshotResponses = {
   /**
@@ -722,20 +682,19 @@ export type ReadAromaCartSnapshotResponses = {
   200: AromaCartSnapshot;
 };
 
-export type ReadAromaCartSnapshotResponse =
-  ReadAromaCartSnapshotResponses[keyof ReadAromaCartSnapshotResponses];
+export type ReadAromaCartSnapshotResponse = ReadAromaCartSnapshotResponses[keyof ReadAromaCartSnapshotResponses];
 
 export type SetAromaCartLineQuantityData = {
   body: AromaSetQuantityRequest;
   headers?: {
-    "X-Correlation-ID"?: Uuid2;
+    'X-Correlation-ID'?: Uuid2;
     traceparent?: MoneyVersionTimeV1SchemaTraceparent;
   };
   path: {
     offerRef: IdentifiersV1SchemaOfferRef;
   };
   query?: never;
-  url: "/api/internal-v1/aroma/cart-lines/{offerRef}:set-quantity";
+  url: '/api/internal-v1/aroma/cart-lines/{offerRef}:set-quantity';
 };
 
 export type SetAromaCartLineQuantityErrors = {
@@ -758,18 +717,14 @@ export type SetAromaCartLineQuantityErrors = {
   /**
    * Operation reference or mutation safety conflict.
    */
-  409:
-    | ErrorAromaOperationRefConflict
-    | ErrorAromaOperationInProgress
-    | ErrorAromaOperationUnknownOutcome;
+  409: ErrorAromaOperationRefConflict | ErrorAromaOperationInProgress | ErrorAromaOperationUnknownOutcome;
   /**
    * Provider is unavailable or the safe typed operation timed out.
    */
   503: ErrorAromaProviderUnavailable;
 };
 
-export type SetAromaCartLineQuantityError =
-  SetAromaCartLineQuantityErrors[keyof SetAromaCartLineQuantityErrors];
+export type SetAromaCartLineQuantityError = SetAromaCartLineQuantityErrors[keyof SetAromaCartLineQuantityErrors];
 
 export type SetAromaCartLineQuantityResponses = {
   /**
@@ -778,20 +733,19 @@ export type SetAromaCartLineQuantityResponses = {
   200: AromaMutationResponse;
 };
 
-export type SetAromaCartLineQuantityResponse =
-  SetAromaCartLineQuantityResponses[keyof SetAromaCartLineQuantityResponses];
+export type SetAromaCartLineQuantityResponse = SetAromaCartLineQuantityResponses[keyof SetAromaCartLineQuantityResponses];
 
 export type RemoveAromaCartLineData = {
   body: AromaRemoveLineRequest;
   headers?: {
-    "X-Correlation-ID"?: Uuid2;
+    'X-Correlation-ID'?: Uuid2;
     traceparent?: MoneyVersionTimeV1SchemaTraceparent;
   };
   path: {
     offerRef: IdentifiersV1SchemaOfferRef;
   };
   query?: never;
-  url: "/api/internal-v1/aroma/cart-lines/{offerRef}:remove";
+  url: '/api/internal-v1/aroma/cart-lines/{offerRef}:remove';
 };
 
 export type RemoveAromaCartLineErrors = {
@@ -814,18 +768,14 @@ export type RemoveAromaCartLineErrors = {
   /**
    * Operation reference or mutation safety conflict.
    */
-  409:
-    | ErrorAromaOperationRefConflict
-    | ErrorAromaOperationInProgress
-    | ErrorAromaOperationUnknownOutcome;
+  409: ErrorAromaOperationRefConflict | ErrorAromaOperationInProgress | ErrorAromaOperationUnknownOutcome;
   /**
    * Provider is unavailable or the safe typed operation timed out.
    */
   503: ErrorAromaProviderUnavailable;
 };
 
-export type RemoveAromaCartLineError =
-  RemoveAromaCartLineErrors[keyof RemoveAromaCartLineErrors];
+export type RemoveAromaCartLineError = RemoveAromaCartLineErrors[keyof RemoveAromaCartLineErrors];
 
 export type RemoveAromaCartLineResponses = {
   /**
@@ -834,5 +784,4 @@ export type RemoveAromaCartLineResponses = {
   200: AromaMutationResponse;
 };
 
-export type RemoveAromaCartLineResponse =
-  RemoveAromaCartLineResponses[keyof RemoveAromaCartLineResponses];
+export type RemoveAromaCartLineResponse = RemoveAromaCartLineResponses[keyof RemoveAromaCartLineResponses];

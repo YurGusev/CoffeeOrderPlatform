@@ -28,7 +28,7 @@ export type BeginBrowserLoginData = {
   query?: {
     returnTo?: string;
   };
-  url: "/auth/login";
+  url: '/auth/login';
 };
 
 export type BeginBrowserLoginErrors = {
@@ -42,8 +42,7 @@ export type BeginBrowserLoginErrors = {
   503: ProblemDetails;
 };
 
-export type BeginBrowserLoginError =
-  BeginBrowserLoginErrors[keyof BeginBrowserLoginErrors];
+export type BeginBrowserLoginError = BeginBrowserLoginErrors[keyof BeginBrowserLoginErrors];
 
 export type CompleteBrowserLoginData = {
   body?: never;
@@ -60,7 +59,7 @@ export type CompleteBrowserLoginData = {
      */
     session_state?: string;
   };
-  url: "/auth/callback";
+  url: '/auth/callback';
 };
 
 export type CompleteBrowserLoginErrors = {
@@ -78,14 +77,13 @@ export type CompleteBrowserLoginErrors = {
   503: ProblemDetails;
 };
 
-export type CompleteBrowserLoginError =
-  CompleteBrowserLoginErrors[keyof CompleteBrowserLoginErrors];
+export type CompleteBrowserLoginError = CompleteBrowserLoginErrors[keyof CompleteBrowserLoginErrors];
 
 export type EndBrowserSessionData = {
   body?: never;
   path?: never;
   query?: never;
-  url: "/auth/logout";
+  url: '/auth/logout';
 };
 
 export type EndBrowserSessionErrors = {
@@ -103,8 +101,7 @@ export type EndBrowserSessionErrors = {
   503: ProblemDetails;
 };
 
-export type EndBrowserSessionError =
-  EndBrowserSessionErrors[keyof EndBrowserSessionErrors];
+export type EndBrowserSessionError = EndBrowserSessionErrors[keyof EndBrowserSessionErrors];
 
 export type EndBrowserSessionResponses = {
   /**
@@ -113,14 +110,13 @@ export type EndBrowserSessionResponses = {
   204: void;
 };
 
-export type EndBrowserSessionResponse =
-  EndBrowserSessionResponses[keyof EndBrowserSessionResponses];
+export type EndBrowserSessionResponse = EndBrowserSessionResponses[keyof EndBrowserSessionResponses];
 
 export type GetBrowserSessionData = {
   body?: never;
   path?: never;
   query?: never;
-  url: "/auth/session";
+  url: '/auth/session';
 };
 
 export type GetBrowserSessionErrors = {
@@ -134,8 +130,7 @@ export type GetBrowserSessionErrors = {
   503: ProblemDetails;
 };
 
-export type GetBrowserSessionError =
-  GetBrowserSessionErrors[keyof GetBrowserSessionErrors];
+export type GetBrowserSessionError = GetBrowserSessionErrors[keyof GetBrowserSessionErrors];
 
 export type GetBrowserSessionResponses = {
   /**
@@ -144,18 +139,17 @@ export type GetBrowserSessionResponses = {
   200: BrowserSession;
 };
 
-export type GetBrowserSessionResponse =
-  GetBrowserSessionResponses[keyof GetBrowserSessionResponses];
+export type GetBrowserSessionResponse = GetBrowserSessionResponses[keyof GetBrowserSessionResponses];
 
 export type AuthorizeBrowserIngressData = {
   body?: never;
   headers: {
-    "X-Original-Method": string;
-    "X-Original-URI": string;
+    'X-Original-Method': string;
+    'X-Original-URI': string;
   };
   path?: never;
   query?: never;
-  url: "/_edge/authorize";
+  url: '/_edge/authorize';
 };
 
 export type AuthorizeBrowserIngressErrors = {
@@ -173,8 +167,7 @@ export type AuthorizeBrowserIngressErrors = {
   503: ProblemDetails;
 };
 
-export type AuthorizeBrowserIngressError =
-  AuthorizeBrowserIngressErrors[keyof AuthorizeBrowserIngressErrors];
+export type AuthorizeBrowserIngressError = AuthorizeBrowserIngressErrors[keyof AuthorizeBrowserIngressErrors];
 
 export type AuthorizeBrowserIngressResponses = {
   /**
@@ -183,5 +176,4 @@ export type AuthorizeBrowserIngressResponses = {
   204: void;
 };
 
-export type AuthorizeBrowserIngressResponse =
-  AuthorizeBrowserIngressResponses[keyof AuthorizeBrowserIngressResponses];
+export type AuthorizeBrowserIngressResponse = AuthorizeBrowserIngressResponses[keyof AuthorizeBrowserIngressResponses];

@@ -44,22 +44,20 @@ export type CustomerAddress = {
   line2?: string;
   city: string;
   postalCode?: string;
-  countryCode: "RU";
+  countryCode: 'RU';
 };
 
-export type CustomerCreateRequest =
-  | {
-      displayName: string;
-      phone: string;
-      email?: string;
-      address?: CustomerAddress;
-    }
-  | {
-      displayName: string;
-      phone?: string;
-      email: string;
-      address?: CustomerAddress;
-    };
+export type CustomerCreateRequest = {
+  displayName: string;
+  phone: string;
+  email?: string;
+  address?: CustomerAddress;
+} | {
+  displayName: string;
+  phone?: string;
+  email: string;
+  address?: CustomerAddress;
+};
 
 export type CustomerResponse = {
   customerRef: IdentifiersV1SchemaCustomerRef;
@@ -103,8 +101,8 @@ export type CatalogProductSummary = {
    * Название категории поставщика; отсутствует, если поставщик его не передал.
    */
   categoryName?: string;
-  unit: "piece" | "gram" | "kilogram";
-  availability: "Available" | "Unavailable" | "Stopped";
+  unit: 'piece' | 'gram' | 'kilogram';
+  availability: 'Available' | 'Unavailable' | 'Stopped';
   mappingAvailable: boolean;
   imageUrl?: string;
   prices?: CatalogPrices;
@@ -145,7 +143,7 @@ export type PricingPreviewRequest = {
 export type PricingPreviewPrice = {
   productRef: IdentifiersV1SchemaProductRef;
   variantRef: IdentifiersV1SchemaVariantRef;
-  unit: "piece" | "gram" | "kilogram";
+  unit: 'piece' | 'gram' | 'kilogram';
   supplierUnitMinor: CatalogPriceMinor;
   saleUnitMinor: CatalogPriceMinor;
   currency: MoneyVersionTimeV1SchemaCurrency;
@@ -175,7 +173,7 @@ export type PricingQuoteLine = {
   variantRef: IdentifiersV1SchemaVariantRef;
   productDisplayName: string;
   quantity: MoneyVersionTimeV1SchemaQuantityDecimal;
-  unit: "piece" | "gram" | "kilogram";
+  unit: 'piece' | 'gram' | 'kilogram';
   unitMinor: MoneyVersionTimeV1SchemaMoneyMinor;
   lineTotalMinor: MoneyVersionTimeV1SchemaMoneyMinor;
   sourceGrindKeyHash?: HashSha256;
@@ -231,7 +229,7 @@ export type OrderItem = {
   variantRef: IdentifiersV1SchemaVariantRef;
   displayName: string;
   quantity: MoneyVersionTimeV1SchemaQuantityDecimal;
-  unit: "piece" | "gram" | "kilogram";
+  unit: 'piece' | 'gram' | 'kilogram';
   quoteRef: IdentifiersV1SchemaQuoteRef;
   quoteLineNumber: number;
   unitMinor: MoneyVersionTimeV1SchemaMoneyMinor;
@@ -253,37 +251,13 @@ export type OrderPricing = {
 };
 
 export type OrderBlocker = {
-  code:
-    | "MAPPING_CHANGED"
-    | "MAPPING_MISSING"
-    | "MAPPING_STOPPED"
-    | "PRODUCT_UNAVAILABLE"
-    | "ORDER_STATE_INCONSISTENT"
-    | "AROMA_UNKNOWN_OUTCOME"
-    | "AROMA_WORKER_INTERRUPTED"
-    | "AROMA_OBSERVATION_UNAVAILABLE"
-    | "AROMA_OBSERVATION_INVALID"
-    | "AROMA_EXTERNAL_CHANGE"
-    | "AROMA_QUANTITY_NOT_SUPPORTED"
-    | "AROMA_MUTATIONS_DISABLED"
-    | "AROMA_MAPPING_NOT_AVAILABLE"
-    | "AROMA_OPERATION_UNKNOWN_OUTCOME"
-    | "AROMA_VERIFICATION_UNAVAILABLE"
-    | "AROMA_VERIFICATION_INVALID"
-    | "AROMA_CART_ITEM_NOT_FOUND";
+  code: 'MAPPING_CHANGED' | 'MAPPING_MISSING' | 'MAPPING_STOPPED' | 'PRODUCT_UNAVAILABLE' | 'ORDER_STATE_INCONSISTENT' | 'AROMA_UNKNOWN_OUTCOME' | 'AROMA_WORKER_INTERRUPTED' | 'AROMA_OBSERVATION_UNAVAILABLE' | 'AROMA_OBSERVATION_INVALID' | 'AROMA_EXTERNAL_CHANGE' | 'AROMA_QUANTITY_NOT_SUPPORTED' | 'AROMA_MUTATIONS_DISABLED' | 'AROMA_MAPPING_NOT_AVAILABLE' | 'AROMA_OPERATION_UNKNOWN_OUTCOME' | 'AROMA_VERIFICATION_UNAVAILABLE' | 'AROMA_VERIFICATION_INVALID' | 'AROMA_CART_ITEM_NOT_FOUND';
   message: string;
   productRef?: IdentifiersV1SchemaProductRef;
 };
 
 export type AromaCard = {
-  state:
-    | "NotRequested"
-    | "PendingObservation"
-    | "OutOfSync"
-    | "Converging"
-    | "InSync"
-    | "Blocked"
-    | "UnknownOutcome";
+  state: 'NotRequested' | 'PendingObservation' | 'OutOfSync' | 'Converging' | 'InSync' | 'Blocked' | 'UnknownOutcome';
   desiredRevision: IdentifiersV1SchemaVersion;
   observedRevision: IdentifiersV1SchemaVersion;
   lastObservedAt?: string | null;
@@ -294,33 +268,26 @@ export type OrderCardResponse = {
   orderRef: IdentifiersV1SchemaOrderRef;
   version: IdentifiersV1SchemaVersion;
   projectionVersion: IdentifiersV1SchemaVersion;
-  status: "Draft" | "Confirmed";
+  status: 'Draft' | 'Confirmed';
   customer: OrderCustomerSnapshot;
   items: Array<OrderItem>;
   pricing: OrderPricing | null;
   aroma: AromaCard;
-  allowedActions: Array<
-    "edit-items" | "confirm" | "request-aroma-reconciliation"
-  >;
+  allowedActions: Array<'edit-items' | 'confirm' | 'request-aroma-reconciliation'>;
 };
 
 export type ReconciliationAcceptedResponse = {
   orderRef: IdentifiersV1SchemaOrderRef;
   orderVersion: IdentifiersV1SchemaVersion;
   requestedAt: MoneyVersionTimeV1SchemaTimestamp;
-  aromaState:
-    | "PendingObservation"
-    | "OutOfSync"
-    | "Converging"
-    | "Blocked"
-    | "UnknownOutcome";
+  aromaState: 'PendingObservation' | 'OutOfSync' | 'Converging' | 'Blocked' | 'UnknownOutcome';
 };
 
 export type SseResourceInvalidated = {
-  subjectType: "order";
+  subjectType: 'order';
   subjectRef: IdentifiersV1SchemaOrderRef;
   ownerVersion: IdentifiersV1SchemaVersion;
-  reason: "OrderChanged" | "AromaStateChanged";
+  reason: 'OrderChanged' | 'AromaStateChanged';
   correlationId: Uuid2;
 };
 
@@ -330,195 +297,177 @@ export type SseStreamReady = {
 };
 
 export type SseStreamReset = {
-  reason: "REPLAY_UNAVAILABLE";
+  reason: 'REPLAY_UNAVAILABLE';
 };
 
 export type ErrorValidationFailed = ProblemDetailsV1SchemaProblemDetails & {
   status?: 400;
-  code?: "VALIDATION_FAILED";
+  code?: 'VALIDATION_FAILED';
 };
 
 export type ErrorInvalidCursor = ProblemDetailsV1SchemaProblemDetails & {
   status?: 400;
-  code?: "INVALID_CURSOR";
+  code?: 'INVALID_CURSOR';
 };
 
-export type ErrorAuthenticationRequired =
-  ProblemDetailsV1SchemaProblemDetails & {
-    status?: 401;
-    code?: "AUTHENTICATION_REQUIRED";
-  };
+export type ErrorAuthenticationRequired = ProblemDetailsV1SchemaProblemDetails & {
+  status?: 401;
+  code?: 'AUTHENTICATION_REQUIRED';
+};
 
 export type ErrorActorContextInvalid = ProblemDetailsV1SchemaProblemDetails & {
   status?: 403;
-  code?: "ACTOR_CONTEXT_INVALID";
+  code?: 'ACTOR_CONTEXT_INVALID';
 };
 
-export type ErrorCustomerPhoneConflict =
-  ProblemDetailsV1SchemaProblemDetails & {
-    status?: 409;
-    code?: "CUSTOMER_PHONE_CONFLICT";
-  };
+export type ErrorCustomerPhoneConflict = ProblemDetailsV1SchemaProblemDetails & {
+  status?: 409;
+  code?: 'CUSTOMER_PHONE_CONFLICT';
+};
 
-export type ErrorCustomerEmailConflict =
-  ProblemDetailsV1SchemaProblemDetails & {
-    status?: 409;
-    code?: "CUSTOMER_EMAIL_CONFLICT";
-  };
+export type ErrorCustomerEmailConflict = ProblemDetailsV1SchemaProblemDetails & {
+  status?: 409;
+  code?: 'CUSTOMER_EMAIL_CONFLICT';
+};
 
 export type ErrorIdempotencyConflict = ProblemDetailsV1SchemaProblemDetails & {
   status?: 409;
-  code?: "IDEMPOTENCY_CONFLICT";
+  code?: 'IDEMPOTENCY_CONFLICT';
 };
 
-export type ErrorIdempotencyRequestInProgress =
-  ProblemDetailsV1SchemaProblemDetails & {
-    status?: 409;
-    code?: "IDEMPOTENCY_REQUEST_IN_PROGRESS";
-  };
+export type ErrorIdempotencyRequestInProgress = ProblemDetailsV1SchemaProblemDetails & {
+  status?: 409;
+  code?: 'IDEMPOTENCY_REQUEST_IN_PROGRESS';
+};
 
-export type ErrorCatalogProductNotFound =
-  ProblemDetailsV1SchemaProblemDetails & {
-    status?: 404;
-    code?: "CATALOG_PRODUCT_NOT_FOUND";
-  };
+export type ErrorCatalogProductNotFound = ProblemDetailsV1SchemaProblemDetails & {
+  status?: 404;
+  code?: 'CATALOG_PRODUCT_NOT_FOUND';
+};
 
-export type ErrorCatalogProductUnavailable =
-  ProblemDetailsV1SchemaProblemDetails & {
-    status?: 409;
-    code?: "CATALOG_PRODUCT_UNAVAILABLE";
-  };
+export type ErrorCatalogProductUnavailable = ProblemDetailsV1SchemaProblemDetails & {
+  status?: 409;
+  code?: 'CATALOG_PRODUCT_UNAVAILABLE';
+};
 
-export type ErrorCatalogRevisionChanged =
-  ProblemDetailsV1SchemaProblemDetails & {
-    status?: 409;
-    code?: "CATALOG_REVISION_CHANGED";
-  };
+export type ErrorCatalogRevisionChanged = ProblemDetailsV1SchemaProblemDetails & {
+  status?: 409;
+  code?: 'CATALOG_REVISION_CHANGED';
+};
 
-export type ErrorPricingGrindNotAvailable =
-  ProblemDetailsV1SchemaProblemDetails & {
-    status?: 422;
-    code?: "PRICING_GRIND_NOT_AVAILABLE";
-  };
+export type ErrorPricingGrindNotAvailable = ProblemDetailsV1SchemaProblemDetails & {
+  status?: 422;
+  code?: 'PRICING_GRIND_NOT_AVAILABLE';
+};
 
-export type ErrorCatalogSnapshotIncomplete =
-  ProblemDetailsV1SchemaProblemDetails & {
-    status?: 503;
-    code?: "CATALOG_SNAPSHOT_INCOMPLETE";
-  };
+export type ErrorCatalogSnapshotIncomplete = ProblemDetailsV1SchemaProblemDetails & {
+  status?: 503;
+  code?: 'CATALOG_SNAPSHOT_INCOMPLETE';
+};
 
 export type ErrorCatalogUnavailable = ProblemDetailsV1SchemaProblemDetails & {
   status?: 503;
-  code?: "CATALOG_UNAVAILABLE";
+  code?: 'CATALOG_UNAVAILABLE';
 };
 
-export type ErrorPricingPolicyUnavailable =
-  ProblemDetailsV1SchemaProblemDetails & {
-    status?: 503;
-    code?: "PRICING_POLICY_UNAVAILABLE";
-  };
+export type ErrorPricingPolicyUnavailable = ProblemDetailsV1SchemaProblemDetails & {
+  status?: 503;
+  code?: 'PRICING_POLICY_UNAVAILABLE';
+};
 
 export type ErrorCustomerNotFound = ProblemDetailsV1SchemaProblemDetails & {
   status?: 404;
-  code?: "CUSTOMER_NOT_FOUND";
+  code?: 'CUSTOMER_NOT_FOUND';
 };
 
 export type ErrorCustomerNotActive = ProblemDetailsV1SchemaProblemDetails & {
   status?: 409;
-  code?: "CUSTOMER_NOT_ACTIVE";
+  code?: 'CUSTOMER_NOT_ACTIVE';
 };
 
 export type ErrorCustomerUnavailable = ProblemDetailsV1SchemaProblemDetails & {
   status?: 503;
-  code?: "CUSTOMER_UNAVAILABLE";
+  code?: 'CUSTOMER_UNAVAILABLE';
 };
 
 export type ErrorOrderNotFound = ProblemDetailsV1SchemaProblemDetails & {
   status?: 404;
-  code?: "ORDER_NOT_FOUND";
+  code?: 'ORDER_NOT_FOUND';
 };
 
 export type ErrorOrderItemNotFound = ProblemDetailsV1SchemaProblemDetails & {
   status?: 404;
-  code?: "ORDER_ITEM_NOT_FOUND";
+  code?: 'ORDER_ITEM_NOT_FOUND';
 };
 
 export type ErrorOrderVersionConflict = ProblemDetailsV1SchemaProblemDetails & {
   status?: 409;
-  code?: "ORDER_VERSION_CONFLICT";
+  code?: 'ORDER_VERSION_CONFLICT';
 };
 
 export type ErrorOrderQuoteStale = ProblemDetailsV1SchemaProblemDetails & {
   status?: 409;
-  code?: "ORDER_QUOTE_STALE";
+  code?: 'ORDER_QUOTE_STALE';
 };
 
 export type ErrorOrderNotEditable = ProblemDetailsV1SchemaProblemDetails & {
   status?: 409;
-  code?: "ORDER_NOT_EDITABLE";
+  code?: 'ORDER_NOT_EDITABLE';
 };
 
-export type ErrorOrderItemLimitExceeded =
-  ProblemDetailsV1SchemaProblemDetails & {
-    status?: 409;
-    code?: "ORDER_ITEM_LIMIT_EXCEEDED";
-  };
+export type ErrorOrderItemLimitExceeded = ProblemDetailsV1SchemaProblemDetails & {
+  status?: 409;
+  code?: 'ORDER_ITEM_LIMIT_EXCEEDED';
+};
 
-export type ErrorOrderQuoteScopeMismatch =
-  ProblemDetailsV1SchemaProblemDetails & {
-    status?: 409;
-    code?: "ORDER_QUOTE_SCOPE_MISMATCH";
-  };
+export type ErrorOrderQuoteScopeMismatch = ProblemDetailsV1SchemaProblemDetails & {
+  status?: 409;
+  code?: 'ORDER_QUOTE_SCOPE_MISMATCH';
+};
 
-export type ErrorOrderConfirmationRejected =
-  ProblemDetailsV1SchemaProblemDetails & {
-    status?: 422;
-    code?: "ORDER_CONFIRMATION_REJECTED";
-  };
+export type ErrorOrderConfirmationRejected = ProblemDetailsV1SchemaProblemDetails & {
+  status?: 422;
+  code?: 'ORDER_CONFIRMATION_REJECTED';
+};
 
 export type ErrorOrderEmpty = ProblemDetailsV1SchemaProblemDetails & {
   status?: 422;
-  code?: "ORDER_EMPTY";
+  code?: 'ORDER_EMPTY';
 };
 
 export type ErrorOrderDesiredOverflow = ProblemDetailsV1SchemaProblemDetails & {
   status?: 422;
-  code?: "ORDER_DESIRED_OVERFLOW";
+  code?: 'ORDER_DESIRED_OVERFLOW';
 };
 
-export type ErrorAromaReconciliationNotAllowed =
-  ProblemDetailsV1SchemaProblemDetails & {
-    status?: 409;
-    code?: "AROMA_RECONCILIATION_NOT_ALLOWED";
-  };
+export type ErrorAromaReconciliationNotAllowed = ProblemDetailsV1SchemaProblemDetails & {
+  status?: 409;
+  code?: 'AROMA_RECONCILIATION_NOT_ALLOWED';
+};
 
-export type ErrorIdempotencyResultNotRetained =
-  ProblemDetailsV1SchemaProblemDetails & {
-    status?: 410;
-    code?: "IDEMPOTENCY_RESULT_NOT_RETAINED";
-  };
+export type ErrorIdempotencyResultNotRetained = ProblemDetailsV1SchemaProblemDetails & {
+  status?: 410;
+  code?: 'IDEMPOTENCY_RESULT_NOT_RETAINED';
+};
 
-export type ErrorIdempotencyLookupUnavailable =
-  ProblemDetailsV1SchemaProblemDetails & {
-    status?: 503;
-    code?: "IDEMPOTENCY_LOOKUP_UNAVAILABLE";
-  };
+export type ErrorIdempotencyLookupUnavailable = ProblemDetailsV1SchemaProblemDetails & {
+  status?: 503;
+  code?: 'IDEMPOTENCY_LOOKUP_UNAVAILABLE';
+};
 
-export type ErrorIdempotencyResultInvalid =
-  ProblemDetailsV1SchemaProblemDetails & {
-    status?: 500;
-    code?: "IDEMPOTENCY_RESULT_INVALID";
-  };
+export type ErrorIdempotencyResultInvalid = ProblemDetailsV1SchemaProblemDetails & {
+  status?: 500;
+  code?: 'IDEMPOTENCY_RESULT_INVALID';
+};
 
-export type ErrorRealtimeCapacityExceeded =
-  ProblemDetailsV1SchemaProblemDetails & {
-    status?: 503;
-    code?: "REALTIME_CAPACITY_EXCEEDED";
-  };
+export type ErrorRealtimeCapacityExceeded = ProblemDetailsV1SchemaProblemDetails & {
+  status?: 503;
+  code?: 'REALTIME_CAPACITY_EXCEEDED';
+};
 
 export type ErrorInternalError = ProblemDetailsV1SchemaProblemDetails & {
   status?: 500;
-  code?: "INTERNAL_ERROR";
+  code?: 'INTERNAL_ERROR';
 };
 
 export type IdentifiersV1SchemaAddressRef = string;
@@ -543,7 +492,7 @@ export type IdentifiersV1SchemaVariantRef = string;
 
 export type IdentifiersV1SchemaVersion = string;
 
-export type MoneyVersionTimeV1SchemaCurrency = "RUB";
+export type MoneyVersionTimeV1SchemaCurrency = 'RUB';
 
 export type HashSha256 = string;
 
@@ -600,7 +549,7 @@ export type CatalogQuery = string;
  */
 export type SupplierDiscountBasisPoints = 1000 | 3500;
 
-export type Availability = "Available" | "Unavailable" | "Stopped";
+export type Availability = 'Available' | 'Unavailable' | 'Stopped';
 
 export type PageLimit = number;
 
@@ -617,7 +566,7 @@ export type LastEventId = IdentifiersV1SchemaMessageId;
 export type SearchCustomersData = {
   body?: never;
   headers?: {
-    "X-Correlation-ID"?: Uuid2;
+    'X-Correlation-ID'?: Uuid2;
     traceparent?: MoneyVersionTimeV1SchemaTraceparent;
   };
   path?: never;
@@ -626,7 +575,7 @@ export type SearchCustomersData = {
     limit?: number;
     cursor?: string;
   };
-  url: "/api/client-v1/customers";
+  url: '/api/client-v1/customers';
 };
 
 export type SearchCustomersErrors = {
@@ -648,8 +597,7 @@ export type SearchCustomersErrors = {
   500: ErrorInternalError;
 };
 
-export type SearchCustomersError =
-  SearchCustomersErrors[keyof SearchCustomersErrors];
+export type SearchCustomersError = SearchCustomersErrors[keyof SearchCustomersErrors];
 
 export type SearchCustomersResponses = {
   /**
@@ -658,23 +606,22 @@ export type SearchCustomersResponses = {
   200: CustomerSearchResponse;
 };
 
-export type SearchCustomersResponse =
-  SearchCustomersResponses[keyof SearchCustomersResponses];
+export type SearchCustomersResponse = SearchCustomersResponses[keyof SearchCustomersResponses];
 
 export type CreateCustomerData = {
   body?: CustomerCreateRequest;
   headers: {
-    "Idempotency-Key": Uuid2;
-    "X-Correlation-ID"?: Uuid2;
+    'Idempotency-Key': Uuid2;
+    'X-Correlation-ID'?: Uuid2;
     traceparent?: MoneyVersionTimeV1SchemaTraceparent;
     /**
      * Exactly true selects owner read-only lookup; any other value is invalid.
      */
-    "Idempotency-Replay-Only"?: true;
+    'Idempotency-Replay-Only'?: true;
   };
   path?: never;
   query?: never;
-  url: "/api/client-v1/customers";
+  url: '/api/client-v1/customers';
 };
 
 export type CreateCustomerErrors = {
@@ -693,11 +640,7 @@ export type CreateCustomerErrors = {
   /**
    * Customer conflict or idempotency conflict.
    */
-  409:
-    | ErrorCustomerPhoneConflict
-    | ErrorCustomerEmailConflict
-    | ErrorIdempotencyConflict
-    | ErrorIdempotencyRequestInProgress;
+  409: ErrorCustomerPhoneConflict | ErrorCustomerEmailConflict | ErrorIdempotencyConflict | ErrorIdempotencyRequestInProgress;
   /**
    * The completed response is outside retention; no new command was run.
    */
@@ -712,8 +655,7 @@ export type CreateCustomerErrors = {
   503: ErrorCustomerUnavailable | ErrorIdempotencyLookupUnavailable;
 };
 
-export type CreateCustomerError =
-  CreateCustomerErrors[keyof CreateCustomerErrors];
+export type CreateCustomerError = CreateCustomerErrors[keyof CreateCustomerErrors];
 
 export type CreateCustomerResponses = {
   /**
@@ -722,13 +664,12 @@ export type CreateCustomerResponses = {
   201: CustomerResponse;
 };
 
-export type CreateCustomerResponse =
-  CreateCustomerResponses[keyof CreateCustomerResponses];
+export type CreateCustomerResponse = CreateCustomerResponses[keyof CreateCustomerResponses];
 
 export type SearchCatalogProductsData = {
   body?: never;
   headers?: {
-    "X-Correlation-ID"?: Uuid2;
+    'X-Correlation-ID'?: Uuid2;
     traceparent?: MoneyVersionTimeV1SchemaTraceparent;
   };
   path?: never;
@@ -737,7 +678,7 @@ export type SearchCatalogProductsData = {
      * Optional product-name filter. When supplied, trim and normalize with Unicode NFKC, then lowercase; the result must contain 2–200 Unicode code points.
      */
     query?: string;
-    availability?: "Available" | "Unavailable" | "Stopped";
+    availability?: 'Available' | 'Unavailable' | 'Stopped';
     /**
      * Наличие правила поставщика 10% или 35%; без применения скидки к цене.
      */
@@ -745,7 +686,7 @@ export type SearchCatalogProductsData = {
     limit?: number;
     cursor?: string;
   };
-  url: "/api/client-v1/catalog/products";
+  url: '/api/client-v1/catalog/products';
 };
 
 export type SearchCatalogProductsErrors = {
@@ -767,8 +708,7 @@ export type SearchCatalogProductsErrors = {
   503: ErrorCatalogSnapshotIncomplete | ErrorCatalogUnavailable;
 };
 
-export type SearchCatalogProductsError =
-  SearchCatalogProductsErrors[keyof SearchCatalogProductsErrors];
+export type SearchCatalogProductsError = SearchCatalogProductsErrors[keyof SearchCatalogProductsErrors];
 
 export type SearchCatalogProductsResponses = {
   /**
@@ -777,18 +717,17 @@ export type SearchCatalogProductsResponses = {
   200: CatalogSearchResponse;
 };
 
-export type SearchCatalogProductsResponse =
-  SearchCatalogProductsResponses[keyof SearchCatalogProductsResponses];
+export type SearchCatalogProductsResponse = SearchCatalogProductsResponses[keyof SearchCatalogProductsResponses];
 
 export type PreviewCatalogPricesData = {
   body: PricingPreviewRequest;
   headers?: {
-    "X-Correlation-ID"?: Uuid2;
+    'X-Correlation-ID'?: Uuid2;
     traceparent?: MoneyVersionTimeV1SchemaTraceparent;
   };
   path?: never;
   query?: never;
-  url: "/api/client-v1/pricing/catalog-preview";
+  url: '/api/client-v1/pricing/catalog-preview';
 };
 
 export type PreviewCatalogPricesErrors = {
@@ -814,8 +753,7 @@ export type PreviewCatalogPricesErrors = {
   503: ErrorCatalogUnavailable | ErrorPricingPolicyUnavailable;
 };
 
-export type PreviewCatalogPricesError =
-  PreviewCatalogPricesErrors[keyof PreviewCatalogPricesErrors];
+export type PreviewCatalogPricesError = PreviewCatalogPricesErrors[keyof PreviewCatalogPricesErrors];
 
 export type PreviewCatalogPricesResponses = {
   /**
@@ -824,23 +762,22 @@ export type PreviewCatalogPricesResponses = {
   200: PricingPreviewResponse;
 };
 
-export type PreviewCatalogPricesResponse =
-  PreviewCatalogPricesResponses[keyof PreviewCatalogPricesResponses];
+export type PreviewCatalogPricesResponse = PreviewCatalogPricesResponses[keyof PreviewCatalogPricesResponses];
 
 export type CreatePricingQuoteData = {
   body?: PricingQuoteCreateRequest;
   headers: {
-    "Idempotency-Key": Uuid2;
-    "X-Correlation-ID"?: Uuid2;
+    'Idempotency-Key': Uuid2;
+    'X-Correlation-ID'?: Uuid2;
     traceparent?: MoneyVersionTimeV1SchemaTraceparent;
     /**
      * Exactly true selects owner read-only lookup; any other value is invalid.
      */
-    "Idempotency-Replay-Only"?: true;
+    'Idempotency-Replay-Only'?: true;
   };
   path?: never;
   query?: never;
-  url: "/api/client-v1/pricing/quotes";
+  url: '/api/client-v1/pricing/quotes';
 };
 
 export type CreatePricingQuoteErrors = {
@@ -863,11 +800,7 @@ export type CreatePricingQuoteErrors = {
   /**
    * Catalog, idempotency, or quote-input conflict.
    */
-  409:
-    | ErrorCatalogProductUnavailable
-    | ErrorCatalogRevisionChanged
-    | ErrorIdempotencyConflict
-    | ErrorIdempotencyRequestInProgress;
+  409: ErrorCatalogProductUnavailable | ErrorCatalogRevisionChanged | ErrorIdempotencyConflict | ErrorIdempotencyRequestInProgress;
   /**
    * The completed response is outside retention; no new command was run.
    */
@@ -883,14 +816,10 @@ export type CreatePricingQuoteErrors = {
   /**
    * Catalog owner or idempotency lookup is unavailable.
    */
-  503:
-    | ErrorCatalogUnavailable
-    | ErrorIdempotencyLookupUnavailable
-    | ErrorPricingPolicyUnavailable;
+  503: ErrorCatalogUnavailable | ErrorIdempotencyLookupUnavailable | ErrorPricingPolicyUnavailable;
 };
 
-export type CreatePricingQuoteError =
-  CreatePricingQuoteErrors[keyof CreatePricingQuoteErrors];
+export type CreatePricingQuoteError = CreatePricingQuoteErrors[keyof CreatePricingQuoteErrors];
 
 export type CreatePricingQuoteResponses = {
   /**
@@ -899,23 +828,22 @@ export type CreatePricingQuoteResponses = {
   201: PricingQuoteResponse;
 };
 
-export type CreatePricingQuoteResponse =
-  CreatePricingQuoteResponses[keyof CreatePricingQuoteResponses];
+export type CreatePricingQuoteResponse = CreatePricingQuoteResponses[keyof CreatePricingQuoteResponses];
 
 export type CreateOrderDraftData = {
   body?: OrderDraftCreateRequest;
   headers: {
-    "Idempotency-Key": Uuid2;
-    "X-Correlation-ID"?: Uuid2;
+    'Idempotency-Key': Uuid2;
+    'X-Correlation-ID'?: Uuid2;
     traceparent?: MoneyVersionTimeV1SchemaTraceparent;
     /**
      * Exactly true selects owner read-only lookup; any other value is invalid.
      */
-    "Idempotency-Replay-Only"?: true;
+    'Idempotency-Replay-Only'?: true;
   };
   path?: never;
   query?: never;
-  url: "/api/client-v1/orders/drafts";
+  url: '/api/client-v1/orders/drafts';
 };
 
 export type CreateOrderDraftErrors = {
@@ -938,10 +866,7 @@ export type CreateOrderDraftErrors = {
   /**
    * Customer state or idempotency conflict.
    */
-  409:
-    | ErrorCustomerNotActive
-    | ErrorIdempotencyConflict
-    | ErrorIdempotencyRequestInProgress;
+  409: ErrorCustomerNotActive | ErrorIdempotencyConflict | ErrorIdempotencyRequestInProgress;
   /**
    * The completed response is outside retention; no new command was run.
    */
@@ -956,8 +881,7 @@ export type CreateOrderDraftErrors = {
   503: ErrorCustomerUnavailable | ErrorIdempotencyLookupUnavailable;
 };
 
-export type CreateOrderDraftError =
-  CreateOrderDraftErrors[keyof CreateOrderDraftErrors];
+export type CreateOrderDraftError = CreateOrderDraftErrors[keyof CreateOrderDraftErrors];
 
 export type CreateOrderDraftResponses = {
   /**
@@ -966,30 +890,29 @@ export type CreateOrderDraftResponses = {
   201: OrderCardResponse;
 };
 
-export type CreateOrderDraftResponse =
-  CreateOrderDraftResponses[keyof CreateOrderDraftResponses];
+export type CreateOrderDraftResponse = CreateOrderDraftResponses[keyof CreateOrderDraftResponses];
 
 export type RemoveOrderItemData = {
   body?: never;
   headers: {
-    "Idempotency-Key": Uuid2;
+    'Idempotency-Key': Uuid2;
     /**
      * Required for a normal DELETE and forbidden in replay-only mode.
      */
-    "If-Match-Version"?: IdentifiersV1SchemaVersion;
-    "X-Correlation-ID"?: Uuid2;
+    'If-Match-Version'?: IdentifiersV1SchemaVersion;
+    'X-Correlation-ID'?: Uuid2;
     traceparent?: MoneyVersionTimeV1SchemaTraceparent;
     /**
      * Exactly true selects owner read-only lookup; any other value is invalid.
      */
-    "Idempotency-Replay-Only"?: true;
+    'Idempotency-Replay-Only'?: true;
   };
   path: {
     orderRef: IdentifiersV1SchemaOrderRef;
     itemRef: IdentifiersV1SchemaItemRef;
   };
   query?: never;
-  url: "/api/client-v1/orders/{orderRef}/items/{itemRef}";
+  url: '/api/client-v1/orders/{orderRef}/items/{itemRef}';
 };
 
 export type RemoveOrderItemErrors = {
@@ -1012,11 +935,7 @@ export type RemoveOrderItemErrors = {
   /**
    * Order version or editability conflict.
    */
-  409:
-    | ErrorOrderVersionConflict
-    | ErrorOrderNotEditable
-    | ErrorIdempotencyConflict
-    | ErrorIdempotencyRequestInProgress;
+  409: ErrorOrderVersionConflict | ErrorOrderNotEditable | ErrorIdempotencyConflict | ErrorIdempotencyRequestInProgress;
   /**
    * The completed response is outside retention; no new command was run.
    */
@@ -1031,8 +950,7 @@ export type RemoveOrderItemErrors = {
   503: ErrorIdempotencyLookupUnavailable;
 };
 
-export type RemoveOrderItemError =
-  RemoveOrderItemErrors[keyof RemoveOrderItemErrors];
+export type RemoveOrderItemError = RemoveOrderItemErrors[keyof RemoveOrderItemErrors];
 
 export type RemoveOrderItemResponses = {
   /**
@@ -1041,26 +959,25 @@ export type RemoveOrderItemResponses = {
   200: OrderCardResponse;
 };
 
-export type RemoveOrderItemResponse =
-  RemoveOrderItemResponses[keyof RemoveOrderItemResponses];
+export type RemoveOrderItemResponse = RemoveOrderItemResponses[keyof RemoveOrderItemResponses];
 
 export type UpsertOrderItemData = {
   body?: OrderItemPutRequest;
   headers: {
-    "Idempotency-Key": Uuid2;
-    "X-Correlation-ID"?: Uuid2;
+    'Idempotency-Key': Uuid2;
+    'X-Correlation-ID'?: Uuid2;
     traceparent?: MoneyVersionTimeV1SchemaTraceparent;
     /**
      * Exactly true selects owner read-only lookup; any other value is invalid.
      */
-    "Idempotency-Replay-Only"?: true;
+    'Idempotency-Replay-Only'?: true;
   };
   path: {
     orderRef: IdentifiersV1SchemaOrderRef;
     itemRef: IdentifiersV1SchemaItemRef;
   };
   query?: never;
-  url: "/api/client-v1/orders/{orderRef}/items/{itemRef}";
+  url: '/api/client-v1/orders/{orderRef}/items/{itemRef}';
 };
 
 export type UpsertOrderItemErrors = {
@@ -1083,14 +1000,7 @@ export type UpsertOrderItemErrors = {
   /**
    * Order or idempotency conflict.
    */
-  409:
-    | ErrorOrderVersionConflict
-    | ErrorOrderQuoteStale
-    | ErrorOrderNotEditable
-    | ErrorIdempotencyConflict
-    | ErrorIdempotencyRequestInProgress
-    | ErrorOrderItemLimitExceeded
-    | ErrorOrderQuoteScopeMismatch;
+  409: ErrorOrderVersionConflict | ErrorOrderQuoteStale | ErrorOrderNotEditable | ErrorIdempotencyConflict | ErrorIdempotencyRequestInProgress | ErrorOrderItemLimitExceeded | ErrorOrderQuoteScopeMismatch;
   /**
    * The completed response is outside retention; no new command was run.
    */
@@ -1105,8 +1015,7 @@ export type UpsertOrderItemErrors = {
   503: ErrorIdempotencyLookupUnavailable;
 };
 
-export type UpsertOrderItemError =
-  UpsertOrderItemErrors[keyof UpsertOrderItemErrors];
+export type UpsertOrderItemError = UpsertOrderItemErrors[keyof UpsertOrderItemErrors];
 
 export type UpsertOrderItemResponses = {
   /**
@@ -1115,25 +1024,24 @@ export type UpsertOrderItemResponses = {
   200: OrderCardResponse;
 };
 
-export type UpsertOrderItemResponse =
-  UpsertOrderItemResponses[keyof UpsertOrderItemResponses];
+export type UpsertOrderItemResponse = UpsertOrderItemResponses[keyof UpsertOrderItemResponses];
 
 export type ConfirmOrderData = {
   body?: OrderConfirmRequest;
   headers: {
-    "Idempotency-Key": Uuid2;
-    "X-Correlation-ID"?: Uuid2;
+    'Idempotency-Key': Uuid2;
+    'X-Correlation-ID'?: Uuid2;
     traceparent?: MoneyVersionTimeV1SchemaTraceparent;
     /**
      * Exactly true selects owner read-only lookup; any other value is invalid.
      */
-    "Idempotency-Replay-Only"?: true;
+    'Idempotency-Replay-Only'?: true;
   };
   path: {
     orderRef: IdentifiersV1SchemaOrderRef;
   };
   query?: never;
-  url: "/api/client-v1/orders/{orderRef}/commands/confirm";
+  url: '/api/client-v1/orders/{orderRef}/commands/confirm';
 };
 
 export type ConfirmOrderErrors = {
@@ -1156,12 +1064,7 @@ export type ConfirmOrderErrors = {
   /**
    * Version, quote, order state, or idempotency conflict.
    */
-  409:
-    | ErrorOrderVersionConflict
-    | ErrorOrderQuoteStale
-    | ErrorOrderNotEditable
-    | ErrorIdempotencyConflict
-    | ErrorIdempotencyRequestInProgress;
+  409: ErrorOrderVersionConflict | ErrorOrderQuoteStale | ErrorOrderNotEditable | ErrorIdempotencyConflict | ErrorIdempotencyRequestInProgress;
   /**
    * The completed response is outside retention; no new command was run.
    */
@@ -1169,10 +1072,7 @@ export type ConfirmOrderErrors = {
   /**
    * Confirmation is rejected, or the completed rejection is replayed.
    */
-  422:
-    | ErrorOrderConfirmationRejected
-    | ErrorOrderEmpty
-    | ErrorOrderDesiredOverflow;
+  422: ErrorOrderConfirmationRejected | ErrorOrderEmpty | ErrorOrderDesiredOverflow;
   /**
    * Safe unexpected error or invalid stored terminal response.
    */
@@ -1192,25 +1092,24 @@ export type ConfirmOrderResponses = {
   200: OrderCardResponse;
 };
 
-export type ConfirmOrderResponse =
-  ConfirmOrderResponses[keyof ConfirmOrderResponses];
+export type ConfirmOrderResponse = ConfirmOrderResponses[keyof ConfirmOrderResponses];
 
 export type RequestAromaReconciliationData = {
   body?: ReconciliationRequest;
   headers: {
-    "Idempotency-Key": Uuid2;
-    "X-Correlation-ID"?: Uuid2;
+    'Idempotency-Key': Uuid2;
+    'X-Correlation-ID'?: Uuid2;
     traceparent?: MoneyVersionTimeV1SchemaTraceparent;
     /**
      * Exactly true selects owner read-only lookup; any other value is invalid.
      */
-    "Idempotency-Replay-Only"?: true;
+    'Idempotency-Replay-Only'?: true;
   };
   path: {
     orderRef: IdentifiersV1SchemaOrderRef;
   };
   query?: never;
-  url: "/api/client-v1/orders/{orderRef}/commands/request-aroma-reconciliation";
+  url: '/api/client-v1/orders/{orderRef}/commands/request-aroma-reconciliation';
 };
 
 export type RequestAromaReconciliationErrors = {
@@ -1233,11 +1132,7 @@ export type RequestAromaReconciliationErrors = {
   /**
    * Version, state, or idempotency conflict.
    */
-  409:
-    | ErrorOrderVersionConflict
-    | ErrorAromaReconciliationNotAllowed
-    | ErrorIdempotencyConflict
-    | ErrorIdempotencyRequestInProgress;
+  409: ErrorOrderVersionConflict | ErrorAromaReconciliationNotAllowed | ErrorIdempotencyConflict | ErrorIdempotencyRequestInProgress;
   /**
    * The completed response is outside retention; no new command was run.
    */
@@ -1252,8 +1147,7 @@ export type RequestAromaReconciliationErrors = {
   503: ErrorIdempotencyLookupUnavailable;
 };
 
-export type RequestAromaReconciliationError =
-  RequestAromaReconciliationErrors[keyof RequestAromaReconciliationErrors];
+export type RequestAromaReconciliationError = RequestAromaReconciliationErrors[keyof RequestAromaReconciliationErrors];
 
 export type RequestAromaReconciliationResponses = {
   /**
@@ -1262,20 +1156,19 @@ export type RequestAromaReconciliationResponses = {
   202: ReconciliationAcceptedResponse;
 };
 
-export type RequestAromaReconciliationResponse =
-  RequestAromaReconciliationResponses[keyof RequestAromaReconciliationResponses];
+export type RequestAromaReconciliationResponse = RequestAromaReconciliationResponses[keyof RequestAromaReconciliationResponses];
 
 export type GetOrderCardData = {
   body?: never;
   headers?: {
-    "X-Correlation-ID"?: Uuid2;
+    'X-Correlation-ID'?: Uuid2;
     traceparent?: MoneyVersionTimeV1SchemaTraceparent;
   };
   path: {
     orderRef: IdentifiersV1SchemaOrderRef;
   };
   query?: never;
-  url: "/api/client-v1/orders/{orderRef}";
+  url: '/api/client-v1/orders/{orderRef}';
 };
 
 export type GetOrderCardErrors = {
@@ -1306,19 +1199,18 @@ export type GetOrderCardResponses = {
   200: OrderCardResponse;
 };
 
-export type GetOrderCardResponse =
-  GetOrderCardResponses[keyof GetOrderCardResponses];
+export type GetOrderCardResponse = GetOrderCardResponses[keyof GetOrderCardResponses];
 
 export type StreamOrderInvalidationsData = {
   body?: never;
   headers?: {
-    "Last-Event-ID"?: IdentifiersV1SchemaMessageId;
-    "X-Correlation-ID"?: Uuid2;
+    'Last-Event-ID'?: IdentifiersV1SchemaMessageId;
+    'X-Correlation-ID'?: Uuid2;
     traceparent?: MoneyVersionTimeV1SchemaTraceparent;
   };
   path?: never;
   query?: never;
-  url: "/events";
+  url: '/events';
 };
 
 export type StreamOrderInvalidationsErrors = {
@@ -1340,8 +1232,7 @@ export type StreamOrderInvalidationsErrors = {
   503: ErrorRealtimeCapacityExceeded;
 };
 
-export type StreamOrderInvalidationsError =
-  StreamOrderInvalidationsErrors[keyof StreamOrderInvalidationsErrors];
+export type StreamOrderInvalidationsError = StreamOrderInvalidationsErrors[keyof StreamOrderInvalidationsErrors];
 
 export type StreamOrderInvalidationsResponses = {
   /**
@@ -1350,5 +1241,4 @@ export type StreamOrderInvalidationsResponses = {
   200: Blob | File;
 };
 
-export type StreamOrderInvalidationsResponse =
-  StreamOrderInvalidationsResponses[keyof StreamOrderInvalidationsResponses];
+export type StreamOrderInvalidationsResponse = StreamOrderInvalidationsResponses[keyof StreamOrderInvalidationsResponses];
