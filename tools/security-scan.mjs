@@ -3487,7 +3487,9 @@ export async function runSecurityScan({
     );
     const outputRoot = join(outputDir, "artifacts");
     await mkdir(outputRoot, { recursive: true, mode: 0o700 });
-    sourceTemporary = await mkdtemp(join(tmpdir(), "coffee-image-source-"));
+    sourceTemporary = await mkdtemp(
+      join(await securityScanTempRoot(), "coffee-image-source-"),
+    );
     const composeProject = identity.context.resources?.composeProject;
     const publishesRuntimeImages =
       typeof composeProject === "string" &&
