@@ -3,7 +3,7 @@ import test from "node:test";
 import { createHash } from "node:crypto";
 import {
   createBrowserOwnerEvidence,
-  createG14OrderEvidence,
+  createOrderEvidence,
   validateBrowserProof,
 } from "../../tools/browser-owner-evidence.mjs";
 
@@ -71,7 +71,7 @@ void test("G14 reads only the run-owned causally linked Published/Processed meta
   ]) {
     const calls = [];
     let closed = false;
-    const snapshot = createG14OrderEvidence({
+    const snapshot = createOrderEvidence({
       roleMap,
       runId,
       connect: async (database) => ({

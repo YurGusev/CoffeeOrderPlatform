@@ -1512,7 +1512,7 @@ export async function verifyGateArtifacts(gate, record, evidenceDir) {
         record.artifacts.push(...additions);
         return "G14 W3C trace is not proven";
       }
-      if (result.fullSystemG14?.status !== "PASS") {
+      if (result.fullSystemObservability?.status !== "PASS") {
         record.artifacts.push(...additions);
         return "G14 full-system SLO, chaos and capacity proof is not complete";
       }

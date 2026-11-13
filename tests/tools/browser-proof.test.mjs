@@ -22,8 +22,8 @@ import {
   BROWSER_REQUIRED_CHECKS,
   createBrowserNetworkMonitor,
   createG14BrowserNetworkMonitor,
-  matchG14BrowserChain,
-  isG14AcceptedProjection,
+  matchBrowserChain,
+  isAcceptedObservabilityProjection,
   validateG14BrowserEvidence,
   buildRealtimeAuthCloseInvocation,
   proveNaturalSseReauthentication,
@@ -47,7 +47,7 @@ import {
   persistBrowserFailureFromChild,
   validateBrowserChildFailureDiagnostic,
   prepareBrowserChildCheckout,
-  validateG14ChildCleanup,
+  validateChildCleanup,
 } from "../../verification/launch/v1/scenarios/browser.mjs";
 
 const RUN_ID = "20261025T132252Z-085cdd6";
@@ -124,21 +124,21 @@ void test("G14 binds a real SSE stream and later owner read to exactly one Confi
     },
   ];
   assert.equal(
-    matchG14BrowserChain(monitor, ORDER_REF, telemetry)?.frame.frameId,
+    matchBrowserChain(monitor, ORDER_REF, telemetry)?.frame.frameId,
     frameId,
   );
   assert.equal(
-    matchG14BrowserChain(monitor, ORDER_REF, [
+    matchBrowserChain(monitor, ORDER_REF, [
       { ...telemetry[0], correlationId: keyForWrongCorrelation() },
     ]),
     undefined,
   );
   assert.equal(
-    matchG14BrowserChain(monitor, "ord_01ARZ3NDEKTSV4RRFFQ69G5FAW", telemetry),
+    matchBrowserChain(monitor, "ord_01ARZ3NDEKTSV4RRFFQ69G5FAW", telemetry),
     undefined,
   );
   assert.equal(
-    matchG14BrowserChain(
+    matchBrowserChain(
       { ...monitor, reads: [{ ...monitor.reads[0], status: 503 }] },
       ORDER_REF,
       telemetry,
@@ -146,7 +146,7 @@ void test("G14 binds a real SSE stream and later owner read to exactly one Confi
     undefined,
   );
   assert.equal(
-    matchG14BrowserChain(
+    matchBrowserChain(
       {
         ...monitor,
         reads: [{ ...monitor.reads[0], sequence: monitor.frames[0].sequence }],
@@ -156,9 +156,9 @@ void test("G14 binds a real SSE stream and later owner read to exactly one Confi
     ),
     undefined,
   );
-  assert.equal(isG14AcceptedProjection("6", "5", "4"), true);
-  assert.equal(isG14AcceptedProjection("4", "5", "3"), false);
-  assert.equal(isG14AcceptedProjection("6", "5", "5"), false);
+  assert.equal(isAcceptedObservabilityProjection("6", "5", "4"), true);
+  assert.equal(isAcceptedObservabilityProjection("4", "5", "3"), false);
+  assert.equal(isAcceptedObservabilityProjection("6", "5", "5"), false);
   const secondFrame = {
     ...monitor.frames[0],
     frameId: "msg_01ARZ3NDEKTSV4RRFFQ69G5FAW",
@@ -178,22 +178,22 @@ void test("G14 binds a real SSE stream and later owner read to exactly one Confi
     ],
   };
   assert.equal(
-    matchG14BrowserChain(repeated, ORDER_REF, [...telemetry, ...telemetry])
+    matchBrowserChain(repeated, ORDER_REF, [...telemetry, ...telemetry])
       ?.frame.frameId,
     frameId,
   );
   assert.equal(
-    matchG14BrowserChain(repeated, ORDER_REF, telemetry, new Set([frameId]))
+    matchBrowserChain(repeated, ORDER_REF, telemetry, new Set([frameId]))
       ?.frame.frameId,
     secondFrame.frameId,
   );
   assert.equal(
-    matchG14BrowserChain(repeated, ORDER_REF, telemetry, new Set(), "5")?.frame
+    matchBrowserChain(repeated, ORDER_REF, telemetry, new Set(), "5")?.frame
       .frameId,
     secondFrame.frameId,
   );
   assert.equal(
-    matchG14BrowserChain(
+    matchBrowserChain(
       {
         ...repeated,
         reads: [
@@ -208,7 +208,7 @@ void test("G14 binds a real SSE stream and later owner read to exactly one Confi
     undefined,
   );
   assert.equal(
-    matchG14BrowserChain(
+    matchBrowserChain(
       {
         ...monitor,
         reads: [
@@ -229,7 +229,7 @@ void test("G14 binds a real SSE stream and later owner read to exactly one Confi
     undefined,
   );
   assert.equal(
-    matchG14BrowserChain(
+    matchBrowserChain(
       { ...monitor, reads: [{ ...monitor.reads[0], projectionVersion: "4" }] },
       ORDER_REF,
       telemetry,
@@ -237,7 +237,7 @@ void test("G14 binds a real SSE stream and later owner read to exactly one Confi
     undefined,
   );
   assert.equal(
-    matchG14BrowserChain(
+    matchBrowserChain(
       {
         ...monitor,
         frames: [
@@ -250,7 +250,7 @@ void test("G14 binds a real SSE stream and later owner read to exactly one Confi
     undefined,
   );
   assert.equal(
-    matchG14BrowserChain(
+    matchBrowserChain(
       {
         ...monitor,
         commands: [
@@ -343,11 +343,11 @@ void test("G14 evidence and cleanup reject extra fields, stale version and unkno
     },
   };
   assert.equal(
-    validateG14ChildCleanup(cleanup, { runId: RUN_ID }),
+    validateChildCleanup(cleanup, { runId: RUN_ID }),
     cleanup.externalCleanup,
   );
   assert.throws(() =>
-    validateG14ChildCleanup(
+    validateChildCleanup(
       { ...cleanup, cleanup: { ...cleanup.cleanup, complete: false } },
       { runId: RUN_ID },
     ),
@@ -367,18 +367,18 @@ void test("G14 evidence and cleanup reject extra fields, stale version and unkno
         const candidate = { ...cleanup, externalCleanup };
         if (attempted === !baselineAttached && removed === !baselineAttached)
           assert.equal(
-            validateG14ChildCleanup(candidate, { runId: RUN_ID }),
+            validateChildCleanup(candidate, { runId: RUN_ID }),
             externalCleanup,
           );
         else
           assert.throws(() =>
-            validateG14ChildCleanup(candidate, { runId: RUN_ID }),
+            validateChildCleanup(candidate, { runId: RUN_ID }),
           );
       }
     }
   }
   assert.throws(() =>
-    validateG14ChildCleanup(
+    validateChildCleanup(
       {
         ...cleanup,
         externalCleanup: {
@@ -390,7 +390,7 @@ void test("G14 evidence and cleanup reject extra fields, stale version and unkno
     ),
   );
   assert.throws(() =>
-    validateG14ChildCleanup(
+    validateChildCleanup(
       {
         ...cleanup,
         externalCleanup: {

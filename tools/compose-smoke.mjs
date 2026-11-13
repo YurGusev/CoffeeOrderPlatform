@@ -41,13 +41,13 @@ import {
 import {
   buildRealtimeAuthCloseInvocation,
   proveBrowser,
-  proveG14Browser,
+  proveBrowserFlow,
   validateG14BrowserEvidence,
   validateBrowserRuntimeArtifact,
 } from "./browser-proof.mjs";
 import {
   createBrowserOwnerEvidence,
-  createG14OrderEvidence,
+  createOrderEvidence,
   validateBrowserProof,
 } from "./browser-owner-evidence.mjs";
 import {
@@ -8984,7 +8984,7 @@ function assertAromaMutationJournal(rows, sourceGrindKeyHash) {
   return rows;
 }
 
-export async function runG14BrowserProof({
+export async function runBrowserProof({
   baseCandidateSha,
   observability,
   onProof,
@@ -8995,7 +8995,7 @@ export async function runG14BrowserProof({
     g14Browser: {
       baseCandidateSha,
       onReady: async (context) => {
-        const proof = await proveG14Browser(context);
+        const proof = await proveBrowserFlow(context);
         if (onProof) await onProof(proof);
         return proof;
       },
@@ -9326,7 +9326,7 @@ export async function runComposeSmoke({
   let receipt;
   let primaryError;
   let cleanupHookError;
-  let retainG14Resources = false;
+  let retainObservabilityResources = false;
   let standardCleanupError;
   const cleanupFailures = [];
   let rollbackStage = options.mutationDisableRollback ? "bootstrap" : null;
@@ -9870,7 +9870,7 @@ export async function runComposeSmoke({
             runId: launchIdentity.context.runId,
           });
           if (g14Browser)
-            g14OrderEvidence = createG14OrderEvidence({
+            g14OrderEvidence = createOrderEvidence({
               connect: ownerConnections,
               roleMap: recoveryProofCredentials.roleMap,
               runId: launchIdentity.context.runId,
@@ -9943,7 +9943,7 @@ export async function runComposeSmoke({
           runId: launchIdentity.context.runId,
         });
         if (g14Browser)
-          g14OrderEvidence = createG14OrderEvidence({
+          g14OrderEvidence = createOrderEvidence({
             connect: ownerConnections,
             roleMap: recoveryProofCredentials.roleMap,
             runId: launchIdentity.context.runId,
@@ -10544,7 +10544,7 @@ export async function runComposeSmoke({
               ? {
                   g14OrderEvidence,
                   configSha256: launchIdentity.context.baseConfigSha256,
-                  attestG14Safety: () =>
+                  attestObservabilitySafety: () =>
                     attestG14ProviderBoundary({
                       projectName,
                       secretsDir,
@@ -10934,7 +10934,7 @@ export async function runComposeSmoke({
       options,
       databases: externalRunDatabaseResources,
     });
-    retainG14Resources = retainedDatabases !== undefined;
+    retainObservabilityResources = retainedDatabases !== undefined;
     if (retainedDatabases) externalDatabaseCleanupReceipt = retainedDatabases;
     try {
       if (
@@ -11030,7 +11030,7 @@ export async function runComposeSmoke({
           );
         }
       }
-      if (browserFixture && !retainG14Resources) {
+      if (browserFixture && !retainObservabilityResources) {
         try {
           await browserFixture.cleanup();
         } catch (error) {
@@ -11221,7 +11221,7 @@ export async function runComposeSmoke({
   const errors = [primaryError, standardCleanupError, cleanupHookError].filter(
     Boolean,
   );
-  const g14Retained = retainG14Resources
+  const g14Retained = retainObservabilityResources
     ? {
         runId: launchIdentity?.context.runId,
         projectName,

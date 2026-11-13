@@ -3030,7 +3030,7 @@ export function observabilityVerificationCoverage(evidence) {
   return {
     verificationScope: "operations-component",
     statusAppliesTo: "mandatory Operations backend and instrumentation gates",
-    fullSystemG14: {
+    fullSystemObservability: {
       status: "NOT_RUN",
       owner: "#13",
       reason:
@@ -5214,7 +5214,7 @@ export async function runObservabilityVerification({
               if (selectedLogs === logFiles) collectorNeedsRestore = false;
             });
           };
-          const script = `import {runG14BrowserProof} from './tools/compose-smoke.mjs';
+          const script = `import {runBrowserProof} from './tools/compose-smoke.mjs';
 import {validateLaunchContext} from './verification/launch/v1/report.mjs';
 const identity=await validateLaunchContext(process.env.COFFEE_LAUNCH_CONTEXT_FILE);
 const runId=identity.context.runId;
@@ -5227,7 +5227,7 @@ const request=(stage,payload)=>new Promise((resolve,reject)=>{
 const init=await request('init',null);
 const observability={exporterToken:init.exporterToken,onReady:context=>request('roles-ready',context),onCleanup:()=>request('cleanup',null)};
 try {
- const r=await runG14BrowserProof({baseCandidateSha:process.argv[1],observability,onProof:proof=>request('browser-proof',proof)});
+ const r=await runBrowserProof({baseCandidateSha:process.argv[1],observability,onProof:proof=>request('browser-proof',proof)});
  if(process.connected)process.disconnect();console.log(JSON.stringify({g14BrowserProof:r.g14BrowserProof,cleanup:r.cleanup,externalCleanup:r.externalCleanup}));
 } catch(error) {
  if(error.g14Retained)console.log(JSON.stringify({g14Retained:error.g14Retained}));

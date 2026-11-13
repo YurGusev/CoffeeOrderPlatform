@@ -1195,7 +1195,7 @@ export async function validateBrowserCorrelation({
   };
 }
 
-export function validateG14ChildCleanup(result, childContext) {
+export function validateChildCleanup(result, childContext) {
   const names = ["customer", "catalog", "pricing", "orders", "integration"]
     .map(
       (owner) =>
@@ -1582,7 +1582,7 @@ export async function runBrowserParent({
 
     if (runCorrelation) {
       const result = await runCorrelation(contextRecord.path);
-      validateG14ChildCleanup(result, childContext);
+      validateChildCleanup(result, childContext);
       validateG14BrowserEvidence(result.g14BrowserProof, {
         runId: childContext.runId,
         candidateSha: childContext.candidateSha,

@@ -9368,7 +9368,7 @@ void test("G15 parent admission restores and verifies the child bundle after che
   );
 });
 
-async function writeSyntheticParentG12({
+async function writeSyntheticSupplyChainParent({
   candidateRoot,
   evidenceDir,
   context,
@@ -9954,7 +9954,7 @@ void test("browser correlation executes the child lifecycle and preserves early 
         .href
     );
   const success = await makeContext("20261030T120000Z");
-  const expectedKafka = await writeSyntheticParentG12({
+  const expectedKafka = await writeSyntheticSupplyChainParent({
     candidateRoot: root,
     evidenceDir: success.evidenceDir,
     context: success.context,
@@ -10872,7 +10872,7 @@ void test("browser correlation executes the child lifecycle and preserves early 
     currentRoot,
   );
   for (const run of [current, replay])
-    await writeSyntheticParentG12({
+    await writeSyntheticSupplyChainParent({
       candidateRoot: currentRoot,
       evidenceDir: run.evidenceDir,
       context: run.context,
@@ -11181,7 +11181,7 @@ void test("browser correlation admission verifies the sealed child bundle and sc
           },
         },
         cleanupErrors: [],
-        fullSystemG14: { status: "NOT_RUN" },
+        fullSystemObservability: { status: "NOT_RUN" },
       });
     await writeFile(join(observations, name), JSON.stringify(data), {
       mode: 0o600,

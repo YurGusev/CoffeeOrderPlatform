@@ -1100,7 +1100,7 @@ export function createG14BrowserNetworkMonitor(cdp) {
   return result;
 }
 
-export function matchG14BrowserChain(
+export function matchBrowserChain(
   monitor,
   orderRef,
   telemetry,
@@ -1156,7 +1156,7 @@ export function matchG14BrowserChain(
   return undefined;
 }
 
-export function isG14AcceptedProjection(
+export function isAcceptedObservabilityProjection(
   acceptedVersion,
   readVersion,
   confirmedVersion,
@@ -1229,10 +1229,10 @@ export function validateG14BrowserEvidence(
   return evidence;
 }
 
-export async function proveG14Browser(runtimeContext) {
+export async function proveBrowserFlow(runtimeContext) {
   if (
     !runtimeContext ||
-    typeof runtimeContext.attestG14Safety !== "function" ||
+    typeof runtimeContext.attestObservabilitySafety !== "function" ||
     typeof runtimeContext.g14OrderEvidence !== "function" ||
     typeof runtimeContext.throwIfStopRequested !== "function" ||
     !/^[0-9a-f]{40}$/u.test(runtimeContext.candidateSha ?? "") ||
@@ -1308,7 +1308,7 @@ export async function proveG14Browser(runtimeContext) {
     await page.getByRole("link", { name: "К заказу" }).click();
     await page.getByRole("button", { name: "Подтвердить заказ" }).click();
     runtimeContext.throwIfStopRequested();
-    const safety = await runtimeContext.attestG14Safety();
+    const safety = await runtimeContext.attestObservabilitySafety();
     assert.deepEqual(safety, {
       configSha256: runtimeContext.configSha256,
       mutationsEnabled: false,
@@ -1344,7 +1344,7 @@ export async function proveG14Browser(runtimeContext) {
       const telemetry = await page.evaluate(() => window.__g14Telemetry);
       const excludedFrames = new Set();
       while (
-        (matched = matchG14BrowserChain(
+        (matched = matchBrowserChain(
           monitor,
           orderRef,
           telemetry,
@@ -1370,7 +1370,7 @@ export async function proveG14Browser(runtimeContext) {
     if (!matched || !owner) fail("G14_BROWSER_CHAIN_NOT_PROVEN");
     const acceptedVersion = await visibleOrderProjectionVersion(page, orderRef);
     if (
-      !isG14AcceptedProjection(
+      !isAcceptedObservabilityProjection(
         acceptedVersion,
         matched.read.projectionVersion,
         confirmed.projectionVersion,

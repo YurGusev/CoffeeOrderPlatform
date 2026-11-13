@@ -655,7 +655,7 @@ export function createBrowserOwnerEvidence({
   });
 }
 
-export function createG14OrderEvidence({ connect, roleMap, runId }) {
+export function createOrderEvidence({ connect, roleMap, runId }) {
   assert.equal(typeof connect, "function");
   assert.match(runId ?? "", /^[0-9]{8}T[0-9]{6}Z-[0-9a-f]{7}$/u);
   const database = validateSchema(roleMap, runId).orders;

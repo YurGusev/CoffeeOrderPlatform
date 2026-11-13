@@ -2014,10 +2014,10 @@ void test("observability evidence distinguishes selected live roles from full 14
     },
   });
   assert.equal(coverage.verificationScope, "operations-component");
-  assert.equal(coverage.fullSystemG14.status, "NOT_RUN");
-  assert.equal(coverage.fullSystemG14.owner, "#13");
-  assert.equal(coverage.fullSystemG14.requiredNodeRuntimeCount, 14);
-  assert.deepEqual(coverage.fullSystemG14.launchPathNodeRuntimes, [
+  assert.equal(coverage.fullSystemObservability.status, "NOT_RUN");
+  assert.equal(coverage.fullSystemObservability.owner, "#13");
+  assert.equal(coverage.fullSystemObservability.requiredNodeRuntimeCount, 14);
+  assert.deepEqual(coverage.fullSystemObservability.launchPathNodeRuntimes, [
     "api-internal",
     "api-public",
     "edge-gateway",
@@ -2025,13 +2025,13 @@ void test("observability evidence distinguishes selected live roles from full 14
     "orders-service",
     "realtime-gateway",
   ]);
-  assert.equal(coverage.fullSystemG14.launchPathNativeNginx, true);
+  assert.equal(coverage.fullSystemObservability.launchPathNativeNginx, true);
   assert.equal(
-    coverage.fullSystemG14.convergenceMetricProof.processKind,
+    coverage.fullSystemObservability.convergenceMetricProof.processKind,
     "driver-container SQL-backed proof helper",
   );
-  assert.equal(coverage.fullSystemG14.convergenceMetricProof.status, "PASS");
-  assert.deepEqual(coverage.fullSystemG14.nodeRuntimesNotClaimedAsLive, [
+  assert.equal(coverage.fullSystemObservability.convergenceMetricProof.status, "PASS");
+  assert.deepEqual(coverage.fullSystemObservability.nodeRuntimesNotClaimedAsLive, [
     "customer-service",
     "catalog-service",
     "catalog-supplier-sync",
@@ -2047,12 +2047,12 @@ void test("observability evidence distinguishes selected live roles from full 14
       runtimeMetrics: { roles: NODE_RUNTIME_ROLES.map((role) => ({ role })) },
     },
   });
-  assert.deepEqual(withMatrix.fullSystemG14.metricMatrixNodeRuntimes, [
+  assert.deepEqual(withMatrix.fullSystemObservability.metricMatrixNodeRuntimes, [
     ...NODE_RUNTIME_ROLES,
   ]);
-  assert.deepEqual(withMatrix.fullSystemG14.nodeRuntimesNotClaimedAsLive, []);
+  assert.deepEqual(withMatrix.fullSystemObservability.nodeRuntimesNotClaimedAsLive, []);
   assert.equal(
-    withMatrix.fullSystemG14.status,
+    withMatrix.fullSystemObservability.status,
     "NOT_RUN",
     "functional telemetry coverage does not grant full-system launch acceptance",
   );

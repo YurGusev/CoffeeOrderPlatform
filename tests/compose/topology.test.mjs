@@ -4790,7 +4790,7 @@ void test("G18 initial-unknown timeout persists a run-bound private fact summary
       evidenceDir,
     };
     const consumer = "orders-aroma-projection-v1";
-    const canary = "PRIVATE_G18_PROVIDER_BODY_CANARY";
+    const canary = "PRIVATE_ROLLBACK_PROVIDER_BODY_CANARY";
     const facts = {
       attempts: [{ state: "Started", attempt_ref: canary }],
       reservations: [
@@ -5097,7 +5097,7 @@ void test("G18 initial-unknown timeout persists a run-bound private fact summary
     assert.deepEqual(JSON.parse(artifactBytes), diagnostic);
     assert.doesNotMatch(
       artifactBytes,
-      /PRIVATE_G18_PROVIDER_BODY_CANARY|attempt_ref|operation_ref|message_id|envelope|response_body/u,
+      /PRIVATE_ROLLBACK_PROVIDER_BODY_CANARY|attempt_ref|operation_ref|message_id|envelope|response_body/u,
     );
     assert.equal((await stat(artifactPath)).mode & 0o777, 0o600);
     await assert.rejects(
@@ -5156,7 +5156,7 @@ void test("G18 restored-card timeout records bounded guarded facts only after ti
   const candidateSha = "4".repeat(40);
   const maxSnapshotAgeMs = 15_000;
   const orderRef = "ord_01J8G18TIMEOUTFIXTURE000000000";
-  const canary = "RAW_G18_DATABASE_ROW_CANARY";
+  const canary = "RAW_ROLLBACK_DATABASE_ROW_CANARY";
   const platformConfig = {
     services: {
       "orders-aroma-preparation": { database: "coffee_platform_orders" },
@@ -5425,7 +5425,7 @@ void test("G18 restored-card timeout records bounded guarded facts only after ti
     );
     assert.doesNotMatch(
       artifactBytes,
-      /RAW_G18_DATABASE_ROW_CANARY|SCOPED_PREPARATION_SECRET_CANARY|ord_01J8G18TIMEOUTFIXTURE/u,
+      /RAW_ROLLBACK_DATABASE_ROW_CANARY|SCOPED_PREPARATION_SECRET_CANARY|ord_01J8G18TIMEOUTFIXTURE/u,
     );
     assert.equal((await stat(artifactPath)).mode & 0o777, 0o600);
     assert.equal(
@@ -5613,7 +5613,7 @@ void test("G18 initial-unknown failure records only a closed substage and owner 
       ),
     /requires an initial-unknown/u,
   );
-  const canary = "PRIVATE_G18_ERROR_BODY_CANARY";
+  const canary = "PRIVATE_ROLLBACK_ERROR_BODY_CANARY";
   const dbDiagnostic = createRollbackInitialUnknownDiagnostic(
     "owner-db-facts",
     Object.assign(new Error(canary), { code: "42501" }),
