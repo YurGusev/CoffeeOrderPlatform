@@ -142,14 +142,17 @@ export function validateRuntimeImageOwnership(inventory, baseline, phase) {
   const owned = [...inventory.expected].filter(
     ([, imageId]) => !ids.has(imageId),
   );
+  // Образы, опубликованные supply_chain и вошедшие в baseline, остаются
+  // в daemon для следующих гейтов и не являются run-owned.
   for (const [reference, imageId] of inventory.refs)
-    assert.ok(
-      owned.some(
-        ([expectedRef, expectedId]) =>
-          expectedRef === reference && expectedId === imageId,
-      ),
-      "run image ownership mismatch",
-    );
+    if (!ids.has(imageId))
+      assert.ok(
+        owned.some(
+          ([expectedRef, expectedId]) =>
+            expectedRef === reference && expectedId === imageId,
+        ),
+        "run image ownership mismatch",
+      );
   if (phase === "baseline") {
     for (const [reference, imageId] of owned)
       if (!inventory.refs.has(reference) && inventory.preexisting.has(imageId))
