@@ -1,19 +1,19 @@
-# ADR-0035: отдельная история config для rollback gate G18
+# ADR-0035: отдельная история config для гейта `rollback`
 
 Статус: решение принято владельцем 24 октября 2026; lineage и runtime сценарий реализованы, runtime PASS пока не получен.<br>
-Основание: явное разрешение на config-only commits для G18 в ходе #13.
+Основание: явное разрешение на config-only commits для `rollback` в ходе #13.
 
 ## Контекст
 
 Один clean candidate SHA должен определять продукт, зависимости и миграции всего
-launch run. G16 требует versioned `mutationsEnabled=true`, а G18 проверяет
+launch run. `aroma_sandbox` требует versioned `mutationsEnabled=true`, а `rollback` проверяет
 committed переключение в `false` и возврат исходного config digest. Оба состояния
 одного tracked файла не могут одновременно принадлежать одному commit.
 
 ## Решение
 
 Product candidate `B` остаётся единственным SHA в основном launch result.
-Только G18 получает два отдельных проверочных config commits:
+Только гейт `rollback` получает два отдельных проверочных config commits:
 
 1. `D` имеет единственного родителя `B`. Его diff меняет только
    `config/platform.yaml.services.aroma-convergence.mutationsEnabled: true → false`.
@@ -32,7 +32,7 @@ env overlay, второй service config и подмена основного ca
 Эти commits локальные, относятся только к isolated run и не разрешают GitHub
 publication, production deployment или новые provider mutations. Перезапуск
 затрагивает только run-owned `aroma-convergence`; остальные health/state checks
-и все гарантии G18 сохраняются. Возврат `R` требует fresh GET и отсутствие blind
+и все гарантии `rollback` сохраняются. Возврат `R` требует fresh GET и отсутствие blind
 replay старого operationRef. Смена config сама по себе не доказывает PASS.
 
 `verification/launch/v1/scenarios/rollback.mjs` проверяет Git lineage и запускает

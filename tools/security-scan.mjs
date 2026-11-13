@@ -67,8 +67,8 @@ function scanCacheRoot() {
     join(homedir(), ".cache/coffee-platform/g12")
   );
 }
-// Эти образы запускает Compose; G12 публикует их в daemon под тегами проекта
-// запуска, чтобы G13/G14 работали по неизменяемым ID, а не собирали заново.
+// Эти образы запускает Compose; `supply_chain` публикует их в daemon под тегами проекта
+// запуска, чтобы `compose`/`observability` работали по неизменяемым ID, а не собирали заново.
 const PUBLISHED_RUNTIME_SERVICES = Object.freeze([
   ...RUNTIME_NAMES,
   "edge-nginx",
@@ -2903,7 +2903,7 @@ async function databaseMetadataFresh(cacheDir, now, policy) {
       () => null,
     );
     // Повреждённая запись кеша (в том числе oversized) — это промах, а не hit:
-    // иначе G12 будет падать на validateDb до истечения metadata.
+    // иначе `supply_chain` будет падать на validateDb до истечения metadata.
     if (!info?.isFile() || info.size < 1 || info.size > MAX_DATABASE_BYTES)
       return false;
     try {

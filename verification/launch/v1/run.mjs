@@ -1577,7 +1577,7 @@ export async function verifyGateArtifacts(gate, record, evidenceDir) {
         });
         record.artifacts.push(await hashFile(failurePath));
       } catch {
-        // The original G15 failure remains authoritative if diagnostics fail validation.
+        // The original `browser` failure remains authoritative if diagnostics fail validation.
       }
       return failure;
     }

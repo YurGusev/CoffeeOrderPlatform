@@ -1,8 +1,8 @@
 # Наблюдаемость первого запуска
 
-Очередь каждого Alloy exporter ограничена 2048 items при двух consumers. В отдельном сравнении 512 items давали enqueue losses, а 2048 устранили их на проверенной нагрузке. Prometheus принимает OTLP samples с нарушенным порядком в окне до 30 минут (`telemetry.prometheus.outOfOrderWindowMs`): Изолированный runtime-прогон зафиксировал out-of-order samples при стандартном нулевом окне. Ограничение потребления памяти и полное runtime-поведение остаются предметом G14, а не следуют из component test. Настройка окна следует [рекомендации Prometheus для OpenTelemetry](https://prometheus.io/docs/guides/opentelemetry/#enable-out-of-order-ingestion).
+Очередь каждого Alloy exporter ограничена 2048 items при двух consumers. В отдельном сравнении 512 items давали enqueue losses, а 2048 устранили их на проверенной нагрузке. Prometheus принимает OTLP samples с нарушенным порядком в окне до 30 минут (`telemetry.prometheus.outOfOrderWindowMs`): Изолированный runtime-прогон зафиксировал out-of-order samples при стандартном нулевом окне. Ограничение потребления памяти и полное runtime-поведение остаются предметом гейта `observability`, а не следуют из component test. Настройка окна следует [рекомендации Prometheus для OpenTelemetry](https://prometheus.io/docs/guides/opentelemetry/#enable-out-of-order-ingestion).
 
-Operations сохраняет producer и runtime contract #64. [ADR-0040](../adr/ADR-0040-grafana-observability.md) и #210 заменяют только его OpenObserve-специфическую реализацию: один Alloy Collector, Grafana, Loki, Prometheus и Tempo. Реализация #210 проверяется; наличие конфигурации и частичных component checks не означает принятия #210 или PASS G12/G14. Исторический `evidence/handoffs/issue-64.yaml` не переписывается. После приёмки #210 его новый handoff станет обязательным input полного launch gate #13; собственные component proofs #210 выполняются до merge и не зависят от будущего принятого handoff.
+Operations сохраняет producer и runtime contract #64. [ADR-0040](../adr/ADR-0040-grafana-observability.md) и #210 заменяют только его OpenObserve-специфическую реализацию: один Alloy Collector, Grafana, Loki, Prometheus и Tempo. Реализация #210 проверяется; наличие конфигурации и частичных component checks не означает принятия #210 или PASS `supply_chain`/`observability`. Исторический `evidence/handoffs/issue-64.yaml` не переписывается. После приёмки #210 его новый handoff станет обязательным input полного launch gate #13; собственные component proofs #210 выполняются до merge и не зависят от будущего принятого handoff.
 
 OTLP trace и metric exporters используют собственный IPv4 DNS resolver, который отменяется при остановке telemetry. Они не занимают общий пул `dns.lookup`: в реальном воспроизведении недоступное имя Collector с telemetry SDK задерживало DNS и readiness, хотя целевой API оставался healthy. [Node DNS](https://nodejs.org/docs/latest-v26.x/api/dns.html#implementation-considerations) различает системный lookup и сетевой resolver. Для Collector требуется DNS alias `otel-collector` в IPv4-сети Compose; `/etc/hosts` этим resolver не учитывается. Изменение DNS относится только к экспортёрам; секундный readiness deadline сохраняется.
 
@@ -52,14 +52,14 @@ Readiness `aroma-observer` и его единственный business read ис
 выполняться во время долгого business read. Проба остаётся аутентифицированной;
 недоступный upstream по-прежнему делает readiness неготовой.
 
-## Образы и G12
+## Образы и `supply_chain`
 
 Grafana собирается только из готового official slim и трёх подписанных ZIP;
 Go/Rust не компилируются. Её финальный image ID и ID storage-helper берутся из
-проверенных G12 receipts. Slim ref в BOM является base. Plugins находятся в
+проверенных receipts `supply_chain`. Slim ref в BOM является base. Plugins находятся в
 `/opt/grafana/plugins`, данные — в `/var/lib/grafana`; обновление image не должно
 использовать старые binaries из data volume. Tempo использует согласованный
-готовый dev image по immutable digest; его стабильность проверяется G14.
+готовый dev image по immutable digest; его стабильность проверяется гейтом `observability`.
 
 Policy `verification.securityScan.approvedFixed` разрешает только два указанных
 в ADR-0040 already-fixed Tempo findings для exact artifact identity. Raw scan и
@@ -73,15 +73,15 @@ CVE-2026-78661 как `not_affected` / `vulnerable_code_not_present` по
 разделены; неизвестные или изменённые identity/finding остаются unresolved.
 Сохранённый OpenVEX не заменяет независимый пересчёт reader.
 
-Перед запуском G13/G14 фактические
-ID всех 14 Node images и nginx сравниваются с проверенными G12 IDs; rebuild
+Перед запуском `compose`/`observability` фактические
+ID всех 14 Node images и nginx сравниваются с проверенными ID `supply_chain`; rebuild
 сам по себе не доказывает равенство. Непрохождение проверки останавливает startup.
 
 ## Хранение и подготовка
 
 Четыре отдельных bounded ext4 volume принадлежат Grafana, Loki, Prometheus и Tempo; Loki/Prometheus/Tempo настроены на retention 3 дня. Только storage init helper получает привилегии. NTFS не используется непосредственно как TSDB filesystem. После reboot provisioner может восстановить loop attachment к сохранённому backing file только при отсутствии ссылок контейнеров; чужие volumes он не переиспользует. Не удаляйте persistent volumes или business storage при cleanup. При rebind provisioner может удалить и создать заново только Docker-запись собственного data-volume; backing volume и файл с данными сохраняются. Recovery и restore требуют отдельной проверки, сохранённый файл сам по себе не является restore PASS.
 
-При наличии разрешения на локальную подготовку предусмотрены следующие CLI. Имена относятся только к собственным telemetry volumes; helper сверяет owner и lifecycle. Bootstrap использует SOPS через trusted materialization, не выдавая общий secrets-файл runtime. Development leaf `telemetry.grafanaAdmin` создан через trusted bootstrap; staging и production не изменены. Для нового development окружения предусмотрена явная идемпотентная команда `pnpm observability:bootstrap --provision-development-grafana-admin`: существующий ключ не ротируется, другое окружение отвергается. Обычная materialization не создаёт секреты автоматически. Storage и generator требуют законный G12 context (`COFFEE_LAUNCH_CONTEXT_FILE`); постоянный alert-sink использует его просканированный hardened storage-helper image по frozen ID.
+При наличии разрешения на локальную подготовку предусмотрены следующие CLI. Имена относятся только к собственным telemetry volumes; helper сверяет owner и lifecycle. Bootstrap использует SOPS через trusted materialization, не выдавая общий secrets-файл runtime. Development leaf `telemetry.grafanaAdmin` создан через trusted bootstrap; staging и production не изменены. Для нового development окружения предусмотрена явная идемпотентная команда `pnpm observability:bootstrap --provision-development-grafana-admin`: существующий ключ не ротируется, другое окружение отвергается. Обычная materialization не создаёт секреты автоматически. Storage и generator требуют законный context `supply_chain` (`COFFEE_LAUNCH_CONTEXT_FILE`); постоянный alert-sink использует его просканированный hardened storage-helper image по frozen ID.
 
 ```sh
 pnpm observability:storage --store grafana --name coffee-observability-grafana-data
@@ -97,7 +97,7 @@ Logging override применяется до создания или recreation 
 
 ### Постоянный запуск на сервере
 
-Используйте постоянный checkout принятого commit с установленными frozen dependencies и сохранённым локальным G12 context/evidence для этого же checkout и SHA. `COFFEE_LAUNCH_CONTEXT_FILE` указывает на его абсолютный `evidence/launch/<run-id>/context.json`; этот locator не является config или секретом. Перед запуском pinned образы Loki/Prometheus/Tempo и проверенные G12 image ID Collector, Grafana и storage-helper должны уже присутствовать локально. Lifecycle и generator не загружают эти образы из G12 evidence, а helper containers запускаются с `--pull=never`. Проверенный storage-helper выполняет также операции ownership; его фактический image ID фиксируется в provenance. Collector также применяется по проверенному G12 image ID; provenance связывает его с receipt, исходным commit и run. Для ранее принятого observability release без формата collector receipt refresh использует его неизменённый generator и pinned BOM reference с проверкой фактического image ID; новый release требует receipt без fallback. Путь `/usr/bin/busybox` сверяется с SHA-256 в BOM. На сервере `node` должен совпадать с точной версией в toolchain; age key должен быть доступен trusted bootstrap. G12 component evidence не становится формальным launch admission.
+Используйте постоянный checkout принятого commit с установленными frozen dependencies и сохранённым локальным context/evidence `supply_chain` для этого же checkout и SHA. `COFFEE_LAUNCH_CONTEXT_FILE` указывает на его абсолютный `evidence/launch/<run-id>/context.json`; этот locator не является config или секретом. Перед запуском pinned образы Loki/Prometheus/Tempo и проверенные image ID `supply_chain` Collector, Grafana и storage-helper должны уже присутствовать локально. Lifecycle и generator не загружают эти образы из evidence `supply_chain`, а helper containers запускаются с `--pull=never`. Проверенный storage-helper выполняет также операции ownership; его фактический image ID фиксируется в provenance. Collector также применяется по проверенному image ID `supply_chain`; provenance связывает его с receipt, исходным commit и run. Для ранее принятого observability release без формата collector receipt refresh использует его неизменённый generator и pinned BOM reference с проверкой фактического image ID; новый release требует receipt без fallback. Путь `/usr/bin/busybox` сверяется с SHA-256 в BOM. На сервере `node` должен совпадать с точной версией в toolchain; age key должен быть доступен trusted bootstrap. Component evidence `supply_chain` не становится формальным launch admission.
 
 ```sh
 export COFFEE_LAUNCH_CONTEXT_FILE=/полный/путь/к/evidence/launch/ID/context.json
@@ -105,9 +105,9 @@ node tools/observability/service.mjs start
 node tools/observability/service.mjs stop
 ```
 
-`start` сверяет G12, BOM probe, конфигурацию, свободное место root и identity собственных контейнеров/volumes; до остановки он также материализует только Collector/Grafana secrets в tmpfs. Затем останавливает и удаляет только свои контейнеры, восстанавливает четыре loop attachment, генерирует config и поднимает указанные telemetry services. Kafka, PostgreSQL и owner runtime им не запускаются. `stop` удаляет только те же контейнеры. Данные четырёх backend и checkpoint volume сохраняются. Secret materialization выполняется trusted config-bootstrap; дополнительный encrypted inventory и файлы паролей не создаются.
+`start` сверяет `supply_chain`, BOM probe, конфигурацию, свободное место root и identity собственных контейнеров/volumes; до остановки он также материализует только Collector/Grafana secrets в tmpfs. Затем останавливает и удаляет только свои контейнеры, восстанавливает четыре loop attachment, генерирует config и поднимает указанные telemetry services. Kafka, PostgreSQL и owner runtime им не запускаются. `stop` удаляет только те же контейнеры. Данные четырёх backend и checkpoint volume сохраняются. Secret materialization выполняется trusted config-bootstrap; дополнительный encrypted inventory и файлы паролей не создаются.
 
-Для восстановления после перезагрузки можно установить user unit ниже, заменив пути на абсолютные пути постоянного checkout и его G12 context. На этом сервере user linger включён. Unit выполняет только подготовку и запуск; Docker использует `on-failure` для перезапуска backend при ненулевом выходе. Контейнеры не стартуют автоматически до восстановления tmpfs/loop устройств; при обычном выходе с кодом 0 автоматический restart не обещается. Docker предупреждает о конфликте двух менеджеров перезапуска: oneshot unit не мониторит отдельно работающие контейнеры. Реальная перезагрузка сервера и её длительность требуют отдельного доказательства.
+Для восстановления после перезагрузки можно установить user unit ниже, заменив пути на абсолютные пути постоянного checkout и его context `supply_chain`. На этом сервере user linger включён. Unit выполняет только подготовку и запуск; Docker использует `on-failure` для перезапуска backend при ненулевом выходе. Контейнеры не стартуют автоматически до восстановления tmpfs/loop устройств; при обычном выходе с кодом 0 автоматический restart не обещается. Docker предупреждает о конфликте двух менеджеров перезапуска: oneshot unit не мониторит отдельно работающие контейнеры. Реальная перезагрузка сервера и её длительность требуют отдельного доказательства.
 
 ```ini
 [Unit]
@@ -146,13 +146,13 @@ Loki WAL использует native `disk_full_threshold: 0.8`; отдельн�
 
 Лимит Grafana составляет 512 MiB: прежние 256 MiB привели к OOM и автоматическому restart в реальном прогоне. Это [минимум upstream](https://grafana.com/docs/grafana/latest/setup-grafana/installation/), достаточность которого проверяется под полной нагрузкой. Проверка сравнивает исходные container ID, StartedAt и RestartCount до намеренных restart: последующий healthy и сброшенный OOMKilled не скрывают аварийный перезапуск.
 
-Штатный отказ каждого backend проверяется отдельно на его собственном ограниченном томе. Для Grafana требуется ошибка SQLite при заполнении, для Tempo — ошибка записи WAL; после освобождения места должны читаться прежний и новый маркеры в том же процессе. Prometheus 3.15.1 может вернуть HTTP 200 при ошибке Commit: [OTLP handler](https://github.com/prometheus/prometheus/blob/v3.15.1/storage/remote/write_otlp_handler.go#L114-L193) не передаёт ошибку из defer в возвращаемое значение. Поэтому проверка требует рост `prometheus_tsdb_wal_writes_failed_total` и отсутствие точного sample под давлением, затем сохранность старого и доступность нового sample без дальнейшего роста ошибок после освобождения места. HTTP 200 сам по себе не подтверждает сохранение метрики. Общий G14 и его artifacts требуют PASS всех четырёх backend; один успешный Loki proof недостаточен.
+Штатный отказ каждого backend проверяется отдельно на его собственном ограниченном томе. Для Grafana требуется ошибка SQLite при заполнении, для Tempo — ошибка записи WAL; после освобождения места должны читаться прежний и новый маркеры в том же процессе. Prometheus 3.15.1 может вернуть HTTP 200 при ошибке Commit: [OTLP handler](https://github.com/prometheus/prometheus/blob/v3.15.1/storage/remote/write_otlp_handler.go#L114-L193) не передаёт ошибку из defer в возвращаемое значение. Поэтому проверка требует рост `prometheus_tsdb_wal_writes_failed_total` и отсутствие точного sample под давлением, затем сохранность старого и доступность нового sample без дальнейшего роста ошибок после освобождения места. HTTP 200 сам по себе не подтверждает сохранение метрики. Гейт `observability` и его artifacts требуют PASS всех четырёх backend; один успешный Loki proof недостаточен.
 
 ## Alerts и проверка
 
 Пять правил ограничены `deployment_environment`, `service_namespace` и `service_version`: not-ready, consumer lag и Outbox age используют окно 5m; UnknownOutcome — 2m; SSE drop rate — 5m с порогом 5%. `notReady` учитывает Node `runtime_ready` и native nginx `probe_success`, включая отсутствие обязательной серии. Шестое правило проверяет заполнение каждого telemetry volume с `alerts.diskUsage.forMs`. Ошибка query не считается resolved. Firing и resolved должны относиться к одному episode; локальный sink хранит ограниченные ротируемые записи.
 
-`pnpm test:observability` запускает disposable run-id proof и сохраняет результаты в `evidence/observability/<run-id>/`; формальный запуск также сохраняет их в `evidence/launch/<run-id>/gates/G14_OBSERVABILITY/artifacts/observability/`. Файлы: `alert-transitions.json`, `correlation-proof.json`, `redaction-scan.json`, `queue-loss-counters.json`, `retention-result.json`, `runtime-health-matrix.json` и `result.json`. Любой обязательный FAIL/NOT_RUN блокирует G14. Проверяются три сигнала и same-trace correlation, redaction, шесть alert episodes, outage/loss, memory/retry/stop, права и сети, persistence и восстановление после disk pressure. Проверка TTL в bounded fixture profile не доказывает истечение реальных 72 часов; сохранность после restart/recreate/checkpointed crash и restore требуют собственного evidence.
+`pnpm test:observability` запускает disposable run-id proof и сохраняет результаты в `evidence/observability/<run-id>/`; формальный запуск также сохраняет их в `evidence/launch/<run-id>/gates/observability/artifacts/observability/`. Файлы: `alert-transitions.json`, `correlation-proof.json`, `redaction-scan.json`, `queue-loss-counters.json`, `retention-result.json`, `runtime-health-matrix.json` и `result.json`. Любой обязательный FAIL/NOT_RUN блокирует `observability`. Проверяются три сигнала и same-trace correlation, redaction, шесть alert episodes, outage/loss, memory/retry/stop, права и сети, persistence и восстановление после disk pressure. Проверка TTL в bounded fixture profile не доказывает истечение реальных 72 часов; сохранность после restart/recreate/checkpointed crash и restore требуют собственного evidence.
 
 Loki retention fixture сохраняет включённый embedded chunk cache и сокращает только его TTL до 30 секунд вместе с остальными тестовыми интервалами. Стандартный часовой TTL мог возвращать удалённый chunk из кеша дольше шестиминутного proof; парные native опыты подтвердили отсутствие старого маркера при сохранности свежего с TTL 30 секунд. Effective настройки проверяются до нагрузки и после восстановления исходного профиля; production retention и cache TTL не меняются. При timeout сохраняются последние наблюдения compactor и old/current controls.
 
@@ -160,20 +160,20 @@ Tempo TTL fixture сокращает также `live_store.flush_op_timeout` д
 
 Disk proof сначала достигает ENOSPC и нулевого `bavail`, затем требует настоящий native failure. После подтверждённой ошибки [SQLite может откатить транзакцию](https://www.sqlite.org/lang_transaction.html#response_to_errors_within_a_transaction) и освободить блоки; положительный post-request `bavail` сам по себе не отменяет наблюдённый отказ. Identity файловой системы проверяется всегда. Снимок и native failure записываются до assertions; точное удаление собственного filler, чтение старого и нового маркеров, тот же процесс и отсутствие OOM остаются обязательными.
 
-G12 имеет установленный scope 22 images + lockfile / 46 reports. Дополнительный scan временного PostgreSQL fixture хранится отдельно: Debian 17.11 дал 86 HIGH / 2 CRITICAL, проверенный кандидат 17.11 Alpine — 34 HIGH / 1 CRITICAL. Это findings тестового инструмента, не допуск или VEX и не изменение G12 targets; fixture не объявляется clean. PostgreSQL business storage остаётся внешним. Полные raw результаты и ограничения указываются в delivery report.
+Гейт `supply_chain` имеет установленный scope 22 images + lockfile / 46 reports. Дополнительный scan временного PostgreSQL fixture хранится отдельно: Debian 17.11 дал 86 HIGH / 2 CRITICAL, проверенный кандидат 17.11 Alpine — 34 HIGH / 1 CRITICAL. Это findings тестового инструмента, не допуск или VEX и не изменение targets `supply_chain`; fixture не объявляется clean. PostgreSQL business storage остаётся внешним. Полные raw результаты и ограничения указываются в delivery report.
 
 Runtime metric matrix охватывает 14 Node runtime и native nginx до штатного cleanup: self-mTLS live/ready/text metrics и ожидаемые 4xx, OTLP HTTP/error и producer metrics, 10 DB-waiting, lag двух durable Kafka consumers с committed offsets и пять scoped Outbox-age series. Cold `realtime-gateway` до consume/commit имеет неизвестный lag (`-1`), отмеченный `ACTIVITY_DEPENDENT / NOT_ASSERTED_WITHOUT_ACTIVITY`; launch-фаза проверяет его после реальной активности. Событийные и транзакционные samples требуют активности шести owner roles и SQL-backed convergence helper, который не заменяет постоянный runtime. Сканируются 15 final images по фактическим IDs.
 
-Формальный G14 использует подготовленный G08 PostgreSQL и пять баз, имена
+Формальный прогон `observability` использует PostgreSQL, подготовленный гейтом `migrations`, и пять баз, имена
 которых выведены из launch run ID и владельцев `customer`, `catalog`, `pricing`,
 `orders`, `integration`. Используются существующие scoped роли; удаление этих
 баз допускается только после подтверждённой остановки потребителей. При
 неподтверждённой очистке базы и receipt сохраняются для разбора. Временные Kafka
 и simulated provider остаются частью проверки.
 
-Для согласованной браузерной корреляции G14 и для G15 используется отдельный
+Для согласованной браузерной корреляции `observability` и для `browser` используется отдельный
 OIDC-only child с подтверждённой связью с parent candidate; Kafka image допускается
-по проверенному G12 parent. В компонентном диагностическом режиме
+по проверенному parent `supply_chain`. В компонентном диагностическом режиме
 `--observability-fixture` по-прежнему использует отдельный PostgreSQL с PGDATA в
 tmpfs 512 MiB и не подтверждает изоляцию существующей business БД. Компонентные
 Orders owners получают canonical `config/database-ownership.json` через
@@ -181,22 +181,22 @@ read-only mount с проверкой hash и role-local доступа. Это�
 launch identity. Формальные full-system SLO, chaos и capacity остаются
 `NOT_RUN` до отдельного подтверждения.
 
-Браузерный subproof G14 выполняет один Confirm через UI и связывает его CID с
+Браузерный subproof `observability` выполняет один Confirm через UI и связывает его CID с
 Published Outbox, Processed Inbox, SSE frame и последующим owner GET. До Confirm
 он проверяет hash загруженного child config, отключённые provider mutations и
 изолированную provider fixture. Если Recovery опередил consumer или cleanup не
 подтверждён, этот путь не принимается. Отдельный synthetic ingress остаётся
 component diagnostic и не подтверждает browser correlation. При отсутствии
 доказанной общей W3C-трассы child packet сохраняется с `traceStatus: NOT_PROVEN`;
-это не PASS полного G14 и не заменяет SLO, chaos или capacity.
+это не PASS полного `observability` и не заменяет SLO, chaos или capacity.
 
 Convergence helper удерживает periodic exporter до подтверждения в Prometheus: `unknown_outcomes_current=1` перед recovery, затем `unknown_outcomes_current=0` и `recovered_applied=1` перед остановкой. Каждая фаза подтверждается run-scoped checkpoint в `/results`; локальные значения и `forceFlush` не доказывают доставку. Истечение bounded ожидания завершает proof с FAIL и cleanup.
 
-Компонентная поставка #210 подтверждена на `e6c2e7d`: G12 и изолированный G14, 15-runtime matrix, persistence, TTL и restore прошли независимую проверку; точные команды, hashes и ограничения приведены в [отчёте](../reports/observability-delivery.md), outputs — в [handoff](../../evidence/handoffs/issue-210.yaml). Это не формальный launch admission G00/G12/G14. #13 отдельно принимает full-system SLO, chaos/failure, capacity и сквозные browser/business/DB/Kafka/SSE критерии. При отказе проверяйте health и loss counters, не повторяйте business effects; при disk pressure освобождайте только собственные telemetry данные и проверяйте восстановление. Не удаляйте `collector_checkpoints` при обычном restart.
+Компонентная поставка #210 подтверждена на `e6c2e7d`: проверки `supply_chain` и изолированного `observability`, 15-runtime matrix, persistence, TTL и restore прошли независимую проверку; точные команды, hashes и ограничения приведены в [отчёте](../reports/observability-delivery.md), outputs — в [handoff](../../evidence/handoffs/issue-210.yaml). Это не формальный launch admission `preflight`/`supply_chain`/`observability`. #13 отдельно принимает full-system SLO, chaos/failure, capacity и сквозные browser/business/DB/Kafka/SSE критерии. При отказе проверяйте health и loss counters, не повторяйте business effects; при disk pressure освобождайте только собственные telemetry данные и проверяйте восстановление. Не удаляйте `collector_checkpoints` при обычном restart.
 
-Для изолированного G12/G14 можно задать системный `TMPDIR` на отдельном доступном
-хранилище; это operational locator временных файлов. G12 сохраняет требование
-10 GiB свободного места (ниже GC-порога 12 GiB, чтобы тёплый кеш не блокировал гейт). G14 размещает там backing-файлы восьми disposable
+Для изолированных `supply_chain`/`observability` можно задать системный `TMPDIR` на отдельном доступном
+хранилище; это operational locator временных файлов. `supply_chain` сохраняет требование
+10 GiB свободного места (ниже GC-порога 12 GiB, чтобы тёплый кеш не блокировал гейт). `observability` размещает там backing-файлы восьми disposable
 ext4 fixtures и backup-архивы; secret configs остаются в `/dev/shm`. Конечные
 TSDB/WAL volumes являются ограниченными ext4, NTFS не используется напрямую
 как TSDB filesystem. Production provisioning без fixture placement не меняется.
@@ -205,4 +205,4 @@ TSDB/WAL volumes являются ограниченными ext4, NTFS не и�
 сгенерированные несекретные configs; секретные файлы получают отдельные строгие
 права trusted bootstrap. Входные `config/platform.yaml`,
 `config/toolchain-versions.json` и `pnpm-lock.yaml` должны иметь mode 0644 для
-проверяемого G12 binding. Журнал запуска хранится отдельно с mode 0600.
+проверяемого binding `supply_chain`. Журнал запуска хранится отдельно с mode 0600.

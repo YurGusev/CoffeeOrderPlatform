@@ -98,7 +98,7 @@ connect. Compose монтирует этот файл readonly только дл
 Отсутствующий context при enabled policy, context при disabled policy, symlink,
 writable файл, неправильный SHA/owner и production завершаются ошибкой.
 
-G18 хранит base и фактический config digest раздельно: только отключённый
+Гейт `rollback` хранит base и фактический config digest раздельно: только отключённый
 `aroma-convergence` допускает единственную config-only замену ADR-0035.
 Остальные runtime и восстановленный R обязаны использовать исходные байты B.
 Этот metadata locator не является третьим источником настроек или секретов.
@@ -386,13 +386,13 @@ overlap, restart всех затронутых runtime, rollback и audit record
 Компрометация общего файла считается компрометацией всех environments и требует
 полной ротации; это осознанная цена требования «один файл».
 
-## 8. Verification backup G17
+## 8. Verification backup `backup_restore`
 
 Владелец 24 октября 2026 разрешил существующему trusted bootstrap использовать
 закреплённый age 1.3.2, public recipients из `.sops.yaml` и документированный age
 identity locator для backup/restore только пяти run-scoped verification DB.
 Точный scope:
-[принятое предложение G17](../../evidence/launch-preparation/2026-10-24/remaining-gates-authority-proposal.md).
+[принятое предложение `backup_restore`](../../evidence/launch-preparation/2026-10-24/remaining-gates-authority-proposal.md).
 Dump шифруется потоком, restore получает plaintext только через pipe. Ciphertext
 и hashes сохраняются в evidence; runtime не получает age key, общий decrypted
 bundle или новый secret scope. Отдельная bootstrap operation сначала проверяет

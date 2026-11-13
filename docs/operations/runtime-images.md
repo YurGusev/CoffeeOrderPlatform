@@ -2,7 +2,7 @@
 
 Canonical runtime-сборка выполняется через `tools/docker-build.mjs` с `--load`.
 Для этого существующего пути без явного custom output wrapper выбирает Docker
-exporter с `source-date-epoch=0,rewrite-timestamp=true`. G12 использует те же
+exporter с `source-date-epoch=0,rewrite-timestamp=true`. `supply_chain` использует те же
 настройки для OCI exporter, сохраняя provenance и проверку attestation.
 Параметры нормализуют время в image metadata и слоях при экспорте;
 они не передаются как frontend `SOURCE_DATE_EPOCH` build argument.
@@ -26,12 +26,12 @@ Node и deployed package links, а не pnpm installer. Состав завис�
 в оставшемся файле; native addon был побайтово одинаков.
 
 Это не обещание полного cold-build воспроизведения при изменившихся
-репозиториях OS-пакетов. Перед запуском обязателен G12 с фактическим SBOM,
+репозиториях OS-пакетов. Перед запуском обязателен прогон `supply_chain` с фактическим SBOM,
 проверкой точных IDs, provenance и прежней политикой HIGH/CRITICAL. Парный
 экспорт и qualification подтверждаются фактическим runtime evidence;
 само наличие exporter options не является PASS.
 
-G12 получает CVE DB из `ghcr.io/aquasecurity/trivy-db`, а Java DB — из
+`supply_chain` получает CVE DB из `ghcr.io/aquasecurity/trivy-db`, а Java DB — из
 `mirror.gcr.io/aquasec/trivy-java-db`. Другие repositories и fallback не
 разрешены; остальные требования к сканированию остаются прежними.
 Источник Java DB отдельно согласован владельцем 4 ноября 2026 и указан в
@@ -41,19 +41,19 @@ G12 получает CVE DB из `ghcr.io/aquasecurity/trivy-db`, а Java DB —
 `otelCollectorImage`: удаляются только `apt` и `libapt-pkg6.0t64`, содержащие
 CVE-2026-109518. Бинарник Alloy, его команда и остальные установленные пакеты
 сохраняются; package inventory не скрывается. Новый источник образа не вводится.
-G12 сохраняет OCI archive, provenance и отдельный проверяемый receipt
+`supply_chain` сохраняет OCI archive, provenance и отдельный проверяемый receipt
 `otelCollector` тем же путём, что остальные curated infrastructure images.
-Observability generate/start/refresh и G14 используют только image ID из этого
+Observability generate/start/refresh и гейт `observability` используют только image ID из этого
 receipt с точной привязкой к source/run/config/BOM; прямой upstream fallback
 удаляется. Изменение формата evidence явно согласовано владельцем. Количество
-целей, HIGH/CRITICAL policy, freshness, pins и бюджеты G12 не меняются.
+целей, HIGH/CRITICAL policy, freshness, pins и бюджеты `supply_chain` не меняются.
 
 Слой `otel-collector` после `dpkg --purge` очищает `/var/log/dpkg.log`,
 `/var/log/alternatives.log`, `/var/log/apt/*` и `/var/cache/ldconfig`: dpkg
 пишет в них текущее время и пересоздаёт кеш, из-за чего image identity менялся
 при каждом повторе. После очистки две независимые сборки одного pinned base
 дают одинаковые config/manifest digests, а `usr/bin/alloy` сохраняет прежний
-`binarySha256`. Это условие проверяется до G12; ручная перепривязка proof к
+`binarySha256`. Это условие проверяется до `supply_chain`; ручная перепривязка proof к
 каждому новому `imageId` не допускается.
 
 Основание: [pnpm #9474](https://github.com/pnpm/pnpm/issues/9474),
@@ -61,23 +61,23 @@ receipt с точной привязкой к source/run/config/BOM; прямо�
 [BuildKit 0.32.2 exporter options](https://github.com/moby/buildkit/blob/v0.32.2/exporter/containerimage/opts.go)
 и [Docker cache invalidation](https://docs.docker.com/build/cache/invalidation/).
 
-8 ноября 2026 владелец согласовал устранение двух блокеров G12 issue #13.
+8 ноября 2026 владелец согласовал устранение двух блокеров `supply_chain` в #13.
 Существующие `musl`/`musl-utils` конечных Node, storage-helper и Kafka обновляются
 до `muslVersion` из `config/toolchain-versions.json` (1.2.6-r3). Kafka сохраняет
 полное сравнение package inventory с разрешённой дельтой; базы и остальные
 пакетные изменения сохраняются. Default Dockerfile ARG проверяется относительно
-BOM для обычного build path; G12 передаёт pin явно.
+BOM для обычного build path; `supply_chain` передаёт pin явно.
 
 Для CVE-2026-78661 разрешён только `not_affected` / `vulnerable_code_not_present`
 восьми исследованных Go executables: Grafana, три подписанных datasource plugins,
 Alloy, Loki, Prometheus и promtool. Закоммиченный [proof profile](../../evidence/security/cve-2026-78661.json) связывает каждый
 report target с точными image ID, binary SHA-256, слоем, package/version и finding
-fingerprint. Его integrity проверяется отдельно. Свежий G12 повторно проверяет
+fingerprint. Его integrity проверяется отдельно. Свежий `supply_chain` повторно проверяет
 identity образа и raw report; reader независимо пересчитывает decisions.
 Для curated Grafana/Alloy обязательна проверенная OCI config/platform identity;
 для Loki/Prometheus — закреплённые upstream reference/manifest и фактический
 Docker image ID. Это повторное использование доказательства байтов неизменяемого
-артефакта, а не перенос прежнего G12 PASS. Дрейф оставляет finding unresolved.
+артефакта, а не перенос прежнего PASS `supply_chain`. Дрейф оставляет finding unresolved.
 
 Основание — отсутствие кода затронутого HTML parser в полных восьми бинарниках,
 проверенная генерация имён emitted/recorded-inline функций Go 1.26.10/1.27.3,

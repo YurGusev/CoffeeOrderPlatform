@@ -20,13 +20,11 @@ void test("номер гейта в идентификаторе, env-перем
   assert.deepEqual(kinds(`const scan${gateNumber(12)}Inventory = 1;\n`), [
     `identifier:scan${gateNumber(12)}Inventory`,
   ]);
-  assert.deepEqual(
-    kinds(`const name = "COFFEE_${gateNumber(12)}_CACHE_DIR";\n`).sort(),
-    [
-      `environment:COFFEE_${gateNumber(12)}_CACHE_DIR`,
-      `identifier:COFFEE_${gateNumber(12)}_CACHE_DIR`,
-    ],
-  );
+  const probeEnv = `COFFEE_${gateNumber(13)}_REQUEST_DIR`;
+  assert.deepEqual(kinds(`const name = "${probeEnv}";\n`).sort(), [
+    `environment:${probeEnv}`,
+    `identifier:${probeEnv}`,
+  ]);
   assert.deepEqual(kinds(`fail("CONFIG-${gateNumber(8)}-SOPS-OUTPUT");\n`), [
     `error-code:CONFIG-${gateNumber(8)}-SOPS-OUTPUT`,
   ]);

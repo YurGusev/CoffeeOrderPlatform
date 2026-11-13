@@ -1325,7 +1325,7 @@ const RUNTIMES = [
   "aroma-gateway",
   "realtime-gateway",
 ];
-// Образы, которые G12 собирает один раз и публикует под тегами проекта запуска.
+// Образы, которые гейт `supply_chain` собирает один раз и публикует под тегами проекта запуска.
 const PUBLISHED_RUNTIME_SERVICES = Object.freeze([...RUNTIMES, "edge-nginx"]);
 const ROLLBACK_CONTAINER_SERVICES = new Set([
   ...RUNTIMES,
@@ -1739,7 +1739,7 @@ export function assertVerifiedRuntimeImages({
 }
 
 /**
- * Проверяет, что опубликованные G12 образы действительно лежат в daemon под
+ * Проверяет, что образы, опубликованные `supply_chain`, действительно лежат в daemon под
  * тегами проекта запуска: Compose запускает именно эти неизменяемые ID.
  */
 export function assertPublishedRuntimeImages(inventory) {
@@ -1760,8 +1760,8 @@ export function assertPublishedRuntimeImages(inventory) {
 }
 
 /**
- * Доказывает, что запущенные контейнеры используют именно опубликованные
- * G12-образы, а не пересобранные локально.
+ * Доказывает, что запущенные контейнеры используют именно образы, опубликованные
+ * `supply_chain`, а не пересобранные локально.
  */
 export function assertRuntimeContainersMatchInventory(
   projectName,
@@ -9491,7 +9491,7 @@ export async function runComposeSmoke({
         launchIdentity,
         "Kafka requires a launch context and G12 artifact",
       );
-      // G08 already checks the exact G15 parent and its OIDC-only lineage.
+      // `migrations` уже проверяет точный parent `browser` и его OIDC-only lineage.
       verifiedKafka = await (
         browserParentModules?.images.loadVerifiedGateImage ??
         loadVerifiedGateImage

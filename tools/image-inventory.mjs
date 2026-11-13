@@ -205,8 +205,8 @@ export function serializeImageInventory(inventory) {
 }
 
 /**
- * Читает инвентарь образов G12 текущего запуска, если он опубликован.
- * Отсутствие файла означает, что G12 ещё не публиковал образы: вызывающий
+ * Читает инвентарь образов `supply_chain` текущего запуска, если он опубликован.
+ * Отсутствие файла означает, что `supply_chain` ещё не публиковал образы: вызывающий
  * обязан собрать их сам (standalone/тестовый путь).
  */
 function supplyChainDir(evidenceDir) {
@@ -254,7 +254,7 @@ async function readEvidenceJson(path, maxBytes) {
 }
 
 /**
- * Сверяет инвентарь с независимо прочитанным evidence G12: PASS-результатом,
+ * Сверяет инвентарь с независимо прочитанным evidence `supply_chain`: PASS-результатом,
  * его checksum-ссылкой и записями provenance для каждого образа. Инвентарь сам
  * по себе не является доказательством — только согласие с этими файлами.
  */
@@ -328,13 +328,13 @@ export async function readLaunchImageInventory({
   const path = imageInventoryPath(evidenceDir);
   const info = await lstat(path).catch(() => null);
   if (info === null) {
-    // Если G12 в этом scope уже дал PASS-результат, инвентарь обязан быть:
-    // иначе proof-стеки, которые не сверяют G12-образ, тихо пересобрали бы его.
+    // Если `supply_chain` в этом scope уже дал PASS-результат, инвентарь обязан быть:
+    // иначе proof-стеки, которые не сверяют образ `supply_chain`, тихо пересобрали бы его.
     const gateResult = await lstat(
       join(supplyChainDir(evidenceDir), "result.json"),
     ).catch(() => null);
     if (gateResult !== null) fail("IMAGE_INVENTORY_MISSING");
-    // Иного G12 в этом scope нет (например, дочерний run), сборка допустима.
+    // Иного `supply_chain` в этом scope нет (например, дочерний run), сборка допустима.
     return null;
   }
   const environment = JSON.parse(

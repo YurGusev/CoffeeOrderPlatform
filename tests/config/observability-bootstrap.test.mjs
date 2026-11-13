@@ -4190,7 +4190,7 @@ void test("G08 canonical target probe is read-only and reports only bounded iden
     const originalConfigBytes = await readFile(configPath);
     const dirtyConfigBytes = Buffer.concat([
       originalConfigBytes,
-      Buffer.from("\n# G08 dirty checkout fixture\n"),
+      Buffer.from("\n# dirty checkout fixture\n"),
     ]);
     await writeFile(configPath, dirtyConfigBytes);
     await chmod(contextPath, 0o600);

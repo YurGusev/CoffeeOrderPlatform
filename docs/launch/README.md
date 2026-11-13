@@ -57,8 +57,9 @@
 33. [Эксплуатация операторской SPA: маршруты, recovery и rollback](30_FRONTEND_OPERATOR_RUNBOOK.md)
 34. [Контракт помола и параллельность #9/#11](30_AROMA_GRIND_CONTRACT_AND_PARALLEL_DELIVERY.md) — утверждённый backend contract closure и физическая идентичность; не evidence реализации.
 35. [Локальное управление контейнерами CoffeeOrderPlatform и CoffeeOrderSystem](31_LOCAL_CONTAINERS_RUNBOOK.md)
-36. [Наблюдаемость Operations и G14](../operations/observability.md) — #64,
+36. [Наблюдаемость Operations и `observability`](../operations/observability.md) — #64,
     `pnpm test:observability` и handoff; FAIL/NOT_RUN не разрешает launch.
+37. [Имена гейтов запуска](22_GATE_NAMING.md) — slug-адресация, `pnpm naming:check` и снимок нарушений.
 
 Продолжение после первого запуска: [план второй волны — закупка, счета и оплата](../wave-2/README.md).
 

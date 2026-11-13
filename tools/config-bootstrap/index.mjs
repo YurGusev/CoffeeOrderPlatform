@@ -3128,7 +3128,7 @@ function migrationExactKeys(value, keys) {
   );
 }
 
-/** Permit only the approved isolation and unit-coverage additions after G08. */
+/** Permit only the approved isolation and unit-coverage additions after `migrations`. */
 export function validateMigrationPreparationConfigTransition(
   preparationConfigBytes,
   currentConfigBytes,
@@ -3245,7 +3245,7 @@ export function validateMigrationPreparationConfigTransition(
   return true;
 }
 
-/** Validate the shared G08 receipt shape against a run and the saved secret bundle. */
+/** Validate the shared `migrations` receipt shape against a run and the saved secret bundle. */
 export function validateMigrationPreparationArtifact(
   value,
   context,
@@ -3624,7 +3624,7 @@ function assertMigrationAdminIdentityAndRoles(state, expectedSystemIdentifier) {
     );
 }
 
-/** Read-only G08 probe; it never creates roles or databases. */
+/** Read-only `migrations` probe; it never creates roles or databases. */
 export async function probeCanonicalMigrationTarget({
   root = REPO_ROOT,
   contextPath = process.env.COFFEE_LAUNCH_CONTEXT_FILE,
@@ -3765,7 +3765,7 @@ export async function attestCanonicalMigrationPreparation({
   };
 }
 
-/** Return the prepared PostgreSQL identity only after a fresh G08-bound probe. */
+/** Return the prepared PostgreSQL identity only after a fresh probe bound to `migrations`. */
 export async function readPreparedPostgresIdentity({
   root = REPO_ROOT,
   contextPath = process.env.COFFEE_LAUNCH_CONTEXT_FILE,
@@ -4700,7 +4700,7 @@ function assertPreparedMigrationRoleInventory(state, roles) {
     );
 }
 
-/** Return one G08 credential only after binding it to the current committed preparation. */
+/** Return one `migrations` credential only after binding it to the current committed preparation. */
 export async function readMigrationCredential({
   root = REPO_ROOT,
   contextPath = process.env.COFFEE_LAUNCH_CONTEXT_FILE,
@@ -5380,7 +5380,7 @@ export function selectBackupRuntimeCredentialClaim({
   return { username: runtimeRole.role, secretRef: claim.secretRef };
 }
 
-/** Read one G17 bootstrap credential in-process after binding it to an exact launch target. */
+/** Read one `backup_restore` bootstrap credential in-process after binding it to an exact launch target. */
 export async function readBackupCredential({
   root = REPO_ROOT,
   runId,
@@ -5570,7 +5570,7 @@ async function assertNoSymlinkPath(path) {
     fail("CONFIG-BACKUP-PATH", "G17 evidence path is not canonical");
 }
 
-/** Bind G17 bootstrap to the validated run, exact YAML bytes, and G00 server identity. */
+/** Bind `backup_restore` bootstrap to the validated run, exact YAML bytes, and `preflight` server identity. */
 export async function validateBackupTarget({
   root = REPO_ROOT,
   contextPath = process.env.COFFEE_LAUNCH_CONTEXT_FILE,

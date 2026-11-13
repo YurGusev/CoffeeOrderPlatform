@@ -3269,7 +3269,7 @@ void test("otel-collector layer removes volatile dpkg state for reproducible ima
     "FROM ${OTEL_COLLECTOR_IMAGE} AS otel-collector",
   );
   const end = dockerfile.indexOf(
-    "# G12 supplies the verified, signed vendor plugin context",
+    "# `supply_chain` supplies the verified, signed vendor plugin context",
   );
   assert.ok(start >= 0 && end > start);
   const stage = dockerfile.slice(start, end);
@@ -5155,7 +5155,7 @@ void test("G18 restored-card timeout records bounded guarded facts only after ti
   const directory = await mkdtemp(join(tmpdir(), "g18-restored-card-timeout-"));
   const candidateSha = "4".repeat(40);
   const maxSnapshotAgeMs = 15_000;
-  const orderRef = "ord_01J8G18TIMEOUTFIXTURE000000000";
+  const orderRef = "ord_01J8X18TIMEOUTFIXTURE000000000";
   const canary = "RAW_ROLLBACK_DATABASE_ROW_CANARY";
   const platformConfig = {
     services: {
@@ -5425,7 +5425,7 @@ void test("G18 restored-card timeout records bounded guarded facts only after ti
     );
     assert.doesNotMatch(
       artifactBytes,
-      /RAW_ROLLBACK_DATABASE_ROW_CANARY|SCOPED_PREPARATION_SECRET_CANARY|ord_01J8G18TIMEOUTFIXTURE/u,
+      /RAW_ROLLBACK_DATABASE_ROW_CANARY|SCOPED_PREPARATION_SECRET_CANARY|ord_01J8X18TIMEOUTFIXTURE/u,
     );
     assert.equal((await stat(artifactPath)).mode & 0o777, 0o600);
     assert.equal(
@@ -7044,7 +7044,9 @@ void test("G13/G14 use current G08 context while malformed browser lineage fails
       },
     }),
     (error) =>
-      ["CONFIG-MIGRATIONS-BUNDLE", "CONFIG-MIGRATIONS-CONTEXT"].includes(error?.ruleId),
+      ["CONFIG-MIGRATIONS-BUNDLE", "CONFIG-MIGRATIONS-CONTEXT"].includes(
+        error?.ruleId,
+      ),
     "ordinary G13 must enter the current-context G08 reader",
   );
 

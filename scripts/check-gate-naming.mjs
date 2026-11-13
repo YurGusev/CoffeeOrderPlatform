@@ -2,7 +2,7 @@
 /**
  * Проверка конвенции имён гейтов запуска.
  *
- * Гейты адресуются стабильным slug (`supply_chain`), а не номером `G12`.
+ * Гейты адресуются стабильным slug (`supply_chain`), а не номером позиции.
  * Номер — это позиция в matrix.yaml, он вычисляется при выводе отчёта и не
  * попадает в идентификаторы, env-переменные, коды ошибок, имена файлов и
  * комментарии. Иначе вставка гейта в середину матрицы переименовывает
@@ -57,6 +57,8 @@ const EXCLUDED_PATHS = Object.freeze([
   "evidence/",
   "scripts/gate-naming-baseline.json",
   "docs/launch/22_GATE_NAMING.md",
+  // Снимок прототипа: base64-строки не являются именами гейтов.
+  "docs/frontend/prototypes/",
 ]);
 
 const RULES = Object.freeze([
@@ -84,7 +86,20 @@ const RULES = Object.freeze([
   },
 ]);
 
-const COMMENT_PREFIX = /(?:\/\/|\/\*|^\s*\*|#)/u;
+// Комментарий — только маркер в начале строки и только в кодовых файлах:
+// заголовки markdown и строковые литералы не являются комментариями.
+const COMMENT_PREFIX = /^\s*(?:\/\/|\/\*|\*|#)/u;
+const COMMENT_EXTENSIONS = new Set([
+  ".js",
+  ".mjs",
+  ".ts",
+  ".tsx",
+  ".py",
+  ".sh",
+  ".yaml",
+  ".yml",
+  ".sql",
+]);
 // Хеши, base64 и случайные fixture-строки не являются именами гейтов.
 const RANDOM_TOKEN = /[A-Za-z0-9]{24,}/u;
 const MAX_SYMBOL_LENGTH = 40;
@@ -97,6 +112,11 @@ function isRandomIdentifier(match) {
   return transitions > MAX_CASE_TRANSITIONS;
 }
 const COMMENT_GATE = new RegExp(String.raw`\b${GATE_NUMBER}\b`, "gu");
+// Старые env-имена читаются один релиз для совместимости окружений.
+const ALLOWED_LEGACY_ENV = new Set([
+  "COFFEE_G12_CACHE_DIR",
+  "COFFEE_G15_OWNER_BROWSER",
+]);
 const BASELINE_VERSION = 1;
 
 function isExcluded(relativePath) {
@@ -137,14 +157,17 @@ export function violationsInSource(relativePath, source) {
     found.set(`${kind}|${line}|${match}`, { kind, path, line, match });
   };
   for (const rule of RULES)
-    for (const hit of source.matchAll(rule.pattern))
-      if (rule.kind === "error-code" || !isRandomIdentifier(hit[0]))
-        add(rule.kind, lineOf(source, hit.index), hit[0]);
-  source.split("\n").forEach((text, index) => {
-    if (!COMMENT_PREFIX.test(text)) return;
-    for (const hit of text.matchAll(COMMENT_GATE))
-      add("comment", index + 1, hit[0]);
-  });
+    for (const hit of source.matchAll(rule.pattern)) {
+      if (ALLOWED_LEGACY_ENV.has(hit[0])) continue;
+      if (rule.kind !== "error-code" && isRandomIdentifier(hit[0])) continue;
+      add(rule.kind, lineOf(source, hit.index), hit[0]);
+    }
+  if (COMMENT_EXTENSIONS.has(extname(path)))
+    source.split("\n").forEach((text, index) => {
+      if (!COMMENT_PREFIX.test(text)) return;
+      for (const hit of text.matchAll(COMMENT_GATE))
+        add("comment", index + 1, hit[0]);
+    });
   return [...found.values()];
 }
 

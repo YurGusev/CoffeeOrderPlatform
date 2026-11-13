@@ -66,14 +66,14 @@ Fastify не является их admission. Владельцы и prerequisite
   in-flight обязательны. Ordering определяется по aggregate, SKIP LOCKED сам по
   себе не доказывает порядок публикации несколькими publishers.
 - [#64](https://github.com/YurGusev/CoffeeOrderPlatform/issues/64) — Observability: производители #10–#12 не заменяют Collector/storage/alert
-  evaluation. Operations реализует их до G14 #13. Потеря telemetry не блокирует
+  evaluation. Operations реализует их до гейта `observability` #13. Потеря telemetry не блокирует
   business path; bounded buffering, drops, retention и redaction проверяются.
 
-G12 supply-chain scan запускается после G07 config/security и до G08 migrations.
-G10 integration, G11 recovery и G13 Compose требуют успешный G12, поскольку
-используют проверенные runtime images; G13 также требует успешный G11. При FAIL
-G12 независимые G08 и G09 могут пройти, а эти Kafka-consuming gates остаются
-NOT_RUN. G19 сохраняет fail-closed решение и не превращает частичный run в допуск.
+Гейт `supply_chain` запускается после `config_security` и до `migrations`.
+Гейты `integration`, `recovery` и `compose` требуют успешного `supply_chain`, поскольку
+используют проверенные runtime images; `compose` также требует успешного `recovery`. При FAIL гейта
+`supply_chain` независимые `migrations` и `db_boundaries` могут пройти, а эти Kafka-consuming gates остаются
+NOT_RUN. `report` сохраняет fail-closed решение и не превращает частичный run в допуск.
 
 Contract task #4 может начаться после #60 независимо от runtime hardening.
 Business writers ждут нужные foundation handoffs; общий Effect admission больше
@@ -112,5 +112,5 @@ node требует явного retention/disk/recovery бюджета и не 
 `orderRef`, `operationRef`, `attemptRef`, `messageId` и correlation связывают
 расследование; высококардинальные identifiers не являются metric labels.
 Одна ограниченная операция имеет trace; долгоживущий order связывает несколько
-traces/links. G14 сохраняет сквозное доказательство browser→DB/Kafka→SSE→refetch
+traces/links. Гейт `observability` сохраняет сквозное доказательство browser→DB/Kafka→SSE→refetch
 и реальные alert injections, не требует бесконечного span на весь order.

@@ -72,10 +72,10 @@ state volume, OCI GC/parallelism config и effective GC policy worker.
 создавать заново и проверять, что используется тот же state volume
 `buildx_buildkit_coffee-platform-mtu0_state`. Если меняется сеть сборки (например,
 MTU `coffee_platform_build_mtu`), сначала сохранить state builder'а, затем
-пересоздать сеть; иначе G12 начинает с холодного кеша и может не уложиться в
+пересоздать сеть; иначе `supply_chain` начинается с холодного кеша и может не уложиться в
 бюджет.
 
-G12 создаёт регистрацию в собственном временном Docker config через тот же
+`supply_chain` создаёт регистрацию в собственном временном Docker config через тот же
 генератор CLI arguments/TOML и тот же verifier перед прямыми OCI builds.
 Endpoint остаётся локальным `unix:///var/run/docker.sock`; socket не
 монтируется в scanner. Credentials остаются в scoped tmpfs, общий Docker
@@ -104,14 +104,14 @@ permission launcher и healthcheck вместе с основным процес
 Это начальный профиль индивидуальных потолков, а не резервирование RAM.
 Сумма всех потолков вместе с BuildKit и desktop превышает RAM этого хоста;
 одновременное достижение всех максимумов не допускает обещания отсутствия OOM.
-Общий heavy lock сохраняется. Перед deployment требуются новый G12 и проверка
+Общий heavy lock сохраняется. Перед deployment требуются новый прогон `supply_chain` и проверка
 рабочих пиков/health deadlines с этими bounds; micro/cgroup proof не заменяет
 capacity admission. Merge сам по себе не меняет запущенный frozen release.
 
 Нативная [проверка от 5 ноября 2026](../../evidence/platform-resources/2026-11-05/native-proof.json)
 подтвердила два создания собственного временного builder, сохранение worker ID
 через `rm --keep-state`, повторный `COPY CACHED`, effective CPU/RAM/GC,
-обычный wrapper и отдельную G12-регистрацию с настоящим async runner.
+обычный wrapper и отдельную регистрацию `supply_chain` с настоящим async runner.
 В изолированном Node container проверены `cpu.max`, `memory.max` и heap sizing.
 Metadata всех 37 исходных томов, включая 33 именованных и оба CoffeeOrderDb,
 совпали; ID/PID/StartedAt/RestartCount 25 проверенных существующих контейнеров
@@ -187,7 +187,7 @@ DHI требует доступ Docker Hub. Существующую учётн�
 trusted bootstrap: `node tools/config-bootstrap/index.mjs --prepare-development-runtime --import-docker-hub-auth /home/yurgusev/.docker/config.json`.
 Источник должен принадлежать пользователю и иметь закрытые права. Команда
 записывает только encrypted `bootstrap.dockerHubPullAuth`, не заменяет отличающуюся
-существующую credential и не меняет Docker login. G12 материализует только эту
+существующую credential и не меняет Docker login. Гейт `supply_chain` материализует только эту
 credential в собственный `/dev/shm/coffee-image-registry-*` и удаляет каталог
 после успеха или ошибки; build context, evidence и runtime её не получают.
 
@@ -222,7 +222,7 @@ Grafana Explore, datasource `loki`, по запросу
 
 Контроллер работает из чистого detached checkout
 `~/coffee-platform/runtime/controllers/<commit>`. Ему передают сохранённый
-`COFFEE_LAUNCH_CONTEXT_FILE` с успешным G12 для того же commit и точных image IDs,
+`COFFEE_LAUNCH_CONTEXT_FILE` с успешным `supply_chain` для того же commit и точных image IDs,
 `COFFEE_DB_EXPECTED_SERVER_IDENTITY` утверждённого PostgreSQL и
 `SOPS_AGE_KEY_FILE` существующего age identity. Эти переменные содержат только
 локаторы и проверяемый идентификатор, не пароли. Образы другого commit или
@@ -289,7 +289,7 @@ unit для этого release. Последующий штатный запус
 2 identity connections, 8 на serial rollout и резерв 32. Пул AROMA Gateway — 6;
 остальные Node pools сохранены. Реальные login, readiness, API→DB→Kafka→SSE и
 restart с сохранением данных обязательны до приёмки установки. Такой запуск
-сам по себе не является formal G00–G19 admission.
+сам по себе не является формальным допуском по гейтам запуска.
 
 Для единственного локального экземпляра Keycloak профиль development задаёт
 `localIdentity.cacheMode: local`. Контроллер передаёт его как `KC_CACHE` при

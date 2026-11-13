@@ -386,11 +386,11 @@ production promotion/admission остаётся отдельной приёмк�
 
 ### Настоящий owner → served browser путь
 
-После G14, в G15 до итогового допуска проверяются три отдельных обязательных
-сценария существующей owner/browser вертикали. G15 запускает их последовательно
+После `observability` в `browser` до итогового допуска проверяются три отдельных обязательных
+сценария существующей owner/browser вертикали. `browser` запускает их последовательно
 после очистки основного browser runtime с проверенным OIDC-only child context;
-отсутствие любого proof, hashes или cleanup блокирует G15.
-Для G15 и nested fixture harness заранее задаётся `TMPDIR` в declared
+отсутствие любого proof, hashes или cleanup блокирует `browser`.
+Для `browser` и nested fixture harness заранее задаётся `TMPDIR` в declared
 scratch вне repository; локальная проверка использует
 `TMPDIR=/home/yurgusev/.hermes/cache/scratch`. Отсутствующий `TMPDIR` не меняет
 CLI guard: результат в обычном `/tmp` не считается declared scratch.

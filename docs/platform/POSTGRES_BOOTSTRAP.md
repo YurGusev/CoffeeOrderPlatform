@@ -62,7 +62,7 @@ password authentication текущими SOPS credentials. Проверки Post
 контекста запуска, конфигурации и encrypted bundle повторяются перед возвратом
 результата. Роли, БД и SOPS при этом не изменяются.
 
-После успешной проверки G08 сохраняет run-bound proof со стадией
+После успешной проверки `migrations` сохраняет run-bound proof со стадией
 `roles-verified`, `createdCount: 0` и `transaction: "read-only"`. Он подтверждает
 текущее состояние, а не прошлое создание ролей. Исторический `roles-created`
 с `createdCount: 15` и `transaction: "committed"` сохраняет прежние проверки.

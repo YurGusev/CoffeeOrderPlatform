@@ -830,7 +830,7 @@ export async function prepare(resultDir, options) {
       "qualification requires the verified child and full operator-1 profile",
     );
   }
-  // Validate the frozen G12 artifact before generating private credentials or
+  // Validate the frozen `supply_chain` artifact before generating private credentials or
   // starting the comparatively expensive native runtime build. This pass is
   // read-only with respect to Docker; the later import pass repeats validation.
   const kafkaArtifactProof = await loadVerifiedGateImage({

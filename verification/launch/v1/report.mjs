@@ -21,7 +21,7 @@ import { gateLabel, gateSlug } from "./gate-identity.mjs";
 
 export { EXPECTED_GATES };
 
-// G19 must work even when G00/G01 failed before candidate dependencies were installed.
+// `report` must work even when `preflight`/`install` failed before candidate dependencies were installed.
 // Keep this small validation contract local and builtin-only.
 const PROJECT_ROOT = resolve(
   dirname(fileURLToPath(import.meta.url)),
