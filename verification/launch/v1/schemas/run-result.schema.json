@@ -123,26 +123,26 @@
       "minItems": 20,
       "maxItems": 20,
       "prefixItems": [
-        { "$ref": "#/$defs/G00_PREFLIGHT" },
-        { "$ref": "#/$defs/G01_INSTALL" },
-        { "$ref": "#/$defs/G02_GENERATED" },
-        { "$ref": "#/$defs/G03_STATIC" },
-        { "$ref": "#/$defs/G04_UNIT" },
-        { "$ref": "#/$defs/G05_CONTRACTS" },
-        { "$ref": "#/$defs/G06_ARCHITECTURE" },
-        { "$ref": "#/$defs/G07_CONFIG_SECURITY" },
-        { "$ref": "#/$defs/G12_SUPPLY_CHAIN" },
-        { "$ref": "#/$defs/G08_MIGRATIONS" },
-        { "$ref": "#/$defs/G09_DB_BOUNDARIES" },
-        { "$ref": "#/$defs/G10_INTEGRATION" },
-        { "$ref": "#/$defs/G11_RECOVERY" },
-        { "$ref": "#/$defs/G13_COMPOSE" },
-        { "$ref": "#/$defs/G14_OBSERVABILITY" },
-        { "$ref": "#/$defs/G15_BROWSER" },
-        { "$ref": "#/$defs/G16_AROMA_SANDBOX" },
-        { "$ref": "#/$defs/G17_BACKUP_RESTORE" },
-        { "$ref": "#/$defs/G18_ROLLBACK" },
-        { "$ref": "#/$defs/G19_REPORT" }
+        { "$ref": "#/$defs/preflight" },
+        { "$ref": "#/$defs/install" },
+        { "$ref": "#/$defs/generated" },
+        { "$ref": "#/$defs/static" },
+        { "$ref": "#/$defs/unit" },
+        { "$ref": "#/$defs/contracts" },
+        { "$ref": "#/$defs/architecture" },
+        { "$ref": "#/$defs/config_security" },
+        { "$ref": "#/$defs/supply_chain" },
+        { "$ref": "#/$defs/migrations" },
+        { "$ref": "#/$defs/db_boundaries" },
+        { "$ref": "#/$defs/integration" },
+        { "$ref": "#/$defs/recovery" },
+        { "$ref": "#/$defs/compose" },
+        { "$ref": "#/$defs/observability" },
+        { "$ref": "#/$defs/browser" },
+        { "$ref": "#/$defs/aroma_sandbox" },
+        { "$ref": "#/$defs/backup_restore" },
+        { "$ref": "#/$defs/rollback" },
+        { "$ref": "#/$defs/report" }
       ],
       "items": false
     },
@@ -173,7 +173,7 @@
         "artifacts"
       ],
       "properties": {
-        "id": { "type": "string" },
+        "id": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
         "status": { "enum": ["PASS", "FAIL", "NOT_RUN"] },
         "expectedCommand": { "type": "string" },
         "startedAt": { "type": ["string", "null"], "format": "date-time" },
@@ -236,52 +236,52 @@
         "sizeBytes": { "type": "integer", "minimum": 0 }
       }
     },
-    "G00_PREFLIGHT": {
+    "preflight": {
       "allOf": [
         { "$ref": "#/$defs/gate" },
         {
           "type": "object",
           "properties": {
-            "id": { "const": "G00_PREFLIGHT" },
+            "id": { "const": "preflight" },
             "expectedCommand": { "const": "pnpm launch:verify:preflight" },
             "timeoutSeconds": { "const": 900 }
           }
         }
       ]
     },
-    "G01_INSTALL": {
+    "install": {
       "allOf": [
         { "$ref": "#/$defs/gate" },
         {
           "type": "object",
           "properties": {
-            "id": { "const": "G01_INSTALL" },
+            "id": { "const": "install" },
             "expectedCommand": { "const": "pnpm install --frozen-lockfile" },
             "timeoutSeconds": { "const": 900 }
           }
         }
       ]
     },
-    "G02_GENERATED": {
+    "generated": {
       "allOf": [
         { "$ref": "#/$defs/gate" },
         {
           "type": "object",
           "properties": {
-            "id": { "const": "G02_GENERATED" },
+            "id": { "const": "generated" },
             "expectedCommand": { "const": "pnpm contracts:check-generated" },
             "timeoutSeconds": { "const": 900 }
           }
         }
       ]
     },
-    "G03_STATIC": {
+    "static": {
       "allOf": [
         { "$ref": "#/$defs/gate" },
         {
           "type": "object",
           "properties": {
-            "id": { "const": "G03_STATIC" },
+            "id": { "const": "static" },
             "expectedCommand": {
               "const": "pnpm format:check && pnpm lint && pnpm typecheck"
             },
@@ -290,26 +290,26 @@
         }
       ]
     },
-    "G04_UNIT": {
+    "unit": {
       "allOf": [
         { "$ref": "#/$defs/gate" },
         {
           "type": "object",
           "properties": {
-            "id": { "const": "G04_UNIT" },
+            "id": { "const": "unit" },
             "expectedCommand": { "const": "pnpm test:unit -- --coverage" },
             "timeoutSeconds": { "const": 900 }
           }
         }
       ]
     },
-    "G05_CONTRACTS": {
+    "contracts": {
       "allOf": [
         { "$ref": "#/$defs/gate" },
         {
           "type": "object",
           "properties": {
-            "id": { "const": "G05_CONTRACTS" },
+            "id": { "const": "contracts" },
             "expectedCommand": {
               "const": "pnpm contracts:check-generated && pnpm contracts:breaking && pnpm contracts:test"
             },
@@ -318,26 +318,26 @@
         }
       ]
     },
-    "G06_ARCHITECTURE": {
+    "architecture": {
       "allOf": [
         { "$ref": "#/$defs/gate" },
         {
           "type": "object",
           "properties": {
-            "id": { "const": "G06_ARCHITECTURE" },
+            "id": { "const": "architecture" },
             "expectedCommand": { "const": "pnpm architecture:check" },
             "timeoutSeconds": { "const": 900 }
           }
         }
       ]
     },
-    "G07_CONFIG_SECURITY": {
+    "config_security": {
       "allOf": [
         { "$ref": "#/$defs/gate" },
         {
           "type": "object",
           "properties": {
-            "id": { "const": "G07_CONFIG_SECURITY" },
+            "id": { "const": "config_security" },
             "expectedCommand": {
               "const": "pnpm versions:check && pnpm config:check && pnpm security:secrets"
             },
@@ -346,13 +346,13 @@
         }
       ]
     },
-    "G08_MIGRATIONS": {
+    "migrations": {
       "allOf": [
         { "$ref": "#/$defs/gate" },
         {
           "type": "object",
           "properties": {
-            "id": { "const": "G08_MIGRATIONS" },
+            "id": { "const": "migrations" },
             "expectedCommand": {
               "const": "pnpm test:migrations:clean && pnpm test:migrations:forward"
             },
@@ -361,104 +361,104 @@
         }
       ]
     },
-    "G09_DB_BOUNDARIES": {
+    "db_boundaries": {
       "allOf": [
         { "$ref": "#/$defs/gate" },
         {
           "type": "object",
           "properties": {
-            "id": { "const": "G09_DB_BOUNDARIES" },
+            "id": { "const": "db_boundaries" },
             "expectedCommand": { "const": "pnpm db:smoke" },
             "timeoutSeconds": { "const": 1800 }
           }
         }
       ]
     },
-    "G10_INTEGRATION": {
+    "integration": {
       "allOf": [
         { "$ref": "#/$defs/gate" },
         {
           "type": "object",
           "properties": {
-            "id": { "const": "G10_INTEGRATION" },
+            "id": { "const": "integration" },
             "expectedCommand": { "const": "pnpm test:integration" },
             "timeoutSeconds": { "const": 1800 }
           }
         }
       ]
     },
-    "G11_RECOVERY": {
+    "recovery": {
       "allOf": [
         { "$ref": "#/$defs/gate" },
         {
           "type": "object",
           "properties": {
-            "id": { "const": "G11_RECOVERY" },
+            "id": { "const": "recovery" },
             "expectedCommand": { "const": "pnpm test:recovery" },
             "timeoutSeconds": { "const": 1800 }
           }
         }
       ]
     },
-    "G12_SUPPLY_CHAIN": {
+    "supply_chain": {
       "allOf": [
         { "$ref": "#/$defs/gate" },
         {
           "type": "object",
           "properties": {
-            "id": { "const": "G12_SUPPLY_CHAIN" },
+            "id": { "const": "supply_chain" },
             "expectedCommand": { "const": "pnpm security:scan" },
             "timeoutSeconds": { "const": 2700 }
           }
         }
       ]
     },
-    "G13_COMPOSE": {
+    "compose": {
       "allOf": [
         { "$ref": "#/$defs/gate" },
         {
           "type": "object",
           "properties": {
-            "id": { "const": "G13_COMPOSE" },
+            "id": { "const": "compose" },
             "expectedCommand": { "const": "pnpm test:compose-smoke" },
             "timeoutSeconds": { "const": 1800 }
           }
         }
       ]
     },
-    "G14_OBSERVABILITY": {
+    "observability": {
       "allOf": [
         { "$ref": "#/$defs/gate" },
         {
           "type": "object",
           "properties": {
-            "id": { "const": "G14_OBSERVABILITY" },
+            "id": { "const": "observability" },
             "expectedCommand": { "const": "pnpm test:observability" },
             "timeoutSeconds": { "const": 1800 }
           }
         }
       ]
     },
-    "G15_BROWSER": {
+    "browser": {
       "allOf": [
         { "$ref": "#/$defs/gate" },
         {
           "type": "object",
           "properties": {
-            "id": { "const": "G15_BROWSER" },
+            "id": { "const": "browser" },
             "expectedCommand": { "const": "pnpm test:playwright" },
             "timeoutSeconds": { "const": 1800 }
           }
         }
       ]
     },
-    "G16_AROMA_SANDBOX": {
+    "aroma_sandbox": {
       "allOf": [
         { "$ref": "#/$defs/gate" },
         {
           "type": "object",
           "properties": {
-            "id": { "const": "G16_AROMA_SANDBOX" },
+            "id": { "const": "aroma_sandbox" },
             "expectedCommand": {
               "const": "pnpm test:aroma-sandbox -- --approval-file \"$AROMA_SANDBOX_APPROVAL_FILE\""
             },
@@ -467,26 +467,26 @@
         }
       ]
     },
-    "G17_BACKUP_RESTORE": {
+    "backup_restore": {
       "allOf": [
         { "$ref": "#/$defs/gate" },
         {
           "type": "object",
           "properties": {
-            "id": { "const": "G17_BACKUP_RESTORE" },
+            "id": { "const": "backup_restore" },
             "expectedCommand": { "const": "pnpm test:backup-restore" },
             "timeoutSeconds": { "const": 1800 }
           }
         }
       ]
     },
-    "G18_ROLLBACK": {
+    "rollback": {
       "allOf": [
         { "$ref": "#/$defs/gate" },
         {
           "type": "object",
           "properties": {
-            "id": { "const": "G18_ROLLBACK" },
+            "id": { "const": "rollback" },
             "expectedCommand": {
               "const": "pnpm test:mutation-disable-rollback"
             },
@@ -495,13 +495,13 @@
         }
       ]
     },
-    "G19_REPORT": {
+    "report": {
       "allOf": [
         { "$ref": "#/$defs/gate" },
         {
           "type": "object",
           "properties": {
-            "id": { "const": "G19_REPORT" },
+            "id": { "const": "report" },
             "expectedCommand": { "const": "pnpm launch:verify:report" },
             "timeoutSeconds": { "const": 900 }
           }

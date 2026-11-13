@@ -4521,7 +4521,7 @@ async function readMigrationPreparationSnapshot(
 ) {
   const path = join(
     source.evidenceDir,
-    "gates/G08_MIGRATIONS/artifacts/canonical-preparation.json",
+    "gates/migrations/artifacts/canonical-preparation.json",
   );
   await assertPreparationNoSymlinkPath(path);
   let info;
@@ -5685,7 +5685,7 @@ export async function validateBackupTarget({
 
   const identityPath = join(
     evidenceDir,
-    "gates/G00_PREFLIGHT/artifacts/postgres-server-identity.json",
+    "gates/preflight/artifacts/postgres-server-identity.json",
   );
   await assertNoSymlinkPath(identityPath);
   const identityStat = await lstat(identityPath);

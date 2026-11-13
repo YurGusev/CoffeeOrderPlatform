@@ -72,7 +72,7 @@ ajv.addFormat("date-time", {
 
 export function gateBudgetMs(gateId, totalRemainingMs) {
   if (!Number.isFinite(totalRemainingMs)) return 0;
-  if (gateId === "G19_REPORT")
+  if (gateId === "report")
     return Math.max(0, totalRemainingMs - REPORT_FINALIZATION_RESERVE_MS);
   return Math.max(0, totalRemainingMs - REPORT_TOTAL_RESERVE_MS);
 }
@@ -1028,7 +1028,7 @@ export async function verifyGateArtifacts(gate, record, evidenceDir) {
     await readFile(join(evidenceDir, "context.json"), "utf8"),
   );
   const additions = [];
-  if (gate.id === "G09_DB_BOUNDARIES") {
+  if (gate.id === "db_boundaries") {
     const failure =
       "G09 live database-boundary receipt does not match the current run or exact 10/40-case contract";
     if (
@@ -1070,11 +1070,11 @@ export async function verifyGateArtifacts(gate, record, evidenceDir) {
       stdoutReceipt = envelope.databaseBoundaryReceipt;
       const migrationPath = join(
         evidenceDir,
-        "gates/G08_MIGRATIONS/artifacts/result.json",
+        "gates/migrations/artifacts/result.json",
       );
       const preparationPath = join(
         evidenceDir,
-        "gates/G08_MIGRATIONS/artifacts/canonical-preparation.json",
+        "gates/migrations/artifacts/canonical-preparation.json",
       );
       await assertNoSymlinkPath(evidenceDir, migrationPath);
       await assertNoSymlinkPath(evidenceDir, preparationPath);
@@ -1345,7 +1345,7 @@ export async function verifyGateArtifacts(gate, record, evidenceDir) {
       return failure;
     additions.push(await hashFile(path));
   }
-  if (gate.id === "G08_MIGRATIONS") {
+  if (gate.id === "migrations") {
     const path = join(gateDir, "artifacts/result.json");
     let receipt;
     try {
@@ -1421,7 +1421,7 @@ export async function verifyGateArtifacts(gate, record, evidenceDir) {
       return "G08 migration oracle receipt does not match the validated context or cleanup contract";
     additions.push(await hashFile(path));
   }
-  if (gate.id === "G14_OBSERVABILITY") {
+  if (gate.id === "observability") {
     const failure =
       "G14 browser correlation child lineage or cleanup is invalid";
     if (
@@ -1520,7 +1520,7 @@ export async function verifyGateArtifacts(gate, record, evidenceDir) {
       return failure;
     }
   }
-  if (gate.id === "G15_BROWSER") {
+  if (gate.id === "browser") {
     const failure =
       "G15 parent wrapper does not admit a joined child, exact fixture lineage, browser proof and cleanup";
     const failedChildAttempt =
@@ -1630,7 +1630,7 @@ export async function verifyGateArtifacts(gate, record, evidenceDir) {
     ])
       additions.push(await hashFile(join(artifactRoot, name)));
   }
-  if (gate.id === "G00_PREFLIGHT") {
+  if (gate.id === "preflight") {
     const path = join(gateDir, "artifacts/preflight.json");
     let output;
     try {
@@ -1665,10 +1665,10 @@ export async function verifyGateArtifacts(gate, record, evidenceDir) {
     record.runs.every(
       (run) => run.exitCode === 0 && !run.timedOut && !run.outputLimitExceeded,
     );
-  if (gate.id === "G13_COMPOSE" && composeCommandSucceeded) {
+  if (gate.id === "compose" && composeCommandSucceeded) {
     const preflightPath = join(
       evidenceDir,
-      "gates/G00_PREFLIGHT/artifacts/preflight.json",
+      "gates/preflight/artifacts/preflight.json",
     );
     let preflight;
     try {
@@ -1706,7 +1706,7 @@ export async function verifyGateArtifacts(gate, record, evidenceDir) {
       return "G13 missing or invalid Kafka namespace inventory receipt";
     }
   }
-  if (gate.id === "G18_ROLLBACK" && gate.status === "PASS") {
+  if (gate.id === "rollback" && gate.status === "PASS") {
     const path = join(gateDir, "artifacts/mutation-disable-rollback.json");
     let artifact;
     try {
@@ -1725,7 +1725,7 @@ export async function verifyGateArtifacts(gate, record, evidenceDir) {
     }
     additions.push(await hashFile(path));
   }
-  if (gate.id === "G19_REPORT") {
+  if (gate.id === "report") {
     const result = JSON.parse(
       await readFile(join(evidenceDir, "decision.json"), "utf8").catch(
         () => "null",
@@ -1818,7 +1818,7 @@ export async function runGate(
   g08ExpectedSystemIdentifier,
   realtimeQualificationPath,
 ) {
-  if (outputBudget.exceeded && gate.id !== "G19_REPORT") {
+  if (outputBudget.exceeded && gate.id !== "report") {
     record.reason =
       "NOT_RUN: исчерпан общий budget stdout/stderr; downstream commands не запускаются";
     record.endedAt = nowIso();
@@ -1834,7 +1834,7 @@ export async function runGate(
     return;
   }
   const failedPredecessors = dependencyStatus(gate, runStart);
-  if (failedPredecessors.length && gate.id !== "G19_REPORT") {
+  if (failedPredecessors.length && gate.id !== "report") {
     record.reason = `NOT_RUN: predecessor не PASS: ${failedPredecessors.join(", ")}`;
     record.endedAt = nowIso();
     await writeFile(join(evidenceDir, "gates", gate.id, "stdout.log"), "", {
@@ -1848,10 +1848,7 @@ export async function runGate(
     await updateGateArtifact(evidenceDir, record);
     return;
   }
-  if (
-    gate.id === "G16_AROMA_SANDBOX" &&
-    !process.env.AROMA_SANDBOX_APPROVAL_FILE
-  ) {
+  if (gate.id === "aroma_sandbox" && !process.env.AROMA_SANDBOX_APPROVAL_FILE) {
     record.reason =
       "NOT_RUN: AROMA_SANDBOX_APPROVAL_FILE отсутствует; controlled-live G16 требует подписанный approval";
     record.endedAt = nowIso();
@@ -1869,7 +1866,7 @@ export async function runGate(
   record.startedAt = nowIso();
   record.reason = "";
   const started = Date.now();
-  if (gate.id === "G14_OBSERVABILITY") {
+  if (gate.id === "observability") {
     try {
       if (!realtimeQualificationPath)
         throw new Error("qualification receipt is required");
@@ -1908,7 +1905,7 @@ export async function runGate(
       return;
     }
   }
-  if (gate.id === "G08_MIGRATIONS") {
+  if (gate.id === "migrations") {
     if (
       typeof g08ExpectedSystemIdentifier !== "string" ||
       !/^[0-9]{1,20}$/u.test(g08ExpectedSystemIdentifier)
@@ -1972,7 +1969,7 @@ export async function runGate(
       Math.max(
         1,
         gate.timeout * 1000 -
-          (["G08_MIGRATIONS", "G14_OBSERVABILITY"].includes(gate.id)
+          (["migrations", "observability"].includes(gate.id)
             ? Date.now() - started
             : 0),
       ),
@@ -2247,7 +2244,7 @@ export async function executeRun(options = {}) {
     for (let index = 0; index < matrix.gates.length; index += 1) {
       const gate = matrix.gates[index];
       const record = result.gates[index];
-      if (gate.id === "G19_REPORT") {
+      if (gate.id === "report") {
         await writeDefects(evidenceDir, ROOT, result);
         await atomicJson(
           join(evidenceDir, "gates", gate.id, "result.json"),
@@ -2255,7 +2252,7 @@ export async function executeRun(options = {}) {
         );
         await save();
       }
-      if (Date.now() >= workloadDeadline && gate.id !== "G19_REPORT") {
+      if (Date.now() >= workloadDeadline && gate.id !== "report") {
         record.reason =
           "NOT_RUN: остановлено для резерва G19 и финализации внутри общего лимита 120 минут";
         record.endedAt = nowIso();

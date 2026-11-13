@@ -248,7 +248,7 @@ export function createBrowserChildFailureDiagnostic({
   }
   const diagnostic = {
     schemaVersion: 1,
-    gateId: "G15_BROWSER",
+    gateId: "browser",
     outcome: "FAIL",
     runId,
     candidateSha,
@@ -951,7 +951,7 @@ export function createRollbackRestoredCardTimeoutDiagnostic({
     throw new Error("G18_RESTORED_CARD_DIAGNOSTIC_IDENTITY_INVALID");
   return {
     schemaVersion: 1,
-    gateId: "G18_ROLLBACK",
+    gateId: "rollback",
     runId: context.runId,
     candidateSha: context.candidateSha,
     stage: "restored-card",
@@ -984,7 +984,7 @@ export async function writeRollbackRestoredCardTimeoutDiagnostic({
     ownerCardState,
     guardedCardFacts,
   });
-  const artifactDir = join(evidenceDir, "gates/G18_ROLLBACK/artifacts");
+  const artifactDir = join(evidenceDir, "gates/rollback/artifacts");
   await mkdir(artifactDir, { recursive: true, mode: 0o700 });
   const artifactPath = join(
     artifactDir,
@@ -1055,7 +1055,7 @@ export function createRollbackInitialUnknownTimeoutDiagnostic({
   const result = hasType("AromaConvergenceChanged.v1");
   return {
     schemaVersion: 1,
-    gateId: "G18_ROLLBACK",
+    gateId: "rollback",
     runId: context.runId,
     candidateSha: context.candidateSha,
     stage: "initial-unknown",
@@ -1162,9 +1162,9 @@ export async function writeRollbackInitialUnknownTimeoutDiagnostic({
   });
   const artifactPath = join(
     evidenceDir,
-    "gates/G18_ROLLBACK/artifacts/mutation-disable-rollback-initial-unknown-timeout.json",
+    "gates/rollback/artifacts/mutation-disable-rollback-initial-unknown-timeout.json",
   );
-  await mkdir(join(evidenceDir, "gates/G18_ROLLBACK/artifacts"), {
+  await mkdir(join(evidenceDir, "gates/rollback/artifacts"), {
     recursive: true,
     mode: 0o700,
   });
@@ -11341,7 +11341,7 @@ if (
     const artifact = validateBrowserRuntimeArtifact(
       {
         schemaVersion: 1,
-        gateId: "G15_BROWSER",
+        gateId: "browser",
         runId: context.runId,
         candidateSha: context.candidateSha,
         baseConfigSha256: context.baseConfigSha256,
@@ -11359,11 +11359,11 @@ if (
         lineage: lineageWithPath,
       },
     );
-    const artifactsDir = join(evidenceDir, "gates/G15_BROWSER/artifacts");
+    const artifactsDir = join(evidenceDir, "gates/browser/artifacts");
     for (const path of [
       evidenceDir,
       join(evidenceDir, "gates"),
-      join(evidenceDir, "gates/G15_BROWSER"),
+      join(evidenceDir, "gates/browser"),
       artifactsDir,
     ]) {
       const info = await lstat(path);

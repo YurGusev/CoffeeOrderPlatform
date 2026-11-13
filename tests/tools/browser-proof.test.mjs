@@ -1316,7 +1316,7 @@ void test("G15 runtime artifact binds full evidence, fixture lineage and cleanup
   };
   const artifact = {
     schemaVersion: 1,
-    gateId: "G15_BROWSER",
+    gateId: "browser",
     runId: RUN_ID,
     candidateSha: CANDIDATE_SHA,
     baseConfigSha256: "6".repeat(64),
@@ -1694,7 +1694,7 @@ void test("G15 child failure receipt keeps only scoped hashes and fixed source l
 
   const tempRoot = await mkdtemp(join(tmpdir(), "g15-child-failure-"));
   const evidenceDir = join(tempRoot, "evidence");
-  const artifactsDir = join(evidenceDir, "gates/G15_BROWSER/artifacts");
+  const artifactsDir = join(evidenceDir, "gates/browser/artifacts");
   await mkdir(artifactsDir, { recursive: true, mode: 0o700 });
   try {
     const error = Object.assign(new Error("child exited"), {
@@ -1718,7 +1718,7 @@ void test("G15 child failure receipt keeps only scoped hashes and fixed source l
     const receipt = JSON.parse(receiptText);
     assert.deepEqual(receipt, {
       schemaVersion: 1,
-      gateId: "G15_BROWSER",
+      gateId: "browser",
       outcome: "FAIL",
       parentRunId: parentContext.runId,
       parentCandidateSha: parentContext.candidateSha,

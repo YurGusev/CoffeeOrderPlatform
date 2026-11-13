@@ -1425,8 +1425,8 @@ void test("G00 source bootstrap permits only untracked evidence under the curren
     `?? evidence/launch/${data.context.runId}/context.json`,
     `?? evidence/launch/${data.context.runId}/environment.json`,
     `?? evidence/launch/${data.context.runId}/run-result.json`,
-    `?? evidence/launch/${data.context.runId}/gates/G00_PREFLIGHT/stdout.log`,
-    `?? evidence/launch/${data.context.runId}/gates/G00_PREFLIGHT/stderr.log`,
+    `?? evidence/launch/${data.context.runId}/gates/preflight/stdout.log`,
+    `?? evidence/launch/${data.context.runId}/gates/preflight/stderr.log`,
   ].join("\n");
   const dependencies = {
     cwd: data.root,
@@ -1468,9 +1468,9 @@ void test("G00 CLI refuses a symlinked artifacts directory without writing outsi
   t.after(() => rm(root, { recursive: true, force: true }));
   const runId = "20261023T120000Z-abcdef0";
   const evidenceDir = join(root, "evidence", "launch", runId);
-  const artifactDir = join(evidenceDir, "gates", "G00_PREFLIGHT", "artifacts");
+  const artifactDir = join(evidenceDir, "gates", "preflight", "artifacts");
   const outsideDir = join(root, "outside");
-  await mkdir(join(evidenceDir, "gates", "G00_PREFLIGHT"), { recursive: true });
+  await mkdir(join(evidenceDir, "gates", "preflight"), { recursive: true });
   await mkdir(outsideDir);
   await symlink(outsideDir, artifactDir);
   const contextPath = join(evidenceDir, "context.json");

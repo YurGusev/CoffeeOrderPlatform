@@ -285,7 +285,7 @@ async function writeChildContext({
   parentContext,
   parentContextPath,
 }) {
-  const gateArtifacts = join(evidenceDir, "gates/G15_BROWSER/artifacts");
+  const gateArtifacts = join(evidenceDir, "gates/browser/artifacts");
   await mkdir(gateArtifacts, { recursive: true, mode: 0o700 });
   const context = {
     schemaVersion: 1,
@@ -416,7 +416,7 @@ export function validateBrowserChildFailureDiagnostic(
   if (
     !exactKeys(diagnostic, expectedKeys) ||
     diagnostic.schemaVersion !== 1 ||
-    diagnostic.gateId !== "G15_BROWSER" ||
+    diagnostic.gateId !== "browser" ||
     diagnostic.outcome !== "FAIL" ||
     diagnostic.runId !== runId ||
     diagnostic.candidateSha !== candidateSha ||
@@ -460,7 +460,7 @@ export async function persistBrowserFailureFromChild({
   }
   const receipt = {
     schemaVersion: 1,
-    gateId: "G15_BROWSER",
+    gateId: "browser",
     outcome: "FAIL",
     parentRunId: parentContext.runId,
     parentCandidateSha: parentContext.candidateSha,
@@ -475,11 +475,11 @@ export async function persistBrowserFailureFromChild({
       ? {}
       : { operationDiagnostic: diagnostic.operationDiagnostic }),
   };
-  const artifactsDir = join(evidenceDir, "gates/G15_BROWSER/artifacts");
+  const artifactsDir = join(evidenceDir, "gates/browser/artifacts");
   for (const directory of [
     evidenceDir,
     join(evidenceDir, "gates"),
-    join(evidenceDir, "gates/G15_BROWSER"),
+    join(evidenceDir, "gates/browser"),
     artifactsDir,
   ]) {
     const info = await lstat(directory);
@@ -520,7 +520,7 @@ export function validateBrowserFailureReceipt(
   if (
     !exactKeys(receipt, expectedKeys) ||
     receipt.schemaVersion !== 1 ||
-    receipt.gateId !== "G15_BROWSER" ||
+    receipt.gateId !== "browser" ||
     receipt.outcome !== "FAIL" ||
     receipt.parentRunId !== parentContext.runId ||
     receipt.parentCandidateSha !== parentContext.candidateSha ||
@@ -916,7 +916,7 @@ export async function validateBrowserParentRuntime({
 }) {
   if (!SHA256.test(parentContext?.baseConfigSha256 ?? ""))
     fail("G15_PARENT_CONFIG_HASH_INVALID");
-  const artifactsDir = join(evidenceDir, "gates/G15_BROWSER/artifacts");
+  const artifactsDir = join(evidenceDir, "gates/browser/artifacts");
   const parentBytes = await assertPrivateFile(
     join(artifactsDir, ARTIFACTS.parentRuntime),
     0o600,
@@ -926,7 +926,7 @@ export async function validateBrowserParentRuntime({
   if (
     !exactKeys(parent, PARENT_KEYS) ||
     parent.schemaVersion !== 1 ||
-    parent.gateId !== "G15_BROWSER" ||
+    parent.gateId !== "browser" ||
     parent.status !== "PASS" ||
     parent.verificationOnly !== true ||
     parent.productionLogin !== false ||
@@ -1091,7 +1091,7 @@ export async function validateBrowserCorrelation({
   evidenceDir,
   parentContext,
 }) {
-  const directory = join(evidenceDir, "gates/G14_OBSERVABILITY/artifacts");
+  const directory = join(evidenceDir, "gates/observability/artifacts");
   const bytes = {};
   for (const [key, mode, limit] of [
     ["receipt", 0o600, 64 * 1024],
@@ -1397,8 +1397,8 @@ export async function runBrowserParent({
       artifactsDir = join(
         evidenceDir,
         runCorrelation
-          ? "gates/G14_OBSERVABILITY/artifacts"
-          : "gates/G15_BROWSER/artifacts",
+          ? "gates/observability/artifacts"
+          : "gates/browser/artifacts",
       );
     }
     const artifacts = runQualification
@@ -1657,7 +1657,7 @@ export async function runBrowserParent({
     const stdoutReceipt = lastJsonLine(childProcessResult.stdout);
     const childRuntimePath = join(
       childEvidenceDir,
-      "gates/G15_BROWSER/artifacts/browser-runtime.json",
+      "gates/browser/artifacts/browser-runtime.json",
     );
     const childRuntimeInfo = await lstat(childRuntimePath);
     if (
@@ -1727,7 +1727,7 @@ export async function runBrowserParent({
     for (const scenario of ["positive", "private-eof", "reauth"]) {
       const name = `owner-${scenario}.json`;
       const bytes = await assertPrivateFile(
-        join(childEvidenceDir, "gates/G15_BROWSER/artifacts", name),
+        join(childEvidenceDir, "gates/browser/artifacts", name),
         0o600,
         8 * 1024 * 1024,
       );
@@ -1742,7 +1742,7 @@ export async function runBrowserParent({
     }
 
     git(childRoot, "update-ref", CHILD_REF, childContext.candidateSha);
-    const artifactsDirParent = join(evidenceDir, "gates/G15_BROWSER/artifacts");
+    const artifactsDirParent = join(evidenceDir, "gates/browser/artifacts");
     const bundlePath = join(artifactsDirParent, ARTIFACTS.bundle);
     execFileSync(
       "git",
@@ -1793,7 +1793,7 @@ export async function runBrowserParent({
     };
     const parentArtifact = {
       schemaVersion: 1,
-      gateId: "G15_BROWSER",
+      gateId: "browser",
       runId: parentContext.runId,
       candidateSha: parentContext.candidateSha,
       baseConfigSha256: parentContext.baseConfigSha256,

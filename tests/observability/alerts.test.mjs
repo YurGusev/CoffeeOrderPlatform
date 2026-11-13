@@ -3669,7 +3669,7 @@ void test("launch observability artifacts survive removal of the temporary candi
     await writeFile(path.join(root, "config/toolchain-versions.json"), "{}\n");
     assert.equal(spawnSync("git", ["init", "-q", root]).status, 0);
     assert.equal(spawnSync("git", ["-C", root, "add", "config"]).status, 0);
-    await mkdir(path.join(evidenceDir, "gates/G14_OBSERVABILITY/artifacts"), {
+    await mkdir(path.join(evidenceDir, "gates/observability/artifacts"), {
       recursive: true,
     });
     const retained = [

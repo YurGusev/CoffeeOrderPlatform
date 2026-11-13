@@ -687,7 +687,7 @@ function parseArguments(args) {
 
 function printResult(status, code) {
   process.stdout.write(
-    `${JSON.stringify({ gate: "G16_AROMA_SANDBOX", approvalAdmission: status, code, liveWorkflow: "NOT_RUN" })}\n`,
+    `${JSON.stringify({ gate: "aroma_sandbox", approvalAdmission: status, code, liveWorkflow: "NOT_RUN" })}\n`,
   );
 }
 

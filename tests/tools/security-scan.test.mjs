@@ -1714,7 +1714,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
   });
   const candidateRoot = join(temp, "candidate");
   const evidenceDir = join(temp, "evidence");
-  const gateDir = join(evidenceDir, "gates", "G12_SUPPLY_CHAIN");
+  const gateDir = join(evidenceDir, "gates", "supply_chain");
   const gateArtifactsDir = join(gateDir, "artifacts");
   const outputDir = join(gateArtifactsDir, "supply-chain");
   const contextPath = join(evidenceDir, "context.json");
@@ -4369,7 +4369,7 @@ void test("G12 builds product images, records pinned upstream identity, and fail
     "utf8",
   );
   const imageInventory = JSON.parse(inventoryBytes);
-  assert.equal(imageInventory.gate, "G12_SUPPLY_CHAIN");
+  assert.equal(imageInventory.gate, "supply_chain");
   assert.equal(imageInventory.status, "PASS");
   assert.equal(imageInventory.composeProject, context.resources.composeProject);
   assert.equal(imageInventory.images.length, RUNTIME_NAMES.length + 1);
@@ -5338,8 +5338,8 @@ void test("G12 scan budget derives from the launch gate deadline and keeps the r
 
 void test("G12 gate timeout fits the standalone scan budget plus its reserve", async () => {
   const { gates } = await loadMatrix();
-  const gate = gates.find(({ id }) => id === "G12_SUPPLY_CHAIN");
-  assert.ok(gate, "G12_SUPPLY_CHAIN must exist");
+  const gate = gates.find(({ id }) => id === "supply_chain");
+  assert.ok(gate, "supply_chain must exist");
   assert.ok(
     gate.timeout * 1000 >= G12_SCAN_BUDGET_MS + G12_SCAN_RESERVE_MS,
     `G12 timeout ${gate.timeout}s must cover scan ${G12_SCAN_BUDGET_MS}ms plus reserve ${G12_SCAN_RESERVE_MS}ms`,

@@ -20,7 +20,7 @@ import { validateLaunchContext } from "../../verification/launch/v1/report.mjs";
 import { inspectLaunchCheckout } from "../../verification/launch/v1/scenarios/rollback.mjs";
 
 const CONFIG = "config/platform.yaml";
-const RECEIPT = "gates/G15_BROWSER/artifacts/oidc-fixture-lineage.json";
+const RECEIPT = "gates/browser/artifacts/oidc-fixture-lineage.json";
 const SHA = /^[0-9a-f]{40}$/u;
 const FIXTURE_PROFILE = Object.freeze({
   issuer: "https://idp.fixture.invalid",

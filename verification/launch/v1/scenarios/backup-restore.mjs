@@ -163,7 +163,7 @@ export function buildBackupRestorePlan(
       schema: roleByOwner.get(owner).schema,
       migratorRole: roleByOwner.get(owner).migratorRole,
       runtimeRoles: roleByOwner.get(owner).runtimeRoles,
-      ciphertext: `gates/G17_BACKUP_RESTORE/artifacts/${owner}.dump.age`,
+      ciphertext: `gates/backup_restore/artifacts/${owner}.dump.age`,
     })),
     age: { version: "1.3.2", recipients },
   };
@@ -1371,8 +1371,8 @@ async function ensureSafeEvidenceDirectory(root, evidenceDir) {
     resolve(root, "evidence/launch"),
     expected,
     resolve(expected, "gates"),
-    resolve(expected, "gates/G17_BACKUP_RESTORE"),
-    resolve(expected, "gates/G17_BACKUP_RESTORE/artifacts"),
+    resolve(expected, "gates/backup_restore"),
+    resolve(expected, "gates/backup_restore/artifacts"),
   ];
   for (const path of parts) {
     let info = await lstat(path).catch((error) =>
@@ -1389,7 +1389,7 @@ async function ensureSafeEvidenceDirectory(root, evidenceDir) {
     )
       fail("G17_EVIDENCE_PATH_INVALID");
   }
-  return resolve(expected, "gates/G17_BACKUP_RESTORE/artifacts");
+  return resolve(expected, "gates/backup_restore/artifacts");
 }
 
 async function writeEvidence(path, value) {

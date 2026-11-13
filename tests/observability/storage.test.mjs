@@ -689,7 +689,7 @@ void test("G12 binds storage helper to the Node base, receipt, index and image",
     const evidenceDir = join(root, "evidence");
     const artifacts = join(
       evidenceDir,
-      "gates/G12_SUPPLY_CHAIN/artifacts/supply-chain/artifacts",
+      "gates/supply_chain/artifacts/supply-chain/artifacts",
     );
     mkdirSync(join(candidateRoot, "config"), { recursive: true });
     mkdirSync(join(candidateRoot, "evidence/security"), { recursive: true });
@@ -804,7 +804,7 @@ void test("G12 binds storage helper to the Node base, receipt, index and image",
     };
     const receipt = {
       schemaVersion: 1,
-      gate: "G12_SUPPLY_CHAIN",
+      gate: "supply_chain",
       status: "PASS",
       runId,
       candidateSha,
@@ -860,7 +860,7 @@ void test("G12 binds storage helper to the Node base, receipt, index and image",
       ociArtifactSha256: hash(artifact),
     };
     const result = {
-      gate: "G12_SUPPLY_CHAIN",
+      gate: "supply_chain",
       status: "PASS",
       code: "G12_SCAN_CLEAN",
       runId,
@@ -1037,7 +1037,7 @@ void test("G12 binds storage helper to the Node base, receipt, index and image",
     };
     const decision = {
       schemaVersion: 1,
-      gate: "G12_SUPPLY_CHAIN",
+      gate: "supply_chain",
       runId,
       candidateSha,
       treeSha,

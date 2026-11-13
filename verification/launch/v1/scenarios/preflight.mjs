@@ -114,7 +114,7 @@ async function safeArtifactPath(context, contextPath) {
   const artifactDir = resolve(
     expectedEvidenceDir,
     "gates",
-    "G00_PREFLIGHT",
+    "preflight",
     "artifacts",
   );
   if (!(await ensureSafeDirectoryTree(sourceRoot, artifactDir, true)))
@@ -1145,7 +1145,7 @@ export async function runPreflight(context, deps = {}) {
   if (!basic)
     return {
       schemaVersion: 1,
-      gateId: "G00_PREFLIGHT",
+      gateId: "preflight",
       runId: context?.runId ?? "unknown",
       candidateSha: context?.candidateSha ?? "unknown",
       status: "FAIL",
@@ -1981,7 +1981,7 @@ export async function runPreflight(context, deps = {}) {
     );
   return {
     schemaVersion: 1,
-    gateId: "G00_PREFLIGHT",
+    gateId: "preflight",
     runId: context.runId,
     candidateSha: context.candidateSha,
     status: checks.every((item) => item.status === "PASS") ? "PASS" : "FAIL",

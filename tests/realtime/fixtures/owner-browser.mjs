@@ -1628,7 +1628,7 @@ if (process.env.COFFEE_G15_OWNER_BROWSER === "1") {
         };
         const path = join(
           evidenceDir,
-          "gates/G15_BROWSER/artifacts",
+          "gates/browser/artifacts",
           `owner-${scenario}.json`,
         );
         await writeFile(path, `${JSON.stringify(receipt)}\n`, {

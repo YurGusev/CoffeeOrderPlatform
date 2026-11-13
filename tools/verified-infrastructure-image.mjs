@@ -381,7 +381,7 @@ async function validateGateImage({
 
   const supplyChainDir = join(
     evidenceDir,
-    "gates/G12_SUPPLY_CHAIN/artifacts/supply-chain",
+    "gates/supply_chain/artifacts/supply-chain",
   );
   const result = parseJson(
     await readEvidenceFile(join(supplyChainDir, "result.json"), {
@@ -443,7 +443,7 @@ async function validateGateImage({
       "baseMaterial",
     ]) ||
     receipt.schemaVersion !== 1 ||
-    receipt.gate !== "G12_SUPPLY_CHAIN" ||
+    receipt.gate !== "supply_chain" ||
     receipt.status !== "PASS" ||
     receipt.runId !== context.runId ||
     receipt.candidateSha !== context.candidateSha ||
@@ -486,7 +486,7 @@ async function validateGateImage({
     image.imageId !== receipt.imageId ||
     image.manifestDigest !== receipt.manifestDigest ||
     image.ociArtifactSha256 !== receipt.ociArtifact.sha256 ||
-    result.gate !== "G12_SUPPLY_CHAIN" ||
+    result.gate !== "supply_chain" ||
     result.status !== "PASS" ||
     result.code !== "G12_SCAN_CLEAN" ||
     result.runId !== context.runId ||
@@ -644,7 +644,7 @@ async function validateGateImage({
       grafanaImage?.path !== "artifacts/grafana-receipt.json" ||
       grafanaImage.receiptSha256 !== sha256(grafanaBytes) ||
       grafanaReceipt.schemaVersion !== 1 ||
-      grafanaReceipt.gate !== "G12_SUPPLY_CHAIN" ||
+      grafanaReceipt.gate !== "supply_chain" ||
       grafanaReceipt.status !== "PASS" ||
       grafanaReceipt.target !== "grafana" ||
       grafanaReceipt.runId !== context.runId ||
@@ -830,7 +830,7 @@ async function validateGateImage({
         claimed.ociArtifactPath !== collector.ociArtifact.path ||
         claimed.ociArtifactSha256 !== collector.ociArtifact.sha256 ||
         collector.schemaVersion !== 1 ||
-        collector.gate !== "G12_SUPPLY_CHAIN" ||
+        collector.gate !== "supply_chain" ||
         collector.status !== "PASS" ||
         collector.target !== "otel-collector" ||
         collector.runId !== context.runId ||
@@ -873,7 +873,7 @@ async function validateGateImage({
     if (
       sha256(decisionBytes) !== decisionRef.sha256 ||
       decision.schemaVersion !== 1 ||
-      decision.gate !== "G12_SUPPLY_CHAIN" ||
+      decision.gate !== "supply_chain" ||
       decision.runId !== context.runId ||
       decision.candidateSha !== context.candidateSha ||
       decision.treeSha !== environment.treeSha ||

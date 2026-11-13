@@ -197,7 +197,6 @@
     "tools/security-scan.mjs|identifier|COFFEE_G12_CACHE_DIR",
     "verification/launch/v1/report.mjs|comment|G00",
     "verification/launch/v1/report.mjs|comment|G01",
-    "verification/launch/v1/report.mjs|comment|G12",
     "verification/launch/v1/report.mjs|comment|G19",
     "verification/launch/v1/run.mjs|comment|G15",
     "verification/launch/v1/run.mjs|identifier|fullSystemG14",

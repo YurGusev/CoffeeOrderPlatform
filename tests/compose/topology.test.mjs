@@ -3517,7 +3517,7 @@ void test("verified infrastructure image loader accepts only context-bound Kafka
   const evidenceDir = join(root, "evidence");
   const supplyChainDir = join(
     evidenceDir,
-    "gates/G12_SUPPLY_CHAIN/artifacts/supply-chain",
+    "gates/supply_chain/artifacts/supply-chain",
   );
   await mkdir(join(candidateRoot, "config"), { recursive: true, mode: 0o700 });
   await mkdir(join(candidateRoot, "evidence/security"), { recursive: true });
@@ -3638,7 +3638,7 @@ void test("verified infrastructure image loader accepts only context-bound Kafka
   };
   const receipt = {
     schemaVersion: 1,
-    gate: "G12_SUPPLY_CHAIN",
+    gate: "supply_chain",
     status: "PASS",
     runId,
     candidateSha,
@@ -3685,7 +3685,7 @@ void test("verified infrastructure image loader accepts only context-bound Kafka
   };
   const receiptBytes = Buffer.from(JSON.stringify(receipt));
   const result = {
-    gate: "G12_SUPPLY_CHAIN",
+    gate: "supply_chain",
     status: "PASS",
     code: "G12_SCAN_CLEAN",
     runId,
@@ -3870,7 +3870,7 @@ void test("verified infrastructure image loader accepts only context-bound Kafka
   };
   const decision = {
     schemaVersion: 1,
-    gate: "G12_SUPPLY_CHAIN",
+    gate: "supply_chain",
     runId,
     candidateSha,
     treeSha: environment.treeSha,
@@ -5090,7 +5090,7 @@ void test("G18 initial-unknown timeout persists a run-bound private fact summary
       artifactPath,
       join(
         evidenceDir,
-        "gates/G18_ROLLBACK/artifacts/mutation-disable-rollback-initial-unknown-timeout.json",
+        "gates/rollback/artifacts/mutation-disable-rollback-initial-unknown-timeout.json",
       ),
     );
     const artifactBytes = await readFile(artifactPath, "utf8");
@@ -5328,7 +5328,7 @@ void test("G18 restored-card timeout records bounded guarded facts only after ti
 
     const artifactPath = join(
       launchIdentity.evidenceDir,
-      "gates/G18_ROLLBACK/artifacts/mutation-disable-rollback-restored-card-timeout.json",
+      "gates/rollback/artifacts/mutation-disable-rollback-restored-card-timeout.json",
     );
     const artifactBytes = await readFile(artifactPath, "utf8");
     const artifact = JSON.parse(artifactBytes);
@@ -5429,11 +5429,8 @@ void test("G18 restored-card timeout records bounded guarded facts only after ti
     );
     assert.equal((await stat(artifactPath)).mode & 0o777, 0o600);
     assert.equal(
-      (
-        await stat(
-          join(launchIdentity.evidenceDir, "gates/G18_ROLLBACK/artifacts"),
-        )
-      ).mode & 0o777,
+      (await stat(join(launchIdentity.evidenceDir, "gates/rollback/artifacts")))
+        .mode & 0o777,
       0o700,
     );
     await assert.rejects(
@@ -5522,7 +5519,7 @@ void test("G18 restored-card timeout records bounded guarded facts only after ti
         await readFile(
           join(
             scenarioIdentity.evidenceDir,
-            "gates/G18_ROLLBACK/artifacts/mutation-disable-rollback-restored-card-timeout.json",
+            "gates/rollback/artifacts/mutation-disable-rollback-restored-card-timeout.json",
           ),
           "utf8",
         ),
@@ -5575,7 +5572,7 @@ void test("G18 restored-card timeout records bounded guarded facts only after ti
       readFile(
         join(
           failedIdentity.evidenceDir,
-          "gates/G18_ROLLBACK/artifacts/mutation-disable-rollback-restored-card-timeout.json",
+          "gates/rollback/artifacts/mutation-disable-rollback-restored-card-timeout.json",
         ),
       ),
       { code: "ENOENT" },

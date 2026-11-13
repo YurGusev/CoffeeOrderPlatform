@@ -827,7 +827,7 @@ async function validateInputs({
     fail("LAUNCH_ENVIRONMENT_MISMATCH");
   const targetOutputDir =
     outputDir ??
-    join(evidenceDir, "gates", "G12_SUPPLY_CHAIN", "artifacts", "supply-chain");
+    join(evidenceDir, "gates", "supply_chain", "artifacts", "supply-chain");
   if (
     resolve(targetOutputDir) !== targetOutputDir ||
     !within(evidenceDir, targetOutputDir)
@@ -1866,7 +1866,7 @@ async function inspectOwnedContainer(run, spec, id) {
     !SHA256.test(imageId ?? "") ||
     imageId !== spec.imageId ||
     imageRef !== SCANNER_IMAGE ||
-    owner !== "G12_SUPPLY_CHAIN" ||
+    owner !== "supply_chain" ||
     runId !== spec.runId ||
     nonce !== spec.nonce
   )
@@ -3252,7 +3252,7 @@ export async function runSecurityScan({
     containerCandidates.push({ ...spec, pending: false });
     const labels = [
       "--label",
-      `${CONTAINER_OWNER_LABEL}=G12_SUPPLY_CHAIN`,
+      `${CONTAINER_OWNER_LABEL}=supply_chain`,
       "--label",
       `${CONTAINER_RUN_LABEL}=${spec.runId}`,
       "--label",
@@ -3323,7 +3323,7 @@ export async function runSecurityScan({
   };
   let result = {
     schemaVersion: 1,
-    gate: "G12_SUPPLY_CHAIN",
+    gate: "supply_chain",
     status: "FAIL",
     code: "NOT_STARTED",
     runId: null,
@@ -3931,7 +3931,7 @@ export async function runSecurityScan({
     });
     const adjudication = {
       schemaVersion: 1,
-      gate: "G12_SUPPLY_CHAIN",
+      gate: "supply_chain",
       runId: identity.context.runId,
       candidateSha: identity.context.candidateSha,
       treeSha: identity.environment.treeSha,
@@ -4017,7 +4017,7 @@ export async function runSecurityScan({
         const image = build.image;
         const receipt = {
           schemaVersion: 1,
-          gate: "G12_SUPPLY_CHAIN",
+          gate: "supply_chain",
           status: "PASS",
           runId: identity.context.runId,
           candidateSha: identity.context.candidateSha,
@@ -4282,7 +4282,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
       process.exitCode = result.code === "INTERRUPTED" ? 130 : 1;
   } catch (error) {
     process.stdout.write(
-      `${JSON.stringify({ gate: "G12_SUPPLY_CHAIN", status: "FAIL", code: /^[A-Z0-9_]{1,64}$/u.test(error?.code ?? "") ? error.code : "SECURITY_SCAN_FAILED" })}\n`,
+      `${JSON.stringify({ gate: "supply_chain", status: "FAIL", code: /^[A-Z0-9_]{1,64}$/u.test(error?.code ?? "") ? error.code : "SECURITY_SCAN_FAILED" })}\n`,
     );
     process.exitCode = 1;
   }

@@ -168,7 +168,7 @@ function assertPreparationAncestor(root, prepSha, candidateSha) {
 async function readPreparation(context, evidenceDir, root) {
   const path = join(
     evidenceDir,
-    "gates/G08_MIGRATIONS/artifacts/canonical-preparation.json",
+    "gates/migrations/artifacts/canonical-preparation.json",
   );
   let info;
   let bytes;
@@ -203,7 +203,7 @@ async function readPreparation(context, evidenceDir, root) {
 export async function readApprovedMigrationTarget(context, evidenceDir) {
   const path = join(
     evidenceDir,
-    "gates/G08_MIGRATIONS/artifacts/approved-target.json",
+    "gates/migrations/artifacts/approved-target.json",
   );
   let file;
   try {
@@ -1307,7 +1307,7 @@ async function runStage(
     await writeFile(
       join(
         evidenceDir,
-        "gates/G08_MIGRATIONS/artifacts/canonical-preparation.json",
+        "gates/migrations/artifacts/canonical-preparation.json",
       ),
       `${JSON.stringify({
         schemaVersion: 1,
@@ -1333,10 +1333,7 @@ async function runStage(
     JSON.stringify(sorted(preparation.prep.roleNames))
   )
     fail("PREPARATION_ROLE_SET_MISMATCH");
-  const cleanPath = join(
-    evidenceDir,
-    "gates/G08_MIGRATIONS/artifacts/clean.json",
-  );
+  const cleanPath = join(evidenceDir, "gates/migrations/artifacts/clean.json");
   let cleanReceipt = null;
   const expectedRunDatabases = plan.owners.map(({ name }) => name).sort();
   if (mode === "forward") {
@@ -1653,7 +1650,7 @@ async function runStage(
     };
     const artifactPath = join(
       evidenceDir,
-      "gates/G09_DB_BOUNDARIES/artifacts/result.json",
+      "gates/db_boundaries/artifacts/result.json",
     );
     await writeFile(
       artifactPath,
@@ -1667,7 +1664,7 @@ async function runStage(
   }
   const artifactPath = join(
     evidenceDir,
-    "gates/G08_MIGRATIONS/artifacts",
+    "gates/migrations/artifacts",
     mode === "clean" ? "clean.json" : "result.json",
   );
   await writeFile(artifactPath, `${JSON.stringify(receipt, null, 2)}\n`, {

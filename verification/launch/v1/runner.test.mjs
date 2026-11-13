@@ -45,7 +45,9 @@ import {
   finalizeReport,
   validateChecksumManifest,
   validateKafkaNamespaceInventory,
+  validateRunResultContract,
 } from "./report.mjs";
+import { LEGACY_GATE_IDS } from "./gate-identity.mjs";
 import {
   CANONICAL_DATABASE_OWNERS,
   deriveLaunchDatabaseName,
@@ -608,7 +610,7 @@ void test("private candidate normalizes reader modes independently of clone umas
 void test("G08 approved target is explicit, private and bound to the current run", async (t) => {
   const root = await mkdtemp(join(tmpdir(), "launch-g08-approved-"));
   t.after(() => rm(root, { recursive: true, force: true }));
-  const artifactDir = join(root, "gates/G08_MIGRATIONS/artifacts");
+  const artifactDir = join(root, "gates/migrations/artifacts");
   await mkdir(artifactDir, { recursive: true, mode: 0o700 });
   const path = join(artifactDir, "approved-target.json");
   const context = {
@@ -676,12 +678,13 @@ void test("G08 approved target is explicit, private and bound to the current run
 });
 
 void test("G08 stops before its command when the approved identity is unavailable", async (t) => {
+  await mkdir(join(process.cwd(), "evidence/launch"), { recursive: true });
   const root = await mkdtemp(
     join(process.cwd(), "evidence/launch/g08-runner-test-"),
   );
   t.after(() => rm(root, { recursive: true, force: true }));
   const gate = {
-    id: "G08_MIGRATIONS",
+    id: "migrations",
     command: "pnpm test:migrations:clean && pnpm test:migrations:forward",
     timeout: 1800,
     predecessors: [],
@@ -933,7 +936,7 @@ void test("G18 requires a structured runtime receipt with verified lineage, phas
   };
   const artifact = {
     schemaVersion: 1,
-    gateId: "G18_ROLLBACK",
+    gateId: "rollback",
     runId: "20261024T120000Z-1234567",
     candidateSha,
     lineage,
@@ -1040,7 +1043,7 @@ void test("G18 requires a structured runtime receipt with verified lineage, phas
     receipt.path,
     join(
       evidenceDir,
-      "gates/G18_ROLLBACK/artifacts/mutation-disable-rollback.json",
+      "gates/rollback/artifacts/mutation-disable-rollback.json",
     ),
   );
   assert.equal(
@@ -1970,26 +1973,26 @@ void test("matrix keeps all mandatory launch gates, exact order, commands and ti
   assert.deepEqual(
     gates.map((gate) => gate.id),
     [
-      "G00_PREFLIGHT",
-      "G01_INSTALL",
-      "G02_GENERATED",
-      "G03_STATIC",
-      "G04_UNIT",
-      "G05_CONTRACTS",
-      "G06_ARCHITECTURE",
-      "G07_CONFIG_SECURITY",
-      "G12_SUPPLY_CHAIN",
-      "G08_MIGRATIONS",
-      "G09_DB_BOUNDARIES",
-      "G10_INTEGRATION",
-      "G11_RECOVERY",
-      "G13_COMPOSE",
-      "G14_OBSERVABILITY",
-      "G15_BROWSER",
-      "G16_AROMA_SANDBOX",
-      "G17_BACKUP_RESTORE",
-      "G18_ROLLBACK",
-      "G19_REPORT",
+      "preflight",
+      "install",
+      "generated",
+      "static",
+      "unit",
+      "contracts",
+      "architecture",
+      "config_security",
+      "supply_chain",
+      "migrations",
+      "db_boundaries",
+      "integration",
+      "recovery",
+      "compose",
+      "observability",
+      "browser",
+      "aroma_sandbox",
+      "backup_restore",
+      "rollback",
+      "report",
     ],
   );
   const expectedIds = gates.map((gate) => gate.id);
@@ -2011,16 +2014,14 @@ void test("matrix keeps all mandatory launch gates, exact order, commands and ti
       `${gate.id} predecessors must precede it`,
     );
   }
-  assert.deepEqual(byId.get("G12_SUPPLY_CHAIN").predecessors, [
-    "G07_CONFIG_SECURITY",
+  assert.deepEqual(byId.get("supply_chain").predecessors, ["config_security"]);
+  assert.deepEqual(byId.get("integration").predecessors, [
+    "db_boundaries",
+    "supply_chain",
   ]);
-  assert.deepEqual(byId.get("G10_INTEGRATION").predecessors, [
-    "G09_DB_BOUNDARIES",
-    "G12_SUPPLY_CHAIN",
-  ]);
-  assert.deepEqual(byId.get("G13_COMPOSE").predecessors, [
-    "G11_RECOVERY",
-    "G12_SUPPLY_CHAIN",
+  assert.deepEqual(byId.get("compose").predecessors, [
+    "recovery",
+    "supply_chain",
   ]);
   const statusesAfterFailure = (failedId, candidateGates = gates) => {
     const statuses = new Map();
@@ -2038,21 +2039,21 @@ void test("matrix keeps all mandatory launch gates, exact order, commands and ti
     return statuses;
   };
   const assertSupplyChainBlocksConsumers = (candidateGates) => {
-    const statuses = statusesAfterFailure("G12_SUPPLY_CHAIN", candidateGates);
-    assert.equal(statuses.get("G08_MIGRATIONS"), "PASS");
-    assert.equal(statuses.get("G09_DB_BOUNDARIES"), "PASS");
-    for (const id of ["G10_INTEGRATION", "G11_RECOVERY", "G13_COMPOSE"]) {
+    const statuses = statusesAfterFailure("supply_chain", candidateGates);
+    assert.equal(statuses.get("migrations"), "PASS");
+    assert.equal(statuses.get("db_boundaries"), "PASS");
+    for (const id of ["integration", "recovery", "compose"]) {
       assert.equal(statuses.get(id), "NOT_RUN");
     }
     return statuses;
   };
   assertSupplyChainBlocksConsumers(gates);
   const withoutSupplyChainIntegrationEdge = gates.map((gate) =>
-    gate.id === "G10_INTEGRATION"
+    gate.id === "integration"
       ? {
           ...gate,
           predecessors: gate.predecessors.filter(
-            (predecessor) => predecessor !== "G12_SUPPLY_CHAIN",
+            (predecessor) => predecessor !== "supply_chain",
           ),
         }
       : gate,
@@ -2061,10 +2062,10 @@ void test("matrix keeps all mandatory launch gates, exact order, commands and ti
     () => assertSupplyChainBlocksConsumers(withoutSupplyChainIntegrationEdge),
     assert.AssertionError,
   );
-  const afterRecoveryFailure = statusesAfterFailure("G11_RECOVERY");
-  assert.equal(afterRecoveryFailure.get("G13_COMPOSE"), "NOT_RUN");
+  const afterRecoveryFailure = statusesAfterFailure("recovery");
+  assert.equal(afterRecoveryFailure.get("compose"), "NOT_RUN");
   assert.deepEqual(
-    [...byId.get("G19_REPORT").predecessors].sort((left, right) =>
+    [...byId.get("report").predecessors].sort((left, right) =>
       left.localeCompare(right),
     ),
     expectedIds.slice(0, -1).sort((left, right) => left.localeCompare(right)),
@@ -2108,7 +2109,7 @@ void test("G09 accepts only exact context-bound 10/40 runtime database evidence"
       baseConfigSha256,
     }),
   );
-  const gate = { id: "G09_DB_BOUNDARIES", command: "pnpm db:smoke" };
+  const gate = { id: "db_boundaries", command: "pnpm db:smoke" };
   const record = {
     runs: [
       {
@@ -2119,7 +2120,7 @@ void test("G09 accepts only exact context-bound 10/40 runtime database evidence"
     ],
     artifacts: [],
   };
-  const artifactDir = join(evidenceDir, "gates/G09_DB_BOUNDARIES/artifacts");
+  const artifactDir = join(evidenceDir, "gates/db_boundaries/artifacts");
   await mkdir(artifactDir, { recursive: true });
   const roleMap = JSON.parse(
     await readFile(
@@ -2195,10 +2196,7 @@ void test("G09 accepts only exact context-bound 10/40 runtime database evidence"
     },
     legacyTargetsExcluded: ["coffeeorder_staging", "coffeeorderdb"],
   };
-  const migrationArtifactDir = join(
-    evidenceDir,
-    "gates/G08_MIGRATIONS/artifacts",
-  );
+  const migrationArtifactDir = join(evidenceDir, "gates/migrations/artifacts");
   await mkdir(migrationArtifactDir, { recursive: true });
   await writeFile(
     join(migrationArtifactDir, "result.json"),
@@ -2283,7 +2281,7 @@ void test("G09 accepts only exact context-bound 10/40 runtime database evidence"
   };
   const migrationPath = join(migrationArtifactDir, "result.json");
   const gatePath = join(artifactDir, "result.json");
-  const stdoutPath = join(evidenceDir, "gates/G09_DB_BOUNDARIES/stdout.log");
+  const stdoutPath = join(evidenceDir, "gates/db_boundaries/stdout.log");
   const prettyEnvelope = `${JSON.stringify(
     { databaseBoundaryReceipt: receipt },
     null,
@@ -2383,7 +2381,7 @@ void test("G08 rejects receipts without exact derived targets and cleanup", asyn
     baseConfigSha256: "a".repeat(64),
   };
   await writeFile(join(evidenceDir, "context.json"), JSON.stringify(context));
-  const artifactDir = join(evidenceDir, "gates/G08_MIGRATIONS/artifacts");
+  const artifactDir = join(evidenceDir, "gates/migrations/artifacts");
   await mkdir(artifactDir, { recursive: true });
   const owners = [
     ["catalog", 12],
@@ -2418,7 +2416,7 @@ void test("G08 rejects receipts without exact derived targets and cleanup", asyn
   };
   const path = join(artifactDir, "result.json");
   await writeFile(path, JSON.stringify(receipt));
-  const gate = { id: "G08_MIGRATIONS" };
+  const gate = { id: "migrations" };
   const record = { artifacts: [], runs: [] };
   assert.equal(await verifyGateArtifacts(gate, record, evidenceDir), null);
   assert.equal(record.artifacts.length, 1);
@@ -2592,15 +2590,15 @@ void test("G15 runner requires the exact command and a context-bound live artifa
       baseConfigSha256: "a".repeat(64),
     }),
   );
-  await mkdir(join(evidenceDir, "gates/G15_BROWSER/artifacts"), {
+  await mkdir(join(evidenceDir, "gates/browser/artifacts"), {
     recursive: true,
   });
   await writeFile(
-    join(evidenceDir, "gates/G15_BROWSER/stdout.log"),
+    join(evidenceDir, "gates/browser/stdout.log"),
     "Vite preview with intercepted owner APIs exited successfully\n",
   );
   await writeFile(
-    join(evidenceDir, "gates/G15_BROWSER/artifacts/browser-proof.json"),
+    join(evidenceDir, "gates/browser/artifacts/browser-proof.json"),
     JSON.stringify({
       status: "PASS",
       runId: "20261024T120000Z-7654321",
@@ -2620,7 +2618,7 @@ void test("G15 runner requires the exact command and a context-bound live artifa
   };
   assert.equal(
     await verifyGateArtifacts(
-      { id: "G15_BROWSER", command: "pnpm test:playwright" },
+      { id: "browser", command: "pnpm test:playwright" },
       record,
       evidenceDir,
     ),
@@ -2629,7 +2627,7 @@ void test("G15 runner requires the exact command and a context-bound live artifa
   assert.notEqual(
     await verifyGateArtifacts(
       {
-        id: "G15_BROWSER",
+        id: "browser",
         command: "node apps/web/test/operator-flow.spec.ts",
       },
       record,
@@ -2653,7 +2651,7 @@ void test("G15 failed gate records only a matching child failure receipt", async
   const childRunId = `${stamp}-${randomBytes(4).toString("hex").slice(0, 7)}`;
   const evidenceDir = join(sourceRoot, "evidence/launch", runId);
   t.after(() => rm(evidenceDir, { recursive: true, force: true }));
-  const artifactDir = join(evidenceDir, "gates/G15_BROWSER/artifacts");
+  const artifactDir = join(evidenceDir, "gates/browser/artifacts");
   await mkdir(artifactDir, { recursive: true, mode: 0o700 });
   const contextFor = (id, parentContext) => ({
     schemaVersion: 1,
@@ -2695,7 +2693,7 @@ void test("G15 failed gate records only a matching child failure receipt", async
   const failurePath = join(artifactDir, "browser-parent-failure.json");
   const failureReceipt = {
     schemaVersion: 1,
-    gateId: "G15_BROWSER",
+    gateId: "browser",
     outcome: "FAIL",
     parentRunId: runId,
     parentCandidateSha: candidateSha,
@@ -2724,7 +2722,7 @@ void test("G15 failed gate records only a matching child failure receipt", async
     },
   };
   await writeJSON(failurePath, failureReceipt, 0o600);
-  const gate = { id: "G15_BROWSER", command: "pnpm test:playwright" };
+  const gate = { id: "browser", command: "pnpm test:playwright" };
   const recordFor = (exitCode) => ({
     status: exitCode === 0 ? "PASS" : "FAIL",
     artifacts: [],
@@ -5036,7 +5034,7 @@ void test("G04 preserves private run-scoped TAP/LCOV diagnostics once without ov
   const candidateSha = "a".repeat(40);
   const runId = `20261024T120000Z-${candidateSha.slice(0, 7)}`;
   const evidenceDir = join(sourceRepoRoot, "evidence/launch", runId);
-  const artifactsDir = join(evidenceDir, "gates/G04_UNIT/artifacts");
+  const artifactsDir = join(evidenceDir, "gates/unit/artifacts");
   await mkdir(artifactsDir, { recursive: true, mode: 0o700 });
   const context = { runId, candidateSha, sourceRepoRoot, evidenceDir };
   const contents = {
@@ -5101,7 +5099,7 @@ void test("G04 rejects a symlinked evidence/launch ancestor before writing artif
   const outsideArtifactsDir = join(
     outsideLaunch,
     runId,
-    "gates/G04_UNIT/artifacts",
+    "gates/unit/artifacts",
   );
   await mkdir(join(sourceRepoRoot, "evidence"), { recursive: true });
   await mkdir(outsideArtifactsDir, { recursive: true, mode: 0o700 });
@@ -5240,9 +5238,9 @@ void test("G04 coverage floors and critical artifact mapping are strict platform
 
 void test("workload cutoff reserves the declared G19 timeout and final report window", () => {
   const reservedMs = 900_000 + 120_000;
-  assert.equal(gateBudgetMs("G00_PREFLIGHT", reservedMs), 0);
-  assert.equal(gateBudgetMs("G19_REPORT", reservedMs), 900_000);
-  assert.equal(gateBudgetMs("G19_REPORT", 900_000), 780_000);
+  assert.equal(gateBudgetMs("preflight", reservedMs), 0);
+  assert.equal(gateBudgetMs("report", reservedMs), 900_000);
+  assert.equal(gateBudgetMs("report", 900_000), 780_000);
 });
 
 void test("G19 accepts only a complete run-scoped Kafka namespace inventory matching G00 claims", () => {
@@ -5390,7 +5388,7 @@ void test("G13 persists only the top-level validated Kafka inventory from succes
     join(tmpdir(), "launch-g13-kafka-inventory-"),
   );
   t.after(() => rm(evidenceDir, { recursive: true, force: true }));
-  const gateDir = join(evidenceDir, "gates/G13_COMPOSE");
+  const gateDir = join(evidenceDir, "gates/compose");
   await mkdir(join(gateDir, "artifacts"), { recursive: true });
   const runId = "20261023T120000Z-1234567";
   const projectName = `coffee-launch-${runId.toLowerCase()}`;
@@ -5531,6 +5529,17 @@ void test("run result validates exact gate order and command identities", async 
     decision: "НЕ ДОПУСТИТЬ",
   };
   await validateRunResult(result);
+  const legacyIdBySlug = new Map(
+    Object.entries(LEGACY_GATE_IDS).map(([legacy, slug]) => [slug, legacy]),
+  );
+  const legacyResult = structuredClone(result);
+  for (const gate of legacyResult.gates) gate.id = legacyIdBySlug.get(gate.id);
+  assert.equal(validateRunResultContract(legacyResult), legacyResult);
+  legacyResult.gates[0].expectedCommand = "pnpm forged-command";
+  assert.throws(
+    () => validateRunResultContract(legacyResult),
+    /Некорректная запись preflight/u,
+  );
   [result.gates[0], result.gates[1]] = [result.gates[1], result.gates[0]];
   await assert.rejects(validateRunResult(result), /must be equal to constant/);
 });
@@ -5547,14 +5556,14 @@ void test("builtin report finalizes a complete fail-closed result without candid
   );
   const gates = EXPECTED_GATES.map(([id, expectedCommand, timeoutSeconds]) => ({
     id,
-    status: id === "G12_SUPPLY_CHAIN" ? "FAIL" : "NOT_RUN",
+    status: id === "supply_chain" ? "FAIL" : "NOT_RUN",
     expectedCommand,
     startedAt: null,
     endedAt: null,
     durationMs: 0,
     timeoutSeconds,
     reason:
-      id === "G12_SUPPLY_CHAIN"
+      id === "supply_chain"
         ? "G12 scan failed"
         : "NOT_RUN: workload budget exhausted; G19 reserve remains",
     runs: [],
@@ -5638,11 +5647,10 @@ void test("builtin report finalizes a complete fail-closed result without candid
   const finalized = await finalizeReport(evidenceDir);
   assert.equal(finalized.result.decision, "НЕ ДОПУСТИТЬ");
   assert.equal(
-    finalized.result.gates.find((gate) => gate.id === "G12_SUPPLY_CHAIN")
-      .status,
+    finalized.result.gates.find((gate) => gate.id === "supply_chain").status,
     "FAIL",
   );
-  for (const id of ["G10_INTEGRATION", "G11_RECOVERY", "G13_COMPOSE"]) {
+  for (const id of ["integration", "recovery", "compose"]) {
     assert.equal(
       finalized.result.gates.find((gate) => gate.id === id).status,
       "NOT_RUN",
@@ -5682,7 +5690,7 @@ void test("builtin report finalizes a complete fail-closed result without candid
   assert.equal(checksumCheck.status, 0, checksumCheck.stderr);
   await writeFile(
     join(evidenceDir, "commands.ndjson"),
-    `${JSON.stringify({ gateId: "G00_PREFLIGHT", argv: ["pnpm", "forged"] })}\n`,
+    `${JSON.stringify({ gateId: "preflight", argv: ["pnpm", "forged"] })}\n`,
   );
   const tampered = await finalizeReport(evidenceDir);
   assert.ok(tampered.errors.some((error) => /commands\.ndjson/.test(error)));
@@ -5781,10 +5789,10 @@ void test("builtin report finalizes a complete fail-closed result without candid
   const expectedTopics = [`${runId}.orders`];
   const expectedGroups = [`${runId}.orders-worker`];
   await writeFile(
-    join(evidenceDir, "gates/G00_PREFLIGHT/artifacts/preflight.json"),
+    join(evidenceDir, "gates/preflight/artifacts/preflight.json"),
     JSON.stringify({
       schemaVersion: 1,
-      gateId: "G00_PREFLIGHT",
+      gateId: "preflight",
       runId,
       candidateSha: result.candidateSha,
       status: "PASS",
@@ -5874,6 +5882,11 @@ void test("candidate report and owner suites accept only the exact launch candid
     candidateReport,
     await readFile(new URL("./report.mjs", import.meta.url)),
   );
+  for (const name of ["gate-matrix.generated.mjs", "gate-identity.mjs"])
+    await writeFile(
+      join(candidateRoot, "verification/launch/v1", name),
+      await readFile(new URL(`./${name}`, import.meta.url)),
+    );
   const helperPaths = [
     "launch-database-target.ts",
     "launch-database-target.js",
@@ -5997,6 +6010,11 @@ void test("candidate report and owner suites accept only the exact launch candid
     sourceReport,
     await readFile(new URL("./report.mjs", import.meta.url)),
   );
+  for (const name of ["gate-matrix.generated.mjs", "gate-identity.mjs"])
+    await writeFile(
+      join(sourceRoot, "verification/launch/v1", name),
+      await readFile(new URL(`./${name}`, import.meta.url)),
+    );
   await mkdir(join(sourceRoot, "packages/platform-config/src"), {
     recursive: true,
   });
@@ -6032,10 +6050,10 @@ void test("candidate report and owner suites accept only the exact launch candid
     await writeFile(join(gateDir, "stderr.log"), "");
   }
   await writeFile(
-    join(evidenceDir, "gates/G00_PREFLIGHT/artifacts/preflight.json"),
+    join(evidenceDir, "gates/preflight/artifacts/preflight.json"),
     JSON.stringify({
       schemaVersion: 1,
-      gateId: "G00_PREFLIGHT",
+      gateId: "preflight",
       runId,
       candidateSha,
       status: "FAIL",
@@ -6050,7 +6068,7 @@ void test("candidate report and owner suites accept only the exact launch candid
     }),
   );
   await writeFile(
-    join(evidenceDir, "gates/G00_PREFLIGHT/result.json"),
+    join(evidenceDir, "gates/preflight/result.json"),
     JSON.stringify(gates[0]),
   );
   const executed = spawnSync(process.execPath, [candidateReport], {
@@ -6076,7 +6094,7 @@ void test("candidate report and owner suites accept only the exact launch candid
     join(evidenceDir, "defects.json"),
     join(evidenceDir, "decision.json"),
     join(evidenceDir, "checksums.sha256"),
-    join(evidenceDir, "gates/G00_PREFLIGHT/artifacts/defect.json"),
+    join(evidenceDir, "gates/preflight/artifacts/defect.json"),
     reportPath,
   ];
   for (const [index, target] of symlinkTargets.entries()) {
@@ -6778,12 +6796,12 @@ void test("G14 cannot pass without sealed browser correlation lineage", async ()
     join(tmpdir(), "coffee-browser-correlation-"),
   );
   try {
-    await mkdir(join(evidenceDir, "gates/G14_OBSERVABILITY/artifacts"), {
+    await mkdir(join(evidenceDir, "gates/observability/artifacts"), {
       recursive: true,
     });
     await writeFile(join(evidenceDir, "context.json"), "{}\n", { mode: 0o600 });
     const failure = await verifyGateArtifacts(
-      { id: "G14_OBSERVABILITY", command: "pnpm test:observability" },
+      { id: "observability", command: "pnpm test:observability" },
       {
         runs: [
           {

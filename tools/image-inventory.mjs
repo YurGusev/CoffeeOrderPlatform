@@ -68,7 +68,7 @@ function within(root, path) {
 export function imageInventoryPath(evidenceDir) {
   return join(
     evidenceDir,
-    "gates/G12_SUPPLY_CHAIN/artifacts/supply-chain/artifacts",
+    "gates/supply_chain/artifacts/supply-chain/artifacts",
     IMAGE_INVENTORY_FILE,
   );
 }
@@ -129,7 +129,7 @@ export function buildImageInventory({
     fail("IMAGE_INVENTORY_IMAGE_SET_INVALID");
   const inventory = {
     schemaVersion: IMAGE_INVENTORY_SCHEMA_VERSION,
-    gate: "G12_SUPPLY_CHAIN",
+    gate: "supply_chain",
     status: "PASS",
     runId: context.runId,
     candidateSha: context.candidateSha,
@@ -166,7 +166,7 @@ export function validateImageInventory(
     fail("IMAGE_INVENTORY_SHAPE_INVALID");
   if (
     inventory.schemaVersion !== IMAGE_INVENTORY_SCHEMA_VERSION ||
-    inventory.gate !== "G12_SUPPLY_CHAIN" ||
+    inventory.gate !== "supply_chain" ||
     inventory.status !== "PASS" ||
     inventory.runId !== context.runId ||
     inventory.candidateSha !== context.candidateSha ||
@@ -210,7 +210,7 @@ export function serializeImageInventory(inventory) {
  * обязан собрать их сам (standalone/тестовый путь).
  */
 function supplyChainDir(evidenceDir) {
-  return join(evidenceDir, "gates/G12_SUPPLY_CHAIN/artifacts/supply-chain");
+  return join(evidenceDir, "gates/supply_chain/artifacts/supply-chain");
 }
 
 async function readEvidenceJson(path, maxBytes) {
@@ -273,7 +273,7 @@ async function verifyInventoryAgainstGateEvidence({
     MAX_GATE_RESULT_BYTES,
   );
   if (
-    result?.gate !== "G12_SUPPLY_CHAIN" ||
+    result?.gate !== "supply_chain" ||
     result?.status !== "PASS" ||
     result?.code !== "G12_SCAN_CLEAN" ||
     result?.runId !== context.runId ||

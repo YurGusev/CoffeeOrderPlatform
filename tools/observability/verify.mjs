@@ -3247,7 +3247,7 @@ async function persistEvidence({
   if (launchEvidenceDir) {
     directory = join(
       launchEvidenceDir,
-      "gates/G14_OBSERVABILITY/artifacts/observability",
+      "gates/observability/artifacts/observability",
     );
     await mkdir(directory, { mode: 0o700 });
     for (const name of [...Object.keys(documents), "result.json"])

@@ -546,7 +546,7 @@ export function validateBrowserRuntimeArtifact(
   );
   if (
     artifact.schemaVersion !== 1 ||
-    artifact.gateId !== "G15_BROWSER" ||
+    artifact.gateId !== "browser" ||
     artifact.runId !== runId ||
     artifact.candidateSha !== candidateSha ||
     artifact.baseConfigSha256 !== baseConfigSha256 ||

@@ -101,7 +101,7 @@ void test("G17 plan binds all source and restore databases to owner, run and SHA
   );
   assert.equal(
     plan.owners[0].ciphertext,
-    "gates/G17_BACKUP_RESTORE/artifacts/customer.dump.age",
+    "gates/backup_restore/artifacts/customer.dump.age",
   );
   assert.equal(plan.candidateSha, context.candidateSha);
 });
@@ -1739,7 +1739,7 @@ void test("G17 validates a real source/candidate context, exact config bytes, pr
     evidenceDir = dirname(contextPath);
     const preflightIdentityPath = join(
       evidenceDir,
-      "gates/G00_PREFLIGHT/artifacts/postgres-server-identity.json",
+      "gates/preflight/artifacts/postgres-server-identity.json",
     );
     await mkdir(dirname(preflightIdentityPath), {
       recursive: true,

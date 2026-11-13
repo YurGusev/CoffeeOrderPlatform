@@ -2102,7 +2102,7 @@ export function parseArguments(args, env = process.env) {
 
 function result(status, code, details = {}) {
   process.stdout.write(
-    `${JSON.stringify({ gate: "G16_AROMA_SANDBOX", status, code, ...details })}\n`,
+    `${JSON.stringify({ gate: "aroma_sandbox", status, code, ...details })}\n`,
   );
 }
 
@@ -3009,7 +3009,7 @@ async function runAromaSandbox({ approvalFile, env = process.env } = {}) {
     }
     process.stdout.write(
       `${JSON.stringify({
-        gate: "G16_AROMA_SANDBOX",
+        gate: "aroma_sandbox",
         status: "APPROVAL_REQUIRED",
         runId,
         candidateSha: identity.context.candidateSha,

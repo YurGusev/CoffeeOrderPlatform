@@ -102,7 +102,7 @@ void test("G14 refuses to launch when qualification is missing", async () => {
   const evidence = await mkdtemp(join(parent, "capacity-runner-"));
   try {
     const gate = {
-      id: "G14_OBSERVABILITY",
+      id: "observability",
       command: "pnpm test:observability",
       timeout: 1800,
       predecessors: [],
@@ -3209,8 +3209,7 @@ void test("G15 realtime launch path binds child identity to verified parent line
   assert.ok(start >= 0 && end > start);
   const functionSource = source.slice(start, end);
   const contextPath = "/child/evidence/context.json";
-  const receiptPath =
-    "/child/evidence/gates/G15_BROWSER/artifacts/lineage.json";
+  const receiptPath = "/child/evidence/gates/browser/artifacts/lineage.json";
   const baseCandidateSha = "d".repeat(40);
   const receiptBytes = Buffer.from("synthetic G15 lineage receipt\n");
   const active = {

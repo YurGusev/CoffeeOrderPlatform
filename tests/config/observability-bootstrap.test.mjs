@@ -5069,7 +5069,7 @@ void test("G17 target binds readonly context, isolated config, and server identi
   } finally {
     await writeFile(configPath, configBytes);
   }
-  const artifactDir = join(evidenceDir, "gates/G00_PREFLIGHT/artifacts");
+  const artifactDir = join(evidenceDir, "gates/preflight/artifacts");
   await mkdir(artifactDir, { recursive: true, mode: 0o700 });
   const identityPath = join(artifactDir, "postgres-server-identity.json");
   const identity = {
@@ -5223,7 +5223,7 @@ void test("G08 current attestation requires password authentication and unchange
     const context = JSON.parse(await readFile(contextPath, "utf8"));
     const approvedPath = join(
       evidenceDir,
-      "gates/G08_MIGRATIONS/artifacts/approved-target.json",
+      "gates/migrations/artifacts/approved-target.json",
     );
     await writeFile(
       approvedPath,
@@ -5406,7 +5406,7 @@ void test("G15 child credentials reuse the unchanged parent G08 receipt only thr
   assert.equal(childBundleInfo.mode & 0o022, 0);
   const artifactPath = join(
     parent.evidenceDir,
-    "gates/G08_MIGRATIONS/artifacts/canonical-preparation.json",
+    "gates/migrations/artifacts/canonical-preparation.json",
   );
   const parentReceipt = await readFile(artifactPath);
   const parentContextBytes = await readFile(parent.contextPath);
@@ -5503,7 +5503,7 @@ void test("G15 child credentials reuse the unchanged parent G08 receipt only thr
     readFile(
       join(
         child.evidenceDir,
-        "gates/G08_MIGRATIONS/artifacts/canonical-preparation.json",
+        "gates/migrations/artifacts/canonical-preparation.json",
       ),
     ),
     { code: "ENOENT" },
@@ -8454,7 +8454,7 @@ void test("G15 fixture lineage, tmpfs trust, and PKCE account switching stay iso
       lineage.receiptPath,
       join(
         launch.evidenceDir,
-        "gates/G15_BROWSER/artifacts/oidc-fixture-lineage.json",
+        "gates/browser/artifacts/oidc-fixture-lineage.json",
       ),
     );
     const lineageReceiptBytes = await readFile(lineage.receiptPath);
@@ -9148,7 +9148,7 @@ void test("G15 child Compose preamble reads the parent-sealed lineage without re
   };
   const expectedReceiptPath = join(
     launch.evidenceDir,
-    "gates/G15_BROWSER/artifacts/oidc-fixture-lineage.json",
+    "gates/browser/artifacts/oidc-fixture-lineage.json",
   );
   await assert.rejects(
     validateBrowserFixtureLineage({
@@ -9387,7 +9387,7 @@ async function writeSyntheticParentG12({
   const { runId, candidateSha } = context;
   const supplyChainDir = join(
     evidenceDir,
-    "gates/G12_SUPPLY_CHAIN/artifacts/supply-chain",
+    "gates/supply_chain/artifacts/supply-chain",
   );
   await mkdir(join(supplyChainDir, "artifacts"), {
     recursive: true,
@@ -9433,7 +9433,7 @@ async function writeSyntheticParentG12({
   };
   const receipt = {
     schemaVersion: 1,
-    gate: "G12_SUPPLY_CHAIN",
+    gate: "supply_chain",
     status: "PASS",
     runId,
     candidateSha,
@@ -9480,7 +9480,7 @@ async function writeSyntheticParentG12({
   };
   const receiptBytes = Buffer.from(JSON.stringify(receipt));
   const result = {
-    gate: "G12_SUPPLY_CHAIN",
+    gate: "supply_chain",
     status: "PASS",
     code: "G12_SCAN_CLEAN",
     runId,
@@ -9665,7 +9665,7 @@ async function writeSyntheticParentG12({
   };
   const decision = {
     schemaVersion: 1,
-    gate: "G12_SUPPLY_CHAIN",
+    gate: "supply_chain",
     runId,
     candidateSha,
     treeSha: environment.treeSha,
@@ -9763,6 +9763,7 @@ void test("browser correlation executes the child lifecycle and preserves early 
   for (const file of [
     "verification/launch/v1/scenarios/rollback.mjs",
     "tools/config-bootstrap/index.mjs",
+    "tools/config-bootstrap/browser-fixture.mjs",
     "tools/verified-infrastructure-image.mjs",
     "tools/security-scan.mjs",
   ]) {
@@ -9850,6 +9851,7 @@ void test("browser correlation executes the child lifecycle and preserves early 
     "tools/realtime-capacity.mjs",
     "verification/launch/v1/scenarios/rollback.mjs",
     "tools/config-bootstrap/index.mjs",
+    "tools/config-bootstrap/browser-fixture.mjs",
     "tools/verified-infrastructure-image.mjs",
     "tools/security-scan.mjs",
     "evidence/security/cve-2026-78661.json",
@@ -9910,7 +9912,7 @@ void test("browser correlation executes the child lifecycle and preserves early 
   ) {
     const runId = `${stamp}-${sha.slice(0, 7)}`;
     const evidenceDir = join(contextSourceRoot, "evidence/launch", runId);
-    const artifacts = join(evidenceDir, "gates/G14_OBSERVABILITY/artifacts");
+    const artifacts = join(evidenceDir, "gates/observability/artifacts");
     await mkdir(artifacts, { recursive: true, mode: 0o700 });
     const context = {
       schemaVersion: 1,
@@ -10089,7 +10091,7 @@ void test("browser correlation executes the child lifecycle and preserves early 
     const lineageBytes = await readFile(
       join(
         child.evidenceDir,
-        "gates/G15_BROWSER/artifacts/oidc-fixture-lineage.json",
+        "gates/browser/artifacts/oidc-fixture-lineage.json",
       ),
     );
     assert.equal(image.lineageReceiptSha256, hash(lineageBytes));
@@ -10138,7 +10140,7 @@ void test("browser correlation executes the child lifecycle and preserves early 
     assert.deepEqual(admitted.launchPath.launchIdentity, image.launchIdentity);
     const reportPath = join(
       success.evidenceDir,
-      "gates/G12_SUPPLY_CHAIN/artifacts/supply-chain/artifacts/edge-gateway.vulnerabilities.json",
+      "gates/supply_chain/artifacts/supply-chain/artifacts/edge-gateway.vulnerabilities.json",
     );
     const reportBytes = await readFile(reportPath);
     await writeFile(reportPath, Buffer.concat([reportBytes, Buffer.from(" ")]));
@@ -10972,7 +10974,7 @@ void test("browser correlation admission verifies the sealed child bundle and sc
   const lineage = await readFile(
     join(
       child.evidenceDir,
-      "gates/G15_BROWSER/artifacts/oidc-fixture-lineage.json",
+      "gates/browser/artifacts/oidc-fixture-lineage.json",
     ),
   );
   const baseConfig = await readFile(
@@ -10981,7 +10983,7 @@ void test("browser correlation admission verifies the sealed child bundle and sc
   const childConfig = await readFile(join(child.root, "config/platform.yaml"));
   const directory = join(
     parentContext.evidenceDir,
-    "gates/G14_OBSERVABILITY/artifacts",
+    "gates/observability/artifacts",
   );
   await mkdir(directory, { recursive: true, mode: 0o700 });
   const bundle = join(directory, "browser-source.bundle");
@@ -11205,7 +11207,7 @@ void test("browser correlation admission verifies the sealed child bundle and sc
   };
   assert.match(
     await verifyGateArtifacts(
-      { id: "G14_OBSERVABILITY", command: "pnpm test:observability" },
+      { id: "observability", command: "pnpm test:observability" },
       wrongCommand,
       parentContext.evidenceDir,
     ),
@@ -11224,7 +11226,7 @@ void test("browser correlation admission verifies the sealed child bundle and sc
   };
   assert.match(
     await verifyGateArtifacts(
-      { id: "G14_OBSERVABILITY", command: "pnpm test:observability" },
+      { id: "observability", command: "pnpm test:observability" },
       record,
       parentContext.evidenceDir,
     ),
@@ -11241,7 +11243,7 @@ void test("browser correlation admission verifies the sealed child bundle and sc
   const missingBackend = { ...record, artifacts: [] };
   assert.match(
     await verifyGateArtifacts(
-      { id: "G14_OBSERVABILITY", command: "pnpm test:observability" },
+      { id: "observability", command: "pnpm test:observability" },
       missingBackend,
       parentContext.evidenceDir,
     ),
@@ -11255,7 +11257,7 @@ void test("browser correlation admission verifies the sealed child bundle and sc
   );
   assert.match(
     await verifyGateArtifacts(
-      { id: "G14_OBSERVABILITY", command: "pnpm test:observability" },
+      { id: "observability", command: "pnpm test:observability" },
       { ...record, artifacts: [] },
       parentContext.evidenceDir,
     ),
@@ -11339,7 +11341,7 @@ async function writeMigrationPreparationArtifact(
     baseConfigSha256: context.baseConfigSha256,
     preparation,
   });
-  const artifactDir = join(evidenceDir, "gates/G08_MIGRATIONS/artifacts");
+  const artifactDir = join(evidenceDir, "gates/migrations/artifacts");
   await mkdir(artifactDir, { recursive: true, mode: 0o700 });
   const artifactPath = join(artifactDir, "canonical-preparation.json");
   await writeFile(artifactPath, JSON.stringify(wrapper), { mode: 0o400 });
