@@ -276,7 +276,7 @@ const roles = [
   ),
 ];
 
-void test("G16: Docker inspect accepts only the exact absent resource response", () => {
+void test("aroma_sandbox: Docker inspect accepts only the exact absent resource response", () => {
   const name = "coffee-g16-diagnostic-absent-network";
   assert.equal(
     isExpectedMissingDockerInspect(
@@ -369,7 +369,7 @@ void test("GREEN: роль-карта совпадает с ownership и сод�
   assert.equal(JSON.stringify(plan).includes("PASSWORD"), false);
 });
 
-void test("G08 v2 keeps the four UPDATE scopes column-only and rejects stale ACLs", async () => {
+void test("migrations v2 keeps the four UPDATE scopes column-only and rejects stale ACLs", async () => {
   assert.equal(roleMap.schemaVersion, 2);
   const roleMapSchema = await readJson(
     join(ROOT, "config/database-role-map.schema.json"),
@@ -558,7 +558,7 @@ void test("GREEN/RED: launch projection changes only owned database names", () =
   );
 });
 
-void test("G08 derives only the five run databases and validates its exact preparation binding", () => {
+void test("migrations derives only the five run databases and validates its exact preparation binding", () => {
   const context = {
     schemaVersion: 1,
     runId: "20261024T110000Z-abcdef0",
@@ -627,12 +627,12 @@ void test("G08 derives only the five run databases and validates its exact prepa
         { ...context, runId: "wrong" },
         "c".repeat(64),
       ),
-    /CONFIG-G08-PREPARATION/u,
+    /CONFIG-MIGRATIONS-PREPARATION/u,
   );
   assert.throws(
     () =>
       validateMigrationPreparationArtifact(artifact, context, "d".repeat(64)),
-    /CONFIG-G08-PREPARATION/u,
+    /CONFIG-MIGRATIONS-PREPARATION/u,
   );
   assert.throws(
     () =>
@@ -645,7 +645,7 @@ void test("G08 derives only the five run databases and validates its exact prepa
   );
 });
 
-void test("G08 retains a late CREATE after an initial absent inspection", async () => {
+void test("migrations retains a late CREATE after an initial absent inspection", async () => {
   const database = {
     owner: "catalog",
     name: "coffee_verify_20261025t120000z_1111111_catalog",
@@ -704,7 +704,7 @@ void test("G08 retains a late CREATE after an initial absent inspection", async 
   assert.equal(dropCalls, 1);
 });
 
-void test("GREEN/RED: database SQL quotes only normative G17 restore names as special identifiers", () => {
+void test("GREEN/RED: database SQL quotes only normative backup_restore target names as special identifiers", () => {
   const orders = roleMap.databases.find(
     (database) => database.schema === "orders",
   );
@@ -732,7 +732,7 @@ void test("GREEN/RED: database SQL quotes only normative G17 restore names as sp
   ]) {
     assert.throws(
       () => renderDatabaseSql({ ...orders, name }),
-      /DB-BOOTSTRAP database name is not a canonical identifier or G17 restore target/u,
+      /DB-BOOTSTRAP database name is not a canonical identifier or backup_restore target/u,
     );
   }
 });
@@ -1066,7 +1066,7 @@ void test("GREEN: smoke matrix is isolated and checks every own/cross-owner pair
   );
 });
 
-void test("G09 smoke performs role-mapped own reads and strictly classifies foreign database denial", async () => {
+void test("db_boundaries smoke performs role-mapped own reads and strictly classifies foreign database denial", async () => {
   const target = {
     runId: "run1234",
   };
@@ -1145,7 +1145,7 @@ void test("G09 smoke performs role-mapped own reads and strictly classifies fore
   );
 });
 
-void test("G09 smoke rejects foreign connection failures other than SQLSTATE 42501", async () => {
+void test("db_boundaries smoke rejects foreign connection failures other than SQLSTATE 42501", async () => {
   await assert.rejects(
     runDatabaseSmoke({
       roleMap,

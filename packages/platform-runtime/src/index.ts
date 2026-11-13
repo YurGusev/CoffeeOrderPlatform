@@ -1262,7 +1262,7 @@ export async function startConfiguredRuntime(
   );
   const config = loadedConfig.config;
   if (/^\/dev\/shm\/coffee-g17-[a-f0-9]{16,64}$/u.test(config.postgres.host))
-    throw new RuntimeError("RUNTIME_G17_SOCKET_STANDALONE_ONLY");
+    throw new RuntimeError("RUNTIME_BACKUP_SOCKET_STANDALONE_ONLY");
   if (config.databaseIsolation.enabled !== Boolean(launchContextPath))
     throw new RuntimeError("RUNTIME_LAUNCH_CONTEXT_POLICY_MISMATCH");
   if (launchContextPath && config.environment === "production")

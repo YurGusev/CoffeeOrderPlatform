@@ -21,10 +21,10 @@ import { load } from "js-yaml";
 import {
   BROWSER_REQUIRED_CHECKS,
   createBrowserNetworkMonitor,
-  createG14BrowserNetworkMonitor,
-  matchG14BrowserChain,
-  isG14AcceptedProjection,
-  validateG14BrowserEvidence,
+  createObservabilityBrowserNetworkMonitor,
+  matchBrowserChain,
+  isAcceptedObservabilityProjection,
+  validateObservabilityBrowserEvidence,
   buildRealtimeAuthCloseInvocation,
   proveNaturalSseReauthentication,
   expectedBrowserCompletedResponse,
@@ -47,7 +47,7 @@ import {
   persistBrowserFailureFromChild,
   validateBrowserChildFailureDiagnostic,
   prepareBrowserChildCheckout,
-  validateG14ChildCleanup,
+  validateChildCleanup,
 } from "../../verification/launch/v1/scenarios/browser.mjs";
 
 const RUN_ID = "20261025T132252Z-085cdd6";
@@ -56,13 +56,13 @@ const REPO_ROOT = fileURLToPath(new URL("../..", import.meta.url));
 const ORDER_REF = "ord_01ARZ3NDEKTSV4RRFFQ69G5FAV";
 const ITEM_REF = "itm_01ARZ3NDEKTSV4RRFFQ69G5FAV";
 
-void test("G14 binds a real SSE stream and later owner read to exactly one Confirm", async () => {
+void test("observability binds a real SSE stream and later owner read to exactly one Confirm", async () => {
   const cdp = new EventEmitter();
   cdp.send = async () => ({
     body: JSON.stringify({ orderRef: ORDER_REF, projectionVersion: "5" }),
     base64Encoded: false,
   });
-  const monitor = createG14BrowserNetworkMonitor(cdp);
+  const monitor = createObservabilityBrowserNetworkMonitor(cdp);
   const correlationId = "00000000-0000-4000-8000-000000000015";
   const frameId = "msg_01ARZ3NDEKTSV4RRFFQ69G5FAV";
   const request = (requestId, url, method = "GET", headers = {}) =>
@@ -124,21 +124,21 @@ void test("G14 binds a real SSE stream and later owner read to exactly one Confi
     },
   ];
   assert.equal(
-    matchG14BrowserChain(monitor, ORDER_REF, telemetry)?.frame.frameId,
+    matchBrowserChain(monitor, ORDER_REF, telemetry)?.frame.frameId,
     frameId,
   );
   assert.equal(
-    matchG14BrowserChain(monitor, ORDER_REF, [
+    matchBrowserChain(monitor, ORDER_REF, [
       { ...telemetry[0], correlationId: keyForWrongCorrelation() },
     ]),
     undefined,
   );
   assert.equal(
-    matchG14BrowserChain(monitor, "ord_01ARZ3NDEKTSV4RRFFQ69G5FAW", telemetry),
+    matchBrowserChain(monitor, "ord_01ARZ3NDEKTSV4RRFFQ69G5FAW", telemetry),
     undefined,
   );
   assert.equal(
-    matchG14BrowserChain(
+    matchBrowserChain(
       { ...monitor, reads: [{ ...monitor.reads[0], status: 503 }] },
       ORDER_REF,
       telemetry,
@@ -146,7 +146,7 @@ void test("G14 binds a real SSE stream and later owner read to exactly one Confi
     undefined,
   );
   assert.equal(
-    matchG14BrowserChain(
+    matchBrowserChain(
       {
         ...monitor,
         reads: [{ ...monitor.reads[0], sequence: monitor.frames[0].sequence }],
@@ -156,9 +156,9 @@ void test("G14 binds a real SSE stream and later owner read to exactly one Confi
     ),
     undefined,
   );
-  assert.equal(isG14AcceptedProjection("6", "5", "4"), true);
-  assert.equal(isG14AcceptedProjection("4", "5", "3"), false);
-  assert.equal(isG14AcceptedProjection("6", "5", "5"), false);
+  assert.equal(isAcceptedObservabilityProjection("6", "5", "4"), true);
+  assert.equal(isAcceptedObservabilityProjection("4", "5", "3"), false);
+  assert.equal(isAcceptedObservabilityProjection("6", "5", "5"), false);
   const secondFrame = {
     ...monitor.frames[0],
     frameId: "msg_01ARZ3NDEKTSV4RRFFQ69G5FAW",
@@ -178,22 +178,22 @@ void test("G14 binds a real SSE stream and later owner read to exactly one Confi
     ],
   };
   assert.equal(
-    matchG14BrowserChain(repeated, ORDER_REF, [...telemetry, ...telemetry])
-      ?.frame.frameId,
+    matchBrowserChain(repeated, ORDER_REF, [...telemetry, ...telemetry])?.frame
+      .frameId,
     frameId,
   );
   assert.equal(
-    matchG14BrowserChain(repeated, ORDER_REF, telemetry, new Set([frameId]))
-      ?.frame.frameId,
-    secondFrame.frameId,
-  );
-  assert.equal(
-    matchG14BrowserChain(repeated, ORDER_REF, telemetry, new Set(), "5")?.frame
+    matchBrowserChain(repeated, ORDER_REF, telemetry, new Set([frameId]))?.frame
       .frameId,
     secondFrame.frameId,
   );
   assert.equal(
-    matchG14BrowserChain(
+    matchBrowserChain(repeated, ORDER_REF, telemetry, new Set(), "5")?.frame
+      .frameId,
+    secondFrame.frameId,
+  );
+  assert.equal(
+    matchBrowserChain(
       {
         ...repeated,
         reads: [
@@ -208,7 +208,7 @@ void test("G14 binds a real SSE stream and later owner read to exactly one Confi
     undefined,
   );
   assert.equal(
-    matchG14BrowserChain(
+    matchBrowserChain(
       {
         ...monitor,
         reads: [
@@ -229,7 +229,7 @@ void test("G14 binds a real SSE stream and later owner read to exactly one Confi
     undefined,
   );
   assert.equal(
-    matchG14BrowserChain(
+    matchBrowserChain(
       { ...monitor, reads: [{ ...monitor.reads[0], projectionVersion: "4" }] },
       ORDER_REF,
       telemetry,
@@ -237,7 +237,7 @@ void test("G14 binds a real SSE stream and later owner read to exactly one Confi
     undefined,
   );
   assert.equal(
-    matchG14BrowserChain(
+    matchBrowserChain(
       {
         ...monitor,
         frames: [
@@ -250,7 +250,7 @@ void test("G14 binds a real SSE stream and later owner read to exactly one Confi
     undefined,
   );
   assert.equal(
-    matchG14BrowserChain(
+    matchBrowserChain(
       {
         ...monitor,
         commands: [
@@ -269,10 +269,10 @@ function keyForWrongCorrelation() {
   return "00000000-0000-4000-8000-000000000016";
 }
 
-void test("G14 evidence and cleanup reject extra fields, stale version and unknown cleanup", () => {
+void test("observability evidence and cleanup reject extra fields, stale version and unknown cleanup", () => {
   const evidence = {
     schemaVersion: 1,
-    purpose: "G14_BROWSER_CORRELATION",
+    purpose: "BROWSER_CORRELATION",
     runId: RUN_ID,
     candidateSha: CANDIDATE_SHA,
     configSha256: "a".repeat(64),
@@ -298,7 +298,10 @@ void test("G14 evidence and cleanup reject extra fields, stale version and unkno
     candidateSha: CANDIDATE_SHA,
     configSha256: evidence.configSha256,
   };
-  assert.equal(validateG14BrowserEvidence(evidence, identity), evidence);
+  assert.equal(
+    validateObservabilityBrowserEvidence(evidence, identity),
+    evidence,
+  );
   for (const change of [
     { acceptedVersion: "4" },
     { confirmCount: 2 },
@@ -311,7 +314,10 @@ void test("G14 evidence and cleanup reject extra fields, stale version and unkno
     { verificationOnly: true },
   ])
     assert.throws(() =>
-      validateG14BrowserEvidence({ ...evidence, ...change }, identity),
+      validateObservabilityBrowserEvidence(
+        { ...evidence, ...change },
+        identity,
+      ),
     );
   assert.throws(() => validateBrowserEvidence(evidence, identity));
   const names = ["customer", "catalog", "pricing", "orders", "integration"]
@@ -343,11 +349,11 @@ void test("G14 evidence and cleanup reject extra fields, stale version and unkno
     },
   };
   assert.equal(
-    validateG14ChildCleanup(cleanup, { runId: RUN_ID }),
+    validateChildCleanup(cleanup, { runId: RUN_ID }),
     cleanup.externalCleanup,
   );
   assert.throws(() =>
-    validateG14ChildCleanup(
+    validateChildCleanup(
       { ...cleanup, cleanup: { ...cleanup.cleanup, complete: false } },
       { runId: RUN_ID },
     ),
@@ -367,18 +373,18 @@ void test("G14 evidence and cleanup reject extra fields, stale version and unkno
         const candidate = { ...cleanup, externalCleanup };
         if (attempted === !baselineAttached && removed === !baselineAttached)
           assert.equal(
-            validateG14ChildCleanup(candidate, { runId: RUN_ID }),
+            validateChildCleanup(candidate, { runId: RUN_ID }),
             externalCleanup,
           );
         else
           assert.throws(() =>
-            validateG14ChildCleanup(candidate, { runId: RUN_ID }),
+            validateChildCleanup(candidate, { runId: RUN_ID }),
           );
       }
     }
   }
   assert.throws(() =>
-    validateG14ChildCleanup(
+    validateChildCleanup(
       {
         ...cleanup,
         externalCleanup: {
@@ -390,7 +396,7 @@ void test("G14 evidence and cleanup reject extra fields, stale version and unkno
     ),
   );
   assert.throws(() =>
-    validateG14ChildCleanup(
+    validateChildCleanup(
       {
         ...cleanup,
         externalCleanup: {
@@ -586,7 +592,7 @@ function validEvidence() {
   };
 }
 
-void test("G15 mutation matcher admits only exact approved owner writes", () => {
+void test("browser mutation matcher admits only exact approved owner writes", () => {
   assert.equal(
     matchesBrowserMutation(
       {
@@ -679,7 +685,7 @@ void test("G15 mutation matcher admits only exact approved owner writes", () => 
   );
 });
 
-void test("G15 natural SSE wait propagates a stop request immediately", async () => {
+void test("browser natural SSE wait propagates a stop request immediately", async () => {
   let stopChecks = 0;
   const runtimeContext = {
     async readRealtimeAuthCloseCount() {
@@ -687,7 +693,7 @@ void test("G15 natural SSE wait propagates a stop request immediately", async ()
     },
     throwIfStopRequested() {
       stopChecks += 1;
-      throw new Error("G18_STOP_REQUESTED_SIGTERM");
+      throw new Error("ROLLBACK_STOP_REQUESTED_SIGTERM");
     },
     ownerEvidence: {
       async snapshot() {
@@ -726,12 +732,12 @@ void test("G15 natural SSE wait propagates a stop request immediately", async ()
       itemRef: "itm_01ARZ3NDEKTSV4RRFFQ69G5FAV",
       idempotencyKey: "fixture-idempotency-key",
     }),
-    /G15_BROWSER_STOP_REQUESTED/u,
+    /BROWSER_STOP_REQUESTED/u,
   );
   assert.equal(stopChecks, 1);
 });
 
-void test("G15 browser proof requires the Compose stop capability", async () => {
+void test("browser proof requires the Compose stop capability", async () => {
   await assert.rejects(
     proveBrowser({
       projectName: "coffee-g15-proof",
@@ -746,11 +752,11 @@ void test("G15 browser proof requires the Compose stop capability", async () => 
       readRealtimeAuthCloseCount() {},
       restartCustomerService() {},
     }),
-    /G15_BROWSER_RUNTIME_CONTEXT_INVALID/u,
+    /BROWSER_RUNTIME_CONTEXT_INVALID/u,
   );
 });
 
-void test("G15 retains the primary browser error after all cleanup attempts", async () => {
+void test("browser retains the primary browser error after all cleanup attempts", async () => {
   const canary = "browser-private-canary";
   const primary = new TypeError(`selector=${canary}`);
   primary.stack = [
@@ -827,7 +833,7 @@ void test("G15 retains the primary browser error after all cleanup attempts", as
     calls.length = 0;
     thrown = { secret: canary };
     await assert.rejects(proveWithDriver(runtimeContext), {
-      message: "G15_BROWSER_PROOF_FAILED",
+      message: "BROWSER_PROOF_FAILED",
     });
     assert.deepEqual(calls, ["detach", "context.close", "driver.close"]);
     const { createBrowserChildFailureDiagnostic } =
@@ -892,7 +898,7 @@ void test("G15 retains the primary browser error after all cleanup attempts", as
           },
           identity,
         ),
-      { code: "G15_CHILD_FAILURE_DIAGNOSTIC_INVALID" },
+      { code: "BROWSER_CHILD_FAILURE_DIAGNOSTIC_INVALID" },
     );
     const localPath = join(REPO_ROOT, "tools/browser-proof.mjs");
     const projection = (stack) =>
@@ -918,7 +924,7 @@ void test("G15 retains the primary browser error after all cleanup attempts", as
   }
 });
 
-void test("G15 completed-response faults admit only the actual operation statuses", () => {
+void test("browser completed-response faults admit only the actual operation statuses", () => {
   assert.equal(
     expectedBrowserCompletedResponse("customer.create", "POST", 201),
     true,
@@ -949,7 +955,7 @@ void test("G15 completed-response faults admit only the actual operation statuse
   );
 });
 
-void test("G15 generated metrics probe resolves runtime YAML and uses docker exec argv", async () => {
+void test("browser generated metrics probe resolves runtime YAML and uses docker exec argv", async () => {
   const containerId = "a".repeat(64);
   const invocation = buildRealtimeAuthCloseInvocation(containerId);
   assert.deepEqual(invocation.args.slice(0, 5), [
@@ -997,11 +1003,11 @@ void test("G15 generated metrics probe resolves runtime YAML and uses docker exe
   }
   assert.throws(
     () => buildRealtimeAuthCloseInvocation("not-a-container-id"),
-    /G15_REALTIME_AUTH_CONTAINER_INVALID/u,
+    /_REALTIME_AUTH_CONTAINER_INVALID/u,
   );
 });
 
-void test("G15 SSE proof requires an exact post-invalidation read of that order at the announced version", () => {
+void test("browser SSE proof requires an exact post-invalidation read of that order at the announced version", () => {
   const otherOrder = "ord_01ARZ3NDEKTSV4RRFFQ69G5FAW";
   const invalidations = [
     { orderRef: otherOrder, ownerVersion: "11", sequence: 10 },
@@ -1052,7 +1058,7 @@ void test("G15 SSE proof requires an exact post-invalidation read of that order 
   );
 });
 
-void test("G15 natural reauthentication proof binds resumed owner GET to the new ready event", () => {
+void test("browser natural reauthentication proof binds resumed owner GET to the new ready event", () => {
   const readySequence = 20;
   const goodRead = {
     orderRef: ORDER_REF,
@@ -1104,7 +1110,7 @@ void test("G15 natural reauthentication proof binds resumed owner GET to the new
   );
 });
 
-void test("G15 stale GET receipt is correlated to the exact held network request", async () => {
+void test("browser stale GET receipt is correlated to the exact held network request", async () => {
   const cdp = new EventEmitter();
   cdp.send = async () => ({
     body: JSON.stringify({ orderRef: ORDER_REF, projectionVersion: "12" }),
@@ -1140,7 +1146,7 @@ void test("G15 stale GET receipt is correlated to the exact held network request
   );
 });
 
-void test("G15 auth-close metric parser accepts exactly one bounded unlabeled sample", () => {
+void test("browser auth-close metric parser accepts exactly one bounded unlabeled sample", () => {
   assert.equal(
     parseRealtimeAuthCloseMetric(
       "# TYPE coffee_realtime_auth_close_total counter\ncoffee_realtime_auth_close_total 7\n",
@@ -1167,7 +1173,7 @@ void test("G15 auth-close metric parser accepts exactly one bounded unlabeled sa
   );
 });
 
-void test("G15 SSE monitor records the native Last-Event-ID used for reconnect", () => {
+void test("browser SSE monitor records the native Last-Event-ID used for reconnect", () => {
   const cdp = new EventEmitter();
   cdp.send = async () => ({ body: "", base64Encoded: false });
   const page = new EventEmitter();
@@ -1229,7 +1235,7 @@ void test("G15 SSE monitor records the native Last-Event-ID used for reconnect",
   assert.equal(monitor.eventSourceReady, 2);
 });
 
-void test("G15 mutation monitor attaches forbidden-write checks to every browser page", () => {
+void test("browser mutation monitor attaches forbidden-write checks to every browser page", () => {
   const cdp = new EventEmitter();
   const initialPage = new EventEmitter();
   const secondPage = new EventEmitter();
@@ -1264,7 +1270,7 @@ void test("G15 mutation monitor attaches forbidden-write checks to every browser
   assert.deepEqual(monitor.invalidationRecords, []);
 });
 
-void test("G15 evidence validator binds the complete passed receipt to its run", () => {
+void test("browser evidence validator binds the complete passed receipt to its run", () => {
   const evidence = validEvidence();
   assert.equal(
     validateBrowserEvidence(evidence, {
@@ -1279,7 +1285,7 @@ void test("G15 evidence validator binds the complete passed receipt to its run",
         runId: "20261025T132300Z-085cdd6",
         candidateSha: CANDIDATE_SHA,
       }),
-    /G15_BROWSER_EVIDENCE_IDENTITY_INVALID/u,
+    /BROWSER_EVIDENCE_IDENTITY_INVALID/u,
   );
   assert.throws(
     () =>
@@ -1287,11 +1293,11 @@ void test("G15 evidence validator binds the complete passed receipt to its run",
         runId: RUN_ID,
         candidateSha: "b".repeat(40),
       }),
-    /G15_BROWSER_EVIDENCE_IDENTITY_INVALID/u,
+    /BROWSER_EVIDENCE_IDENTITY_INVALID/u,
   );
 });
 
-void test("G15 runtime artifact binds full evidence, fixture lineage and cleanup", () => {
+void test("browser runtime artifact binds full evidence, fixture lineage and cleanup", () => {
   const lineage = {
     schemaVersion: 1,
     profile: "verification-only-pkce-jwks-v1",
@@ -1316,7 +1322,7 @@ void test("G15 runtime artifact binds full evidence, fixture lineage and cleanup
   };
   const artifact = {
     schemaVersion: 1,
-    gateId: "G15_BROWSER",
+    gateId: "browser",
     runId: RUN_ID,
     candidateSha: CANDIDATE_SHA,
     baseConfigSha256: "6".repeat(64),
@@ -1340,7 +1346,7 @@ void test("G15 runtime artifact binds full evidence, fixture lineage and cleanup
         { ...artifact, candidateSha: "7".repeat(40) },
         expected,
       ),
-    /G15_BROWSER_ARTIFACT_IDENTITY_INVALID/u,
+    /BROWSER_ARTIFACT_IDENTITY_INVALID/u,
   );
   assert.throws(
     () =>
@@ -1351,7 +1357,7 @@ void test("G15 runtime artifact binds full evidence, fixture lineage and cleanup
         },
         expected,
       ),
-    /G15_BROWSER_ARTIFACT_LINEAGE_INVALID/u,
+    /BROWSER_ARTIFACT_LINEAGE_INVALID/u,
   );
   assert.throws(
     () =>
@@ -1365,11 +1371,11 @@ void test("G15 runtime artifact binds full evidence, fixture lineage and cleanup
         },
         expected,
       ),
-    /G15_BROWSER_ARTIFACT_CLEANUP_INVALID/u,
+    /BROWSER_ARTIFACT_CLEANUP_INVALID/u,
   );
 });
 
-void test("G15 parent admits only a joined successful child with matching cleanup receipt", () => {
+void test("browser parent admits only a joined successful child with matching cleanup receipt", () => {
   const childContext = { runId: RUN_ID, candidateSha: CANDIDATE_SHA };
   const callbackProof = {
     schemaVersion: 1,
@@ -1421,7 +1427,7 @@ void test("G15 parent admits only a joined successful child with matching cleanu
           childRuntime,
           stdoutReceipt,
         ),
-      { code: "G15_CHILD_PROCESS_NOT_ADMITTED" },
+      { code: "BROWSER_CHILD_PROCESS_NOT_ADMITTED" },
     );
   }
   assert.throws(
@@ -1430,7 +1436,7 @@ void test("G15 parent admits only a joined successful child with matching cleanu
         ...stdoutReceipt,
         cleanup: { ...cleanup, verified: false },
       }),
-    { code: "G15_CHILD_PROCESS_NOT_ADMITTED" },
+    { code: "BROWSER_CHILD_PROCESS_NOT_ADMITTED" },
   );
   assert.throws(
     () =>
@@ -1440,11 +1446,11 @@ void test("G15 parent admits only a joined successful child with matching cleanu
         { ...childRuntime, status: "FAIL" },
         stdoutReceipt,
       ),
-    { code: "G15_CHILD_PROCESS_NOT_ADMITTED" },
+    { code: "BROWSER_CHILD_PROCESS_NOT_ADMITTED" },
   );
 });
 
-void test("G15 parent and child configuration identities require SHA-256 hashes", async () => {
+void test("browser parent and child configuration identities require SHA-256 hashes", async () => {
   const parentRoot = "/tmp/g15-parent-candidate";
   const parentContext = {
     runId: "20261025T130000Z-1234567",
@@ -1485,7 +1491,7 @@ void test("G15 parent and child configuration identities require SHA-256 hashes"
         parentContext,
         parentRoot,
       ),
-    { code: "G15_CHILD_CONTEXT_INVALID" },
+    { code: "BROWSER_CHILD_CONTEXT_INVALID" },
   );
 
   const evidenceDir = await mkdtemp(join(tmpdir(), "g15-parent-sha-"));
@@ -1500,7 +1506,7 @@ void test("G15 parent and child configuration identities require SHA-256 hashes"
         },
         stdoutReceipt: {},
       }),
-      { code: "G15_PARENT_CONFIG_HASH_INVALID" },
+      { code: "BROWSER_PARENT_CONFIG_HASH_INVALID" },
     );
     await assert.rejects(
       validateBrowserParentRuntime({
@@ -1519,7 +1525,7 @@ void test("G15 parent and child configuration identities require SHA-256 hashes"
   }
 });
 
-void test("G15 child failure receipt keeps only scoped hashes and fixed source location", async () => {
+void test("browser child failure receipt keeps only scoped hashes and fixed source location", async () => {
   const { createBrowserChildFailureDiagnostic } =
     await import("../../tools/compose-smoke.mjs");
   const parentCandidateSha = "1".repeat(40);
@@ -1531,7 +1537,7 @@ void test("G15 child failure receipt keeps only scoped hashes and fixed source l
     runId: RUN_ID,
     candidateSha: `${RUN_ID.slice(-7)}${"a".repeat(33)}`,
   };
-  const canary = "G15_RAW_CHILD_ERROR_CANARY";
+  const canary = "BROWSER_RAW_CHILD_ERROR_CANARY";
   const childFailure = Object.assign(new TypeError(canary), {
     stack: [
       `TypeError: ${canary}`,
@@ -1631,7 +1637,7 @@ void test("G15 child failure receipt keeps only scoped hashes and fixed source l
         { ...diagnostic, rawStack: childFailure.stack },
         childContext,
       ),
-    { code: "G15_CHILD_FAILURE_DIAGNOSTIC_INVALID" },
+    { code: "BROWSER_CHILD_FAILURE_DIAGNOSTIC_INVALID" },
   );
   assert.throws(
     () =>
@@ -1639,7 +1645,7 @@ void test("G15 child failure receipt keeps only scoped hashes and fixed source l
         { ...diagnostic, runId: parentContext.runId },
         childContext,
       ),
-    { code: "G15_CHILD_FAILURE_DIAGNOSTIC_INVALID" },
+    { code: "BROWSER_CHILD_FAILURE_DIAGNOSTIC_INVALID" },
   );
   assert.throws(
     () =>
@@ -1653,7 +1659,7 @@ void test("G15 child failure receipt keeps only scoped hashes and fixed source l
         },
         childContext,
       ),
-    { code: "G15_CHILD_FAILURE_DIAGNOSTIC_INVALID" },
+    { code: "BROWSER_CHILD_FAILURE_DIAGNOSTIC_INVALID" },
   );
   assert.throws(
     () =>
@@ -1667,7 +1673,7 @@ void test("G15 child failure receipt keeps only scoped hashes and fixed source l
         },
         childContext,
       ),
-    { code: "G15_CHILD_FAILURE_DIAGNOSTIC_INVALID" },
+    { code: "BROWSER_CHILD_FAILURE_DIAGNOSTIC_INVALID" },
   );
   assert.throws(
     () =>
@@ -1689,12 +1695,12 @@ void test("G15 child failure receipt keeps only scoped hashes and fixed source l
         },
         childContext,
       ),
-    { code: "G15_CHILD_FAILURE_DIAGNOSTIC_INVALID" },
+    { code: "BROWSER_CHILD_FAILURE_DIAGNOSTIC_INVALID" },
   );
 
   const tempRoot = await mkdtemp(join(tmpdir(), "g15-child-failure-"));
   const evidenceDir = join(tempRoot, "evidence");
-  const artifactsDir = join(evidenceDir, "gates/G15_BROWSER/artifacts");
+  const artifactsDir = join(evidenceDir, "gates/browser/artifacts");
   await mkdir(artifactsDir, { recursive: true, mode: 0o700 });
   try {
     const error = Object.assign(new Error("child exited"), {
@@ -1718,7 +1724,7 @@ void test("G15 child failure receipt keeps only scoped hashes and fixed source l
     const receipt = JSON.parse(receiptText);
     assert.deepEqual(receipt, {
       schemaVersion: 1,
-      gateId: "G15_BROWSER",
+      gateId: "browser",
       outcome: "FAIL",
       parentRunId: parentContext.runId,
       parentCandidateSha: parentContext.candidateSha,
@@ -1745,7 +1751,7 @@ void test("G15 child failure receipt keeps only scoped hashes and fixed source l
           { ...receipt, childCandidateSha: parentCandidateSha },
           { parentContext, childContext },
         ),
-      { code: "G15_BROWSER_FAILURE_RECEIPT_INVALID" },
+      { code: "BROWSER_FAILURE_RECEIPT_INVALID" },
     );
     await assert.rejects(
       persistBrowserFailureFromChild({
@@ -1810,7 +1816,7 @@ void test("G15 child failure receipt keeps only scoped hashes and fixed source l
   }
 });
 
-void test("G15 child preparation builds ignored modules before importing the Compose entrypoint", async (t) => {
+void test("browser child preparation builds ignored modules before importing the Compose entrypoint", async (t) => {
   const childRoot = await mkdtemp(join(tmpdir(), "g15-child-module-load-"));
   const bin = join(childRoot, "bin");
   const oldPath = process.env.PATH;
@@ -1818,7 +1824,7 @@ void test("G15 child preparation builds ignored modules before importing the Com
   t.after(async () => {
     if (oldPath === undefined) delete process.env.PATH;
     else process.env.PATH = oldPath;
-    delete process.env.G15_PNPM_COMMAND_LOG;
+    delete process.env._PNPM_COMMAND_LOG;
     await rm(childRoot, { recursive: true, force: true });
   });
   await mkdir(join(childRoot, "tools"), { recursive: true });
@@ -1840,10 +1846,10 @@ void test("G15 child preparation builds ignored modules before importing the Com
   );
   await writeFile(
     join(bin, "pnpm"),
-    '#!/bin/sh\nprintf \'%s\\n\' "$*" >> "$G15_PNPM_COMMAND_LOG"\nif [ "$1" = exec ]; then mkdir -p packages/platform-database/dist; printf \'export const built = true;\\n\' > packages/platform-database/dist/index.js; fi\n',
+    '#!/bin/sh\nprintf \'%s\\n\' "$*" >> "$_PNPM_COMMAND_LOG"\nif [ "$1" = exec ]; then mkdir -p packages/platform-database/dist; printf \'export const built = true;\\n\' > packages/platform-database/dist/index.js; fi\n',
   );
   await chmod(join(bin, "pnpm"), 0o700);
-  process.env.G15_PNPM_COMMAND_LOG = commandLog;
+  process.env._PNPM_COMMAND_LOG = commandLog;
   process.env.PATH = `${bin}:${oldPath ?? ""}`;
 
   await prepareBrowserChildCheckout(childRoot);
@@ -1856,7 +1862,7 @@ void test("G15 child preparation builds ignored modules before importing the Com
   );
 });
 
-void test("G15 evidence validator rejects extra fields and incomplete checks", () => {
+void test("browser evidence validator rejects extra fields and incomplete checks", () => {
   const withExtraField = { ...validEvidence(), rawRequest: "must not persist" };
   assert.throws(
     () =>
@@ -1864,7 +1870,7 @@ void test("G15 evidence validator rejects extra fields and incomplete checks", (
         runId: RUN_ID,
         candidateSha: CANDIDATE_SHA,
       }),
-    /G15_BROWSER_EVIDENCE_SCHEMA_INVALID/u,
+    /BROWSER_EVIDENCE_SCHEMA_INVALID/u,
   );
 
   const missingCheck = validEvidence();
@@ -1875,7 +1881,7 @@ void test("G15 evidence validator rejects extra fields and incomplete checks", (
         runId: RUN_ID,
         candidateSha: CANDIDATE_SHA,
       }),
-    /G15_BROWSER_EVIDENCE_INCOMPLETE/u,
+    /BROWSER_EVIDENCE_INCOMPLETE/u,
   );
 
   const failedCheck = validEvidence();
@@ -1886,7 +1892,7 @@ void test("G15 evidence validator rejects extra fields and incomplete checks", (
         runId: RUN_ID,
         candidateSha: CANDIDATE_SHA,
       }),
-    /G15_BROWSER_EVIDENCE_INCOMPLETE/u,
+    /BROWSER_EVIDENCE_INCOMPLETE/u,
   );
 
   const leakedOwnerEvidence = validEvidence();
@@ -1897,11 +1903,11 @@ void test("G15 evidence validator rejects extra fields and incomplete checks", (
         runId: RUN_ID,
         candidateSha: CANDIDATE_SHA,
       }),
-    /G15_BROWSER_EVIDENCE_OWNER_INVALID/u,
+    /BROWSER_EVIDENCE_OWNER_INVALID/u,
   );
 });
 
-void test("G15 owner proof rejects altered config, hashes, transport and cleanup", () => {
+void test("browser owner proof rejects altered config, hashes, transport and cleanup", () => {
   const hashes = {
     positive: "1".repeat(64),
     "private-eof": "2".repeat(64),

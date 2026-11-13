@@ -13,6 +13,8 @@
     "preinstall": "node scripts/check-toolchain-versions.mjs",
     "authority:check": "python3 scripts/validate-launch-authority.py && python3 -m unittest discover -s tests/authority -p 'test_*.py'",
     "architecture:check": "node scripts/check-architecture.mjs && node --test tests/architecture/checks.test.mjs",
+    "naming:check": "node scripts/check-gate-naming.mjs && node --test tests/architecture/gate-naming.test.mjs",
+    "matrix:sync:check": "node scripts/generate-gate-matrix.mjs --check",
     "contracts:lint": "node scripts/contracts-lint.mjs",
     "contracts:generate": "node scripts/contracts-generate.mjs",
     "contracts:check-generated": "node scripts/contracts-check-generated.mjs",
@@ -103,7 +105,7 @@
     "lint": "pnpm typecheck && oxlint --type-aware --deny-warnings --ignore-pattern 'tests/architecture/fixtures/**' --ignore-pattern 'packages/generated/**' --ignore-pattern 'packages/platform-ui/provenance/**' apps packages scripts tests verification",
     "typecheck": "tsc -b --pretty false",
     "test": "node --test 'tests/*/!(soak).test.mjs' tests/realtime/fixtures/harness.test.mjs packages/*/test/**/*.test.mjs verification/launch/v1/runner.test.mjs verification/launch/v1/scenarios/preflight.test.mjs",
-    "check": "pnpm authority:check && pnpm versions:check && pnpm compatibility:check && pnpm config:check && pnpm contracts:lint && pnpm contracts:check-generated && pnpm contracts:breaking && pnpm typecheck && pnpm contracts:test && pnpm architecture:check && pnpm rule-parity:check && pnpm lint && pnpm web:build && pnpm browser:bundle:check && pnpm test:ui && pnpm test:web-foundation && pnpm test:web-operator && pnpm test",
+    "check": "pnpm authority:check && pnpm versions:check && pnpm compatibility:check && pnpm config:check && pnpm contracts:lint && pnpm contracts:check-generated && pnpm contracts:breaking && pnpm typecheck && pnpm contracts:test && pnpm architecture:check && pnpm rule-parity:check && pnpm matrix:sync:check && pnpm naming:check && pnpm lint && pnpm web:build && pnpm browser:bundle:check && pnpm test:ui && pnpm test:web-foundation && pnpm test:web-operator && pnpm test",
     "verify:customer-slice": "node tools/grokverify-customer.mjs",
     "security:scan": "node tools/security-scan.mjs"
   },

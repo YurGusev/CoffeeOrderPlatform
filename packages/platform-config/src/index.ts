@@ -654,7 +654,7 @@ export function parseSecurityScanVerification(
   if (source["enabled"] !== true)
     throw new PlatformConfigError(
       `${path}.enabled`,
-      "G12 обязателен и должен быть включён",
+      "supply_chain обязателен и должен быть включён",
     );
   const constants = {
     cpu: [source["cpu"], 2],
@@ -1800,12 +1800,12 @@ function postgresConfig(
     if (!/^\/dev\/shm\/coffee-g17-[a-f0-9]{16,64}$/u.test(host))
       throw new PlatformConfigError(
         `${path}.host`,
-        "разрешён только canonical endpoint или private G17 Unix socket path",
+        "разрешён только canonical endpoint или private backup_restore Unix socket path",
       );
     if (environment === "production" || !databaseIsolationEnabled)
       throw new PlatformConfigError(
         `${path}.host`,
-        "G17 Unix socket разрешён только вне production при включённой database isolation",
+        "backup_restore Unix socket разрешён только вне production при включённой database isolation",
       );
   }
   return Object.freeze({

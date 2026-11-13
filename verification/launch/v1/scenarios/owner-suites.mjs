@@ -68,7 +68,8 @@ async function integrationFiles() {
     .filter((name) => name.endsWith(".test.mjs"))
     .sort()
     .map((name) => `tests/pricing/${name}`);
-  if (!pricingFiles.length) throw new Error("G10: no pricing test files found");
+  if (!pricingFiles.length)
+    throw new Error("integration: no pricing test files found");
   return [
     ...INTEGRATION_FILES.slice(0, 5),
     ...pricingFiles,

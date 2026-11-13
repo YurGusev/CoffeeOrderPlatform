@@ -1,9 +1,9 @@
-# ADR-0034: G16 на существующей учётной записи AROMA
+# ADR-0034: `aroma_sandbox` на существующей учётной записи AROMA
 
-Статус: реализовано; отдельный G16 PASS на candidate `0dbe0a40685cbf348f0a63f8633a8db3a74a5467`.<br>
+Статус: реализовано; отдельный PASS гейта `aroma_sandbox` на candidate `0dbe0a40685cbf348f0a63f8633a8db3a74a5467`.<br>
 Дата: 2026-10-23.<br>
 Основание: прямое поручение владельца использовать существующую учётную запись,
-создать sandbox и разблокировать G16 в #13.
+создать sandbox и разблокировать `aroma_sandbox` в #13.
 
 ## Контекст
 
@@ -14,9 +14,9 @@
 ограниченные изменения собственной тестовой строки и восстановление пустой
 корзины. Эти результаты не доказывают текущее состояние аккаунта.
 
-23 октября владелец повторно поручил использовать этот аккаунт для G16.
+23 октября владелец повторно поручил использовать этот аккаунт для `aroma_sandbox`.
 Отдельный vendor sandbox не предоставлен. Прежнее безусловное запрещение
-production origin в G16 не позволяет выполнить новое поручение на существующем
+production origin в `aroma_sandbox` не позволяет выполнить новое поручение на существующем
 `https://aromateacoffee.ru`.
 
 ## Решение
@@ -26,7 +26,7 @@ Sandbox здесь — временный изолированный локал�
 реальный AROMA и существующая учётная запись. Изоляция аккаунта у поставщика
 и создание отдельной vendor-среды не заявляются.
 
-Для G16 допускается только режим `controlled-live-existing-account`.
+Для `aroma_sandbox` допускается только режим `controlled-live-existing-account`.
 Versioned policy и подписанный approval связывают точные origin, account
 fingerprint, candidate SHA, run-id, approver, один offerRef и maximum quantity.
 `existingAccountException.authority=user-2026-10-23` обозначает это конкретное
@@ -47,18 +47,18 @@ Approval этого эксперимента подписывает однора
 отсутствие approval прекращает сценарий с cleanup без мутаций.
 
 По решению владельца от 1 ноября 2026 обычный product candidate сохраняет
-`aromaSandbox=null` и `mutationsEnabled=false`. Только G16 создаёт отдельный
+`aromaSandbox=null` и `mutationsEnabled=false`. Только aroma_sandbox создаёт отдельный
 config-only child: точная утверждённая policy со свежим публичным ключом и
 `mutationsEnabled=true`. Signer запускается непосредственно перед этой фазой;
 approval связывается с фактическими child SHA/run ID. Код продукта и остальные
-tracked bytes идентичны parent; Git/config/context/bundle и parent G12 image
+tracked bytes идентичны parent; Git/config/context/bundle и parent supply_chain image
 bindings проверяются до допуска. [Границы исключения](../../evidence/launch-preparation/2026-11-01/controlled-config-lineage.md)
 не меняют provider scope, срок подписи, семь фаз и обязательное восстановление.
 Незавершённый cleanup не допускается; этот child не меняет обычную конфигурацию.
 
 PostgreSQL этого изолированного fixture проверяется отдельно: точный registry
 digest берётся из неизменного parent BOM и связывается с фактическим image ID.
-Текущий G12 не сканирует этот fixture; parent G12 receipt для него не создаётся.
+Текущий supply_chain не сканирует этот fixture; parent supply_chain receipt для него не создаётся.
 Существующие resource limits, ownership и cleanup сохраняются.
 
 Несекретные поля ранее утверждённой policy сохранены как исторический
@@ -71,7 +71,7 @@ policy со свежим ключом в единственный versioned chil
 
 Persistent evidence содержит только `controlled-approval.json.age` и
 `controlled-approval.sig.age`. Используется уже закреплённый age и recipients
-из `.sops.yaml`, как в G17. Исходные approval/signature bytes передаются через
+из `.sops.yaml`, как в backup_restore. Исходные approval/signature bytes передаются через
 stdin/stdout только в памяти; plaintext-файлы остаются только в private tmpfs.
 Verifier проверяет ciphertext hashes, расшифровывает в ограниченные RAM buffers
 через существующий операторский `SOPS_AGE_KEY_FILE`, затем выполняет прежнюю
@@ -90,7 +90,7 @@ Gateway `aroma.catalogIdentityKeyV1` и отдельным namespace
 `coffee-platform:g16:account:v1`, origin и cart scope. Email сначала сравнивается
 с canonical credential в памяти; пароль в MAC не участвует. Сохраняется только
 `sha256:<hex>` MAC. Это ограниченное разрешение на закрытый keyed account
-identifier для G16; открытые хэши email/password и значения credentials по
+identifier для `aroma_sandbox`; открытые хэши email/password и значения credentials по
 ADR-0017 по-прежнему запрещены. Ключ MAC и profile payload не попадают в evidence.
 
 ## Границы выполнения
@@ -99,14 +99,14 @@ ADR-0017 по-прежнему запрещены. Ключ MAC и profile paylo
 - Один offerRef из свежего реального каталога и mapping; количество не больше
   двух единиц Gateway, без помола и только с подтверждённой упаковкой.
 - Выбор mapping из каталога — только candidate selection. Для текущего AROMA
-  wire proof G16 выбирает только provider offer `445`: после fresh catalog export
+  wire proof `aroma_sandbox` выбирает только provider offer `445`: после fresh catalog export
   и activation Gateway owner делает exact raw-offer reverse lookup, а Catalog
   active/Available/whole-bean mapping обязан вернуть тот же canonical `offerRef`.
   Перед approval и повторно перед mutation grant Gateway binding проверяется с
   точными offer/supplier. Если binding не содержит packing/grind, допускается
   только отдельный проверенный wire proof для offer `445` и совпавшего account
   fingerprint: `packing=Aroma`, `grindId=null`, quantity `1`, успешная точная
-  cleanup baseline. Proof и исходный receipt закреплены SHA-256 в G16; он не
+  cleanup baseline. Proof и исходный receipt закреплены SHA-256 в `aroma_sandbox`; он не
   записывает факты в immutable source binding и не расширяет owner default.
   Явный конфликт binding, другой offer/account, отсутствующий или изменённый
   proof даёт `AROMA_CONTROLLED_OFFER_FACTS_NOT_PROVEN`. Для остальных offers
@@ -123,7 +123,7 @@ ADR-0017 по-прежнему запрещены. Ключ MAC и profile paylo
 - Восстановление меняет только собственную однозначно идентифицированную строку
   новым operationRef. Чужая строка или изменение означает STOP/FAIL; массовое
   очищение корзины и удаление чужих данных запрещены.
-- PASS требует всех семи фаз G16 и финального полного fingerprint, равного
+- PASS требует всех семи фаз `aroma_sandbox` и финального полного fingerprint, равного
   baseline. При неполном восстановлении — disable дальнейших мутаций, FAIL и
   P0 defect; успешная подпись сама по себе не даёт PASS.
 - Временные контейнеры, БД, private materialization и процессы удаляются после
@@ -139,9 +139,9 @@ account MAC, SHA/run-id, порядок операций, durable факты и 
 Gateway→Orders ответа не выдаётся за provider timeout: Gateway уже Acknowledged,
 а UnknownOutcome принадлежит Orders.
 
-В текущем запуске успешная catalog phase сама по себе не является G16 PASS:
+В текущем запуске успешная catalog phase сама по себе не является PASS `aroma_sandbox`:
 без первичных фактов о точной persisted binding запуск останавливается до
-`APPROVAL_REQUIRED` с `AROMA_CONTROLLED_OFFER_FACTS_NOT_PROVEN`. G16 остаётся
+`APPROVAL_REQUIRED` с `AROMA_CONTROLLED_OFFER_FACTS_NOT_PROVEN`. `aroma_sandbox` остаётся
 guarded/непринятым, пока эти факты не доказаны и полный фазовый сценарий не
 завершится с соответствующим evidence.
 
@@ -156,11 +156,11 @@ Reservation, lease/fence или recovery state. После потери отве
 остаётся прежним до завершения restart/reconciliation; пустое намерение для
 восстановления публикуется только затем. Это не proof цепочки Confirm →
 contribution → aggregate Desired и не повод добавлять продуктовый Cancel.
-Результат этого отдельного G16 не заменяет общий G00–G19 и не закрывает #13.
+Результат этого отдельного прогона `aroma_sandbox` не заменяет общий набор гейтов запуска и не закрывает #13.
 
 ### Первый импорт Catalog
 
-Первоначальный G16 от 23 октября использовал явный `ANALYZE` disposable Catalog
+Первоначальный прогон `aroma_sandbox` от 23 октября использовал явный `ANALYZE` disposable Catalog
 через canonical migrator. Его immutable evidence сохраняет
 `catalogStatisticsPrepared=true`, `coldDatabasePlannerProof=false`: прежний
 owner SQL обработал 810 offers за 5017ms в финальной транзакции при бюджете
@@ -169,10 +169,10 @@ owner SQL обработал 810 offers за 5017ms в финальной тра
 По поручению владельца от 24 октября production activation переведена на
 пакетные операции по проверенному поколению. Cold regression на 810 offers и
 2085 identities запускается на новой БД без statistics, с canonical runtime
-ролью и прежними DB-бюджетами. G16 использует этот же production путь без
+ролью и прежними DB-бюджетами. `aroma_sandbox` использует этот же production путь без
 дополнительного `ANALYZE` и migrator hook. `catalogStatisticsPrepared=false`;
 отдельный cold regression не выдаётся за общий capacity proof или за повторный
-live G16. Исторические failed runs и их hashes не переписываются.
+live-прогон `aroma_sandbox`. Исторические failed runs и их hashes не переписываются.
 
 Catalog pricing input в private HTTP harness вызывает настоящий `createCatalogOwner`
 поверх `CatalogStore` через existing `catalog-service` pool с `coffee_catalog_api_ro`.
@@ -188,4 +188,4 @@ Activation writer не имеет прав на API views. Scoped materializatio
 Все семь фаз, durable recovery и точное восстановление пустой baseline PASS;
 временный контур и approval material удалены. В обычном config после проверки
 mutations выключены и verification policy null. Полный #13 остаётся blocked
-по отдельным launch prerequisites; этот результат не является G00–G19 admission.
+по отдельным launch prerequisites; этот результат не является допуском по гейтам запуска.

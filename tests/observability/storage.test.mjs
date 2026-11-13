@@ -246,7 +246,7 @@ void test("bounded telemetry storage preserves unrelated volumes and cleanup exc
           storageHelperImage,
           run,
         }),
-      /disposable G14 storage/u,
+      /disposable observability storage/u,
     );
   }
   assert.equal(calls.length, 1);
@@ -682,14 +682,14 @@ void test("storage helper rejects image tags and uses the verified ID for every 
   );
 });
 
-void test("G12 binds storage helper to the Node base, receipt, index and image", async () => {
+void test("supply_chain binds storage helper to the Node base, receipt, index and image", async () => {
   const root = mkdtempSync(join(tmpdir(), "coffee-storage-proof-"));
   try {
     const candidateRoot = join(root, "candidate");
     const evidenceDir = join(root, "evidence");
     const artifacts = join(
       evidenceDir,
-      "gates/G12_SUPPLY_CHAIN/artifacts/supply-chain/artifacts",
+      "gates/supply_chain/artifacts/supply-chain/artifacts",
     );
     mkdirSync(join(candidateRoot, "config"), { recursive: true });
     mkdirSync(join(candidateRoot, "evidence/security"), { recursive: true });
@@ -804,7 +804,7 @@ void test("G12 binds storage helper to the Node base, receipt, index and image",
     };
     const receipt = {
       schemaVersion: 1,
-      gate: "G12_SUPPLY_CHAIN",
+      gate: "supply_chain",
       status: "PASS",
       runId,
       candidateSha,
@@ -860,9 +860,9 @@ void test("G12 binds storage helper to the Node base, receipt, index and image",
       ociArtifactSha256: hash(artifact),
     };
     const result = {
-      gate: "G12_SUPPLY_CHAIN",
+      gate: "supply_chain",
       status: "PASS",
-      code: "G12_SCAN_CLEAN",
+      code: "SUPPLY_CHAIN_SCAN_CLEAN",
       runId,
       candidateSha,
       storageHelper: image,
@@ -1037,7 +1037,7 @@ void test("G12 binds storage helper to the Node base, receipt, index and image",
     };
     const decision = {
       schemaVersion: 1,
-      gate: "G12_SUPPLY_CHAIN",
+      gate: "supply_chain",
       runId,
       candidateSha,
       treeSha,
@@ -1092,7 +1092,7 @@ void test("G12 binds storage helper to the Node base, receipt, index and image",
     writeFileSync(join(artifacts, "storage-helper-base-index.json"), "{}");
     await assert.rejects(
       loadVerifiedGateImage(options),
-      /G12_KAFKA_BASE_MATERIAL_INVALID/u,
+      /_KAFKA_BASE_MATERIAL_INVALID/u,
     );
   } finally {
     rmSync(root, { recursive: true, force: true });

@@ -52,13 +52,13 @@ import {
 import {
   buildRealtimeAuthCloseInvocation,
   proveBrowser,
-  proveG14Browser,
-  validateG14BrowserEvidence,
+  proveBrowserFlow,
+  validateObservabilityBrowserEvidence,
   validateBrowserRuntimeArtifact,
 } from "./browser-proof.mjs";
 import {
   createBrowserOwnerEvidence,
-  createG14OrderEvidence,
+  createOrderEvidence,
   validateBrowserProof,
 } from "./browser-owner-evidence.mjs";
 import {
@@ -195,11 +195,11 @@ const ROLLBACK_INITIAL_UNKNOWN_OPERATIONS = new Set([
   "guarded-card-http",
 ]);
 const ROLLBACK_OWNER_HTTP_FAILURE_CODES = Object.freeze([
-  "G18_ORDER_CARD_HTTP_INVALID",
-  "G18_RECONCILIATION_CARD_STATE_INVALID",
-  "G18_RECONCILIATION_HTTP_INVALID",
-  "G18_OWNER_HTTP_READ_FAILED",
-  "G18_OWNER_HTTP_RECONCILE_FAILED",
+  "ROLLBACK_ORDER_CARD_HTTP_INVALID",
+  "ROLLBACK_RECONCILIATION_CARD_STATE_INVALID",
+  "ROLLBACK_RECONCILIATION_HTTP_INVALID",
+  "ROLLBACK_OWNER_HTTP_READ_FAILED",
+  "ROLLBACK_OWNER_HTTP_RECONCILE_FAILED",
 ]);
 const ROLLBACK_OWNER_HTTP_SIGNALS = new Set([
   "SIGABRT",
@@ -232,7 +232,7 @@ export function attachRollbackBootstrapSubstage(receipt, substage) {
   );
   assert.ok(
     ROLLBACK_BOOTSTRAP_SUBSTAGES.includes(substage),
-    "G18 bootstrap substage is not allowlisted",
+    "rollback bootstrap substage is not allowlisted",
   );
   return Object.freeze({ ...receipt, bootstrapSubstage: substage });
 }
@@ -248,9 +248,9 @@ export function createBrowserChildFailureDiagnostic({
     !COMMIT_SHA.test(candidateSha ?? "") ||
     !runId.endsWith(`-${candidateSha.slice(0, 7)}`)
   )
-    throw new Error("G15_CHILD_DIAGNOSTIC_IDENTITY_INVALID");
+    throw new Error("BROWSER_CHILD_DIAGNOSTIC_IDENTITY_INVALID");
   let errorName = "Error";
-  let message = "G15_CHILD_FAILED";
+  let message = "BROWSER_CHILD_FAILED";
   try {
     if (error?.cause instanceof Error) error = error.cause;
     if (BROWSER_FAILURE_ERROR_NAMES.has(error?.name)) errorName = error.name;
@@ -260,7 +260,7 @@ export function createBrowserChildFailureDiagnostic({
   }
   const diagnostic = {
     schemaVersion: 1,
-    gateId: "G15_BROWSER",
+    gateId: "browser",
     outcome: "FAIL",
     runId,
     candidateSha,
@@ -383,7 +383,7 @@ export function attachRollbackInitialUnknownSubstage(
   );
   assert.ok(
     ROLLBACK_INITIAL_UNKNOWN_SUBSTAGES.includes(substage),
-    "G18 initial-unknown substage is not allowlisted",
+    "rollback initial-unknown substage is not allowlisted",
   );
   const safeDiagnostic =
     diagnostic && ROLLBACK_INITIAL_UNKNOWN_OPERATIONS.has(diagnostic.operation)
@@ -420,7 +420,7 @@ export function attachRollbackInitialUnknownSubstage(
 export function createRollbackInitialUnknownDiagnostic(operation, error) {
   assert.ok(
     ROLLBACK_INITIAL_UNKNOWN_OPERATIONS.has(operation),
-    "G18 initial-unknown operation is not allowlisted",
+    "rollback initial-unknown operation is not allowlisted",
   );
   const diagnostic = {
     operation,
@@ -557,7 +557,7 @@ export function attachRollbackContainerSnapshot(
 
 function parseRollbackContainerInspect(output) {
   if (typeof output !== "string")
-    throw new Error("G18_CONTAINER_SNAPSHOT_INVALID");
+    throw new Error("ROLLBACK_CONTAINER_SNAPSHOT_INVALID");
   return output
     .trim()
     .split("\n")
@@ -565,7 +565,7 @@ function parseRollbackContainerInspect(output) {
     .map((line) => {
       const fields = line.split("\t");
       if (fields.length !== 9)
-        throw new Error("G18_CONTAINER_SNAPSHOT_INVALID");
+        throw new Error("ROLLBACK_CONTAINER_SNAPSHOT_INVALID");
       const [
         name,
         project,
@@ -625,7 +625,7 @@ export function captureRollbackContainerSnapshot(
     const run = (args) => {
       const timeout = deadline - now();
       if (timeout <= 0)
-        throw Object.assign(new Error("G18_CONTAINER_SNAPSHOT_TIMEOUT"), {
+        throw Object.assign(new Error("ROLLBACK_CONTAINER_SNAPSHOT_TIMEOUT"), {
           code: "ETIMEDOUT",
         });
       return execDocker(args, {
@@ -960,14 +960,14 @@ export function createRollbackRestoredCardTimeoutDiagnostic({
     !COMMIT_SHA.test(context.candidateSha ?? "") ||
     !context.runId.endsWith(`-${context.candidateSha.slice(0, 7)}`)
   )
-    throw new Error("G18_RESTORED_CARD_DIAGNOSTIC_IDENTITY_INVALID");
+    throw new Error("ROLLBACK_RESTORED_CARD_DIAGNOSTIC_IDENTITY_INVALID");
   return {
     schemaVersion: 1,
-    gateId: "G18_ROLLBACK",
+    gateId: "rollback",
     runId: context.runId,
     candidateSha: context.candidateSha,
     stage: "restored-card",
-    code: "G18_RESTORED_CARD_IN_SYNC_TIMEOUT",
+    code: "ROLLBACK_RESTORED_CARD_IN_SYNC_TIMEOUT",
     ownerCardState: ROLLBACK_CARD_STATES.has(ownerCardState)
       ? ownerCardState
       : "Other",
@@ -990,13 +990,13 @@ export async function writeRollbackRestoredCardTimeoutDiagnostic({
     resolve(evidenceDir) !== expectedEvidenceDir ||
     resolve(context?.evidenceDir ?? "") !== expectedEvidenceDir
   )
-    throw new Error("G18_RESTORED_CARD_DIAGNOSTIC_EVIDENCE_SCOPE_INVALID");
+    throw new Error("ROLLBACK_RESTORED_CARD_DIAGNOSTIC_EVIDENCE_SCOPE_INVALID");
   const artifact = createRollbackRestoredCardTimeoutDiagnostic({
     launchIdentity,
     ownerCardState,
     guardedCardFacts,
   });
-  const artifactDir = join(evidenceDir, "gates/G18_ROLLBACK/artifacts");
+  const artifactDir = join(evidenceDir, "gates/rollback/artifacts");
   await mkdir(artifactDir, { recursive: true, mode: 0o700 });
   const artifactPath = join(
     artifactDir,
@@ -1025,7 +1025,7 @@ export function createRollbackInitialUnknownTimeoutDiagnostic({
     !context.runId.endsWith(`-${context.candidateSha.slice(0, 7)}`) ||
     typeof projectionConsumerGroupId !== "string"
   )
-    throw new Error("G18_INITIAL_UNKNOWN_DIAGNOSTIC_IDENTITY_INVALID");
+    throw new Error("ROLLBACK_INITIAL_UNKNOWN_DIAGNOSTIC_IDENTITY_INVALID");
   const rows = (name) => (Array.isArray(facts?.[name]) ? facts[name] : []);
   const attemptUnknown = rows("attempts").some(
     (row) => row.state === "UnknownOutcome",
@@ -1067,11 +1067,11 @@ export function createRollbackInitialUnknownTimeoutDiagnostic({
   const result = hasType("AromaConvergenceChanged.v1");
   return {
     schemaVersion: 1,
-    gateId: "G18_ROLLBACK",
+    gateId: "rollback",
     runId: context.runId,
     candidateSha: context.candidateSha,
     stage: "initial-unknown",
-    code: "G18_INITIAL_UNKNOWN_OUTCOME_TIMEOUT",
+    code: "ROLLBACK_INITIAL_UNKNOWN_OUTCOME_TIMEOUT",
     predicates: {
       attemptUnknown,
       reservationUnknownUnresolved,
@@ -1163,7 +1163,9 @@ export async function writeRollbackInitialUnknownTimeoutDiagnostic({
     resolve(evidenceDir) !== expectedEvidenceDir ||
     resolve(context?.evidenceDir ?? "") !== expectedEvidenceDir
   ) {
-    throw new Error("G18_INITIAL_UNKNOWN_DIAGNOSTIC_EVIDENCE_SCOPE_INVALID");
+    throw new Error(
+      "ROLLBACK_INITIAL_UNKNOWN_DIAGNOSTIC_EVIDENCE_SCOPE_INVALID",
+    );
   }
   const artifact = createRollbackInitialUnknownTimeoutDiagnostic({
     launchIdentity,
@@ -1174,9 +1176,9 @@ export async function writeRollbackInitialUnknownTimeoutDiagnostic({
   });
   const artifactPath = join(
     evidenceDir,
-    "gates/G18_ROLLBACK/artifacts/mutation-disable-rollback-initial-unknown-timeout.json",
+    "gates/rollback/artifacts/mutation-disable-rollback-initial-unknown-timeout.json",
   );
-  await mkdir(join(evidenceDir, "gates/G18_ROLLBACK/artifacts"), {
+  await mkdir(join(evidenceDir, "gates/rollback/artifacts"), {
     recursive: true,
     mode: 0o700,
   });
@@ -1195,7 +1197,7 @@ export async function withEarlyRollbackGuardReceipt(
   assert.equal(
     typeof operation,
     "function",
-    "early G18 guard operation is required",
+    "early rollback guard operation is required",
   );
   try {
     return await operation();
@@ -1205,7 +1207,7 @@ export async function withEarlyRollbackGuardReceipt(
       error instanceof Error &&
       error.message.startsWith("RUNTIME_DATABASE_TARGET_INVALID:")
         ? "RUNTIME_DATABASE_TARGET_INVALID"
-        : "G18_LAUNCH_CONFIG_GUARD_REJECTED";
+        : "ROLLBACK_LAUNCH_CONFIG_GUARD_REJECTED";
     const safeError = new Error(guardCode);
     safeError.rollbackFailure = attachRollbackBootstrapSubstage(
       createRollbackFailureReceipt({
@@ -1230,17 +1232,17 @@ export async function withEarlyRollbackGuardReceipt(
 export function withRollbackComposeDiagnostic(operation, invoke, onFailure) {
   assert.ok(
     ROLLBACK_COMPOSE_OPERATIONS.includes(operation),
-    "G18 Compose operation is not allowlisted",
+    "rollback Compose operation is not allowlisted",
   );
   assert.equal(
     typeof invoke,
     "function",
-    "G18 Compose operation callback is required",
+    "rollback Compose operation callback is required",
   );
   assert.equal(
     typeof onFailure,
     "function",
-    "G18 Compose diagnostic callback is required",
+    "rollback Compose diagnostic callback is required",
   );
   try {
     return invoke();
@@ -1305,7 +1307,7 @@ function runTrackedRollbackCompose(
 
 function throwIfRollbackTerminationRequested() {
   if (rollbackTerminationSignal)
-    throw new Error(`G18_STOP_REQUESTED_${rollbackTerminationSignal}`);
+    throw new Error(`_STOP_REQUESTED_${rollbackTerminationSignal}`);
 }
 const COMPOSE_NETWORKS = [
   "coffee_host_ingress",
@@ -1321,7 +1323,7 @@ const DATABASE_PROOF_IMAGE = JSON.parse(
 ).postgresFixtureImage;
 const CUSTOMER_TEST_IMAGE =
   "node:26.8.1-trixie-slim@sha256:c0753125a3789977aefe869cbebccf70e3cfd7ea84ca48547458f02e4f1d7146";
-// Образы, которые G12 собирает один раз и публикует под тегами проекта запуска.
+// Образы, которые supply_chain собирает один раз и публикует под тегами проекта запуска.
 const PUBLISHED_RUNTIME_SERVICES = Object.freeze([...RUNTIMES, "edge-nginx"]);
 const ROLLBACK_CONTAINER_SERVICES = new Set([
   ...RUNTIMES,
@@ -1384,7 +1386,7 @@ function usage() {
     "  --customer-proof                 run the isolated Customer integration suite",
     "  --recovery-proof                  run the isolated 14-Node plus native-nginx PostgreSQL/Kafka recovery proof",
     "  --browser-proof                   run the isolated served-SPA, OIDC and owner recovery proof",
-    "  --mutation-disable-rollback      run G18 on the isolated full-stack recovery topology with validated D/R configs",
+    "  --mutation-disable-rollback      run rollback on the isolated full-stack recovery topology with validated D/R configs",
     "  --aroma-binding-proof             run the isolated native HTTPS AROMA offer-binding proof",
     "  --aroma-cart-proof                run the isolated native mTLS safe cart-read proof with a local provider fixture",
     "  --provision-empty-postgres-network create coffee_postgres_data only when absent; never starts PostgreSQL",
@@ -1724,7 +1726,7 @@ export function assertVerifiedRuntimeImages({
     assert.match(
       expected ?? "",
       /^sha256:[a-f0-9]{64}$/u,
-      `G12 image ID missing for ${service}`,
+      `supply_chain image ID missing for ${service}`,
     );
     const reference = directImageIds
       ? expected
@@ -1741,13 +1743,13 @@ export function assertVerifiedRuntimeImages({
     assert.equal(
       actual,
       expected,
-      `${service} image differs from the scanned G12 artifact`,
+      `${service} image differs from the scanned supply_chain artifact`,
     );
   }
 }
 
 /**
- * Проверяет, что опубликованные G12 образы действительно лежат в daemon под
+ * Проверяет, что образы, опубликованные `supply_chain`, действительно лежат в daemon под
  * тегами проекта запуска: Compose запускает именно эти неизменяемые ID.
  */
 export function assertPublishedRuntimeImages(inventory) {
@@ -1762,14 +1764,14 @@ export function assertPublishedRuntimeImages(inventory) {
     assert.equal(
       actual,
       image.imageId,
-      `${image.service} image is missing from the published G12 inventory`,
+      `${image.service} image is missing from the published supply_chain inventory`,
     );
   }
 }
 
 /**
- * Доказывает, что запущенные контейнеры используют именно опубликованные
- * G12-образы, а не пересобранные локально.
+ * Доказывает, что запущенные контейнеры используют именно образы, опубликованные
+ * `supply_chain`, а не пересобранные локально.
  */
 export function assertRuntimeContainersMatchInventory(
   projectName,
@@ -1803,7 +1805,7 @@ export function assertRuntimeContainersMatchInventory(
     assert.equal(
       imageId,
       expectedImageId,
-      `${service} container runs an image outside the published G12 inventory`,
+      `${service} container runs an image outside the published supply_chain inventory`,
     );
     expected.delete(service);
   }
@@ -2258,7 +2260,9 @@ export async function readExternalRecoveryProofCredentials(
     "external recovery launch metadata has a closed shape",
   );
   assert.ok(
-    ["G13", "G14", "G15"].includes(launchMetadata.expectedLineage),
+    ["compose", "observability", "browser"].includes(
+      launchMetadata.expectedLineage,
+    ),
     "external recovery launch lineage is invalid",
   );
   assert.equal(typeof launchMetadata.candidateRoot, "string");
@@ -2288,7 +2292,7 @@ export async function readExternalRecoveryProofCredentials(
         browserPreparationContextPath.length === 0)) ||
     (hasBrowserParentMetadata && !hasPreparationContextPath)
   )
-    throw new Error("G15 G08 parent preparation reference is missing");
+    throw new Error("browser parent preparation reference is missing");
   const hasAllBrowserParentMetadata =
     resources !== undefined &&
     resources !== null &&
@@ -2296,17 +2300,17 @@ export async function readExternalRecoveryProofCredentials(
       (key) => Object.hasOwn(resources, key),
     );
   if (
-    ["G13", "G14"].includes(launchMetadata.expectedLineage) &&
+    ["compose", "observability"].includes(launchMetadata.expectedLineage) &&
     (hasPreparationContextPath || hasBrowserParentMetadata)
   )
     throw new Error(
-      "external recovery lineage metadata cannot downgrade to G13/G14",
+      "external recovery lineage metadata cannot downgrade to compose/observability",
     );
   if (
-    launchMetadata.expectedLineage === "G15" &&
+    launchMetadata.expectedLineage === "browser" &&
     (!hasPreparationContextPath || !hasAllBrowserParentMetadata)
   )
-    throw new Error("G15 G08 parent preparation reference is missing");
+    throw new Error("browser parent preparation reference is missing");
   const configRoot = launchMetadata.candidateRoot;
   const preparationSource = hasPreparationContextPath
     ? { preparationContextPath: browserPreparationContextPath }
@@ -2477,20 +2481,21 @@ export function externalRecoveryMigrationCredentialRequest(
   };
 }
 
-export function retainG14AfterCollectorFailure({
-  g14Browser,
+export function retainObservabilityAfterCollectorFailure({
+  observabilityBrowser,
   observability,
   cleanupHookError,
   options,
   databases,
 }) {
-  if (!(g14Browser && observability && cleanupHookError)) return undefined;
+  if (!(observabilityBrowser && observability && cleanupHookError))
+    return undefined;
   options.keep = true;
   return {
     verified: false,
     removed: [],
     retained: databases.map(({ database }) => database.name),
-    failure: "G14_COLLECTOR_RESTORE_UNCONFIRMED",
+    failure: "OBSERVABILITY_COLLECTOR_RESTORE_UNCONFIRMED",
   };
 }
 
@@ -3010,7 +3015,7 @@ export async function writeScopedComposeOverride(projectName, options = {}) {
     assert.ok(
       resolve(candidateRoot) === candidateRoot &&
         resolve(browserFixture.fixtureRoot) === browserFixture.fixtureRoot,
-      "G15 fixture mount paths must be canonical",
+      "browser fixture mount paths must be canonical",
     );
     const edge = service("edge-gateway");
     edge.environment = {
@@ -3083,14 +3088,17 @@ export async function writeScopedComposeOverride(projectName, options = {}) {
       },
     });
   }
-  if (options.g14Config) {
-    assert.ok(options.launchContextPath, "G14 config requires child context");
-    const { path: configPath, sha256 } = options.g14Config;
+  if (options.observabilityConfig) {
+    assert.ok(
+      options.launchContextPath,
+      "observability config requires child context",
+    );
+    const { path: configPath, sha256 } = options.observabilityConfig;
     assert.match(sha256 ?? "", /^[a-f0-9]{64}$/u);
     assert.equal(
       await realpath(configPath),
       configPath,
-      "G14 config path must be canonical",
+      "observability config path must be canonical",
     );
     const before = await lstat(configPath);
     assert.ok(
@@ -3098,7 +3106,7 @@ export async function writeScopedComposeOverride(projectName, options = {}) {
         !before.isSymbolicLink() &&
         before.uid === process.getuid() &&
         (before.mode & 0o777) === 0o444,
-      "G14 config must be sealed and owned",
+      "observability config must be sealed and owned",
     );
     const bytes = await readFile(configPath);
     const after = await lstat(configPath);
@@ -3107,12 +3115,12 @@ export async function writeScopedComposeOverride(projectName, options = {}) {
         before.ino === after.ino &&
         before.size === after.size &&
         before.mtimeMs === after.mtimeMs,
-      "G14 config identity changed",
+      "observability config identity changed",
     );
     assert.equal(
       createHash("sha256").update(bytes).digest("hex"),
       sha256,
-      "G14 config hash mismatch",
+      "observability config hash mismatch",
     );
   }
   if (options.launchContextPath) {
@@ -3130,11 +3138,11 @@ export async function writeScopedComposeOverride(projectName, options = {}) {
           target: "/run/coffee-launch/context.json",
           read_only: true,
         },
-        ...(options.g14Config
+        ...(options.observabilityConfig
           ? [
               {
                 type: "bind",
-                source: options.g14Config.path,
+                source: options.observabilityConfig.path,
                 target: "/app/config/platform.yaml",
                 read_only: true,
               },
@@ -3148,8 +3156,8 @@ export async function writeScopedComposeOverride(projectName, options = {}) {
     service("kafka").image = options.kafkaImage;
     service("kafka").pull_policy = "never";
   }
-  // Поддерживаются обе формы: карта service→tag из инвентаря G12 и массив
-  // {service, imageId} из ownership G10; Compose принимает image ID напрямую.
+  // Поддерживаются обе формы: карта service→tag из инвентаря supply_chain и массив
+  // {service, imageId} из ownership integration; Compose принимает image ID напрямую.
   if (options.runtimeImages !== undefined) {
     const entries = new Map(
       Array.isArray(options.runtimeImages)
@@ -3239,7 +3247,10 @@ export function rollbackRuntimeComposeOptions(
     ...(controlled
       ? {
           runtimeImages: controlled.runtimeImages,
-          g14Config: { path: configPath, sha256: controlled.configSha256 },
+          observabilityConfig: {
+            path: configPath,
+            sha256: controlled.configSha256,
+          },
         }
       : configPath
         ? { aromaConvergenceConfigPath: configPath }
@@ -3604,7 +3615,7 @@ function assertEphemeralDatabaseProofStorage(container) {
   const dataPath = "/var/lib/postgresql/data";
   assert.ok(
     tmpfs?.[dataPath]?.split(",").includes("size=536870912"),
-    "G14 PostgreSQL data tmpfs must have a 512 MiB limit",
+    "observability PostgreSQL data tmpfs must have a 512 MiB limit",
   );
   const stat = runDocker([
     "exec",
@@ -3620,7 +3631,7 @@ function assertEphemeralDatabaseProofStorage(container) {
   assert.equal(
     stat.length,
     3,
-    "G14 PostgreSQL data filesystem status must have three fields",
+    "observability PostgreSQL data filesystem status must have three fields",
   );
   const [type, blockSizeText, blockCountText] = stat;
   const blockSize = Number(blockSizeText);
@@ -3629,7 +3640,7 @@ function assertEphemeralDatabaseProofStorage(container) {
   assert.equal(
     type,
     "tmpfs",
-    "G14 PostgreSQL data directory must be an actual tmpfs filesystem",
+    "observability PostgreSQL data directory must be an actual tmpfs filesystem",
   );
   assert.ok(
     Number.isSafeInteger(blockSize) &&
@@ -3638,7 +3649,7 @@ function assertEphemeralDatabaseProofStorage(container) {
       blockCount > 0 &&
       Number.isSafeInteger(totalBytes) &&
       totalBytes === 536870912,
-    "G14 PostgreSQL data tmpfs must have an actual 512 MiB capacity",
+    "observability PostgreSQL data tmpfs must have an actual 512 MiB capacity",
   );
   return {
     type: "tmpfs",
@@ -4163,7 +4174,7 @@ export async function applyExternalRecoveryMigrations(
     assert.deepEqual(
       targetState.rows.map(({ datname }) => datname),
       [],
-      "G13/G15 refuses any pre-existing run database; it never adopts databases",
+      "compose/browser refuses any pre-existing run database; it never adopts databases",
     );
   } catch (error) {
     preflightError = error;
@@ -7255,7 +7266,7 @@ function readRealtimeAuthCloseCount(projectName, containerId) {
     if (!Number.isSafeInteger(count)) throw new Error("metric count is unsafe");
     return count;
   } catch {
-    throw new Error("G15_REALTIME_AUTH_METRIC_UNAVAILABLE");
+    throw new Error("BROWSER_REALTIME_AUTH_METRIC_UNAVAILABLE");
   }
 }
 
@@ -7277,7 +7288,7 @@ function assertOwnedRuntimeContainer(projectName, runtime, containerId) {
       throw new Error("runtime identity changed");
     return row;
   } catch {
-    throw new Error("G15_RUNTIME_OWNERSHIP_INVALID");
+    throw new Error("BROWSER_RUNTIME_OWNERSHIP_INVALID");
   }
 }
 
@@ -7294,10 +7305,10 @@ async function restartBrowserFixtureCustomerService(
       timeout: 15_000,
     }).trim();
   } catch {
-    throw new Error("G15_CUSTOMER_RESTART_FAILED");
+    throw new Error("BROWSER_CUSTOMER_RESTART_FAILED");
   }
   if (restarted !== containerId)
-    throw new Error("G15_CUSTOMER_RESTART_IDENTITY_CHANGED");
+    throw new Error("BROWSER_CUSTOMER_RESTART_IDENTITY_CHANGED");
   await waitForRuntimeReadiness(
     projectName,
     secretsDir,
@@ -7387,7 +7398,9 @@ export async function waitForRollbackFacts(
     if (predicate(lastFacts)) return lastFacts;
     await new Promise((resolvePromise) => setTimeout(resolvePromise, 100));
   }
-  const timeout = new Error(`G18_${description}_TIMEOUT`, { cause: lastFacts });
+  const timeout = new Error(`ROLLBACK_${description}_TIMEOUT`, {
+    cause: lastFacts,
+  });
   try {
     await onTimeout?.(lastFacts);
   } catch {
@@ -7404,18 +7417,22 @@ function assertOnlyRuntimeRecreated(before, after, runtime) {
   assert.equal(
     before.size,
     after.size,
-    "G18 service inventory changed during one-runtime config reload",
+    "rollback service inventory changed during one-runtime config reload",
   );
   for (const [name, id] of before) {
-    assert.ok(after.has(name), `G18 runtime disappeared: ${name}`);
+    assert.ok(after.has(name), `rollback runtime disappeared: ${name}`);
     if (name === runtime)
       assert.notEqual(
         after.get(name),
         id,
-        `G18 ${runtime} container was not recreated`,
+        `rollback ${runtime} container was not recreated`,
       );
     else
-      assert.equal(after.get(name), id, `G18 unexpectedly recreated ${name}`);
+      assert.equal(
+        after.get(name),
+        id,
+        `rollback unexpectedly recreated ${name}`,
+      );
   }
 }
 
@@ -7433,7 +7450,7 @@ function assertOldRollbackOperationPreserved(
   );
   assert.ok(
     currentReservation && currentGateway,
-    "G18 old operation rows disappeared during rollback",
+    "rollback old operation rows disappeared during rollback",
   );
   assert.deepEqual(
     {
@@ -7454,7 +7471,7 @@ function assertOldRollbackOperationPreserved(
       state: reservationState,
       resolved: true,
     },
-    "G18 old Orders reservation identity or recovery state changed unexpectedly",
+    "rollback old Orders reservation identity or recovery state changed unexpectedly",
   );
   assert.deepEqual(
     {
@@ -7467,7 +7484,7 @@ function assertOldRollbackOperationPreserved(
       state: "UnknownOutcome",
       failure_code: gateway.failure_code,
     },
-    "G18 immutable old Gateway journal row changed during rollback",
+    "rollback immutable old Gateway journal row changed during rollback",
   );
   return { reservation: currentReservation, gateway: currentGateway };
 }
@@ -7563,12 +7580,12 @@ async function readContainerConfigProof(
   assert.equal(
     attestation.phase,
     phase,
-    "G18 config bytes did not match the expected ADR-0035 phase",
+    "rollback config bytes did not match the expected ADR-0035 phase",
   );
   assert.equal(
     attestation.actualConfigSha256,
     phase === "disabled" ? lineage.D.configSha256 : lineage.R.configSha256,
-    "G18 mounted config bytes do not match validated lineage",
+    "rollback mounted config bytes do not match validated lineage",
   );
   const output = runCompose(
     projectName,
@@ -7580,11 +7597,14 @@ async function readContainerConfigProof(
       input: rollbackRuntimeConfigProofSource(),
     },
   );
-  const mounted = parseFinalJsonLine(output, "G18_RUNTIME_CONFIG_READ_FAILED");
+  const mounted = parseFinalJsonLine(
+    output,
+    "ROLLBACK_RUNTIME_CONFIG_READ_FAILED",
+  );
   assert.deepEqual(
     mounted,
     { sha256: attestation.actualConfigSha256, mutationsEnabled },
-    "G18 running convergence container did not load the exact validated mounted config bytes",
+    "rollback running convergence container did not load the exact validated mounted config bytes",
   );
   return { ...attestation, mutationsEnabled };
 }
@@ -7593,7 +7613,7 @@ export function rollbackRuntimeConfigProofSource(
   packageJsonPath = "/app/package.json",
 ) {
   if (resolve(packageJsonPath) !== packageJsonPath)
-    throw new Error("G18_RUNTIME_PACKAGE_ROOT_INVALID");
+    throw new Error("ROLLBACK_RUNTIME_PACKAGE_ROOT_INVALID");
   return `import {createHash} from 'node:crypto';import {readFile} from 'node:fs/promises';import {createRequire} from 'node:module';import {pathToFileURL} from 'node:url';
 const runtimeRequire=createRequire(createRequire(${JSON.stringify(packageJsonPath)}).resolve('@coffee-platform/runtime'));
 const {load}=await import(pathToFileURL(runtimeRequire.resolve('js-yaml')).href);
@@ -7601,7 +7621,7 @@ const bytes=await readFile(process.env.COFFEE_CONFIG_FILE);const config=load(byt
 console.log(JSON.stringify({sha256:createHash('sha256').update(bytes).digest('hex'),mutationsEnabled:config.services['aroma-convergence'].mutationsEnabled}));\n`;
 }
 
-export function validateG14ProviderBoundary({
+export function validateObservabilityProviderBoundary({
   projectName,
   expectedConfigSha256,
   mounted,
@@ -7697,7 +7717,7 @@ export function validateG14ProviderBoundary({
   };
 }
 
-export function attestG14ProviderBoundary({
+export function attestObservabilityProviderBoundary({
   projectName,
   secretsDir,
   composeFile,
@@ -7746,9 +7766,9 @@ export function attestG14ProviderBoundary({
         input: rollbackRuntimeConfigProofSource(),
       },
     ),
-    "G14_RUNTIME_CONFIG_READ_FAILED",
+    "OBSERVABILITY_RUNTIME_CONFIG_READ_FAILED",
   );
-  return validateG14ProviderBoundary({
+  return validateObservabilityProviderBoundary({
     projectName,
     expectedConfigSha256,
     mounted,
@@ -7780,7 +7800,7 @@ async function runRollbackOwnerHttp(
   );
   return parseFinalJsonLine(
     output,
-    `G18_OWNER_HTTP_${action.toUpperCase()}_FAILED`,
+    `_OWNER_HTTP_${action.toUpperCase()}_FAILED`,
   );
 }
 
@@ -7811,7 +7831,7 @@ async function runMutationDisableRollbackProof({
       providerFixture &&
       recoveryDatabaseProof &&
       recoveryProofCredentials,
-    "G18 fixtures are missing",
+    "rollback fixtures are missing",
   );
   const verifyConvergenceImage = (override) => {
     if (!runtimeImages) return;
@@ -7821,11 +7841,11 @@ async function runMutationDisableRollbackProof({
     const expected = runtimeImages.find(
       ({ service }) => service === "aroma-convergence",
     ).imageId;
-    assert.ok(row?.ID, "G18 convergence container is missing");
+    assert.ok(row?.ID, "rollback convergence container is missing");
     assert.equal(
       runDocker(["inspect", "--format", "{{.Image}}", row.ID]).trim(),
       expected,
-      "G18 convergence image changed after restart",
+      "rollback convergence image changed after restart",
     );
   };
   const port = recoveryDatabaseProof.port;
@@ -7839,7 +7859,7 @@ async function runMutationDisableRollbackProof({
   assert.equal(
     projectionConsumers.length,
     1,
-    "G18 convergence event must have one durable Orders projection consumer",
+    "rollback convergence event must have one durable Orders projection consumer",
   );
   const projectionConsumerGroupId = projectionConsumers[0].groupId;
   let initialUnknownActive = false;
@@ -7916,7 +7936,7 @@ async function runMutationDisableRollbackProof({
   assert.equal(
     drifted.guardedCardState,
     "OutOfSync",
-    "G18 armed provider drift did not reach the guarded Orders Card",
+    "rollback armed provider drift did not reach the guarded Orders Card",
   );
   markInitialUnknownPhase("owner-reconcile");
   const initialReconcile = await runRollbackOwnerHttp(
@@ -7930,12 +7950,12 @@ async function runMutationDisableRollbackProof({
   assert.equal(
     initialReconcile.status,
     202,
-    "G18 B-phase owner reconciliation command was not accepted",
+    "rollback B-phase owner reconciliation command was not accepted",
   );
   assert.equal(
     initialReconcile.cardState,
     "OutOfSync",
-    "G18 B-phase reconciliation did not start from actual guarded drift",
+    "rollback B-phase reconciliation did not start from actual guarded drift",
   );
 
   markInitialUnknownPhase("unknown-facts");
@@ -7987,7 +8007,7 @@ async function runMutationDisableRollbackProof({
           row.consumer_name === "orders-aroma-preparation-v1" &&
           row.state === "Processed",
       ),
-    "G18 confirmed owner order was not delivered through the real preparation Inbox",
+    "rollback confirmed owner order was not delivered through the real preparation Inbox",
   );
   const unknownAttempt = unknown.attempts.find(
     (row) => row.state === "UnknownOutcome",
@@ -7997,7 +8017,7 @@ async function runMutationDisableRollbackProof({
     unknownAttempt &&
       currentDesired &&
       unknownAttempt.desired_revision === currentDesired.desired_revision,
-    "G18 unknown attempt does not match the current desired cart revision",
+    "rollback unknown attempt does not match the current desired cart revision",
   );
   const operatorIntent = unknown.ordersOutbox.find(
     (row) =>
@@ -8012,7 +8032,7 @@ async function runMutationDisableRollbackProof({
   );
   assert.ok(
     operatorWake,
-    "G18 B-phase reconciliation has no causally linked OperatorRequested wake",
+    "rollback B-phase reconciliation has no causally linked OperatorRequested wake",
   );
   assert.ok(
     hasProcessedRollbackOperatorWake({
@@ -8025,7 +8045,7 @@ async function runMutationDisableRollbackProof({
       orderRef: rollbackOrder.orderRef,
       consumerName: "aroma-convergence-v1",
     }),
-    "G18 B-phase unknown outcome is not causally linked through the real Orders command, preparation Inbox and convergence Inbox",
+    "rollback B-phase unknown outcome is not causally linked through the real Orders command, preparation Inbox and convergence Inbox",
   );
   const oldReservation = unknown.reservations.find(
     (row) => row.state === "UnknownOutcome" && !row.resolved,
@@ -8035,7 +8055,7 @@ async function runMutationDisableRollbackProof({
   );
   assert.ok(
     oldReservation && oldGateway,
-    "G18 unknown reservation and immutable Gateway journal row must correlate",
+    "rollback unknown reservation and immutable Gateway journal row must correlate",
   );
   assert.equal(oldReservation.action, "SetQuantity");
   assert.equal(oldReservation.offer_ref, rollbackOrder.offerRef);
@@ -8048,7 +8068,7 @@ async function runMutationDisableRollbackProof({
         row.kind === "set-quantity" &&
         row.outcome === "response-lost-before-effect",
     ),
-    "G18 provider fixture did not lose the first SetQuantity response before applying it",
+    "rollback provider fixture did not lose the first SetQuantity response before applying it",
   );
   const firstCounts = await readAromaCartProviderCounts(
     providerFixture.countFile,
@@ -8056,7 +8076,7 @@ async function runMutationDisableRollbackProof({
   assert.equal(
     firstCounts.put,
     1,
-    "G18 initial unknown must have exactly one provider write attempt",
+    "rollback initial unknown must have exactly one provider write attempt",
   );
   const unknownCard = await runRollbackOwnerHttp(
     projectName,
@@ -8068,13 +8088,13 @@ async function runMutationDisableRollbackProof({
   assert.equal(
     unknownCard.state,
     "UnknownOutcome",
-    "G18 owner HTTP did not expose the actual UnknownOutcome projection",
+    "rollback owner HTTP did not expose the actual UnknownOutcome projection",
   );
 
   const initialConvergence = initialRows.get("aroma-convergence");
   assert.ok(
     initialConvergence?.ID,
-    "G18 convergence runtime is missing before crash/restart",
+    "rollback convergence runtime is missing before crash/restart",
   );
   runDocker([
     "stop",
@@ -8140,7 +8160,7 @@ async function runMutationDisableRollbackProof({
     assert.equal(
       disabledRuntimeConfig.mutationsEnabled,
       false,
-      "G18 disabled runtime config must disable mutations",
+      "rollback disabled runtime config must disable mutations",
     );
     markDisabledReconcileSubstage("release");
     await writeFile(providerFixture.recoveryGetReleaseFile, "", {
@@ -8182,9 +8202,12 @@ async function runMutationDisableRollbackProof({
     )?.ID;
     assert.ok(
       convergenceContainer,
-      "G18 disabled convergence container is absent",
+      "rollback disabled convergence container is absent",
     );
-    assert.ok(observerContainer, "G18 disabled observer container is absent");
+    assert.ok(
+      observerContainer,
+      "rollback disabled observer container is absent",
+    );
     await waitForDockerHealthy(convergenceContainer);
     throwIfRollbackTerminationRequested();
     await waitForDockerHealthy(observerContainer);
@@ -8236,21 +8259,21 @@ async function runMutationDisableRollbackProof({
     assert.equal(
       disabledCounts.put,
       firstCounts.put,
-      "G18 disabled mode issued a provider mutation",
+      "rollback disabled mode issued a provider mutation",
     );
     assert.equal(
       disabledCounts.post,
       firstCounts.post,
-      "G18 disabled mode issued a provider add",
+      "rollback disabled mode issued a provider add",
     );
     assert.equal(
       disabledCounts.delete,
       firstCounts.delete,
-      "G18 disabled mode issued a provider removal",
+      "rollback disabled mode issued a provider removal",
     );
     assert.ok(
       disabledCounts.cart > firstCounts.cart,
-      "G18 disabled mode did not prove a fresh provider GET",
+      "rollback disabled mode did not prove a fresh provider GET",
     );
     assert.ok(
       afterDisabled.convergenceOutbox.length >
@@ -8259,12 +8282,12 @@ async function runMutationDisableRollbackProof({
           afterDisabled,
           projectionConsumerGroupId,
         ),
-      "G18 convergence result did not traverse Kafka and the configured Orders projection Inbox",
+      "rollback convergence result did not traverse Kafka and the configured Orders projection Inbox",
     );
     assert.equal(
       afterDisabled.orderProjection?.state,
       "Blocked",
-      "G18 disabled state did not reach the Orders Card projection",
+      "rollback disabled state did not reach the Orders Card projection",
     );
     const disabledCard = await runRollbackOwnerHttp(
       projectName,
@@ -8290,7 +8313,7 @@ async function runMutationDisableRollbackProof({
     assert.equal(
       reconcile.status,
       202,
-      "G18 owner reconciliation command was not accepted",
+      "rollback owner reconciliation command was not accepted",
     );
     const accepted = await waitForRollbackFacts(
       facts,
@@ -8325,7 +8348,7 @@ async function runMutationDisableRollbackProof({
     assert.ok(
       accepted.orderProjection?.state === "Blocked" ||
         accepted.orderProjection?.state === "UnknownOutcome",
-      "G18 reconciliation changed the disabled projection to an unrelated state",
+      "rollback reconciliation changed the disabled projection to an unrelated state",
     );
     assertRollbackHistoryPreserved(afterDisabled, accepted);
     const settledDisabled = await waitForRollbackFacts(
@@ -8401,7 +8424,7 @@ async function runMutationDisableRollbackProof({
     assert.equal(
       restoredRuntimeConfig.mutationsEnabled,
       true,
-      "G18 restored runtime config must re-enable mutations",
+      "rollback restored runtime config must re-enable mutations",
     );
     const afterRestoredRows = assertHealthy(
       projectName,
@@ -8424,7 +8447,7 @@ async function runMutationDisableRollbackProof({
     assert.equal(
       restoredReconcile.status,
       202,
-      "G18 restored owner reconciliation command was not accepted",
+      "rollback restored owner reconciliation command was not accepted",
     );
     const restored = await waitForRollbackFacts(
       facts,
@@ -8468,7 +8491,7 @@ async function runMutationDisableRollbackProof({
     );
     assert.ok(
       newGateway && newReservation,
-      "G18 restored ACK is not correlated with its Orders reservation",
+      "rollback restored ACK is not correlated with its Orders reservation",
     );
     assert.equal(newGateway.operation_kind, "SetLineQuantity");
     assert.deepEqual(
@@ -8488,7 +8511,7 @@ async function runMutationDisableRollbackProof({
         observed_before_milli: "2000",
         desired_milli: "1000",
       },
-      "G18 fresh acknowledged operation lacks a verified matching Orders reservation",
+      "rollback fresh acknowledged operation lacks a verified matching Orders reservation",
     );
     const restoredCounts = await readAromaCartProviderCounts(
       providerFixture.countFile,
@@ -8496,21 +8519,21 @@ async function runMutationDisableRollbackProof({
     assert.equal(
       restoredCounts.put,
       firstCounts.put + 1,
-      "G18 restore did not issue exactly one fresh SetQuantity",
+      "rollback restore did not issue exactly one fresh SetQuantity",
     );
     assert.equal(
       restoredCounts.post,
       firstCounts.post,
-      "G18 restore unexpectedly added a cart line",
+      "rollback restore unexpectedly added a cart line",
     );
     assert.equal(
       restoredCounts.delete,
       firstCounts.delete,
-      "G18 restore unexpectedly removed a cart line",
+      "rollback restore unexpectedly removed a cart line",
     );
     assert.ok(
       restoredCounts.cart > disabledCounts.cart,
-      "G18 restored runtime did not use a fresh GET",
+      "rollback restored runtime did not use a fresh GET",
     );
     const finalPhysical = JSON.parse(
       await readFile(providerFixture.physicalFile, "utf8"),
@@ -8518,7 +8541,7 @@ async function runMutationDisableRollbackProof({
     assert.deepEqual(
       finalPhysical,
       { lineCount: 1, quantities: [1] },
-      "G18 fake provider did not finish at the desired physical quantity",
+      "rollback fake provider did not finish at the desired physical quantity",
     );
     // Orders projects the terminal convergence event in a separate Inbox transaction.
     const finalCard = await waitForRollbackFacts(
@@ -8550,7 +8573,7 @@ async function runMutationDisableRollbackProof({
     assert.equal(
       finalCard.state,
       "InSync",
-      "G18 restored physical state did not reach the real Orders Card",
+      "rollback restored physical state did not reach the real Orders Card",
     );
     const { reservation: finalOldReservation, gateway: finalOldGateway } =
       assertOldRollbackOperationPreserved(
@@ -8562,17 +8585,17 @@ async function runMutationDisableRollbackProof({
     assert.equal(
       restored.work?.dirty,
       false,
-      "G18 did not finish the current desired revision",
+      "rollback did not finish the current desired revision",
     );
     assert.equal(
       restored.lease?.active ?? false,
       false,
-      "G18 left an active convergence lease",
+      "rollback left an active convergence lease",
     );
     const trace = await readProviderTrace(providerFixture.traceFile);
     assert.ok(
       hasCompleteSafeGetBetweenLostAndApplied(trace),
-      "G18 mutation after recovery was not preceded by a fresh provider GET",
+      "rollback mutation after recovery was not preceded by a fresh provider GET",
     );
     return {
       schemaVersion: 1,
@@ -9384,7 +9407,7 @@ function assertAromaMutationJournal(rows, sourceGrindKeyHash) {
   return rows;
 }
 
-export async function runG14BrowserProof({
+export async function runBrowserProof({
   baseCandidateSha,
   observability,
   onProof,
@@ -9392,10 +9415,10 @@ export async function runG14BrowserProof({
   return runComposeSmoke({
     args: ["--recovery-proof"],
     observability,
-    g14Browser: {
+    observabilityBrowser: {
       baseCandidateSha,
       onReady: async (context) => {
-        const proof = await proveG14Browser(context);
+        const proof = await proveBrowserFlow(context);
         if (onProof) await onProof(proof);
         return proof;
       },
@@ -9408,15 +9431,15 @@ export async function runComposeSmoke({
   args = process.argv.slice(2),
   observability,
   browser,
-  g14Browser,
+  observabilityBrowser,
 } = {}) {
   rollbackComposeDiagnostic = undefined;
   const options = parseArguments(args);
   assert.ok(
-    !(browser && g14Browser),
-    "G14 and G15 browser hooks are mutually exclusive",
+    !(browser && observabilityBrowser),
+    "observability and browser hooks are mutually exclusive",
   );
-  const browserHook = browser ?? g14Browser;
+  const browserHook = browser ?? observabilityBrowser;
   if (options.observabilityFixture) {
     assert.ok(
       observability !== undefined &&
@@ -9480,7 +9503,7 @@ export async function runComposeSmoke({
     assert.deepEqual(
       Object.keys(browser).sort(),
       ["baseCandidateSha", "onCleanup", "onReady"],
-      "G15 browser hook shape is closed",
+      "browser hook shape is closed",
     );
     assert.ok(
       options.recoveryProof &&
@@ -9488,14 +9511,14 @@ export async function runComposeSmoke({
         !options.noBuild &&
         !options.keep &&
         !options.mutationDisableRollback,
-      "G15 browser hooks require an ordinary --recovery-proof run",
+      "browser hooks require an ordinary --recovery-proof run",
     );
     assert.match(browser.baseCandidateSha ?? "", COMMIT_SHA);
     assert.equal(typeof browser.onReady, "function");
     assert.equal(typeof browser.onCleanup, "function");
   }
-  if (g14Browser !== undefined) {
-    assert.deepEqual(Object.keys(g14Browser).sort(), [
+  if (observabilityBrowser !== undefined) {
+    assert.deepEqual(Object.keys(observabilityBrowser).sort(), [
       "baseCandidateSha",
       "onCleanup",
       "onReady",
@@ -9508,15 +9531,15 @@ export async function runComposeSmoke({
         !options.mutationDisableRollback &&
         !options.observabilityFixture,
     );
-    assert.match(g14Browser.baseCandidateSha ?? "", COMMIT_SHA);
-    assert.equal(typeof g14Browser.onReady, "function");
-    assert.equal(typeof g14Browser.onCleanup, "function");
+    assert.match(observabilityBrowser.baseCandidateSha ?? "", COMMIT_SHA);
+    assert.equal(typeof observabilityBrowser.onReady, "function");
+    assert.equal(typeof observabilityBrowser.onCleanup, "function");
   }
   if (options.browserProof)
     assert.ok(browser, "--browser-proof requires the integrated browser hook");
   assert.ok(
     !externalRecovery || !options.keep,
-    "G13/G15 external recovery always requires verified cleanup",
+    "compose/browser external recovery always requires verified cleanup",
   );
   if (options.aromaBindingProof)
     assertAromaGatewaySocketAssociationRegression();
@@ -9580,17 +9603,17 @@ export async function runComposeSmoke({
           assert.equal(
             config.environment,
             "development",
-            "G14 fixture requires the development environment",
+            "observability fixture requires the development environment",
           );
           assert.equal(
             config.verification?.databaseIsolation?.enabled,
             false,
-            "G14 fixture requires canonical database isolation disabled",
+            "observability fixture requires canonical database isolation disabled",
           );
           assert.equal(
             config.verification?.kafkaNamespaceIsolation,
             false,
-            "G14 fixture requires canonical Kafka namespace isolation disabled",
+            "observability fixture requires canonical Kafka namespace isolation disabled",
           );
         } else {
           const targetConfig = {
@@ -9642,12 +9665,12 @@ export async function runComposeSmoke({
   if (browserHook !== undefined)
     assert.ok(
       launchIdentity,
-      "G15 browser hooks require a validated launch context",
+      "browser hooks require a validated launch context",
     );
   if (options.observabilityFixture)
     assert.ok(
       launchIdentity,
-      "G14 fixture requires a validated G12 launch context",
+      "observability fixture requires a validated supply_chain launch context",
     );
   const projectName =
     options.projectName ??
@@ -9662,22 +9685,22 @@ export async function runComposeSmoke({
   let rollbackLineage;
   let rollbackParent;
   if (options.mutationDisableRollback) {
-    assert.ok(launchIdentity, "G18 launch context is missing");
+    assert.ok(launchIdentity, "rollback launch context is missing");
     assert.equal(
       launchIdentity.candidateRoot,
       ROOT,
-      "G18 must execute from the exact candidate checkout",
+      "rollback must execute from the exact candidate checkout",
     );
     assert.equal(
       resolve(process.cwd()),
       launchIdentity.candidateRoot,
-      "G18 process cwd must be the exact candidate checkout",
+      "rollback process cwd must be the exact candidate checkout",
     );
     const expectedProject = rollbackComposeProjectName(launchIdentity.context);
     assert.equal(
       projectName,
       expectedProject,
-      "G18 must use the context's exact isolated Compose project",
+      "rollback must use the context's exact isolated Compose project",
     );
     rollbackLineage = await validateRollbackLineage({
       launchIdentity,
@@ -9686,7 +9709,7 @@ export async function runComposeSmoke({
       restoredRoot: options.restoredRoot,
       restoredSha: options.restoredSha,
     });
-    if (launchIdentity.context.resources?.controlledScope === "G18")
+    if (launchIdentity.context.resources?.controlledScope === "rollback")
       rollbackParent = await readRollbackParent(launchIdentity);
   }
   let secretsDir;
@@ -9739,14 +9762,14 @@ export async function runComposeSmoke({
   let browserFixtureRoot;
   let browserContext;
   let browserOwnerEvidence;
-  let g14OrderEvidence;
-  let g14BrowserProof;
+  let orderEvidence;
   let browserProof;
+  let observabilityBrowserProof;
   let browserCallbackAttempted = false;
   let receipt;
   let primaryError;
   let cleanupHookError;
-  let retainG14Resources = false;
+  let retainObservabilityResources = false;
   let standardCleanupError;
   const cleanupFailures = [];
   let rollbackStage = options.mutationDisableRollback ? "bootstrap" : null;
@@ -9759,7 +9782,7 @@ export async function runComposeSmoke({
   const markRollbackStage = (stage) => {
     assert.ok(
       ROLLBACK_FAILURE_STAGES.includes(stage),
-      "G18 internal failure stage is invalid",
+      "rollback internal failure stage is invalid",
     );
     rollbackStage = stage;
   };
@@ -9770,7 +9793,7 @@ export async function runComposeSmoke({
     }
     assert.ok(
       ROLLBACK_INITIAL_UNKNOWN_SUBSTAGES.includes(substage),
-      "G18 initial-unknown substage is not allowlisted",
+      "rollback initial-unknown substage is not allowlisted",
     );
     rollbackInitialUnknownSubstage = substage;
   };
@@ -9781,14 +9804,14 @@ export async function runComposeSmoke({
     }
     assert.ok(
       ROLLBACK_DISABLED_RECONCILE_SUBSTAGES.includes(substage),
-      "G18 disabled reconcile substage is not allowlisted",
+      "rollback disabled reconcile substage is not allowlisted",
     );
     rollbackDisabledReconcileSubstage = substage;
   };
   const markRollbackBootstrapSubstage = (substage) => {
     assert.ok(
       ROLLBACK_BOOTSTRAP_SUBSTAGES.includes(substage),
-      "G18 bootstrap substage is invalid",
+      "rollback bootstrap substage is invalid",
     );
     rollbackBootstrapSubstage = substage;
   };
@@ -9852,10 +9875,10 @@ export async function runComposeSmoke({
             candidateRoot: launchIdentity.candidateRoot,
             resources: launchIdentity.context.resources,
             expectedLineage: browserHook
-              ? "G15"
+              ? "browser"
               : observability
-                ? "G14"
-                : "G13",
+                ? "observability"
+                : "compose",
           }
         : undefined;
     if (proofLaunchIdentity) {
@@ -9918,9 +9941,9 @@ export async function runComposeSmoke({
     if (needsKafka) {
       assert.ok(
         launchIdentity,
-        "Kafka requires a launch context and G12 artifact",
+        "Kafka requires a launch context and supply_chain artifact",
       );
-      // G08 already checks the exact G15 parent and its OIDC-only lineage.
+      // migrations already checks the exact browser parent and its OIDC-only lineage.
       const parentImages = rollbackParent
         ? await import(
             pathToFileURL(
@@ -9977,7 +10000,7 @@ export async function runComposeSmoke({
     if (
       ownershipPath &&
       !options.noBuild &&
-      !g14Browser &&
+      !observabilityBrowser &&
       !browser &&
       !(
         options.databaseProof ||
@@ -9991,7 +10014,7 @@ export async function runComposeSmoke({
         ownershipPath,
         join(
           launchIdentity.evidenceDir,
-          "gates/G10_INTEGRATION/artifacts/runtime-image-ownership.json",
+          "gates/integration/artifacts/runtime-image-ownership.json",
         ),
       );
       assert.equal(await realpath(ownershipPath), ownershipPath);
@@ -10050,7 +10073,7 @@ export async function runComposeSmoke({
       edgeNginxImage: options.noBuild
         ? undefined
         : `${projectName}-edge-nginx:latest`,
-      // Приоритет источников образов: D/R-сборки G18 > ownership G10 > инвентарь G12.
+      // Приоритет источников образов: D/R-сборки rollback > ownership integration > инвентарь supply_chain.
       ...(launchImageInventory
         ? {
             runtimeImages: Object.fromEntries(
@@ -10064,7 +10087,7 @@ export async function runComposeSmoke({
       ...(rollbackRuntimeImages
         ? {
             runtimeImages: rollbackRuntimeImages,
-            g14Config: {
+            observabilityConfig: {
               path: join(ROOT, "config/platform.yaml"),
               sha256: rollbackLineage.B.configSha256,
             },
@@ -10123,18 +10146,21 @@ export async function runComposeSmoke({
       });
       browserFixtureRoot = dirname(browserFixture.browser.homePath);
       const initialComposeFile = composeFile;
-      let g14Config;
-      if (g14Browser) {
+      let observabilityConfig;
+      if (observabilityBrowser) {
         const path = join(secretsDir, "g14-platform.yaml");
         const bytes = await readFile(join(ROOT, "config/platform.yaml"));
         assert.equal(
           createHash("sha256").update(bytes).digest("hex"),
           launchIdentity.context.baseConfigSha256,
-          "G14 child config hash mismatch",
+          "observability child config hash mismatch",
         );
         await writeFile(path, bytes, { mode: 0o444, flag: "wx" });
         await chmod(path, 0o444);
-        g14Config = { path, sha256: launchIdentity.context.baseConfigSha256 };
+        observabilityConfig = {
+          path,
+          sha256: launchIdentity.context.baseConfigSha256,
+        };
       }
       composeFile = await writeScopedComposeOverride(projectName, {
         sharedPostgres: externalRecovery,
@@ -10154,7 +10180,7 @@ export async function runComposeSmoke({
           : undefined,
         runtimeLogging: observability ? platformConfig : undefined,
         browserFixture,
-        g14Config,
+        observabilityConfig,
         candidateRoot: launchIdentity.candidateRoot,
       });
       composeFiles.push(composeFile);
@@ -10386,7 +10412,7 @@ export async function runComposeSmoke({
           const ownerConnections = async (database) => {
             assert.ok(
               ownedDatabaseNames.has(database),
-              "G15 owner evidence database is outside the run scope",
+              "browser owner evidence database is outside the run scope",
             );
             return createPostgresClient(
               replaceDatabase(recoveryAdminUrl, database),
@@ -10398,8 +10424,8 @@ export async function runComposeSmoke({
             actorRef: "actor:g15-browser-fixture",
             runId: launchIdentity.context.runId,
           });
-          if (g14Browser)
-            g14OrderEvidence = createG14OrderEvidence({
+          if (observabilityBrowser)
+            orderEvidence = createOrderEvidence({
               connect: ownerConnections,
               roleMap: recoveryProofCredentials.roleMap,
               runId: launchIdentity.context.runId,
@@ -10464,7 +10490,7 @@ export async function runComposeSmoke({
           const ownerConnections = async (database) => {
             assert.ok(
               ownedDatabaseNames.has(database),
-              "G15 owner evidence database is outside the run scope",
+              "browser owner evidence database is outside the run scope",
             );
             return createPostgresClient(
               replaceDatabase(recoveryAdminUrl, database),
@@ -10476,8 +10502,8 @@ export async function runComposeSmoke({
             actorRef: "actor:g15-browser-fixture",
             runId: launchIdentity.context.runId,
           });
-          if (g14Browser)
-            g14OrderEvidence = createG14OrderEvidence({
+          if (observabilityBrowser)
+            orderEvidence = createOrderEvidence({
               connect: ownerConnections,
               roleMap: recoveryProofCredentials.roleMap,
               runId: launchIdentity.context.runId,
@@ -10494,10 +10520,10 @@ export async function runComposeSmoke({
       browser ||
       options.mutationDisableRollback
     );
-    const imageContextPath = g14Browser
+    const imageContextPath = observabilityBrowser
       ? recoveryProofCredentials?.g08PreparationContextPath
       : launchContextPath;
-    const imageIdentity = g14Browser
+    const imageIdentity = observabilityBrowser
       ? await browserParentModules.validateLaunchContext(imageContextPath)
       : launchIdentity;
     if (launchImageInventory)
@@ -10509,7 +10535,7 @@ export async function runComposeSmoke({
           options.customerProof,
         )
       : null;
-    // Опубликованный инвентарь G12 покрывает все runtime-образы, поэтому
+    // Опубликованный инвентарь supply_chain покрывает все runtime-образы, поэтому
     // ownership-фаза не должна инициировать сборку.
     const imageMode =
       launchImageInventory ||
@@ -10603,7 +10629,7 @@ export async function runComposeSmoke({
             expected,
           ]).trim(),
           expected,
-          `${service} image differs from the scanned G12 artifact`,
+          `${service} image differs from the scanned supply_chain artifact`,
         );
       }
     }
@@ -10691,7 +10717,7 @@ export async function runComposeSmoke({
       assert.equal(
         runDocker(["inspect", "--format", "{{.Image}}", kafka.ID]).trim(),
         verifiedKafka.imageId,
-        "Kafka runtime differs from the scanned G12 artifact",
+        "Kafka runtime differs from the scanned supply_chain artifact",
       );
     }
     if (rollbackRuntimeImages) {
@@ -10701,13 +10727,13 @@ export async function runComposeSmoke({
         assert.equal(
           runDocker(["inspect", "--format", "{{.Image}}", row.ID]).trim(),
           imageId,
-          `${name} runtime differs from the scanned parent G12 artifact`,
+          `${name} runtime differs from the scanned parent supply_chain artifact`,
         );
       }
     }
     if (browserHook) {
       const idp = rows.get("g15-idp");
-      assert.ok(idp, "G15 IdP fixture is absent from Compose ps");
+      assert.ok(idp, "browser IdP fixture is absent from Compose ps");
       assert.equal(idp.State, "running");
       assert.equal(idp.Health, "healthy");
     }
@@ -11147,12 +11173,12 @@ export async function runComposeSmoke({
               ),
             nginxContainerId: rows.get("edge-nginx")?.ID,
             ownerEvidence: browserOwnerEvidence,
-            ...(g14Browser
+            ...(observabilityBrowser
               ? {
-                  g14OrderEvidence,
+                  orderEvidence,
                   configSha256: launchIdentity.context.baseConfigSha256,
-                  attestG14Safety: () =>
-                    attestG14ProviderBoundary({
+                  attestObservabilitySafety: () =>
+                    attestObservabilityProviderBoundary({
                       projectName,
                       secretsDir,
                       composeFile,
@@ -11202,11 +11228,11 @@ export async function runComposeSmoke({
           },
         );
       }
-      if (g14Browser) {
+      if (observabilityBrowser) {
         throwIfRollbackTerminationRequested();
         browserCallbackAttempted = true;
-        g14BrowserProof = validateG14BrowserEvidence(
-          await g14Browser.onReady(browserContext),
+        observabilityBrowserProof = validateObservabilityBrowserEvidence(
+          await observabilityBrowser.onReady(browserContext),
           {
             runId: launchIdentity.context.runId,
             candidateSha: launchIdentity.context.candidateSha,
@@ -11243,7 +11269,10 @@ export async function runComposeSmoke({
             runtimeImages: rollbackRuntimeImages,
             kafkaImageId: verifiedKafka.imageId,
           };
-      } else if (options.recoveryProof && (!browserHook || g14Browser)) {
+      } else if (
+        options.recoveryProof &&
+        (!browserHook || observabilityBrowser)
+      ) {
         assert.ok(
           aromaCartProviderFixture,
           "recovery proof local provider fixture is missing",
@@ -11600,7 +11629,7 @@ export async function runComposeSmoke({
         ? { externalCleanup: { verified: false, failure: "CLEANUP_PENDING" } }
         : {}),
       browserProof,
-      ...(g14Browser ? { g14BrowserProof } : {}),
+      ...(observabilityBrowser ? { observabilityBrowserProof } : {}),
       mutationDisableRollback: rollbackEvidence,
       aromaBindingProof: options.aromaBindingProof
         ? {
@@ -11675,14 +11704,14 @@ export async function runComposeSmoke({
         }
       }
     }
-    const retainedDatabases = retainG14AfterCollectorFailure({
-      g14Browser,
+    const retainedDatabases = retainObservabilityAfterCollectorFailure({
+      observabilityBrowser,
       observability,
       cleanupHookError,
       options,
       databases: externalRunDatabaseResources,
     });
-    retainG14Resources = retainedDatabases !== undefined;
+    retainObservabilityResources = retainedDatabases !== undefined;
     if (retainedDatabases) externalDatabaseCleanupReceipt = retainedDatabases;
     try {
       if (
@@ -11778,7 +11807,7 @@ export async function runComposeSmoke({
           );
         }
       }
-      if (browserFixture && !retainG14Resources) {
+      if (browserFixture && !retainObservabilityResources) {
         try {
           await browserFixture.cleanup();
         } catch (error) {
@@ -11878,7 +11907,7 @@ export async function runComposeSmoke({
       if (!complete)
         standardCleanupError = new Error(
           JSON.stringify({
-            code: "G18_CLEANUP_FAILED",
+            code: "ROLLBACK_CLEANUP_FAILED",
             failures: cleanupFailures,
             retainedResources: retainedList,
           }),
@@ -11951,7 +11980,8 @@ export async function runComposeSmoke({
         composeOverrideRemoved,
       };
       if (receipt) receipt.cleanup = cleanup;
-      if (!complete) standardCleanupError ??= new Error("G15_CLEANUP_FAILED");
+      if (!complete)
+        standardCleanupError ??= new Error("BROWSER_CLEANUP_FAILED");
     }
   }
   let finalizedExternalCleanup;
@@ -11970,7 +12000,7 @@ export async function runComposeSmoke({
   const errors = [primaryError, standardCleanupError, cleanupHookError].filter(
     Boolean,
   );
-  const g14Retained = retainG14Resources
+  const observabilityRetained = retainObservabilityResources
     ? {
         runId: launchIdentity?.context.runId,
         projectName,
@@ -12033,7 +12063,7 @@ export async function runComposeSmoke({
       : stageFailure;
     const surfaced =
       errors.length > 1
-        ? new AggregateError(errors, "G18_RUNTIME_PROOF_FAILED", { cause })
+        ? new AggregateError(errors, "ROLLBACK_RUNTIME_PROOF_FAILED", { cause })
         : errors[0];
     surfaced.rollbackFailure = rollbackFailure;
     throw surfaced;
@@ -12051,13 +12081,15 @@ export async function runComposeSmoke({
     );
     if (finalizedExternalCleanup)
       combined.externalCleanup = finalizedExternalCleanup;
-    if (g14Retained) combined.g14Retained = g14Retained;
+    if (observabilityRetained)
+      combined.observabilityRetained = observabilityRetained;
     throw combined;
   }
   if (errors.length === 1) {
     if (finalizedExternalCleanup)
       errors[0].externalCleanup = finalizedExternalCleanup;
-    if (g14Retained) errors[0].g14Retained = g14Retained;
+    if (observabilityRetained)
+      errors[0].observabilityRetained = observabilityRetained;
     throw errors[0];
   }
   console.log(JSON.stringify(receipt));
@@ -12075,10 +12107,10 @@ if (
     baseCandidateSha,
   }) {
     const contextPath = process.env.COFFEE_LAUNCH_CONTEXT_FILE;
-    if (!contextPath) throw new Error("G15_LAUNCH_CONTEXT_REQUIRED");
+    if (!contextPath) throw new Error("BROWSER_LAUNCH_CONTEXT_REQUIRED");
     const launch = await validateLaunchContext(contextPath);
     if (launch.candidateRoot !== ROOT || resolve(process.cwd()) !== ROOT)
-      throw new Error("G15_CANDIDATE_IDENTITY_INVALID");
+      throw new Error("BROWSER_CANDIDATE_IDENTITY_INVALID");
     const { context, evidenceDir } = launch;
     const lineageWithPath = await readBrowserFixtureLineage({
       root: ROOT,
@@ -12090,7 +12122,7 @@ if (
     const artifact = validateBrowserRuntimeArtifact(
       {
         schemaVersion: 1,
-        gateId: "G15_BROWSER",
+        gateId: "browser",
         runId: context.runId,
         candidateSha: context.candidateSha,
         baseConfigSha256: context.baseConfigSha256,
@@ -12108,11 +12140,11 @@ if (
         lineage: lineageWithPath,
       },
     );
-    const artifactsDir = join(evidenceDir, "gates/G15_BROWSER/artifacts");
+    const artifactsDir = join(evidenceDir, "gates/browser/artifacts");
     for (const path of [
       evidenceDir,
       join(evidenceDir, "gates"),
-      join(evidenceDir, "gates/G15_BROWSER"),
+      join(evidenceDir, "gates/browser"),
       artifactsDir,
     ]) {
       const info = await lstat(path);
@@ -12122,7 +12154,7 @@ if (
         info.uid !== process.getuid() ||
         (info.mode & 0o077) !== 0
       )
-        throw new Error("G15_ARTIFACT_DIRECTORY_INVALID");
+        throw new Error("BROWSER_ARTIFACT_DIRECTORY_INVALID");
     }
     const path = join(artifactsDir, "browser-runtime.json");
     const bytes = `${JSON.stringify(artifact, null, 2)}\n`;
@@ -12185,7 +12217,7 @@ if (
         );
       } catch {
         console.error(
-          "compose-smoke: FAIL: G15_BROWSER_CHILD_DIAGNOSTIC_UNAVAILABLE",
+          "compose-smoke: FAIL: _BROWSER_CHILD_DIAGNOSTIC_UNAVAILABLE",
         );
       }
     } else if (error?.rollbackFailure)

@@ -34,7 +34,7 @@ function waitFor(ms, signal) {
     function abort() {
       clearTimeout(timer);
       signal.removeEventListener("abort", abort);
-      reject(signal.reason ?? new Error("G17_RECOVERY_ABORTED"));
+      reject(signal.reason ?? new Error("BACKUP_RECOVERY_ABORTED"));
     }
     signal.addEventListener("abort", abort, { once: true });
   });
@@ -43,14 +43,14 @@ function waitFor(ms, signal) {
 export function verifyRecoveryUnknownOutcomeTrace(trace, oldOperationRef) {
   requireProof(
     Array.isArray(trace) && trace[0]?.kind === "GET",
-    "G17_UNKNOWN_OUTCOME_RECOVERY_NOT_GET_FIRST",
+    "BACKUP_UNKNOWN_OUTCOME_RECOVERY_NOT_GET_FIRST",
   );
   requireProof(
     !trace.some(
       (entry) =>
         entry?.kind === "MUTATION" && entry.operationRef === oldOperationRef,
     ),
-    "G17_UNKNOWN_OUTCOME_OLD_OPERATION_REPLAYED",
+    "BACKUP_UNKNOWN_OUTCOME_OLD_OPERATION_REPLAYED",
   );
   return { firstAction: trace[0].kind, oldOperationRefReplayed: false };
 }
@@ -132,7 +132,7 @@ export function queryRecoveryInboxByMessageIds(client, messageIds) {
     Array.isArray(messageIds) &&
       messageIds.length > 0 &&
       messageIds.every((id) => typeof id === "string" && id.length > 0),
-    "G17_INBOX_MESSAGE_IDS_INVALID",
+    "BACKUP_INBOX_MESSAGE_IDS_INVALID",
   );
   return client.query(
     `SELECT message_id, state, envelope FROM orders.inbox_messages
@@ -161,13 +161,16 @@ async function verifyFixtureSourceTargets({
           sourceDatabases[owner] ===
           `coffee_verify_${runId.toLowerCase().replace("-", "_")}_${owner}`,
       ),
-    "G17_FIXTURE_TARGET_INVALID",
+    "BACKUP_FIXTURE_TARGET_INVALID",
   );
   for (const owner of owners) {
     const role = roleMap.databases.find(
       (entry) => entry.name === `coffee_platform_${owner}`,
     )?.migratorRole;
-    requireProof(role === `coffee_${owner}_migrator`, "G17_OWNER_MAP_INVALID");
+    requireProof(
+      role === `coffee_${owner}_migrator`,
+      "BACKUP_OWNER_MAP_INVALID",
+    );
     const client = await openAdminClient(
       target.host,
       target.port,
@@ -191,7 +194,7 @@ async function verifyFixtureSourceTargets({
           version === expectedVersion &&
           system_identifier === target.systemIdentifier &&
           database_owner === role,
-        "G17_FIXTURE_SERVER_IDENTITY_MISMATCH",
+        "BACKUP_FIXTURE_SERVER_IDENTITY_MISMATCH",
       );
     } finally {
       await client.end();
@@ -210,7 +213,7 @@ export function optionsFor(owner, runtime, config, target, credential) {
     typeof credential.password !== "string" ||
     !credential.password
   )
-    throw new Error("G17_RECOVERY_CONFIG_INVALID");
+    throw new Error("BACKUP_RECOVERY_CONFIG_INVALID");
   return createDatabaseOptions({
     owner: runtime,
     database: owner,
@@ -249,14 +252,14 @@ async function seedConfirmedContribution({
   await admin.query(
     `INSERT INTO orders.orders(order_ref,status,version,projection_version,customer_ref,customer_version,
       customer_display_name,customer_state,customer_state_proof_hash,currency,created_by_actor_ref,last_modified_by_actor_ref)
-     VALUES($1,'Draft',1,1,$2,1,'G17 isolated fixture','Active',$3,'RUB','g17-backup-restore','g17-backup-restore')`,
+     VALUES($1,'Draft',1,1,$2,1,'backup_restore isolated fixture','Active',$3,'RUB','g17-backup-restore','g17-backup-restore')`,
     [orderRef, customerRef, sha(`${runId}:${suffix}:customer`)],
   );
   await admin.query(
     `INSERT INTO orders.order_items(order_ref,item_ref,line_position,product_ref,variant_ref,product_display_name,unit,
       quantity_milli,quote_ref,quote_line_number,quote_hash,internal_proof_hash,quote_expires_at,policy_version_ref,
       catalog_snapshot_revision,mapping_revision,offer_ref,unit_minor,line_total_minor,currency,source_grind_key_hash,grind_display_name)
-     VALUES($1,$2,1,$3,$4,'G17 isolated fixture','piece',$5::bigint,$6,1,$7,$7,clock_timestamp()+interval '1 hour',$8,
+     VALUES($1,$2,1,$3,$4,'backup_restore isolated fixture','piece',$5::bigint,$6,1,$7,$7,clock_timestamp()+interval '1 hour',$8,
       1,1,$9,0,0,'RUB',NULL,NULL)`,
     [
       orderRef,
@@ -294,7 +297,7 @@ async function seedDraftOutboxAggregate({ admin, runId, customerRef }) {
   await admin.query(
     `INSERT INTO orders.orders(order_ref,status,version,projection_version,customer_ref,customer_version,
       customer_display_name,customer_state,customer_state_proof_hash,currency,created_by_actor_ref,last_modified_by_actor_ref)
-     VALUES($1,'Draft',1,1,$2,1,'G17 isolated fixture','Active',$3,'RUB','g17-backup-restore','g17-backup-restore')`,
+     VALUES($1,'Draft',1,1,$2,1,'backup_restore isolated fixture','Active',$3,'RUB','g17-backup-restore','g17-backup-restore')`,
     [orderRef, customerRef, sha(`${runId}:primary:customer`)],
   );
   return orderRef;
@@ -438,7 +441,7 @@ async function orderFixture({ database, runId, signal }) {
     const prior = baseline.rows[0];
     requireProof(
       Object.values(prior).every((value) => value === 0),
-      "G17_SOURCE_FIXTURE_TARGET_NOT_EMPTY",
+      "BACKUP_SOURCE_FIXTURE_TARGET_NOT_EMPTY",
     );
 
     const offerRef = recoveryFixtureRef("off", `${runId}:offer`);
@@ -487,14 +490,14 @@ async function orderFixture({ database, runId, signal }) {
     const initialPreparation = await preparation.runOnce(signal);
     requireProof(
       initialPreparation === "prepared",
-      "G17_SOURCE_INITIAL_PREPARATION_FAILED",
+      "BACKUP_SOURCE_INITIAL_PREPARATION_FAILED",
     );
     const initialDesired = await admin.query(
       "SELECT desired_revision::text AS revision FROM orders.cart_desired_revisions WHERE state='Current'",
     );
     requireProof(
       initialDesired.rows[0]?.revision === "1",
-      "G17_SOURCE_INITIAL_DESIRED_FAILED",
+      "BACKUP_SOURCE_INITIAL_DESIRED_FAILED",
     );
 
     const settings =
@@ -517,7 +520,7 @@ async function orderFixture({ database, runId, signal }) {
         unit: "piece",
         availability: "Available",
         mappingRevision: "1",
-        displayName: "G17 fixture",
+        displayName: "backup_restore fixture",
       }),
       read: async () => {
         beforeTrace.push("GET");
@@ -533,11 +536,11 @@ async function orderFixture({ database, runId, signal }) {
       setQuantity: async (_offer, request) => {
         beforeTrace.push("MUTATION");
         physicalQuantity = request.quantity;
-        throw new Error("G17 controlled lost response");
+        throw new Error("backup_restore controlled lost response");
       },
       remove: async () => {
         beforeTrace.push("MUTATION");
-        throw new Error("unexpected G17 fixture removal");
+        throw new Error("unexpected backup_restore fixture removal");
       },
     };
     await convergence.recover(signal);
@@ -547,7 +550,7 @@ async function orderFixture({ database, runId, signal }) {
     );
     requireProof(
       completed.rows[0]?.count === 1,
-      "G17_SOURCE_COMPLETED_ATTEMPT_FIXTURE_FAILED",
+      "BACKUP_SOURCE_COMPLETED_ATTEMPT_FIXTURE_FAILED",
     );
     await seedConfirmedContribution({
       admin,
@@ -561,7 +564,7 @@ async function orderFixture({ database, runId, signal }) {
     const nextPreparation = await preparation.runOnce(signal);
     requireProof(
       nextPreparation === "prepared",
-      "G17_SOURCE_NEXT_PREPARATION_FAILED",
+      "BACKUP_SOURCE_NEXT_PREPARATION_FAILED",
     );
     const currentDesired = await admin.query(
       "SELECT desired_revision::text AS revision,desired_hash FROM orders.cart_desired_revisions WHERE state='Current'",
@@ -574,7 +577,7 @@ async function orderFixture({ database, runId, signal }) {
     requireProof(
       currentDesired.rows[0]?.revision === "2" &&
         currentDesired.rows[0]?.desired_hash === expectedPlan.hash,
-      "G17_SOURCE_NEXT_DESIRED_FAILED",
+      "BACKUP_SOURCE_NEXT_DESIRED_FAILED",
     );
     physicalQuantity = "1";
     beforeTrace.length = 0;
@@ -592,7 +595,7 @@ async function orderFixture({ database, runId, signal }) {
         unknown.rows[0]?.desired_milli === "2000" &&
         beforeTrace[0] === "GET" &&
         beforeTrace[1] === "MUTATION",
-      "G17_SOURCE_UNKNOWN_OUTCOME_FIXTURE_FAILED",
+      "BACKUP_SOURCE_UNKNOWN_OUTCOME_FIXTURE_FAILED",
     );
     const interruptedAttempt = recoveryFixtureRef(
       "att",
@@ -612,7 +615,7 @@ async function orderFixture({ database, runId, signal }) {
     const inboxPayload = { fixture: "g17", runId };
     const inboxMessage = {
       messageId: inboxId,
-      messageType: "G17Fixture.v1",
+      messageType: "BackupRestoreFixture.v1",
       receivedAt: now,
       payloadHash: sha(JSON.stringify(inboxPayload)),
       payload: inboxPayload,
@@ -623,7 +626,7 @@ async function orderFixture({ database, runId, signal }) {
     inboxMessage.payloadHash = inboxHash;
     const processed = {
       messageId: recoveryFixtureRef("msg", `${runId}:inbox-completed`),
-      messageType: "G17Fixture.v1",
+      messageType: "BackupRestoreFixture.v1",
       receivedAt: now,
       payloadHash: inboxHash,
       payload: { ...inboxPayload, completed: true },
@@ -634,7 +637,7 @@ async function orderFixture({ database, runId, signal }) {
     const processedEnvelope = makeEnvelope({
       messageId: processed.messageId,
       messageType: processed.messageType,
-      aggregateType: "G17Fixture",
+      aggregateType: "BackupRestoreFixture",
       aggregateRef: "g17-backup-restore",
       ownerVersion: "1",
       payload: processed.payload,
@@ -661,7 +664,7 @@ async function orderFixture({ database, runId, signal }) {
     const pendingEnvelope = makeEnvelope({
       messageId: inboxId,
       messageType: inboxMessage.messageType,
-      aggregateType: "G17Fixture",
+      aggregateType: "BackupRestoreFixture",
       aggregateRef: "g17-backup-restore",
       ownerVersion: "1",
       payload: inboxPayload,
@@ -703,12 +706,12 @@ async function orderFixture({ database, runId, signal }) {
     );
     const outboxMessages = ["completed", "pending"].map((state, index) => {
       const messageId = recoveryFixtureRef("msg", `${runId}:outbox:${state}`);
-      const messageType = `G17BackupRestore${state === "completed" ? "Completed" : "Pending"}.v1`;
+      const messageType = `BackupRestore${state === "completed" ? "Completed" : "Pending"}.v1`;
       const aggregateSequence =
         BigInt(previousSequence.rows[0].sequence) + BigInt(index) + 1n;
       requireProof(
         aggregateSequence <= BigInt(Number.MAX_SAFE_INTEGER),
-        "G17_SOURCE_OUTBOX_SEQUENCE_INVALID",
+        "BACKUP_SOURCE_OUTBOX_SEQUENCE_INVALID",
       );
       const aggregateSequenceNumber = Number(aggregateSequence);
       const payload = { runId, fixture: state };
@@ -766,7 +769,7 @@ async function orderFixture({ database, runId, signal }) {
     );
     requireProof(
       sent.length === 1 && sent[0] === outboxMessages[0].messageId,
-      "G17_SOURCE_OUTBOX_FIXTURE_FAILED",
+      "BACKUP_SOURCE_OUTBOX_FIXTURE_FAILED",
     );
 
     return {
@@ -830,7 +833,7 @@ async function gatewayFixture({ database, runId, signal }) {
     );
     requireProof(
       existing.rows[0]?.count === 0,
-      "G17_SOURCE_JOURNAL_FIXTURE_TARGET_NOT_EMPTY",
+      "BACKUP_SOURCE_JOURNAL_FIXTURE_TARGET_NOT_EMPTY",
     );
     const journal = new ProviderMutationJournalStore(db);
     const request = {
@@ -853,12 +856,12 @@ async function gatewayFixture({ database, runId, signal }) {
     let dispatches = 0;
     const executor = new GatewayMutationExecutor(journal, async () => {
       dispatches++;
-      throw new Error("G17 controlled lost response");
+      throw new Error("backup_restore controlled lost response");
     });
     const result = await executor.execute(request, delegation, signal);
     requireProof(
       result.state === "UnknownOutcome" && dispatches === 1,
-      "G17_SOURCE_JOURNAL_FIXTURE_FAILED",
+      "BACKUP_SOURCE_JOURNAL_FIXTURE_FAILED",
     );
     return { request, delegation };
   } finally {
@@ -887,7 +890,7 @@ export async function prepareRecoveryFixtures({
       Object.keys(sourceDatabases ?? {})
         .sort()
         .join(",") === [...owners].sort().join(","),
-    "G17_FIXTURE_IDENTITY_INVALID",
+    "BACKUP_FIXTURE_IDENTITY_INVALID",
   );
   const toolchain = JSON.parse(
     await readFile(
@@ -901,7 +904,7 @@ export async function prepareRecoveryFixtures({
       typeof target.host === "string" &&
       Number.isInteger(target.port) &&
       /^[0-9]+$/u.test(target.systemIdentifier ?? ""),
-    "G17_FIXTURE_TARGET_INVALID",
+    "BACKUP_FIXTURE_TARGET_INVALID",
   );
   const roleMap = JSON.parse(
     await readFile(
@@ -1001,7 +1004,7 @@ export async function inspectRecoveryFixtures({
         desired.rows[1].desired_revision === "2" &&
         desired.rows[1].state === "Current" &&
         desired.rows[1].desired_hash === expectedPlan.hash,
-      "G17_RECOVERY_FIXTURE_DESIRED_MISSING",
+      "BACKUP_RECOVERY_FIXTURE_DESIRED_MISSING",
     );
     const exactOrder = await ordersAdmin.query(
       "SELECT count(*)::int AS count FROM orders.orders WHERE order_ref = ANY($1::varchar(30)[])",
@@ -1022,7 +1025,7 @@ export async function inspectRecoveryFixtures({
       exactOrder.rows[0]?.count === 2 &&
         exactMapping.rows[0]?.count === 1 &&
         exactDesiredLine.rows[0]?.quantity === "2000",
-      "G17_RECOVERY_FIXTURE_OWNER_ROWS_MISSING",
+      "BACKUP_RECOVERY_FIXTURE_OWNER_ROWS_MISSING",
     );
     const completed = await ordersAdmin.query(
       `SELECT count(*)::int AS count FROM orders.convergence_attempts
@@ -1050,7 +1053,7 @@ export async function inspectRecoveryFixtures({
         unknown.rows[0]?.reservation_state === "UnknownOutcome" &&
         unknown.rows[0]?.offer_ref === offerRef &&
         unknown.rows[0]?.desired_milli === "2000",
-      "G17_RECOVERY_FIXTURE_ATTEMPTS_MISSING",
+      "BACKUP_RECOVERY_FIXTURE_ATTEMPTS_MISSING",
     );
     const inbox = await queryRecoveryInboxByMessageIds(ordersAdmin, [
       recoveryFixtureRef("msg", `${runId}:inbox`),
@@ -1067,7 +1070,7 @@ export async function inspectRecoveryFixtures({
       completedInbox?.state === "Processed" &&
         pendingInbox?.state === "Processing" &&
         inbox.rows.length === 2,
-      "G17_RECOVERY_FIXTURE_INBOX_MISSING",
+      "BACKUP_RECOVERY_FIXTURE_INBOX_MISSING",
     );
     const outbox = await ordersAdmin.query(
       `SELECT message_id,state FROM orders.outbox_messages WHERE message_id = ANY($1::text[])`,
@@ -1093,7 +1096,7 @@ export async function inspectRecoveryFixtures({
       outboxById.get(completedOutboxId) === "Published" &&
         outboxById.get(pendingOutboxId) === "Pending" &&
         outbox.rows.length === 2,
-      "G17_RECOVERY_FIXTURE_OUTBOX_MISSING",
+      "BACKUP_RECOVERY_FIXTURE_OUTBOX_MISSING",
     );
     orderFacts = {
       orderRef,
@@ -1143,7 +1146,7 @@ export async function inspectRecoveryFixtures({
     requireProof(
       record?.state === "UnknownOutcome" &&
         record.operationRef === operationRef,
-      "G17_RECOVERY_FIXTURE_GATEWAY_JOURNAL_MISSING",
+      "BACKUP_RECOVERY_FIXTURE_GATEWAY_JOURNAL_MISSING",
     );
     return {
       orders: orderFacts,
@@ -1264,12 +1267,12 @@ export async function proveRecoveryAfterRestore({
         ? barrier.rows[0].until.getTime()
         : Date.parse(barrier.rows[0]?.until);
     if (!Number.isFinite(until))
-      throw Object.assign(new Error("G17_RESTORE_RECOVERY_WINDOW_MISSING"), {
-        code: "G17_RESTORE_RECOVERY_WINDOW_MISSING",
+      throw Object.assign(new Error("BACKUP_RESTORE_RECOVERY_WINDOW_MISSING"), {
+        code: "BACKUP_RESTORE_RECOVERY_WINDOW_MISSING",
       });
     const waitMs = until - Date.now() + 50;
     if (waitMs > 10 * 60_000)
-      requireProof(false, "G17_RECOVERY_WINDOW_EXCEEDS_LIMIT");
+      requireProof(false, "BACKUP_RECOVERY_WINDOW_EXCEEDS_LIMIT");
     if (waitMs > 0) await waitFor(waitMs, signal);
     const targetLine = { offerRef: fixtures.orders.offerRef, quantity: "2" };
     const snapshot = {
@@ -1290,7 +1293,7 @@ export async function proveRecoveryAfterRestore({
         unit: "piece",
         availability: "Available",
         mappingRevision: "1",
-        displayName: "G17 fixture",
+        displayName: "backup_restore fixture",
       }),
       read: async () => {
         trace.push({ kind: "GET" });
@@ -1298,11 +1301,11 @@ export async function proveRecoveryAfterRestore({
       },
       setQuantity: async (_offer, request) => {
         trace.push({ kind: "MUTATION", operationRef: request.operationRef });
-        throw new Error("unexpected G17 recovery mutation");
+        throw new Error("unexpected backup_restore recovery mutation");
       },
       remove: async (_offer, request) => {
         trace.push({ kind: "MUTATION", operationRef: request.operationRef });
-        throw new Error("unexpected G17 recovery mutation");
+        throw new Error("unexpected backup_restore recovery mutation");
       },
     };
     await convergence.runOnce(gateway, signal);
@@ -1318,7 +1321,7 @@ export async function proveRecoveryAfterRestore({
     );
     requireProof(
       orderFacts.rows[0]?.reservation_state === "RecoveredApplied",
-      "G17_CONVERGENCE_RECOVERY_NOT_APPLIED",
+      "BACKUP_CONVERGENCE_RECOVERY_NOT_APPLIED",
     );
     const attemptRecovery = await ordersAdmin.query(
       "SELECT state FROM orders.convergence_attempts WHERE attempt_ref=$1",
@@ -1331,7 +1334,7 @@ export async function proveRecoveryAfterRestore({
       attemptRecovery.rows[0]?.state === "Failed" &&
         completedHistory.rows[0]?.count >=
           fixtures.orders.completedAttemptCount,
-      "G17_ATTEMPT_HISTORY_RECOVERY_FAILED",
+      "BACKUP_ATTEMPT_HISTORY_RECOVERY_FAILED",
     );
     results.convergence = {
       ...traceProof,
@@ -1360,7 +1363,7 @@ export async function proveRecoveryAfterRestore({
       preparationProjection.rows[0]?.desired_revision === "2" &&
         preparationProjection.rows[0]?.desired_hash ===
           fixtures.orders.desiredHash,
-      "G17_PREPARATION_RECOVERY_FAILED",
+      "BACKUP_PREPARATION_RECOVERY_FAILED",
     );
     results.preparation = {
       desiredRevision: preparationProjection.rows[0].desired_revision,
@@ -1400,7 +1403,7 @@ export async function proveRecoveryAfterRestore({
     );
     requireProof(
       pendingResult.kind === "processed" && handled === 1,
-      "G17_INBOX_PENDING_RECOVERY_FAILED",
+      "BACKUP_INBOX_PENDING_RECOVERY_FAILED",
     );
     const completedEnvelope = fixtures.orders.inbox.completedEnvelope;
     const completedMessage = {
@@ -1430,7 +1433,7 @@ export async function proveRecoveryAfterRestore({
     );
     requireProof(
       duplicate.kind === "duplicate" && duplicateHandled === 0,
-      "G17_INBOX_COMPLETED_REPLAYED",
+      "BACKUP_INBOX_COMPLETED_REPLAYED",
     );
     results.inbox = {
       unfinished: "resumed",
@@ -1460,7 +1463,7 @@ export async function proveRecoveryAfterRestore({
     );
     requireProof(
       relay.published === 1 && relay.failed === 0 && relay.unknown === 0,
-      "G17_OUTBOX_PENDING_RECOVERY_FAILED",
+      "BACKUP_OUTBOX_PENDING_RECOVERY_FAILED",
     );
     results.outbox = relay;
   } finally {
@@ -1489,7 +1492,7 @@ export async function proveRecoveryAfterRestore({
     let dispatches = 0;
     const executor = new GatewayMutationExecutor(journal, async () => {
       dispatches++;
-      throw new Error("old G17 operation must not dispatch");
+      throw new Error("old backup_restore operation must not dispatch");
     });
     const replay = await executor.execute(
       fixtures.gateway.request,
@@ -1500,7 +1503,7 @@ export async function proveRecoveryAfterRestore({
       replay.state === "UnknownOutcome" &&
         replay.replayed === true &&
         dispatches === 0,
-      "G17_GATEWAY_UNKNOWN_REPLAY_DISPATCHED",
+      "BACKUP_GATEWAY_UNKNOWN_REPLAY_DISPATCHED",
     );
     results.gateway = {
       state: replay.state,

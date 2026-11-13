@@ -39,16 +39,15 @@ import {
 const SCANNER_IMAGE =
   "ghcr.io/aquasecurity/trivy@sha256:790fd66d1697395d8693d1acaa1ea702406a20f109b6fc7bac8db623eca6c06c";
 const SCANNER_VERSION = "0.76.1";
-export const G12_SCAN_BUDGET_MS = 40 * 60_000;
-export const G12_SCAN_RESERVE_MS = 5 * 60_000;
+export const _SCAN_BUDGET_MS = 40 * 60_000;
+export const _SCAN_RESERVE_MS = 5 * 60_000;
 const GATE_DEADLINE_ENV = "COFFEE_LAUNCH_GATE_DEADLINE_EPOCH_MS";
 export function scanBudgetMs(now = Date.now(), env = process.env) {
   const raw = env[GATE_DEADLINE_ENV];
-  if (raw === undefined) return G12_SCAN_BUDGET_MS;
+  if (raw === undefined) return _SCAN_BUDGET_MS;
   const deadline = Number(raw);
-  if (!Number.isSafeInteger(deadline) || deadline <= 0)
-    return G12_SCAN_BUDGET_MS;
-  return Math.max(1, deadline - now - G12_SCAN_RESERVE_MS);
+  if (!Number.isSafeInteger(deadline) || deadline <= 0) return _SCAN_BUDGET_MS;
+  return Math.max(1, deadline - now - _SCAN_RESERVE_MS);
 }
 const BUILD_NETWORK = "coffee_platform_build_mtu";
 const UPSTREAM_IMAGES = Object.freeze([
@@ -57,16 +56,17 @@ const UPSTREAM_IMAGES = Object.freeze([
   "tempoImage",
 ]);
 const SCAN_LOCK = join(tmpdir(), "coffee-platform-trivy.lock");
-// Сетевые артефакты G12 (Trivy DB, образ сканера, плагины Grafana) неизменяемы
-// и закреплены digest/hash, поэтому кешируются между запусками на хосте.
-function g12CacheRoot() {
+// Сетевые артефакты supply chain неизменяемы и закреплены digest/hash,
+// поэтому кешируются между запусками на хосте. Старое имя читается один
+// релиз, чтобы существующие окружения продолжили работать.
+function scanCacheRoot() {
   return (
-    process.env.COFFEE_G12_CACHE_DIR ??
-    join(homedir(), ".cache/coffee-platform/g12")
+    process.env.COFFEE_SCAN_CACHE_DIR ??
+    join(homedir(), ".cache/coffee-platform/scan")
   );
 }
-// Эти образы запускает Compose; G12 публикует их в daemon под тегами проекта
-// запуска, чтобы G13/G14 работали по неизменяемым ID, а не собирали заново.
+// Эти образы запускает Compose; `supply_chain` публикует их в daemon под тегами проекта
+// запуска, чтобы `compose`/`observability` работали по неизменяемым ID, а не собирали заново.
 const PUBLISHED_RUNTIME_SERVICES = Object.freeze([
   ...RUNTIME_NAMES,
   "edge-nginx",
@@ -849,7 +849,7 @@ async function validateInputs({
     fail("LAUNCH_ENVIRONMENT_MISMATCH");
   const targetOutputDir =
     outputDir ??
-    join(evidenceDir, "gates", "G12_SUPPLY_CHAIN", "artifacts", "supply-chain");
+    join(evidenceDir, "gates", "supply_chain", "artifacts", "supply-chain");
   if (
     resolve(targetOutputDir) !== targetOutputDir ||
     !within(evidenceDir, targetOutputDir)
@@ -952,12 +952,12 @@ async function cachedHttpsFile({
   expectedSha256,
   run,
   args,
-  cacheRoot = g12CacheRoot(),
+  cacheRoot = scanCacheRoot(),
 }) {
   // Ожидаемый hash приходит из toolchain BOM; он обязан быть digest, иначе
   // значение вида "../../x" изменило бы путь записи curl.
   if (!/^[a-f0-9]{64}$/u.test(expectedSha256 ?? ""))
-    fail("G12_CACHE_DIGEST_INVALID");
+    fail("SUPPLY_CHAIN_CACHE_DIGEST_INVALID");
   const cached = join(cacheRoot, "downloads", expectedSha256);
   await mkdir(join(cacheRoot, "downloads"), {
     recursive: true,
@@ -969,7 +969,7 @@ async function cachedHttpsFile({
   if (cachedHash !== expectedSha256) {
     await run("curl", ["--output", cached, ...args]);
     if ((await hashRegularFile(cached, 64 * 1024 * 1024)) !== expectedSha256)
-      fail("G12_CACHE_DOWNLOAD_MISMATCH");
+      fail("SUPPLY_CHAIN_CACHE_DOWNLOAD_MISMATCH");
   }
   await copyFile(cached, path);
 }
@@ -1888,7 +1888,7 @@ async function inspectOwnedContainer(run, spec, id) {
     !SHA256.test(imageId ?? "") ||
     imageId !== spec.imageId ||
     imageRef !== SCANNER_IMAGE ||
-    owner !== "G12_SUPPLY_CHAIN" ||
+    owner !== "supply_chain" ||
     runId !== spec.runId ||
     nonce !== spec.nonce
   )
@@ -2923,7 +2923,7 @@ async function databaseMetadataFresh(cacheDir, now, policy) {
       () => null,
     );
     // Повреждённая запись кеша (в том числе oversized) — это промах, а не hit:
-    // иначе G12 будет падать на validateDb до истечения metadata.
+    // иначе `supply_chain` будет падать на validateDb до истечения metadata.
     if (!info?.isFile() || info.size < 1 || info.size > MAX_DATABASE_BYTES)
       return false;
     try {
@@ -3201,7 +3201,7 @@ async function pruneStaleLaunchImages(run, composeProject) {
 export async function runSecurityScan({
   contextFile,
   outputDir,
-  cacheRoot = g12CacheRoot(),
+  cacheRoot = scanCacheRoot(),
   clock = Date.now,
   nonceFactory = randomUUID,
   validateContext = validateLaunchContext,
@@ -3275,7 +3275,7 @@ export async function runSecurityScan({
     containerCandidates.push({ ...spec, pending: false });
     const labels = [
       "--label",
-      `${CONTAINER_OWNER_LABEL}=G12_SUPPLY_CHAIN`,
+      `${CONTAINER_OWNER_LABEL}=supply_chain`,
       "--label",
       `${CONTAINER_RUN_LABEL}=${spec.runId}`,
       "--label",
@@ -3346,7 +3346,7 @@ export async function runSecurityScan({
   };
   let result = {
     schemaVersion: 1,
-    gate: "G12_SUPPLY_CHAIN",
+    gate: "supply_chain",
     status: "FAIL",
     code: "NOT_STARTED",
     runId: null,
@@ -3956,7 +3956,7 @@ export async function runSecurityScan({
     });
     const adjudication = {
       schemaVersion: 1,
-      gate: "G12_SUPPLY_CHAIN",
+      gate: "supply_chain",
       runId: identity.context.runId,
       candidateSha: identity.context.candidateSha,
       treeSha: identity.environment.treeSha,
@@ -3990,8 +3990,8 @@ export async function runSecurityScan({
     result.code =
       result.evaluation.unresolvedHigh + result.evaluation.critical > 0
         ? "HIGH_OR_CRITICAL_FINDINGS"
-        : "G12_SCAN_CLEAN";
-    result.status = result.code === "G12_SCAN_CLEAN" ? "PASS" : "FAIL";
+        : "SUPPLY_CHAIN_SCAN_CLEAN";
+    result.status = result.code === "SUPPLY_CHAIN_SCAN_CLEAN" ? "PASS" : "FAIL";
     if (result.status === "FAIL") result.failure = { code: result.code, stage };
     if (result.status === "PASS" && publishesRuntimeImages) {
       markStage("image-inventory");
@@ -4042,7 +4042,7 @@ export async function runSecurityScan({
         const image = build.image;
         const receipt = {
           schemaVersion: 1,
-          gate: "G12_SUPPLY_CHAIN",
+          gate: "supply_chain",
           status: "PASS",
           runId: identity.context.runId,
           candidateSha: identity.context.candidateSha,
@@ -4311,7 +4311,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
       process.exitCode = result.code === "INTERRUPTED" ? 130 : 1;
   } catch (error) {
     process.stdout.write(
-      `${JSON.stringify({ gate: "G12_SUPPLY_CHAIN", status: "FAIL", code: /^[A-Z0-9_]{1,64}$/u.test(error?.code ?? "") ? error.code : "SECURITY_SCAN_FAILED" })}\n`,
+      `${JSON.stringify({ gate: "supply_chain", status: "FAIL", code: /^[A-Z0-9_]{1,64}$/u.test(error?.code ?? "") ? error.code : "SECURITY_SCAN_FAILED" })}\n`,
     );
     process.exitCode = 1;
   }

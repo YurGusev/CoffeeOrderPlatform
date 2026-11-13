@@ -404,14 +404,14 @@ void test(
     );
     await assert.rejects(
       assertForwardFixtures(forwardDatabase, fixtureBefore),
-      /G08_MIGRATIONS FORWARD_FIXTURE_CHANGED: catalog/u,
+      /MIGRATIONS FORWARD_FIXTURE_CHANGED: catalog/u,
     );
     await migrationClient.query(
       "UPDATE catalog.products SET category_name=NULL,display_name='Changed legacy name' WHERE product_ref='prd_00000000000000000000000009'",
     );
     await assert.rejects(
       assertForwardFixtures(forwardDatabase, fixtureBefore),
-      /G08_MIGRATIONS FORWARD_FIXTURE_CHANGED: catalog/u,
+      /MIGRATIONS FORWARD_FIXTURE_CHANGED: catalog/u,
     );
     await migrationClient.query(
       "UPDATE catalog.products SET display_name='Before upgrade' WHERE product_ref='prd_00000000000000000000000009'",
@@ -421,7 +421,7 @@ void test(
     );
     await assert.rejects(
       assertForwardFixtures(forwardDatabase, fixtureBefore),
-      /G08_MIGRATIONS FORWARD_FIXTURE_CHANGED: catalog/u,
+      /MIGRATIONS FORWARD_FIXTURE_CHANGED: catalog/u,
     );
     await migrationClient.query(
       "INSERT INTO catalog.variants(snapshot_ref,variant_ref,product_ref,unit) VALUES ('snp_00000000000000000000000009','var_00000000000000000000000009','prd_00000000000000000000000009','piece')",

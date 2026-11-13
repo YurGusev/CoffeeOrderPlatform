@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "purpose": "G00_CORRECTIVE_ACCEPTED_HANDOFF_SUPPLEMENT",
+  "purpose": "PREFLIGHT_CORRECTIVE_ACCEPTED_HANDOFF_SUPPLEMENT",
   "authorization": {
     "date": "2026-10-24",
     "authority": "explicit-user-approval-in-current-task",

@@ -77,7 +77,7 @@ Target values **до capacity измерений**, со scope `config/platform.
 время считается от первого прочитанного байта до записи лога после отправки
 последнего байта; [`request_completion`](https://nginx.org/en/docs/http/ngx_http_core_module.html#var_request_completion)
 равно `OK` для завершённого запроса.
-G14 измеряет наблюдённую выборку cohort `client.orders` с проверенным correlation ID и точным
+Гейт `observability` измеряет наблюдённую выборку cohort `client.orders` с проверенным correlation ID и точным
 источником native контейнера в окне browser flow, исключая незавершённые
 запросы из статистики. Отчёт показывает число наблюдений, статусы, ошибки,
 обрывы, исключённые и дубликаты, минимум, максимум и p50/p95 методом

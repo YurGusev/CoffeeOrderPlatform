@@ -3,16 +3,16 @@
 Статус: решение принято владельцем 24 октября 2026; реализация проверяется в #13.
 Основание: явное разрешение «Разрешаю предложенную изоляцию DB» к
 [предложению](../../evidence/launch-preparation/2026-10-24/database-namespace-authority-proposal.md).
-Отдельная граница G17 разрешена точной формулировкой «Разрешаю предложенный G17 Unix socket» ([историческое предложение](../../evidence/launch-preparation/2026-10-24/g17-native-socket-authority-proposal.md)):
+Отдельная граница `backup_restore` разрешена прямым поручением владельца на отдельный Unix socket ([историческое предложение](../../evidence/launch-preparation/2026-10-24/g17-native-socket-authority-proposal.md)):
 private endpoint допустим только в non-production config с включённой database isolation,
-после проверки readonly run/SHA/config context и G00 server identity. Обычные runtime
+после проверки readonly run/SHA/config context и identity сервера, проверенной `preflight`. Обычные runtime
 не подключаются к этому endpoint; canonical `coffee_postgres` сохраняется.
 
 ## Контекст
 
 Runner создаёт run-id из текущего UTC timestamp и SHA уже существующего
 candidate. Эти значения нельзя заранее включить в имена DB того же commit.
-Буквальное требование будущих имён в committed YAML делало G00 невыполнимым.
+Буквальное требование будущих имён в committed YAML делало проверку `preflight` невыполнимой.
 
 ## Решение
 
@@ -43,8 +43,8 @@ owner ∈ {customer, catalog, pricing, orders, integration}
 до проекции; в памяти меняются только имена DB и соответствующие runtime claims.
 Обычный запуск сохраняет прежние canonical targets.
 
-G00 проверяет план всех десяти DB runtime и пяти владельцев до создания ресурсов.
-Runtime сверяет фактические байты config с base digest. Для G18 допускается
+Гейт `preflight` проверяет план всех десяти DB runtime и пяти владельцев до создания ресурсов.
+Runtime сверяет фактические байты config с base digest. Для `rollback` допускается
 ровно исключение [ADR-0035](ADR-0035-launch-rollback-config-lineage.md): только
 `aroma-convergence` в состоянии D с `mutationsEnabled=false` может подтвердить
 base digest обратной заменой единственного literal flag. Остальные байты обязаны
@@ -60,7 +60,7 @@ base digest обратной заменой единственного literal f
 сетей: уже существующее допустимое подключение к `coffee_postgres_data` сохраняется;
 только подтверждённое подключение, созданное текущим запуском, отключается при cleanup.
 Исходный маршрут и endpoints повторно проверяются, при расхождении cleanup завершается ошибкой.
-Standalone G18 на disposable PostgreSQL не заменяет full launch и не отменяет
-требование G13 использовать внешний PostgreSQL без создания PostgreSQL service.
+Standalone-прогон `rollback` на disposable PostgreSQL не заменяет full launch и не отменяет
+требование `compose` использовать внешний PostgreSQL без создания PostgreSQL service.
 Исторические FAIL и их manifests сохраняются. Этот ADR не разрешает deployment,
 GitHub publication, provider mutation или запись в legacy/production DB.

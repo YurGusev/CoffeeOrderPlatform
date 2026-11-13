@@ -103,7 +103,7 @@ export function inspectLaunchRuntimeImages(
 }
 
 export function captureRuntimeImageBaseline(inventory) {
-  // G12 публикует проверенные образы под теми же run-ссылками до G10, поэтому
+  // supply_chain публикует проверенные образы под теми же run-ссылками до integration, поэтому
   // существующие ссылки — это уже подтверждённое владение, а не коллизия.
   for (const [reference, imageId] of inventory.refs)
     assert.equal(
@@ -196,8 +196,8 @@ export function cleanupLaunchRuntimeImages(
       inventory.expected.get(reference),
       "run image cleanup ownership is unknown",
     );
-  // Образы, опубликованные G12 и вошедшие в baseline, переиспользуются
-  // следующими гейтами (G13–G18), поэтому cleanup их не удаляет.
+  // Образы, опубликованные supply_chain и вошедшие в baseline, переиспользуются
+  // следующими гейтами (compose–rollback), поэтому cleanup их не удаляет.
   const baselineIds = new Set((baseline ?? []).map(({ imageId }) => imageId));
   const removable = [...inventory.refs].filter(
     ([, id]) => !baselineIds.has(id),
@@ -215,7 +215,7 @@ export function cleanupLaunchRuntimeImages(
     run(["image", "rm", "--no-prune", ...references]);
   }
   const after = inspectLaunchRuntimeImages(projectName, verifiedImages, run);
-  // G12-owned ссылки остаются доступными для последующих гейтов запуска.
+  // supply_chain-owned ссылки остаются доступными для последующих гейтов запуска.
   assert.equal(
     [...after.refs].filter(([, id]) => !baselineIds.has(id)).length,
     0,

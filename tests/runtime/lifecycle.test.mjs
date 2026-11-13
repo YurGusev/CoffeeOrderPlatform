@@ -109,7 +109,7 @@ const health = {
   successThreshold: 1,
 };
 
-void test("ordinary configured runtimes reject the standalone G17 Unix socket endpoint", async (t) => {
+void test("ordinary configured runtimes reject the standalone backup_restore Unix socket endpoint", async (t) => {
   const directory = await mkdtemp(
     join(tmpdir(), "coffee-g17-runtime-endpoint-"),
   );
@@ -140,7 +140,7 @@ void test("ordinary configured runtimes reject the standalone G17 Unix socket en
       startConfiguredRuntime("edge-gateway"),
       (error) =>
         error instanceof RuntimeError &&
-        error.code === "RUNTIME_G17_SOCKET_STANDALONE_ONLY",
+        error.code === "RUNTIME_BACKUP_SOCKET_STANDALONE_ONLY",
     );
   } finally {
     for (const [key, value] of Object.entries(previous)) {

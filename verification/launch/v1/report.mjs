@@ -16,53 +16,17 @@ import {
   deriveLaunchDatabaseName,
 } from "../../../packages/platform-config/src/launch-database-target.ts";
 import { CANONICAL_KAFKA_TOPIC_NAMES } from "../../../packages/platform-config/src/launch-kafka-target.ts";
+import { EXPECTED_GATES } from "./gate-matrix.generated.mjs";
+import { gateLabel, gateSlug } from "./gate-identity.mjs";
 
-// G19 must work even when G00/G01 failed before candidate dependencies were installed.
+export { EXPECTED_GATES };
+
+// `report` must work even when `preflight`/`install` failed before candidate dependencies were installed.
 // Keep this small validation contract local and builtin-only.
 const PROJECT_ROOT = resolve(
   dirname(fileURLToPath(import.meta.url)),
   "../../..",
 );
-// G12 inner budget 33 min + post-processing/headroom.
-const G12_GATE_TIMEOUT_SECONDS = 2700;
-export const EXPECTED_GATES = [
-  ["G00_PREFLIGHT", "pnpm launch:verify:preflight", 900],
-  ["G01_INSTALL", "pnpm install --frozen-lockfile", 900],
-  ["G02_GENERATED", "pnpm contracts:check-generated", 900],
-  ["G03_STATIC", "pnpm format:check && pnpm lint && pnpm typecheck", 900],
-  ["G04_UNIT", "pnpm test:unit -- --coverage", 900],
-  [
-    "G05_CONTRACTS",
-    "pnpm contracts:check-generated && pnpm contracts:breaking && pnpm contracts:test",
-    900,
-  ],
-  ["G06_ARCHITECTURE", "pnpm architecture:check", 900],
-  [
-    "G07_CONFIG_SECURITY",
-    "pnpm versions:check && pnpm config:check && pnpm security:secrets",
-    900,
-  ],
-  ["G12_SUPPLY_CHAIN", "pnpm security:scan", G12_GATE_TIMEOUT_SECONDS],
-  [
-    "G08_MIGRATIONS",
-    "pnpm test:migrations:clean && pnpm test:migrations:forward",
-    1800,
-  ],
-  ["G09_DB_BOUNDARIES", "pnpm db:smoke", 1800],
-  ["G10_INTEGRATION", "pnpm test:integration", 1800],
-  ["G11_RECOVERY", "pnpm test:recovery", 1800],
-  ["G13_COMPOSE", "pnpm test:compose-smoke", 1800],
-  ["G14_OBSERVABILITY", "pnpm test:observability", 1800],
-  ["G15_BROWSER", "pnpm test:playwright", 1800],
-  [
-    "G16_AROMA_SANDBOX",
-    'pnpm test:aroma-sandbox -- --approval-file "$AROMA_SANDBOX_APPROVAL_FILE"',
-    1800,
-  ],
-  ["G17_BACKUP_RESTORE", "pnpm test:backup-restore", 1800],
-  ["G18_ROLLBACK", "pnpm test:mutation-disable-rollback", 1800],
-  ["G19_REPORT", "pnpm launch:verify:report", 900],
-];
 
 function redactText(text) {
   return String(text)
@@ -101,7 +65,7 @@ export function validateRunResultContract(result) {
   ] of EXPECTED_GATES.entries()) {
     const gate = result.gates[index];
     if (
-      gate?.id !== id ||
+      gateSlug(gate?.id) !== id ||
       gate.expectedCommand !== command ||
       gate.timeoutSeconds !== timeoutSeconds ||
       !["PASS", "FAIL", "NOT_RUN"].includes(gate.status) ||
@@ -494,7 +458,7 @@ async function validateEvidence(evidenceDir, result, sourceRoot) {
   const preflightPath = join(
     evidenceDir,
     "gates",
-    "G00_PREFLIGHT",
+    result.gates[0].id,
     "artifacts",
     "preflight.json",
   );
@@ -509,11 +473,11 @@ async function validateEvidence(evidenceDir, result, sourceRoot) {
         preflight.checks.some((check) => check.status !== "PASS")
       ) {
         errors.push(
-          "G00 preflight artifact семантически не совпадает с результатом",
+          "preflight artifact семантически не совпадает с результатом",
         );
       }
     } catch {
-      errors.push("Нет валидного G00 preflight artifact для PASS");
+      errors.push("Нет валидного preflight artifact для PASS");
     }
   }
   if (result.gates[13].status === "PASS") {
@@ -537,12 +501,14 @@ async function validateEvidence(evidenceDir, result, sourceRoot) {
         kafkaPlan.facts.candidateContextValid !== true
       ) {
         throw new Error(
-          "G00 Kafka plan does not bind this run, candidate and base config",
+          "preflight Kafka plan does not bind this run, candidate and base config",
         );
       }
       const inventoryPath = join(
         evidenceDir,
-        "gates/G13_COMPOSE/artifacts/kafka-namespace-inventory.json",
+        "gates",
+        result.gates[13].id,
+        "artifacts/kafka-namespace-inventory.json",
       );
       const inventory = JSON.parse(await readFile(inventoryPath, "utf8"));
       if (
@@ -550,7 +516,7 @@ async function validateEvidence(evidenceDir, result, sourceRoot) {
           (artifact) => resolve(artifact.path) === inventoryPath,
         )
       )
-        throw new Error("G13 inventory is not listed as a gate artifact");
+        throw new Error("compose inventory is not listed as a gate artifact");
       validateKafkaNamespaceInventory(inventory, {
         runId: context.runId,
         projectName: context.resources?.composeProject,
@@ -559,7 +525,7 @@ async function validateEvidence(evidenceDir, result, sourceRoot) {
       });
     } catch {
       errors.push(
-        "Нет валидного G13 Kafka namespace inventory, связанного с G00 plan/context",
+        "Нет валидного compose Kafka namespace inventory, связанного с preflight plan/context",
       );
     }
   }
@@ -574,7 +540,7 @@ async function validateEvidence(evidenceDir, result, sourceRoot) {
       g19.runs[0]?.outputLimitExceeded)
   ) {
     errors.push(
-      "G19 PASS не подтверждён единственным exact report argv с exit 0",
+      "report PASS не подтверждён единственным exact report argv с exit 0",
     );
   }
   if (g19.status === "PASS") {
@@ -594,9 +560,9 @@ async function validateEvidence(evidenceDir, result, sourceRoot) {
         decision.decision !== result.decision ||
         !report.startsWith(`# ${result.decision}\n`)
       )
-        errors.push("G19 report/decision identity or decision mismatch");
+        errors.push("report/decision identity or decision mismatch");
     } catch {
-      errors.push("G19 report или decision.json отсутствует");
+      errors.push("report или decision.json отсутствует");
     }
   }
   if (!files.has(resultPath)) errors.push("Отсутствует run-result.json");
@@ -607,11 +573,11 @@ export async function writeDefects(evidenceDir, sourceRoot, result) {
   const defects = [];
   for (const gate of result.gates.filter((entry) => entry.status === "FAIL")) {
     const checkFailures = [];
-    if (gate.id === "G00_PREFLIGHT") {
+    if (gateSlug(gate.id) === "preflight") {
       try {
         const preflight = JSON.parse(
           await readFile(
-            join(evidenceDir, "gates/G00_PREFLIGHT/artifacts/preflight.json"),
+            join(evidenceDir, "gates", gate.id, "artifacts/preflight.json"),
             "utf8",
           ),
         );
@@ -744,11 +710,11 @@ export async function validateChecksumManifest(evidenceDir, sourceRoot, runId) {
   return rows;
 }
 
-async function preflightFindings(evidenceDir) {
+async function preflightFindings(evidenceDir, gateId) {
   try {
     const value = JSON.parse(
       await readFile(
-        join(evidenceDir, "gates/G00_PREFLIGHT/artifacts/preflight.json"),
+        join(evidenceDir, "gates", gateId, "artifacts/preflight.json"),
         "utf8",
       ),
     );
@@ -823,10 +789,11 @@ function reportMarkdown(
     "| Gate | Статус | Команда | Длительность, с | Причина |",
     "|---|---|---|---:|---|",
   ];
-  for (const gate of result.gates) {
+  for (const [index, gate] of result.gates.entries()) {
     const duration = (gate.durationMs / 1000).toFixed(3);
+    const label = gateLabel(index, gateSlug(gate.id) ?? gate.id);
     lines.push(
-      `| ${gate.id} | ${gate.status} | \`${gate.expectedCommand.replaceAll("|", "\\|")}\` | ${duration} | ${redactText(
+      `| ${label} | ${gate.status} | \`${gate.expectedCommand.replaceAll("|", "\\|")}\` | ${duration} | ${redactText(
         gate.reason || "—",
       )
         .replaceAll("|", "\\|")
@@ -835,9 +802,9 @@ function reportMarkdown(
   }
   lines.push(
     "",
-    "## Предварительная проверка G00",
+    "## Предварительная проверка preflight",
     "",
-    `Статус: ${preflight.status}. Артефакт: [preflight.json](../../../../evidence/launch/${result.runId}/gates/G00_PREFLIGHT/artifacts/preflight.json).`,
+    `Статус: ${preflight.status}. Артефакт: [preflight.json](../../../../evidence/launch/${result.runId}/gates/${result.gates[0].id}/artifacts/preflight.json).`,
   );
   if (preflight.checks.length)
     lines.push(...preflight.checks.map((check) => `- ${check}`));
@@ -850,20 +817,20 @@ function reportMarkdown(
     "",
     "## Sandbox fingerprint",
     "",
-    `G16: ${result.gates[16].status}; account fingerprint: ${fingerprint ?? "нет доказательства в принятом evidence"}. Credentials не включаются в отчёт.`,
+    `aroma_sandbox: ${result.gates[16].status}; account fingerprint: ${fingerprint ?? "нет доказательства в принятом evidence"}. Credentials не включаются в отчёт.`,
   );
   lines.push(
     "",
     "## Backup RPO и restore time",
     "",
-    `G17: ${result.gates[17].status}; требование: RPO на момент dump, restore не более 10 минут для каждой БД и 30 минут суммарно. Фактические измерения: ${result.gates[17].status === "NOT_RUN" ? "NOT_RUN — доказательства нет" : "см. связанные G17 artifacts; runner не подменяет отсутствующие измерения расчетными значениями"}.`,
+    `backup_restore: ${result.gates[17].status}; требование: RPO на момент dump, restore не более 10 минут для каждой БД и 30 минут суммарно. Фактические измерения: ${result.gates[17].status === "NOT_RUN" ? "NOT_RUN — доказательства нет" : "см. связанные backup_restore artifacts; runner не подменяет отсутствующие измерения расчетными значениями"}.`,
   );
   lines.push(
     "",
     "## Observability и rollback",
     "",
-    `G14 observability: ${result.gates[14].status} — ${redactText(result.gates[14].reason || "нет причины отказа")}.`,
-    `G18 rollback: ${result.gates[18].status} — ${redactText(result.gates[18].reason || "нет причины отказа")}.`,
+    `observability: ${result.gates[14].status} — ${redactText(result.gates[14].reason || "нет причины отказа")}.`,
+    `rollback: ${result.gates[18].status} — ${redactText(result.gates[18].reason || "нет причины отказа")}.`,
   );
   lines.push(
     "",
@@ -913,7 +880,7 @@ function reportMarkdown(
     "",
     ...environmentErrors.map((error) => `- Environment: ${error}`),
     ...unproven.map((entry) => `- ${entry}`),
-    "- G16 без проверенного detached signature verifier и signed approval не выполняет provider-вызов.",
+    "- aroma_sandbox без проверенного detached signature verifier и signed approval не выполняет provider-вызов.",
     "- Непрошедшие gates сохраняют FAIL или NOT_RUN; автоматического retry нет.",
     "",
   );
@@ -1129,7 +1096,7 @@ async function writeFinalFiles(
     if (file !== handoffPath && file !== join(evidenceDir, "checksums.sha256"))
       artifactHashes.push(await fileDigest(file, evidenceDir));
   artifactHashes.sort((a, b) => a.path.localeCompare(b.path, "en"));
-  // JSON is YAML 1.2 and lets G19 run before candidate dependencies exist.
+  // JSON is YAML 1.2 and lets report run before candidate dependencies exist.
   await writeRegularNoFollow(
     evidenceDir,
     handoffPath,
@@ -1266,7 +1233,7 @@ export async function finalizeReport(evidenceDir, expectedSourceRoot = null) {
         }
       : { status: "NOT_PROVEN", sha256: null };
   const descriptorError =
-    "G19: source descriptor отсутствует в точном candidate commit или недоступен";
+    "report: source descriptor отсутствует в точном candidate commit или недоступен";
   if (sourceDescriptor.status !== "BOUND") {
     const gate = result.gates[19];
     gate.status = "FAIL";
@@ -1282,7 +1249,7 @@ export async function finalizeReport(evidenceDir, expectedSourceRoot = null) {
   let evidenceErrors = await validateEvidence(evidenceDir, result, sourceRoot);
   if (sourceDescriptor.status !== "BOUND") evidenceErrors.push(descriptorError);
   const environmentErrors = environmentProofErrors(result.environment);
-  const preflight = await preflightFindings(evidenceDir);
+  const preflight = await preflightFindings(evidenceDir, result.gates[0].id);
   const fingerprint = await sandboxFingerprint(evidenceDir, result.gates[16]);
   let reportPath = await writeFinalFiles(
     evidenceDir,

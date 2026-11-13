@@ -28,32 +28,31 @@ const RUN_LABEL = "io.coffeeorderplatform.g15.browser.run";
 const IMAGE_ID = /^sha256:[0-9a-f]{64}$/u;
 const CONTAINER_ID = /^[0-9a-f]{64}$/u;
 const SAFE_CODES = new Set([
-  "G15_BROWSER_CONTEXT_INVALID",
-  "G15_BROWSER_NGINX_IDENTITY_INVALID",
-  "G15_BROWSER_NETWORK_INVALID",
-  "G15_BROWSER_IMAGE_PIN_INVALID",
-  "G15_BROWSER_IMAGE_UNAVAILABLE",
-  "G15_BROWSER_FIXTURE_HOME_INVALID",
-  "G15_BROWSER_CHROMIUM_INVALID",
-  "G15_BROWSER_CREATE_FAILED",
-  "G15_BROWSER_CREATE_OWNERSHIP_UNCONFIRMED",
-  "G15_BROWSER_CONTAINER_IDENTITY_INVALID",
-  "G15_BROWSER_START_FAILED",
-  "G15_BROWSER_EXEC_FAILED",
-  "G15_BROWSER_ENDPOINT_INVALID",
-  "G15_BROWSER_CONNECT_FAILED",
-  "G15_BROWSER_CLEANUP_UNCONFIRMED",
-  "G15_BROWSER_DOCKER_FAILED",
-  "G15_BROWSER_TIMEOUT",
+  "BROWSER_CONTEXT_INVALID",
+  "BROWSER_NGINX_IDENTITY_INVALID",
+  "BROWSER_NETWORK_INVALID",
+  "BROWSER_IMAGE_PIN_INVALID",
+  "BROWSER_IMAGE_UNAVAILABLE",
+  "BROWSER_FIXTURE_HOME_INVALID",
+  "BROWSER_CHROMIUM_INVALID",
+  "BROWSER_CREATE_FAILED",
+  "BROWSER_CREATE_OWNERSHIP_UNCONFIRMED",
+  "BROWSER_CONTAINER_IDENTITY_INVALID",
+  "BROWSER_START_FAILED",
+  "BROWSER_EXEC_FAILED",
+  "BROWSER_ENDPOINT_INVALID",
+  "BROWSER_CONNECT_FAILED",
+  "BROWSER_CLEANUP_UNCONFIRMED",
+  "BROWSER_DOCKER_FAILED",
+  "BROWSER_TIMEOUT",
 ]);
 
 function fail(code) {
-  throw new Error(SAFE_CODES.has(code) ? code : "G15_BROWSER_DOCKER_FAILED");
+  throw new Error(SAFE_CODES.has(code) ? code : "BROWSER_DOCKER_FAILED");
 }
 
 function safeCode(error, fallback) {
-  if (error?.code === "ETIMEDOUT" || error?.killed)
-    return "G15_BROWSER_TIMEOUT";
+  if (error?.code === "ETIMEDOUT" || error?.killed) return "BROWSER_TIMEOUT";
   return SAFE_CODES.has(error?.message) ? error.message : fallback;
 }
 
@@ -112,7 +111,7 @@ async function docker(args, { timeout = 10000 } = {}) {
     });
     return { code: 0, stdout: result.stdout, stderr: result.stderr };
   } catch (error) {
-    if (error?.code === "ETIMEDOUT") fail("G15_BROWSER_TIMEOUT");
+    if (error?.code === "ETIMEDOUT") fail("BROWSER_TIMEOUT");
     return {
       code: Number.isInteger(error?.code) ? error.code : 1,
       stdout: typeof error?.stdout === "string" ? error.stdout : "",
@@ -131,12 +130,11 @@ async function containerRow(runDocker, id, expected) {
   const output = await checked(
     runDocker,
     ["inspect", id],
-    "G15_BROWSER_DOCKER_FAILED",
+    "BROWSER_DOCKER_FAILED",
     10000,
   );
-  const rows = parseJson(output, "G15_BROWSER_DOCKER_FAILED");
-  if (!Array.isArray(rows) || rows.length !== 1)
-    fail("G15_BROWSER_DOCKER_FAILED");
+  const rows = parseJson(output, "BROWSER_DOCKER_FAILED");
+  if (!Array.isArray(rows) || rows.length !== 1) fail("BROWSER_DOCKER_FAILED");
   const row = rows[0];
   const labels = row.Config?.Labels ?? {};
   if (
@@ -147,7 +145,7 @@ async function containerRow(runDocker, id, expected) {
     labels[PROJECT_LABEL] !== expected.projectName ||
     labels[RUN_LABEL] !== expected.runId
   )
-    fail("G15_BROWSER_CONTAINER_IDENTITY_INVALID");
+    fail("BROWSER_CONTAINER_IDENTITY_INVALID");
   return row;
 }
 
@@ -155,12 +153,12 @@ async function inspectNginx(runDocker, context) {
   const output = await checked(
     runDocker,
     ["inspect", context.nginxContainerId],
-    "G15_BROWSER_NGINX_IDENTITY_INVALID",
+    "BROWSER_NGINX_IDENTITY_INVALID",
     10000,
   );
-  const rows = parseJson(output, "G15_BROWSER_NGINX_IDENTITY_INVALID");
+  const rows = parseJson(output, "BROWSER_NGINX_IDENTITY_INVALID");
   if (!Array.isArray(rows) || rows.length !== 1)
-    fail("G15_BROWSER_NGINX_IDENTITY_INVALID");
+    fail("BROWSER_NGINX_IDENTITY_INVALID");
   const row = rows[0];
   const labels = row.Config?.Labels ?? {};
   const networkName = context.networks?.coffee_edge_backend;
@@ -175,15 +173,15 @@ async function inspectNginx(runDocker, context) {
     !isIPv4(network.IPAddress) ||
     network.IPAddress.startsWith("127.")
   )
-    fail("G15_BROWSER_NGINX_IDENTITY_INVALID");
+    fail("BROWSER_NGINX_IDENTITY_INVALID");
 
   const networkOutput = await checked(
     runDocker,
     ["network", "inspect", networkName],
-    "G15_BROWSER_NETWORK_INVALID",
+    "BROWSER_NETWORK_INVALID",
     10000,
   );
-  const networkRows = parseJson(networkOutput, "G15_BROWSER_NETWORK_INVALID");
+  const networkRows = parseJson(networkOutput, "BROWSER_NETWORK_INVALID");
   const networkRow =
     Array.isArray(networkRows) && networkRows.length === 1
       ? networkRows[0]
@@ -198,7 +196,7 @@ async function inspectNginx(runDocker, context) {
     networkLabels["com.docker.compose.network"] !== "coffee_edge_backend" ||
     !ipInSubnet(network.IPAddress, subnet)
   )
-    fail("G15_BROWSER_NETWORK_INVALID");
+    fail("BROWSER_NETWORK_INVALID");
   return {
     networkName,
     networkId: network.NetworkID,
@@ -213,28 +211,28 @@ async function pinnedImage(runDocker) {
       await readFile(join(REPO_ROOT, IMAGE_CONFIG), "utf8"),
     );
   } catch {
-    fail("G15_BROWSER_IMAGE_PIN_INVALID");
+    fail("BROWSER_IMAGE_PIN_INVALID");
   }
   const imageRef = toolchain.browserHelperNodeImage;
   const match =
     typeof imageRef === "string" &&
     imageRef.match(/^(node:26\.8\.1-trixie-slim)@(sha256:[0-9a-f]{64})$/u);
-  if (!match) fail("G15_BROWSER_IMAGE_PIN_INVALID");
+  if (!match) fail("BROWSER_IMAGE_PIN_INVALID");
   const output = await checked(
     runDocker,
     ["image", "inspect", "--format", "{{.Id}}|{{json .RepoDigests}}", imageRef],
-    "G15_BROWSER_IMAGE_UNAVAILABLE",
+    "BROWSER_IMAGE_UNAVAILABLE",
     10000,
   );
   const [id, digestsText, ...extra] = output.trim().split("|");
-  const digests = parseJson(digestsText, "G15_BROWSER_IMAGE_UNAVAILABLE");
+  const digests = parseJson(digestsText, "BROWSER_IMAGE_UNAVAILABLE");
   if (
     extra.length ||
     !IMAGE_ID.test(id ?? "") ||
     !Array.isArray(digests) ||
     !digests.includes(`node@${match[2]}`)
   )
-    fail("G15_BROWSER_IMAGE_UNAVAILABLE");
+    fail("BROWSER_IMAGE_UNAVAILABLE");
   return { imageRef, imageId: id };
 }
 
@@ -242,7 +240,7 @@ async function validateFixtureHome(context) {
   const home = context.browserFixture?.browser?.homePath;
   const profile = context.browserFixture?.browser?.nssProfilePath;
   if (typeof home !== "string" || typeof profile !== "string")
-    fail("G15_BROWSER_FIXTURE_HOME_INVALID");
+    fail("BROWSER_FIXTURE_HOME_INVALID");
   try {
     const canonicalHome = resolve(home);
     const homeInfo = await lstat(canonicalHome);
@@ -254,7 +252,7 @@ async function validateFixtureHome(context) {
       (await realpath(canonicalHome)) !== canonicalHome ||
       resolve(profile) !== join(canonicalHome, ".local/share/pki/nssdb")
     )
-      fail("G15_BROWSER_FIXTURE_HOME_INVALID");
+      fail("BROWSER_FIXTURE_HOME_INVALID");
     const expectedDirs = [
       canonicalHome,
       join(canonicalHome, ".local"),
@@ -271,10 +269,10 @@ async function validateFixtureHome(context) {
         (info.mode & 0o777) !== 0o700 ||
         (await realpath(directory)) !== directory
       )
-        fail("G15_BROWSER_FIXTURE_HOME_INVALID");
+        fail("BROWSER_FIXTURE_HOME_INVALID");
     }
     if ((await readdir(canonicalHome)).some((name) => name !== ".local"))
-      fail("G15_BROWSER_FIXTURE_HOME_INVALID");
+      fail("BROWSER_FIXTURE_HOME_INVALID");
     for (const [directory, expectedName] of [
       [join(canonicalHome, ".local"), "share"],
       [join(canonicalHome, ".local/share"), "pki"],
@@ -282,7 +280,7 @@ async function validateFixtureHome(context) {
     ]) {
       const contents = await readdir(directory);
       if (contents.length !== 1 || contents[0] !== expectedName)
-        fail("G15_BROWSER_FIXTURE_HOME_INVALID");
+        fail("BROWSER_FIXTURE_HOME_INVALID");
     }
     const names = await readdir(profile);
     if (
@@ -291,7 +289,7 @@ async function validateFixtureHome(context) {
         (name) => !["cert9.db", "key4.db", "pkcs11.txt"].includes(name),
       )
     )
-      fail("G15_BROWSER_FIXTURE_HOME_INVALID");
+      fail("BROWSER_FIXTURE_HOME_INVALID");
     for (const name of names) {
       const path = join(profile, name);
       const info = await lstat(path);
@@ -301,12 +299,12 @@ async function validateFixtureHome(context) {
         info.uid !== 1000 ||
         (info.mode & 0o777) !== 0o600
       )
-        fail("G15_BROWSER_FIXTURE_HOME_INVALID");
+        fail("BROWSER_FIXTURE_HOME_INVALID");
     }
     return canonicalHome;
   } catch (error) {
-    if (error?.message === "G15_BROWSER_FIXTURE_HOME_INVALID") throw error;
-    fail("G15_BROWSER_FIXTURE_HOME_INVALID");
+    if (error?.message === "BROWSER_FIXTURE_HOME_INVALID") throw error;
+    fail("BROWSER_FIXTURE_HOME_INVALID");
   }
 }
 
@@ -336,11 +334,11 @@ async function chromiumPaths(chromium) {
       !librariesInfo.isDirectory() ||
       (await realpath(librariesPath)) !== librariesPath
     )
-      fail("G15_BROWSER_CHROMIUM_INVALID");
+      fail("BROWSER_CHROMIUM_INVALID");
     return { executable, directory, nodeModules };
   } catch (error) {
-    if (error?.message === "G15_BROWSER_CHROMIUM_INVALID") throw error;
-    fail("G15_BROWSER_CHROMIUM_INVALID");
+    if (error?.message === "BROWSER_CHROMIUM_INVALID") throw error;
+    fail("BROWSER_CHROMIUM_INVALID");
   }
 }
 
@@ -412,7 +410,7 @@ function parseEndpoint(line, bridgeAddress) {
   try {
     url = new URL(line.trim());
   } catch {
-    fail("G15_BROWSER_ENDPOINT_INVALID");
+    fail("BROWSER_ENDPOINT_INVALID");
   }
   if (
     url.protocol !== "ws:" ||
@@ -424,7 +422,7 @@ function parseEndpoint(line, bridgeAddress) {
     url.search ||
     url.hash
   )
-    fail("G15_BROWSER_ENDPOINT_INVALID");
+    fail("BROWSER_ENDPOINT_INVALID");
   const hash = createHash("sha256").update(line.trim()).digest("hex");
   url.hostname = bridgeAddress;
   return { endpoint: url.toString(), endpointSha256: hash };
@@ -438,14 +436,14 @@ function spawnServer(spawnProcess, cid, source) {
       { stdio: ["pipe", "pipe", "pipe"] },
     );
   } catch {
-    fail("G15_BROWSER_EXEC_FAILED");
+    fail("BROWSER_EXEC_FAILED");
   }
 }
 
 async function readEndpoint(server, timeoutMs = 15000) {
   return await new Promise((resolvePromise, rejectPromise) => {
     let line = "";
-    const timeout = setTimeout(() => finish("G15_BROWSER_TIMEOUT"), timeoutMs);
+    const timeout = setTimeout(() => finish("BROWSER_TIMEOUT"), timeoutMs);
     const finish = (error, value) => {
       clearTimeout(timeout);
       server.stdout?.removeListener("data", onData);
@@ -455,17 +453,16 @@ async function readEndpoint(server, timeoutMs = 15000) {
     };
     const onData = (chunk) => {
       line += chunk.toString("utf8");
-      if (line.length > 2048) return finish("G15_BROWSER_ENDPOINT_INVALID");
+      if (line.length > 2048) return finish("BROWSER_ENDPOINT_INVALID");
       const newline = line.indexOf("\n");
       if (newline >= 0) finish(null, line.slice(0, newline));
     };
-    const onError = () => finish("G15_BROWSER_EXEC_FAILED");
+    const onError = () => finish("BROWSER_EXEC_FAILED");
     server.stdout?.on("data", onData);
     server.stderr?.on("data", () => {});
     server.once?.("error", onError);
     server.once?.("exit", (code) => {
-      if (code !== null && code !== undefined)
-        finish("G15_BROWSER_EXEC_FAILED");
+      if (code !== null && code !== undefined) finish("BROWSER_EXEC_FAILED");
     });
   });
 }
@@ -475,7 +472,7 @@ async function stopAndRemove(runDocker, expected) {
   try {
     row = await containerRow(runDocker, expected.id, expected);
   } catch {
-    fail("G15_BROWSER_CLEANUP_UNCONFIRMED");
+    fail("BROWSER_CLEANUP_UNCONFIRMED");
   }
   if (row.State?.Running) {
     const stopped = await runDocker(
@@ -485,21 +482,21 @@ async function stopAndRemove(runDocker, expected) {
     if (stopped.code !== 0) {
       try {
         const afterStop = await containerRow(runDocker, expected.id, expected);
-        if (afterStop.State?.Running) fail("G15_BROWSER_CLEANUP_UNCONFIRMED");
+        if (afterStop.State?.Running) fail("BROWSER_CLEANUP_UNCONFIRMED");
       } catch {
-        fail("G15_BROWSER_CLEANUP_UNCONFIRMED");
+        fail("BROWSER_CLEANUP_UNCONFIRMED");
       }
     }
   }
   const beforeRemove = await containerRow(runDocker, expected.id, expected);
-  if (beforeRemove.State?.Running) fail("G15_BROWSER_CLEANUP_UNCONFIRMED");
+  if (beforeRemove.State?.Running) fail("BROWSER_CLEANUP_UNCONFIRMED");
   const removed = await runDocker(["container", "rm", expected.id], {
     timeout: 5000,
   });
-  if (removed.code !== 0) fail("G15_BROWSER_CLEANUP_UNCONFIRMED");
+  if (removed.code !== 0) fail("BROWSER_CLEANUP_UNCONFIRMED");
   const absent = await runDocker(["inspect", expected.id], { timeout: 5000 });
   if (absent.code === 0 || !/No such object/iu.test(absent.stderr ?? ""))
-    fail("G15_BROWSER_CLEANUP_UNCONFIRMED");
+    fail("BROWSER_CLEANUP_UNCONFIRMED");
 }
 
 async function recoverCreate(runDocker, name, expected, cidfile) {
@@ -513,21 +510,18 @@ async function recoverCreate(runDocker, name, expected, cidfile) {
     timeout: 5000,
   });
   if (result.code !== 0) return null;
-  const rows = parseJson(
-    result.stdout,
-    "G15_BROWSER_CREATE_OWNERSHIP_UNCONFIRMED",
-  );
+  const rows = parseJson(result.stdout, "BROWSER_CREATE_OWNERSHIP_UNCONFIRMED");
   if (!Array.isArray(rows) || rows.length !== 1)
-    fail("G15_BROWSER_CREATE_OWNERSHIP_UNCONFIRMED");
+    fail("BROWSER_CREATE_OWNERSHIP_UNCONFIRMED");
   const row = rows[0];
   const foundId = row.Id;
   if (!CONTAINER_ID.test(foundId ?? "") || (id && id !== foundId))
-    fail("G15_BROWSER_CREATE_OWNERSHIP_UNCONFIRMED");
+    fail("BROWSER_CREATE_OWNERSHIP_UNCONFIRMED");
   const actual = { ...expected, id: foundId };
   try {
     await containerRow(runDocker, foundId, actual);
   } catch {
-    fail("G15_BROWSER_CREATE_OWNERSHIP_UNCONFIRMED");
+    fail("BROWSER_CREATE_OWNERSHIP_UNCONFIRMED");
   }
   return actual;
 }
@@ -549,14 +543,14 @@ export async function startBrowser(
     runtimeContext.networks?.coffee_edge_backend !==
       `${runtimeContext.projectName}_coffee_edge_backend`
   )
-    fail("G15_BROWSER_CONTEXT_INVALID");
+    fail("BROWSER_CONTEXT_INVALID");
 
   let chromium = injectedChromium;
   if (!chromium) {
     try {
       ({ chromium } = await import("playwright"));
     } catch {
-      fail("G15_BROWSER_CHROMIUM_INVALID");
+      fail("BROWSER_CHROMIUM_INVALID");
     }
   }
   const [nginx, image, home, paths] = await Promise.all([
@@ -590,7 +584,7 @@ export async function startBrowser(
     cleanupStarted = true;
     if (ambiguousCreate) {
       witness.cleanup = "UNCONFIRMED";
-      fail("G15_BROWSER_CLEANUP_UNCONFIRMED");
+      fail("BROWSER_CLEANUP_UNCONFIRMED");
     }
     let cleanupFailed = false;
     try {
@@ -604,14 +598,14 @@ export async function startBrowser(
       if (server) {
         await new Promise((resolvePromise, rejectPromise) => {
           const timer = setTimeout(
-            () => rejectPromise(new Error("G15_BROWSER_TIMEOUT")),
+            () => rejectPromise(new Error("BROWSER_TIMEOUT")),
             8000,
           );
           const onExit = (code) => {
             clearTimeout(timer);
             server.removeListener("exit", onExit);
             if (code === 0) resolvePromise();
-            else rejectPromise(new Error("G15_BROWSER_EXEC_FAILED"));
+            else rejectPromise(new Error("BROWSER_EXEC_FAILED"));
           };
           server.once("exit", onExit);
           if (server.exitCode !== null) onExit(server.exitCode);
@@ -637,7 +631,7 @@ export async function startBrowser(
         witness.cleanup = "UNCONFIRMED";
       }
     }
-    if (cleanupFailed) fail("G15_BROWSER_CLEANUP_UNCONFIRMED");
+    if (cleanupFailed) fail("BROWSER_CLEANUP_UNCONFIRMED");
     return witness.cleanup;
   };
 
@@ -681,19 +675,19 @@ export async function startBrowser(
       create = await runDocker(createArgs, { timeout: 30000 });
     } catch {
       if (!(await recoverAttempt()))
-        fail("G15_BROWSER_CREATE_OWNERSHIP_UNCONFIRMED");
-      fail("G15_BROWSER_CREATE_FAILED");
+        fail("BROWSER_CREATE_OWNERSHIP_UNCONFIRMED");
+      fail("BROWSER_CREATE_FAILED");
     }
     if (create.code !== 0) {
       if (!(await recoverAttempt()))
-        fail("G15_BROWSER_CREATE_OWNERSHIP_UNCONFIRMED");
-      fail("G15_BROWSER_CREATE_FAILED");
+        fail("BROWSER_CREATE_OWNERSHIP_UNCONFIRMED");
+      fail("BROWSER_CREATE_FAILED");
     }
     const cid = create.stdout.trim();
     if (!CONTAINER_ID.test(cid)) {
       if (!(await recoverAttempt()))
-        fail("G15_BROWSER_CREATE_OWNERSHIP_UNCONFIRMED");
-      fail("G15_BROWSER_CREATE_FAILED");
+        fail("BROWSER_CREATE_OWNERSHIP_UNCONFIRMED");
+      fail("BROWSER_CREATE_FAILED");
     }
     expected = {
       id: cid,
@@ -709,7 +703,7 @@ export async function startBrowser(
     const started = await runDocker(["container", "start", cid], {
       timeout: 15000,
     });
-    if (started.code !== 0) fail("G15_BROWSER_START_FAILED");
+    if (started.code !== 0) fail("BROWSER_START_FAILED");
     const source = serverSource(
       join(paths.nodeModules, "playwright/index.mjs"),
       paths.executable,
@@ -721,12 +715,12 @@ export async function startBrowser(
     try {
       browser = await chromium.connect(parsed.endpoint, { timeout: 15000 });
     } catch {
-      fail("G15_BROWSER_CONNECT_FAILED");
+      fail("BROWSER_CONNECT_FAILED");
     }
     witness.status = "READY";
     return { browser, close: clean, witness };
   } catch (error) {
-    const code = safeCode(error, "G15_BROWSER_DOCKER_FAILED");
+    const code = safeCode(error, "BROWSER_DOCKER_FAILED");
     try {
       await clean();
     } catch {

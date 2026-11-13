@@ -340,8 +340,8 @@ export async function writeUnitEvidenceArtifacts(context, artifacts) {
     join(sourceRepoRoot, "evidence/launch"),
     evidenceDir,
     join(evidenceDir, "gates"),
-    join(evidenceDir, "gates/G04_UNIT"),
-    join(evidenceDir, "gates/G04_UNIT/artifacts"),
+    join(evidenceDir, "gates/unit"),
+    join(evidenceDir, "gates/unit/artifacts"),
   ];
   if (sourceRepoRoot !== context.sourceRepoRoot)
     throw new Error("UNIT_EVIDENCE_DIRECTORY_INVALID");
@@ -512,7 +512,7 @@ export async function runUnitCoverage(argv = process.argv.slice(2)) {
         : null;
     const diagnostic = {
       schemaVersion: 1,
-      gateId: "G04_UNIT",
+      gateId: "unit",
       runId: context.runId,
       candidateSha: context.candidateSha,
       node: {
@@ -547,10 +547,10 @@ export async function runUnitCoverage(argv = process.argv.slice(2)) {
       "LAUNCH_CONTEXT_CHANGED_DURING_TESTS",
     );
     if (tapDiagnostic.code)
-      throw new Error(`${tapDiagnostic.code}:evidence=G04_UNIT/artifacts`);
+      throw new Error(`${tapDiagnostic.code}:evidence=unit/artifacts`);
     if (run.status !== 0)
       throw new Error(
-        `UNIT_NODE_TEST_FAILED:${diagnostic.node.exitCode ?? diagnostic.node.signal ?? diagnostic.node.spawnError ?? "unknown"}:evidence=G04_UNIT/artifacts`,
+        `UNIT_NODE_TEST_FAILED:${diagnostic.node.exitCode ?? diagnostic.node.signal ?? diagnostic.node.spawnError ?? "unknown"}:evidence=unit/artifacts`,
       );
     const lcov = parseLcovRecords(
       rawOutputs["coverage.lcov"]?.toString("utf8") ?? "",

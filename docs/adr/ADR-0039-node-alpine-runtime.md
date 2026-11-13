@@ -13,7 +13,7 @@ trust roots, topology, канонические revision roots и остальн
 
 ## Контекст
 
-В 15 Node-based образах Trixie диагностика G12 показала по 56 HIGH и 3 CRITICAL
+В 15 Node-based образах Trixie диагностика `supply_chain` показала по 56 HIGH и 3 CRITICAL
 OS findings; после доступных обновлений четырёх пакетов остались бы 44 HIGH.
 Официальный Alpine image с той же версией Node имел два HIGH finding для
 `libcrypto3` и `libssl3`, устраняемых обновлением существующих пакетов.
@@ -35,8 +35,8 @@ OS findings; после доступных обновлений четырёх �
   Node runtime явно запрашивает обновление существующих `libcrypto3` и
   `libssl3` из подписанного v3.24 repository; отдельная диагностическая
   инвентаризация не исполняется во время сборки.
-- `browserHelperNodeImage` остаётся закреплённым Trixie image: G15 browser
-  helper использует GNU userspace. `CUSTOMER_TEST_IMAGE` в Compose smoke
+- `browserHelperNodeImage` остаётся закреплённым Trixie image: browser helper гейта `browser`
+  использует GNU userspace. `CUSTOMER_TEST_IMAGE` в Compose smoke
   остаётся отдельной test dependency, не production authority.
 - Node/npm/Corepack/pnpm pins, application topology, OpenObserve Rust artifact и
   прочие решения ADR-0019 не меняются.
@@ -65,4 +65,4 @@ gates ADR-0019. Изменение базового libc требует повт
 
 Возврат production image к Trixie требует нового принятого решения и повторной
 сверки toolchain BOM, foundation authority, Dockerfile и validators. Отдельный
-G15 browser helper остаётся на Trixie независимо от rollback production image.
+browser helper гейта `browser` остаётся на Trixie независимо от rollback production image.

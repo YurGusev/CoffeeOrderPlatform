@@ -587,7 +587,9 @@ export async function runService(action, overrides = {}) {
   if (!contextFile) throw new Error("COFFEE_LAUNCH_CONTEXT_FILE is required");
   const active = await deps.validateLaunchContext(contextFile);
   if (active.candidateRoot !== (await deps.realpath(ROOT)))
-    throw new Error("G12 candidate checkout does not match this installation");
+    throw new Error(
+      "supply_chain candidate checkout does not match this installation",
+    );
   const config = await deps.loadPlatformConfig(ROOT);
   const imageRefs = JSON.parse(
     await deps.readFile(join(ROOT, "config/toolchain-versions.json"), "utf8"),

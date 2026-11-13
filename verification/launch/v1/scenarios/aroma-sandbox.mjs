@@ -45,7 +45,10 @@ import {
 import { aromaSandboxResourceNames } from "./aroma-sandbox-resources.mjs";
 import { buildBackupRestorePlan } from "./backup-restore.mjs";
 
-export async function readApprovedG16Policy(candidateRoot, candidateSha) {
+export async function readApprovedAromaSandboxPolicy(
+  candidateRoot,
+  candidateSha,
+) {
   const path = join(
     candidateRoot,
     "evidence/aroma-provider/controlled-account.json",
@@ -93,7 +96,7 @@ export async function readApprovedG16Policy(candidateRoot, candidateSha) {
   return policy;
 }
 
-export async function createG16Checkout({
+export async function createAromaSandboxCheckout({
   candidateRoot,
   candidateSha,
   publicKeyPem,
@@ -111,11 +114,11 @@ export async function createG16Checkout({
       timeout: 10_000,
     },
   );
-  const historicalPolicy = await readApprovedG16Policy(
+  const historicalPolicy = await readApprovedAromaSandboxPolicy(
     candidateRoot,
     candidateSha,
   );
-  const childConfig = buildG16ChildConfig({
+  const childConfig = buildAromaSandboxChildConfig({
     parentBytes,
     historicalPolicy,
     publicKeyPem,
@@ -125,7 +128,7 @@ export async function createG16Checkout({
   return createConfigOnlyCheckout({ candidateRoot, candidateSha, childConfig });
 }
 
-export async function validateG16Checkout({
+export async function validateAromaSandboxCheckout({
   candidateRoot,
   candidateSha,
   baselineRoot,
@@ -148,9 +151,12 @@ export async function validateG16Checkout({
       timeout: 10_000,
     });
   const parentBytes = configBlob(candidateRoot, candidateSha);
-  const expected = buildG16ChildConfig({
+  const expected = buildAromaSandboxChildConfig({
     parentBytes,
-    historicalPolicy: await readApprovedG16Policy(candidateRoot, candidateSha),
+    historicalPolicy: await readApprovedAromaSandboxPolicy(
+      candidateRoot,
+      candidateSha,
+    ),
     publicKeyPem,
     keyId,
     approver,
@@ -165,7 +171,7 @@ export async function validateG16Checkout({
   };
 }
 
-export function buildG16ChildConfig({
+export function buildAromaSandboxChildConfig({
   parentBytes,
   historicalPolicy,
   publicKeyPem,
@@ -373,7 +379,9 @@ export function validateAromaPackingWireProof(facts, receipt) {
     receipt.operationId !== operationId ||
     receipt.operationIds?.add !== `${operationId}:add` ||
     receipt.operationIds?.delete !== `${operationId}:delete` ||
-    receipt.purpose !== "bounded out-of-G16 exact-line packing probe" ||
+    receipt.purpose !==
+      // Значение из неизменяемого evidence 2026-10-24.
+      "bounded out-of-G16 exact-line packing probe" || // gate-naming: allow-historical
     receipt.offerId !== "445" ||
     receipt.requestedPacking !== "Aroma" ||
     receipt.origin !== "https://aromateacoffee.ru" ||
@@ -2317,7 +2325,7 @@ export function parseArguments(args, env = process.env) {
 
 function result(status, code, details = {}) {
   process.stdout.write(
-    `${JSON.stringify({ gate: "G16_AROMA_SANDBOX", status, code, ...details })}\n`,
+    `${JSON.stringify({ gate: "aroma_sandbox", status, code, ...details })}\n`,
   );
 }
 
@@ -2410,7 +2418,7 @@ async function waitForApproval(
 }
 
 async function controlledParentRequest(stage, payload = {}) {
-  if (process.env.COFFEE_G16_CONTROLLED_CHILD !== "1") return;
+  if (process.env.COFFEE_AROMA_SANDBOX_CONTROLLED_CHILD !== "1") return;
   if (!process.connected || !process.send)
     throw new Error("G16_PARENT_IPC_MISSING");
   await new Promise((resolvePromise, reject) => {
@@ -3255,7 +3263,7 @@ async function runAromaSandbox({ approvalFile, env = process.env } = {}) {
     }
     process.stdout.write(
       `${JSON.stringify({
-        gate: "G16_AROMA_SANDBOX",
+        gate: "aroma_sandbox",
         status: "APPROVAL_REQUIRED",
         runId,
         candidateSha: identity.context.candidateSha,
@@ -3386,7 +3394,7 @@ async function runAromaSandbox({ approvalFile, env = process.env } = {}) {
             cartState: "UNRESOLVED_OR_NONBASELINE",
             mutationsDisabled: true,
             resourceIDs: resources.resourceIDs,
-            requiredAction: "CONTROLLED_G16_RECOVERY_BEFORE_RESOURCE_CLEANUP",
+            requiredAction: "CONTROLLED_AROMA_RECOVERY_BEFORE_RESOURCE_CLEANUP",
             cleanup: cleanupEvidence,
           },
           ...(failureEvidence ? { failureEvidence } : {}),
@@ -3437,12 +3445,17 @@ const G16_PHASES = [
 ];
 const digest = (bytes) => createHash("sha256").update(bytes).digest("hex");
 
-export function sanitizeControlledG16Recovery(outcome, context, policy, image) {
+export function sanitizeControlledAromaSandboxRecovery(
+  outcome,
+  context,
+  policy,
+  image,
+) {
   const recovery = outcome?.recovery;
   const ids = recovery?.resourceIDs;
   const names = aromaSandboxResourceNames(context.runId);
   if (
-    outcome?.gate !== "G16_AROMA_SANDBOX" ||
+    outcome?.gate !== "aroma_sandbox" ||
     outcome.status !== "FAIL" ||
     outcome.code !== "RECOVERY_REQUIRED" ||
     outcome.runId !== context.runId ||
@@ -3455,7 +3468,7 @@ export function sanitizeControlledG16Recovery(outcome, context, policy, image) {
     recovery.cartState !== "UNRESOLVED_OR_NONBASELINE" ||
     recovery.mutationsDisabled !== true ||
     recovery.requiredAction !==
-      "CONTROLLED_G16_RECOVERY_BEFORE_RESOURCE_CLEANUP" ||
+      "CONTROLLED_AROMA_SANDBOX_RECOVERY_BEFORE_RESOURCE_CLEANUP" ||
     recovery.cleanup?.removed !== false ||
     recovery.cleanup?.retained !== true ||
     recovery.cleanup?.failed ||
@@ -3513,7 +3526,7 @@ export function sanitizeControlledG16Recovery(outcome, context, policy, image) {
       : {}),
   };
   return {
-    gate: "G16_AROMA_SANDBOX",
+    gate: "aroma_sandbox",
     status: "FAIL",
     code: "RECOVERY_REQUIRED",
     runId: context.runId,
@@ -3544,14 +3557,15 @@ export function sanitizeControlledG16Recovery(outcome, context, policy, image) {
         },
         databaseSystemIdentifier: ids.databaseSystemIdentifier,
       },
-      requiredAction: "CONTROLLED_G16_RECOVERY_BEFORE_RESOURCE_CLEANUP",
+      requiredAction:
+        "CONTROLLED_AROMA_SANDBOX_RECOVERY_BEFORE_RESOURCE_CLEANUP",
       cleanup: { removed: false, retained: true },
     },
     ...(failureEvidence ? { failureEvidence } : {}),
   };
 }
 
-async function prepareG16Age({ candidateRoot, context }, env) {
+async function prepareAromaSandboxAge({ candidateRoot, context }, env) {
   const locator = env.SOPS_AGE_KEY_FILE;
   if (
     typeof locator !== "string" ||
@@ -3618,7 +3632,7 @@ async function prepareG16Age({ candidateRoot, context }, env) {
   return { locator, recipients: plan.recipients };
 }
 
-function runG16Age(args, input) {
+function runAromaSandboxAge(args, input) {
   try {
     return execFileSync("age", args, {
       input,
@@ -3631,10 +3645,15 @@ function runG16Age(args, input) {
   }
 }
 
-export function validateControlledG16Result(outcome, context, policy, image) {
+export function validateControlledAromaSandboxResult(
+  outcome,
+  context,
+  policy,
+  image,
+) {
   const names = aromaSandboxResourceNames(context.runId);
   if (
-    outcome?.gate !== "G16_AROMA_SANDBOX" ||
+    outcome?.gate !== "aroma_sandbox" ||
     outcome.status !== "PASS" ||
     outcome.code !== "CONTROLLED_LIVE_SCENARIO_COMPLETE" ||
     outcome.runId !== context.runId ||
@@ -3699,7 +3718,7 @@ export function validateControlledG16Result(outcome, context, policy, image) {
   return outcome;
 }
 
-export async function verifyControlledG16Evidence({
+export async function verifyControlledAromaSandboxEvidence({
   parentIdentity,
   parentContextPath,
   requireCleanup = true,
@@ -3711,7 +3730,7 @@ export async function verifyControlledG16Evidence({
     sourceRoot,
     evidenceDir,
   } = parentIdentity;
-  const artifacts = join(evidenceDir, "gates/G16_AROMA_SANDBOX/artifacts");
+  const artifacts = join(evidenceDir, "gates/aroma_sandbox/artifacts");
   const receipt = JSON.parse(
     (
       await readRegular(join(artifacts, "controlled-parent.json"), 16384)
@@ -3752,7 +3771,7 @@ export async function verifyControlledG16Evidence({
     context.acceptedBaseCommit !== parent.acceptedBaseCommit ||
     context.evidenceDir !==
       join(sourceRoot, "evidence/launch", context.runId) ||
-    context.resources?.controlledScope !== "G16" ||
+    context.resources?.controlledScope !== "aroma_sandbox" ||
     context.resources.controlledParentContextPath !== parentContextPath ||
     context.resources.controlledParentCandidateSha !== parent.candidateSha ||
     context.resources.controlledParentRunId !== parent.runId ||
@@ -3799,12 +3818,12 @@ export async function verifyControlledG16Evidence({
     receipt.signatureCiphertextSha256,
     65536,
   );
-  const age = await prepareG16Age(parentIdentity, env);
-  const approvalBytes = runG16Age(
+  const age = await prepareAromaSandboxAge(parentIdentity, env);
+  const approvalBytes = runAromaSandboxAge(
     ["--decrypt", "--identity", age.locator],
     encryptedApproval,
   );
-  const signature = runG16Age(
+  const signature = runAromaSandboxAge(
     ["--decrypt", "--identity", age.locator],
     encryptedSignature,
   );
@@ -3816,7 +3835,7 @@ export async function verifyControlledG16Evidence({
   )
     throw new Error("G16_APPROVAL_PLAINTEXT_HASH_INVALID");
   const approval = JSON.parse(approvalBytes.toString("utf8"));
-  const policy = await readApprovedG16Policy(
+  const policy = await readApprovedAromaSandboxPolicy(
     candidateRoot,
     parent.candidateSha,
   );
@@ -3828,7 +3847,7 @@ export async function verifyControlledG16Evidence({
       )
     ).toString("utf8"),
   );
-  validateControlledG16Result(
+  validateControlledAromaSandboxResult(
     outcome,
     context,
     policy,
@@ -3895,7 +3914,7 @@ export async function verifyControlledG16Evidence({
       throw new Error("G16_BUNDLE_INVALID");
     git(childRoot, "fetch", "--quiet", "--no-tags", bundle, "HEAD");
     git(childRoot, "checkout", "--quiet", "--detach", context.candidateSha);
-    const lineage = await validateG16Checkout({
+    const lineage = await validateAromaSandboxCheckout({
       candidateRoot,
       candidateSha: parent.candidateSha,
       baselineRoot: childRoot,
@@ -3913,7 +3932,7 @@ export async function verifyControlledG16Evidence({
   return receipt;
 }
 
-export async function handleControlledG16ChildFailure({
+export async function handleControlledAromaSandboxChildFailure({
   error,
   parent,
   childContext,
@@ -3932,7 +3951,7 @@ export async function handleControlledG16ChildFailure({
     try {
       const last = error.result.stdout.split(/\r?\n/u).filter(Boolean).at(-1);
       const outcome = JSON.parse(last);
-      const policy = await readApprovedG16Policy(
+      const policy = await readApprovedAromaSandboxPolicy(
         candidateRoot,
         parent.candidateSha,
       );
@@ -3944,7 +3963,7 @@ export async function handleControlledG16ChildFailure({
           )
         ).toString("utf8"),
       );
-      recovery = sanitizeControlledG16Recovery(
+      recovery = sanitizeControlledAromaSandboxRecovery(
         outcome,
         childContext,
         policy,
@@ -4003,7 +4022,7 @@ export async function handleControlledG16ChildFailure({
   throw failureError;
 }
 
-export async function runControlledG16Parent({
+export async function runControlledAromaSandboxParent({
   parentIdentity,
   parentContextPath,
   signerPath,
@@ -4077,13 +4096,13 @@ export async function runControlledG16Parent({
     )
       throw new Error("G16_SIGNER_DIRECTORY_INVALID");
     signerDirectory = readyDirectory;
-    const age = await prepareG16Age(parentIdentity, process.env);
+    const age = await prepareAromaSandboxAge(parentIdentity, process.env);
     const signerIdentity = {
       publicKeyPem: ready.publicKeyPem,
       keyId: ready.keyId,
       approver: ready.approver,
     };
-    baseline = await createG16Checkout({
+    baseline = await createAromaSandboxCheckout({
       candidateRoot,
       candidateSha: parent.candidateSha,
       ...signerIdentity,
@@ -4095,7 +4114,7 @@ export async function runControlledG16Parent({
       contextPath: parentContextPath,
       childRoot: baseline.baselineRoot,
       childSha: baseline.baselineSha,
-      scope: "G16",
+      scope: "aroma_sandbox",
       signer: signerIdentity,
     });
     const bundle = await writeRollbackLineageBundle({
@@ -4103,16 +4122,16 @@ export async function runControlledG16Parent({
       restoredRoot: baseline.baselineRoot,
       restoredSha: baseline.baselineSha,
       evidenceDir,
-      scope: "G16",
+      scope: "aroma_sandbox",
     });
-    const artifacts = join(evidenceDir, "gates/G16_AROMA_SANDBOX/artifacts");
+    const artifacts = join(evidenceDir, "gates/aroma_sandbox/artifacts");
     await mkdir(artifacts, { recursive: true, mode: 0o700 });
     const env = {
       ...process.env,
       COFFEE_LAUNCH_CONTEXT_FILE: child.path,
-      COFFEE_G16_CONTROLLED_CHILD: "1",
+      COFFEE_AROMA_SANDBOX_CONTROLLED_CHILD: "1",
     };
-    delete env.COFFEE_G16_SIGNER_PATH;
+    delete env.COFFEE_AROMA_SANDBOX_SIGNER_PATH;
     let signed;
     let signerApproved = false;
     let approvalRequests = 0;
@@ -4134,7 +4153,7 @@ export async function runControlledG16Parent({
             throw new Error("G16_APPROVAL_MISSING");
           return {};
         }
-        const policy = await readApprovedG16Policy(
+        const policy = await readApprovedAromaSandboxPolicy(
           candidateRoot,
           parent.candidateSha,
         );
@@ -4176,7 +4195,7 @@ export async function runControlledG16Parent({
         return {};
       },
     }).catch(async (error) => {
-      return handleControlledG16ChildFailure({
+      return handleControlledAromaSandboxChildFailure({
         error,
         parent,
         childContext: child.context,
@@ -4190,7 +4209,7 @@ export async function runControlledG16Parent({
       throw new Error("G16_APPROVAL_MISSING");
     const last = execution.stdout.split(/\r?\n/u).filter(Boolean).at(-1);
     const outcome = JSON.parse(last);
-    const policy = await readApprovedG16Policy(
+    const policy = await readApprovedAromaSandboxPolicy(
       candidateRoot,
       parent.candidateSha,
     );
@@ -4202,7 +4221,7 @@ export async function runControlledG16Parent({
         )
       ).toString("utf8"),
     );
-    validateControlledG16Result(
+    validateControlledAromaSandboxResult(
       outcome,
       child.context,
       policy,
@@ -4225,8 +4244,14 @@ export async function runControlledG16Parent({
         "controlled-child-result.json",
         Buffer.from(`${JSON.stringify(outcome, null, 2)}\n`),
       ],
-      ["controlled-approval.json.age", runG16Age(ageArgs, approvalBytes)],
-      ["controlled-approval.sig.age", runG16Age(ageArgs, signatureBytes)],
+      [
+        "controlled-approval.json.age",
+        runAromaSandboxAge(ageArgs, approvalBytes),
+      ],
+      [
+        "controlled-approval.sig.age",
+        runAromaSandboxAge(ageArgs, signatureBytes),
+      ],
     ];
     for (const [name, bytes] of files)
       await writeFile(join(artifacts, name), bytes, {
@@ -4259,7 +4284,7 @@ export async function runControlledG16Parent({
       flag: "wx",
       mode: 0o600,
     });
-    await verifyControlledG16Evidence({
+    await verifyControlledAromaSandboxEvidence({
       parentIdentity,
       parentContextPath,
       requireCleanup: false,
@@ -4291,7 +4316,10 @@ export async function runControlledG16Parent({
     await writeFile(receiptPath, `${JSON.stringify(receipt, null, 2)}\n`, {
       mode: 0o600,
     });
-    await verifyControlledG16Evidence({ parentIdentity, parentContextPath });
+    await verifyControlledAromaSandboxEvidence({
+      parentIdentity,
+      parentContextPath,
+    });
     return {
       schemaVersion: 1,
       controlledChild: {
@@ -4353,13 +4381,13 @@ export async function main(args = process.argv.slice(2)) {
   }
   try {
     const { approvalFile } = parseArguments(args);
-    if (process.env.COFFEE_G16_SIGNER_PATH) {
+    if (process.env.COFFEE_AROMA_SANDBOX_SIGNER_PATH) {
       const contextPath = process.env.COFFEE_LAUNCH_CONTEXT_FILE;
       const parentIdentity = await validateContext(contextPath);
-      const receipt = await runControlledG16Parent({
+      const receipt = await runControlledAromaSandboxParent({
         parentIdentity,
         parentContextPath: contextPath,
-        signerPath: process.env.COFFEE_G16_SIGNER_PATH,
+        signerPath: process.env.COFFEE_AROMA_SANDBOX_SIGNER_PATH,
       });
       result("PASS", "CONTROLLED_LIVE_SCENARIO_COMPLETE", receipt);
       return 0;
@@ -4368,7 +4396,10 @@ export async function main(args = process.argv.slice(2)) {
       await runAromaSandbox({ approvalFile }),
     );
     await controlledParentRequest("cleanup");
-    if (process.env.COFFEE_G16_CONTROLLED_CHILD === "1" && process.connected)
+    if (
+      process.env.COFFEE_AROMA_SANDBOX_CONTROLLED_CHILD === "1" &&
+      process.connected
+    )
       process.disconnect();
     result(
       outcome.status,
@@ -4423,7 +4454,10 @@ export async function main(args = process.argv.slice(2)) {
         ? 78
         : 1;
   } catch (error) {
-    if (process.env.COFFEE_G16_CONTROLLED_CHILD === "1" && process.connected)
+    if (
+      process.env.COFFEE_AROMA_SANDBOX_CONTROLLED_CHILD === "1" &&
+      process.connected
+    )
       process.disconnect();
     const code = safeAromaFailureCode(error);
     result(

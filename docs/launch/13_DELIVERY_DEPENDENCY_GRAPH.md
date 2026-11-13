@@ -47,9 +47,9 @@ Observability не блокирует business implementation; Operations при
 instrumentation points после #12. #64 сохраняется как producer foundation; #210
 владеет заменой OpenObserve-специфической реализации и пока проверяется.
 Исторический `evidence/handoffs/issue-64.yaml` неизменен; после приёмки #210
-полный #13 требует также его merged handoff. Component G12/G14 #210 проверяются
+полный #13 требует также его merged handoff. Компонентные проверки `supply_chain`/`observability` #210 выполняются
 до merge без зависимости от собственного будущего handoff; producer/config не
-заменяют PASS G14.
+заменяют PASS `observability`.
 [Runbook Operations](../operations/observability.md) описывает границы проверки.
 
 #136 поставляет только ADR, UX-макеты и согласованные нормативные документы.
@@ -127,34 +127,34 @@ collector.
 
 ## Контрольные точки
 
-| Issue | Обязательные inputs                                                                        | Выход и consumer                                                                                                                                                                                                                                        |
-| ----- | ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| #60   | accepted #49 / PR #59; baseline #3 / PR #22 и #47                                          | Fastify recovery, ADR-0025, graph → #4, #61                                                                                                                                                                                                             |
-| #61   | #60                                                                                        | deadlines/cancellation/readiness/shutdown → #62, #63, #64                                                                                                                                                                                               |
-| #62   | #60, #61                                                                                   | transaction outcome, durable idempotency, migrations/pool → #5, #10, #63 и DB owners                                                                                                                                                                    |
-| #63   | #61, #62                                                                                   | durable Inbox/Outbox, partition drain, broker persistence → #16, #8, #11, #12, #64                                                                                                                                                                      |
-| #119  | #60                                                                                        | browser recovery, Draft/cache/SSE policy, SPA route authority → #4/#5/#7/#8/#9/#12/#13                                                                                                                                                                  |
-| #4    | #2, #3, #60, #119                                                                          | OpenAPI/JSON Schema, types-only generation, fixtures → business contract consumers                                                                                                                                                                      |
-| #5    | #4, #62, #119                                                                              | Customer API/migrations → #8, #9, #13                                                                                                                                                                                                                   |
-| #10   | #4, #62                                                                                    | safe NDJSON/cart transport, durable operation journal → #6, #11                                                                                                                                                                                         |
-| #6    | #10, #62                                                                                   | Received Catalog staging generation + immutable AROMA binding preparation → #16                                                                                                                                                                         |
-| #16   | #6, #63                                                                                    | durable binding acknowledgements, active revision + owner Outbox events → #17, #18, #8, #11                                                                                                                                                             |
-| #17   | #4, #16                                                                                    | Catalog search + Pricing input → #18, #7, #8, #9                                                                                                                                                                                                        |
-| #18   | #10, #6, #16, #17                                                                          | pipeline recovery/capacity evidence → #7, #8, #9, #11, #13                                                                                                                                                                                              |
-| #7    | #4, #17, #18, #62, #119                                                                    | immutable PricingQuote/verify → #8, #9                                                                                                                                                                                                                  |
-| #8    | #4, #5, #7, #17, #18, #63, #119                                                            | Draft/Confirm/contribution/Order Card → #9, #11, #12                                                                                                                                                                                                    |
-| #136  | accepted #4, #119                                                                          | historical ADR-0027/SVG handoff merged with `contentAcceptance: NOT_RUN`; владелец подтвердил последующую приёмку SVG 2026-09-23 (дата/источник первоначального решения уточняются); visual заменён ADR-0029 + versioned prototype → #137, #9, #12, #13 |
-| #137  | #136                                                                                       | `@coffee-platform/ui`, React/Vite/Tailwind/React Aria foundation, browser/Node graphs → #9                                                                                                                                                              |
-| #159  | #19, #4, #60, #61, #119, #137                                                              | ADR-0031 + normative transport/auth contract → #160, #161, #162, #9, #12, #64, #13                                                                                                                                                                      |
-| #160  | #159                                                                                       | private Edge authorizer/session/actor receiver + crypto tests → #162, #12                                                                                                                                                                               |
-| #161  | #159, #137                                                                                 | native nginx image/static/transport fixture → #162, #9, #64                                                                                                                                                                                             |
-| #162  | #160, #161                                                                                 | один active cutover/removal old transport, trust/config/rollback evidence → #9, #12, #64, #13                                                                                                                                                           |
-| #9    | #4, #5, #7, #8, #17, #18, #119, #137, #162                                                 | один `QueryClient`, project-owned fetch/client-v1 runtime validation + React operator flow → #12, #13                                                                                                                                                   |
-| #11   | #10, #16, #18, #8, #63                                                                     | этап A: backend grind contract → integration gate #9; этап B: observer/convergence/UnknownOutcome → #12, #13                                                                                                                                            |
-| #12   | #8, #9, #11, #63, #119, #160, #162                                                         | single-instance SSE invalidation/refetch → #64, #13                                                                                                                                                                                                     |
-| #64   | #4, #61, #62, #63, #12, #162                                                               | историческая producer foundation, Pino/OTel, native applicability и redaction → #210, #13                                                                                                                                                               |
-| #210  | #64, [PR #209](https://github.com/YurGusev/CoffeeOrderPlatform/pull/209) как принятая base | миграция observability по ADR-0040; после приёмки handoff → G14 #13                                                                                                                                                                                     |
-| #13   | все outputs выше, #119, #162, принятый handoff #210                                        | verified release evidence → закрытие #1                                                                                                                                                                                                                 |
+| Issue | Обязательные inputs | Выход и consumer |
+|---|---|---|
+| #60 | accepted #49 / PR #59; baseline #3 / PR #22 и #47 | Fastify recovery, ADR-0025, graph → #4, #61 |
+| #61 | #60 | deadlines/cancellation/readiness/shutdown → #62, #63, #64 |
+| #62 | #60, #61 | transaction outcome, durable idempotency, migrations/pool → #5, #10, #63 и DB owners |
+| #63 | #61, #62 | durable Inbox/Outbox, partition drain, broker persistence → #16, #8, #11, #12, #64 |
+| #119 | #60 | browser recovery, Draft/cache/SSE policy, SPA route authority → #4/#5/#7/#8/#9/#12/#13 |
+| #4 | #2, #3, #60, #119 | OpenAPI/JSON Schema, types-only generation, fixtures → business contract consumers |
+| #5 | #4, #62, #119 | Customer API/migrations → #8, #9, #13 |
+| #10 | #4, #62 | safe NDJSON/cart transport, durable operation journal → #6, #11 |
+| #6 | #10, #62 | Received Catalog staging generation + immutable AROMA binding preparation → #16 |
+| #16 | #6, #63 | durable binding acknowledgements, active revision + owner Outbox events → #17, #18, #8, #11 |
+| #17 | #4, #16 | Catalog search + Pricing input → #18, #7, #8, #9 |
+| #18 | #10, #6, #16, #17 | pipeline recovery/capacity evidence → #7, #8, #9, #11, #13 |
+| #7 | #4, #17, #18, #62, #119 | immutable PricingQuote/verify → #8, #9 |
+| #8 | #4, #5, #7, #17, #18, #63, #119 | Draft/Confirm/contribution/Order Card → #9, #11, #12 |
+| #136 | accepted #4, #119 | historical ADR-0027/SVG handoff merged with `contentAcceptance: NOT_RUN`; владелец подтвердил последующую приёмку SVG 2026-09-23 (дата/источник первоначального решения уточняются); visual заменён ADR-0029 + versioned prototype → #137, #9, #12, #13 |
+| #137 | #136 | `@coffee-platform/ui`, React/Vite/Tailwind/React Aria foundation, browser/Node graphs → #9 |
+| #159 | #19, #4, #60, #61, #119, #137 | ADR-0031 + normative transport/auth contract → #160, #161, #162, #9, #12, #64, #13 |
+| #160 | #159 | private Edge authorizer/session/actor receiver + crypto tests → #162, #12 |
+| #161 | #159, #137 | native nginx image/static/transport fixture → #162, #9, #64 |
+| #162 | #160, #161 | один active cutover/removal old transport, trust/config/rollback evidence → #9, #12, #64, #13 |
+| #9 | #4, #5, #7, #8, #17, #18, #119, #137, #162 | один `QueryClient`, project-owned fetch/client-v1 runtime validation + React operator flow → #12, #13 |
+| #11 | #10, #16, #18, #8, #63 | этап A: backend grind contract → integration gate #9; этап B: observer/convergence/UnknownOutcome → #12, #13 |
+| #12 | #8, #9, #11, #63, #119, #160, #162 | single-instance SSE invalidation/refetch → #64, #13 |
+| #64 | #4, #61, #62, #63, #12, #162 | историческая producer foundation, Pino/OTel, native applicability и redaction → #210, #13 |
+| #210 | #64, [PR #209](https://github.com/YurGusev/CoffeeOrderPlatform/pull/209) как принятая base | миграция observability по ADR-0040; после приёмки handoff → `observability` #13 |
+| #13 | все outputs выше, #119, #162, принятый handoff #210 | verified release evidence → закрытие #1 |
 
 Для #9/#11 действует [контракт параллельной разработки](30_AROMA_GRIND_CONTRACT_AND_PARALLEL_DELIVERY.md):
 полный #11 не блокирует старт #9; этап A #11 поставляет общий контракт помола
@@ -203,14 +203,14 @@ Historical handoffs не переписываются под новый protocol
 
 Для #13 владелец согласовал два связанных артефакта: до заморозки кандидата
 `evidence/handoffs/issue-13.yaml` фиксирует фактические inputs, outputs и
-проверки на момент подготовки; после запуска G19 создаёт
+проверки на момент подготовки; после запуска report создаёт
 `evidence/launch/<run-id>/handoff.yaml` с результатами и SHA-256 точного Git blob
 исходного descriptor в том же candidate SHA. Производный файл входит в
 `checksums.sha256`. Оба артефакта и их хэши публикуются в PR и Obsidian;
 для внесения итогов не создаётся новый source SHA. Исходный descriptor сам по
-себе не означает PASS или допуск; итог определяется результатом G00–G19.
+себе не означает PASS или допуск; итог определяется результатом preflight–report.
 
-## Дополнение #277: два CVE-блокера G12
+## Дополнение #277: два CVE-блокера supply_chain
 
 `#275 → #277 → #13`. #277 обновляет только существующие musl/musl-utils
 конечных Node/storage-helper/Kafka и добавляет точный proof-bound `not_affected`
@@ -218,6 +218,6 @@ Historical handoffs не переписываются под новый protocol
 правило определено в [runtime images](../operations/runtime-images.md).
 После merge обязательный дополнительный input #13 — принятый merge #277 и
 `evidence/handoffs/issue-277.yaml` с проверяемыми hashes изменённых artifacts.
-Все прежние inputs #13 сохраняются. Собственный G12 #277 проверяет этот fix;
-#13 проходит собственные CI/G12/qualification/G00–G19 на новом frozen source.
+Все прежние inputs #13 сохраняются. Собственный прогон `supply_chain` #277 проверяет этот fix;
+#13 проходит собственные CI/`supply_chain`/qualification и гейты запуска на новом frozen source.
 Этот handoff не закрывает #1 или #266 и не объявляет production admission.

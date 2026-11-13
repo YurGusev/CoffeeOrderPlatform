@@ -53,7 +53,9 @@ import {
   finalizeReport,
   validateChecksumManifest,
   validateKafkaNamespaceInventory,
+  validateRunResultContract,
 } from "./report.mjs";
+import { LEGACY_GATE_IDS } from "./gate-identity.mjs";
 import {
   CANONICAL_DATABASE_OWNERS,
   deriveLaunchDatabaseName,
@@ -84,25 +86,25 @@ import {
   captureAromaPhaseFailureFacts,
   computeExistingAccountFingerprint,
   createAromaMutationGrant,
-  createG16Checkout,
-  buildG16ChildConfig,
-  handleControlledG16ChildFailure,
-  readApprovedG16Policy,
+  createAromaSandboxCheckout,
+  buildAromaSandboxChildConfig,
+  handleControlledAromaSandboxChildFailure,
+  readApprovedAromaSandboxPolicy,
   createAromaProviderMutationGuard,
   inspectAromaProfile,
   loadAromaPackingWireProof,
   normalizeCleanupFailureOutcome,
   parseArguments as parseAromaArguments,
-  runControlledG16Parent,
+  runControlledAromaSandboxParent,
   safeAromaConvergenceEvidence,
   safeAromaDiagnostic,
   safeAromaFailureCode,
   safeAromaPhaseFailureEvidence,
-  sanitizeControlledG16Recovery,
+  sanitizeControlledAromaSandboxRecovery,
   startAcknowledgementDropProxy,
   validateAromaPackingWireProof,
-  validateControlledG16Result,
-  verifyControlledG16Evidence,
+  validateControlledAromaSandboxResult,
+  verifyControlledAromaSandboxEvidence,
   waitForAromaRestartEligibility,
 } from "./scenarios/aroma-sandbox.mjs";
 import {
@@ -298,10 +300,10 @@ void test("launch data temporary directory is private, canonical and gate scoped
   process.env.COFFEE_LAUNCH_DATA_TEMP_DIR = "/tmp/untrusted-inherited";
   try {
     for (const [index, [gateId, expectedTmp, expectedData, configured]] of [
-      ["G12_SUPPLY_CHAIN", "/tmp/launch-original-temp", privateDir, true],
-      ["G14_OBSERVABILITY", privateDir, null, true],
-      ["G10_INTEGRATION", "/tmp/launch-original-temp", null, true],
-      ["G12_SUPPLY_CHAIN", "/tmp/launch-original-temp", null, false],
+      ["supply_chain", "/tmp/launch-original-temp", privateDir, true],
+      ["observability", privateDir, null, true],
+      ["integration", "/tmp/launch-original-temp", null, true],
+      ["supply_chain", "/tmp/launch-original-temp", null, false],
     ].entries()) {
       const stdout = join(directory, `${gateId}-${index}.out`);
       const stderr = join(directory, `${gateId}-${index}.err`);
@@ -392,12 +394,12 @@ void test("image cleanup completes before ownership can pass; unknown cleanup fa
   );
 });
 
-void test("G19 runs image cleanup before writing the final decision", async () => {
+void test("report runs image cleanup before writing the final decision", async () => {
   const source = await readFile(new URL("./run.mjs", import.meta.url), "utf8");
   const gates = source.indexOf(
     "for (let index = 0; index < matrix.gates.length",
   );
-  const report = source.indexOf('if (gate.id === "G19_REPORT")', gates);
+  const report = source.indexOf('if (gate.id === "report")', gates);
   const cleanup = source.indexOf(
     "imageCleanupVerified = finishRuntimeImageOwnership(",
     report,
@@ -670,7 +672,7 @@ void test("owner-suite TAP summary rejects empty or omitted integration/recovery
   }
 });
 
-void test("G18 baseline child changes only the approved parent mutation flag", async (t) => {
+void test("rollback baseline child changes only the approved parent mutation flag", async (t) => {
   const fixture = await rollbackGitFixture(t);
   const base = await createRollbackBaseline({
     candidateRoot: fixture.roots.disabled,
@@ -774,7 +776,7 @@ void test("controlled config checkout retains Git objects after borrowed parent 
   );
 });
 
-void test("G18 validates only a clean config-only B→D→R lineage", async (t) => {
+void test("rollback validates only a clean config-only B→D→R lineage", async (t) => {
   const good = await rollbackGitFixture(t);
   const receipt = await validateRollbackLineage({
     launchIdentity: good.launchIdentity,
@@ -853,7 +855,7 @@ void test("G18 validates only a clean config-only B→D→R lineage", async (t) 
   }
 });
 
-void test("G18 creates isolated config commits without changing the B checkout", async (t) => {
+void test("rollback creates isolated config commits without changing the B checkout", async (t) => {
   const good = await rollbackGitFixture(t);
   const before = rollbackGit(
     good.roots.candidate,
@@ -1007,10 +1009,10 @@ void test("private candidate normalizes reader modes independently of clone umas
   assert.equal(await readFile(outside, "utf8"), "untouched");
 });
 
-void test("G08 approved target is explicit, private and bound to the current run", async (t) => {
+void test("migrations approved target is explicit, private and bound to the current run", async (t) => {
   const root = await mkdtemp(join(tmpdir(), "launch-g08-approved-"));
   t.after(() => rm(root, { recursive: true, force: true }));
-  const artifactDir = join(root, "gates/G08_MIGRATIONS/artifacts");
+  const artifactDir = join(root, "gates/migrations/artifacts");
   await mkdir(artifactDir, { recursive: true, mode: 0o700 });
   const path = join(artifactDir, "approved-target.json");
   const context = {
@@ -1028,7 +1030,7 @@ void test("G08 approved target is explicit, private and bound to the current run
       "--g08-expected-system-identifier",
       value.systemIdentifier,
     ]),
-    { g08ExpectedSystemIdentifier: value.systemIdentifier },
+    { migrationsExpectedSystemIdentifier: value.systemIdentifier },
   );
   for (const identifier of [undefined, "", "abc", "1".repeat(21)])
     assert.throws(
@@ -1077,13 +1079,14 @@ void test("G08 approved target is explicit, private and bound to the current run
   );
 });
 
-void test("G08 stops before its command when the approved identity is unavailable", async (t) => {
+void test("migrations stops before its command when the approved identity is unavailable", async (t) => {
+  await mkdir(join(process.cwd(), "evidence/launch"), { recursive: true });
   const root = await mkdtemp(
     join(process.cwd(), "evidence/launch/g08-runner-test-"),
   );
   t.after(() => rm(root, { recursive: true, force: true }));
   const gate = {
-    id: "G08_MIGRATIONS",
+    id: "migrations",
     command: "pnpm test:migrations:clean && pnpm test:migrations:forward",
     timeout: 1800,
     predecessors: [],
@@ -1125,7 +1128,7 @@ void test("G08 stops before its command when the approved identity is unavailabl
   );
 });
 
-void test("G18 accepts only the canonical launch-context Compose project string", () => {
+void test("rollback accepts only the canonical launch-context Compose project string", () => {
   const context = {
     runId: "20261024T120000Z-1234567",
     resources: { composeProject: "coffee-launch-20261024t120000z-1234567" },
@@ -1157,7 +1160,7 @@ void test("G18 accepts only the canonical launch-context Compose project string"
   );
 });
 
-void test("G18 local provider injects UnknownOutcome only for the first numeric SetQuantity wire", () => {
+void test("rollback local provider injects UnknownOutcome only for the first numeric SetQuantity wire", () => {
   assert.equal(
     shouldLoseFirstRollbackSetQuantityResponse(1, { quantity: 1 }),
     true,
@@ -1176,7 +1179,7 @@ void test("G18 local provider injects UnknownOutcome only for the first numeric 
   );
 });
 
-void test("G18 captures the fixture baseline before delayed runtimes and preserves immutable owner history", () => {
+void test("rollback captures the fixture baseline before delayed runtimes and preserves immutable owner history", () => {
   const baseline = {
     counts: {},
     attempts: [],
@@ -1311,7 +1314,7 @@ void test("G18 captures the fixture baseline before delayed runtimes and preserv
   }
 });
 
-void test("G18 requires a structured runtime receipt with verified lineage, phases and cleanup", async (t) => {
+void test("rollback requires a structured runtime receipt with verified lineage, phases and cleanup", async (t) => {
   const candidateSha = "1".repeat(40);
   const lineage = {
     B: {
@@ -1335,7 +1338,7 @@ void test("G18 requires a structured runtime receipt with verified lineage, phas
   };
   const artifact = {
     schemaVersion: 1,
-    gateId: "G18_ROLLBACK",
+    gateId: "rollback",
     runId: "20261024T120000Z-1234567",
     candidateSha,
     lineage,
@@ -1442,7 +1445,7 @@ void test("G18 requires a structured runtime receipt with verified lineage, phas
     receipt.path,
     join(
       evidenceDir,
-      "gates/G18_ROLLBACK/artifacts/mutation-disable-rollback.json",
+      "gates/rollback/artifacts/mutation-disable-rollback.json",
     ),
   );
   assert.equal(
@@ -1453,7 +1456,7 @@ void test("G18 requires a structured runtime receipt with verified lineage, phas
   assert.deepEqual(JSON.parse(written.toString("utf8")), artifact);
 });
 
-void test("G18 projects only canonical owner databases into the verified launch namespace", async () => {
+void test("rollback projects only canonical owner databases into the verified launch namespace", async () => {
   const ownership = JSON.parse(
     await readFile(
       new URL("../../../config/database-ownership.json", import.meta.url),
@@ -1488,12 +1491,12 @@ void test("G18 projects only canonical owner databases into the verified launch 
   assert.deepEqual(
     ownership,
     beforeOwnership,
-    "G18 database projection must not mutate canonical ownership input",
+    "rollback database projection must not mutate canonical ownership input",
   );
   assert.deepEqual(
     roleMap,
     beforeRoleMap,
-    "G18 database projection must not mutate canonical role-map input",
+    "rollback database projection must not mutate canonical role-map input",
   );
   assert.deepEqual(
     projected.ownership.databases.map(({ owner, name }) => [owner, name]),
@@ -1756,7 +1759,7 @@ void test("trusted bootstrap environment excludes launch context and inherited d
   });
 });
 
-void test("G18 B, D and R overrides bind the identical launch context and project-scoped nginx image", async (t) => {
+void test("rollback B, D and R overrides bind the identical launch context and project-scoped nginx image", async (t) => {
   const contextPath = "/tmp/coffee-launch-context-proof.json";
   const projectName = "coffee-launch-proof-20261024t120000z-1234567";
   const configs = [
@@ -1807,7 +1810,7 @@ void test("G18 B, D and R overrides bind the identical launch context and projec
   }
 });
 
-void test("G18 runtime config proof resolves js-yaml from the deployed runtime package", async (t) => {
+void test("rollback runtime config proof resolves js-yaml from the deployed runtime package", async (t) => {
   const flatRoot = await mkdtemp(join(tmpdir(), "g18-flat-runtime-layout-"));
   t.after(() => rm(flatRoot, { recursive: true, force: true }));
   const runtimeRoot = join(flatRoot, "node_modules/@coffee-platform/runtime");
@@ -1857,7 +1860,7 @@ void test("G18 runtime config proof resolves js-yaml from the deployed runtime p
   });
 });
 
-void test("G18 persists only sanitized child failure JSON and fails closed on missing receipt", async (t) => {
+void test("rollback persists only sanitized child failure JSON and fails closed on missing receipt", async (t) => {
   const good = await rollbackGitFixture(t);
   const lineage = await validateRollbackLineage({
     launchIdentity: good.launchIdentity,
@@ -1940,7 +1943,7 @@ void test("G18 persists only sanitized child failure JSON and fails closed on mi
   const disabledReceipt = createRollbackFailureReceipt({
     ...identity,
     stage: "disabled-reconcile",
-    error: new Error("G18_PHASE_FAILED"),
+    error: new Error("ROLLBACK_PHASE_FAILED"),
     cleanup,
   });
   const disabledPayload = attachRollbackDisabledReconcileSubstage(
@@ -2061,7 +2064,7 @@ void test("G18 persists only sanitized child failure JSON and fails closed on mi
   );
 });
 
-void test("G18 joins SIGTERM cleanup and timed-out child processes before caller cleanup", async (t) => {
+void test("rollback joins SIGTERM cleanup and timed-out child processes before caller cleanup", async (t) => {
   const directory = await mkdtemp(join(tmpdir(), "launch-g18-child-"));
   t.after(() => rm(directory, { recursive: true, force: true }));
   const readPublished = async (path, label) => {
@@ -2111,7 +2114,10 @@ catch(error) { console.log(JSON.stringify({joined:error.result?.joined===true,co
     controller.once("close", (code, signal) => resolve({ code, signal }));
   });
   const readyProcess = JSON.parse(
-    await readPublished(ready, "G18 stub child did not start before signal"),
+    await readPublished(
+      ready,
+      "rollback stub child did not start before signal",
+    ),
   );
   assert.equal(process.kill(readyProcess.pid, 0), true);
   controller.kill("SIGTERM");
@@ -2152,7 +2158,7 @@ setInterval(() => {}, 1000);`;
     const timeoutProcess = JSON.parse(
       await readPublished(
         timeoutReady,
-        "G18 timeout child did not publish readiness",
+        "rollback timeout child did not publish readiness",
       ),
     );
     assert.equal(process.kill(timeoutProcess.pid, 0), true);
@@ -2167,13 +2173,13 @@ setInterval(() => {}, 1000);`;
     assert.throws(() => process.kill(timeoutProcess.pid, 0), { code: "ESRCH" });
   } finally {
     if (!released) {
-      abandonTimeout(new Error("G18 timeout child was not armed"));
+      abandonTimeout(new Error("rollback timeout child was not armed"));
       await timedOut.catch(() => {});
     }
   }
 });
 
-void test("managed G14 child IPC joins ordered stages without exposing producer token", async () => {
+void test("managed observability child IPC joins ordered stages without exposing producer token", async () => {
   const token = "private-ipc-producer-token";
   const source = `const request=(stage,payload)=>new Promise((resolve,reject)=>{process.once('message',m=>m.ok&&m.stage===stage?resolve(m.payload):reject(Error('rejected')));process.send({stage,payload});});
 try { const init=await request('init',null); if(typeof init.token!=='string'||!init.token||JSON.stringify([process.argv,process.env]).includes(init.token))throw Error('token privacy'); await request('roles-ready',null); await request('browser-proof',null); await request('cleanup',null); process.disconnect(); console.log('done'); } catch { try { await request('cleanup',null); } catch {} process.disconnect(); process.exitCode=1; }`;
@@ -2372,26 +2378,26 @@ void test("matrix keeps all mandatory launch gates, exact order, commands and ti
   assert.deepEqual(
     gates.map((gate) => gate.id),
     [
-      "G00_PREFLIGHT",
-      "G01_INSTALL",
-      "G02_GENERATED",
-      "G03_STATIC",
-      "G04_UNIT",
-      "G05_CONTRACTS",
-      "G06_ARCHITECTURE",
-      "G07_CONFIG_SECURITY",
-      "G12_SUPPLY_CHAIN",
-      "G08_MIGRATIONS",
-      "G09_DB_BOUNDARIES",
-      "G10_INTEGRATION",
-      "G11_RECOVERY",
-      "G13_COMPOSE",
-      "G14_OBSERVABILITY",
-      "G15_BROWSER",
-      "G16_AROMA_SANDBOX",
-      "G17_BACKUP_RESTORE",
-      "G18_ROLLBACK",
-      "G19_REPORT",
+      "preflight",
+      "install",
+      "generated",
+      "static",
+      "unit",
+      "contracts",
+      "architecture",
+      "config_security",
+      "supply_chain",
+      "migrations",
+      "db_boundaries",
+      "integration",
+      "recovery",
+      "compose",
+      "observability",
+      "browser",
+      "aroma_sandbox",
+      "backup_restore",
+      "rollback",
+      "report",
     ],
   );
   const expectedIds = gates.map((gate) => gate.id);
@@ -2413,16 +2419,14 @@ void test("matrix keeps all mandatory launch gates, exact order, commands and ti
       `${gate.id} predecessors must precede it`,
     );
   }
-  assert.deepEqual(byId.get("G12_SUPPLY_CHAIN").predecessors, [
-    "G07_CONFIG_SECURITY",
+  assert.deepEqual(byId.get("supply_chain").predecessors, ["config_security"]);
+  assert.deepEqual(byId.get("integration").predecessors, [
+    "db_boundaries",
+    "supply_chain",
   ]);
-  assert.deepEqual(byId.get("G10_INTEGRATION").predecessors, [
-    "G09_DB_BOUNDARIES",
-    "G12_SUPPLY_CHAIN",
-  ]);
-  assert.deepEqual(byId.get("G13_COMPOSE").predecessors, [
-    "G11_RECOVERY",
-    "G12_SUPPLY_CHAIN",
+  assert.deepEqual(byId.get("compose").predecessors, [
+    "recovery",
+    "supply_chain",
   ]);
   const statusesAfterFailure = (failedId, candidateGates = gates) => {
     const statuses = new Map();
@@ -2440,21 +2444,21 @@ void test("matrix keeps all mandatory launch gates, exact order, commands and ti
     return statuses;
   };
   const assertSupplyChainBlocksConsumers = (candidateGates) => {
-    const statuses = statusesAfterFailure("G12_SUPPLY_CHAIN", candidateGates);
-    assert.equal(statuses.get("G08_MIGRATIONS"), "PASS");
-    assert.equal(statuses.get("G09_DB_BOUNDARIES"), "PASS");
-    for (const id of ["G10_INTEGRATION", "G11_RECOVERY", "G13_COMPOSE"]) {
+    const statuses = statusesAfterFailure("supply_chain", candidateGates);
+    assert.equal(statuses.get("migrations"), "PASS");
+    assert.equal(statuses.get("db_boundaries"), "PASS");
+    for (const id of ["integration", "recovery", "compose"]) {
       assert.equal(statuses.get(id), "NOT_RUN");
     }
     return statuses;
   };
   assertSupplyChainBlocksConsumers(gates);
   const withoutSupplyChainIntegrationEdge = gates.map((gate) =>
-    gate.id === "G10_INTEGRATION"
+    gate.id === "integration"
       ? {
           ...gate,
           predecessors: gate.predecessors.filter(
-            (predecessor) => predecessor !== "G12_SUPPLY_CHAIN",
+            (predecessor) => predecessor !== "supply_chain",
           ),
         }
       : gate,
@@ -2463,10 +2467,10 @@ void test("matrix keeps all mandatory launch gates, exact order, commands and ti
     () => assertSupplyChainBlocksConsumers(withoutSupplyChainIntegrationEdge),
     assert.AssertionError,
   );
-  const afterRecoveryFailure = statusesAfterFailure("G11_RECOVERY");
-  assert.equal(afterRecoveryFailure.get("G13_COMPOSE"), "NOT_RUN");
+  const afterRecoveryFailure = statusesAfterFailure("recovery");
+  assert.equal(afterRecoveryFailure.get("compose"), "NOT_RUN");
   assert.deepEqual(
-    [...byId.get("G19_REPORT").predecessors].sort((left, right) =>
+    [...byId.get("report").predecessors].sort((left, right) =>
       left.localeCompare(right),
     ),
     expectedIds.slice(0, -1).sort((left, right) => left.localeCompare(right)),
@@ -2482,7 +2486,7 @@ void test("matrix keeps all mandatory launch gates, exact order, commands and ti
   assert.deepEqual(
     gates.slice(8, 18).map((gate) => gate.timeout),
     [2700, ...Array(9).fill(1800)],
-    "G12 has its own inner+headroom budget; the rest stay at 1800",
+    "supply_chain has its own inner+headroom budget; the rest stay at 1800",
   );
   assert.deepEqual(splitCommand(gates[3].command), [
     ["pnpm", "format:check"],
@@ -2491,7 +2495,7 @@ void test("matrix keeps all mandatory launch gates, exact order, commands and ti
   ]);
 });
 
-void test("G09 accepts only exact context-bound 10/40 runtime database evidence", async (t) => {
+void test("db_boundaries accepts only exact context-bound 10/40 runtime database evidence", async (t) => {
   const evidenceDir = await mkdtemp(join(tmpdir(), "launch-g09-offline-"));
   t.after(() => rm(evidenceDir, { recursive: true, force: true }));
   const runId = "20261025T120000Z-1234567";
@@ -2510,7 +2514,7 @@ void test("G09 accepts only exact context-bound 10/40 runtime database evidence"
       baseConfigSha256,
     }),
   );
-  const gate = { id: "G09_DB_BOUNDARIES", command: "pnpm db:smoke" };
+  const gate = { id: "db_boundaries", command: "pnpm db:smoke" };
   const record = {
     runs: [
       {
@@ -2521,7 +2525,7 @@ void test("G09 accepts only exact context-bound 10/40 runtime database evidence"
     ],
     artifacts: [],
   };
-  const artifactDir = join(evidenceDir, "gates/G09_DB_BOUNDARIES/artifacts");
+  const artifactDir = join(evidenceDir, "gates/db_boundaries/artifacts");
   await mkdir(artifactDir, { recursive: true });
   const roleMap = JSON.parse(
     await readFile(
@@ -2597,10 +2601,7 @@ void test("G09 accepts only exact context-bound 10/40 runtime database evidence"
     },
     legacyTargetsExcluded: ["coffeeorder_staging", "coffeeorderdb"],
   };
-  const migrationArtifactDir = join(
-    evidenceDir,
-    "gates/G08_MIGRATIONS/artifacts",
-  );
+  const migrationArtifactDir = join(evidenceDir, "gates/migrations/artifacts");
   await mkdir(migrationArtifactDir, { recursive: true });
   await writeFile(
     join(migrationArtifactDir, "result.json"),
@@ -2685,7 +2686,7 @@ void test("G09 accepts only exact context-bound 10/40 runtime database evidence"
   };
   const migrationPath = join(migrationArtifactDir, "result.json");
   const gatePath = join(artifactDir, "result.json");
-  const stdoutPath = join(evidenceDir, "gates/G09_DB_BOUNDARIES/stdout.log");
+  const stdoutPath = join(evidenceDir, "gates/db_boundaries/stdout.log");
   const prettyEnvelope = `${JSON.stringify(
     { databaseBoundaryReceipt: receipt },
     null,
@@ -2776,7 +2777,7 @@ void test("G09 accepts only exact context-bound 10/40 runtime database evidence"
   );
 });
 
-void test("G08 rejects receipts without exact derived targets and cleanup", async (t) => {
+void test("migrations rejects receipts without exact derived targets and cleanup", async (t) => {
   const evidenceDir = await mkdtemp(join(tmpdir(), "launch-g08-receipt-"));
   t.after(() => rm(evidenceDir, { recursive: true, force: true }));
   const context = {
@@ -2785,7 +2786,7 @@ void test("G08 rejects receipts without exact derived targets and cleanup", asyn
     baseConfigSha256: "a".repeat(64),
   };
   await writeFile(join(evidenceDir, "context.json"), JSON.stringify(context));
-  const artifactDir = join(evidenceDir, "gates/G08_MIGRATIONS/artifacts");
+  const artifactDir = join(evidenceDir, "gates/migrations/artifacts");
   await mkdir(artifactDir, { recursive: true });
   const owners = [
     ["catalog", 12],
@@ -2820,7 +2821,7 @@ void test("G08 rejects receipts without exact derived targets and cleanup", asyn
   };
   const path = join(artifactDir, "result.json");
   await writeFile(path, JSON.stringify(receipt));
-  const gate = { id: "G08_MIGRATIONS" };
+  const gate = { id: "migrations" };
   const record = { artifacts: [], runs: [] };
   assert.equal(await verifyGateArtifacts(gate, record, evidenceDir), null);
   assert.equal(record.artifacts.length, 1);
@@ -2844,7 +2845,7 @@ void test("G08 rejects receipts without exact derived targets and cleanup", asyn
   );
 });
 
-void test("G08 ACL oracle distinguishes table and exact column UPDATE grants", async () => {
+void test("migrations ACL oracle distinguishes table and exact column UPDATE grants", async () => {
   const roleDatabase = JSON.parse(
     await readFile("config/database-role-map.json", "utf8"),
   ).databases.find(({ schema }) => schema === "orders");
@@ -2953,7 +2954,7 @@ void test("G08 ACL oracle distinguishes table and exact column UPDATE grants", a
   );
 });
 
-void test("G08 forward owner diagnostics expose only bounded failure facts", () => {
+void test("migrations forward owner diagnostics expose only bounded failure facts", () => {
   const formatted = formatOwnerStageFailure("orders", "seed", {
     sqlState: "23503",
     code: "DB_QUERY_FAILED",
@@ -2961,7 +2962,7 @@ void test("G08 forward owner diagnostics expose only bounded failure facts", () 
   });
   assert.equal(
     formatted.message,
-    "G08_MIGRATIONS OWNER_STAGE_FAILED: orders:seed:23503",
+    "MIGRATIONS OWNER_STAGE_FAILED: orders:seed:23503",
   );
   assert.equal(formatted.message.includes("secret-canary"), false);
   assert.equal(
@@ -2969,19 +2970,19 @@ void test("G08 forward owner diagnostics expose only bounded failure facts", () 
       code: "DB_QUERY_FAILED",
       message: "secret-canary",
     }).message,
-    "G08_MIGRATIONS OWNER_STAGE_FAILED: catalog:current:UNKNOWN",
+    "MIGRATIONS OWNER_STAGE_FAILED: catalog:current:UNKNOWN",
   );
   assert.throws(
     () => formatOwnerStageFailure("coffeeorderdb", "seed", { code: "23503" }),
-    /Invalid G08 owner stage/u,
+    /Invalid migrations owner stage/u,
   );
   assert.throws(
     () => formatOwnerStageFailure("orders", "cleanup", { code: "23503" }),
-    /Invalid G08 owner stage/u,
+    /Invalid migrations owner stage/u,
   );
 });
 
-void test("G15 runner requires the exact command and a context-bound live artifact", async (t) => {
+void test("browser runner requires the exact command and a context-bound live artifact", async (t) => {
   const evidenceDir = await mkdtemp(join(tmpdir(), "launch-g15-mock-"));
   t.after(() => rm(evidenceDir, { recursive: true, force: true }));
   const runId = "20261025T120000Z-1234567";
@@ -2994,15 +2995,15 @@ void test("G15 runner requires the exact command and a context-bound live artifa
       baseConfigSha256: "a".repeat(64),
     }),
   );
-  await mkdir(join(evidenceDir, "gates/G15_BROWSER/artifacts"), {
+  await mkdir(join(evidenceDir, "gates/browser/artifacts"), {
     recursive: true,
   });
   await writeFile(
-    join(evidenceDir, "gates/G15_BROWSER/stdout.log"),
+    join(evidenceDir, "gates/browser/stdout.log"),
     "Vite preview with intercepted owner APIs exited successfully\n",
   );
   await writeFile(
-    join(evidenceDir, "gates/G15_BROWSER/artifacts/browser-proof.json"),
+    join(evidenceDir, "gates/browser/artifacts/browser-proof.json"),
     JSON.stringify({
       status: "PASS",
       runId: "20261024T120000Z-7654321",
@@ -3022,16 +3023,16 @@ void test("G15 runner requires the exact command and a context-bound live artifa
   };
   assert.equal(
     await verifyGateArtifacts(
-      { id: "G15_BROWSER", command: "pnpm test:playwright" },
+      { id: "browser", command: "pnpm test:playwright" },
       record,
       evidenceDir,
     ),
-    "G15 parent wrapper does not admit a joined child, exact fixture lineage, browser proof and cleanup",
+    "browser parent wrapper does not admit a joined child, exact fixture lineage, browser proof and cleanup",
   );
   assert.notEqual(
     await verifyGateArtifacts(
       {
-        id: "G15_BROWSER",
+        id: "browser",
         command: "node apps/web/test/operator-flow.spec.ts",
       },
       record,
@@ -3041,7 +3042,7 @@ void test("G15 runner requires the exact command and a context-bound live artifa
   );
 });
 
-void test("G15 failed gate records only a matching child failure receipt", async (t) => {
+void test("browser failed gate records only a matching child failure receipt", async (t) => {
   const sourceRoot = process.cwd();
   const candidateSha = execFileSync("git", ["rev-parse", "HEAD"], {
     cwd: sourceRoot,
@@ -3055,7 +3056,7 @@ void test("G15 failed gate records only a matching child failure receipt", async
   const childRunId = `${stamp}-${randomBytes(4).toString("hex").slice(0, 7)}`;
   const evidenceDir = join(sourceRoot, "evidence/launch", runId);
   t.after(() => rm(evidenceDir, { recursive: true, force: true }));
-  const artifactDir = join(evidenceDir, "gates/G15_BROWSER/artifacts");
+  const artifactDir = join(evidenceDir, "gates/browser/artifacts");
   await mkdir(artifactDir, { recursive: true, mode: 0o700 });
   const contextFor = (id, parentContext) => ({
     schemaVersion: 1,
@@ -3097,7 +3098,7 @@ void test("G15 failed gate records only a matching child failure receipt", async
   const failurePath = join(artifactDir, "browser-parent-failure.json");
   const failureReceipt = {
     schemaVersion: 1,
-    gateId: "G15_BROWSER",
+    gateId: "browser",
     outcome: "FAIL",
     parentRunId: runId,
     parentCandidateSha: candidateSha,
@@ -3126,7 +3127,7 @@ void test("G15 failed gate records only a matching child failure receipt", async
     },
   };
   await writeJSON(failurePath, failureReceipt, 0o600);
-  const gate = { id: "G15_BROWSER", command: "pnpm test:playwright" };
+  const gate = { id: "browser", command: "pnpm test:playwright" };
   const recordFor = (exitCode) => ({
     status: exitCode === 0 ? "PASS" : "FAIL",
     artifacts: [],
@@ -3134,7 +3135,7 @@ void test("G15 failed gate records only a matching child failure receipt", async
   });
   const failedRecord = recordFor(1);
   const rejection =
-    "G15 parent wrapper does not admit a joined child, exact fixture lineage, browser proof and cleanup";
+    "browser parent wrapper does not admit a joined child, exact fixture lineage, browser proof and cleanup";
 
   assert.equal(
     await verifyGateArtifacts(gate, failedRecord, evidenceDir),
@@ -3171,7 +3172,7 @@ void test("G15 failed gate records only a matching child failure receipt", async
   assert.equal(wrongIdentity.status, "FAIL");
 });
 
-function syntheticControlledG16Result(context, policy, image) {
+function syntheticControlledAromaSandboxResult(context, policy, image) {
   const names = aromaSandboxResourceNames(context.runId);
   const phase = (name, fields = {}) => ({
     phase: name,
@@ -3179,7 +3180,7 @@ function syntheticControlledG16Result(context, policy, image) {
     ...fields,
   });
   return {
-    gate: "G16_AROMA_SANDBOX",
+    gate: "aroma_sandbox",
     status: "PASS",
     code: "CONTROLLED_LIVE_SCENARIO_COMPLETE",
     ...context,
@@ -3243,16 +3244,16 @@ function syntheticControlledG16Result(context, policy, image) {
   };
 }
 
-void test("G16 controlled result requires bound phases, restore and owned cleanup", () => {
+void test("aroma_sandbox controlled result requires bound phases, restore and owned cleanup", () => {
   const context = {
     runId: "20261031T123456Z-abcdef0",
     candidateSha: `abcdef0${"1".repeat(33)}`,
   };
   const policy = { accountFingerprint: `sha256:${"2".repeat(64)}` };
   const image = `postgres:17.11-alpine@sha256:${"3".repeat(64)}`;
-  const value = syntheticControlledG16Result(context, policy, image);
+  const value = syntheticControlledAromaSandboxResult(context, policy, image);
   assert.equal(
-    validateControlledG16Result(value, context, policy, image),
+    validateControlledAromaSandboxResult(value, context, policy, image),
     value,
   );
   for (const mutate of [
@@ -3290,13 +3291,14 @@ void test("G16 controlled result requires bound phases, restore and owned cleanu
     const altered = structuredClone(value);
     mutate(altered);
     assert.throws(
-      () => validateControlledG16Result(altered, context, policy, image),
+      () =>
+        validateControlledAromaSandboxResult(altered, context, policy, image),
       /G16_CHILD_RESULT_INVALID/u,
     );
   }
 });
 
-void test("G16 parent persists sanitized recovery from a failed managed child", async (t) => {
+void test("aroma_sandbox parent persists sanitized recovery from a failed managed child", async (t) => {
   const root = fileURLToPath(new URL("../../..", import.meta.url));
   const parent = {
     runId: "20261031T120000Z-1234567",
@@ -3309,13 +3311,16 @@ void test("G16 parent persists sanitized recovery from a failed managed child", 
     runId: "20261031T123456Z-abcdef0",
     candidateSha: `abcdef0${"1".repeat(33)}`,
   };
-  const policy = await readApprovedG16Policy(root, parent.candidateSha);
+  const policy = await readApprovedAromaSandboxPolicy(
+    root,
+    parent.candidateSha,
+  );
   const image = JSON.parse(
     await readFile(join(root, "config/toolchain-versions.json"), "utf8"),
   ).postgresImage;
   const names = aromaSandboxResourceNames(childContext.runId);
   const outcome = {
-    gate: "G16_AROMA_SANDBOX",
+    gate: "aroma_sandbox",
     status: "FAIL",
     code: "RECOVERY_REQUIRED",
     ...childContext,
@@ -3330,7 +3335,8 @@ void test("G16 parent persists sanitized recovery from a failed managed child", 
       diagnostic: { substage: "selection", ownerCode: "NO_LEAK_SENTINEL" },
       cartState: "UNRESOLVED_OR_NONBASELINE",
       mutationsDisabled: true,
-      requiredAction: "CONTROLLED_G16_RECOVERY_BEFORE_RESOURCE_CLEANUP",
+      requiredAction:
+        "CONTROLLED_AROMA_SANDBOX_RECOVERY_BEFORE_RESOURCE_CLEANUP",
       cleanup: { removed: false, retained: true },
       resourceIDs: {
         runId: childContext.runId,
@@ -3403,7 +3409,7 @@ void test("G16 parent persists sanitized recovery from a failed managed child", 
         cwd: root,
         env: process.env,
       }).catch((error) =>
-        handleControlledG16ChildFailure({
+        handleControlledAromaSandboxChildFailure({
           error,
           parent,
           childContext,
@@ -3464,13 +3470,18 @@ void test("G16 parent persists sanitized recovery from a failed managed child", 
     const altered = structuredClone(outcome);
     mutate(altered);
     assert.equal(
-      sanitizeControlledG16Recovery(altered, childContext, policy, image),
+      sanitizeControlledAromaSandboxRecovery(
+        altered,
+        childContext,
+        policy,
+        image,
+      ),
       null,
     );
   }
 });
 
-void test("G16 signer locator requires a single absolute path", () => {
+void test("aroma_sandbox signer locator requires a single absolute path", () => {
   assert.deepEqual(
     parseLaunchArguments(["--g16-signer", "/tmp/g16-operator.mjs"]),
     { g16SignerPath: "/tmp/g16-operator.mjs" },
@@ -3483,7 +3494,7 @@ void test("G16 signer locator requires a single absolute path", () => {
     assert.throws(() => parseLaunchArguments(args), /g16-signer/u);
 });
 
-void test("G16 parent joins a refused signer without touching foreign tmpfs", async () => {
+void test("aroma_sandbox parent joins a refused signer without touching foreign tmpfs", async () => {
   const root = await mkdtemp(join(tmpdir(), "coffee-g16-refusal-test-"));
   const foreign = await mkdtemp("/dev/shm/coffee-g16-operator-");
   try {
@@ -3501,7 +3512,7 @@ setInterval(() => {}, 1000);
 `,
     );
     await assert.rejects(
-      runControlledG16Parent({
+      runControlledAromaSandboxParent({
         parentIdentity: {
           context: {},
           sourceRoot: root,
@@ -3523,10 +3534,10 @@ setInterval(() => {}, 1000);
   }
 });
 
-void test("G16 controlled evidence rejects unknown cleanup and altered child context", async () => {
+void test("aroma_sandbox controlled evidence rejects unknown cleanup and altered child context", async () => {
   const root = await mkdtemp(join(tmpdir(), "coffee-g16-parent-test-"));
   try {
-    const artifacts = join(root, "gates/G16_AROMA_SANDBOX/artifacts");
+    const artifacts = join(root, "gates/aroma_sandbox/artifacts");
     await mkdir(artifacts, { recursive: true });
     const parentIdentity = {
       evidenceDir: root,
@@ -3550,7 +3561,7 @@ void test("G16 controlled evidence rejects unknown cleanup and altered child con
     const path = join(artifacts, "controlled-parent.json");
     await writeFile(path, JSON.stringify(receipt));
     await assert.rejects(
-      verifyControlledG16Evidence({
+      verifyControlledAromaSandboxEvidence({
         parentIdentity,
         parentContextPath: "/parent",
       }),
@@ -3561,7 +3572,7 @@ void test("G16 controlled evidence rejects unknown cleanup and altered child con
     await writeFile(path, JSON.stringify(receipt));
     await writeFile(join(artifacts, "controlled-child-context.json"), "{}");
     await assert.rejects(
-      verifyControlledG16Evidence({
+      verifyControlledAromaSandboxEvidence({
         parentIdentity,
         parentContextPath: "/parent",
       }),
@@ -3572,7 +3583,7 @@ void test("G16 controlled evidence rejects unknown cleanup and altered child con
   }
 });
 
-void test("G16 controlled evidence verifies signed child bundle and rejects altered binding", async () => {
+void test("aroma_sandbox controlled evidence verifies signed child bundle and rejects altered binding", async () => {
   const temporary = await mkdtemp(join(tmpdir(), "coffee-g16-evidence-test-"));
   let child;
   let parentEvidenceDir;
@@ -3616,7 +3627,7 @@ void test("G16 controlled evidence verifies signed child bundle and rejects alte
     git("add", "--", ".sops.yaml");
     git(
       "-c",
-      "user.name=G16 synthetic test",
+      "user.name=aroma_sandbox synthetic test",
       "-c",
       "user.email=fixture@example.invalid",
       "commit",
@@ -3635,7 +3646,11 @@ void test("G16 controlled evidence verifies signed child bundle and rejects alte
       .digest("hex")
       .slice(0, 20)}`;
     const signer = { publicKeyPem, keyId, approver: "g16-operator" };
-    child = await createG16Checkout({ candidateRoot, candidateSha, ...signer });
+    child = await createAromaSandboxCheckout({
+      candidateRoot,
+      candidateSha,
+      ...signer,
+    });
     const hash = (bytes) => createHash("sha256").update(bytes).digest("hex");
     const sourceRoot = await fsPromises.realpath(process.cwd());
     const parentRunId = `20261031T123400Z-${candidateSha.slice(0, 7)}`;
@@ -3669,20 +3684,23 @@ void test("G16 controlled evidence verifies signed child bundle and rejects alte
       resources: {
         composeProject: `coffee-launch-${runId.toLowerCase()}`,
         kafkaPrefix: runId,
-        controlledScope: "G16",
+        controlledScope: "aroma_sandbox",
         controlledParentContextPath: parentContextPath,
         controlledParentCandidateSha: candidateSha,
         controlledParentRunId: parent.runId,
       },
     };
-    const policy = await readApprovedG16Policy(candidateRoot, candidateSha);
+    const policy = await readApprovedAromaSandboxPolicy(
+      candidateRoot,
+      candidateSha,
+    );
     const toolchain = JSON.parse(
       await readFile(
         join(candidateRoot, "config/toolchain-versions.json"),
         "utf8",
       ),
     );
-    const outcome = syntheticControlledG16Result(
+    const outcome = syntheticControlledAromaSandboxResult(
       context,
       policy,
       toolchain.postgresImage,
@@ -3711,9 +3729,9 @@ void test("G16 controlled evidence verifies signed child bundle and rejects alte
       restoredRoot: child.baselineRoot,
       restoredSha: child.baselineSha,
       evidenceDir,
-      scope: "G16",
+      scope: "aroma_sandbox",
     });
-    const artifacts = join(evidenceDir, "gates/G16_AROMA_SANDBOX/artifacts");
+    const artifacts = join(evidenceDir, "gates/aroma_sandbox/artifacts");
     const encrypt = (bytes) =>
       execFileSync("age", ["--recipient", recipient], {
         input: bytes,
@@ -3758,7 +3776,7 @@ void test("G16 controlled evidence verifies signed child bundle and rejects alte
       context: parent,
     };
     const verifyEvidence = (key = ageKey) =>
-      verifyControlledG16Evidence({
+      verifyControlledAromaSandboxEvidence({
         parentIdentity,
         parentContextPath,
         env: { ...process.env, SOPS_AGE_KEY_FILE: key },
@@ -3781,7 +3799,7 @@ void test("G16 controlled evidence verifies signed child bundle and rejects alte
     assert.equal(signatureCiphertext.includes(signature), false);
     assert.equal((await verifyEvidence()).childSha, child.baselineSha);
     process.env.SOPS_AGE_KEY_FILE = ageKey;
-    const gate = { id: "G16_AROMA_SANDBOX" };
+    const gate = { id: "aroma_sandbox" };
     const pendingRecord = () => ({
       status: "NOT_RUN",
       runs: [],
@@ -3795,7 +3813,7 @@ void test("G16 controlled evidence verifies signed child bundle and rejects alte
     const missing = pendingRecord();
     assert.match(
       await verifyGateArtifacts(gate, missing, evidenceDir),
-      /G16 controlled child failed/u,
+      /aroma_sandbox controlled child failed/u,
     );
     assert.deepEqual(missing.artifacts, []);
     await writeFile(ciphertextPath, approvalCiphertext, { mode: 0o600 });
@@ -3804,7 +3822,7 @@ void test("G16 controlled evidence verifies signed child bundle and rejects alte
     const missingCleanup = pendingRecord();
     assert.match(
       await verifyGateArtifacts(gate, missingCleanup, evidenceDir),
-      /G16 controlled child failed/u,
+      /aroma_sandbox controlled child failed/u,
     );
     assert.deepEqual(missingCleanup.artifacts, []);
     receipt.cleanup.signerRemoved = false;
@@ -3812,7 +3830,7 @@ void test("G16 controlled evidence verifies signed child bundle and rejects alte
     const forgedCleanup = pendingRecord();
     assert.match(
       await verifyGateArtifacts(gate, forgedCleanup, evidenceDir),
-      /G16 controlled child failed/u,
+      /aroma_sandbox controlled child failed/u,
     );
     assert.deepEqual(forgedCleanup.artifacts, []);
     receipt.cleanup.signerRemoved = true;
@@ -3896,7 +3914,7 @@ void test("G16 controlled evidence verifies signed child bundle and rejects alte
   }
 });
 
-void test("G16 child config preserves parent except approved policy and mutation flag", async () => {
+void test("aroma_sandbox child config preserves parent except approved policy and mutation flag", async () => {
   const fixture = await aromaApprovalFixture();
   const { publicKey } = generateKeyPairSync("ed25519");
   const publicKeyPem = publicKey
@@ -3918,7 +3936,7 @@ void test("G16 child config preserves parent except approved policy and mutation
     keyId,
     approver: "g16-operator",
   };
-  const child = parseYaml(buildG16ChildConfig(input).toString("utf8"));
+  const child = parseYaml(buildAromaSandboxChildConfig(input).toString("utf8"));
   assert.equal(child.services["aroma-convergence"].mutationsEnabled, true);
   assert.equal(child.services["aroma-convergence"].unrelated, "preserved");
   assert.deepEqual(child.verification.aromaSandbox.trustedApprovers, [
@@ -3928,12 +3946,12 @@ void test("G16 child config preserves parent except approved policy and mutation
     child.verification.aromaSandbox;
   assert.deepEqual(childPolicy, historicalPolicy);
   assert.throws(
-    () => buildG16ChildConfig({ ...input, keyId: "g16-foreign" }),
+    () => buildAromaSandboxChildConfig({ ...input, keyId: "g16-foreign" }),
     /G16_APPROVER_IDENTITY_INVALID/u,
   );
   assert.throws(
     () =>
-      buildG16ChildConfig({
+      buildAromaSandboxChildConfig({
         ...input,
         parentBytes: Buffer.from(
           parentBytes
@@ -3945,7 +3963,7 @@ void test("G16 child config preserves parent except approved policy and mutation
   );
   assert.throws(
     () =>
-      buildG16ChildConfig({
+      buildAromaSandboxChildConfig({
         ...input,
         historicalPolicy: {
           ...historicalPolicy,
@@ -3959,7 +3977,7 @@ void test("G16 child config preserves parent except approved policy and mutation
   );
 });
 
-void test("G16 historical approval requires the exact committed proof artifact", async (t) => {
+void test("aroma_sandbox historical approval requires the exact committed proof artifact", async (t) => {
   const root = await mkdtemp(join(tmpdir(), "coffee-approved-policy-"));
   t.after(() => rm(root, { recursive: true, force: true }));
   const git = (...args) =>
@@ -3982,18 +4000,18 @@ void test("G16 historical approval requires the exact committed proof artifact",
   git("add", ".");
   git("commit", "-qm", "approved proof");
   const sha = git("rev-parse", "HEAD");
-  const policy = await readApprovedG16Policy(root, sha);
+  const policy = await readApprovedAromaSandboxPolicy(root, sha);
   assert.equal(policy.existingAccountException.authority, "user-2026-10-23");
   assert.equal(Object.hasOwn(policy, "trustedApprovers"), false);
   await writeFile(path, `${bytes.toString()} `);
   await assert.rejects(
-    readApprovedG16Policy(root, sha),
+    readApprovedAromaSandboxPolicy(root, sha),
     /G16_APPROVED_POLICY_BLOB_INVALID/u,
   );
   git("add", ".");
   git("commit", "-qm", "altered proof");
   await assert.rejects(
-    readApprovedG16Policy(root, git("rev-parse", "HEAD")),
+    readApprovedAromaSandboxPolicy(root, git("rev-parse", "HEAD")),
     /G16_APPROVED_POLICY_BLOB_INVALID/u,
   );
 });
@@ -4522,7 +4540,7 @@ void test("AROMA full-cart guards fail closed and recovery cleanup requires base
   );
 });
 
-void test("G16 requires the selected offer's explicit binding packing and null grind before approval or grant", () => {
+void test("aroma_sandbox requires the selected offer's explicit binding packing and null grind before approval or grant", () => {
   const binding = {
     offerRef: `off_${"0".repeat(26)}`,
     supplierRef: `sup_${"1".repeat(26)}`,
@@ -4563,7 +4581,7 @@ void test("G16 requires the selected offer's explicit binding packing and null g
   );
 });
 
-void test("G16 exact raw-offer reverse lookup rejects foreign and stale approved refs", () => {
+void test("aroma_sandbox exact raw-offer reverse lookup rejects foreign and stale approved refs", () => {
   const offerRef = `off_${"0".repeat(26)}`;
   const binding = {
     offerRef,
@@ -4624,7 +4642,7 @@ void test("G16 exact raw-offer reverse lookup rejects foreign and stale approved
   );
 });
 
-void test("G16 accepts only pinned offer-445 wire facts when source binding facts are absent", async () => {
+void test("aroma_sandbox accepts only pinned offer-445 wire facts when source binding facts are absent", async () => {
   const root = process.cwd();
   const factsPath = join(
     root,
@@ -4783,7 +4801,7 @@ void test("G16 accepts only pinned offer-445 wire facts when source binding fact
   assert.equal(grants, 0);
 });
 
-void test("G16 rejects missing, tampered, or symlinked packing proof sources", async (t) => {
+void test("aroma_sandbox rejects missing, tampered, or symlinked packing proof sources", async (t) => {
   const root = await mkdtemp(join(tmpdir(), "g16-packing-proof-"));
   t.after(() => rm(root, { recursive: true, force: true }));
   const directory = join(root, "evidence/aroma-provider/2026-10-24-packing");
@@ -4834,7 +4852,7 @@ void test("G16 rejects missing, tampered, or symlinked packing proof sources", a
   );
 });
 
-void test("G16 binds the mutator preparation GET and unsafe call to the approved cart phase and exact expiry", async () => {
+void test("aroma_sandbox binds the mutator preparation GET and unsafe call to the approved cart phase and exact expiry", async () => {
   const [
     { ProviderCartMutator },
     { GatewayMutationExecutor },
@@ -5066,7 +5084,7 @@ void test("G16 binds the mutator preparation GET and unsafe call to the approved
   );
 });
 
-void test("G16 restart waits for exact DB-clock reservation eligibility within the canonical bound", async () => {
+void test("aroma_sandbox restart waits for exact DB-clock reservation eligibility within the canonical bound", async () => {
   const calls = [];
   const pauses = [];
   let monotonic = 10;
@@ -5132,7 +5150,7 @@ void test("G16 restart waits for exact DB-clock reservation eligibility within t
   );
 });
 
-void test("G16 resolves only the exact approval environment placeholder and fails closed when absent", () => {
+void test("aroma_sandbox resolves only the exact approval environment placeholder and fails closed when absent", () => {
   assert.deepEqual(
     parseAromaArguments(
       ["--approval-file", "$AROMA_SANDBOX_APPROVAL_FILE"],
@@ -5159,7 +5177,7 @@ void test("G16 resolves only the exact approval environment placeholder and fail
   );
 });
 
-void test("G16 cleanup failure always changes the gate decision to FAIL", () => {
+void test("aroma_sandbox cleanup failure always changes the gate decision to FAIL", () => {
   assert.deepEqual(
     normalizeCleanupFailureOutcome({
       status: "PASS",
@@ -5187,7 +5205,7 @@ void test("G16 cleanup failure always changes the gate decision to FAIL", () => 
   );
 });
 
-void test("G16 phase failure keeps bounded convergence evidence and strips unknown codes and payload fields", async () => {
+void test("aroma_sandbox phase failure keeps bounded convergence evidence and strips unknown codes and payload fields", async () => {
   const secret = "PRIVATE_PROVIDER_BODY_CANARY";
   const rawConvergenceEvidence = {
     latestAttempt: {
@@ -5322,7 +5340,7 @@ void test("G16 phase failure keeps bounded convergence evidence and strips unkno
   );
 });
 
-void test("G16 real catalog export preserves safe recordBatch failure facts through importer terminal record", async () => {
+void test("aroma_sandbox real catalog export preserves safe recordBatch failure facts through importer terminal record", async () => {
   const { DatabaseTransactionError } =
     await import("../../../packages/platform-database/dist/index.js");
   const {
@@ -5530,7 +5548,7 @@ void test("AROMA Desired fixture appends only monotonic revision, line and work 
   );
 });
 
-void test("G16 migration helper creates its checksum ledger before grants and rolls back DDL with ledger rows", async (t) => {
+void test("aroma_sandbox migration helper creates its checksum ledger before grants and rolls back DDL with ledger rows", async (t) => {
   const root = await mkdtemp(join(tmpdir(), "coffee-g16-migrations-"));
   t.after(() => rm(root, { recursive: true, force: true }));
   const directory = join(root, "apps/catalog-service/migrations");
@@ -5961,7 +5979,7 @@ void test("pnpm forwards the approval-file argument after its separator to the o
   }
 });
 
-void test("G04, G08, G09, G10, G11, G12, G13, G14, G17 and G18 forward the verified launch context to gate commands", async (t) => {
+void test("unit, migrations, db_boundaries, integration, recovery, supply_chain, compose, observability, backup_restore and rollback forward the verified launch context to gate commands", async (t) => {
   const directory = await mkdtemp(join(tmpdir(), "launch-owner-context-"));
   t.after(() => rm(directory, { recursive: true, force: true }));
   const contextPath = "/tmp/coffee-launch-context-proof.json";
@@ -6057,7 +6075,7 @@ void test("gate children receive the absolute gate deadline in the environment",
   }
 });
 
-void test("G04 classifies changed critical source roots and enforces emitted-JS LCOV and no skipped unit tests", () => {
+void test("unit classifies changed critical source roots and enforces emitted-JS LCOV and no skipped unit tests", () => {
   const modules = [
     {
       id: "orders",
@@ -6257,7 +6275,7 @@ void test("G04 classifies changed critical source roots and enforces emitted-JS 
   );
 });
 
-void test("G04 preserves private run-scoped TAP/LCOV diagnostics once without overwriting", async (t) => {
+void test("unit preserves private run-scoped TAP/LCOV diagnostics once without overwriting", async (t) => {
   const sourceRepoRoot = await mkdtemp(
     join(tmpdir(), "launch-g04-artifact-root-"),
   );
@@ -6265,7 +6283,7 @@ void test("G04 preserves private run-scoped TAP/LCOV diagnostics once without ov
   const candidateSha = "a".repeat(40);
   const runId = `20261024T120000Z-${candidateSha.slice(0, 7)}`;
   const evidenceDir = join(sourceRepoRoot, "evidence/launch", runId);
-  const artifactsDir = join(evidenceDir, "gates/G04_UNIT/artifacts");
+  const artifactsDir = join(evidenceDir, "gates/unit/artifacts");
   await mkdir(artifactsDir, { recursive: true, mode: 0o700 });
   const context = { runId, candidateSha, sourceRepoRoot, evidenceDir };
   const contents = {
@@ -6310,7 +6328,7 @@ void test("G04 preserves private run-scoped TAP/LCOV diagnostics once without ov
   );
 });
 
-void test("G04 rejects a symlinked evidence/launch ancestor before writing artifacts", async (t) => {
+void test("unit rejects a symlinked evidence/launch ancestor before writing artifacts", async (t) => {
   const sourceRepoRoot = await mkdtemp(
     join(tmpdir(), "launch-g04-symlink-root-"),
   );
@@ -6330,7 +6348,7 @@ void test("G04 rejects a symlinked evidence/launch ancestor before writing artif
   const outsideArtifactsDir = join(
     outsideLaunch,
     runId,
-    "gates/G04_UNIT/artifacts",
+    "gates/unit/artifacts",
   );
   await mkdir(join(sourceRepoRoot, "evidence"), { recursive: true });
   await mkdir(outsideArtifactsDir, { recursive: true, mode: 0o700 });
@@ -6347,7 +6365,7 @@ void test("G04 rejects a symlinked evidence/launch ancestor before writing artif
   });
 });
 
-void test("G04 unit child excludes bootstrap and operator locators while preserving the launch context and coverage", async (t) => {
+void test("unit child excludes bootstrap and operator locators while preserving the launch context and coverage", async (t) => {
   const directory = await mkdtemp(join(tmpdir(), "launch-g04-child-env-"));
   t.after(() => rm(directory, { recursive: true, force: true }));
   const values = {
@@ -6355,7 +6373,7 @@ void test("G04 unit child excludes bootstrap and operator locators while preserv
     AROMA_SANDBOX_APPROVAL_FILE: "/synthetic/operator-approval",
     COFFEE_LAUNCH_CONTEXT_FILE: "/synthetic/context",
     NODE_V8_COVERAGE: directory,
-    COFFEE_G04_ENV_TEST: "ordinary-value",
+    COFFEE_UNIT_ENV_PROBE: "ordinary-value",
   };
   const original = Object.fromEntries(
     Object.keys(values).map((key) => [key, process.env[key]]),
@@ -6369,7 +6387,7 @@ void test("G04 unit child excludes bootstrap and operator locators while preserv
         noApproval: !Object.hasOwn(process.env, "AROMA_SANDBOX_APPROVAL_FILE"),
         context: process.env.COFFEE_LAUNCH_CONTEXT_FILE === "/synthetic/context",
         coverage: process.env.NODE_V8_COVERAGE === ${JSON.stringify(directory)},
-        ordinary: process.env.COFFEE_G04_ENV_TEST === "ordinary-value"
+        ordinary: process.env.COFFEE_UNIT_ENV_PROBE === "ordinary-value"
       }))`,
     ]);
     assert.equal(child.status, 0);
@@ -6390,7 +6408,7 @@ void test("G04 unit child excludes bootstrap and operator locators while preserv
   }
 });
 
-void test("G04 requires an owned read-only context and reuses the full clean-checkout guard", async (t) => {
+void test("unit requires an owned read-only context and reuses the full clean-checkout guard", async (t) => {
   const directory = await mkdtemp(join(tmpdir(), "launch-g04-context-"));
   t.after(() => rm(directory, { recursive: true, force: true }));
   const contextPath = join(directory, "context.json");
@@ -6425,7 +6443,7 @@ void test("G04 requires an owned read-only context and reuses the full clean-che
   );
 });
 
-void test("G04 coverage floors and critical artifact mapping are strict platform policy", async () => {
+void test("unit coverage floors and critical artifact mapping are strict platform policy", async () => {
   const config = parseYaml(
     await readFile(join(process.cwd(), "config/platform.yaml"), "utf8"),
     { json: true },
@@ -6467,14 +6485,14 @@ void test("G04 coverage floors and critical artifact mapping are strict platform
   assert.throws(() => parsePlatformConfig(remapped), /artifact mapping/u);
 });
 
-void test("workload cutoff reserves the declared G19 timeout and final report window", () => {
+void test("workload cutoff reserves the declared report timeout and final report window", () => {
   const reservedMs = 900_000 + 120_000;
-  assert.equal(gateBudgetMs("G00_PREFLIGHT", reservedMs), 0);
-  assert.equal(gateBudgetMs("G19_REPORT", reservedMs), 900_000);
-  assert.equal(gateBudgetMs("G19_REPORT", 900_000), 780_000);
+  assert.equal(gateBudgetMs("preflight", reservedMs), 0);
+  assert.equal(gateBudgetMs("report", reservedMs), 900_000);
+  assert.equal(gateBudgetMs("report", 900_000), 780_000);
 });
 
-void test("G19 accepts only a complete run-scoped Kafka namespace inventory matching G00 claims", () => {
+void test("report accepts only a complete run-scoped Kafka namespace inventory matching preflight claims", () => {
   const runId = "20261023T120000Z-1234567";
   const expectedTopics = [
     "coffee.catalog.snapshot.v1",
@@ -6614,12 +6632,12 @@ void test("G19 accepts only a complete run-scoped Kafka namespace inventory matc
   );
 });
 
-void test("G13 persists only the top-level validated Kafka inventory from successful stdout", async (t) => {
+void test("compose persists only the top-level validated Kafka inventory from successful stdout", async (t) => {
   const evidenceDir = await mkdtemp(
     join(tmpdir(), "launch-g13-kafka-inventory-"),
   );
   t.after(() => rm(evidenceDir, { recursive: true, force: true }));
-  const gateDir = join(evidenceDir, "gates/G13_COMPOSE");
+  const gateDir = join(evidenceDir, "gates/compose");
   await mkdir(join(gateDir, "artifacts"), { recursive: true });
   const runId = "20261023T120000Z-1234567";
   const projectName = `coffee-launch-${runId.toLowerCase()}`;
@@ -6760,6 +6778,17 @@ void test("run result validates exact gate order and command identities", async 
     decision: "НЕ ДОПУСТИТЬ",
   };
   await validateRunResult(result);
+  const legacyIdBySlug = new Map(
+    Object.entries(LEGACY_GATE_IDS).map(([legacy, slug]) => [slug, legacy]),
+  );
+  const legacyResult = structuredClone(result);
+  for (const gate of legacyResult.gates) gate.id = legacyIdBySlug.get(gate.id);
+  assert.equal(validateRunResultContract(legacyResult), legacyResult);
+  legacyResult.gates[0].expectedCommand = "pnpm forged-command";
+  assert.throws(
+    () => validateRunResultContract(legacyResult),
+    /Некорректная запись preflight/u,
+  );
   [result.gates[0], result.gates[1]] = [result.gates[1], result.gates[0]];
   await assert.rejects(validateRunResult(result), /must be equal to constant/);
 });
@@ -6805,16 +6834,16 @@ void test("builtin report finalizes a complete fail-closed result without candid
   );
   const gates = EXPECTED_GATES.map(([id, expectedCommand, timeoutSeconds]) => ({
     id,
-    status: id === "G12_SUPPLY_CHAIN" ? "FAIL" : "NOT_RUN",
+    status: id === "supply_chain" ? "FAIL" : "NOT_RUN",
     expectedCommand,
     startedAt: null,
     endedAt: null,
     durationMs: 0,
     timeoutSeconds,
     reason:
-      id === "G12_SUPPLY_CHAIN"
-        ? "G12 scan failed"
-        : "NOT_RUN: workload budget exhausted; G19 reserve remains",
+      id === "supply_chain"
+        ? "supply_chain scan failed"
+        : "NOT_RUN: workload budget exhausted; report reserve remains",
     runs: [],
     artifacts: [],
   }));
@@ -6896,11 +6925,10 @@ void test("builtin report finalizes a complete fail-closed result without candid
   const finalized = await finalizeReport(evidenceDir);
   assert.equal(finalized.result.decision, "НЕ ДОПУСТИТЬ");
   assert.equal(
-    finalized.result.gates.find((gate) => gate.id === "G12_SUPPLY_CHAIN")
-      .status,
+    finalized.result.gates.find((gate) => gate.id === "supply_chain").status,
     "FAIL",
   );
-  for (const id of ["G10_INTEGRATION", "G11_RECOVERY", "G13_COMPOSE"]) {
+  for (const id of ["integration", "recovery", "compose"]) {
     assert.equal(
       finalized.result.gates.find((gate) => gate.id === id).status,
       "NOT_RUN",
@@ -6920,14 +6948,14 @@ void test("builtin report finalizes a complete fail-closed result without candid
   assert.equal(handoff.decision, "НЕ ДОПУСТИТЬ");
   assert.equal(handoff.gates.length, 20);
   assert.equal(
-    handoff.gates.find((gate) => gate.id === "G12_SUPPLY_CHAIN").status,
+    handoff.gates.find((gate) => gate.id === "supply_chain").status,
     "FAIL",
   );
   assert.equal(
-    handoff.gates.find((gate) => gate.id === "G14_OBSERVABILITY").status,
+    handoff.gates.find((gate) => gate.id === "observability").status,
     "NOT_RUN",
   );
-  assert.equal(handoff.limits.gateTimeoutSeconds.G14_OBSERVABILITY, 1800);
+  assert.equal(handoff.limits.gateTimeoutSeconds.observability, 1800);
   for (const name of ["run-result.json", "decision.json"]) {
     const row = handoff.artifactHashes.find(({ path }) => path === name);
     const bytes = await readFile(join(evidenceDir, name));
@@ -6952,7 +6980,7 @@ void test("builtin report finalizes a complete fail-closed result without candid
   assert.equal(unbound.result.gates[19].status, "FAIL");
   assert.match(unbound.result.gates[19].reason, /source descriptor/u);
   assert.equal(
-    unbound.result.gates.find((gate) => gate.id === "G12_SUPPLY_CHAIN").status,
+    unbound.result.gates.find((gate) => gate.id === "supply_chain").status,
     "FAIL",
   );
   assert.ok(unbound.errors.some((error) => /source descriptor/u.test(error)));
@@ -6973,15 +7001,15 @@ void test("builtin report finalizes a complete fail-closed result without candid
   assert.doesNotMatch(report, /\n\n$/);
   assert.match(
     report,
-    /## Sandbox fingerprint[\s\S]*G16: NOT_RUN; account fingerprint: нет доказательства/,
+    /## Sandbox fingerprint[\s\S]*aroma_sandbox: NOT_RUN; account fingerprint: нет доказательства/,
   );
   assert.match(
     report,
-    /## Backup RPO и restore time[\s\S]*G17: NOT_RUN;[\s\S]*NOT_RUN — доказательства нет/,
+    /## Backup RPO и restore time[\s\S]*backup_restore: NOT_RUN;[\s\S]*NOT_RUN — доказательства нет/,
   );
   assert.match(
     report,
-    /## Observability и rollback[\s\S]*G14 observability: NOT_RUN[\s\S]*G18 rollback: NOT_RUN/,
+    /## Observability и rollback[\s\S]*observability: NOT_RUN[\s\S]*rollback: NOT_RUN/,
   );
   assert.match(
     report,
@@ -7001,7 +7029,7 @@ void test("builtin report finalizes a complete fail-closed result without candid
   assert.equal(checksumCheck.status, 0, checksumCheck.stderr);
   await writeFile(
     join(evidenceDir, "commands.ndjson"),
-    `${JSON.stringify({ gateId: "G00_PREFLIGHT", argv: ["pnpm", "forged"] })}\n`,
+    `${JSON.stringify({ gateId: "preflight", argv: ["pnpm", "forged"] })}\n`,
   );
   const tampered = await finalizeReport(evidenceDir);
   assert.ok(tampered.errors.some((error) => /commands\.ndjson/.test(error)));
@@ -7046,7 +7074,7 @@ void test("builtin report finalizes a complete fail-closed result without candid
   ]);
   assert.equal(finalHandoff.gates[19].runs[0].exitCode, 0);
   assert.equal(
-    finalHandoff.gates.find((gate) => gate.id === "G12_SUPPLY_CHAIN").status,
+    finalHandoff.gates.find((gate) => gate.id === "supply_chain").status,
     "FAIL",
   );
   assert.equal(finalHandoff.decision, "НЕ ДОПУСТИТЬ");
@@ -7064,7 +7092,7 @@ void test("builtin report finalizes a complete fail-closed result without candid
   const forgedReportCommand = await finalizeReport(evidenceDir);
   assert.ok(
     forgedReportCommand.errors.some((error) =>
-      /фактический argv|G19 PASS/.test(error),
+      /фактический argv|report PASS/.test(error),
     ),
   );
 
@@ -7111,10 +7139,10 @@ void test("builtin report finalizes a complete fail-closed result without candid
   const expectedTopics = [`${runId}.orders`];
   const expectedGroups = [`${runId}.orders-worker`];
   await writeFile(
-    join(evidenceDir, "gates/G00_PREFLIGHT/artifacts/preflight.json"),
+    join(evidenceDir, "gates/preflight/artifacts/preflight.json"),
     JSON.stringify({
       schemaVersion: 1,
-      gateId: "G00_PREFLIGHT",
+      gateId: "preflight",
       runId,
       candidateSha: result.candidateSha,
       status: "PASS",
@@ -7156,7 +7184,7 @@ void test("builtin report finalizes a complete fail-closed result without candid
   const missingKafkaInventory = await finalizeReport(evidenceDir);
   assert.ok(
     missingKafkaInventory.errors.some((error) =>
-      /G13 Kafka namespace inventory/u.test(error),
+      /compose Kafka namespace inventory/u.test(error),
     ),
   );
 });
@@ -7204,6 +7232,11 @@ void test("candidate report and owner suites accept only the exact launch candid
     candidateReport,
     await readFile(new URL("./report.mjs", import.meta.url)),
   );
+  for (const name of ["gate-matrix.generated.mjs", "gate-identity.mjs"])
+    await writeFile(
+      join(candidateRoot, "verification/launch/v1", name),
+      await readFile(new URL(`./${name}`, import.meta.url)),
+    );
   const helperPaths = [
     "launch-database-target.ts",
     "launch-database-target.js",
@@ -7332,6 +7365,11 @@ void test("candidate report and owner suites accept only the exact launch candid
     sourceReport,
     await readFile(new URL("./report.mjs", import.meta.url)),
   );
+  for (const name of ["gate-matrix.generated.mjs", "gate-identity.mjs"])
+    await writeFile(
+      join(sourceRoot, "verification/launch/v1", name),
+      await readFile(new URL(`./${name}`, import.meta.url)),
+    );
   await mkdir(join(sourceRoot, "packages/platform-config/src"), {
     recursive: true,
   });
@@ -7367,10 +7405,10 @@ void test("candidate report and owner suites accept only the exact launch candid
     await writeFile(join(gateDir, "stderr.log"), "");
   }
   await writeFile(
-    join(evidenceDir, "gates/G00_PREFLIGHT/artifacts/preflight.json"),
+    join(evidenceDir, "gates/preflight/artifacts/preflight.json"),
     JSON.stringify({
       schemaVersion: 1,
-      gateId: "G00_PREFLIGHT",
+      gateId: "preflight",
       runId,
       candidateSha,
       status: "FAIL",
@@ -7385,7 +7423,7 @@ void test("candidate report and owner suites accept only the exact launch candid
     }),
   );
   await writeFile(
-    join(evidenceDir, "gates/G00_PREFLIGHT/result.json"),
+    join(evidenceDir, "gates/preflight/result.json"),
     JSON.stringify(gates[0]),
   );
   const executed = spawnSync(process.execPath, [candidateReport], {
@@ -7412,7 +7450,7 @@ void test("candidate report and owner suites accept only the exact launch candid
     join(evidenceDir, "decision.json"),
     join(evidenceDir, "handoff.yaml"),
     join(evidenceDir, "checksums.sha256"),
-    join(evidenceDir, "gates/G00_PREFLIGHT/artifacts/defect.json"),
+    join(evidenceDir, "gates/preflight/artifacts/defect.json"),
     reportPath,
   ];
   for (const [index, target] of symlinkTargets.entries()) {
@@ -7629,7 +7667,7 @@ void test("combined stdout/stderr budget writes a marker and fails the gate capt
   );
 });
 
-void test("G00 and G19 pnpm commands keep exact argv and do not auto-install before execution", async (t) => {
+void test("preflight and report pnpm commands keep exact argv and do not auto-install before execution", async (t) => {
   const directory = await mkdtemp(join(tmpdir(), "launch-pnpm-preinstall-"));
   t.after(() => rm(directory, { recursive: true, force: true }));
   const localDependency = join(directory, "local-dependency");
@@ -8133,17 +8171,17 @@ void test(
   },
 );
 
-void test("G14 cannot pass without sealed browser correlation lineage", async () => {
+void test("observability cannot pass without sealed browser correlation lineage", async () => {
   const evidenceDir = await mkdtemp(
     join(tmpdir(), "coffee-browser-correlation-"),
   );
   try {
-    await mkdir(join(evidenceDir, "gates/G14_OBSERVABILITY/artifacts"), {
+    await mkdir(join(evidenceDir, "gates/observability/artifacts"), {
       recursive: true,
     });
     await writeFile(join(evidenceDir, "context.json"), "{}\n", { mode: 0o600 });
     const failure = await verifyGateArtifacts(
-      { id: "G14_OBSERVABILITY", command: "pnpm test:observability" },
+      { id: "observability", command: "pnpm test:observability" },
       {
         runs: [
           {
@@ -8166,15 +8204,15 @@ void test("G14 cannot pass without sealed browser correlation lineage", async ()
   }
 });
 
-void test("G12 image hydration binds native G00 proof and verified runtime receipts", async (t) => {
+void test("supply_chain image hydration binds native preflight proof and verified runtime receipts", async (t) => {
   const directory = await mkdtemp(join(tmpdir(), "launch-image-evidence-"));
   t.after(() => rm(directory, { recursive: true, force: true }));
   const contextFile = join(directory, "context.json");
   const preflightPath = join(
     directory,
-    "gates/G00_PREFLIGHT/artifacts/preflight.json",
+    "gates/preflight/artifacts/preflight.json",
   );
-  await mkdir(join(directory, "gates/G00_PREFLIGHT/artifacts"), {
+  await mkdir(join(directory, "gates/preflight/artifacts"), {
     recursive: true,
   });
   const runId = "20261101T000000Z-abcdef0";
@@ -8184,7 +8222,7 @@ void test("G12 image hydration binds native G00 proof and verified runtime recei
   const nodeImageId = `sha256:${"4".repeat(64)}`;
   const proof = {
     schemaVersion: 1,
-    gateId: "G00_PREFLIGHT",
+    gateId: "preflight",
     status: "PASS",
     runId,
     candidateSha,
@@ -8215,7 +8253,7 @@ void test("G12 image hydration binds native G00 proof and verified runtime recei
     evidenceDir: directory,
   };
   await writeFile(contextFile, JSON.stringify(context));
-  const g00 = { id: "G00_PREFLIGHT", status: "PASS", artifacts: [] };
+  const g00 = { id: "preflight", status: "PASS", artifacts: [] };
   const result = {
     runId,
     candidateSha,
@@ -8300,7 +8338,7 @@ void test("G12 image hydration binds native G00 proof and verified runtime recei
   );
 });
 
-void test("G12 image hydration persists atomically and fails closed on error or deadline", async () => {
+void test("supply_chain image hydration persists atomically and fails closed on error or deadline", async () => {
   for (const scenario of [
     "success",
     "reader-error",
@@ -8347,7 +8385,10 @@ void test("G12 image hydration persists atomically and fails closed on error or 
     } else {
       assert.equal(record.status, "FAIL", scenario);
       assert.deepEqual(result.environment, previous, scenario);
-      assert.match(record.reason, /G12 image evidence validation failed/u);
+      assert.match(
+        record.reason,
+        /supply_chain image evidence validation failed/u,
+      );
       assert.deepEqual(
         persisted,
         scenario === "late-write" ? [images, previous] : [],

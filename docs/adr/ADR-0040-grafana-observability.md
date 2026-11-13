@@ -23,8 +23,7 @@ healthy API только после включения telemetry SDK. Resolver �
 
 Готовый Alloy 1.21.3 выбран кандидатом Collector после проверки поставленного
 бинарника и image: `go-jose/v4 4.1.6`, Trivy 0 HIGH/0 CRITICAL. Найдены также
-22 MEDIUM, 4 LOW и 3 UNKNOWN: их нельзя описывать как отсутствие CVE. Runtime
-эквивалентность и окончательный G12 требуют отдельной проверки одного candidate.
+22 MEDIUM, 4 LOW и 3 UNKNOWN: их нельзя описывать как отсутствие CVE. Runtime-эквивалентность и окончательный `supply_chain` требуют проверки одного candidate.
 Contrib 0.164.0 проверен и отклонён: поставленный бинарник содержит 4.1.5 и
 CVE-2026-116587 HIGH. Владелец отклонил VEX для этой уязвимости; скрытого ignore нет.
 
@@ -41,7 +40,7 @@ HTTP UI, readiness и служебная диагностика Alloy слуша
 внешние usage reports и внешние notifications выключены. Grafana anonymous access
 запрещён; admin password получает только его scoped materialization.
 
-Очередь Alloy exporter увеличена до 2048 items при двух consumers после воспроизведённых enqueue losses на 512. Для Prometheus задано ограниченное 30-минутное окно приёма out-of-order OTLP samples: Изолированный runtime-прогон показал такие samples при нулевом стандартном окне. [Документация Prometheus](https://prometheus.io/docs/guides/opentelemetry/#enable-out-of-order-ingestion) описывает эту настройку. Причина конкретного HTTP 400 не доказана; компонентное сравнение не заменяет проверки памяти и полного G14.
+Очередь Alloy exporter увеличена до 2048 items при двух consumers после воспроизведённых enqueue losses на 512. Для Prometheus задано ограниченное 30-минутное окно приёма out-of-order OTLP samples: Изолированный runtime-прогон показал такие samples при нулевом стандартном окне. [Документация Prometheus](https://prometheus.io/docs/guides/opentelemetry/#enable-out-of-order-ingestion) описывает эту настройку. Причина конкретного HTTP 400 не доказана; компонентное сравнение не заменяет проверки памяти и полного `observability`.
 
 Tempo получает `telemetry.tempo.finishOnShutdownTimeoutMs: 10000`, который renderer
 передаёт в native `backend_worker.finish_on_shutdown_timeout`. Стандартные 30 секунд
@@ -51,7 +50,7 @@ Tempo получает `telemetry.tempo.finishOnShutdownTimeoutMs: 10000`, ко�
 отменяет контекст незавершённого задания по этому таймеру; полные persistence,
 checkpointed crash, retention и restore остаются обязательными проверками.
 
-## Хранение и изменение G14
+## Хранение и изменение `observability`
 
 Владелец явно согласовал отдельные ограниченные persistent volumes, три дня
 retention, проверку штатных отказов/recovery и alert на 80% заполнения. У Loki
@@ -104,7 +103,7 @@ restore и capacity должны быть доказаны отдельно, а 
 
 ## Приёмка и границы
 
-Перед мерджем нужны реальный G12, Compose/G14, все применимые 15-runtime metrics,
+Перед мерджем нужны фактический прогон `supply_chain`, Compose и `observability`, все применимые 15-runtime metrics,
 native nginx, три сигнала и same-trace path, шесть alert episodes, outage/loss,
 memory/retry/stop, persistence/retention/restore и проверка прав/сетей. Любой
 обязательный FAIL/NOT_RUN блокирует допуск. Старые handoff и пользовательские
@@ -124,7 +123,7 @@ Prometheus 13.2.5 и Tempo 13.4.1 plugins. Tempo 3.1.1 с `go-jose 4.1.4` и
 полный Grafana 13.3.0 с 39 HIGH в bundled plugins исключены из выбранной поставки.
 Vendor Rust/Go не компилируется: target Grafana копирует проверенное содержимое
 трёх ZIP в `/opt/grafana/plugins`, вне persistent `/var/lib/grafana`.
-Финальный image ID приходит из G12 receipt, официальный slim pin является base.
+Финальный image ID приходит из receipt `supply_chain`, официальный slim pin является base.
 
 Разрешение ограничено CVE-2026-21728 и CVE-2026-28377 для exact Tempo plugin
 binary `292f1875dbcc18125701cca2762da7e65300a4ca3ea3c4105f24b7cd57694588`.
@@ -138,17 +137,17 @@ binary `292f1875dbcc18125701cca2762da7e65300a4ca3ea3c4105f24b7cd57694588`.
 Единственная policy — `verification.securityScan.approvedFixed`: пустой набор
 или ровно два согласованных CVE. BOM хранит exact ZIP/manifest/binary hashes,
 ключ подписи и module identity. Изменение BOM не расширяет закрытый approved
-набор. G12 сохраняет raw HIGH, отдельно фиксирует resolvedFixed и unresolvedHigh,
+набор. `supply_chain` сохраняет raw HIGH, отдельно фиксирует resolvedFixed и unresolvedHigh,
 проверяет физические файлы финального OCI и связывает решение с exact candidate,
 run, manifest/platform и image ID. Любой иной HIGH, CRITICAL или несовпадение
 identity блокирует допуск. VEX для неисправленной `go-jose 4.1.5` запрещён.
 MEDIUM/LOW/UNKNOWN остаются в отчётах; «0 CVE» не утверждается.
 
-Кандидат `e6c2e7d` прошёл независимые компонентные G12/G14: три сигнала,
+Кандидат `e6c2e7d` прошёл независимые компонентные проверки `supply_chain`/`observability`: три сигнала,
 15-runtime matrix, alert transitions, native pressure/recovery, persistence,
 TTL и backup/restore. [Отчёт](../reports/observability-delivery.md) фиксирует
 source/hash bindings и ограничения, [handoff](../../evidence/handoffs/issue-210.yaml)
-передаёт Operations в #13. Формальный G00/G12/G14 admission и full-system #13
+передаёт Operations в #13. Формальный допуск по гейтам `preflight`/`supply_chain`/`observability` и full-system #13
 не подменяются этим компонентным доказательством.
 
 ## Источники

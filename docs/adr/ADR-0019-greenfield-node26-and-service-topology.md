@@ -70,7 +70,7 @@ image:
 - HTTP/Kafka/PostgreSQL client compatibility;
 - SBOM, provenance и vulnerability scan.
 
-Эти проверки материализуются в #3 и блокируются G01/G03/G10/G12/G13/G14 #13.
+Эти проверки материализуются в #3 и блокируются гейтами `install`/`static`/`integration`/`supply_chain`/`compose`/`observability` #13.
 Непройденный workload не получает production image.
 
 ### 2. Пятнадцать физических runtime

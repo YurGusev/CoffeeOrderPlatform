@@ -249,23 +249,23 @@ function sha256(value) {
 
 function validateRequest(operation, input, methodName) {
   const descriptor = OPERATION[operation];
-  if (!descriptor) fail("G15_OWNER_OPERATION_INVALID");
+  if (!descriptor) fail("BROWSER_OWNER_OPERATION_INVALID");
   const keys =
     descriptor.owner === "orders" && operation.startsWith("orders.item.")
       ? ["operation", "idempotencyKey", "orderRef", "itemRef"]
       : ["operation", "idempotencyKey"];
   if (methodName === "seedInProgress") keys.push("requestHash");
-  exactKeys(input, keys, "G15_OWNER_INPUT_INVALID");
+  exactKeys(input, keys, "BROWSER_OWNER_INPUT_INVALID");
   if (input.operation !== operation || !UUID.test(input.idempotencyKey ?? ""))
-    fail("G15_OWNER_INPUT_INVALID");
+    fail("BROWSER_OWNER_INPUT_INVALID");
   if (methodName === "seedInProgress" && !SHA256.test(input.requestHash ?? ""))
-    fail("G15_OWNER_INPUT_INVALID");
+    fail("BROWSER_OWNER_INPUT_INVALID");
   let orderRef, itemRef;
   if (operation.startsWith("orders.item.")) {
     orderRef = input.orderRef;
     itemRef = input.itemRef;
     if (!REF.order.test(orderRef ?? "") || !REF.item.test(itemRef ?? ""))
-      fail("G15_OWNER_INPUT_INVALID");
+      fail("BROWSER_OWNER_INPUT_INVALID");
   }
   return {
     descriptor,
@@ -296,13 +296,13 @@ function validateSchema(roleMap, runId) {
     const database = roleMap.databases.find(
       (candidate) => candidate.name === runDatabaseName(runId, owner),
     );
-    assert.ok(database, "G15 owner database is missing");
+    assert.ok(database, "browser owner database is missing");
     assert.equal(database.schema, expected.schema);
     assert.equal(database.name, runDatabaseName(runId, expected.owner));
     const runtime = database.runtimeRoles.find(
       (candidate) => candidate.runtime === expected.runtime,
     );
-    assert.ok(runtime, "G15 owner runtime role is missing");
+    assert.ok(runtime, "browser owner runtime role is missing");
     assert.equal(runtime.role, expected.role);
     assert.ok(
       Object.values(OPERATION).some((operation) => operation.owner === owner),
@@ -317,22 +317,22 @@ async function withClient(connect, database, operation) {
   try {
     client = await connect(database);
   } catch {
-    fail("G15_OWNER_DB_CONNECT_FAILED");
+    fail("BROWSER_OWNER_DB_CONNECT_FAILED");
   }
   let primary;
   let result;
   try {
     result = await operation(client);
   } catch (error) {
-    primary = safeOperationError(error, "G15_OWNER_DB_QUERY_FAILED");
+    primary = safeOperationError(error, "BROWSER_OWNER_DB_QUERY_FAILED");
   }
   let closeError;
   try {
     await client.end();
   } catch {
-    closeError = new BrowserOwnerEvidenceError("G15_OWNER_DB_CLOSE_FAILED");
+    closeError = new BrowserOwnerEvidenceError("BROWSER_OWNER_DB_CLOSE_FAILED");
   }
-  if (primary && closeError) fail("G15_OWNER_DB_CLOSE_FAILED");
+  if (primary && closeError) fail("BROWSER_OWNER_DB_CLOSE_FAILED");
   if (primary) throw primary;
   if (closeError) throw closeError;
   return result;
@@ -342,19 +342,19 @@ function safeExerciseResult(result) {
   exactKeys(
     result,
     ["status", "problemCode"],
-    "G15_OWNER_LOOKUP_RESULT_INVALID",
+    "BROWSER_OWNER_LOOKUP_RESULT_INVALID",
   );
   if (
     result.status !== 503 ||
     result.problemCode !== "IDEMPOTENCY_LOOKUP_UNAVAILABLE"
   )
-    fail("G15_OWNER_LOOKUP_RESULT_INVALID");
+    fail("BROWSER_OWNER_LOOKUP_RESULT_INVALID");
   return { status: result.status, problemCode: result.problemCode };
 }
 
 function validateLookupAcl(rows, role) {
   if (!Array.isArray(rows) || rows.length === 0)
-    fail("G15_OWNER_LOOKUP_ACL_INVALID");
+    fail("BROWSER_OWNER_LOOKUP_ACL_INVALID");
   for (const row of rows) {
     exactKeys(
       row,
@@ -366,7 +366,7 @@ function validateLookupAcl(rows, role) {
         "privilegeType",
         "isGrantable",
       ],
-      "G15_OWNER_LOOKUP_ACL_INVALID",
+      "BROWSER_OWNER_LOOKUP_ACL_INVALID",
     );
     if (
       (row.scope !== "table" && row.scope !== "column") ||
@@ -377,7 +377,7 @@ function validateLookupAcl(rows, role) {
       (row.scope === "column" && typeof row.columnName !== "string") ||
       (row.scope === "table" && row.columnName !== null)
     )
-      fail("G15_OWNER_LOOKUP_ACL_INVALID");
+      fail("BROWSER_OWNER_LOOKUP_ACL_INVALID");
   }
   const selectGrants = rows.filter(
     (row) =>
@@ -397,7 +397,7 @@ function validateLookupAcl(rows, role) {
     roleColumnSelect ||
     publicSelect
   )
-    fail("G15_OWNER_LOOKUP_ACL_NONCANONICAL");
+    fail("BROWSER_OWNER_LOOKUP_ACL_NONCANONICAL");
   return rows;
 }
 
@@ -430,18 +430,18 @@ export function createBrowserOwnerEvidence({
         );
         assert.ok(
           idempotency.rows.length <= 1,
-          "G15 idempotency key is not unique",
+          "browser idempotency key is not unique",
         );
         const row = idempotency.rows[0];
         const state = row?.state ?? null;
         if (state !== null && state !== "Acquired" && state !== "Completed")
-          fail("G15_OWNER_STATE_INVALID");
+          fail("BROWSER_OWNER_STATE_INVALID");
         const resourceRef = row?.resource_ref ?? null;
         if (
           resourceRef !== null &&
           !REF[parsed.descriptor.resource].test(resourceRef)
         )
-          fail("G15_OWNER_RESOURCE_INVALID");
+          fail("BROWSER_OWNER_RESOURCE_INVALID");
 
         const tableCounts = {};
         const digestRows = [];
@@ -481,7 +481,7 @@ export function createBrowserOwnerEvidence({
   async function assertAbsent(input) {
     const evidence = await snapshot(input);
     if (evidence.idempotencyRows !== 0 || evidence.state !== null)
-      fail("G15_OWNER_EXPECTED_ABSENT");
+      fail("BROWSER_OWNER_EXPECTED_ABSENT");
     return Object.freeze({
       operation: evidence.operation,
       absent: true,
@@ -496,7 +496,7 @@ export function createBrowserOwnerEvidence({
       for (const table of CUSTOMER_BUSINESS_TABLES) {
         const result = await client.query(table.sql);
         if (!Array.isArray(result.rows))
-          fail("G15_OWNER_CUSTOMER_SNAPSHOT_INVALID");
+          fail("BROWSER_OWNER_CUSTOMER_SNAPSHOT_INVALID");
         tableCounts[table.name] = result.rows.length;
         for (const row of result.rows) {
           if (
@@ -505,7 +505,7 @@ export function createBrowserOwnerEvidence({
             typeof row.version !== "string" ||
             row.version.length === 0
           )
-            fail("G15_OWNER_CUSTOMER_SNAPSHOT_INVALID");
+            fail("BROWSER_OWNER_CUSTOMER_SNAPSHOT_INVALID");
           digestRows.push([table.name, row.pk, row.version]);
         }
       }
@@ -553,7 +553,7 @@ export function createBrowserOwnerEvidence({
         ...(input?.orderRef ? ["orderRef", "itemRef"] : []),
         "exercise",
       ],
-      "G15_OWNER_INPUT_INVALID",
+      "BROWSER_OWNER_INPUT_INVALID",
     );
     assert.equal(typeof input.exercise, "function");
     const { descriptor, ...identity } = validateRequest(
@@ -573,13 +573,13 @@ export function createBrowserOwnerEvidence({
           [ACTOR_REF, identity.scope, identity.idempotencyKey],
         );
         if (existing.rows?.length !== 1)
-          fail("G15_OWNER_LOOKUP_RECORD_REQUIRED");
+          fail("BROWSER_OWNER_LOOKUP_RECORD_REQUIRED");
         const privilege = await client.query(
           "SELECT has_table_privilege($1, $2, 'SELECT') AS allowed",
           [spec.role, spec.table],
         );
         if (privilege.rows?.[0]?.allowed !== true)
-          fail("G15_OWNER_LOOKUP_PRIVILEGE_NOT_PRESENT");
+          fail("BROWSER_OWNER_LOOKUP_PRIVILEGE_NOT_PRESENT");
         const aclResult = await client.query(TABLE_ACL_SQL, [spec.table]);
         const originalAcl = validateLookupAcl(aclResult.rows, spec.role);
         let restoreNeeded = false;
@@ -595,9 +595,12 @@ export function createBrowserOwnerEvidence({
             [spec.role, spec.table],
           );
           if (afterRevoke.rows?.[0]?.allowed !== false)
-            fail("G15_OWNER_LOOKUP_REVOKE_NOT_EFFECTIVE");
+            fail("BROWSER_OWNER_LOOKUP_REVOKE_NOT_EFFECTIVE");
         } catch (error) {
-          primary = safeOperationError(error, "G15_OWNER_LOOKUP_SETUP_FAILED");
+          primary = safeOperationError(
+            error,
+            "BROWSER_OWNER_LOOKUP_SETUP_FAILED",
+          );
         }
         if (!primary) {
           try {
@@ -605,7 +608,7 @@ export function createBrowserOwnerEvidence({
           } catch (error) {
             primary = safeOperationError(
               error,
-              "G15_OWNER_LOOKUP_EXERCISE_FAILED",
+              "BROWSER_OWNER_LOOKUP_EXERCISE_FAILED",
             );
           }
         }
@@ -620,20 +623,21 @@ export function createBrowserOwnerEvidence({
               [spec.role, spec.table],
             );
             if (restored.rows?.[0]?.allowed !== true)
-              fail("G15_OWNER_LOOKUP_RESTORE_UNVERIFIED");
+              fail("BROWSER_OWNER_LOOKUP_RESTORE_UNVERIFIED");
             const restoredAcl = await client.query(TABLE_ACL_SQL, [spec.table]);
             assert.deepEqual(
               validateLookupAcl(restoredAcl.rows, spec.role),
               originalAcl,
-              "G15 owner SELECT ACL did not return to its original state",
+              "browser owner SELECT ACL did not return to its original state",
             );
           } catch {
             restoreFailure = new BrowserOwnerEvidenceError(
-              "G15_OWNER_LOOKUP_RESTORE_FAILED",
+              "BROWSER_OWNER_LOOKUP_RESTORE_FAILED",
             );
           }
         }
-        if (primary && restoreFailure) fail("G15_OWNER_LOOKUP_RESTORE_FAILED");
+        if (primary && restoreFailure)
+          fail("BROWSER_OWNER_LOOKUP_RESTORE_FAILED");
         if (primary) throw primary;
         if (restoreFailure) throw restoreFailure;
         return Object.freeze({
@@ -655,7 +659,7 @@ export function createBrowserOwnerEvidence({
   });
 }
 
-export function createG14OrderEvidence({ connect, roleMap, runId }) {
+export function createOrderEvidence({ connect, roleMap, runId }) {
   assert.equal(typeof connect, "function");
   assert.match(runId ?? "", /^[0-9]{8}T[0-9]{6}Z-[0-9a-f]{7}$/u);
   const database = validateSchema(roleMap, runId).orders;
@@ -663,7 +667,7 @@ export function createG14OrderEvidence({ connect, roleMap, runId }) {
     exactKeys(
       input,
       ["orderRef", "correlationId", "frameId", "ownerVersion"],
-      "G14_OWNER_INPUT_INVALID",
+      "OBSERVABILITY_OWNER_INPUT_INVALID",
     );
     const { orderRef, correlationId, frameId, ownerVersion } = input;
     if (
@@ -672,7 +676,7 @@ export function createG14OrderEvidence({ connect, roleMap, runId }) {
       !/^msg_[0-9A-HJKMNP-TV-Z]{26}$/u.test(frameId ?? "") ||
       !/^[1-9]\d{0,18}$/u.test(ownerVersion ?? "")
     )
-      fail("G14_OWNER_INPUT_INVALID");
+      fail("OBSERVABILITY_OWNER_INPUT_INVALID");
     return withClient(connect, database, async (client) => {
       await client.query("BEGIN READ ONLY");
       try {
@@ -680,7 +684,7 @@ export function createG14OrderEvidence({ connect, roleMap, runId }) {
           "SELECT message_id,topic,state,correlation_id,causation_id,traceparent FROM orders.outbox_messages WHERE aggregate_ref=$1 AND message_type='OrderConfirmed.v1' AND correlation_id=$2",
           [orderRef, correlationId],
         );
-        if (confirmed.rows.length !== 1) fail("G14_OWNER_CHAIN_NOT_PROVEN");
+        if (confirmed.rows.length !== 1) fail("BROWSER_OWNER_CHAIN_NOT_PROVEN");
         const root = confirmed.rows[0];
         const inbox = await client.query(
           "SELECT state FROM orders.inbox_messages WHERE consumer_name=$1 AND message_id=$2",
@@ -710,7 +714,7 @@ export function createG14OrderEvidence({ connect, roleMap, runId }) {
           event.traceparent !== root.traceparent ||
           event.owner_version !== ownerVersion
         )
-          fail("G14_OWNER_CHAIN_NOT_PROVEN");
+          fail("BROWSER_OWNER_CHAIN_NOT_PROVEN");
         return {
           ownerMessageSha256: sha256(root.message_id),
           realtimeMessageSha256: sha256(event.message_id),
@@ -737,7 +741,7 @@ export function validateBrowserProof(proof, { runId, candidateSha }) {
       "verificationOnly",
       "productionLogin",
     ],
-    "G15_BROWSER_PROOF_SCHEMA_INVALID",
+    "BROWSER_PROOF_SCHEMA_INVALID",
   );
   if (
     proof.schemaVersion !== 1 ||
@@ -747,6 +751,6 @@ export function validateBrowserProof(proof, { runId, candidateSha }) {
     proof.verificationOnly !== true ||
     proof.productionLogin !== false
   )
-    fail("G15_BROWSER_PROOF_IDENTITY_INVALID");
+    fail("BROWSER_PROOF_IDENTITY_INVALID");
   return Object.freeze({ ...proof });
 }

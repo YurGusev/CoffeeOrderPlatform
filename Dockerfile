@@ -135,7 +135,7 @@ copyFileSync('node_modules/@confluentinc/kafka-javascript/build/Release/confluen
 if (typeof kafka('@confluentinc/kafka-javascript').RdKafka.Producer !== 'function') throw new Error('Deployed Kafka native addon is missing');
 NODE
 
-# Build the exact pinned Kafka source for G12 and update only the
+# Build the exact pinned Kafka source for `supply_chain` and update only the
 # pre-existing Alpine packages approved by the supply-chain gate.
 FROM ${KAFKA_IMAGE} AS kafka
 ARG MUSL_VERSION
@@ -169,7 +169,7 @@ RUN --network=host apk add --no-cache --upgrade e2fsprogs util-linux libcrypto3 
   && rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx \
   && command -v mkfs.ext4 && command -v losetup && command -v blkid && command -v truncate
 
-# G12 supplies the pinned Alloy base.
+# `supply_chain` supplies the pinned Alloy base.
 FROM ${OTEL_COLLECTOR_IMAGE} AS otel-collector
 # dpkg writes timestamps into logs and regenerates ldconfig cache, so removing
 # those volatile files keeps the layer byte-identical across rebuilds.
@@ -177,7 +177,7 @@ RUN --network=none dpkg --purge apt libapt-pkg6.0t64 \
  && rm -f /var/log/dpkg.log /var/log/alternatives.log /var/log/apt/history.log /var/log/apt/term.log \
  && rm -rf /var/cache/ldconfig /var/cache/apt /var/lib/apt/lists
 
-# G12 supplies the verified, signed vendor plugin context and the pinned base.
+# `supply_chain` supplies the verified, signed vendor plugin context and the pinned base.
 FROM ${GRAFANA_IMAGE} AS grafana
 COPY --from=grafana-plugins --chown=472:472 /loki /opt/grafana/plugins/loki
 COPY --from=grafana-plugins --chown=472:472 /tempo /opt/grafana/plugins/tempo

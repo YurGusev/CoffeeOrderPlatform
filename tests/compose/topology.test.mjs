@@ -2002,7 +2002,7 @@ void test("owned database endpoint fault restores aliases and refuses foreign id
     foreign = true;
     await assert.rejects(
       proveOwnedNetworkDependency(input),
-      /G15_RUNTIME_OWNERSHIP_INVALID/u,
+      /BROWSER_RUNTIME_OWNERSHIP_INVALID/u,
     );
     assert.equal(
       calls.filter((args) => args[0] === "network").length,
@@ -2112,7 +2112,7 @@ void test("programmatic observability hooks require a bounded recovery-proof run
   assert.equal(cleanupContext, undefined);
 });
 
-void test("G14 verifies the exact owned PostgreSQL container before use and cleanup", async () => {
+void test("observability verifies the exact owned PostgreSQL container before use and cleanup", async () => {
   const { assertObservabilityPostgresIdentity } =
     await import("../../tools/compose-smoke.mjs");
   const id = "a".repeat(64),
@@ -2161,7 +2161,7 @@ void test("G14 verifies the exact owned PostgreSQL container before use and clea
   );
 });
 
-void test("G14 PostgreSQL proof storage is verified tmpfs while other proof storage stays unchanged", async () => {
+void test("observability PostgreSQL proof storage is verified tmpfs while other proof storage stays unchanged", async () => {
   const calls = [];
   let inspected = {
     "/var/lib/postgresql/data": "rw,noexec,nosuid,size=536870912",
@@ -2766,7 +2766,7 @@ if (args[0] === 'network' && args[1] === 'inspect') {
   }
 });
 
-void test("smoke accepts only runtime image IDs verified by G12 before startup", async (t) => {
+void test("smoke accepts only runtime image IDs verified by supply_chain before startup", async (t) => {
   const { assertVerifiedRuntimeImages } =
     await import("../../tools/compose-smoke.mjs");
   const catalog = JSON.parse(
@@ -2878,7 +2878,7 @@ void test("smoke accepts only runtime image IDs verified by G12 before startup",
   }
 });
 
-void test("smoke rejects mismatched or missing G12 runtime IDs before startup", async (t) => {
+void test("smoke rejects mismatched or missing supply_chain runtime IDs before startup", async (t) => {
   const { assertVerifiedRuntimeImages } =
     await import("../../tools/compose-smoke.mjs");
   const catalog = JSON.parse(
@@ -2901,7 +2901,7 @@ void test("smoke rejects mismatched or missing G12 runtime IDs before startup", 
           projectName: "coffee-test",
           verifiedImages,
         }),
-      /differs from the scanned G12 artifact/u,
+      /differs from the scanned supply_chain artifact/u,
     );
     assert.equal(calls.length, 1);
     assert.deepEqual(calls[0][1].slice(0, 2), ["image", "inspect"]);
@@ -2913,7 +2913,7 @@ void test("smoke rejects mismatched or missing G12 runtime IDs before startup", 
           verifiedImages,
           directImageIds: true,
         }),
-      /differs from the scanned G12 artifact/u,
+      /differs from the scanned supply_chain artifact/u,
     );
     assert.equal(calls[0][1].at(-1), verifiedImages[0].imageId);
     calls.length = 0;
@@ -2923,7 +2923,7 @@ void test("smoke rejects mismatched or missing G12 runtime IDs before startup", 
           projectName: "coffee-test",
           verifiedImages: [],
         }),
-      /G12 image ID missing/u,
+      /supply_chain image ID missing/u,
     );
     assert.deepEqual(calls, []);
   } finally {
@@ -2932,16 +2932,16 @@ void test("smoke rejects mismatched or missing G12 runtime IDs before startup", 
   }
 });
 
-void test("G14 retains scoped resources when collector restoration is unconfirmed", async (t) => {
+void test("observability retains scoped resources when collector restoration is unconfirmed", async (t) => {
   const {
-    retainG14AfterCollectorFailure,
+    retainObservabilityAfterCollectorFailure,
     externalRecoveryCleanupSummary,
     removeBuiltRuntimeImages,
   } = await import("../../tools/compose-smoke.mjs");
   const options = { keep: false, noBuild: false };
   const databases = [{ database: { name: "coffee_verify_run_orders" } }];
-  const receipt = retainG14AfterCollectorFailure({
-    g14Browser: {},
+  const receipt = retainObservabilityAfterCollectorFailure({
+    observabilityBrowser: {},
     observability: {},
     cleanupHookError: new Error("IPC disconnected"),
     options,
@@ -2952,7 +2952,7 @@ void test("G14 retains scoped resources when collector restoration is unconfirme
     verified: false,
     removed: [],
     retained: ["coffee_verify_run_orders"],
-    failure: "G14_COLLECTOR_RESTORE_UNCONFIRMED",
+    failure: "OBSERVABILITY_COLLECTOR_RESTORE_UNCONFIRMED",
   });
   const calls = [];
   t.mock.method(childProcess, "execFileSync", (...args) => calls.push(args));
@@ -2979,8 +2979,8 @@ void test("G14 retains scoped resources when collector restoration is unconfirme
   assert.equal(summary.attachment.removed, false);
   const normal = { keep: false };
   assert.equal(
-    retainG14AfterCollectorFailure({
-      g14Browser: undefined,
+    retainObservabilityAfterCollectorFailure({
+      observabilityBrowser: undefined,
       observability: {},
       cleanupHookError: new Error("error"),
       options: normal,
@@ -2990,8 +2990,8 @@ void test("G14 retains scoped resources when collector restoration is unconfirme
   );
   assert.equal(normal.keep, false);
   assert.equal(
-    retainG14AfterCollectorFailure({
-      g14Browser: {},
+    retainObservabilityAfterCollectorFailure({
+      observabilityBrowser: {},
       observability: {},
       cleanupHookError: undefined,
       options: normal,
@@ -3002,7 +3002,7 @@ void test("G14 retains scoped resources when collector restoration is unconfirme
   assert.equal(normal.keep, false);
 });
 
-void test("G14 seals the child config for every Node runtime and rejects mismatch", async (t) => {
+void test("observability seals the child config for every Node runtime and rejects mismatch", async (t) => {
   const { writeScopedComposeOverride } =
     await import("../../tools/compose-smoke.mjs");
   const { load } = await import("js-yaml");
@@ -3018,7 +3018,7 @@ void test("G14 seals the child config for every Node runtime and rejects mismatc
     .digest("hex");
   const override = await writeScopedComposeOverride("coffee-g14-config", {
     launchContextPath: context,
-    g14Config: { path: config, sha256 },
+    observabilityConfig: { path: config, sha256 },
   });
   t.after(() => rm(override, { force: true }));
   const services = load(await readFile(override, "utf8")).services;
@@ -3053,7 +3053,7 @@ void test("G14 seals the child config for every Node runtime and rejects mismatc
   }));
   const bound = await writeScopedComposeOverride("coffee-controlled-config", {
     launchContextPath: context,
-    g14Config: { path: config, sha256 },
+    observabilityConfig: { path: config, sha256 },
     runtimeImages,
   });
   t.after(() => rm(bound, { force: true }));
@@ -3077,17 +3077,17 @@ void test("G14 seals the child config for every Node runtime and rejects mismatc
   await assert.rejects(
     writeScopedComposeOverride("coffee-g14-config", {
       launchContextPath: context,
-      g14Config: { path: config, sha256: "a".repeat(64) },
+      observabilityConfig: { path: config, sha256: "a".repeat(64) },
     }),
-    /G14 config hash mismatch/u,
+    /observability config hash mismatch/u,
   );
   await chmod(config, 0o644);
   await assert.rejects(
     writeScopedComposeOverride("coffee-g14-config", {
       launchContextPath: context,
-      g14Config: { path: config, sha256 },
+      observabilityConfig: { path: config, sha256 },
     }),
-    /G14 config must be sealed and owned/u,
+    /observability config must be sealed and owned/u,
   );
 });
 
@@ -3618,7 +3618,7 @@ void test("Compose keeps forbidden trust-plane connections absent (negative topo
   assert.deepEqual(providerMembers, ["aroma-gateway"]);
 });
 
-void test("Kafka requires the verified G12 artifact and preserves single-node KRaft without host publish", async () => {
+void test("Kafka requires the verified supply_chain artifact and preserves single-node KRaft without host publish", async () => {
   const config = composeConfig();
   const kafka = config.services.kafka;
   assert.equal(kafka.image, "coffee-platform-kafka:verified-artifact-required");
@@ -3938,7 +3938,7 @@ void test("otel-collector layer removes volatile dpkg state for reproducible ima
     "FROM ${OTEL_COLLECTOR_IMAGE} AS otel-collector",
   );
   const end = dockerfile.indexOf(
-    "# G12 supplies the verified, signed vendor plugin context",
+    "# `supply_chain` supplies the verified, signed vendor plugin context",
   );
   assert.ok(start >= 0 && end > start);
   const stage = dockerfile.slice(start, end);
@@ -4188,7 +4188,7 @@ void test("verified infrastructure image loader accepts only context-bound Kafka
   const evidenceDir = join(root, "evidence");
   const supplyChainDir = join(
     evidenceDir,
-    "gates/G12_SUPPLY_CHAIN/artifacts/supply-chain",
+    "gates/supply_chain/artifacts/supply-chain",
   );
   await mkdir(join(candidateRoot, "config"), { recursive: true, mode: 0o700 });
   await mkdir(join(candidateRoot, "evidence/security"), { recursive: true });
@@ -4309,7 +4309,7 @@ void test("verified infrastructure image loader accepts only context-bound Kafka
   };
   const receipt = {
     schemaVersion: 1,
-    gate: "G12_SUPPLY_CHAIN",
+    gate: "supply_chain",
     status: "PASS",
     runId,
     candidateSha,
@@ -4356,9 +4356,9 @@ void test("verified infrastructure image loader accepts only context-bound Kafka
   };
   const receiptBytes = Buffer.from(JSON.stringify(receipt));
   const result = {
-    gate: "G12_SUPPLY_CHAIN",
+    gate: "supply_chain",
     status: "PASS",
-    code: "G12_SCAN_CLEAN",
+    code: "SUPPLY_CHAIN_SCAN_CLEAN",
     runId,
     candidateSha,
     kafka: {
@@ -4541,7 +4541,7 @@ void test("verified infrastructure image loader accepts only context-bound Kafka
   };
   const decision = {
     schemaVersion: 1,
-    gate: "G12_SUPPLY_CHAIN",
+    gate: "supply_chain",
     runId,
     candidateSha,
     treeSha: environment.treeSha,
@@ -4604,11 +4604,11 @@ void test("verified infrastructure image loader accepts only context-bound Kafka
     imported: false,
   });
   await assert.rejects(loadVerifiedGateImage({ target: "openobserve" }), {
-    message: "G12_KAFKA_TARGET_INVALID",
+    message: "SUPPLY_CHAIN_KAFKA_TARGET_INVALID",
   });
 });
 
-void test("G15 browser CLI mode is isolated and requires its integrated hook", async () => {
+void test("browser CLI mode is isolated and requires its integrated hook", async () => {
   const { runComposeSmoke } = await import("../../tools/compose-smoke.mjs");
   for (const args of [
     ["--browser-proof", "--stub-secrets"],
@@ -4633,7 +4633,7 @@ void test("G15 browser CLI mode is isolated and requires its integrated hook", a
   );
 });
 
-void test("G15 Compose service rows retain the full container ID", async () => {
+void test("browser Compose service rows retain the full container ID", async () => {
   const source = await readFile(
     new URL("../../tools/compose-smoke.mjs", import.meta.url),
     "utf8",
@@ -4669,7 +4669,7 @@ void test("G15 Compose service rows retain the full container ID", async () => {
   assert.equal(rows.find((row) => row.Service === "edge-nginx")?.ID, fullId);
 });
 
-void test("G18 Compose failure diagnostics preserve the original error and expose only finite process facts", async () => {
+void test("rollback Compose failure diagnostics preserve the original error and expose only finite process facts", async () => {
   const { ROLLBACK_COMPOSE_OPERATIONS, withRollbackComposeDiagnostic } =
     await import("../../tools/compose-smoke.mjs");
   const { createRollbackFailureReceipt, validateRollbackFailureArtifact } =
@@ -4781,7 +4781,7 @@ void test("G18 Compose failure diagnostics preserve the original error and expos
         () => {},
         () => {},
       ),
-    /G18 Compose operation is not allowlisted/u,
+    /rollback Compose operation is not allowlisted/u,
   );
 
   const source = await readFile(
@@ -5022,7 +5022,7 @@ void test("G18 Compose failure diagnostics preserve the original error and expos
   }
 });
 
-void test("G18 runtime-stack failure snapshots only bounded project container state before cleanup", async () => {
+void test("rollback runtime-stack failure snapshots only bounded project container state before cleanup", async () => {
   const {
     attachRollbackContainerSnapshot,
     captureRollbackContainerSnapshot,
@@ -5351,7 +5351,7 @@ void test("G18 runtime-stack failure snapshots only bounded project container st
   }
 });
 
-void test("G18 accepts a nullable startup wake only for the exact current cart revision and processed Inbox message", async () => {
+void test("rollback accepts a nullable startup wake only for the exact current cart revision and processed Inbox message", async () => {
   const { hasProcessedRollbackWakeForDesiredRevision } =
     await import("../../tools/rollback-runtime-proof.mjs");
   const desiredRevision = "7";
@@ -5496,7 +5496,7 @@ void test("compose-smoke wait windows follow the launch gate deadline", async ()
   }
 });
 
-void test("G18 initial-unknown timeout persists a run-bound private fact summary and preserves the timeout", async () => {
+void test("rollback initial-unknown timeout persists a run-bound private fact summary and preserves the timeout", async () => {
   const {
     createRollbackInitialUnknownTimeoutDiagnostic,
     waitForRollbackFacts,
@@ -5514,7 +5514,7 @@ void test("G18 initial-unknown timeout persists a run-bound private fact summary
       evidenceDir,
     };
     const consumer = "orders-aroma-projection-v1";
-    const canary = "PRIVATE_G18_PROVIDER_BODY_CANARY";
+    const canary = "PRIVATE_ROLLBACK_PROVIDER_BODY_CANARY";
     const facts = {
       attempts: [{ state: "Started", attempt_ref: canary }],
       reservations: [
@@ -5640,7 +5640,7 @@ void test("G18 initial-unknown timeout persists a run-bound private fact summary
     assert.equal(diagnostic.runId, runId);
     assert.equal(diagnostic.candidateSha, candidateSha);
     assert.equal(diagnostic.stage, "initial-unknown");
-    assert.equal(diagnostic.code, "G18_INITIAL_UNKNOWN_OUTCOME_TIMEOUT");
+    assert.equal(diagnostic.code, "ROLLBACK_INITIAL_UNKNOWN_OUTCOME_TIMEOUT");
 
     const desiredRevision = "7";
     const orderRef = canary;
@@ -5814,14 +5814,14 @@ void test("G18 initial-unknown timeout persists a run-bound private fact summary
       artifactPath,
       join(
         evidenceDir,
-        "gates/G18_ROLLBACK/artifacts/mutation-disable-rollback-initial-unknown-timeout.json",
+        "gates/rollback/artifacts/mutation-disable-rollback-initial-unknown-timeout.json",
       ),
     );
     const artifactBytes = await readFile(artifactPath, "utf8");
     assert.deepEqual(JSON.parse(artifactBytes), diagnostic);
     assert.doesNotMatch(
       artifactBytes,
-      /PRIVATE_G18_PROVIDER_BODY_CANARY|attempt_ref|operation_ref|message_id|envelope|response_body/u,
+      /PRIVATE_ROLLBACK_PROVIDER_BODY_CANARY|attempt_ref|operation_ref|message_id|envelope|response_body/u,
     );
     assert.equal((await stat(artifactPath)).mode & 0o777, 0o600);
     await assert.rejects(
@@ -5862,7 +5862,7 @@ void test("G18 initial-unknown timeout persists a run-bound private fact summary
         },
       ),
       (error) =>
-        error.message === "G18_INITIAL_UNKNOWN_OUTCOME_TIMEOUT" &&
+        error.message === "ROLLBACK_INITIAL_UNKNOWN_OUTCOME_TIMEOUT" &&
         error.cause === originalFacts,
     );
   } finally {
@@ -5870,7 +5870,7 @@ void test("G18 initial-unknown timeout persists a run-bound private fact summary
   }
 });
 
-void test("G18 restored-card timeout records bounded guarded facts only after timeout", async (t) => {
+void test("rollback restored-card timeout records bounded guarded facts only after timeout", async (t) => {
   const { waitForRollbackFacts, writeRollbackRestoredCardTimeoutDiagnostic } =
     await import("../../tools/compose-smoke.mjs");
   const { readRollbackGuardedCardFacts } =
@@ -5879,8 +5879,8 @@ void test("G18 restored-card timeout records bounded guarded facts only after ti
   const directory = await mkdtemp(join(tmpdir(), "g18-restored-card-timeout-"));
   const candidateSha = "4".repeat(40);
   const maxSnapshotAgeMs = 15_000;
-  const orderRef = "ord_01J8G18TIMEOUTFIXTURE000000000";
-  const canary = "RAW_G18_DATABASE_ROW_CANARY";
+  const orderRef = "ord_01J8X18TIMEOUTFIXTURE000000000";
+  const canary = "RAW_ROLLBACK_DATABASE_ROW_CANARY";
   const platformConfig = {
     services: {
       "orders-aroma-preparation": { database: "coffee_platform_orders" },
@@ -6008,7 +6008,7 @@ void test("G18 restored-card timeout records bounded guarded facts only after ti
           });
         },
       ),
-      (error) => error.message === "G18_RESTORED_CARD_IN_SYNC_TIMEOUT",
+      (error) => error.message === "ROLLBACK_RESTORED_CARD_IN_SYNC_TIMEOUT",
     );
     assert.equal(calls.queries.length, 1);
     assert.equal(calls.ends, 1);
@@ -6052,7 +6052,7 @@ void test("G18 restored-card timeout records bounded guarded facts only after ti
 
     const artifactPath = join(
       launchIdentity.evidenceDir,
-      "gates/G18_ROLLBACK/artifacts/mutation-disable-rollback-restored-card-timeout.json",
+      "gates/rollback/artifacts/mutation-disable-rollback-restored-card-timeout.json",
     );
     const artifactBytes = await readFile(artifactPath, "utf8");
     const artifact = JSON.parse(artifactBytes);
@@ -6149,15 +6149,12 @@ void test("G18 restored-card timeout records bounded guarded facts only after ti
     );
     assert.doesNotMatch(
       artifactBytes,
-      /RAW_G18_DATABASE_ROW_CANARY|SCOPED_PREPARATION_SECRET_CANARY|ord_01J8G18TIMEOUTFIXTURE/u,
+      /RAW_ROLLBACK_DATABASE_ROW_CANARY|SCOPED_PREPARATION_SECRET_CANARY|ord_01J8X18TIMEOUTFIXTURE/u,
     );
     assert.equal((await stat(artifactPath)).mode & 0o777, 0o600);
     assert.equal(
-      (
-        await stat(
-          join(launchIdentity.evidenceDir, "gates/G18_ROLLBACK/artifacts"),
-        )
-      ).mode & 0o777,
+      (await stat(join(launchIdentity.evidenceDir, "gates/rollback/artifacts")))
+        .mode & 0o777,
       0o700,
     );
     await assert.rejects(
@@ -6240,13 +6237,13 @@ void test("G18 restored-card timeout records bounded guarded facts only after ti
             });
           },
         ),
-        (error) => error.message === "G18_RESTORED_CARD_IN_SYNC_TIMEOUT",
+        (error) => error.message === "ROLLBACK_RESTORED_CARD_IN_SYNC_TIMEOUT",
       );
       const scenarioArtifact = JSON.parse(
         await readFile(
           join(
             scenarioIdentity.evidenceDir,
-            "gates/G18_ROLLBACK/artifacts/mutation-disable-rollback-restored-card-timeout.json",
+            "gates/rollback/artifacts/mutation-disable-rollback-restored-card-timeout.json",
           ),
           "utf8",
         ),
@@ -6261,7 +6258,7 @@ void test("G18 restored-card timeout records bounded guarded facts only after ti
         ownerCardState: "OutOfSync",
         guardedCardFacts: row,
       }),
-      /G18_RESTORED_CARD_DIAGNOSTIC_EVIDENCE_SCOPE_INVALID/u,
+      /_RESTORED_CARD_DIAGNOSTIC_EVIDENCE_SCOPE_INVALID/u,
     );
 
     const failedIdentity = makeIdentity("20261026T120001Z");
@@ -6288,7 +6285,7 @@ void test("G18 restored-card timeout records bounded guarded facts only after ti
         },
       ),
       (error) => {
-        assert.equal(error.message, "G18_RESTORED_CARD_IN_SYNC_TIMEOUT");
+        assert.equal(error.message, "ROLLBACK_RESTORED_CARD_IN_SYNC_TIMEOUT");
         assert.doesNotMatch(error.message, new RegExp(canary, "u"));
         return true;
       },
@@ -6299,7 +6296,7 @@ void test("G18 restored-card timeout records bounded guarded facts only after ti
       readFile(
         join(
           failedIdentity.evidenceDir,
-          "gates/G18_ROLLBACK/artifacts/mutation-disable-rollback-restored-card-timeout.json",
+          "gates/rollback/artifacts/mutation-disable-rollback-restored-card-timeout.json",
         ),
       ),
       { code: "ENOENT" },
@@ -6309,7 +6306,7 @@ void test("G18 restored-card timeout records bounded guarded facts only after ti
   }
 });
 
-void test("G18 initial-unknown failure records only a closed substage and owner HTTP source parses", async () => {
+void test("rollback initial-unknown failure records only a closed substage and owner HTTP source parses", async () => {
   const {
     attachRollbackInitialUnknownSubstage,
     createRollbackInitialUnknownDiagnostic,
@@ -6340,7 +6337,7 @@ void test("G18 initial-unknown failure records only a closed substage and owner 
       ),
     /requires an initial-unknown/u,
   );
-  const canary = "PRIVATE_G18_ERROR_BODY_CANARY";
+  const canary = "PRIVATE_ROLLBACK_ERROR_BODY_CANARY";
   const dbDiagnostic = createRollbackInitialUnknownDiagnostic(
     "owner-db-facts",
     Object.assign(new Error(canary), { code: "42501" }),
@@ -6358,7 +6355,7 @@ void test("G18 initial-unknown failure records only a closed substage and owner 
       status: 1,
       signal: null,
       stderr: Buffer.from(
-        `${canary}\r\nError: G18_ORDER_CARD_HTTP_INVALID\r\n    at child (file:///private/path)`,
+        `${canary}\r\nError: ROLLBACK_ORDER_CARD_HTTP_INVALID\r\n    at child (file:///private/path)`,
       ),
     }),
   );
@@ -6367,24 +6364,24 @@ void test("G18 initial-unknown failure records only a closed substage and owner 
     sqlState: null,
     exitCode: 1,
     signal: null,
-    failureCode: "G18_ORDER_CARD_HTTP_INVALID",
+    failureCode: "ROLLBACK_ORDER_CARD_HTTP_INVALID",
   });
   const exactMessageDiagnostic = createRollbackInitialUnknownDiagnostic(
     "guarded-card-http",
-    Object.assign(new Error("G18_ORDER_CARD_HTTP_INVALID"), {
+    Object.assign(new Error("ROLLBACK_ORDER_CARD_HTTP_INVALID"), {
       status: 1,
       stderr: Buffer.from("quoted code is not needed"),
     }),
   );
   assert.equal(
     exactMessageDiagnostic.failureCode,
-    "G18_ORDER_CARD_HTTP_INVALID",
+    "ROLLBACK_ORDER_CARD_HTTP_INVALID",
     "the exact allowlisted Error.message remains recognized",
   );
   for (const stderr of [
-    `const source = "Error: G18_ORDER_CARD_HTTP_INVALID";`,
+    `const source = "Error: _ORDER_CARD_HTTP_INVALID";`,
     "Other child failure",
-    "Error: G18_ORDER_CARD_HTTP_INVALID extra",
+    "Error: _ORDER_CARD_HTTP_INVALID extra",
   ]) {
     const misleadingDiagnostic = createRollbackInitialUnknownDiagnostic(
       "guarded-card-http",
@@ -6575,7 +6572,7 @@ void test("G18 initial-unknown failure records only a closed substage and owner 
   }
 });
 
-void test("G18 fake provider holds a decoder-invalid HTTP 200 after lost PUT until D attestation release", async () => {
+void test("rollback fake provider holds a decoder-invalid HTTP 200 after lost PUT until D attestation release", async () => {
   const { rollbackRecoveryGetResponse } =
     await import("../../tools/compose-smoke.mjs");
   const {
@@ -6850,7 +6847,7 @@ void test("G18 fake provider holds a decoder-invalid HTTP 200 after lost PUT unt
   }
 });
 
-void test("G18 fault is armed only after B health and D recovery GET release follows mounted-config attestation", async () => {
+void test("rollback fault is armed only after B health and D recovery GET release follows mounted-config attestation", async () => {
   const source = await readFile(
     join(REPO_ROOT, "tools/compose-smoke.mjs"),
     "utf8",
@@ -6859,7 +6856,10 @@ void test("G18 fault is armed only after B health and D recovery GET release fol
     "async function runMutationDisableRollbackProof(",
   );
   const end = source.indexOf("\nasync function assertDatabaseProof(", start);
-  assert.ok(start >= 0 && end > start, "G18 lifecycle function was not found");
+  assert.ok(
+    start >= 0 && end > start,
+    "rollback lifecycle function was not found",
+  );
   const proof = source.slice(start, end);
   const healthy = proof.indexOf(
     "const initialRows = assertHealthy(projectName, secretsDir, composeFile)",
@@ -6995,15 +6995,15 @@ void test("G18 fault is armed only after B health and D recovery GET release fol
       ++cardReads === 1 ? { status: 200, state: "OutOfSync" } : acceptedCard,
     ),
     acceptedCard,
-    "G18 must return the actual owner HTTP Card after its asynchronous projection catches up",
+    "rollback must return the actual owner HTTP Card after its asynchronous projection catches up",
   );
   assert.equal(cardReads, 2);
   await assert.rejects(
     readFinalCard(async () => ({ status: 200, state: "OutOfSync" }), 50),
-    { message: "G18_RESTORED_CARD_IN_SYNC_TIMEOUT" },
-    "a permanently guarded Card must still fail G18",
+    { message: "ROLLBACK_RESTORED_CARD_IN_SYNC_TIMEOUT" },
+    "a permanently guarded Card must still fail rollback",
   );
-  const ownerError = new Error("G18_OWNER_HTTP_READ_FAILED");
+  const ownerError = new Error("ROLLBACK_OWNER_HTTP_READ_FAILED");
   await assert.rejects(
     readFinalCard(async () => {
       throw ownerError;
@@ -7012,7 +7012,7 @@ void test("G18 fault is armed only after B health and D recovery GET release fol
   );
 });
 
-void test("G18 operator wake proves real command correlation, preparation delivery and exact causation", async () => {
+void test("rollback operator wake proves real command correlation, preparation delivery and exact causation", async () => {
   const { hasProcessedRollbackOperatorWake } =
     await import("../../tools/rollback-runtime-proof.mjs");
   const correlationId = "reconcile-correlation";
@@ -7421,7 +7421,7 @@ void test("Kafka namespace inventory proves exact physical claims and rejects ca
   );
 });
 
-void test("G18 convergence projection delivery requires AromaConvergenceChanged on the configured Orders projection group", async () => {
+void test("rollback convergence projection delivery requires AromaConvergenceChanged on the configured Orders projection group", async () => {
   const {
     hasProcessedConvergenceProjectionEvent,
     rollbackFactsRequireGuardedCard,
@@ -7505,7 +7505,7 @@ void test("G18 convergence projection delivery requires AromaConvergenceChanged 
   );
 });
 
-void test("G18 early database projection guard emits a finite bootstrap receipt before resource setup", async (t) => {
+void test("rollback early database projection guard emits a finite bootstrap receipt before resource setup", async (t) => {
   const {
     attachRollbackBootstrapSubstage,
     ROLLBACK_BOOTSTRAP_SUBSTAGES,
@@ -7573,7 +7573,7 @@ void test("G18 early database projection guard emits a finite bootstrap receipt 
     guardError.rollbackFailure.bootstrapSubstage,
     "launch-context-guard",
   );
-  assert.equal(guardError.rollbackFailure.code, "G18_PHASE_FAILED");
+  assert.equal(guardError.rollbackFailure.code, "ROLLBACK_PHASE_FAILED");
   assert.equal(
     guardError.rollbackFailure.messageSha256,
     createHash("sha256")
@@ -7614,7 +7614,7 @@ void test("G18 early database projection guard emits a finite bootstrap receipt 
         bootstrapReceipt,
         `provider-fixture:${canary}`,
       ),
-    /G18 bootstrap substage is not allowlisted/u,
+    /rollback bootstrap substage is not allowlisted/u,
   );
   assert.throws(
     () =>
@@ -7634,7 +7634,7 @@ void test("G18 early database projection guard emits a finite bootstrap receipt 
       },
     ),
     (error) => error === ordinaryError,
-    "non-G18 guard failures must remain unchanged",
+    "non-rollback guard failures must remain unchanged",
   );
 
   const evidenceDir = await mkdtemp(join(tmpdir(), "g18-early-guard-receipt-"));
@@ -7652,7 +7652,7 @@ void test("G18 early database projection guard emits a finite bootstrap receipt 
   });
   assert.equal(persisted.artifact.stage, "bootstrap");
   assert.equal(persisted.artifact.bootstrapSubstage, "launch-context-guard");
-  assert.equal(persisted.artifact.code, "G18_PHASE_FAILED");
+  assert.equal(persisted.artifact.code, "ROLLBACK_PHASE_FAILED");
   assert.equal(persisted.artifact.cleanup.complete, true);
   assert.deepEqual(persisted.artifact.cleanup.inventory, {
     containers: [],
@@ -7661,413 +7661,7 @@ void test("G18 early database projection guard emits a finite bootstrap receipt 
   });
 });
 
-void test("nginx ingress uses the scoped public CA with strict TLS", async () => {
-  const source = await readFile(
-    join(REPO_ROOT, "tools/compose-smoke.mjs"),
-    "utf8",
-  );
-  const helperStart = source.indexOf("async function assertNginxIngress(");
-  const helperEnd = source.indexOf(
-    "\nfunction runtimeHealthStatus(",
-    helperStart,
-  );
-  const callerStart = source.indexOf("await assertNginxIngress(", helperEnd);
-  const callerEnd = source.indexOf("\n      if (browser) {", callerStart);
-  assert.ok(
-    helperStart >= 0 &&
-      helperEnd > helperStart &&
-      callerStart > helperEnd &&
-      callerEnd > callerStart,
-  );
-  const program = `(async () => { ${source.slice(helperStart, helperEnd)} ${source.slice(callerStart, callerEnd)} })()`;
-  for (const [mode, ca] of [
-    ["canonical", "PUBLIC_CA"],
-    ["canonical", undefined],
-    ["fixture", "FIXTURE_CA"],
-    ["recovery", "FIXTURE_CA"],
-  ]) {
-    const requests = [];
-    let reads = 0;
-    await runInNewContext(program, {
-      assert,
-      platformConfig: { nginxTransport: { publicHost: "localhost" } },
-      materialized: {
-        transportMaterials: { publicTls: { caPem: "FIXTURE_CA" } },
-      },
-      options: {
-        stubSecrets: mode === "fixture",
-        recoveryProof: mode === "recovery",
-      },
-      secretsDir: "/tmp/scoped",
-      join,
-      parseYaml,
-      readFile: async (path, encoding) => {
-        assert.equal(mode, "canonical");
-        assert.equal(path, "/tmp/scoped/edge-gateway.yaml");
-        assert.equal(encoding, "utf8");
-        reads += 1;
-        return ca
-          ? "secrets:\n  edge:\n    tlsCaBundle: PUBLIC_CA\n"
-          : "secrets:\n  edge: {}\n";
-      },
-      httpsRequest: (options, onResponse) => {
-        requests.push(options);
-        return {
-          once() {
-            return this;
-          },
-          end() {
-            onResponse({
-              statusCode: options.path === "/health/live" ? 200 : 401,
-              headers: { "content-type": "application/problem+json" },
-              resume() {},
-              once(_event, callback) {
-                callback();
-              },
-            });
-          },
-        };
-      },
-    });
-    assert.equal(requests.length, 2);
-    for (const request of requests) {
-      assert.equal(request.ca, ca);
-      assert.equal(Object.hasOwn(request, "ca"), ca !== undefined);
-      assert.equal(request.rejectUnauthorized, true);
-      assert.equal(request.minVersion, "TLSv1.3");
-      assert.equal(request.servername, "localhost");
-    }
-    assert.equal(reads, mode === "canonical" ? 1 : 0);
-  }
-});
-
-void test("normal launch G13 bootstraps durable offsets only on a fresh owned Kafka volume", async () => {
-  const { isExternalRecoveryProof } =
-    await import("../../tools/compose-smoke.mjs");
-  const source = await readFile(
-    join(REPO_ROOT, "tools/compose-smoke.mjs"),
-    "utf8",
-  );
-  const part = (start, end) => {
-    const first = source.indexOf(start);
-    const last = source.indexOf(end, first);
-    assert.ok(first >= 0 && last > first);
-    return source.slice(first, last);
-  };
-  const selection = part(
-    "const launchContextPath = process.env.COFFEE_LAUNCH_CONTEXT_FILE;",
-    "\n  if (observability !== undefined)",
-  );
-  const identity = part(
-    "const isolatedDatabaseProof =",
-    "    if (proofLaunchIdentity) {",
-  );
-  const guardStart = source.lastIndexOf(
-    "    if (",
-    source.indexOf("      const kafkaVolume ="),
-  );
-  const guard = source.slice(
-    guardStart,
-    source.indexOf("    if (options.mutationDisableRollback)", guardStart),
-  );
-  const bootstrapStart = source.lastIndexOf(
-    "    if (",
-    source.indexOf("      prepareRecoveryKafkaBootstrap(", guardStart),
-  );
-  const bootstrap = source.slice(
-    bootstrapStart,
-    source.indexOf(
-      '    runTrackedRollbackCompose(\n      "runtime-stack-up"',
-      bootstrapStart,
-    ),
-  );
-  for (const [options, context, policy, existing, expected] of [
-    [{ projectName: "owned", noBuild: true }, true, true, false, "bootstrap"],
-    [{ projectName: "owned" }, true, true, true, "deny"],
-    [{ projectName: "owned" }, false, true, true, "registry"],
-    [{ projectName: "owned" }, true, false, false, "none"],
-    [{ databaseProof: true }, true, true, false, "registry"],
-    [{ customerProof: true }, true, true, false, "registry"],
-    [{ aromaBindingProof: true }, true, true, false, "registry"],
-    [{ aromaCartProof: true }, true, true, false, "registry"],
-    [{ mutationDisableRollback: true }, true, true, false, "registry"],
-    [{ stubSecrets: true }, true, true, false, "registry"],
-    [{ recoveryProof: true }, true, true, false, "bootstrap"],
-    [
-      { recoveryProof: true, observabilityFixture: true },
-      true,
-      true,
-      false,
-      "bootstrap",
-    ],
-  ]) {
-    const calls = [];
-    const run = () =>
-      runInNewContext(
-        `(() => {
-      ${selection}
-      const launchIdentity = context ? { context: { resources: {} } } : undefined;
-      ${identity}
-      ${guard}
-      ${bootstrap}
-    })()`,
-        {
-          process: {
-            env: context ? { COFFEE_LAUNCH_CONTEXT_FILE: "/context" } : {},
-          },
-          context,
-          options,
-          isExternalRecoveryProof,
-          assert,
-          platformConfig: { verification: { kafkaNamespaceIsolation: policy } },
-          launchConfigIdentity: () => ({ runId: "run" }),
-          projectName: "owned",
-          secretsDir: "/secrets",
-          composeFile: "/compose",
-          browserHook: undefined,
-          observability: undefined,
-          kafkaNamespaceIdentity: {},
-          runTrackedRollbackCompose() {},
-          runDocker(args) {
-            calls.push("guard");
-            assert.equal(args.at(-1), "name=owned_kafka_data");
-            return existing ? "owned_kafka_data\n" : "";
-          },
-          prepareRecoveryKafkaBootstrap() {
-            calls.push("bootstrap");
-          },
-          prepareKafkaNamespaceRegistry() {
-            calls.push("registry");
-          },
-        },
-      );
-    if (expected === "deny") assert.throws(run, /fresh Kafka volume/u);
-    else run();
-    assert.deepEqual(
-      calls,
-      expected === "deny"
-        ? ["guard"]
-        : expected === "bootstrap"
-          ? ["guard", "bootstrap"]
-          : expected === "registry"
-            ? ["registry"]
-            : [],
-    );
-  }
-});
-
-void test("normal launch G13 prepares and cleans its external run databases", async () => {
-  const { isExternalRecoveryProof } =
-    await import("../../tools/compose-smoke.mjs");
-  const source = await readFile(
-    join(REPO_ROOT, "tools/compose-smoke.mjs"),
-    "utf8",
-  );
-  const part = (start, end) => {
-    const first = source.indexOf(start);
-    const last = source.indexOf(end, first);
-    assert.ok(first >= 0 && last > first);
-    return source.slice(first, last);
-  };
-  const selection = part(
-    "const launchContextPath = process.env.COFFEE_LAUNCH_CONTEXT_FILE;",
-    "\n  if (observability !== undefined)",
-  );
-  const identity = part(
-    "const isolatedDatabaseProof =",
-    "    if (proofLaunchIdentity) {",
-  );
-  const credentials = part(
-    "    recoveryProofCredentials =\n",
-    "    const browserParentModules =",
-  );
-  const prepare =
-    part(
-      "    if (externalRecovery) {\n      recoveryDatabaseProof = await applyExternalRecoveryMigrations(",
-      "\n      if (options.recoveryProof) {",
-    ) + "\n    }";
-  const cleanup = part(
-    "      if (composeAttempted && !options.keep) {",
-    "      if (browserFixture && !retainG14Resources) {",
-  );
-  const program = `(async () => {
-    ${selection}
-    const launchIdentity = hasContext ? { candidateRoot: '/candidate', context: { resources: {} } } : undefined;
-    ${identity}
-    let recoveryProofCredentials, recoveryDatabaseProof, externalDatabaseCleanupReceipt, cleanupHookError;
-    let composeAttempted = false, composeDownComplete = false;
-    const externalRunDatabaseResources = [];
-    let primaryError;
-    try {
-      ${credentials}
-      ${prepare}
-      composeAttempted = true;
-      if (failAfterPrepare) throw new Error('synthetic startup failure');
-    } catch (error) { primaryError = error; }
-    finally { ${cleanup} }
-    if (primaryError) throw primaryError;
-    if (cleanupHookError) throw cleanupHookError;
-    return externalDatabaseCleanupReceipt;
-  })()`;
-  for (const [hasContext, failAfterPrepare, failPrepare, failDown] of [
-    [true, false, false, false],
-    [true, true, false, false],
-    [true, false, true, false],
-    [true, false, false, true],
-    [false, false, false, false],
-  ]) {
-    const calls = [];
-    const resources = [];
-    const run = runInNewContext(program, {
-      args: ["--project-name", "project"],
-      options: { projectName: "project" },
-      observability: undefined,
-      browserHook: undefined,
-      browserFixture: undefined,
-      process: {
-        env: hasContext ? { COFFEE_LAUNCH_CONTEXT_FILE: "/context.json" } : {},
-      },
-      hasContext,
-      failAfterPrepare,
-      isExternalRecoveryProof,
-      launchConfigIdentity: () => ({ runId: "run" }),
-      readExternalRecoveryProofCredentials: async (
-        identity,
-        path,
-        metadata,
-      ) => {
-        assert.equal(identity.runId, "run");
-        assert.equal(path, "/context.json");
-        assert.equal(metadata.expectedLineage, "G13");
-        calls.push("credentials");
-        return { scope: "run" };
-      },
-      readRecoveryProofCredentials: async () => {
-        throw new Error("unexpected fixture credentials");
-      },
-      applyExternalRecoveryMigrations: async (
-        credential,
-        _config,
-        path,
-        tracked,
-      ) => {
-        assert.equal(credential.scope, "run");
-        assert.equal(path, "/context.json");
-        tracked.push(...resources);
-        calls.push("prepare");
-        if (failPrepare) throw new Error("synthetic migration failure");
-        return {};
-      },
-      cleanupExternalRecoveryDatabases: async (
-        credential,
-        tracked,
-        stopped,
-      ) => {
-        assert.equal(credential.scope, "run");
-        assert.equal(stopped, true);
-        assert.equal(tracked.length, 5);
-        calls.push("cleanup");
-        return { verified: true };
-      },
-      cleanupApprovedExternalPostgresAttachment: () => calls.push("detach"),
-      externalPostgresAttachment: {},
-      platformConfig: {},
-      projectName: "project",
-      secretsDir: "/secrets",
-      composeFile: "/compose",
-      runCompose: (_project, _secrets, args) => {
-        assert.equal(args[0], "down");
-        calls.push("down");
-        if (failDown) throw new Error("synthetic compose down failure");
-      },
-    });
-    resources.push(
-      ...["customer", "catalog", "pricing", "orders", "integration"].map(
-        (name) => ({ database: { name } }),
-      ),
-    );
-    if (failAfterPrepare || failPrepare || failDown)
-      await assert.rejects(
-        run,
-        /synthetic (startup|migration|compose down) failure/u,
-      );
-    else await run;
-    assert.deepEqual(
-      calls,
-      !hasContext
-        ? ["down"]
-        : failPrepare
-          ? ["credentials", "prepare", "cleanup", "detach"]
-          : failDown
-            ? ["credentials", "prepare", "down"]
-            : ["credentials", "prepare", "down", "cleanup", "detach"],
-    );
-  }
-  for (const [options, expected] of [
-    [{ projectName: "project", noBuild: true }, true],
-    [{ stubSecrets: true }, false],
-    [{ databaseProof: true }, false],
-    [{ customerProof: true }, false],
-    [{ aromaBindingProof: true }, false],
-    [{ aromaCartProof: true }, false],
-    [{ recoveryProof: true }, true],
-    [{ recoveryProof: true, observabilityFixture: true }, false],
-    [{ recoveryProof: true, mutationDisableRollback: true }, false],
-  ]) {
-    assert.equal(
-      runInNewContext(`(() => { ${selection} return externalRecovery; })()`, {
-        process: { env: { COFFEE_LAUNCH_CONTEXT_FILE: "/context.json" } },
-        options,
-        isExternalRecoveryProof,
-      }),
-      expected,
-    );
-  }
-  const projection = part(
-    "      const kafkaRefs = platformConfig.services[runtime].secretRefs.filter(",
-    "\n    }\n    // Docker Compose's local file-secret backend",
-  );
-  for (const projected of [true, false]) {
-    let written;
-    const canonical = { username: "canonical", password: "canonical-password" };
-    const selected = { username: "run-role", password: "run-password" };
-    await runInNewContext(`(async () => { ${projection} })()`, {
-      runtime: "orders-service",
-      path: "/private/scoped.yaml",
-      options: projected
-        ? {
-            recoveryProofCredentials: {
-              databaseCredentialsByRuntime: { "orders-service": selected },
-            },
-          }
-        : {},
-      platformConfig: {
-        services: {
-          "orders-service": { secretRefs: ["postgres.orders", "kafka.client"] },
-        },
-      },
-      kafkaCredential: { username: "kafka-fixture" },
-      assert,
-      readFile: async () => "fixture",
-      parseYaml: () => ({
-        secrets: { postgres: { orders: canonical }, unrelated: "preserved" },
-      }),
-      dumpYaml: JSON.stringify,
-      chmod: async () => {},
-      writeFile: async (_path, value) => {
-        written = JSON.parse(value);
-      },
-    });
-    assert.deepEqual(
-      written.secrets.postgres.orders,
-      projected ? selected : canonical,
-    );
-    assert.equal(written.secrets.kafka.client.username, "kafka-fixture");
-    assert.equal(written.secrets.unrelated, "preserved");
-  }
-});
-
-void test("G13/G15 external PostgreSQL attachment is exact and keeps the shared data network", async (t) => {
+void test("compose/browser external PostgreSQL attachment is exact and keeps the shared data network", async (t) => {
   const {
     externalRecoveryMigrationCredentialRequest,
     externalPostgresConnectArgs,
@@ -8100,7 +7694,7 @@ void test("G13/G15 external PostgreSQL attachment is exact and keeps the shared 
       observabilityFixture: true,
     }),
     false,
-    "bounded G14 fixture uses disposable PostgreSQL and never selects external G08 credentials",
+    "bounded observability fixture uses disposable PostgreSQL and never selects external migrations credentials",
   );
   assert.equal(
     isExternalRecoveryProof({
@@ -8108,7 +7702,7 @@ void test("G13/G15 external PostgreSQL attachment is exact and keeps the shared 
       mutationDisableRollback: true,
     }),
     false,
-    "G18 remains on its separate disposable diagnostic path",
+    "rollback remains on its separate disposable diagnostic path",
   );
   assert.equal(isExternalRecoveryProof({ aromaCartProof: true }), false);
   assert.deepEqual(
@@ -8210,7 +7804,7 @@ void test("G13/G15 external PostgreSQL attachment is exact and keeps the shared 
   }
 });
 
-void test("G13/G14 use current G08 context while malformed browser lineage fails before PostgreSQL", async (t) => {
+void test("compose/observability use current migrations context while malformed browser lineage fails before PostgreSQL", async (t) => {
   const { readExternalRecoveryProofCredentials } =
     await import("../../tools/compose-smoke.mjs");
   const launchIdentity = {
@@ -8228,24 +7822,26 @@ void test("G13/G14 use current G08 context while malformed browser lineage fails
   await assert.rejects(
     readExternalRecoveryProofCredentials(launchIdentity, "/", {
       candidateRoot: REPO_ROOT,
-      expectedLineage: "G13",
+      expectedLineage: "compose",
       resources: {
         composeProject: "coffee-launch-g13-fixture",
         kafkaPrefix: "20261026T000000Z-1234567",
       },
     }),
     (error) =>
-      ["CONFIG-G08-BUNDLE", "CONFIG-G08-CONTEXT"].includes(error?.ruleId),
-    "ordinary G13 must enter the current-context G08 reader",
+      ["CONFIG-MIGRATIONS-BUNDLE", "CONFIG-MIGRATIONS-CONTEXT"].includes(
+        error?.ruleId,
+      ),
+    "ordinary compose must enter the current-context migrations reader",
   );
 
   await assert.rejects(
     readExternalRecoveryProofCredentials(launchIdentity, "/", {
       candidateRoot: REPO_ROOT,
-      expectedLineage: "G14",
+      expectedLineage: "observability",
       resources: { g08PreparationContextPath: "/foreign/context.json" },
     }),
-    /cannot downgrade to G13\/G14/u,
+    /cannot downgrade to compose\/observability/u,
   );
 
   for (const resources of [
@@ -8268,10 +7864,10 @@ void test("G13/G14 use current G08 context while malformed browser lineage fails
     await assert.rejects(
       readExternalRecoveryProofCredentials(launchIdentity, "/", {
         candidateRoot: REPO_ROOT,
-        expectedLineage: "G15",
+        expectedLineage: "browser",
         resources,
       }),
-      /G15 G08 parent preparation reference is missing/u,
+      /browser parent preparation reference is missing/u,
     );
   }
   assert.equal(connectCalls, 0, "context failures must precede PostgreSQL");
@@ -8889,8 +8485,8 @@ void test("catalog slice preserves secret ownership and uses host identity and s
   assert.equal(after.mode & 0o777, 0o400);
 });
 
-void test("G14 provider boundary rejects enabled mutations and non-isolated fixture", async () => {
-  const { validateG14ProviderBoundary } =
+void test("observability provider boundary rejects enabled mutations and non-isolated fixture", async () => {
+  const { validateObservabilityProviderBoundary } =
     await import("../../tools/compose-smoke.mjs");
   const projectName = "coffee-g14";
   const networkName = `${projectName}_coffee_provider_egress`;
@@ -8956,33 +8552,36 @@ void test("G14 provider boundary rejects enabled mutations and non-isolated fixt
     fixtureImageId: fixture.Image,
     fixtureDirectory: "/dev/shm/fixture",
   };
-  assert.equal(validateG14ProviderBoundary(input).providerIsolated, true);
+  assert.equal(
+    validateObservabilityProviderBoundary(input).providerIsolated,
+    true,
+  );
   assert.throws(() =>
-    validateG14ProviderBoundary({
+    validateObservabilityProviderBoundary({
       ...input,
       mounted: { ...input.mounted, mutationsEnabled: true },
     }),
   );
   assert.throws(() =>
-    validateG14ProviderBoundary({
+    validateObservabilityProviderBoundary({
       ...input,
       mounted: { ...input.mounted, sha256: "d".repeat(64) },
     }),
   );
   assert.throws(() =>
-    validateG14ProviderBoundary({
+    validateObservabilityProviderBoundary({
       ...input,
       network: { ...network, Internal: false },
     }),
   );
   assert.throws(() =>
-    validateG14ProviderBoundary({
+    validateObservabilityProviderBoundary({
       ...input,
       fixtureImageId: `sha256:${"e".repeat(64)}`,
     }),
   );
   assert.throws(() =>
-    validateG14ProviderBoundary({
+    validateObservabilityProviderBoundary({
       ...input,
       internalNetworks: [
         { ...internalNetworks[0], Internal: false },
@@ -8991,7 +8590,7 @@ void test("G14 provider boundary rejects enabled mutations and non-isolated fixt
     }),
   );
   assert.throws(() =>
-    validateG14ProviderBoundary({
+    validateObservabilityProviderBoundary({
       ...input,
       fixture: {
         ...fixture,
