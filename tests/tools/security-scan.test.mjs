@@ -2594,7 +2594,9 @@ void test("G12 builds product images, records pinned upstream identity, and fail
             ).isFile(),
             true,
           );
-          assert.ok(scanCache.startsWith(`${selectedTempRoot}/`));
+          // Trivy DB живёт в постоянном cacheRoot, а не в per-run data temp.
+          assert.equal(scanCache.startsWith(`${selectedTempRoot}/`), false);
+          assert.match(scanCache, /\/trivy$/u);
           assert.equal((await lstat(placementLock)).isFile(), true);
         }
         if (interruptDuringBuild) {
