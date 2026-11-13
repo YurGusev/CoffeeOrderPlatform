@@ -223,7 +223,7 @@ export async function fixture(run, options = {}) {
           options.launchContextFile,
           {
             candidateRoot: active.candidateRoot,
-            expectedLineage: "G15",
+            expectedLineage: "browser",
             resources: active.context.resources,
           },
         );

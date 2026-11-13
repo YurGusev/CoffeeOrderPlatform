@@ -30,20 +30,26 @@ void test("номер гейта в идентификаторе, env-перем
     `identifier:${probeEnv}`,
   ]);
   assert.deepEqual(kinds(`fail("CONFIG-${gateNumber(8)}-SOPS-OUTPUT");\n`), [
+    `gate-number:${gateNumber(8)}`,
     `error-code:CONFIG-${gateNumber(8)}-SOPS-OUTPUT`,
   ]);
 });
 
 void test("номер гейта в комментарии запрещён", () => {
-  assert.deepEqual(kinds(`// ${gateNumber(12)} собирает образы\n`), [
-    `comment:${gateNumber(12)}`,
-  ]);
-  assert.deepEqual(kinds(`# ${gateNumber(8)} миграции\n`), [
-    `comment:${gateNumber(8)}`,
-  ]);
-  assert.deepEqual(kinds(` * ${gateNumber(14)} наблюдаемость\n`), [
-    `comment:${gateNumber(14)}`,
-  ]);
+  for (const number of [12, 8, 14]) {
+    const line = `// ${gateNumber(number)} собирает образы\n`;
+    assert.deepEqual(kinds(line), [
+      `gate-number:${gateNumber(number)}`,
+      `comment:${gateNumber(number)}`,
+    ]);
+  }
+  for (const number of [8, 14]) {
+    const line = `# ${gateNumber(number)} миграции\n`;
+    assert.deepEqual(kinds(line), [
+      `gate-number:${gateNumber(number)}`,
+      `comment:${gateNumber(number)}`,
+    ]);
+  }
 });
 
 void test("slug-имена и обычный текст конвенцию не нарушают", () => {
@@ -58,12 +64,14 @@ void test("хеши и случайные fixture-строки не считаю
     kinds("const digest = 'MLG12IM7qQUyLTcrmGPs48s5mCiC9e';\n"),
     [],
   );
-  assert.deepEqual(kinds("const hash = 'a'.repeat(64) + 'G12';\n"), []);
+  assert.deepEqual(kinds("const hash = 'a'.repeat(64) + 'G12';\n"), [
+    "gate-number:G12",
+  ]);
 });
 
 void test("старый id нормализуется в slug, неизвестный id — нет", () => {
   assert.equal(gateSlug("supply_chain"), "supply_chain");
-  assert.equal(gateSlug("G12_SUPPLY_CHAIN"), "supply_chain");
+  assert.equal(gateSlug("SUPPLY_CHAIN_SUPPLY_CHAIN"), "supply_chain");
   assert.equal(gateSlug("G99_UNKNOWN"), null);
   assert.equal(gateSlug(undefined), null);
   assert.equal(Object.isFrozen(LEGACY_GATE_IDS), true);

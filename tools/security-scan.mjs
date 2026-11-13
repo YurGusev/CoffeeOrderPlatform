@@ -39,16 +39,15 @@ import {
 const SCANNER_IMAGE =
   "ghcr.io/aquasecurity/trivy@sha256:790fd66d1697395d8693d1acaa1ea702406a20f109b6fc7bac8db623eca6c06c";
 const SCANNER_VERSION = "0.76.1";
-export const G12_SCAN_BUDGET_MS = 40 * 60_000;
-export const G12_SCAN_RESERVE_MS = 5 * 60_000;
+export const _SCAN_BUDGET_MS = 40 * 60_000;
+export const _SCAN_RESERVE_MS = 5 * 60_000;
 const GATE_DEADLINE_ENV = "COFFEE_LAUNCH_GATE_DEADLINE_EPOCH_MS";
 export function scanBudgetMs(now = Date.now(), env = process.env) {
   const raw = env[GATE_DEADLINE_ENV];
-  if (raw === undefined) return G12_SCAN_BUDGET_MS;
+  if (raw === undefined) return _SCAN_BUDGET_MS;
   const deadline = Number(raw);
-  if (!Number.isSafeInteger(deadline) || deadline <= 0)
-    return G12_SCAN_BUDGET_MS;
-  return Math.max(1, deadline - now - G12_SCAN_RESERVE_MS);
+  if (!Number.isSafeInteger(deadline) || deadline <= 0) return _SCAN_BUDGET_MS;
+  return Math.max(1, deadline - now - _SCAN_RESERVE_MS);
 }
 const BUILD_NETWORK = "coffee_platform_build_mtu";
 const UPSTREAM_IMAGES = Object.freeze([
@@ -63,8 +62,7 @@ const SCAN_LOCK = join(tmpdir(), "coffee-platform-trivy.lock");
 function scanCacheRoot() {
   return (
     process.env.COFFEE_SCAN_CACHE_DIR ??
-    process.env.COFFEE_G12_CACHE_DIR ??
-    join(homedir(), ".cache/coffee-platform/g12")
+    join(homedir(), ".cache/coffee-platform/scan")
   );
 }
 // Эти образы запускает Compose; `supply_chain` публикует их в daemon под тегами проекта
@@ -937,7 +935,7 @@ async function cachedHttpsFile({
   // Ожидаемый hash приходит из toolchain BOM; он обязан быть digest, иначе
   // значение вида "../../x" изменило бы путь записи curl.
   if (!/^[a-f0-9]{64}$/u.test(expectedSha256 ?? ""))
-    fail("G12_CACHE_DIGEST_INVALID");
+    fail("SUPPLY_CHAIN_CACHE_DIGEST_INVALID");
   const cached = join(cacheRoot, "downloads", expectedSha256);
   await mkdir(join(cacheRoot, "downloads"), {
     recursive: true,
@@ -949,7 +947,7 @@ async function cachedHttpsFile({
   if (cachedHash !== expectedSha256) {
     await run("curl", ["--output", cached, ...args]);
     if ((await hashRegularFile(cached, 64 * 1024 * 1024)) !== expectedSha256)
-      fail("G12_CACHE_DOWNLOAD_MISMATCH");
+      fail("SUPPLY_CHAIN_CACHE_DOWNLOAD_MISMATCH");
   }
   await copyFile(cached, path);
 }
@@ -3967,8 +3965,8 @@ export async function runSecurityScan({
     result.code =
       result.evaluation.unresolvedHigh + result.evaluation.critical > 0
         ? "HIGH_OR_CRITICAL_FINDINGS"
-        : "G12_SCAN_CLEAN";
-    result.status = result.code === "G12_SCAN_CLEAN" ? "PASS" : "FAIL";
+        : "SUPPLY_CHAIN_SCAN_CLEAN";
+    result.status = result.code === "SUPPLY_CHAIN_SCAN_CLEAN" ? "PASS" : "FAIL";
     if (result.status === "FAIL") result.failure = { code: result.code, stage };
     if (result.status === "PASS" && publishesRuntimeImages) {
       markStage("image-inventory");

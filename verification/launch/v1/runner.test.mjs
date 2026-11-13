@@ -374,7 +374,7 @@ void test("owner-suite TAP summary rejects empty or omitted integration/recovery
   }
 });
 
-void test("G18 validates only a clean config-only B→D→R lineage", async (t) => {
+void test("rollback validates only a clean config-only B→D→R lineage", async (t) => {
   const good = await rollbackGitFixture(t);
   const receipt = await validateRollbackLineage({
     launchIdentity: good.launchIdentity,
@@ -453,7 +453,7 @@ void test("G18 validates only a clean config-only B→D→R lineage", async (t) 
   }
 });
 
-void test("G18 creates isolated config commits without changing the B checkout", async (t) => {
+void test("rollback creates isolated config commits without changing the B checkout", async (t) => {
   const good = await rollbackGitFixture(t);
   const before = rollbackGit(
     good.roots.candidate,
@@ -607,7 +607,7 @@ void test("private candidate normalizes reader modes independently of clone umas
   assert.equal(await readFile(outside, "utf8"), "untouched");
 });
 
-void test("G08 approved target is explicit, private and bound to the current run", async (t) => {
+void test("migrations approved target is explicit, private and bound to the current run", async (t) => {
   const root = await mkdtemp(join(tmpdir(), "launch-g08-approved-"));
   t.after(() => rm(root, { recursive: true, force: true }));
   const artifactDir = join(root, "gates/migrations/artifacts");
@@ -677,7 +677,7 @@ void test("G08 approved target is explicit, private and bound to the current run
   );
 });
 
-void test("G08 stops before its command when the approved identity is unavailable", async (t) => {
+void test("migrations stops before its command when the approved identity is unavailable", async (t) => {
   await mkdir(join(process.cwd(), "evidence/launch"), { recursive: true });
   const root = await mkdtemp(
     join(process.cwd(), "evidence/launch/g08-runner-test-"),
@@ -726,7 +726,7 @@ void test("G08 stops before its command when the approved identity is unavailabl
   );
 });
 
-void test("G18 accepts only the canonical launch-context Compose project string", () => {
+void test("rollback accepts only the canonical launch-context Compose project string", () => {
   const context = {
     runId: "20261024T120000Z-1234567",
     resources: { composeProject: "coffee-launch-20261024t120000z-1234567" },
@@ -758,7 +758,7 @@ void test("G18 accepts only the canonical launch-context Compose project string"
   );
 });
 
-void test("G18 local provider injects UnknownOutcome only for the first numeric SetQuantity wire", () => {
+void test("rollback local provider injects UnknownOutcome only for the first numeric SetQuantity wire", () => {
   assert.equal(
     shouldLoseFirstRollbackSetQuantityResponse(1, { quantity: 1 }),
     true,
@@ -777,7 +777,7 @@ void test("G18 local provider injects UnknownOutcome only for the first numeric 
   );
 });
 
-void test("G18 captures the fixture baseline before delayed runtimes and preserves immutable owner history", () => {
+void test("rollback captures the fixture baseline before delayed runtimes and preserves immutable owner history", () => {
   const baseline = {
     counts: {},
     attempts: [],
@@ -912,7 +912,7 @@ void test("G18 captures the fixture baseline before delayed runtimes and preserv
   }
 });
 
-void test("G18 requires a structured runtime receipt with verified lineage, phases and cleanup", async (t) => {
+void test("rollback requires a structured runtime receipt with verified lineage, phases and cleanup", async (t) => {
   const candidateSha = "1".repeat(40);
   const lineage = {
     B: {
@@ -1054,7 +1054,7 @@ void test("G18 requires a structured runtime receipt with verified lineage, phas
   assert.deepEqual(JSON.parse(written.toString("utf8")), artifact);
 });
 
-void test("G18 projects only canonical owner databases into the verified launch namespace", async () => {
+void test("rollback projects only canonical owner databases into the verified launch namespace", async () => {
   const ownership = JSON.parse(
     await readFile(
       new URL("../../../config/database-ownership.json", import.meta.url),
@@ -1089,12 +1089,12 @@ void test("G18 projects only canonical owner databases into the verified launch 
   assert.deepEqual(
     ownership,
     beforeOwnership,
-    "G18 database projection must not mutate canonical ownership input",
+    "rollback database projection must not mutate canonical ownership input",
   );
   assert.deepEqual(
     roleMap,
     beforeRoleMap,
-    "G18 database projection must not mutate canonical role-map input",
+    "rollback database projection must not mutate canonical role-map input",
   );
   assert.deepEqual(
     projected.ownership.databases.map(({ owner, name }) => [owner, name]),
@@ -1357,7 +1357,7 @@ void test("trusted bootstrap environment excludes launch context and inherited d
   });
 });
 
-void test("G18 B, D and R overrides bind the identical launch context and project-scoped nginx image", async (t) => {
+void test("rollback B, D and R overrides bind the identical launch context and project-scoped nginx image", async (t) => {
   const contextPath = "/tmp/coffee-launch-context-proof.json";
   const projectName = "coffee-launch-proof-20261024t120000z-1234567";
   const configs = [
@@ -1408,7 +1408,7 @@ void test("G18 B, D and R overrides bind the identical launch context and projec
   }
 });
 
-void test("G18 runtime config proof resolves js-yaml from the deployed runtime package", async (t) => {
+void test("rollback runtime config proof resolves js-yaml from the deployed runtime package", async (t) => {
   const flatRoot = await mkdtemp(join(tmpdir(), "g18-flat-runtime-layout-"));
   t.after(() => rm(flatRoot, { recursive: true, force: true }));
   const runtimeRoot = join(flatRoot, "node_modules/@coffee-platform/runtime");
@@ -1458,7 +1458,7 @@ void test("G18 runtime config proof resolves js-yaml from the deployed runtime p
   });
 });
 
-void test("G18 persists only sanitized child failure JSON and fails closed on missing receipt", async (t) => {
+void test("rollback persists only sanitized child failure JSON and fails closed on missing receipt", async (t) => {
   const good = await rollbackGitFixture(t);
   const lineage = await validateRollbackLineage({
     launchIdentity: good.launchIdentity,
@@ -1541,7 +1541,7 @@ void test("G18 persists only sanitized child failure JSON and fails closed on mi
   const disabledReceipt = createRollbackFailureReceipt({
     ...identity,
     stage: "disabled-reconcile",
-    error: new Error("G18_PHASE_FAILED"),
+    error: new Error("ROLLBACK_PHASE_FAILED"),
     cleanup,
   });
   const disabledPayload = attachRollbackDisabledReconcileSubstage(
@@ -1662,7 +1662,7 @@ void test("G18 persists only sanitized child failure JSON and fails closed on mi
   );
 });
 
-void test("G18 joins SIGTERM cleanup and timed-out child processes before caller cleanup", async (t) => {
+void test("rollback joins SIGTERM cleanup and timed-out child processes before caller cleanup", async (t) => {
   const directory = await mkdtemp(join(tmpdir(), "launch-g18-child-"));
   t.after(() => rm(directory, { recursive: true, force: true }));
   const readPublished = async (path, label) => {
@@ -1712,7 +1712,10 @@ catch(error) { console.log(JSON.stringify({joined:error.result?.joined===true,co
     controller.once("close", (code, signal) => resolve({ code, signal }));
   });
   const readyProcess = JSON.parse(
-    await readPublished(ready, "G18 stub child did not start before signal"),
+    await readPublished(
+      ready,
+      "rollback stub child did not start before signal",
+    ),
   );
   assert.equal(process.kill(readyProcess.pid, 0), true);
   controller.kill("SIGTERM");
@@ -1753,7 +1756,7 @@ setInterval(() => {}, 1000);`;
     const timeoutProcess = JSON.parse(
       await readPublished(
         timeoutReady,
-        "G18 timeout child did not publish readiness",
+        "rollback timeout child did not publish readiness",
       ),
     );
     assert.equal(process.kill(timeoutProcess.pid, 0), true);
@@ -1768,13 +1771,13 @@ setInterval(() => {}, 1000);`;
     assert.throws(() => process.kill(timeoutProcess.pid, 0), { code: "ESRCH" });
   } finally {
     if (!released) {
-      abandonTimeout(new Error("G18 timeout child was not armed"));
+      abandonTimeout(new Error("rollback timeout child was not armed"));
       await timedOut.catch(() => {});
     }
   }
 });
 
-void test("managed G14 child IPC joins ordered stages without exposing producer token", async () => {
+void test("managed observability child IPC joins ordered stages without exposing producer token", async () => {
   const token = "private-ipc-producer-token";
   const source = `const request=(stage,payload)=>new Promise((resolve,reject)=>{process.once('message',m=>m.ok&&m.stage===stage?resolve(m.payload):reject(Error('rejected')));process.send({stage,payload});});
 try { const init=await request('init',null); if(typeof init.token!=='string'||!init.token||JSON.stringify([process.argv,process.env]).includes(init.token))throw Error('token privacy'); await request('roles-ready',null); await request('browser-proof',null); await request('cleanup',null); process.disconnect(); console.log('done'); } catch { try { await request('cleanup',null); } catch {} process.disconnect(); process.exitCode=1; }`;
@@ -2081,7 +2084,7 @@ void test("matrix keeps all mandatory launch gates, exact order, commands and ti
   assert.deepEqual(
     gates.slice(8, 18).map((gate) => gate.timeout),
     [2700, ...Array(9).fill(1800)],
-    "G12 has its own inner+headroom budget; the rest stay at 1800",
+    "supply_chain has its own inner+headroom budget; the rest stay at 1800",
   );
   assert.deepEqual(splitCommand(gates[3].command), [
     ["pnpm", "format:check"],
@@ -2090,7 +2093,7 @@ void test("matrix keeps all mandatory launch gates, exact order, commands and ti
   ]);
 });
 
-void test("G09 accepts only exact context-bound 10/40 runtime database evidence", async (t) => {
+void test("db_boundaries accepts only exact context-bound 10/40 runtime database evidence", async (t) => {
   const evidenceDir = await mkdtemp(join(tmpdir(), "launch-g09-offline-"));
   t.after(() => rm(evidenceDir, { recursive: true, force: true }));
   const runId = "20261025T120000Z-1234567";
@@ -2372,7 +2375,7 @@ void test("G09 accepts only exact context-bound 10/40 runtime database evidence"
   );
 });
 
-void test("G08 rejects receipts without exact derived targets and cleanup", async (t) => {
+void test("migrations rejects receipts without exact derived targets and cleanup", async (t) => {
   const evidenceDir = await mkdtemp(join(tmpdir(), "launch-g08-receipt-"));
   t.after(() => rm(evidenceDir, { recursive: true, force: true }));
   const context = {
@@ -2440,7 +2443,7 @@ void test("G08 rejects receipts without exact derived targets and cleanup", asyn
   );
 });
 
-void test("G08 ACL oracle distinguishes table and exact column UPDATE grants", async () => {
+void test("migrations ACL oracle distinguishes table and exact column UPDATE grants", async () => {
   const roleDatabase = JSON.parse(
     await readFile("config/database-role-map.json", "utf8"),
   ).databases.find(({ schema }) => schema === "orders");
@@ -2549,7 +2552,7 @@ void test("G08 ACL oracle distinguishes table and exact column UPDATE grants", a
   );
 });
 
-void test("G08 forward owner diagnostics expose only bounded failure facts", () => {
+void test("migrations forward owner diagnostics expose only bounded failure facts", () => {
   const formatted = formatOwnerStageFailure("orders", "seed", {
     sqlState: "23503",
     code: "DB_QUERY_FAILED",
@@ -2557,7 +2560,7 @@ void test("G08 forward owner diagnostics expose only bounded failure facts", () 
   });
   assert.equal(
     formatted.message,
-    "G08_MIGRATIONS OWNER_STAGE_FAILED: orders:seed:23503",
+    "MIGRATIONS OWNER_STAGE_FAILED: orders:seed:23503",
   );
   assert.equal(formatted.message.includes("secret-canary"), false);
   assert.equal(
@@ -2565,19 +2568,19 @@ void test("G08 forward owner diagnostics expose only bounded failure facts", () 
       code: "DB_QUERY_FAILED",
       message: "secret-canary",
     }).message,
-    "G08_MIGRATIONS OWNER_STAGE_FAILED: catalog:current:UNKNOWN",
+    "MIGRATIONS OWNER_STAGE_FAILED: catalog:current:UNKNOWN",
   );
   assert.throws(
     () => formatOwnerStageFailure("coffeeorderdb", "seed", { code: "23503" }),
-    /Invalid G08 owner stage/u,
+    /Invalid migrations owner stage/u,
   );
   assert.throws(
     () => formatOwnerStageFailure("orders", "cleanup", { code: "23503" }),
-    /Invalid G08 owner stage/u,
+    /Invalid migrations owner stage/u,
   );
 });
 
-void test("G15 runner requires the exact command and a context-bound live artifact", async (t) => {
+void test("browser runner requires the exact command and a context-bound live artifact", async (t) => {
   const evidenceDir = await mkdtemp(join(tmpdir(), "launch-g15-mock-"));
   t.after(() => rm(evidenceDir, { recursive: true, force: true }));
   const runId = "20261025T120000Z-1234567";
@@ -2622,7 +2625,7 @@ void test("G15 runner requires the exact command and a context-bound live artifa
       record,
       evidenceDir,
     ),
-    "G15 parent wrapper does not admit a joined child, exact fixture lineage, browser proof and cleanup",
+    "browser parent wrapper does not admit a joined child, exact fixture lineage, browser proof and cleanup",
   );
   assert.notEqual(
     await verifyGateArtifacts(
@@ -2637,7 +2640,7 @@ void test("G15 runner requires the exact command and a context-bound live artifa
   );
 });
 
-void test("G15 failed gate records only a matching child failure receipt", async (t) => {
+void test("browser failed gate records only a matching child failure receipt", async (t) => {
   const sourceRoot = process.cwd();
   const candidateSha = execFileSync("git", ["rev-parse", "HEAD"], {
     cwd: sourceRoot,
@@ -2730,7 +2733,7 @@ void test("G15 failed gate records only a matching child failure receipt", async
   });
   const failedRecord = recordFor(1);
   const rejection =
-    "G15 parent wrapper does not admit a joined child, exact fixture lineage, browser proof and cleanup";
+    "browser parent wrapper does not admit a joined child, exact fixture lineage, browser proof and cleanup";
 
   assert.equal(
     await verifyGateArtifacts(gate, failedRecord, evidenceDir),
@@ -3291,7 +3294,7 @@ void test("AROMA full-cart guards fail closed and recovery cleanup requires base
   );
 });
 
-void test("G16 requires the selected offer's explicit binding packing and null grind before approval or grant", () => {
+void test("aroma_sandbox requires the selected offer's explicit binding packing and null grind before approval or grant", () => {
   const binding = {
     offerRef: `off_${"0".repeat(26)}`,
     supplierRef: `sup_${"1".repeat(26)}`,
@@ -3332,7 +3335,7 @@ void test("G16 requires the selected offer's explicit binding packing and null g
   );
 });
 
-void test("G16 exact raw-offer reverse lookup rejects foreign and stale approved refs", () => {
+void test("aroma_sandbox exact raw-offer reverse lookup rejects foreign and stale approved refs", () => {
   const offerRef = `off_${"0".repeat(26)}`;
   const binding = {
     offerRef,
@@ -3393,7 +3396,7 @@ void test("G16 exact raw-offer reverse lookup rejects foreign and stale approved
   );
 });
 
-void test("G16 accepts only pinned offer-445 wire facts when source binding facts are absent", async () => {
+void test("aroma_sandbox accepts only pinned offer-445 wire facts when source binding facts are absent", async () => {
   const root = process.cwd();
   const factsPath = join(
     root,
@@ -3552,7 +3555,7 @@ void test("G16 accepts only pinned offer-445 wire facts when source binding fact
   assert.equal(grants, 0);
 });
 
-void test("G16 rejects missing, tampered, or symlinked packing proof sources", async (t) => {
+void test("aroma_sandbox rejects missing, tampered, or symlinked packing proof sources", async (t) => {
   const root = await mkdtemp(join(tmpdir(), "g16-packing-proof-"));
   t.after(() => rm(root, { recursive: true, force: true }));
   const directory = join(root, "evidence/aroma-provider/2026-10-24-packing");
@@ -3603,7 +3606,7 @@ void test("G16 rejects missing, tampered, or symlinked packing proof sources", a
   );
 });
 
-void test("G16 binds the mutator preparation GET and unsafe call to the approved cart phase and exact expiry", async () => {
+void test("aroma_sandbox binds the mutator preparation GET and unsafe call to the approved cart phase and exact expiry", async () => {
   const [
     { ProviderCartMutator },
     { GatewayMutationExecutor },
@@ -3835,7 +3838,7 @@ void test("G16 binds the mutator preparation GET and unsafe call to the approved
   );
 });
 
-void test("G16 restart waits for exact DB-clock reservation eligibility within the canonical bound", async () => {
+void test("aroma_sandbox restart waits for exact DB-clock reservation eligibility within the canonical bound", async () => {
   const calls = [];
   const pauses = [];
   let monotonic = 10;
@@ -3901,7 +3904,7 @@ void test("G16 restart waits for exact DB-clock reservation eligibility within t
   );
 });
 
-void test("G16 resolves only the exact approval environment placeholder and fails closed when absent", () => {
+void test("aroma_sandbox resolves only the exact approval environment placeholder and fails closed when absent", () => {
   assert.deepEqual(
     parseAromaArguments(
       ["--approval-file", "$AROMA_SANDBOX_APPROVAL_FILE"],
@@ -3928,7 +3931,7 @@ void test("G16 resolves only the exact approval environment placeholder and fail
   );
 });
 
-void test("G16 cleanup failure always changes the gate decision to FAIL", () => {
+void test("aroma_sandbox cleanup failure always changes the gate decision to FAIL", () => {
   assert.deepEqual(
     normalizeCleanupFailureOutcome({
       status: "PASS",
@@ -3956,7 +3959,7 @@ void test("G16 cleanup failure always changes the gate decision to FAIL", () => 
   );
 });
 
-void test("G16 phase failure keeps bounded convergence evidence and strips unknown codes and payload fields", async () => {
+void test("aroma_sandbox phase failure keeps bounded convergence evidence and strips unknown codes and payload fields", async () => {
   const secret = "PRIVATE_PROVIDER_BODY_CANARY";
   const rawConvergenceEvidence = {
     latestAttempt: {
@@ -4091,7 +4094,7 @@ void test("G16 phase failure keeps bounded convergence evidence and strips unkno
   );
 });
 
-void test("G16 real catalog export preserves safe recordBatch failure facts through importer terminal record", async () => {
+void test("aroma_sandbox real catalog export preserves safe recordBatch failure facts through importer terminal record", async () => {
   const { DatabaseTransactionError } =
     await import("../../../packages/platform-database/dist/index.js");
   const {
@@ -4299,7 +4302,7 @@ void test("AROMA Desired fixture appends only monotonic revision, line and work 
   );
 });
 
-void test("G16 migration helper creates its checksum ledger before grants and rolls back DDL with ledger rows", async (t) => {
+void test("aroma_sandbox migration helper creates its checksum ledger before grants and rolls back DDL with ledger rows", async (t) => {
   const root = await mkdtemp(join(tmpdir(), "coffee-g16-migrations-"));
   t.after(() => rm(root, { recursive: true, force: true }));
   const directory = join(root, "apps/catalog-service/migrations");
@@ -4730,7 +4733,7 @@ void test("pnpm forwards the approval-file argument after its separator to the o
   }
 });
 
-void test("G04, G08, G09, G10, G11, G12, G13, G14, G17 and G18 forward the verified launch context to gate commands", async (t) => {
+void test("unit, migrations, db_boundaries, integration, recovery, supply_chain, compose, observability, backup_restore and rollback forward the verified launch context to gate commands", async (t) => {
   const directory = await mkdtemp(join(tmpdir(), "launch-owner-context-"));
   t.after(() => rm(directory, { recursive: true, force: true }));
   const contextPath = "/tmp/coffee-launch-context-proof.json";
@@ -4826,7 +4829,7 @@ void test("gate children receive the absolute gate deadline in the environment",
   }
 });
 
-void test("G04 classifies changed critical source roots and enforces emitted-JS LCOV and no skipped unit tests", () => {
+void test("unit classifies changed critical source roots and enforces emitted-JS LCOV and no skipped unit tests", () => {
   const modules = [
     {
       id: "orders",
@@ -5026,7 +5029,7 @@ void test("G04 classifies changed critical source roots and enforces emitted-JS 
   );
 });
 
-void test("G04 preserves private run-scoped TAP/LCOV diagnostics once without overwriting", async (t) => {
+void test("unit preserves private run-scoped TAP/LCOV diagnostics once without overwriting", async (t) => {
   const sourceRepoRoot = await mkdtemp(
     join(tmpdir(), "launch-g04-artifact-root-"),
   );
@@ -5079,7 +5082,7 @@ void test("G04 preserves private run-scoped TAP/LCOV diagnostics once without ov
   );
 });
 
-void test("G04 rejects a symlinked evidence/launch ancestor before writing artifacts", async (t) => {
+void test("unit rejects a symlinked evidence/launch ancestor before writing artifacts", async (t) => {
   const sourceRepoRoot = await mkdtemp(
     join(tmpdir(), "launch-g04-symlink-root-"),
   );
@@ -5116,7 +5119,7 @@ void test("G04 rejects a symlinked evidence/launch ancestor before writing artif
   });
 });
 
-void test("G04 unit child excludes bootstrap and operator locators while preserving the launch context and coverage", async (t) => {
+void test("unit child excludes bootstrap and operator locators while preserving the launch context and coverage", async (t) => {
   const directory = await mkdtemp(join(tmpdir(), "launch-g04-child-env-"));
   t.after(() => rm(directory, { recursive: true, force: true }));
   const values = {
@@ -5159,7 +5162,7 @@ void test("G04 unit child excludes bootstrap and operator locators while preserv
   }
 });
 
-void test("G04 requires an owned read-only context and reuses the full clean-checkout guard", async (t) => {
+void test("unit requires an owned read-only context and reuses the full clean-checkout guard", async (t) => {
   const directory = await mkdtemp(join(tmpdir(), "launch-g04-context-"));
   t.after(() => rm(directory, { recursive: true, force: true }));
   const contextPath = join(directory, "context.json");
@@ -5194,7 +5197,7 @@ void test("G04 requires an owned read-only context and reuses the full clean-che
   );
 });
 
-void test("G04 coverage floors and critical artifact mapping are strict platform policy", async () => {
+void test("unit coverage floors and critical artifact mapping are strict platform policy", async () => {
   const config = parseYaml(
     await readFile(join(process.cwd(), "config/platform.yaml"), "utf8"),
     { json: true },
@@ -5236,14 +5239,14 @@ void test("G04 coverage floors and critical artifact mapping are strict platform
   assert.throws(() => parsePlatformConfig(remapped), /artifact mapping/u);
 });
 
-void test("workload cutoff reserves the declared G19 timeout and final report window", () => {
+void test("workload cutoff reserves the declared report timeout and final report window", () => {
   const reservedMs = 900_000 + 120_000;
   assert.equal(gateBudgetMs("preflight", reservedMs), 0);
   assert.equal(gateBudgetMs("report", reservedMs), 900_000);
   assert.equal(gateBudgetMs("report", 900_000), 780_000);
 });
 
-void test("G19 accepts only a complete run-scoped Kafka namespace inventory matching G00 claims", () => {
+void test("report accepts only a complete run-scoped Kafka namespace inventory matching preflight claims", () => {
   const runId = "20261023T120000Z-1234567";
   const expectedTopics = [
     "coffee.catalog.snapshot.v1",
@@ -5383,7 +5386,7 @@ void test("G19 accepts only a complete run-scoped Kafka namespace inventory matc
   );
 });
 
-void test("G13 persists only the top-level validated Kafka inventory from successful stdout", async (t) => {
+void test("compose persists only the top-level validated Kafka inventory from successful stdout", async (t) => {
   const evidenceDir = await mkdtemp(
     join(tmpdir(), "launch-g13-kafka-inventory-"),
   );
@@ -5564,8 +5567,8 @@ void test("builtin report finalizes a complete fail-closed result without candid
     timeoutSeconds,
     reason:
       id === "supply_chain"
-        ? "G12 scan failed"
-        : "NOT_RUN: workload budget exhausted; G19 reserve remains",
+        ? "supply_chain scan failed"
+        : "NOT_RUN: workload budget exhausted; report reserve remains",
     runs: [],
     artifacts: [],
   }));
@@ -5662,15 +5665,15 @@ void test("builtin report finalizes a complete fail-closed result without candid
   assert.doesNotMatch(report, /\n\n$/);
   assert.match(
     report,
-    /## Sandbox fingerprint[\s\S]*G16: NOT_RUN; account fingerprint: нет доказательства/,
+    /## Sandbox fingerprint[\s\S]*aroma_sandbox: NOT_RUN; account fingerprint: нет доказательства/,
   );
   assert.match(
     report,
-    /## Backup RPO и restore time[\s\S]*G17: NOT_RUN;[\s\S]*NOT_RUN — доказательства нет/,
+    /## Backup RPO и restore time[\s\S]*backup_restore: NOT_RUN;[\s\S]*NOT_RUN — доказательства нет/,
   );
   assert.match(
     report,
-    /## Observability и rollback[\s\S]*G14 observability: NOT_RUN[\s\S]*G18 rollback: NOT_RUN/,
+    /## Observability и rollback[\s\S]*observability: NOT_RUN[\s\S]*rollback: NOT_RUN/,
   );
   assert.match(
     report,
@@ -5741,7 +5744,7 @@ void test("builtin report finalizes a complete fail-closed result without candid
   const forgedReportCommand = await finalizeReport(evidenceDir);
   assert.ok(
     forgedReportCommand.errors.some((error) =>
-      /фактический argv|G19 PASS/.test(error),
+      /фактический argv|report PASS/.test(error),
     ),
   );
 
@@ -5834,7 +5837,7 @@ void test("builtin report finalizes a complete fail-closed result without candid
   const missingKafkaInventory = await finalizeReport(evidenceDir);
   assert.ok(
     missingKafkaInventory.errors.some((error) =>
-      /G13 Kafka namespace inventory/u.test(error),
+      /compose Kafka namespace inventory/u.test(error),
     ),
   );
 });
@@ -6311,7 +6314,7 @@ void test("combined stdout/stderr budget writes a marker and fails the gate capt
   );
 });
 
-void test("G00 and G19 pnpm commands keep exact argv and do not auto-install before execution", async (t) => {
+void test("preflight and report pnpm commands keep exact argv and do not auto-install before execution", async (t) => {
   const directory = await mkdtemp(join(tmpdir(), "launch-pnpm-preinstall-"));
   t.after(() => rm(directory, { recursive: true, force: true }));
   const localDependency = join(directory, "local-dependency");
@@ -6791,7 +6794,7 @@ void test(
   },
 );
 
-void test("G14 cannot pass without sealed browser correlation lineage", async () => {
+void test("observability cannot pass without sealed browser correlation lineage", async () => {
   const evidenceDir = await mkdtemp(
     join(tmpdir(), "coffee-browser-correlation-"),
   );

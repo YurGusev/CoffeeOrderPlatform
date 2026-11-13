@@ -109,7 +109,7 @@ const health = {
   successThreshold: 1,
 };
 
-void test("ordinary configured runtimes reject the standalone G17 Unix socket endpoint", async (t) => {
+void test("ordinary configured runtimes reject the standalone backup_restore Unix socket endpoint", async (t) => {
   const directory = await mkdtemp(
     join(tmpdir(), "coffee-g17-runtime-endpoint-"),
   );

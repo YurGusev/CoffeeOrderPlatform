@@ -37,8 +37,8 @@ export const ROLLBACK_FAILURE_STAGES = Object.freeze([
   "child-process",
 ]);
 const ROLLBACK_FAILURE_CODES = new Set([
-  "G18_PHASE_FAILED",
-  "G18_CLEANUP_FAILED",
+  "ROLLBACK_PHASE_FAILED",
+  "ROLLBACK_CLEANUP_FAILED",
   "ROLLBACK_FAILURE_RECEIPT_INVALID",
 ]);
 const ROLLBACK_ERROR_NAMES = new Set([
@@ -469,9 +469,9 @@ export async function createRollbackCheckouts({
     gitOutput(
       disabledRoot,
       "-c",
-      "user.name=Coffee G18 verifier",
+      "user.name=Coffee rollback verifier",
       "-c",
-      "user.email=coffee-g18-verifier@example.invalid",
+      "user.email=coffee-rollback-verifier@example.invalid",
       "commit",
       "--quiet",
       "-m",
@@ -502,9 +502,9 @@ export async function createRollbackCheckouts({
     gitOutput(
       restoredRoot,
       "-c",
-      "user.name=Coffee G18 verifier",
+      "user.name=Coffee rollback verifier",
       "-c",
-      "user.email=coffee-g18-verifier@example.invalid",
+      "user.email=coffee-rollback-verifier@example.invalid",
       "commit",
       "--quiet",
       "-m",
@@ -828,7 +828,9 @@ export function createRollbackFailureReceipt({
     ? error.name
     : "Error";
   const message =
-    typeof error?.message === "string" ? error.message : "G18_PHASE_FAILED";
+    typeof error?.message === "string"
+      ? error.message
+      : "ROLLBACK_PHASE_FAILED";
   const receipt = {
     schemaVersion: 1,
     gateId: "rollback",
@@ -836,7 +838,7 @@ export function createRollbackFailureReceipt({
     runId,
     candidateSha,
     stage: ROLLBACK_FAILURE_STAGES.includes(stage) ? stage : "child-process",
-    code: cleanupFailed ? "G18_CLEANUP_FAILED" : "G18_PHASE_FAILED",
+    code: cleanupFailed ? "ROLLBACK_CLEANUP_FAILED" : "ROLLBACK_PHASE_FAILED",
     errorName,
     messageSha256: createHash("sha256").update(message).digest("hex"),
     cleanup,

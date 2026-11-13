@@ -80,7 +80,7 @@ void test("capacity producer rejects invalid launch context before creating reso
   await assert.rejects(stat(`${resultDir}.ownership.json`), { code: "ENOENT" });
 });
 
-void test("G14 refuses to launch when qualification is missing", async () => {
+void test("observability refuses to launch when qualification is missing", async () => {
   const { parseArgs, runGate } =
     await import("../../../verification/launch/v1/run.mjs");
   assert.equal(
@@ -1161,7 +1161,7 @@ void test("prepared operator-1 keeps ordinary budgets, 100 subjects, one shard a
   }
 });
 
-void test("G12 Kafka proof is checked before fixture writes and frozen by immutable ID", async () => {
+void test("supply_chain Kafka proof is checked before fixture writes and frozen by immutable ID", async () => {
   const source = await readFile(
     new URL("./setup.mjs", import.meta.url),
     "utf8",
@@ -1173,7 +1173,7 @@ void test("G12 Kafka proof is checked before fixture writes and frozen by immuta
     );
   assert.ok(prepareStart >= 0 && prepareEnd > prepareStart);
   const effects = [],
-    missingArtifact = new Error("G12 artifact unavailable");
+    missingArtifact = new Error("supply_chain artifact unavailable");
   const prepare = runInNewContext(
     `(()=>{${source.slice(prepareStart, prepareEnd).replace(/^export /u, "")};return prepare;})()`,
     {
@@ -1298,7 +1298,7 @@ void test("G12 Kafka proof is checked before fixture writes and frozen by immuta
     );
     await assert.rejects(
       runMismatch,
-      /G12 Kafka artifact changed during fixture preparation/u,
+      /supply_chain Kafka artifact changed during fixture preparation/u,
     );
     assert.deepEqual(calls, [
       { target: "kafka", loadImage: false },
@@ -1360,7 +1360,7 @@ void test("G12 Kafka proof is checked before fixture writes and frozen by immuta
       const loader =
         scenario === "missing"
           ? async () => {
-              throw new Error("G12 receipt missing");
+              throw new Error("supply_chain receipt missing");
             }
           : async () => ({ ...artifact, receiptSha256: "f".repeat(64) });
       const verify = runInNewContext(
@@ -1388,8 +1388,8 @@ void test("G12 Kafka proof is checked before fixture writes and frozen by immuta
       await assert.rejects(
         verify(dir, hash(manifestText)),
         scenario === "missing"
-          ? /G12 receipt missing/u
-          : /prepared G12 Kafka identity drift: receiptSha256/u,
+          ? /supply_chain receipt missing/u
+          : /prepared supply_chain Kafka identity drift: receiptSha256/u,
       );
       assert.deepEqual(dockerCalls, [], `${scenario} must fail before Docker`);
     }
@@ -1533,7 +1533,7 @@ void test("qualification retains its images and private witness until all consum
   }
 });
 
-void test("G12 cleanup does not remove preexisting images or hide preparation failure", async () => {
+void test("supply_chain cleanup does not remove preexisting images or hide preparation failure", async () => {
   const source = await readFile(
     new URL("./setup.mjs", import.meta.url),
     "utf8",
@@ -3199,7 +3199,7 @@ void test("product launch uses the runtime-supported configuration locators", ()
   assert.throws(() => productArgs("edge-gateway", false, { port: 4000 }));
   assert.throws(() => productArgs("edge-gateway", true, { port: 0 }));
 });
-void test("G15 realtime launch path binds child identity to verified parent lineage", async () => {
+void test("browser realtime launch path binds child identity to verified parent lineage", async () => {
   const source = await readFile(
     new URL("./setup.mjs", import.meta.url),
     "utf8",
@@ -3211,7 +3211,7 @@ void test("G15 realtime launch path binds child identity to verified parent line
   const contextPath = "/child/evidence/context.json";
   const receiptPath = "/child/evidence/gates/browser/artifacts/lineage.json";
   const baseCandidateSha = "d".repeat(40);
-  const receiptBytes = Buffer.from("synthetic G15 lineage receipt\n");
+  const receiptBytes = Buffer.from("synthetic browser lineage receipt\n");
   const active = {
     context: {
       schemaVersion: 1,

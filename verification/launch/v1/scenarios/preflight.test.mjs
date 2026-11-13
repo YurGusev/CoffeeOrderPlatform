@@ -408,7 +408,7 @@ void test("shared Kafka registry mapping covers all six topics and six DLQs with
   );
 });
 
-void test("G00 fails closed on missing or guessed accepted base", async () => {
+void test("preflight fails closed on missing or guessed accepted base", async () => {
   const result = await runPreflight({
     schemaVersion: 1,
     runId: "bad",
@@ -421,7 +421,7 @@ void test("G00 fails closed on missing or guessed accepted base", async () => {
   );
 });
 
-void test("G00 rejects unknown fields in the accepted handoff supplement", async (t) => {
+void test("preflight rejects unknown fields in the accepted handoff supplement", async (t) => {
   const data = await fixture();
   t.after(() => rm(data.root, { recursive: true, force: true }));
   const supplement = JSON.parse(
@@ -458,7 +458,7 @@ void test("G00 rejects unknown fields in the accepted handoff supplement", async
   );
 });
 
-void test("G00 accepts the exact GitHub merges and accepted blobs in the scoped supplement", async () => {
+void test("preflight accepts the exact GitHub merges and accepted blobs in the scoped supplement", async () => {
   const cwd = process.cwd();
   const supplement = JSON.parse(
     await readFile(
@@ -654,7 +654,7 @@ void test("G00 accepts the exact GitHub merges and accepted blobs in the scoped 
   );
 });
 
-void test("G00 requires the canonical enabled database-isolation policy", async (t) => {
+void test("preflight requires the canonical enabled database-isolation policy", async (t) => {
   const data = await fixture({ databaseIsolationEnabled: false });
   t.after(() => rm(data.root, { recursive: true, force: true }));
   const result = await runPreflight(data.context, {
@@ -673,7 +673,7 @@ void test("G00 requires the canonical enabled database-isolation policy", async 
   assert.equal(check.facts.allRuntimeDatabaseTargetsRunScoped, false);
 });
 
-void test("G00 admits Kafka namespace claims only from the committed flag and exact launch context", async (t) => {
+void test("preflight admits Kafka namespace claims only from the committed flag and exact launch context", async (t) => {
   const data = await fixture({ kafkaNamespaceIsolationEnabled: true });
   t.after(() => rm(data.root, { recursive: true, force: true }));
   const deriveRuntimeKafkaTarget = ({
@@ -778,7 +778,7 @@ void test("G00 admits Kafka namespace claims only from the committed flag and ex
   );
 });
 
-void test("G00 verifies fresh GitHub closure and historical hashes while selecting latest merge by ancestry", async (t) => {
+void test("preflight verifies fresh GitHub closure and historical hashes while selecting latest merge by ancestry", async (t) => {
   const data = await fixture();
   t.after(() => rm(data.root, { recursive: true, force: true }));
   const result = await runPreflight(data.context, {
@@ -1011,7 +1011,7 @@ function nativeDocker({
 
 const dockerVerb = (args) => args[args[0] === "--host" ? 2 : 0];
 
-void test("G00 proves pinned native base images with isolated version-only containers", async (t) => {
+void test("preflight proves pinned native base images with isolated version-only containers", async (t) => {
   const docker = nativeDocker();
   const data = await fixture({ dockerExec: docker.exec });
   t.after(() => rm(data.root, { recursive: true, force: true }));
@@ -1161,7 +1161,7 @@ void test("G00 proves pinned native base images with isolated version-only conta
   );
 });
 
-void test("G00 rejects a remote or emulated Docker daemon architecture", async (t) => {
+void test("preflight rejects a remote or emulated Docker daemon architecture", async (t) => {
   const docker = nativeDocker({ daemonArch: "arm64" });
   const data = await fixture({ dockerExec: docker.exec });
   t.after(() => rm(data.root, { recursive: true, force: true }));
@@ -1187,7 +1187,7 @@ void test("G00 rejects a remote or emulated Docker daemon architecture", async (
   );
 });
 
-void test("G00 refuses remote Docker endpoints before image or container operations", async (t) => {
+void test("preflight refuses remote Docker endpoints before image or container operations", async (t) => {
   const cases = [
     {
       docker: nativeDocker(),
@@ -1236,7 +1236,7 @@ void test("G00 refuses remote Docker endpoints before image or container operati
   }
 });
 
-void test("G00 rejects mismatched native image digest or runtime version", async (t) => {
+void test("preflight rejects mismatched native image digest or runtime version", async (t) => {
   for (const docker of [
     nativeDocker({ wrongNodeDigest: true }),
     nativeDocker({ nodeVersion: "v99.0.0\n" }),
@@ -1263,7 +1263,7 @@ void test("G00 rejects mismatched native image digest or runtime version", async
   }
 });
 
-void test("G00 leaves missing-image and colliding-name containers untouched", async (t) => {
+void test("preflight leaves missing-image and colliding-name containers untouched", async (t) => {
   const unavailable = nativeDocker({ unavailable: "node" });
   const collision = nativeDocker({
     createFailure: "container name is already in use",
@@ -1294,7 +1294,7 @@ void test("G00 leaves missing-image and colliding-name containers untouched", as
   }
 });
 
-void test("G00 cleans up a timed-out version probe and fails on cleanup errors", async (t) => {
+void test("preflight cleans up a timed-out version probe and fails on cleanup errors", async (t) => {
   const timedOut = nativeDocker({ startTimeout: "1".repeat(64) });
   const cleanupFailed = nativeDocker({ cleanupFailure: true });
   for (const docker of [timedOut, cleanupFailed]) {
@@ -1320,7 +1320,7 @@ void test("G00 cleans up a timed-out version probe and fails on cleanup errors",
   }
 });
 
-void test("G00 rejects a repeated GitHub pagination cursor", async (t) => {
+void test("preflight rejects a repeated GitHub pagination cursor", async (t) => {
   const data = await fixture({ repeatAcceptedIssueCursor: true });
   t.after(() => rm(data.root, { recursive: true, force: true }));
   const result = await runPreflight(data.context, {
@@ -1344,7 +1344,7 @@ void test("G00 rejects a repeated GitHub pagination cursor", async (t) => {
   );
 });
 
-void test("G00 fails when an exact matrix script is absent", async (t) => {
+void test("preflight fails when an exact matrix script is absent", async (t) => {
   const missingScriptName = "test:unit";
   const data = await fixture({ missingScriptName });
   t.after(() => rm(data.root, { recursive: true, force: true }));
@@ -1364,7 +1364,7 @@ void test("G00 fails when an exact matrix script is absent", async (t) => {
   assert.deepEqual(scriptsCheck.facts.missingScriptNames, [missingScriptName]);
 });
 
-void test("G00 rejects missing consumers while allowing an empty consumers array", async (t) => {
+void test("preflight rejects missing consumers while allowing an empty consumers array", async (t) => {
   const data = await fixture({
     missingConsumersIssue: 5,
     emptyConsumersIssue: 7,
@@ -1391,7 +1391,7 @@ void test("G00 rejects missing consumers while allowing an empty consumers array
   );
 });
 
-void test("G00 does not infer legacy handoff proof and rejects a missing accepted base", async (t) => {
+void test("preflight does not infer legacy handoff proof and rejects a missing accepted base", async (t) => {
   const data = await fixture({ legacyIssue: 3, missingBase: true });
   t.after(() => rm(data.root, { recursive: true, force: true }));
   const result = await runPreflight(data.context, {
@@ -1418,7 +1418,7 @@ void test("G00 does not infer legacy handoff proof and rejects a missing accepte
   );
 });
 
-void test("G00 source bootstrap permits only untracked evidence under the current run", async (t) => {
+void test("preflight source bootstrap permits only untracked evidence under the current run", async (t) => {
   const data = await fixture();
   t.after(() => rm(data.root, { recursive: true, force: true }));
   const currentRunEvidence = [
@@ -1463,7 +1463,7 @@ void test("G00 source bootstrap permits only untracked evidence under the curren
   }
 });
 
-void test("G00 CLI refuses a symlinked artifacts directory without writing outside evidence", async (t) => {
+void test("preflight CLI refuses a symlinked artifacts directory without writing outside evidence", async (t) => {
   const root = await mkdtemp(join(tmpdir(), "coffee-preflight-symlink-test-"));
   t.after(() => rm(root, { recursive: true, force: true }));
   const runId = "20261023T120000Z-abcdef0";

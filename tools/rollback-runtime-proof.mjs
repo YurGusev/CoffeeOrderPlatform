@@ -186,7 +186,7 @@ export function applyRollbackArmedCartDrift({
     cart.products.length !== 1 ||
     cart.products[0]?.quantity !== 1
   ) {
-    throw new Error("G18_FAULT_CART_BASELINE_INVALID");
+    throw new Error("ROLLBACK_FAULT_CART_BASELINE_INVALID");
   }
   cart.products[0].quantity = 2;
   return true;
@@ -195,22 +195,22 @@ export function applyRollbackArmedCartDrift({
 export function assertRollbackFixtureBaseline(baseline) {
   assert.ok(
     baseline && baseline.counts && Array.isArray(baseline.attempts),
-    "G18 pre-runtime baseline is missing",
+    "rollback pre-runtime baseline is missing",
   );
   assert.equal(
     baseline.attempts.length,
     0,
-    "G18 owner fixture began with convergence attempts",
+    "rollback owner fixture began with convergence attempts",
   );
   assert.equal(
     baseline.reservations.length,
     0,
-    "G18 owner fixture began with mutation reservations",
+    "rollback owner fixture began with mutation reservations",
   );
   assert.equal(
     baseline.gatewayRows.length,
     0,
-    "G18 owner fixture began with Gateway journal rows",
+    "rollback owner fixture began with Gateway journal rows",
   );
   return true;
 }
@@ -539,7 +539,7 @@ export function assertRollbackHistoryPreserved(before, after) {
       const current = currentById.get(keyOf(prior));
       assert.ok(
         current,
-        `G18 ${collection} history dropped a previously observed row`,
+        `rollback ${collection} history dropped a previously observed row`,
       );
       if (
         !isDeepStrictEqual(
@@ -547,7 +547,7 @@ export function assertRollbackHistoryPreserved(before, after) {
           fields.map((field) => prior[field]),
         )
       ) {
-        throw new Error(`G18 ${collection} immutable history changed`);
+        throw new Error(`rollback ${collection} immutable history changed`);
       }
     }
   }
@@ -694,14 +694,14 @@ export async function seedRollbackOrder({
     const customer = {
       customerRef: ref("cus"),
       customerVersion: "1",
-      displayName: "G18 isolated runtime fixture",
+      displayName: "rollback isolated runtime fixture",
       state: "Active",
     };
     const draft = await store.createDraft({ ...meta(), customer });
     const item = {
       productRef,
       variantRef,
-      productDisplayName: "G18 fixture coffee",
+      productDisplayName: "rollback fixture coffee",
       unit: "piece",
       quantityMilli: "1000",
       quoteRef: ref("prq"),
@@ -932,7 +932,7 @@ export async function readRollbackGuardedCardFacts({
     !Number.isInteger(maxSnapshotAgeMs) ||
     maxSnapshotAgeMs < 0
   )
-    throw new Error("G18_GUARDED_CARD_FACTS_INPUT_INVALID");
+    throw new Error("ROLLBACK_GUARDED_CARD_FACTS_INPUT_INVALID");
 
   const client = new Client({
     host: "127.0.0.1",
@@ -952,7 +952,7 @@ export async function readRollbackGuardedCardFacts({
       maxSnapshotAgeMs,
     ]);
     const row = result.rows[0];
-    if (!row) throw new Error("G18_GUARDED_CARD_FACTS_MISSING");
+    if (!row) throw new Error("ROLLBACK_GUARDED_CARD_FACTS_MISSING");
     return {
       projectionState: GUARDED_CARD_PROJECTION_STATES.has(row.projection_state)
         ? row.projection_state
@@ -1074,13 +1074,13 @@ const request=async(operation,method,body)=>{
 };
 try{
   const card=await request('getOrderCard','GET');
-  if(card.status!==200||card.value?.orderRef!==orderRef||typeof card.value?.version!=='string'||!card.value?.aroma) throw new Error('G18_ORDER_CARD_HTTP_INVALID');
+  if(card.status!==200||card.value?.orderRef!==orderRef||typeof card.value?.version!=='string'||!card.value?.aroma) throw new Error('_ORDER_CARD_HTTP_INVALID');
   if(${JSON.stringify(action)}==='read') console.log(JSON.stringify({status:card.status,state:card.value.aroma.state,version:card.value.version,
     blockerCodes:card.value.aroma.blockers.map(value=>value.code)}));
   else {
-    if(!['UnknownOutcome','Blocked','OutOfSync'].includes(card.value.aroma.state)) throw new Error('G18_RECONCILIATION_CARD_STATE_INVALID');
-    const accepted=await request('requestAromaReconciliation','POST',{expectedVersion:card.value.version,reason:'G18 isolated rollback recovery'});
-    if(accepted.status!==202||accepted.value?.orderRef!==orderRef||accepted.value?.aromaState!==card.value.aroma.state) throw new Error('G18_RECONCILIATION_HTTP_INVALID');
+    if(!['UnknownOutcome','Blocked','OutOfSync'].includes(card.value.aroma.state)) throw new Error('_RECONCILIATION_CARD_STATE_INVALID');
+    const accepted=await request('requestAromaReconciliation','POST',{expectedVersion:card.value.version,reason:'rollback isolated recovery'});
+    if(accepted.status!==202||accepted.value?.orderRef!==orderRef||accepted.value?.aromaState!==card.value.aroma.state) throw new Error('_RECONCILIATION_HTTP_INVALID');
     console.log(JSON.stringify({status:accepted.status,cardState:card.value.aroma.state,version:accepted.value.orderVersion,correlationId:accepted.correlationId}));
   }
 } finally {await client.close();}

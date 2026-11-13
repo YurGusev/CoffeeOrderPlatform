@@ -105,7 +105,7 @@ def main():
                 slot,
                 certificate,
                 0,
-                ("G15 Verification Fixture CA " + str(index + 1)).encode("ascii"),
+                ("Browser Verification Fixture CA " + str(index + 1)).encode("ascii"),
                 0,
             ) != 0:
                 raise ValueError("NSS_CERT_IMPORT_FAILED")

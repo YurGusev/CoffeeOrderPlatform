@@ -34,7 +34,7 @@ const OWNERS = Object.freeze({
   integration: { current: 7, prefix: 7 },
 });
 const DENIED_DATABASES = new Set(["coffeeorderdb", "coffeeorder_staging"]);
-const MIGRATION_FAILURE = Symbol("G08 migration failure");
+const MIGRATION_FAILURE = Symbol("migrations failure");
 const OWNER_PHASES = new Set([
   "callerprefix",
   "seed",
@@ -54,21 +54,21 @@ const ROLE_ATTRIBUTES = Object.freeze({
 });
 
 function fail(code, message = code) {
-  const error = new Error(`G08_MIGRATIONS ${code}: ${message}`);
+  const error = new Error(`MIGRATIONS ${code}: ${message}`);
   error[MIGRATION_FAILURE] = true;
   throw error;
 }
 
 export function formatOwnerStageFailure(owner, phase, error) {
   if (!Object.hasOwn(OWNERS, owner) || !OWNER_PHASES.has(phase))
-    throw new TypeError("Invalid G08 owner stage");
+    throw new TypeError("Invalid migrations owner stage");
   if (error?.[MIGRATION_FAILURE]) return error;
   const sqlState = [error?.sqlState, error?.code].find(
     (candidate) =>
       typeof candidate === "string" && /^[0-9A-Z]{5}$/.test(candidate),
   );
   return new Error(
-    `G08_MIGRATIONS OWNER_STAGE_FAILED: ${owner}:${phase}:${sqlState ?? "UNKNOWN"}`,
+    `MIGRATIONS OWNER_STAGE_FAILED: ${owner}:${phase}:${sqlState ?? "UNKNOWN"}`,
   );
 }
 
@@ -184,7 +184,7 @@ async function readPreparation(context, evidenceDir, root) {
       fail("PREPARATION_ARTIFACT_UNTRUSTED");
     bytes = await readFile(path);
   } catch (error) {
-    if (error.message.startsWith("G08_MIGRATIONS")) throw error;
+    if (error.message.startsWith("MIGRATIONS")) throw error;
     fail("PREPARATION_ARTIFACT_MISSING");
   }
   const secretsPath = join(root, "secrets/platform.secrets.sops.yaml");
@@ -1695,7 +1695,7 @@ if (
     await runMigrationStage(process.argv[2]);
   } catch (error) {
     process.stderr.write(
-      `${error.message.startsWith("G08_MIGRATIONS") ? error.message : "G08_MIGRATIONS FAILED"}\n`,
+      `${error.message.startsWith("MIGRATIONS") ? error.message : "MIGRATIONS FAILED"}\n`,
     );
     process.exitCode = 1;
   }

@@ -209,7 +209,7 @@ function validateOwnerSummary(summary, tableNames) {
       "tableCounts",
       "businessDigest",
     ],
-    "G15_BROWSER_EVIDENCE_OWNER_INVALID",
+    "BROWSER_EVIDENCE_OWNER_INVALID",
   );
   if (
     summary.state !== "Completed" ||
@@ -217,65 +217,57 @@ function validateOwnerSummary(summary, tableNames) {
     !/^[0-9a-f]{64}$/u.test(summary.resourceSha256 ?? "") ||
     !/^[0-9a-f]{64}$/u.test(summary.businessDigest ?? "")
   )
-    fail("G15_BROWSER_EVIDENCE_OWNER_INVALID");
-  exactKeys(
-    summary.tableCounts,
-    tableNames,
-    "G15_BROWSER_EVIDENCE_OWNER_INVALID",
-  );
+    fail("BROWSER_EVIDENCE_OWNER_INVALID");
+  exactKeys(summary.tableCounts, tableNames, "BROWSER_EVIDENCE_OWNER_INVALID");
   if (Object.values(summary.tableCounts).some((count) => !safeCount(count)))
-    fail("G15_BROWSER_EVIDENCE_OWNER_INVALID");
+    fail("BROWSER_EVIDENCE_OWNER_INVALID");
 }
 
 function validateCheck(name, check) {
   const details = CHECK_DETAIL_KEYS[name];
-  if (!details) fail("G15_BROWSER_EVIDENCE_INCOMPLETE");
-  exactKeys(
-    check,
-    ["passed", ...details],
-    "G15_BROWSER_EVIDENCE_CHECK_INVALID",
-  );
-  if (check.passed !== true) fail("G15_BROWSER_EVIDENCE_INCOMPLETE");
+  if (!details) fail("BROWSER_EVIDENCE_INCOMPLETE");
+  exactKeys(check, ["passed", ...details], "BROWSER_EVIDENCE_CHECK_INVALID");
+  if (check.passed !== true) fail("BROWSER_EVIDENCE_INCOMPLETE");
   for (const [key, value] of Object.entries(check)) {
     if (key === "passed") continue;
     if (name === "accessibility") {
       exactKeys(
         value,
         ["violations", "seriousOrCritical"],
-        "G15_BROWSER_EVIDENCE_CHECK_INVALID",
+        "BROWSER_EVIDENCE_CHECK_INVALID",
       );
       if (!safeCount(value.violations) || value.seriousOrCritical !== 0)
-        fail("G15_BROWSER_EVIDENCE_CHECK_INVALID");
+        fail("BROWSER_EVIDENCE_CHECK_INVALID");
     } else if (key === "problemCode") {
       if (
         value !== "IDEMPOTENCY_REQUEST_IN_PROGRESS" &&
         value !== "IDEMPOTENCY_RESULT_NOT_RETAINED" &&
         value !== "IDEMPOTENCY_LOOKUP_UNAVAILABLE"
       )
-        fail("G15_BROWSER_EVIDENCE_CHECK_INVALID");
+        fail("BROWSER_EVIDENCE_CHECK_INVALID");
     } else if (key === "state") {
-      if (value !== "Acquired") fail("G15_BROWSER_EVIDENCE_CHECK_INVALID");
+      if (value !== "Acquired") fail("BROWSER_EVIDENCE_CHECK_INVALID");
     } else if (key === "keySha256") {
       if (!/^[0-9a-f]{64}$/u.test(value ?? ""))
-        fail("G15_BROWSER_EVIDENCE_CHECK_INVALID");
+        fail("BROWSER_EVIDENCE_CHECK_INVALID");
     } else if (key === "status" && name === "inProgressReplay") {
-      if (value !== 409) fail("G15_BROWSER_EVIDENCE_CHECK_INVALID");
+      if (value !== 409) fail("BROWSER_EVIDENCE_CHECK_INVALID");
     } else if (key === "status" && name === "notRetainedReplay") {
-      if (value !== 410) fail("G15_BROWSER_EVIDENCE_CHECK_INVALID");
+      if (value !== 410) fail("BROWSER_EVIDENCE_CHECK_INVALID");
     } else if (key === "status" && name === "lookupUnavailableReplay") {
-      if (value !== 503) fail("G15_BROWSER_EVIDENCE_CHECK_INVALID");
+      if (value !== 503) fail("BROWSER_EVIDENCE_CHECK_INVALID");
     } else if (key === "status" && name === "optimisticConflict") {
-      if (value !== 409) fail("G15_BROWSER_EVIDENCE_CHECK_INVALID");
+      if (value !== 409) fail("BROWSER_EVIDENCE_CHECK_INVALID");
     } else if (
       key === "historicalReplayStatus" &&
       name === "sameOrderStaleReplay"
     ) {
-      if (value !== 200) fail("G15_BROWSER_EVIDENCE_CHECK_INVALID");
+      if (value !== 200) fail("BROWSER_EVIDENCE_CHECK_INVALID");
     } else if (
       key === "authCloseCountDelta" &&
       name === "naturalSseReauthentication"
     ) {
-      if (value !== 1) fail("G15_BROWSER_EVIDENCE_CHECK_INVALID");
+      if (value !== 1) fail("BROWSER_EVIDENCE_CHECK_INVALID");
     } else if (
       [
         "replayStatus",
@@ -285,46 +277,46 @@ function validateCheck(name, check) {
       ].includes(key)
     ) {
       if (value !== 200 && value !== 201)
-        fail("G15_BROWSER_EVIDENCE_CHECK_INVALID");
+        fail("BROWSER_EVIDENCE_CHECK_INVALID");
       if (key === "replayStatus" && value !== 201)
-        fail("G15_BROWSER_EVIDENCE_CHECK_INVALID");
+        fail("BROWSER_EVIDENCE_CHECK_INVALID");
       if (key !== "replayStatus" && value !== 200)
-        fail("G15_BROWSER_EVIDENCE_CHECK_INVALID");
+        fail("BROWSER_EVIDENCE_CHECK_INVALID");
     } else if (
       key === "status" &&
       (name === "apiFallback" || name === "assetFallback")
     ) {
-      if (value !== 404) fail("G15_BROWSER_EVIDENCE_CHECK_INVALID");
+      if (value !== 404) fail("BROWSER_EVIDENCE_CHECK_INVALID");
     } else if (key === "missingStatus") {
-      if (value !== 404) fail("G15_BROWSER_EVIDENCE_CHECK_INVALID");
+      if (value !== 404) fail("BROWSER_EVIDENCE_CHECK_INVALID");
     } else if (key === "logoutStatus") {
-      if (value !== 204) fail("G15_BROWSER_EVIDENCE_CHECK_INVALID");
+      if (value !== 204) fail("BROWSER_EVIDENCE_CHECK_INVALID");
     } else if (key === "customerReadStatus" || key === "customerCreateStatus") {
-      if (value !== 403) fail("G15_BROWSER_EVIDENCE_CHECK_INVALID");
+      if (value !== 403) fail("BROWSER_EVIDENCE_CHECK_INVALID");
     } else if (key === "businessBefore" || key === "businessAfter") {
       exactKeys(
         value,
         ["tableCounts", "businessDigest"],
-        "G15_BROWSER_EVIDENCE_CHECK_INVALID",
+        "BROWSER_EVIDENCE_CHECK_INVALID",
       );
       exactKeys(
         value.tableCounts,
         ["customers", "addresses", "channelLinks", "audit"],
-        "G15_BROWSER_EVIDENCE_CHECK_INVALID",
+        "BROWSER_EVIDENCE_CHECK_INVALID",
       );
       if (
         Object.values(value.tableCounts).some((count) => !safeCount(count)) ||
         !/^[0-9a-f]{64}$/u.test(value.businessDigest ?? "")
       )
-        fail("G15_BROWSER_EVIDENCE_CHECK_INVALID");
+        fail("BROWSER_EVIDENCE_CHECK_INVALID");
     } else if (typeof value === "number") {
-      if (!safeCount(value)) fail("G15_BROWSER_EVIDENCE_CHECK_INVALID");
+      if (!safeCount(value)) fail("BROWSER_EVIDENCE_CHECK_INVALID");
     } else if (key === "indexHtml" || key === "missingReturnedIndex") {
-      if (value !== false) fail("G15_BROWSER_EVIDENCE_CHECK_INVALID");
+      if (value !== false) fail("BROWSER_EVIDENCE_CHECK_INVALID");
     } else if (typeof value !== "boolean") {
-      fail("G15_BROWSER_EVIDENCE_CHECK_INVALID");
+      fail("BROWSER_EVIDENCE_CHECK_INVALID");
     } else if (value !== true) {
-      fail("G15_BROWSER_EVIDENCE_CHECK_INVALID");
+      fail("BROWSER_EVIDENCE_CHECK_INVALID");
     }
   }
   if (
@@ -359,7 +351,7 @@ function validateCheck(name, check) {
       (check.servedScriptCount < 1 || check.servedStylesheetCount < 1)) ||
     (name === "noConfirmOrReconcile" && check.forbiddenMutationRequests !== 0)
   )
-    fail("G15_BROWSER_EVIDENCE_CHECK_INVALID");
+    fail("BROWSER_EVIDENCE_CHECK_INVALID");
 }
 
 function sha256(value) {
@@ -368,9 +360,7 @@ function sha256(value) {
 
 function safeFailure(error) {
   const code = error instanceof Error ? error.message : "";
-  return /^G15_[A-Z0-9_]{1,96}$/u.test(code)
-    ? code
-    : "G15_BROWSER_PROOF_FAILED";
+  return /^G15_[A-Z0-9_]{1,96}$/u.test(code) ? code : "BROWSER_PROOF_FAILED";
 }
 
 function headerValue(headers, name) {
@@ -439,7 +429,7 @@ export function validateBrowserEvidence(evidence, { runId, candidateSha }) {
     Object.keys(evidence).sort().join("\0") !==
       [...requiredKeys].sort().join("\0")
   )
-    fail("G15_BROWSER_EVIDENCE_SCHEMA_INVALID");
+    fail("BROWSER_EVIDENCE_SCHEMA_INVALID");
   if (
     evidence.schemaVersion !== 1 ||
     evidence.runId !== runId ||
@@ -448,7 +438,7 @@ export function validateBrowserEvidence(evidence, { runId, candidateSha }) {
     evidence.verificationOnly !== true ||
     evidence.productionLogin !== false
   )
-    fail("G15_BROWSER_EVIDENCE_IDENTITY_INVALID");
+    fail("BROWSER_EVIDENCE_IDENTITY_INVALID");
   if (
     evidence.checks === null ||
     typeof evidence.checks !== "object" ||
@@ -457,13 +447,13 @@ export function validateBrowserEvidence(evidence, { runId, candidateSha }) {
       [...BROWSER_REQUIRED_CHECKS].sort().join("\0") ||
     Object.values(evidence.checks).some((check) => check?.passed !== true)
   )
-    fail("G15_BROWSER_EVIDENCE_INCOMPLETE");
+    fail("BROWSER_EVIDENCE_INCOMPLETE");
   for (const [name, check] of Object.entries(evidence.checks))
     validateCheck(name, check);
   exactKeys(
     evidence.owners,
     ["customer", "orders", "pricing"],
-    "G15_BROWSER_EVIDENCE_OWNER_INVALID",
+    "BROWSER_EVIDENCE_OWNER_INVALID",
   );
   validateOwnerSummary(evidence.owners.customer, [
     "customers",
@@ -478,7 +468,7 @@ export function validateBrowserEvidence(evidence, { runId, candidateSha }) {
   exactKeys(
     evidence.owners.orders,
     ["draft", "put", "delete"],
-    "G15_BROWSER_EVIDENCE_OWNER_INVALID",
+    "BROWSER_EVIDENCE_OWNER_INVALID",
   );
   validateOwnerSummary(evidence.owners.orders.draft, [
     "orders",
@@ -508,7 +498,7 @@ export function validateBrowserEvidence(evidence, { runId, candidateSha }) {
       "browserContexts",
       "eventSourceResponses",
     ],
-    "G15_BROWSER_EVIDENCE_BROWSER_INVALID",
+    "BROWSER_EVIDENCE_BROWSER_INVALID",
   );
   if (
     evidence.browser.driverStatus !== "READY" ||
@@ -519,7 +509,7 @@ export function validateBrowserEvidence(evidence, { runId, candidateSha }) {
     !safeCount(evidence.browser.eventSourceResponses) ||
     evidence.browser.eventSourceResponses < 1
   )
-    fail("G15_BROWSER_EVIDENCE_BROWSER_INVALID");
+    fail("BROWSER_EVIDENCE_BROWSER_INVALID");
   return evidence;
 }
 
@@ -542,7 +532,7 @@ export function validateBrowserRuntimeArtifact(
       "browserEvidence",
       "cleanup",
     ],
-    "G15_BROWSER_ARTIFACT_SCHEMA_INVALID",
+    "BROWSER_ARTIFACT_SCHEMA_INVALID",
   );
   if (
     artifact.schemaVersion !== 1 ||
@@ -554,13 +544,13 @@ export function validateBrowserRuntimeArtifact(
     artifact.verificationOnly !== true ||
     artifact.productionLogin !== false
   )
-    fail("G15_BROWSER_ARTIFACT_IDENTITY_INVALID");
+    fail("BROWSER_ARTIFACT_IDENTITY_INVALID");
   if (!lineage || typeof lineage !== "object" || Array.isArray(lineage))
-    fail("G15_BROWSER_ARTIFACT_LINEAGE_INVALID");
+    fail("BROWSER_ARTIFACT_LINEAGE_INVALID");
   const expectedLineage = { ...lineage };
   delete expectedLineage.receiptPath;
   if (!isDeepStrictEqual(artifact.lineage, expectedLineage))
-    fail("G15_BROWSER_ARTIFACT_LINEAGE_INVALID");
+    fail("BROWSER_ARTIFACT_LINEAGE_INVALID");
   validateBrowserEvidence(artifact.browserEvidence, {
     runId,
     candidateSha,
@@ -578,7 +568,7 @@ export function validateBrowserRuntimeArtifact(
       "secretsDirRemoved",
       "composeOverrideRemoved",
     ],
-    "G15_BROWSER_ARTIFACT_CLEANUP_INVALID",
+    "BROWSER_ARTIFACT_CLEANUP_INVALID",
   );
   if (
     cleanup.verified !== true ||
@@ -591,18 +581,18 @@ export function validateBrowserRuntimeArtifact(
     !Array.isArray(cleanup.retainedResources) ||
     cleanup.retainedResources.length !== 0
   )
-    fail("G15_BROWSER_ARTIFACT_CLEANUP_INVALID");
+    fail("BROWSER_ARTIFACT_CLEANUP_INVALID");
   exactKeys(
     cleanup.inventory,
     ["containers", "volumes", "networks"],
-    "G15_BROWSER_ARTIFACT_CLEANUP_INVALID",
+    "BROWSER_ARTIFACT_CLEANUP_INVALID",
   );
   if (
     Object.values(cleanup.inventory).some(
       (resources) => !Array.isArray(resources) || resources.length !== 0,
     )
   )
-    fail("G15_BROWSER_ARTIFACT_CLEANUP_INVALID");
+    fail("BROWSER_ARTIFACT_CLEANUP_INVALID");
   return artifact;
 }
 
@@ -747,7 +737,7 @@ export function expectedBrowserCompletedResponse(operation, method, status) {
 
 export function buildRealtimeAuthCloseInvocation(containerId) {
   if (!/^[0-9a-f]{64}$/u.test(containerId ?? ""))
-    fail("G15_REALTIME_AUTH_CONTAINER_INVALID");
+    fail("BROWSER_REALTIME_AUTH_CONTAINER_INVALID");
   const script = `import {createRequire} from "node:module";
 import {pathToFileURL} from "node:url";
 import {readFileSync} from "node:fs";
@@ -1055,7 +1045,7 @@ export function createObservabilityBrowserNetworkMonitor(cdp) {
           "reason",
           "correlationId",
         ],
-        "G14_FRAME_INVALID",
+        "OBSERVABILITY_FRAME_INVALID",
       );
       if (
         data.subjectType !== "order" ||
@@ -1196,11 +1186,11 @@ export function validateObservabilityBrowserEvidence(
       "traceStatus",
       "browserCleanup",
     ],
-    "G14_BROWSER_EVIDENCE_SCHEMA_INVALID",
+    "OBSERVABILITY_BROWSER_EVIDENCE_SCHEMA_INVALID",
   );
   if (
     evidence.schemaVersion !== 1 ||
-    evidence.purpose !== "G14_BROWSER_CORRELATION" ||
+    evidence.purpose !== "BROWSER_CORRELATION" ||
     evidence.runId !== runId ||
     evidence.candidateSha !== candidateSha ||
     evidence.configSha256 !== configSha256 ||
@@ -1225,7 +1215,7 @@ export function validateObservabilityBrowserEvidence(
     evidence.traceStatus !== "NOT_PROVEN" ||
     evidence.browserCleanup !== "EXACT_OWNED_CONTAINER_REMOVED"
   )
-    fail("G14_BROWSER_EVIDENCE_INVALID");
+    fail("OBSERVABILITY_BROWSER_EVIDENCE_INVALID");
   return evidence;
 }
 
@@ -1239,7 +1229,7 @@ export async function proveBrowserFlow(runtimeContext) {
     !/^[0-9]{8}T[0-9]{6}Z-[0-9a-f]{7}$/u.test(runtimeContext.runId ?? "") ||
     !/^[0-9a-f]{64}$/u.test(runtimeContext.configSha256 ?? "")
   )
-    fail("G14_BROWSER_CONTEXT_INVALID");
+    fail("OBSERVABILITY_BROWSER_CONTEXT_INVALID");
   const driver = await startBrowser(runtimeContext);
   let context;
   let cdp;
@@ -1292,7 +1282,8 @@ export async function proveBrowserFlow(runtimeContext) {
     await page.getByRole("button", { name: "Создать черновик" }).click();
     await page.waitForURL(/\/app\/orders\/ord_[0-9A-HJKMNP-TV-Z]{26}$/u);
     const orderRef = new URL(page.url()).pathname.split("/").at(-1);
-    if (!REF.order.test(orderRef ?? "")) fail("G14_BROWSER_ORDER_INVALID");
+    if (!REF.order.test(orderRef ?? ""))
+      fail("OBSERVABILITY_BROWSER_ORDER_INVALID");
     await page.getByRole("link", { name: "Открыть каталог" }).click();
     await page
       .getByRole("textbox", { name: "Название товара" })
@@ -1335,7 +1326,7 @@ export async function proveBrowserFlow(runtimeContext) {
       confirmed.status !== "Confirmed" ||
       !/^[1-9]\d{0,18}$/u.test(confirmed.projectionVersion ?? "")
     )
-      fail("G14_BROWSER_CONFIRM_INVALID");
+      fail("OBSERVABILITY_BROWSER_CONFIRM_INVALID");
     const deadline = Date.now() + 30000;
     let matched;
     let owner;
@@ -1361,13 +1352,14 @@ export async function proveBrowserFlow(runtimeContext) {
           });
           break;
         } catch (error) {
-          if (error?.message !== "G14_OWNER_CHAIN_NOT_PROVEN") throw error;
+          if (error?.message !== "OBSERVABILITY_OWNER_CHAIN_NOT_PROVEN")
+            throw error;
           excludedFrames.add(matched.frame.frameId);
         }
       }
       if (!owner) await new Promise((resolve) => setTimeout(resolve, 100));
     }
-    if (!matched || !owner) fail("G14_BROWSER_CHAIN_NOT_PROVEN");
+    if (!matched || !owner) fail("OBSERVABILITY_BROWSER_CHAIN_NOT_PROVEN");
     const acceptedVersion = await visibleOrderProjectionVersion(page, orderRef);
     if (
       !isAcceptedObservabilityProjection(
@@ -1376,7 +1368,7 @@ export async function proveBrowserFlow(runtimeContext) {
         confirmed.projectionVersion,
       )
     )
-      fail("G14_BROWSER_VERSION_NOT_ACCEPTED");
+      fail("OBSERVABILITY_BROWSER_VERSION_NOT_ACCEPTED");
     if (
       monitor.commands.length !== 1 ||
       observedCommands.length !== 1 ||
@@ -1385,10 +1377,10 @@ export async function proveBrowserFlow(runtimeContext) {
       pageRequestPath(observedCommands[0]) !==
         `/api/client-v1/orders/${orderRef}/commands/confirm`
     )
-      fail("G14_BROWSER_EXTRA_COMMAND");
+      fail("OBSERVABILITY_BROWSER_EXTRA_COMMAND");
     evidence = {
       schemaVersion: 1,
-      purpose: "G14_BROWSER_CORRELATION",
+      purpose: "BROWSER_CORRELATION",
       runId: runtimeContext.runId,
       candidateSha: runtimeContext.candidateSha,
       configSha256: safety.configSha256,
@@ -1422,7 +1414,7 @@ export async function proveBrowserFlow(runtimeContext) {
       cleanupError = true;
     }
     if (cleanupError || cleanup !== "EXACT_OWNED_CONTAINER_REMOVED")
-      fail("G14_BROWSER_CLEANUP_UNCONFIRMED");
+      fail("OBSERVABILITY_BROWSER_CLEANUP_UNCONFIRMED");
   }
   evidence.browserCleanup = cleanup;
   return validateObservabilityBrowserEvidence(evidence, {
@@ -1492,7 +1484,7 @@ async function visibleOrderProjectionVersion(page, orderRef) {
     /^Заказ ord_[0-9A-HJKMNP-TV-Z]{26} · версия представления ([0-9]{1,19})$/u.exec(
       text ?? "",
     );
-  if (!match) fail("G15_BROWSER_ORDER_VERSION_UNAVAILABLE");
+  if (!match) fail("BROWSER_ORDER_VERSION_UNAVAILABLE");
   return match[1];
 }
 
@@ -1611,7 +1603,7 @@ function assertSafeIntent(intent, method, path) {
 
 function keyFromPausedRequest(request) {
   const key = headerValue(request.headers, "idempotency-key");
-  if (!UUID.test(key ?? "")) fail("G15_BROWSER_IDEMPOTENCY_KEY_INVALID");
+  if (!UUID.test(key ?? "")) fail("BROWSER_IDEMPOTENCY_KEY_INVALID");
   return key;
 }
 
@@ -1649,7 +1641,7 @@ async function armFetchFault(cdp, { origin, path, method, stage, onTarget }) {
       } catch {
         if (!settled) {
           settled = true;
-          rejectTarget(new Error("G15_BROWSER_FAULT_CONTINUE_FAILED"));
+          rejectTarget(new Error("BROWSER_FAULT_CONTINUE_FAILED"));
         }
       }
       return;
@@ -1692,7 +1684,7 @@ async function armFetchFault(cdp, { origin, path, method, stage, onTarget }) {
       } catch {
         // Preserve a finite producer failure.
       }
-      rejectTarget(new Error("G15_BROWSER_FAULT_TARGET_FAILED"));
+      rejectTarget(new Error("BROWSER_FAULT_TARGET_FAILED"));
     }
   };
   cdp.on(eventName, handler);
@@ -1702,7 +1694,7 @@ async function armFetchFault(cdp, { origin, path, method, stage, onTarget }) {
     });
   } catch {
     cdp.removeListener(eventName, handler);
-    fail("G15_BROWSER_FAULT_ENABLE_FAILED");
+    fail("BROWSER_FAULT_ENABLE_FAILED");
   }
   return Object.freeze({
     target,
@@ -1711,7 +1703,7 @@ async function armFetchFault(cdp, { origin, path, method, stage, onTarget }) {
       try {
         await cdp.send("Fetch.disable");
       } catch {
-        fail("G15_BROWSER_FAULT_DISABLE_FAILED");
+        fail("BROWSER_FAULT_DISABLE_FAILED");
       }
     },
   });
@@ -1740,7 +1732,7 @@ async function armCompletedResponseLoss({
           event.responseStatusCode,
         )
       )
-        fail("G15_BROWSER_COMPLETED_RESPONSE_STATUS_INVALID");
+        fail("BROWSER_COMPLETED_RESPONSE_STATUS_INVALID");
       const key = keyFromPausedRequest(event.request);
       const before = await completedSnapshot(
         ownerEvidence,
@@ -1755,7 +1747,7 @@ async function armCompletedResponseLoss({
     await action();
     const captured = await withTimeout(
       fault.target,
-      "G15_BROWSER_RESPONSE_FAULT_TIMEOUT",
+      "BROWSER_RESPONSE_FAULT_TIMEOUT",
     );
     await page
       .getByText("Исход команды неизвестен")
@@ -1798,7 +1790,7 @@ async function holdNextOrderGetResponse(cdp, orderRef) {
       } catch {
         if (!settled) {
           settled = true;
-          rejectTarget(new Error("G15_BROWSER_STALE_GET_CONTINUE_FAILED"));
+          rejectTarget(new Error("BROWSER_STALE_GET_CONTINUE_FAILED"));
         }
       }
       return;
@@ -1822,7 +1814,7 @@ async function holdNextOrderGetResponse(cdp, orderRef) {
         ? Buffer.from(payload.body, "base64").toString("utf8")
         : payload.body;
       if (Buffer.byteLength(text, "utf8") > 65536)
-        fail("G15_BROWSER_STALE_GET_BODY_INVALID");
+        fail("BROWSER_STALE_GET_BODY_INVALID");
       const body = JSON.parse(text);
       if (
         typeof event.networkId !== "string" ||
@@ -1830,7 +1822,7 @@ async function holdNextOrderGetResponse(cdp, orderRef) {
         body?.orderRef !== orderRef ||
         !/^\d{1,19}$/u.test(body.projectionVersion ?? "")
       )
-        fail("G15_BROWSER_STALE_GET_BODY_INVALID");
+        fail("BROWSER_STALE_GET_BODY_INVALID");
       resolveTarget({
         requestId: event.requestId,
         networkId: event.networkId,
@@ -1844,7 +1836,7 @@ async function holdNextOrderGetResponse(cdp, orderRef) {
       } catch {
         // Preserve the finite parsing failure.
       }
-      rejectTarget(new Error("G15_BROWSER_STALE_GET_BODY_INVALID"));
+      rejectTarget(new Error("BROWSER_STALE_GET_BODY_INVALID"));
     }
   };
   cdp.on("Fetch.requestPaused", handler);
@@ -1856,7 +1848,7 @@ async function holdNextOrderGetResponse(cdp, orderRef) {
     });
   } catch {
     cdp.removeListener("Fetch.requestPaused", handler);
-    fail("G15_BROWSER_STALE_GET_ENABLE_FAILED");
+    fail("BROWSER_STALE_GET_ENABLE_FAILED");
   }
   return Object.freeze({
     target,
@@ -1871,7 +1863,7 @@ async function holdNextOrderGetResponse(cdp, orderRef) {
       } catch {
         await waitFor(
           () => monitor.failedRequests.has(networkId),
-          "G15_BROWSER_STALE_GET_RELEASE_UNRESOLVED",
+          "BROWSER_STALE_GET_RELEASE_UNRESOLVED",
           5000,
         );
         return monitor.failedRequests.get(networkId)?.canceled
@@ -1884,7 +1876,7 @@ async function holdNextOrderGetResponse(cdp, orderRef) {
       try {
         await cdp.send("Fetch.disable");
       } catch {
-        fail("G15_BROWSER_STALE_GET_DISABLE_FAILED");
+        fail("BROWSER_STALE_GET_DISABLE_FAILED");
       }
     },
   });
@@ -1904,7 +1896,7 @@ async function armRequestAbort({ page, cdp, method, path, action }) {
     await action();
     const captured = await withTimeout(
       fault.target,
-      "G15_BROWSER_REQUEST_FAULT_TIMEOUT",
+      "BROWSER_REQUEST_FAULT_TIMEOUT",
     );
     await page
       .getByText("Исход команды неизвестен")
@@ -1951,7 +1943,7 @@ async function createCustomerForm(page, suffix) {
   const dialog = page.getByRole("dialog", { name: "Новый клиент" });
   await dialog
     .getByRole("textbox", { name: "Имя", exact: true })
-    .fill(`G15 synthetic ${suffix}`);
+    .fill(`browser synthetic ${suffix}`);
   const syntheticEmail = `g15-${suffix}@example.invalid`;
   await dialog
     .getByRole("textbox", { name: "Email", exact: true })
@@ -2012,7 +2004,7 @@ async function waitOrderRealtime(monitor, before) {
         before.orderRef,
         before.sequence,
       ),
-    "G15_BROWSER_SSE_REFETCH_TIMEOUT",
+    "BROWSER_SSE_REFETCH_TIMEOUT",
     30000,
   );
   return {
@@ -2032,7 +2024,7 @@ export async function proveNaturalSseReauthentication({
   idempotencyKey,
 }) {
   const baselineCount = await runtimeContext.readRealtimeAuthCloseCount();
-  if (!safeCount(baselineCount)) fail("G15_BROWSER_AUTH_METRIC_INVALID");
+  if (!safeCount(baselineCount)) fail("BROWSER_AUTH_METRIC_INVALID");
   const baselineResponses = monitor.eventSourceResponses;
   const baselineReady = monitor.eventSourceReady;
   const baselineRequestSequence =
@@ -2051,7 +2043,7 @@ export async function proveNaturalSseReauthentication({
     try {
       runtimeContext.throwIfStopRequested();
     } catch {
-      fail("G15_BROWSER_STOP_REQUESTED");
+      fail("BROWSER_STOP_REQUESTED");
     }
   };
   let observedCount = baselineCount;
@@ -2059,12 +2051,12 @@ export async function proveNaturalSseReauthentication({
     async () => {
       observedCount = await runtimeContext.readRealtimeAuthCloseCount();
       if (!safeCount(observedCount) || observedCount < baselineCount)
-        fail("G15_BROWSER_AUTH_METRIC_INVALID");
+        fail("BROWSER_AUTH_METRIC_INVALID");
       if (observedCount > baselineCount + 1)
-        fail("G15_BROWSER_AUTH_CLOSE_COUNT_UNEXPECTED");
+        fail("BROWSER_AUTH_CLOSE_COUNT_UNEXPECTED");
       return observedCount === baselineCount + 1;
     },
-    "G15_BROWSER_AUTH_CLOSE_TIMEOUT",
+    "BROWSER_AUTH_CLOSE_TIMEOUT",
     120000,
     2000,
     shouldStop,
@@ -2079,7 +2071,7 @@ export async function proveNaturalSseReauthentication({
           record.status === 200 &&
           record.readySequence !== null,
       ),
-    "G15_BROWSER_AUTH_RECONNECT_TIMEOUT",
+    "BROWSER_AUTH_RECONNECT_TIMEOUT",
     15000,
     250,
     shouldStop,
@@ -2101,7 +2093,7 @@ export async function proveNaturalSseReauthentication({
         orderRef,
         versionBefore,
       ),
-    "G15_BROWSER_AUTH_OWNER_REFETCH_TIMEOUT",
+    "BROWSER_AUTH_OWNER_REFETCH_TIMEOUT",
     15000,
     250,
     shouldStop,
@@ -2150,7 +2142,7 @@ async function abortedCustomerIntent(page, suffix) {
   });
   await page.getByRole("heading", { name: "Клиенты" }).waitFor();
   const { dialog, syntheticEmail } = await createCustomerForm(page, suffix);
-  const name = `G15 synthetic ${suffix}`;
+  const name = `browser synthetic ${suffix}`;
   const path = OPERATION["customer.create"].path;
   const pageCdp = await page.context().newCDPSession(page);
   let aborted;
@@ -2259,7 +2251,7 @@ export async function proveBrowser(runtimeContext) {
     typeof runtimeContext.readRealtimeAuthCloseCount !== "function" ||
     typeof runtimeContext.restartCustomerService !== "function"
   )
-    fail("G15_BROWSER_RUNTIME_CONTEXT_INVALID");
+    fail("BROWSER_RUNTIME_CONTEXT_INVALID");
 
   let driver;
   let browserContext;
@@ -2322,13 +2314,13 @@ export async function proveBrowser(runtimeContext) {
     await page.getByText(IDENTITY.actorRef, { exact: true }).waitFor();
     await waitFor(
       () => monitor.eventSourceReady > 0 && monitor.eventSourceResponses > 0,
-      "G15_BROWSER_SSE_NOT_READY",
+      "BROWSER_SSE_NOT_READY",
     );
     setCheck("oidcLogin", { authenticatedSession: true, servedIngress: true });
     const customerA11y = await accessibilityPass(page);
 
     const nameSuffix = randomUUID().slice(0, 12);
-    const customerName = `G15 synthetic ${nameSuffix}`;
+    const customerName = `browser synthetic ${nameSuffix}`;
     const customerEmail = `g15-${nameSuffix}@example.invalid`;
     const { dialog: customerDialog } = await createCustomerForm(
       page,
@@ -2613,7 +2605,7 @@ export async function proveBrowser(runtimeContext) {
       putResponse.request().headers(),
       "idempotency-key",
     );
-    if (!UUID.test(putKey ?? "")) fail("G15_BROWSER_IDEMPOTENCY_KEY_INVALID");
+    if (!UUID.test(putKey ?? "")) fail("BROWSER_IDEMPOTENCY_KEY_INVALID");
     const putSnapshot = await completedSnapshot(
       runtimeContext.ownerEvidence,
       "orders.item.put",
@@ -2652,7 +2644,7 @@ export async function proveBrowser(runtimeContext) {
     await staleUpdate.click();
     const stalePut = await withTimeout(
       conflictFault.target,
-      "G15_BROWSER_CONFLICT_BARRIER_TIMEOUT",
+      "BROWSER_CONFLICT_BARRIER_TIMEOUT",
     );
     await completedSnapshot(
       runtimeContext.ownerEvidence,
@@ -2688,8 +2680,7 @@ export async function proveBrowser(runtimeContext) {
       currentPut.request().headers(),
       "idempotency-key",
     );
-    if (!UUID.test(currentKey ?? ""))
-      fail("G15_BROWSER_IDEMPOTENCY_KEY_INVALID");
+    if (!UUID.test(currentKey ?? "")) fail("BROWSER_IDEMPOTENCY_KEY_INVALID");
     const currentSnapshot = await completedSnapshot(
       runtimeContext.ownerEvidence,
       "orders.item.put",
@@ -2755,7 +2746,7 @@ export async function proveBrowser(runtimeContext) {
     await page.getByRole("heading", { name: "Поиск товаров" }).waitFor();
     const heldGetResult = await withTimeout(
       heldGet.target,
-      "G15_BROWSER_STALE_GET_NOT_STARTED",
+      "BROWSER_STALE_GET_NOT_STARTED",
       30000,
     );
     assert.equal(heldGetResult.responseProjectionVersion, staleVersion);
@@ -2791,7 +2782,7 @@ export async function proveBrowser(runtimeContext) {
       "idempotency-key",
     );
     if (!UUID.test(staleGetWriteKey ?? ""))
-      fail("G15_BROWSER_IDEMPOTENCY_KEY_INVALID");
+      fail("BROWSER_IDEMPOTENCY_KEY_INVALID");
     const staleGetWriteCard = await staleGetWrite.json();
     assert.equal(staleGetWriteCard.orderRef, orderRef);
     assert.ok(
@@ -2813,7 +2804,7 @@ export async function proveBrowser(runtimeContext) {
             orderRef,
             staleVersion,
           ) || monitor.failedRequests.has(heldGetResult.networkId),
-        "G15_BROWSER_STALE_GET_COMPLETION_UNRESOLVED",
+        "BROWSER_STALE_GET_COMPLETION_UNRESOLVED",
         5000,
       );
       if (monitor.failedRequests.get(heldGetResult.networkId)?.canceled)
@@ -2876,8 +2867,7 @@ export async function proveBrowser(runtimeContext) {
       newerPut.request().headers(),
       "idempotency-key",
     );
-    if (!UUID.test(newerPutKey ?? ""))
-      fail("G15_BROWSER_IDEMPOTENCY_KEY_INVALID");
+    if (!UUID.test(newerPutKey ?? "")) fail("BROWSER_IDEMPOTENCY_KEY_INVALID");
     const newerCard = await newerPut.json();
     assert.equal(newerCard.orderRef, orderRef);
     assert.ok(BigInt(newerCard.projectionVersion) > BigInt(currentVersion));
@@ -2979,8 +2969,7 @@ export async function proveBrowser(runtimeContext) {
       deleteResponse.request().headers(),
       "idempotency-key",
     );
-    if (!UUID.test(deleteKey ?? ""))
-      fail("G15_BROWSER_IDEMPOTENCY_KEY_INVALID");
+    if (!UUID.test(deleteKey ?? "")) fail("BROWSER_IDEMPOTENCY_KEY_INVALID");
     const deleteSnapshot = await completedSnapshot(
       runtimeContext.ownerEvidence,
       "orders.item.delete",
@@ -3076,7 +3065,7 @@ export async function proveBrowser(runtimeContext) {
     const seeded = await runtimeContext.ownerEvidence.seedInProgress({
       operation: "customer.create",
       idempotencyKey: inProgressIntent.key,
-      requestHash: sha256("G15 synthetic acquired fixture request"),
+      requestHash: sha256("browser synthetic acquired fixture request"),
     });
     assert.equal(seeded.state, "Acquired");
     const inProgress = await replayExpectedProblem(inProgressPage, {
@@ -3119,7 +3108,7 @@ export async function proveBrowser(runtimeContext) {
     const unavailableSeed = await runtimeContext.ownerEvidence.seedInProgress({
       operation: "customer.create",
       idempotencyKey: unavailableIntent.key,
-      requestHash: sha256("G15 synthetic unavailable fixture request"),
+      requestHash: sha256("browser synthetic unavailable fixture request"),
     });
     assert.equal(unavailableSeed.state, "Acquired");
     const unavailable =
@@ -3198,8 +3187,7 @@ export async function proveBrowser(runtimeContext) {
       deniedWrite.request().headers(),
       "idempotency-key",
     );
-    if (!UUID.test(deniedKey ?? ""))
-      fail("G15_BROWSER_IDEMPOTENCY_KEY_INVALID");
+    if (!UUID.test(deniedKey ?? "")) fail("BROWSER_IDEMPOTENCY_KEY_INVALID");
     const deniedAbsent = await snapshotForAbsent(
       runtimeContext.ownerEvidence,
       "customer.create",
@@ -3262,22 +3250,22 @@ export async function proveBrowser(runtimeContext) {
     try {
       await cdp?.detach();
     } catch {
-      cleanupFailureCode ??= "G15_BROWSER_CDP_CLEANUP_FAILED";
+      cleanupFailureCode ??= "BROWSER_CDP_CLEANUP_FAILED";
     }
     try {
       await browserContext?.close();
     } catch {
-      cleanupFailureCode ??= "G15_BROWSER_CONTEXT_CLEANUP_FAILED";
+      cleanupFailureCode ??= "BROWSER_CONTEXT_CLEANUP_FAILED";
     }
     try {
       if (driver && !driverClosed && driver.witness.status === "READY") {
         const cleanup = await driver.close();
         if (cleanup !== "EXACT_OWNED_CONTAINER_REMOVED")
-          cleanupFailureCode ??= "G15_BROWSER_DRIVER_CLEANUP_FAILED";
+          cleanupFailureCode ??= "BROWSER_DRIVER_CLEANUP_FAILED";
         driverClosed = true;
       }
     } catch {
-      cleanupFailureCode ??= "G15_BROWSER_DRIVER_CLEANUP_FAILED";
+      cleanupFailureCode ??= "BROWSER_DRIVER_CLEANUP_FAILED";
     }
   }
   if (failure) throw failure;

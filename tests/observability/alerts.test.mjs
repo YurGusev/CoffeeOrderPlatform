@@ -1994,7 +1994,7 @@ void test("verification provenance hashes the non-ignored source tree and compil
   assert.match(identity.identityHash, /^[a-f0-9]{64}$/u);
 });
 
-void test("observability evidence distinguishes selected live roles from full 14-runtime G14 coverage", () => {
+void test("observability evidence distinguishes selected live roles from full 14-runtime observability coverage", () => {
   const coverage = observabilityVerificationCoverage({
     launchPathProof: {
       roles: [
@@ -2374,7 +2374,7 @@ void test("Grafana backend queries require fresh owner samples and exact traces"
   );
 });
 
-void test("G14 component requires five child database removals before browser", () => {
+void test("observability component requires five child database removals before browser", () => {
   const runId = "20261030T120000Z-abcdef0";
   const names = ["customer", "catalog", "pricing", "orders", "integration"]
     .map(
@@ -2420,7 +2420,7 @@ void test("G14 component requires five child database removals before browser", 
     );
 });
 
-void test("G14 queries actual child telemetry before cleanup and fails closed on missing or private data", async () => {
+void test("observability queries actual child telemetry before cleanup and fails closed on missing or private data", async () => {
   const { runManagedRollbackChild } =
     await import("../../verification/launch/v1/scenarios/rollback.mjs");
   const traceId = "a".repeat(32);
@@ -3381,7 +3381,7 @@ void test("restoration preserves proof failure and reports both failures without
   }
 });
 
-void test("G14 cannot pass with a missing or incomplete required phase", () => {
+void test("observability cannot pass with a missing or incomplete required phase", () => {
   const pass = { status: "PASS" };
   const evidence = {
     cleanupErrors: [],
@@ -3647,7 +3647,7 @@ void test("Grafana hold windows use the episode start rather than delayed webhoo
   assert.ok(Number.isNaN(alertEpisodeStartMs(`invalid:${started}`)));
 });
 
-void test("G14 cannot pass when required evidence cannot be written", async () => {
+void test("observability cannot pass when required evidence cannot be written", async () => {
   const evidence = { status: "PASS" };
   await persistVerificationResult({
     root: "/fixture",

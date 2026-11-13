@@ -160,7 +160,9 @@ export function validateAromaPackingWireProof(facts, receipt) {
     receipt.operationId !== operationId ||
     receipt.operationIds?.add !== `${operationId}:add` ||
     receipt.operationIds?.delete !== `${operationId}:delete` ||
-    receipt.purpose !== "bounded out-of-G16 exact-line packing probe" ||
+    receipt.purpose !==
+      // Значение из неизменяемого evidence 2026-10-24.
+      "bounded out-of-G16 exact-line packing probe" || // gate-naming: allow-historical
     receipt.offerId !== "445" ||
     receipt.requestedPacking !== "Aroma" ||
     receipt.origin !== "https://aromateacoffee.ru" ||

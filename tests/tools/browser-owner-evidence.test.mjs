@@ -48,7 +48,7 @@ const key = "1a6b9b0a-e6ad-4d6f-a74f-95e461a5b2d7";
 const requestHash = "a".repeat(64);
 const actorRef = "actor:g15-browser-fixture";
 
-void test("G14 reads only the run-owned causally linked Published/Processed metadata", async () => {
+void test("observability reads only the run-owned causally linked Published/Processed metadata", async () => {
   const root = "msg_01ARZ3NDEKTSV4RRFFQ69G5FAV";
   const frame = "msg_01ARZ3NDEKTSV4RRFFQ69G5FAW";
   for (const [cause, rootTrace, eventTrace] of [
@@ -133,7 +133,7 @@ void test("G14 reads only the run-owned causally linked Published/Processed meta
       );
     } else
       await assert.rejects(snapshot(input), {
-        message: "G14_OWNER_CHAIN_NOT_PROVEN",
+        message: "BROWSER_OWNER_CHAIN_NOT_PROVEN",
       });
     assert.equal(calls[0].sql, "BEGIN READ ONLY");
     assert.equal(calls.at(-1).sql, "ROLLBACK");
@@ -185,7 +185,7 @@ function makeEvidence(connect) {
   return createBrowserOwnerEvidence({ connect, roleMap, actorRef, runId });
 }
 
-void test("G15 owner snapshot is run-bound, allowlisted, and returns only hashes/counts", async () => {
+void test("browser owner snapshot is run-bound, allowlisted, and returns only hashes/counts", async () => {
   const calls = [];
   const evidence = makeEvidence(async (database) => ({
     async query(sql, values = []) {
@@ -235,9 +235,9 @@ void test("G15 owner snapshot is run-bound, allowlisted, and returns only hashes
   );
 });
 
-void test("G15 customer business snapshot covers fixed run DB tables without returning identifiers", async () => {
+void test("browser customer business snapshot covers fixed run DB tables without returning identifiers", async () => {
   const calls = [];
-  const canary = "G15_CUSTOMER_PII_CANARY";
+  const canary = "BROWSER_CUSTOMER_PII_CANARY";
   const evidence = makeEvidence(async (database) => ({
     async query(sql) {
       calls.push({ database, sql });
@@ -293,7 +293,7 @@ void test("G15 customer business snapshot covers fixed run DB tables without ret
     assert.equal(serialized.includes(sensitiveValue), false);
 });
 
-void test("G15 customer business digest includes channel-link row versions", async () => {
+void test("browser customer business digest includes channel-link row versions", async () => {
   let channelLinkVersion = "43";
   const evidence = makeEvidence(async () => ({
     async query(sql) {
@@ -319,7 +319,7 @@ void test("G15 customer business digest includes channel-link row versions", asy
   assert.notEqual(before.businessDigest, after.businessDigest);
 });
 
-void test("G15 owner capability rejects unknown owners, malformed refs, and noncanonical role maps before connecting", async () => {
+void test("browser owner capability rejects unknown owners, malformed refs, and noncanonical role maps before connecting", async () => {
   let connects = 0;
   const evidence = makeEvidence(async () => {
     connects += 1;
@@ -327,7 +327,7 @@ void test("G15 owner capability rejects unknown owners, malformed refs, and nonc
   });
   await assert.rejects(
     evidence.snapshot({ operation: "orders.confirm", idempotencyKey: key }),
-    { message: "G15_OWNER_OPERATION_INVALID" },
+    { message: "BROWSER_OWNER_OPERATION_INVALID" },
   );
   await assert.rejects(
     evidence.snapshot({
@@ -336,7 +336,7 @@ void test("G15 owner capability rejects unknown owners, malformed refs, and nonc
       orderRef: "not-a-run-order",
       itemRef,
     }),
-    { message: "G15_OWNER_INPUT_INVALID" },
+    { message: "BROWSER_OWNER_INPUT_INVALID" },
   );
   assert.equal(connects, 0);
 
@@ -354,7 +354,7 @@ void test("G15 owner capability rejects unknown owners, malformed refs, and nonc
   );
 });
 
-void test("G15 Acquired fixture uses the exact orders operation scope and no business payload", async () => {
+void test("browser Acquired fixture uses the exact orders operation scope and no business payload", async () => {
   let insert;
   const evidence = makeEvidence(async (database) => ({
     async query(sql, values = []) {
@@ -388,7 +388,7 @@ void test("G15 Acquired fixture uses the exact orders operation scope and no bus
   assert.equal(JSON.stringify(result).includes(orderRef), false);
 });
 
-void test("G15 absent lookup is confirmed without inserting state", async () => {
+void test("browser absent lookup is confirmed without inserting state", async () => {
   let queries = 0;
   const evidence = makeEvidence(async () => ({
     async query() {
@@ -406,10 +406,10 @@ void test("G15 absent lookup is confirmed without inserting state", async () => 
   assert.equal(queries, 1);
 });
 
-void test("G15 owner evidence converts database errors to finite codes", async () => {
+void test("browser owner evidence converts database errors to finite codes", async () => {
   const evidence = makeEvidence(async () => ({
     async query() {
-      throw new Error("password=G15_DATABASE_ERROR_CANARY");
+      throw new Error("password=_DATABASE_ERROR_CANARY");
     },
     async end() {},
   }));
@@ -418,11 +418,11 @@ void test("G15 owner evidence converts database errors to finite codes", async (
       operation: "customer.create",
       idempotencyKey: key,
     }),
-    { message: "G15_OWNER_DB_QUERY_FAILED" },
+    { message: "BROWSER_OWNER_DB_QUERY_FAILED" },
   );
 });
 
-void test("G15 lookup fault restores owner SELECT before returning or rethrowing", async (t) => {
+void test("browser lookup fault restores owner SELECT before returning or rethrowing", async (t) => {
   for (const callbackThrows of [false, true]) {
     await t.test(`callbackThrows=${callbackThrows}`, async () => {
       let allowed = true;
@@ -474,7 +474,7 @@ void test("G15 lookup fault restores owner SELECT before returning or rethrowing
       });
       if (callbackThrows)
         await assert.rejects(operation, {
-          message: "G15_OWNER_LOOKUP_EXERCISE_FAILED",
+          message: "BROWSER_OWNER_LOOKUP_EXERCISE_FAILED",
         });
       else
         assert.deepEqual(await operation, {
@@ -492,7 +492,7 @@ void test("G15 lookup fault restores owner SELECT before returning or rethrowing
   }
 });
 
-void test("G15 lookup fault refuses noncanonical SELECT ACL before mutation", async (t) => {
+void test("browser lookup fault refuses noncanonical SELECT ACL before mutation", async (t) => {
   const mutations = [
     [
       "PUBLIC SELECT",
@@ -565,14 +565,14 @@ void test("G15 lookup fault refuses noncanonical SELECT ACL before mutation", as
             throw new Error("must not run");
           },
         }),
-        { message: "G15_OWNER_LOOKUP_ACL_NONCANONICAL" },
+        { message: "BROWSER_OWNER_LOOKUP_ACL_NONCANONICAL" },
       );
       assert.equal(revoked, 0);
     });
   }
 });
 
-void test("G15 owner lookup fails closed if SELECT restoration cannot be verified", async () => {
+void test("browser owner lookup fails closed if SELECT restoration cannot be verified", async () => {
   let allowed = true;
   const acl = canonicalOrdersAcl();
   const evidence = makeEvidence(async () => ({
@@ -591,7 +591,7 @@ void test("G15 owner lookup fails closed if SELECT restoration cannot be verifie
         return { rows: [] };
       }
       if (sql.startsWith("GRANT SELECT"))
-        throw new Error("password=G15_RESTORE_CANARY");
+        throw new Error("password=_RESTORE_CANARY");
       throw new Error("unexpected query");
     },
     async end() {},
@@ -605,12 +605,12 @@ void test("G15 owner lookup fails closed if SELECT restoration cannot be verifie
         problemCode: "IDEMPOTENCY_LOOKUP_UNAVAILABLE",
       }),
     }),
-    { message: "G15_OWNER_LOOKUP_RESTORE_FAILED" },
+    { message: "BROWSER_OWNER_LOOKUP_RESTORE_FAILED" },
   );
   assert.equal(allowed, false);
 });
 
-void test("G15 callback proof is exact and bound to this run and candidate", () => {
+void test("browser callback proof is exact and bound to this run and candidate", () => {
   const proof = {
     schemaVersion: 1,
     runId,
@@ -632,7 +632,7 @@ void test("G15 callback proof is exact and bound to this run and candidate", () 
         runId: "20261025T132253Z-085cdd7",
         candidateSha: proof.candidateSha,
       }),
-    { message: "G15_BROWSER_PROOF_IDENTITY_INVALID" },
+    { message: "BROWSER_PROOF_IDENTITY_INVALID" },
   );
   assert.throws(
     () =>
@@ -640,7 +640,7 @@ void test("G15 callback proof is exact and bound to this run and candidate", () 
         { ...proof, recoveryProof: true },
         { runId, candidateSha: proof.candidateSha },
       ),
-    { message: "G15_BROWSER_PROOF_SCHEMA_INVALID" },
+    { message: "BROWSER_PROOF_SCHEMA_INVALID" },
   );
 });
 

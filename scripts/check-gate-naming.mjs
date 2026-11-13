@@ -59,6 +59,8 @@ const EXCLUDED_PATHS = Object.freeze([
   "docs/launch/22_GATE_NAMING.md",
   // Снимок прототипа: base64-строки не являются именами гейтов.
   "docs/frontend/prototypes/",
+  // Конвенция и её проверочный тест содержат номера как контрпримеры.
+  "tests/architecture/gate-naming.test.mjs",
 ]);
 
 const RULES = Object.freeze([
@@ -88,6 +90,10 @@ const RULES = Object.freeze([
 
 // Комментарий — только маркер в начале строки и только в кодовых файлах:
 // заголовки markdown и строковые литералы не являются комментариями.
+const BARE_GATE = new RegExp(String.raw`\b${GATE_NUMBER}\b`, "gu");
+// Строки, обязанные совпадать с неизменяемым историческим evidence, помечаются
+// явным маркером и конвенцию не нарушают.
+const HISTORICAL_MARKER = "gate-naming: allow-historical";
 const COMMENT_PREFIX = /^\s*(?:\/\/|\/\*|\*|#)/u;
 const COMMENT_EXTENSIONS = new Set([
   ".js",
@@ -117,11 +123,8 @@ export function isOpaqueToken(match) {
   return parts.length > MAX_WORD_PARTS;
 }
 const COMMENT_GATE = new RegExp(String.raw`\b${GATE_NUMBER}\b`, "gu");
-// Старые env-имена читаются один релиз для совместимости окружений.
-const ALLOWED_LEGACY_ENV = new Set([
-  "COFFEE_G12_CACHE_DIR",
-  "COFFEE_G15_OWNER_BROWSER",
-]);
+// PostgreSQL-версия в именах пакетов не является номером гейта.
+const ALLOWED_TOKENS = new Set(["pg16", "pg17", "pg18", "_OTHER"]);
 const BASELINE_VERSION = 1;
 
 function isExcluded(relativePath) {
@@ -161,9 +164,20 @@ export function violationsInSource(relativePath, source) {
   const add = (kind, line, match) => {
     found.set(`${kind}|${line}|${match}`, { kind, path, line, match });
   };
+  const lines = source.split("\n");
+  const historical = new Set(
+    lines
+      .map((text, index) => (text.includes(HISTORICAL_MARKER) ? index + 1 : 0))
+      .filter(Boolean),
+  );
+  for (const hit of source.matchAll(BARE_GATE)) {
+    if (ALLOWED_TOKENS.has(hit[0])) continue;
+    if (historical.has(lineOf(source, hit.index))) continue;
+    add("gate-number", lineOf(source, hit.index), hit[0]);
+  }
   for (const rule of RULES)
     for (const hit of source.matchAll(rule.pattern)) {
-      if (ALLOWED_LEGACY_ENV.has(hit[0])) continue;
+      if (ALLOWED_TOKENS.has(hit[0])) continue;
       {
         if (rule.kind === "error-code" || !isOpaqueToken(hit[0]))
           add(rule.kind, lineOf(source, hit.index), hit[0]);

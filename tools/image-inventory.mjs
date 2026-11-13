@@ -275,7 +275,7 @@ async function verifyInventoryAgainstGateEvidence({
   if (
     result?.gate !== "supply_chain" ||
     result?.status !== "PASS" ||
-    result?.code !== "G12_SCAN_CLEAN" ||
+    result?.code !== "SUPPLY_CHAIN_SCAN_CLEAN" ||
     result?.runId !== context.runId ||
     result?.candidateSha !== context.candidateSha ||
     result?.provenance?.status !== "PASS" ||

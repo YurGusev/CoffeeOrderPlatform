@@ -1030,7 +1030,7 @@ export async function verifyGateArtifacts(gate, record, evidenceDir) {
   const additions = [];
   if (gate.id === "db_boundaries") {
     const failure =
-      "G09 live database-boundary receipt does not match the current run or exact 10/40-case contract";
+      "db_boundaries live database-boundary receipt does not match the current run or exact 10/40-case contract";
     if (
       gate.command !== "pnpm db:smoke" ||
       record.runs?.length !== 1 ||
@@ -1351,10 +1351,10 @@ export async function verifyGateArtifacts(gate, record, evidenceDir) {
     try {
       receipt = JSON.parse(await readFile(path, "utf8"));
     } catch {
-      return "G08 migration oracle receipt is missing or invalid";
+      return "migrations oracle receipt is missing or invalid";
     }
     if (!receipt || typeof receipt !== "object" || Array.isArray(receipt))
-      return "G08 migration oracle receipt is missing or invalid";
+      return "migrations oracle receipt is missing or invalid";
     const expectedOwners = [
       ["catalog", 12],
       ["customer", 2],
@@ -1418,12 +1418,12 @@ export async function verifyGateArtifacts(gate, record, evidenceDir) {
       JSON.stringify(receipt.legacyTargetsExcluded) !==
         JSON.stringify(["coffeeorder_staging", "coffeeorderdb"])
     )
-      return "G08 migration oracle receipt does not match the validated context or cleanup contract";
+      return "migrations oracle receipt does not match the validated context or cleanup contract";
     additions.push(await hashFile(path));
   }
   if (gate.id === "observability") {
     const failure =
-      "G14 browser correlation child lineage or cleanup is invalid";
+      "observability browser correlation child lineage or cleanup is invalid";
     if (
       gate.command !== "pnpm test:observability" ||
       record.runs?.length !== 1 ||
@@ -1510,11 +1510,11 @@ export async function verifyGateArtifacts(gate, record, evidenceDir) {
         return failure;
       if (traceNotProven) {
         record.artifacts.push(...additions);
-        return "G14 W3C trace is not proven";
+        return "observability W3C trace is not proven";
       }
       if (result.fullSystemObservability?.status !== "PASS") {
         record.artifacts.push(...additions);
-        return "G14 full-system SLO, chaos and capacity proof is not complete";
+        return "observability full-system SLO, chaos and capacity proof is not complete";
       }
     } catch {
       return failure;
@@ -1522,7 +1522,7 @@ export async function verifyGateArtifacts(gate, record, evidenceDir) {
   }
   if (gate.id === "browser") {
     const failure =
-      "G15 parent wrapper does not admit a joined child, exact fixture lineage, browser proof and cleanup";
+      "browser parent wrapper does not admit a joined child, exact fixture lineage, browser proof and cleanup";
     const failedChildAttempt =
       gate.command === "pnpm test:playwright" &&
       record.runs?.length === 1 &&
@@ -1636,7 +1636,7 @@ export async function verifyGateArtifacts(gate, record, evidenceDir) {
     try {
       output = JSON.parse(await readFile(path, "utf8"));
     } catch {
-      return "G00 missing or invalid artifacts/preflight.json";
+      return "preflight missing or invalid artifacts/preflight.json";
     }
     const kafkaPlan = output.checks?.find(
       (check) => check.id === "KAFKA_NAMESPACE_PLAN",
@@ -1657,7 +1657,7 @@ export async function verifyGateArtifacts(gate, record, evidenceDir) {
       Array.isArray(kafkaPlan.facts?.expectedPhysical?.topics) &&
       Array.isArray(kafkaPlan.facts?.expectedPhysical?.groups);
     if (!valid)
-      return "G00 preflight result is FAIL or does not identify this run/candidate";
+      return "preflight result is FAIL or does not identify this run/candidate";
     additions.push(await hashFile(path));
   }
   const composeCommandSucceeded =
@@ -1674,7 +1674,7 @@ export async function verifyGateArtifacts(gate, record, evidenceDir) {
     try {
       preflight = JSON.parse(await readFile(preflightPath, "utf8"));
     } catch {
-      return "G13 missing G00 Kafka namespace plan";
+      return "compose missing preflight Kafka namespace plan";
     }
     const kafkaPlan = preflight.checks?.find(
       (check) => check.id === "KAFKA_NAMESPACE_PLAN",
@@ -1691,7 +1691,7 @@ export async function verifyGateArtifacts(gate, record, evidenceDir) {
       kafkaPlan.facts.baseConfigShaMatchesContext !== true ||
       kafkaPlan.facts.candidateContextValid !== true
     )
-      return "G13 has no context-bound committed Kafka namespace plan";
+      return "compose has no context-bound committed Kafka namespace plan";
     try {
       additions.push(
         await captureKafkaNamespaceArtifact({
@@ -1703,7 +1703,7 @@ export async function verifyGateArtifacts(gate, record, evidenceDir) {
         }),
       );
     } catch {
-      return "G13 missing or invalid Kafka namespace inventory receipt";
+      return "compose missing or invalid Kafka namespace inventory receipt";
     }
   }
   if (gate.id === "rollback" && gate.status === "PASS") {
@@ -1712,7 +1712,7 @@ export async function verifyGateArtifacts(gate, record, evidenceDir) {
     try {
       artifact = JSON.parse(await readFile(path, "utf8"));
     } catch {
-      return "G18 missing or invalid artifacts/mutation-disable-rollback.json";
+      return "rollback missing or invalid artifacts/mutation-disable-rollback.json";
     }
     try {
       validateRollbackRuntimeArtifact(artifact, {
@@ -1721,7 +1721,7 @@ export async function verifyGateArtifacts(gate, record, evidenceDir) {
         lineage: artifact.lineage,
       });
     } catch {
-      return "G18 rollback runtime artifact failed identity, lineage, phase or cleanup validation";
+      return "rollback runtime artifact failed identity, lineage, phase or cleanup validation";
     }
     additions.push(await hashFile(path));
   }
@@ -1737,7 +1737,7 @@ export async function verifyGateArtifacts(gate, record, evidenceDir) {
       result.candidateSha !== context.candidateSha ||
       !["ДОПУСТИТЬ", "НЕ ДОПУСТИТЬ"].includes(result.decision)
     )
-      return "G19 decision.json отсутствует или относится к другому run/SHA";
+      return "report decision.json отсутствует или относится к другому run/SHA";
     const reportPath = join(
       context.sourceRepoRoot,
       "docs/reports/launch",
@@ -1749,7 +1749,7 @@ export async function verifyGateArtifacts(gate, record, evidenceDir) {
       await access(reportPath);
       await access(checksumPath);
     } catch {
-      return "G19 не создал ОТЧЁТ.md и checksums.sha256";
+      return "report не создал ОТЧЁТ.md и checksums.sha256";
     }
     try {
       await validateChecksumManifest(
@@ -1758,7 +1758,7 @@ export async function verifyGateArtifacts(gate, record, evidenceDir) {
         context.runId,
       );
     } catch (error) {
-      return `G19 checksums manifest invalid: ${redactText(error.message)}`;
+      return `report checksums manifest invalid: ${redactText(error.message)}`;
     }
   }
   record.artifacts.push(...additions);
@@ -1850,7 +1850,7 @@ export async function runGate(
   }
   if (gate.id === "aroma_sandbox" && !process.env.AROMA_SANDBOX_APPROVAL_FILE) {
     record.reason =
-      "NOT_RUN: AROMA_SANDBOX_APPROVAL_FILE отсутствует; controlled-live G16 требует подписанный approval";
+      "NOT_RUN: AROMA_SANDBOX_APPROVAL_FILE отсутствует; controlled-live aroma_sandbox требует подписанный approval";
     record.endedAt = nowIso();
     await writeFile(join(evidenceDir, "gates", gate.id, "stdout.log"), "", {
       mode: 0o600,
@@ -1887,10 +1887,12 @@ export async function runGate(
       });
       record.artifacts.push(await hashFile(path));
       if (Date.now() - started >= gate.timeout * 1000)
-        throw new Error("qualification admission exhausted the G14 budget");
+        throw new Error(
+          "qualification admission exhausted the observability budget",
+        );
     } catch (error) {
       record.status = "FAIL";
-      record.reason = `G14 realtime qualification admission failed: ${redactText(error.message)}`;
+      record.reason = `observability realtime qualification admission failed: ${redactText(error.message)}`;
       record.durationMs = Date.now() - started;
       record.endedAt = nowIso();
       await writeFile(join(evidenceDir, "gates", gate.id, "stdout.log"), "", {
@@ -1911,7 +1913,7 @@ export async function runGate(
       !/^[0-9]{1,20}$/u.test(g08ExpectedSystemIdentifier)
     )
       record.reason =
-        "G08: требуется утверждённый system identifier PostgreSQL";
+        "migrations: требуется утверждённый system identifier PostgreSQL";
     else {
       try {
         const { context } = await validateLaunchContext(contextPath);
@@ -1933,7 +1935,7 @@ export async function runGate(
           { flag: "wx", mode: 0o400 },
         );
       } catch {
-        record.reason = "G08: не удалось сохранить утверждённый target";
+        record.reason = "migrations: не удалось сохранить утверждённый target";
       }
     }
     if (record.reason) {
@@ -2254,7 +2256,7 @@ export async function executeRun(options = {}) {
       }
       if (Date.now() >= workloadDeadline && gate.id !== "report") {
         record.reason =
-          "NOT_RUN: остановлено для резерва G19 и финализации внутри общего лимита 120 минут";
+          "NOT_RUN: остановлено для резерва report и финализации внутри общего лимита 120 минут";
         record.endedAt = nowIso();
         await writeFile(join(evidenceDir, "gates", gate.id, "stdout.log"), "", {
           mode: 0o600,

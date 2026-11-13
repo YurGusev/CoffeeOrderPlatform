@@ -21,12 +21,12 @@ React Aria-compatible registry скопирован с неизменяемой 
 Снимки исходников сохранены в `provenance/shadcn/aria/` и адаптированы в
 production components. Пути upstream и SHA-256 исходников:
 
-| Локальный снимок | Upstream path | SHA-256 |
-| --- | --- | --- |
+| Локальный снимок                    | Upstream path                               | SHA-256                                                            |
+| ----------------------------------- | ------------------------------------------- | ------------------------------------------------------------------ |
 | `provenance/shadcn/aria/button.tsx` | `apps/v4/registry/bases/aria/ui/button.tsx` | `8bcff6f70522e6e6cb0ff67f050830ea1a93596403d2d9b035f3b543c7a42e2c` |
 | `provenance/shadcn/aria/dialog.tsx` | `apps/v4/registry/bases/aria/ui/dialog.tsx` | `ff8a8e6b372e7eb06c931975d8ac1ea59d9271051ac178a62c95f6acae20bb35` |
-| `provenance/shadcn/aria/field.tsx` | `apps/v4/registry/bases/aria/ui/field.tsx` | `1019104c41eaef8ffae109e2ece95be87a7a637e3a9bac049d7a9fb54bfb7275` |
-| `provenance/shadcn/aria/input.tsx` | `apps/v4/registry/bases/aria/ui/input.tsx` | `b9596748b7238b5605f558474e9d50afc1535c5832c57134055e4bbde5fa804f` |
+| `provenance/shadcn/aria/field.tsx`  | `apps/v4/registry/bases/aria/ui/field.tsx`  | `1019104c41eaef8ffae109e2ece95be87a7a637e3a9bac049d7a9fb54bfb7275` |
+| `provenance/shadcn/aria/input.tsx`  | `apps/v4/registry/bases/aria/ui/input.tsx`  | `b9596748b7238b5605f558474e9d50afc1535c5832c57134055e4bbde5fa804f` |
 
 Локальные адаптации: `Button` сохраняет React Aria primitive и композицию `cn`,
 но сопоставляет variants/sizes с API платформы и выбранными tokens; `Dialog`

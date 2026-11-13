@@ -473,11 +473,11 @@ async function validateEvidence(evidenceDir, result, sourceRoot) {
         preflight.checks.some((check) => check.status !== "PASS")
       ) {
         errors.push(
-          "G00 preflight artifact семантически не совпадает с результатом",
+          "preflight artifact семантически не совпадает с результатом",
         );
       }
     } catch {
-      errors.push("Нет валидного G00 preflight artifact для PASS");
+      errors.push("Нет валидного preflight artifact для PASS");
     }
   }
   if (result.gates[13].status === "PASS") {
@@ -501,7 +501,7 @@ async function validateEvidence(evidenceDir, result, sourceRoot) {
         kafkaPlan.facts.candidateContextValid !== true
       ) {
         throw new Error(
-          "G00 Kafka plan does not bind this run, candidate and base config",
+          "preflight Kafka plan does not bind this run, candidate and base config",
         );
       }
       const inventoryPath = join(
@@ -516,7 +516,7 @@ async function validateEvidence(evidenceDir, result, sourceRoot) {
           (artifact) => resolve(artifact.path) === inventoryPath,
         )
       )
-        throw new Error("G13 inventory is not listed as a gate artifact");
+        throw new Error("compose inventory is not listed as a gate artifact");
       validateKafkaNamespaceInventory(inventory, {
         runId: context.runId,
         projectName: context.resources?.composeProject,
@@ -525,7 +525,7 @@ async function validateEvidence(evidenceDir, result, sourceRoot) {
       });
     } catch {
       errors.push(
-        "Нет валидного G13 Kafka namespace inventory, связанного с G00 plan/context",
+        "Нет валидного compose Kafka namespace inventory, связанного с preflight plan/context",
       );
     }
   }
@@ -540,7 +540,7 @@ async function validateEvidence(evidenceDir, result, sourceRoot) {
       g19.runs[0]?.outputLimitExceeded)
   ) {
     errors.push(
-      "G19 PASS не подтверждён единственным exact report argv с exit 0",
+      "report PASS не подтверждён единственным exact report argv с exit 0",
     );
   }
   if (g19.status === "PASS") {
@@ -560,9 +560,9 @@ async function validateEvidence(evidenceDir, result, sourceRoot) {
         decision.decision !== result.decision ||
         !report.startsWith(`# ${result.decision}\n`)
       )
-        errors.push("G19 report/decision identity or decision mismatch");
+        errors.push("report/decision identity or decision mismatch");
     } catch {
-      errors.push("G19 report или decision.json отсутствует");
+      errors.push("report или decision.json отсутствует");
     }
   }
   if (!files.has(resultPath)) errors.push("Отсутствует run-result.json");
@@ -802,7 +802,7 @@ function reportMarkdown(
   }
   lines.push(
     "",
-    "## Предварительная проверка G00",
+    "## Предварительная проверка preflight",
     "",
     `Статус: ${preflight.status}. Артефакт: [preflight.json](../../../../evidence/launch/${result.runId}/gates/${result.gates[0].id}/artifacts/preflight.json).`,
   );
@@ -817,20 +817,20 @@ function reportMarkdown(
     "",
     "## Sandbox fingerprint",
     "",
-    `G16: ${result.gates[16].status}; account fingerprint: ${fingerprint ?? "нет доказательства в принятом evidence"}. Credentials не включаются в отчёт.`,
+    `aroma_sandbox: ${result.gates[16].status}; account fingerprint: ${fingerprint ?? "нет доказательства в принятом evidence"}. Credentials не включаются в отчёт.`,
   );
   lines.push(
     "",
     "## Backup RPO и restore time",
     "",
-    `G17: ${result.gates[17].status}; требование: RPO на момент dump, restore не более 10 минут для каждой БД и 30 минут суммарно. Фактические измерения: ${result.gates[17].status === "NOT_RUN" ? "NOT_RUN — доказательства нет" : "см. связанные G17 artifacts; runner не подменяет отсутствующие измерения расчетными значениями"}.`,
+    `backup_restore: ${result.gates[17].status}; требование: RPO на момент dump, restore не более 10 минут для каждой БД и 30 минут суммарно. Фактические измерения: ${result.gates[17].status === "NOT_RUN" ? "NOT_RUN — доказательства нет" : "см. связанные backup_restore artifacts; runner не подменяет отсутствующие измерения расчетными значениями"}.`,
   );
   lines.push(
     "",
     "## Observability и rollback",
     "",
-    `G14 observability: ${result.gates[14].status} — ${redactText(result.gates[14].reason || "нет причины отказа")}.`,
-    `G18 rollback: ${result.gates[18].status} — ${redactText(result.gates[18].reason || "нет причины отказа")}.`,
+    `observability: ${result.gates[14].status} — ${redactText(result.gates[14].reason || "нет причины отказа")}.`,
+    `rollback: ${result.gates[18].status} — ${redactText(result.gates[18].reason || "нет причины отказа")}.`,
   );
   lines.push(
     "",
@@ -880,7 +880,7 @@ function reportMarkdown(
     "",
     ...environmentErrors.map((error) => `- Environment: ${error}`),
     ...unproven.map((entry) => `- ${entry}`),
-    "- G16 без проверенного detached signature verifier и signed approval не выполняет provider-вызов.",
+    "- aroma_sandbox без проверенного detached signature verifier и signed approval не выполняет provider-вызов.",
     "- Непрошедшие gates сохраняют FAIL или NOT_RUN; автоматического retry нет.",
     "",
   );

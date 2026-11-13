@@ -3654,7 +3654,7 @@ void test("runtime materialization fails closed on SOPS errors and malformed dec
   }
 });
 
-void test("G16 materializes only run-scoped admin and runtime secret files with owner-only permissions", async () => {
+void test("aroma_sandbox materializes only run-scoped admin and runtime secret files with owner-only permissions", async () => {
   const fixture = await createSecretMaterializationFixture();
   const outputDir = await mkdtemp("/dev/shm/coffee-g16-secrets-");
   const runId = "20261024T185000Z-abc1234";
@@ -3732,7 +3732,7 @@ void test("G16 materializes only run-scoped admin and runtime secret files with 
   }
 });
 
-void test("G16 database provisioning enforces the pinned server and cleans up only its created run databases", async (t) => {
+void test("aroma_sandbox database provisioning enforces the pinned server and cleans up only its created run databases", async (t) => {
   const fixture = await createSecretMaterializationFixture();
   const outputDir = await mkdtemp("/dev/shm/coffee-g16-secrets-");
   const runId = "20261024T185100Z-def5678";
@@ -4137,7 +4137,7 @@ void test("config-bootstrap validates the synthetic encrypted config without dec
   }
 });
 
-void test("G08 canonical target probe is read-only and reports only bounded identity and role inventory", async (t) => {
+void test("migrations canonical target probe is read-only and reports only bounded identity and role inventory", async (t) => {
   const launch = await createMigrationLaunchFixture();
   const {
     fixture,
@@ -4265,7 +4265,7 @@ void test("G08 canonical target probe is read-only and reports only bounded iden
           ],
         };
       if (sql.startsWith("SELECT rolname,")) return { rows: roleRows };
-      assert.fail(`unexpected G08 probe query: ${sql}`);
+      assert.fail(`unexpected migrations probe query: ${sql}`);
     });
 
     const absent = await probeCanonicalMigrationTarget({
@@ -4371,7 +4371,7 @@ void test("G08 canonical target probe is read-only and reports only bounded iden
   }
 });
 
-void test("G08 canonical target probe returns finite sanitized database failure facts", async (t) => {
+void test("migrations canonical target probe returns finite sanitized database failure facts", async (t) => {
   const { fixture, evidenceDir, contextPath } =
     await createMigrationLaunchFixture();
   const credentialCanary = "synthetic-pg-password-detail-canary";
@@ -4384,7 +4384,7 @@ void test("G08 canonical target probe returns finite sanitized database failure 
     });
     t.mock.method(Client.prototype, "end", async () => {});
     t.mock.method(Client.prototype, "query", async () => {
-      assert.fail("G08 connect failure must stop before SQL");
+      assert.fail("migrations connect failure must stop before SQL");
     });
 
     await assert.rejects(
@@ -4412,7 +4412,7 @@ void test("G08 canonical target probe returns finite sanitized database failure 
   }
 });
 
-void test("G08 canonical target probe sanitizes identity and role-inventory query failures", async (t) => {
+void test("migrations canonical target probe sanitizes identity and role-inventory query failures", async (t) => {
   const canary = "synthetic-query-detail-canary";
   for (const scenario of [
     {
@@ -4479,7 +4479,7 @@ void test("G08 canonical target probe sanitizes identity and role-inventory quer
               ],
             };
           if (sql.startsWith("SELECT rolname,")) return { rows: [] };
-          assert.fail(`unexpected G08 ${scenario.name} query`);
+          assert.fail(`unexpected migrations ${scenario.name} query`);
         });
 
         await assert.rejects(
@@ -4505,7 +4505,7 @@ void test("G08 canonical target probe sanitizes identity and role-inventory quer
     });
 });
 
-void test("G08 admin credential sync uses the configured user and does not rewrite a valid SOPS credential", async (t) => {
+void test("migrations admin credential sync uses the configured user and does not rewrite a valid SOPS credential", async (t) => {
   const { fixture, evidenceDir, contextPath, adminPassword } =
     await createMigrationLaunchFixture();
   const bundlePath = join(fixture.root, "secrets/platform.secrets.sops.yaml");
@@ -4541,7 +4541,7 @@ void test("G08 admin credential sync uses the configured user and does not rewri
           ],
         };
       if (sql.startsWith("SELECT rolname,")) return { rows: [] };
-      assert.fail("G08 admin verification must remain read-only");
+      assert.fail("migrations admin verification must remain read-only");
     });
 
     const result = await synchronizeMigrationAdminCredential({
@@ -4579,7 +4579,7 @@ void test("G08 admin credential sync uses the configured user and does not rewri
   }
 });
 
-void test("G08 admin credential sync falls back only on exact 28P01 and persists only the encrypted admin field", async (t) => {
+void test("migrations admin credential sync falls back only on exact 28P01 and persists only the encrypted admin field", async (t) => {
   const { fixture, evidenceDir, contextPath, adminPassword } =
     await createMigrationLaunchFixture();
   const bundlePath = join(fixture.root, "secrets/platform.secrets.sops.yaml");
@@ -4625,7 +4625,7 @@ void test("G08 admin credential sync falls back only on exact 28P01 and persists
           ],
         };
       if (sql.startsWith("SELECT rolname,")) return { rows: [] };
-      assert.fail("G08 credential synchronization must not execute DDL");
+      assert.fail("migrations credential synchronization must not execute DDL");
     });
 
     const result = await synchronizeMigrationAdminCredential({
@@ -4711,7 +4711,7 @@ void test("G08 admin credential sync falls back only on exact 28P01 and persists
   }
 });
 
-void test("G08 admin credential sync refuses non-auth failures, changed source identity, and rejected source credentials without bundle writes", async (t) => {
+void test("migrations admin credential sync refuses non-auth failures, changed source identity, and rejected source credentials without bundle writes", async (t) => {
   const scenarios = [
     {
       name: "non-authentication PG failure never reads Docker",
@@ -4917,7 +4917,7 @@ void test("G08 admin credential sync refuses non-auth failures, changed source i
                 ]
               : [],
           };
-        assert.fail("unexpected G08 admin query");
+        assert.fail("unexpected migrations admin query");
       });
       await assert.rejects(
         synchronizeMigrationAdminCredential({
@@ -5021,7 +5021,7 @@ void test("G08 admin credential sync refuses non-auth failures, changed source i
   }
 });
 
-void test("G17 target binds readonly context, isolated config, and server identity before secret access", async (t) => {
+void test("backup_restore target binds readonly context, isolated config, and server identity before secret access", async (t) => {
   const launch = await createMigrationLaunchFixture({
     databaseIsolation: true,
   });
@@ -5110,7 +5110,7 @@ void test("G17 target binds readonly context, isolated config, and server identi
   );
 });
 
-void test("G08 credential reader rejects malformed requests before accessing secrets", async () => {
+void test("migrations credential reader rejects malformed requests before accessing secrets", async () => {
   const valid = {
     root: "/nonexistent-g08-root",
     owner: "customer",
@@ -5135,7 +5135,7 @@ void test("G08 credential reader rejects malformed requests before accessing sec
   }
 });
 
-void test("G08 current attestation requires password authentication and unchanged canonical inputs", async (t) => {
+void test("migrations current attestation requires password authentication and unchanged canonical inputs", async (t) => {
   const launch = await createMigrationLaunchFixture({
     migratorBlock: true,
     alignedRunId: true,
@@ -5390,7 +5390,7 @@ void test("G08 current attestation requires password authentication and unchange
   }
 });
 
-void test("G15 child credentials reuse the unchanged parent G08 receipt only through exact OIDC lineage", async (t) => {
+void test("browser child credentials reuse the unchanged parent migrations receipt only through exact OIDC lineage", async (t) => {
   const parent = await createMigrationLaunchFixture({
     migratorBlock: true,
     databaseIsolation: true,
@@ -5469,7 +5469,9 @@ void test("G15 child credentials reuse the unchanged parent G08 receipt only thr
       }
       return result;
     }
-    assert.fail("G15 inherited preparation must use readonly identity queries");
+    assert.fail(
+      "browser inherited preparation must use readonly identity queries",
+    );
   });
 
   const identity = await readPreparedPostgresIdentity({
@@ -5548,7 +5550,7 @@ void test("G15 child credentials reuse the unchanged parent G08 receipt only thr
   assert.equal(
     connectCalls.length,
     connectionsBeforeDirtyParent,
-    "a dirty G15 parent checkout must be rejected before PostgreSQL access",
+    "a dirty browser parent checkout must be rejected before PostgreSQL access",
   );
 
   const trackedParent = join(parent.fixture.root, "config/platform.yaml");
@@ -5664,7 +5666,7 @@ void test("G15 child credentials reuse the unchanged parent G08 receipt only thr
   assert.deepEqual(await readFile(artifactPath), parentReceipt);
 });
 
-void test("G15 child G08 credential admission rejects non-profile config changes before PostgreSQL connection", async (t) => {
+void test("browser child migrations credential admission rejects non-profile config changes before PostgreSQL connection", async (t) => {
   const parent = await createMigrationLaunchFixture({
     migratorBlock: true,
     databaseIsolation: true,
@@ -5708,7 +5710,7 @@ void test("G15 child G08 credential admission rejects non-profile config changes
   assert.equal(connectCalls, 0);
 });
 
-void test("G08 preparation binds its committed config and permits only the approved isolation transition", () => {
+void test("migrations preparation binds its committed config and permits only the approved isolation transition", () => {
   const preparedConfigBytes = Buffer.from(
     [
       "postgres:",
@@ -6036,7 +6038,7 @@ void test("G08 preparation binds its committed config and permits only the appro
   );
 });
 
-void test("G08 credential reader rejects stale receipts, invalid identities, unsafe inventories, and unisolated configs", async (t) => {
+void test("migrations credential reader rejects stale receipts, invalid identities, unsafe inventories, and unisolated configs", async (t) => {
   const cases = [
     {
       name: "writable preparation receipt",
@@ -6057,7 +6059,7 @@ void test("G08 credential reader rejects stale receipts, invalid identities, uns
       probe: false,
     },
     {
-      name: "orphan G15 parent metadata without a preparation context",
+      name: "orphan browser parent metadata without a preparation context",
       orphanPreparationMetadata: true,
       expectedRule: "CONFIG-MIGRATIONS-BROWSER-LINEAGE",
       probe: false,
@@ -6488,7 +6490,7 @@ void test("G08 credential reader rejects stale receipts, invalid identities, uns
   }
 });
 
-void test("G08 role preparation rechecks roles, stores only encrypted credentials and creates all roles in one transaction", async (t) => {
+void test("migrations role preparation rechecks roles, stores only encrypted credentials and creates all roles in one transaction", async (t) => {
   const launch = await createMigrationLaunchFixture();
   const { fixture, evidenceDir, contextPath, adminPassword } = launch;
   const bundlePath = join(fixture.root, "secrets/platform.secrets.sops.yaml");
@@ -6593,7 +6595,7 @@ void test("G08 role preparation rechecks roles, stores only encrypted credential
           throw new Error("fixture CREATE ROLE failed");
         return { rows: [] };
       }
-      assert.fail("unexpected G08 preparation query");
+      assert.fail("unexpected migrations preparation query");
     });
 
     systemIdentifier = "7613370342949990435";
@@ -7025,7 +7027,7 @@ void test("G08 role preparation rechecks roles, stores only encrypted credential
   }
 });
 
-void test("G08 role preparation refuses an existing migrator block and a changed bundle snapshot", async (t) => {
+void test("migrations role preparation refuses an existing migrator block and a changed bundle snapshot", async (t) => {
   const launch = await createMigrationLaunchFixture({ migratorBlock: true });
   const { fixture, evidenceDir, contextPath } = launch;
   const bundlePath = join(fixture.root, "secrets/platform.secrets.sops.yaml");
@@ -7054,7 +7056,7 @@ void test("G08 role preparation refuses an existing migrator block and a changed
         inventoryCalls += 1;
         return { rows: roleRows };
       }
-      assert.fail("unexpected G08 preparation query");
+      assert.fail("unexpected migrations preparation query");
     });
 
     await assert.rejects(
@@ -7118,7 +7120,7 @@ void test("G08 role preparation refuses an existing migrator block and a changed
   }
 });
 
-void test("G08 role preparation validates temporary ciphertext and plaintext before replacing secrets", async (t) => {
+void test("migrations role preparation validates temporary ciphertext and plaintext before replacing secrets", async (t) => {
   const cases = [
     {
       name: "SOPS encryption command failure",
@@ -7768,7 +7770,7 @@ if (process.env.FAKE_DOCKER_FAIL_USER && args[userIndex + 1] === process.env.FAK
   }
 });
 
-void test("G16 migrator and finalizer bind the run database, server identity, and canonical role before SQL effects", async (t) => {
+void test("aroma_sandbox migrator and finalizer bind the run database, server identity, and canonical role before SQL effects", async (t) => {
   const fixture = await createSecretMaterializationFixture();
   const runId = "20261024T185200Z-fac5678";
   const owner = "orders";
@@ -8203,7 +8205,7 @@ async function createBrowserLaunchFixture({
     );
     execFileSync(
       "git",
-      ["commit", "-qm", "G15 verification OIDC config variant"],
+      ["commit", "-qm", "browser verification OIDC config variant"],
       {
         cwd: fixture.root,
       },
@@ -8290,12 +8292,12 @@ async function createBrowserChildMigrationLaunchFixture(
       "git",
       [
         "-c",
-        "user.name=G15 fixture",
+        "user.name=browser fixture",
         "-c",
         "user.email=g15@example.invalid",
         "commit",
         "-qm",
-        "G15 exact OIDC fixture",
+        "browser exact OIDC fixture",
       ],
       { cwd: childRoot, stdio: "ignore" },
     );
@@ -8347,7 +8349,7 @@ async function createBrowserChildMigrationLaunchFixture(
   }
 }
 
-void test("G15 generated child clone replaces its local origin before context validation", async (t) => {
+void test("browser generated child clone replaces its local origin before context validation", async (t) => {
   const launch = await createBrowserLaunchFixture();
   const runId = `${new Date().toISOString().replace(/[-:]/gu, "").slice(0, 15)}Z-${randomBytes(4).toString("hex").slice(0, 7)}`;
   const childRoot = await mkdtemp(join(tmpdir(), "g15-origin-child-"));
@@ -8406,7 +8408,7 @@ void test("G15 generated child clone replaces its local origin before context va
   assert.equal(validated.context.candidateSha, candidateSha);
 });
 
-void test("G15 fixture lineage, tmpfs trust, and PKCE account switching stay isolated", async (t) => {
+void test("browser fixture lineage, tmpfs trust, and PKCE account switching stay isolated", async (t) => {
   const launch = await createBrowserLaunchFixture();
   const ingressCaDir = await mkdtemp("/dev/shm/g15-ingress-ca-");
   let materialized;
@@ -8430,7 +8432,7 @@ void test("G15 fixture lineage, tmpfs trust, and PKCE account switching stay iso
         "-out",
         ingressCaPath,
         "-subj",
-        "/CN=G15 public ingress test CA",
+        "/CN=browser public ingress test CA",
         "-addext",
         "basicConstraints=critical,CA:TRUE",
         "-addext",
@@ -8474,7 +8476,7 @@ void test("G15 fixture lineage, tmpfs trust, and PKCE account switching stay iso
         contextPath: launch.contextPath,
         baseCandidateSha: launch.baseCandidateSha,
       }),
-      { code: "G15_RECEIPT_STALE" },
+      { code: "BROWSER_RECEIPT_STALE" },
     );
     await chmod(lineage.receiptPath, 0o600);
     await writeFile(lineage.receiptPath, lineageReceiptBytes);
@@ -8487,7 +8489,7 @@ void test("G15 fixture lineage, tmpfs trust, and PKCE account switching stay iso
         publicIngressCaPem,
         tmpfsRoot: "/tmp",
       }),
-      { code: "G15_TMPFS_REQUIRED" },
+      { code: "BROWSER_TMPFS_REQUIRED" },
     );
     await assert.rejects(
       materializeBrowserFixture({
@@ -8496,7 +8498,7 @@ void test("G15 fixture lineage, tmpfs trust, and PKCE account switching stay iso
         lineageArtifactLoc: lineage.receiptPath,
         publicIngressCaPem: "not a certificate",
       }),
-      { code: "G15_INGRESS_CA_INVALID" },
+      { code: "BROWSER_INGRESS_CA_INVALID" },
     );
     const sentinelRoot = await mkdtemp("/dev/shm/g15-nss-sentinel-");
     const sentinelPath = join(sentinelRoot, "foreign-sentinel.txt");
@@ -8550,7 +8552,7 @@ void test("G15 fixture lineage, tmpfs trust, and PKCE account switching stay iso
           lineageArtifactLoc: lineage.receiptPath,
           publicIngressCaPem,
         }),
-        { code: "G15_NSS_IMPORT_FAILED" },
+        { code: "BROWSER_NSS_IMPORT_FAILED" },
       );
       assert.equal(nssImportCalls, 1);
       assert.equal(
@@ -8587,7 +8589,7 @@ void test("G15 fixture lineage, tmpfs trust, and PKCE account switching stay iso
             lineageArtifactLoc: lineage.receiptPath,
             publicIngressCaPem,
           }),
-          { code: "G15_NSS_RECEIPT_INVALID" },
+          { code: "BROWSER_NSS_RECEIPT_INVALID" },
         );
         assert.ok(partialFixtureRoot);
         await assert.rejects(stat(partialFixtureRoot), { code: "ENOENT" });
@@ -8631,7 +8633,7 @@ void test("G15 fixture lineage, tmpfs trust, and PKCE account switching stay iso
           "utf8",
         ),
       }),
-      { code: "G15_INGRESS_CA_INVALID" },
+      { code: "BROWSER_INGRESS_CA_INVALID" },
     );
     assert.equal(
       materialized.browser.nssProfilePath.startsWith("/dev/shm/"),
@@ -8875,7 +8877,7 @@ void test("G15 fixture lineage, tmpfs trust, and PKCE account switching stay iso
     const restoredIdentity = await lstat(ownedFixtureRoot);
     assert.equal(restoredIdentity.dev, originalIdentity.dev);
     assert.equal(restoredIdentity.ino, originalIdentity.ino);
-    assert.equal(cleanupError?.code, "G15_FIXTURE_OWNERSHIP_CHANGED");
+    assert.equal(cleanupError?.code, "BROWSER_FIXTURE_OWNERSHIP_CHANGED");
     assert.equal(
       replacementCanaryContents,
       "replacement must survive cleanup\n",
@@ -8898,7 +8900,7 @@ void test("G15 fixture lineage, tmpfs trust, and PKCE account switching stay iso
   }
 });
 
-void test("G15 Compose wiring mounts only scoped fixture paths and trusts the IdP CA in Edge", async () => {
+void test("browser Compose wiring mounts only scoped fixture paths and trusts the IdP CA in Edge", async () => {
   const { writeScopedComposeOverride } =
     await import("../../tools/compose-smoke.mjs");
   const directory = await mkdtemp("/dev/shm/g15-compose-wiring-");
@@ -9019,7 +9021,7 @@ void test("G15 Compose wiring mounts only scoped fixture paths and trusts the Id
   }
 });
 
-void test("G15 programmatic browser hooks reject runs without validated context", async () => {
+void test("browser programmatic hooks reject runs without validated context", async () => {
   const { runComposeSmoke } = await import("../../tools/compose-smoke.mjs");
   const previousContext = process.env.COFFEE_LAUNCH_CONTEXT_FILE;
   delete process.env.COFFEE_LAUNCH_CONTEXT_FILE;
@@ -9033,7 +9035,7 @@ void test("G15 programmatic browser hooks reject runs without validated context"
           onCleanup: async () => {},
         },
       }),
-      /G15 browser hooks require a validated launch context/u,
+      /browser hooks require a validated launch context/u,
     );
   } finally {
     if (previousContext === undefined)
@@ -9042,7 +9044,7 @@ void test("G15 programmatic browser hooks reject runs without validated context"
   }
 });
 
-void test("G15 lineage rejects a non-profile config edit and an extra committed path", async (t) => {
+void test("browser lineage rejects a non-profile config edit and an extra committed path", async (t) => {
   const badProfile = await createBrowserLaunchFixture({
     mutateConfig: (text) =>
       text.replace(
@@ -9061,7 +9063,7 @@ void test("G15 lineage rejects a non-profile config edit and an extra committed 
       contextPath: badProfile.contextPath,
       baseCandidateSha: badProfile.baseCandidateSha,
     }),
-    { code: "G15_CONFIG_DELTA_INVALID" },
+    { code: "BROWSER_CONFIG_DELTA_INVALID" },
   );
 
   const extraPath = await createBrowserLaunchFixture({
@@ -9078,7 +9080,7 @@ void test("G15 lineage rejects a non-profile config edit and an extra committed 
       contextPath: extraPath.contextPath,
       baseCandidateSha: extraPath.baseCandidateSha,
     }),
-    { code: "G15_CONFIG_ONLY_LINEAGE_REQUIRED" },
+    { code: "BROWSER_CONFIG_ONLY_LINEAGE_REQUIRED" },
   );
 
   const staleContext = await createBrowserLaunchFixture();
@@ -9093,7 +9095,7 @@ void test("G15 lineage rejects a non-profile config edit and an extra committed 
       contextPath: staleContext.contextPath,
       baseCandidateSha: staleContext.candidateSha,
     }),
-    { code: "G15_BASE_NOT_DIRECT_PARENT" },
+    { code: "BROWSER_BASE_NOT_DIRECT_PARENT" },
   );
   const context = JSON.parse(await readFile(staleContext.contextPath, "utf8"));
   context.baseConfigSha256 = "0".repeat(64);
@@ -9108,11 +9110,11 @@ void test("G15 lineage rejects a non-profile config edit and an extra committed 
       contextPath: staleContext.contextPath,
       baseCandidateSha: staleContext.baseCandidateSha,
     }),
-    { code: "G15_CONTEXT_CONFIG_MISMATCH" },
+    { code: "BROWSER_CONTEXT_CONFIG_MISMATCH" },
   );
 });
 
-void test("G15 child Compose preamble reads the parent-sealed lineage without rewriting it", async (t) => {
+void test("browser child Compose preamble reads the parent-sealed lineage without rewriting it", async (t) => {
   const launch = await createBrowserLaunchFixture();
   t.after(async () => {
     await rm(launch.evidenceDir, { recursive: true, force: true });
@@ -9124,7 +9126,7 @@ void test("G15 child Compose preamble reads the parent-sealed lineage without re
     "browserOidc: null\nbrowserOidc: null",
   ]) {
     assert.throws(() => fixtureConfigText(baseText), {
-      code: "G15_CONFIG_BASE_INVALID",
+      code: "BROWSER_CONFIG_BASE_INVALID",
     });
   }
   const pureInputs = {
@@ -9135,9 +9137,9 @@ void test("G15 child Compose preamble reads the parent-sealed lineage without re
     configSha256: "0".repeat(64),
   };
   for (const [override, code] of [
-    [{ baseCandidateSha: "invalid" }, "G15_BASE_SHA_INVALID"],
-    [{ candidateSha: "invalid" }, "G15_CANDIDATE_INVALID"],
-    [{ runId: "invalid" }, "G15_CANDIDATE_INVALID"],
+    [{ baseCandidateSha: "invalid" }, "BROWSER_BASE_SHA_INVALID"],
+    [{ candidateSha: "invalid" }, "BROWSER_CANDIDATE_INVALID"],
+    [{ runId: "invalid" }, "BROWSER_CANDIDATE_INVALID"],
   ]) {
     await assert.rejects(
       validateBrowserFixtureGitLineage({ ...pureInputs, ...override }),
@@ -9158,13 +9160,13 @@ void test("G15 child Compose preamble reads the parent-sealed lineage without re
       ...lineageArgs,
       root: "/tmp/foreign-g15-source",
     }),
-    { code: "G15_SOURCE_ROOT_INVALID" },
+    { code: "BROWSER_SOURCE_ROOT_INVALID" },
   );
   assert.equal(await lstat(expectedReceiptPath).catch(() => null), null);
   await chmod(launch.contextPath, 0o600);
   try {
     await assert.rejects(validateBrowserFixtureLineage(lineageArgs), {
-      code: "G15_CONTEXT_MODE_INVALID",
+      code: "BROWSER_CONTEXT_MODE_INVALID",
     });
     assert.equal(await lstat(expectedReceiptPath).catch(() => null), null);
   } finally {
@@ -9185,7 +9187,7 @@ void test("G15 child Compose preamble reads the parent-sealed lineage without re
       ...lineageArgs,
       root: "/tmp/foreign-g15-source",
     }),
-    { code: "G15_SOURCE_ROOT_INVALID" },
+    { code: "BROWSER_SOURCE_ROOT_INVALID" },
   );
   await assert.rejects(
     materializeBrowserFixture({
@@ -9193,13 +9195,13 @@ void test("G15 child Compose preamble reads the parent-sealed lineage without re
       lineageArtifactLoc: join(launch.evidenceDir, "foreign-receipt.json"),
       publicIngressCaPem: "unused",
     }),
-    { code: "G15_RECEIPT_PATH_INVALID" },
+    { code: "BROWSER_RECEIPT_PATH_INVALID" },
   );
   const artifactsDir = dirname(created.receiptPath);
   await chmod(artifactsDir, 0o755);
   try {
     await assert.rejects(readBrowserFixtureLineage(lineageArgs), {
-      code: "G15_RECEIPT_DIRECTORY_INVALID",
+      code: "BROWSER_RECEIPT_DIRECTORY_INVALID",
     });
     assert.deepEqual(await readFile(created.receiptPath), beforeBytes);
   } finally {
@@ -9212,7 +9214,7 @@ void test("G15 child Compose preamble reads the parent-sealed lineage without re
   await symlink(foreignPath, created.receiptPath);
   try {
     await assert.rejects(readBrowserFixtureLineage(lineageArgs), {
-      code: "G15_RECEIPT_FILE_INVALID",
+      code: "BROWSER_RECEIPT_FILE_INVALID",
     });
     assert.deepEqual(await readFile(foreignPath), foreignBytes);
   } finally {
@@ -9226,7 +9228,7 @@ void test("G15 child Compose preamble reads the parent-sealed lineage without re
       lineageArtifactLoc: created.receiptPath,
       publicIngressCaPem: "-----BEGIN CERTIFICATE-----\ninvalid",
     }),
-    { code: "G15_INGRESS_CA_INVALID" },
+    { code: "BROWSER_INGRESS_CA_INVALID" },
   );
   assert.deepEqual(await readFile(created.receiptPath), beforeBytes);
   await assert.rejects(
@@ -9235,7 +9237,7 @@ void test("G15 child Compose preamble reads the parent-sealed lineage without re
       contextPath: launch.contextPath,
       baseCandidateSha: launch.candidateSha,
     }),
-    { code: "G15_BASE_NOT_DIRECT_PARENT" },
+    { code: "BROWSER_BASE_NOT_DIRECT_PARENT" },
   );
   assert.deepEqual(await readFile(created.receiptPath), beforeBytes);
 
@@ -9253,7 +9255,7 @@ void test("G15 child Compose preamble reads the parent-sealed lineage without re
       contextPath: launch.contextPath,
       baseCandidateSha: launch.baseCandidateSha,
     }),
-    { code: "G15_RECEIPT_SCHEMA_INVALID" },
+    { code: "BROWSER_RECEIPT_SCHEMA_INVALID" },
   );
 
   await chmod(created.receiptPath, 0o600);
@@ -9265,11 +9267,11 @@ void test("G15 child Compose preamble reads the parent-sealed lineage without re
       contextPath: launch.contextPath,
       baseCandidateSha: launch.baseCandidateSha,
     }),
-    { code: "G15_RECEIPT_FILE_INVALID" },
+    { code: "BROWSER_RECEIPT_FILE_INVALID" },
   );
 });
 
-void test("G15 parent admission restores and verifies the child bundle after checkout removal", async (t) => {
+void test("browser parent admission restores and verifies the child bundle after checkout removal", async (t) => {
   const launch = await createBrowserLaunchFixture();
   const bundleDirectory = await mkdtemp(join(tmpdir(), "g15-parent-bundle-"));
   t.after(async () => {
@@ -9303,7 +9305,7 @@ void test("G15 parent admission restores and verifies the child bundle after che
       runId: launch.runId,
       configSha256: context.baseConfigSha256,
     }),
-    { code: "G15_BASE_NOT_DIRECT_PARENT" },
+    { code: "BROWSER_BASE_NOT_DIRECT_PARENT" },
   );
 
   const bundlePath = join(bundleDirectory, "child.bundle");
@@ -9367,7 +9369,7 @@ void test("G15 parent admission restores and verifies the child bundle after che
       baseConfigBytes,
       childConfigBytes,
     }),
-    { code: "G15_BUNDLE_FETCH_FAILED" },
+    { code: "BROWSER_BUNDLE_FETCH_FAILED" },
   );
 });
 
@@ -9485,7 +9487,7 @@ async function writeSyntheticSupplyChainParent({
   const result = {
     gate: "supply_chain",
     status: "PASS",
-    code: "G12_SCAN_CLEAN",
+    code: "SUPPLY_CHAIN_SCAN_CLEAN",
     runId,
     candidateSha,
     kafka: {
@@ -10108,7 +10110,7 @@ void test("browser correlation executes the child lifecycle and preserves early 
     });
     try {
       await assert.rejects(
-        ordersFixture(async () => assert.fail("unprepared G08"), {
+        ordersFixture(async () => assert.fail("unprepared migrations"), {
           launchIdentity: image.launchIdentity,
           launchContextFile: contextPath,
         }),
@@ -10282,9 +10284,9 @@ void test("browser correlation executes the child lifecycle and preserves early 
             routePreserved: true,
           },
         },
-        g14BrowserProof: {
+        browserProof: {
           schemaVersion: 1,
-          purpose: "G14_BROWSER_CORRELATION",
+          purpose: "BROWSER_CORRELATION",
           runId: child.runId,
           candidateSha: child.candidateSha,
           configSha256: child.baseConfigSha256,
@@ -10720,7 +10722,7 @@ void test("browser correlation executes the child lifecycle and preserves early 
     }),
     (error) =>
       error.evidence?.status === "FAIL" &&
-      /G12_KAFKA_EVIDENCE_PATH_INVALID/u.test(error.evidence.failure),
+      /_KAFKA_EVIDENCE_PATH_INVALID/u.test(error.evidence.failure),
   );
   const saved = join(imageFailure.artifacts, "observability");
   const savedNames = [
@@ -10738,7 +10740,7 @@ void test("browser correlation executes the child lifecycle and preserves early 
     await readFile(join(saved, "result.json"), "utf8"),
   );
   assert.equal(savedResult.status, "FAIL");
-  assert.match(savedResult.failure, /G12_KAFKA_EVIDENCE_PATH_INVALID/u);
+  assert.match(savedResult.failure, /_KAFKA_EVIDENCE_PATH_INVALID/u);
 
   const foreignRoot = join(directory, "foreign");
   execReal("git", [
@@ -11039,7 +11041,7 @@ void test("browser correlation admission verifies the sealed child bundle and sc
     evidenceRemoved: true,
     proof: {
       schemaVersion: 1,
-      purpose: "G14_BROWSER_CORRELATION",
+      purpose: "BROWSER_CORRELATION",
       runId: child.runId,
       candidateSha: child.candidateSha,
       configSha256: digest(childConfig),
@@ -11127,7 +11129,7 @@ void test("browser correlation admission verifies the sealed child bundle and sc
         evidenceDir: parentContext.evidenceDir,
         parentContext,
       }),
-      { code: "G14_BROWSER_CORRELATION_RECEIPT_INVALID" },
+      { code: "OBSERVABILITY_BROWSER_CORRELATION_RECEIPT_INVALID" },
     );
   }
   receipt.cleanup.attachment = {
@@ -11274,7 +11276,7 @@ void test("browser correlation admission verifies the sealed child bundle and sc
       evidenceDir: parentContext.evidenceDir,
       parentContext,
     }),
-    { code: "G14_BROWSER_CORRELATION_RECEIPT_INVALID" },
+    { code: "OBSERVABILITY_BROWSER_CORRELATION_RECEIPT_INVALID" },
   );
   receipt.cleanup.databases.removed = databases;
   receipt.proof.acceptedVersion = "4";
@@ -11284,7 +11286,7 @@ void test("browser correlation admission verifies the sealed child bundle and sc
       evidenceDir: parentContext.evidenceDir,
       parentContext,
     }),
-    { code: "G14_BROWSER_CORRELATION_RECEIPT_INVALID" },
+    { code: "OBSERVABILITY_BROWSER_CORRELATION_RECEIPT_INVALID" },
   );
 });
 
@@ -11623,7 +11625,7 @@ async function createMigrationLaunchFixture({
 
     execFileSync("git", ["init", "-q"], { cwd: fixture.root });
 
-    execFileSync("git", ["config", "user.name", "G08 fixture"], {
+    execFileSync("git", ["config", "user.name", "migrations fixture"], {
       cwd: fixture.root,
     });
     execFileSync("git", ["config", "user.email", "g08@example.invalid"], {
@@ -11644,9 +11646,13 @@ async function createMigrationLaunchFixture({
       ["add", "config", "platform", "secrets", ".sops.yaml"],
       { cwd: fixture.root },
     );
-    execFileSync("git", ["commit", "-qm", "G08 readonly probe fixture"], {
-      cwd: fixture.root,
-    });
+    execFileSync(
+      "git",
+      ["commit", "-qm", "migrations readonly probe fixture"],
+      {
+        cwd: fixture.root,
+      },
+    );
     const candidateSha = execFileSync("git", ["rev-parse", "HEAD"], {
       cwd: fixture.root,
       encoding: "utf8",
@@ -11690,7 +11696,7 @@ async function createMigrationLaunchFixture({
   }
 }
 
-void test("G14 telemetry sources require exact child networks and all G12 role images", async () => {
+void test("observability telemetry sources require exact child networks and all supply_chain role images", async () => {
   const { validateObservabilityTelemetrySources } =
     await import("../../tools/observability/verify.mjs");
   const { OBSERVABILITY_TARGETS } =

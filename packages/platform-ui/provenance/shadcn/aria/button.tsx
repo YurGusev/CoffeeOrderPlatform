@@ -1,14 +1,14 @@
-"use client"
+"use client";
 
-import type * as React from "react"
-import { cva, type VariantProps } from "class-variance-authority"
-import { cn } from "cn"
+import type * as React from "react";
+import { cva, type VariantProps } from "class-variance-authority";
+import { cn } from "cn";
 import {
   Button as ButtonPrimitive,
   Link as LinkPrimitive,
   type ButtonProps as ButtonPrimitiveProps,
   type LinkProps as LinkPrimitiveProps,
-} from "react-aria-components"
+} from "react-aria-components";
 
 const buttonVariants = cva(
   "cn-button group/button inline-flex shrink-0 items-center justify-center whitespace-nowrap transition-all outline-none select-none disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0",
@@ -37,8 +37,8 @@ const buttonVariants = cva(
       variant: "default",
       size: "default",
     },
-  }
-)
+  },
+);
 
 function Button({
   className,
@@ -48,7 +48,7 @@ function Button({
 }: Omit<ButtonPrimitiveProps, "className"> &
   React.RefAttributes<HTMLButtonElement> &
   VariantProps<typeof buttonVariants> & {
-    className?: string
+    className?: string;
   }) {
   return (
     <ButtonPrimitive
@@ -58,7 +58,7 @@ function Button({
       className={cn(buttonVariants({ variant, size, className }))}
       {...props}
     />
-  )
+  );
 }
 
 function LinkButton({
@@ -68,7 +68,7 @@ function LinkButton({
   ...props
 }: Omit<LinkPrimitiveProps, "className"> &
   VariantProps<typeof buttonVariants> & {
-    className?: string
+    className?: string;
   }) {
   return (
     <LinkPrimitive
@@ -78,7 +78,7 @@ function LinkButton({
       className={cn(buttonVariants({ variant, size, className }))}
       {...props}
     />
-  )
+  );
 }
 
-export { Button, LinkButton, buttonVariants }
+export { Button, LinkButton, buttonVariants };
