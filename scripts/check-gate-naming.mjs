@@ -100,16 +100,21 @@ const COMMENT_EXTENSIONS = new Set([
   ".yml",
   ".sql",
 ]);
-// Хеши, base64 и случайные fixture-строки не являются именами гейтов.
-const RANDOM_TOKEN = /[A-Za-z0-9]{24,}/u;
-const MAX_SYMBOL_LENGTH = 40;
-const MAX_CASE_TRANSITIONS = 6;
+// Хеши и base64-строки не являются именами гейтов: у них нет ни одного
+// разделителя слова и длина заметно больше осмысленного имени.
+const HEX_TOKEN = /^[0-9a-f]{16,}$/u;
+const BASE64_TOKEN = /^[A-Za-z0-9+/=]{20,}$/u;
+const MAX_SYMBOL_LENGTH = 64;
+const MAX_WORD_PARTS = 6;
 
-function isRandomIdentifier(match) {
+// Одно слово даёт одну-две части при разбиении по регистру и разделителям;
+// случайная base64-строка — много частей с цифрами.
+export function isOpaqueToken(match) {
   if (match.length > MAX_SYMBOL_LENGTH) return true;
-  if (RANDOM_TOKEN.test(match)) return true;
-  const transitions = match.match(/[a-z][A-Z]|[A-Z][a-z]/gu)?.length ?? 0;
-  return transitions > MAX_CASE_TRANSITIONS;
+  if (HEX_TOKEN.test(match)) return true;
+  if (!BASE64_TOKEN.test(match)) return false;
+  const parts = match.split(/(?=[A-Z])|_/u).filter(Boolean);
+  return parts.length > MAX_WORD_PARTS;
 }
 const COMMENT_GATE = new RegExp(String.raw`\b${GATE_NUMBER}\b`, "gu");
 // Старые env-имена читаются один релиз для совместимости окружений.
@@ -159,8 +164,10 @@ export function violationsInSource(relativePath, source) {
   for (const rule of RULES)
     for (const hit of source.matchAll(rule.pattern)) {
       if (ALLOWED_LEGACY_ENV.has(hit[0])) continue;
-      if (rule.kind !== "error-code" && isRandomIdentifier(hit[0])) continue;
-      add(rule.kind, lineOf(source, hit.index), hit[0]);
+      {
+        if (rule.kind === "error-code" || !isOpaqueToken(hit[0]))
+          add(rule.kind, lineOf(source, hit.index), hit[0]);
+      }
     }
   if (COMMENT_EXTENSIONS.has(extname(path)))
     source.split("\n").forEach((text, index) => {
@@ -171,10 +178,32 @@ export function violationsInSource(relativePath, source) {
   return [...found.values()];
 }
 
+const PATH_GATE = new RegExp(
+  String.raw`(?:^|[^A-Za-z0-9])[A-Za-z0-9._-]*?${GATE_NUMBER}`,
+  "u",
+);
+
+export function pathViolation(relativePath) {
+  const normalized = relativePath.split(sep).join("/");
+  if (!PATH_GATE.test(normalized)) return null;
+  const name = normalized.slice(normalized.lastIndexOf("/") + 1);
+  const hit =
+    new RegExp(String.raw`\b${GATE_NUMBER}\b`, "u").exec(name) ??
+    name.match(new RegExp(GATE_NUMBER, "u"));
+  return {
+    kind: "path",
+    path: normalized,
+    line: 0,
+    match: hit ? hit[0] : name,
+  };
+}
+
 async function collectViolations() {
   const violations = [];
   for (const relativePath of trackedFiles()) {
     if (!isScanned(relativePath)) continue;
+    const fromPath = pathViolation(relativePath);
+    if (fromPath) violations.push(fromPath);
     const source = await readFile(join(REPO_ROOT, relativePath), "utf8").catch(
       () => null,
     );

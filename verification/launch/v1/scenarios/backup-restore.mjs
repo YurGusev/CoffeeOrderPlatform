@@ -84,7 +84,7 @@ export function restoreDatabaseName(runId, owner) {
   return name;
 }
 
-const BACKUP_SCHEMA_RESTRICT_KEY = "coffeeG17SchemaCompareV1";
+const BACKUP_SCHEMA_RESTRICT_KEY = "coffeeBackupSchemaCompareV1";
 
 export function schemaSnapshotArguments(database) {
   quoteIdentifier(database);

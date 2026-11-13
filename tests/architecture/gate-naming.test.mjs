@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { violationsInSource } from "../../scripts/check-gate-naming.mjs";
+import {
+  isOpaqueToken,
+  pathViolation,
+  violationsInSource,
+} from "../../scripts/check-gate-naming.mjs";
 import {
   GATE_SLUG_PATTERN,
   LEGACY_GATE_IDS,
@@ -74,4 +78,26 @@ void test("метка гейта вычисляется из позиции и s
   assert.equal(gateLabel(8, "supply_chain"), "G08 supply_chain");
   assert.equal(gateLabel(9, "migrations"), "G09 migrations");
   assert.equal(gateLabel(19, "report"), "G19 report");
+});
+
+void test("номер гейта в имени файла запрещён", () => {
+  assert.deepEqual(pathViolation("tools/browser-scan.mjs"), null);
+  assert.equal(
+    pathViolation(`tools/${gateNumber(15)}-browser-scan.mjs`)?.kind,
+    "path",
+  );
+  assert.equal(
+    pathViolation(`tests/tools/${gateNumber(15)}-browser-proof.test.mjs`)?.path,
+    `tests/tools/${gateNumber(15)}-browser-proof.test.mjs`,
+  );
+});
+
+void test("каждое слово camelCase-имени проверяется, случайная строка — нет", () => {
+  assert.equal(
+    isOpaqueToken(`create${gateNumber(14)}BrowserNetworkMonitor`),
+    false,
+  );
+  assert.equal(isOpaqueToken(`${"a".repeat(64)}`), true);
+  assert.equal(isOpaqueToken("5f2d9b1c7a4e8f30d6b2"), true);
+  assert.equal(isOpaqueToken("aGVsbG8td29ybGQtdGhpcy1pcy1iYXNlNjQ"), true);
 });

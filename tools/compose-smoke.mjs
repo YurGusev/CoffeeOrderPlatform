@@ -42,7 +42,7 @@ import {
   buildRealtimeAuthCloseInvocation,
   proveBrowser,
   proveBrowserFlow,
-  validateG14BrowserEvidence,
+  validateObservabilityBrowserEvidence,
   validateBrowserRuntimeArtifact,
 } from "./browser-proof.mjs";
 import {
@@ -2469,7 +2469,7 @@ export function externalRecoveryMigrationCredentialRequest(
   };
 }
 
-export function retainG14AfterCollectorFailure({
+export function retainObservabilityAfterCollectorFailure({
   g14Browser,
   observability,
   cleanupHookError,
@@ -7225,7 +7225,7 @@ const bytes=await readFile(process.env.COFFEE_CONFIG_FILE);const config=load(byt
 console.log(JSON.stringify({sha256:createHash('sha256').update(bytes).digest('hex'),mutationsEnabled:config.services['aroma-convergence'].mutationsEnabled}));\n`;
 }
 
-export function validateG14ProviderBoundary({
+export function validateObservabilityProviderBoundary({
   projectName,
   expectedConfigSha256,
   mounted,
@@ -7321,7 +7321,7 @@ export function validateG14ProviderBoundary({
   };
 }
 
-export function attestG14ProviderBoundary({
+export function attestObservabilityProviderBoundary({
   projectName,
   secretsDir,
   composeFile,
@@ -7372,7 +7372,7 @@ export function attestG14ProviderBoundary({
     ),
     "G14_RUNTIME_CONFIG_READ_FAILED",
   );
-  return validateG14ProviderBoundary({
+  return validateObservabilityProviderBoundary({
     projectName,
     expectedConfigSha256,
     mounted,
@@ -10545,7 +10545,7 @@ export async function runComposeSmoke({
                   g14OrderEvidence,
                   configSha256: launchIdentity.context.baseConfigSha256,
                   attestObservabilitySafety: () =>
-                    attestG14ProviderBoundary({
+                    attestObservabilityProviderBoundary({
                       projectName,
                       secretsDir,
                       composeFile,
@@ -10593,7 +10593,7 @@ export async function runComposeSmoke({
       if (g14Browser) {
         throwIfRollbackTerminationRequested();
         browserCallbackAttempted = true;
-        g14BrowserProof = validateG14BrowserEvidence(
+        g14BrowserProof = validateObservabilityBrowserEvidence(
           await g14Browser.onReady(browserContext),
           {
             runId: launchIdentity.context.runId,
@@ -10927,7 +10927,7 @@ export async function runComposeSmoke({
         }
       }
     }
-    const retainedDatabases = retainG14AfterCollectorFailure({
+    const retainedDatabases = retainObservabilityAfterCollectorFailure({
       g14Browser,
       observability,
       cleanupHookError,

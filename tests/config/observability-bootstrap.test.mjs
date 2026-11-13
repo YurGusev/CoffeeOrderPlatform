@@ -9980,7 +9980,7 @@ void test("browser correlation executes the child lifecycle and preserves early 
     callbackStart,
   );
   const componentCleanup = verifierSource.indexOf(
-    "validateG14ComponentCleanup(",
+    "validateObservabilityComponentCleanup(",
     componentStart,
   );
   const browserStart = verifierSource.indexOf(
@@ -11691,7 +11691,7 @@ async function createMigrationLaunchFixture({
 }
 
 void test("G14 telemetry sources require exact child networks and all G12 role images", async () => {
-  const { validateG14TelemetrySources } =
+  const { validateObservabilityTelemetrySources } =
     await import("../../tools/observability/verify.mjs");
   const { OBSERVABILITY_TARGETS } =
     await import("../../tools/observability/generate.mjs");
@@ -11765,10 +11765,13 @@ void test("G14 telemetry sources require exact child networks and all G12 role i
     ]);
   };
   const input = { payload, projectName, verifiedImages, runDocker };
-  assert.equal((await validateG14TelemetrySources(input)).logFiles.length, 15);
+  assert.equal(
+    (await validateObservabilityTelemetrySources(input)).logFiles.length,
+    15,
+  );
   rows["orders-service"].Image = `sha256:${"f".repeat(64)}`;
   await assert.rejects(
-    validateG14TelemetrySources(input),
+    validateObservabilityTelemetrySources(input),
     /image or network invalid/u,
   );
   rows["orders-service"].Image = verifiedImages.find(
@@ -11778,14 +11781,14 @@ void test("G14 telemetry sources require exact child networks and all G12 role i
     networks.coffee_internal_api
   ].NetworkID = "b".repeat(64);
   await assert.rejects(
-    validateG14TelemetrySources(input),
+    validateObservabilityTelemetrySources(input),
     /image or network invalid/u,
   );
   rows["orders-service"].NetworkSettings.Networks[
     networks.coffee_internal_api
   ].NetworkID = "a".repeat(64);
   await assert.rejects(
-    validateG14TelemetrySources({
+    validateObservabilityTelemetrySources({
       ...input,
       payload: {
         ...payload,
@@ -11795,7 +11798,7 @@ void test("G14 telemetry sources require exact child networks and all G12 role i
     /network name invalid/u,
   );
   await assert.rejects(
-    validateG14TelemetrySources({
+    validateObservabilityTelemetrySources({
       ...input,
       payload: { ...payload, runtimes: payload.runtimes.slice(1) },
     }),

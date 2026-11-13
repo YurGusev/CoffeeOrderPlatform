@@ -3131,7 +3131,7 @@ async function runAromaSandbox({ approvalFile, env = process.env } = {}) {
             cartState: "UNRESOLVED_OR_NONBASELINE",
             mutationsDisabled: true,
             resourceIDs: resources.resourceIDs,
-            requiredAction: "CONTROLLED_G16_RECOVERY_BEFORE_RESOURCE_CLEANUP",
+            requiredAction: "CONTROLLED_AROMA_RECOVERY_BEFORE_RESOURCE_CLEANUP",
             cleanup: cleanupEvidence,
           },
           ...(failureEvidence ? { failureEvidence } : {}),

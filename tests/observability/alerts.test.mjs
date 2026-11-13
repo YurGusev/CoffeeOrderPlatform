@@ -36,8 +36,8 @@ import {
   queryLokiLogs,
   waitForOwnedMetricFamilySamples,
   waitForSameTraceSpans,
-  collectG14BrowserTelemetry,
-  validateG14ComponentCleanup,
+  collectObservabilityBrowserTelemetry,
+  validateObservabilityComponentCleanup,
   waitForConvergenceMetricSamples,
   readSinkEvents,
   durationMilliseconds,
@@ -2388,7 +2388,10 @@ void test("G14 component requires five child database removals before browser", 
     attachment: { routePreserved: true },
   };
   const component = { cleanupVerified: true, cleanup };
-  assert.equal(validateG14ComponentCleanup(component, runId), cleanup);
+  assert.equal(
+    validateObservabilityComponentCleanup(component, runId),
+    cleanup,
+  );
   for (const altered of [
     { ...component, cleanupVerified: false },
     { ...component, cleanup: { ...cleanup, verified: false } },
@@ -2412,7 +2415,7 @@ void test("G14 component requires five child database removals before browser", 
     },
   ])
     assert.throws(
-      () => validateG14ComponentCleanup(altered, runId),
+      () => validateObservabilityComponentCleanup(altered, runId),
       /cleanup is unverified/u,
     );
 });
@@ -2608,7 +2611,7 @@ void test("G14 queries actual child telemetry before cleanup and fails closed on
       );
     };
   const collect = (fetchImpl) =>
-    collectG14BrowserTelemetry({
+    collectObservabilityBrowserTelemetry({
       proof,
       startTimeUs,
       lokiUrl: "http://loki:3100",

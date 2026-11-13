@@ -2292,13 +2292,13 @@ void test("smoke rejects mismatched or missing G12 runtime IDs before startup", 
 
 void test("G14 retains scoped resources when collector restoration is unconfirmed", async (t) => {
   const {
-    retainG14AfterCollectorFailure,
+    retainObservabilityAfterCollectorFailure,
     externalRecoveryCleanupSummary,
     removeBuiltRuntimeImages,
   } = await import("../../tools/compose-smoke.mjs");
   const options = { keep: false, noBuild: false };
   const databases = [{ database: { name: "coffee_verify_run_orders" } }];
-  const receipt = retainG14AfterCollectorFailure({
+  const receipt = retainObservabilityAfterCollectorFailure({
     g14Browser: {},
     observability: {},
     cleanupHookError: new Error("IPC disconnected"),
@@ -2337,7 +2337,7 @@ void test("G14 retains scoped resources when collector restoration is unconfirme
   assert.equal(summary.attachment.removed, false);
   const normal = { keep: false };
   assert.equal(
-    retainG14AfterCollectorFailure({
+    retainObservabilityAfterCollectorFailure({
       g14Browser: undefined,
       observability: {},
       cleanupHookError: new Error("error"),
@@ -2348,7 +2348,7 @@ void test("G14 retains scoped resources when collector restoration is unconfirme
   );
   assert.equal(normal.keep, false);
   assert.equal(
-    retainG14AfterCollectorFailure({
+    retainObservabilityAfterCollectorFailure({
       g14Browser: {},
       observability: {},
       cleanupHookError: undefined,
@@ -7701,7 +7701,7 @@ void test("catalog slice preserves secret ownership and uses host identity and s
 });
 
 void test("G14 provider boundary rejects enabled mutations and non-isolated fixture", async () => {
-  const { validateG14ProviderBoundary } =
+  const { validateObservabilityProviderBoundary } =
     await import("../../tools/compose-smoke.mjs");
   const projectName = "coffee-g14";
   const networkName = `${projectName}_coffee_provider_egress`;
@@ -7767,33 +7767,36 @@ void test("G14 provider boundary rejects enabled mutations and non-isolated fixt
     fixtureImageId: fixture.Image,
     fixtureDirectory: "/dev/shm/fixture",
   };
-  assert.equal(validateG14ProviderBoundary(input).providerIsolated, true);
+  assert.equal(
+    validateObservabilityProviderBoundary(input).providerIsolated,
+    true,
+  );
   assert.throws(() =>
-    validateG14ProviderBoundary({
+    validateObservabilityProviderBoundary({
       ...input,
       mounted: { ...input.mounted, mutationsEnabled: true },
     }),
   );
   assert.throws(() =>
-    validateG14ProviderBoundary({
+    validateObservabilityProviderBoundary({
       ...input,
       mounted: { ...input.mounted, sha256: "d".repeat(64) },
     }),
   );
   assert.throws(() =>
-    validateG14ProviderBoundary({
+    validateObservabilityProviderBoundary({
       ...input,
       network: { ...network, Internal: false },
     }),
   );
   assert.throws(() =>
-    validateG14ProviderBoundary({
+    validateObservabilityProviderBoundary({
       ...input,
       fixtureImageId: `sha256:${"e".repeat(64)}`,
     }),
   );
   assert.throws(() =>
-    validateG14ProviderBoundary({
+    validateObservabilityProviderBoundary({
       ...input,
       internalNetworks: [
         { ...internalNetworks[0], Internal: false },
@@ -7802,7 +7805,7 @@ void test("G14 provider boundary rejects enabled mutations and non-isolated fixt
     }),
   );
   assert.throws(() =>
-    validateG14ProviderBoundary({
+    validateObservabilityProviderBoundary({
       ...input,
       fixture: {
         ...fixture,

@@ -48,7 +48,7 @@ const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const NODE_RUNTIME_TARGETS = OBSERVABILITY_TARGETS.filter(
   (runtime) => runtime !== "edge-nginx",
 );
-export async function validateG14TelemetrySources({
+export async function validateObservabilityTelemetrySources({
   payload,
   projectName,
   verifiedImages,
@@ -1928,7 +1928,7 @@ export async function waitForSameTraceSpans({
   );
 }
 
-export function validateG14ComponentCleanup(component, runId) {
+export function validateObservabilityComponentCleanup(component, runId) {
   if (!/^[0-9]{8}T[0-9]{6}Z-[0-9a-f]{7}$/u.test(runId ?? ""))
     throw new Error("G14 component child identity invalid");
   const expected = ["customer", "catalog", "pricing", "orders", "integration"]
@@ -1960,7 +1960,7 @@ const G14_DURABLE_SPANS = {
   "realtime-gateway": ["Kafka.consume"],
 };
 
-export async function collectG14BrowserTelemetry({
+export async function collectObservabilityBrowserTelemetry({
   proof,
   startTimeUs,
   lokiUrl,
@@ -5162,7 +5162,7 @@ export async function runObservabilityVerification({
           // This synthetic diagnostic remains separate from the actual browser proof.
           try {
             const component = await executeLaunchPath(contextPath);
-            const externalCleanup = validateG14ComponentCleanup(
+            const externalCleanup = validateObservabilityComponentCleanup(
               component,
               identity.context.runId,
             );
@@ -5186,7 +5186,7 @@ export async function runObservabilityVerification({
           }
           const { runManagedRollbackChild } =
             await import("../../verification/launch/v1/scenarios/rollback.mjs");
-          const { validateG14BrowserEvidence } =
+          const { validateObservabilityBrowserEvidence } =
             await import("../browser-proof.mjs");
           const verifiedImages = await readVerifiedRuntimeImages({
             contextFile: process.env.COFFEE_LAUNCH_CONTEXT_FILE,
@@ -5274,7 +5274,7 @@ try {
                 }
                 if (stage === "roles-ready") {
                   const { logFiles: childLogs, networks } =
-                    await validateG14TelemetrySources({
+                    await validateObservabilityTelemetrySources({
                       payload: message.payload,
                       projectName: expectedProject,
                       verifiedImages,
@@ -5290,19 +5290,24 @@ try {
                   return null;
                 }
                 if (stage === "browser-proof") {
-                  observedProof = validateG14BrowserEvidence(message.payload, {
-                    runId: identity.context.runId,
-                    candidateSha: identity.context.candidateSha,
-                    configSha256: identity.context.baseConfigSha256,
-                  });
-                  browserTelemetry = await collectG14BrowserTelemetry({
-                    proof: observedProof,
-                    startTimeUs: browserTelemetryStartedAtUs,
-                    nativeNginxContainerId: browserNginxContainerId,
-                    lokiUrl: baseUrls.loki,
-                    tempoUrl: baseUrls.tempo,
-                    secrets,
-                  });
+                  observedProof = validateObservabilityBrowserEvidence(
+                    message.payload,
+                    {
+                      runId: identity.context.runId,
+                      candidateSha: identity.context.candidateSha,
+                      configSha256: identity.context.baseConfigSha256,
+                    },
+                  );
+                  browserTelemetry = await collectObservabilityBrowserTelemetry(
+                    {
+                      proof: observedProof,
+                      startTimeUs: browserTelemetryStartedAtUs,
+                      nativeNginxContainerId: browserNginxContainerId,
+                      lokiUrl: baseUrls.loki,
+                      tempoUrl: baseUrls.tempo,
+                      secrets,
+                    },
+                  );
                   stage = "cleanup";
                   return null;
                 }

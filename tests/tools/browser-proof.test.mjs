@@ -21,10 +21,10 @@ import { load } from "js-yaml";
 import {
   BROWSER_REQUIRED_CHECKS,
   createBrowserNetworkMonitor,
-  createG14BrowserNetworkMonitor,
+  createObservabilityBrowserNetworkMonitor,
   matchBrowserChain,
   isAcceptedObservabilityProjection,
-  validateG14BrowserEvidence,
+  validateObservabilityBrowserEvidence,
   buildRealtimeAuthCloseInvocation,
   proveNaturalSseReauthentication,
   expectedBrowserCompletedResponse,
@@ -62,7 +62,7 @@ void test("G14 binds a real SSE stream and later owner read to exactly one Confi
     body: JSON.stringify({ orderRef: ORDER_REF, projectionVersion: "5" }),
     base64Encoded: false,
   });
-  const monitor = createG14BrowserNetworkMonitor(cdp);
+  const monitor = createObservabilityBrowserNetworkMonitor(cdp);
   const correlationId = "00000000-0000-4000-8000-000000000015";
   const frameId = "msg_01ARZ3NDEKTSV4RRFFQ69G5FAV";
   const request = (requestId, url, method = "GET", headers = {}) =>
@@ -298,7 +298,10 @@ void test("G14 evidence and cleanup reject extra fields, stale version and unkno
     candidateSha: CANDIDATE_SHA,
     configSha256: evidence.configSha256,
   };
-  assert.equal(validateG14BrowserEvidence(evidence, identity), evidence);
+  assert.equal(
+    validateObservabilityBrowserEvidence(evidence, identity),
+    evidence,
+  );
   for (const change of [
     { acceptedVersion: "4" },
     { confirmCount: 2 },
@@ -311,7 +314,10 @@ void test("G14 evidence and cleanup reject extra fields, stale version and unkno
     { verificationOnly: true },
   ])
     assert.throws(() =>
-      validateG14BrowserEvidence({ ...evidence, ...change }, identity),
+      validateObservabilityBrowserEvidence(
+        { ...evidence, ...change },
+        identity,
+      ),
     );
   assert.throws(() => validateBrowserEvidence(evidence, identity));
   const names = ["customer", "catalog", "pricing", "orders", "integration"]

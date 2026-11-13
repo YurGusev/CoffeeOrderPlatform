@@ -988,7 +988,7 @@ export function createBrowserNetworkMonitor(cdp, page) {
   return monitor;
 }
 
-export function createG14BrowserNetworkMonitor(cdp) {
+export function createObservabilityBrowserNetworkMonitor(cdp) {
   const streams = new Map();
   const requests = new Map();
   const result = { sequence: 0, commands: [], frames: [], reads: [] };
@@ -1167,7 +1167,7 @@ export function isAcceptedObservabilityProjection(
   );
 }
 
-export function validateG14BrowserEvidence(
+export function validateObservabilityBrowserEvidence(
   evidence,
   { runId, candidateSha, configSha256 },
 ) {
@@ -1271,7 +1271,7 @@ export async function proveBrowserFlow(runtimeContext) {
     const page = await context.newPage();
     cdp = await context.newCDPSession(page);
     await cdp.send("Network.enable");
-    const monitor = createG14BrowserNetworkMonitor(cdp);
+    const monitor = createObservabilityBrowserNetworkMonitor(cdp);
     const login = page.waitForResponse(
       (response) =>
         responseMatches(response, "/auth/session", "GET") &&
@@ -1425,7 +1425,7 @@ export async function proveBrowserFlow(runtimeContext) {
       fail("G14_BROWSER_CLEANUP_UNCONFIRMED");
   }
   evidence.browserCleanup = cleanup;
-  return validateG14BrowserEvidence(evidence, {
+  return validateObservabilityBrowserEvidence(evidence, {
     runId: runtimeContext.runId,
     candidateSha: runtimeContext.candidateSha,
     configSha256: runtimeContext.configSha256,

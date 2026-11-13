@@ -23,7 +23,7 @@ import {
 } from "../../../../tools/config-bootstrap/browser-fixture.mjs";
 import {
   validateBrowserRuntimeArtifact,
-  validateG14BrowserEvidence,
+  validateObservabilityBrowserEvidence,
 } from "../../../../tools/browser-proof.mjs";
 import { validateLaunchContext } from "../report.mjs";
 import { inspectLaunchCheckout, runManagedRollbackChild } from "./rollback.mjs";
@@ -1163,7 +1163,7 @@ export async function validateBrowserCorrelation({
   )
     fail("G14_BROWSER_CORRELATION_RECEIPT_INVALID");
   try {
-    validateG14BrowserEvidence(receipt.proof, {
+    validateObservabilityBrowserEvidence(receipt.proof, {
       runId: childContext.runId,
       candidateSha: childContext.candidateSha,
       configSha256: childContext.baseConfigSha256,
@@ -1583,7 +1583,7 @@ export async function runBrowserParent({
     if (runCorrelation) {
       const result = await runCorrelation(contextRecord.path);
       validateChildCleanup(result, childContext);
-      validateG14BrowserEvidence(result.g14BrowserProof, {
+      validateObservabilityBrowserEvidence(result.g14BrowserProof, {
         runId: childContext.runId,
         candidateSha: childContext.candidateSha,
         configSha256: childContext.baseConfigSha256,
