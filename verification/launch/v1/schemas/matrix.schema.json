@@ -42,6 +42,7 @@
       "required": [
         "id",
         "version",
+        "profile",
         "mandatory",
         "owner",
         "predecessors",
@@ -56,6 +57,7 @@
       "properties": {
         "id": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
         "version": { "const": 1 },
+        "profile": { "enum": ["fast", "release", "both"] },
         "mandatory": { "const": true },
         "owner": { "type": "string", "minLength": 1 },
         "predecessors": {

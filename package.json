@@ -111,6 +111,8 @@
     "secrets:renew-transport": "node scripts/renew-service-transport-certs.mjs",
     "secrets:check-transport": "node scripts/renew-service-transport-certs.mjs --check",
     "launch:run": "node scripts/launch-run.mjs",
+    "launch:fast": "node verification/launch/v1/run.mjs --profile fast",
+    "launch:release": "node verification/launch/v1/run.mjs --profile release",
     "launch:precheck": "node scripts/launch-precheck.mjs"
   },
   "devDependencies": {

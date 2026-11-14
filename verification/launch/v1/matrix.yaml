@@ -2,6 +2,7 @@ version: 1
 gates:
   - id: preflight
     version: 1
+    profile: both
     mandatory: true
     owner: Platform
     predecessors: []
@@ -15,6 +16,7 @@ gates:
     rerunPolicy: new-run-id-only
   - id: install
     version: 1
+    profile: both
     mandatory: true
     owner: Platform
     predecessors: [preflight]
@@ -27,6 +29,7 @@ gates:
     rerunPolicy: new-run-id-only
   - id: generated
     version: 1
+    profile: both
     mandatory: true
     owner: Contracts
     predecessors: [install]
@@ -39,6 +42,7 @@ gates:
     rerunPolicy: new-run-id-only
   - id: static
     version: 1
+    profile: both
     mandatory: true
     owner: Platform
     predecessors: [generated]
@@ -51,6 +55,7 @@ gates:
     rerunPolicy: new-run-id-only
   - id: unit
     version: 1
+    profile: both
     mandatory: true
     owner: Domain owners
     predecessors: [static]
@@ -63,6 +68,7 @@ gates:
     rerunPolicy: new-run-id-only
   - id: contracts
     version: 1
+    profile: both
     mandatory: true
     owner: Contracts
     predecessors: [static]
@@ -75,6 +81,7 @@ gates:
     rerunPolicy: new-run-id-only
   - id: architecture
     version: 1
+    profile: both
     mandatory: true
     owner: Architecture
     predecessors: [contracts]
@@ -87,6 +94,7 @@ gates:
     rerunPolicy: new-run-id-only
   - id: config_security
     version: 1
+    profile: both
     mandatory: true
     owner: Security
     predecessors: [contracts]
@@ -99,6 +107,7 @@ gates:
     rerunPolicy: new-run-id-only
   - id: supply_chain
     version: 1
+    profile: release
     mandatory: true
     owner: Security
     predecessors: [config_security]
@@ -111,6 +120,7 @@ gates:
     rerunPolicy: new-run-id-only
   - id: migrations
     version: 1
+    profile: release
     mandatory: true
     owner: DB owners
     predecessors: [config_security]
@@ -123,6 +133,7 @@ gates:
     rerunPolicy: new-run-id-only
   - id: db_boundaries
     version: 1
+    profile: release
     mandatory: true
     owner: DB owners
     predecessors: [migrations]
@@ -135,6 +146,7 @@ gates:
     rerunPolicy: new-run-id-only
   - id: integration
     version: 1
+    profile: release
     mandatory: true
     owner: Service owners
     predecessors: [db_boundaries, supply_chain]
@@ -147,6 +159,7 @@ gates:
     rerunPolicy: new-run-id-only
   - id: recovery
     version: 1
+    profile: release
     mandatory: true
     owner: Reliability
     predecessors: [integration]
@@ -159,6 +172,7 @@ gates:
     rerunPolicy: new-run-id-only
   - id: compose
     version: 1
+    profile: release
     mandatory: true
     owner: Platform
     predecessors: [recovery, supply_chain]
@@ -171,6 +185,7 @@ gates:
     rerunPolicy: new-run-id-only
   - id: observability
     version: 1
+    profile: release
     mandatory: true
     owner: Operations
     predecessors: [compose]
@@ -184,6 +199,7 @@ gates:
     rerunPolicy: new-run-id-only
   - id: browser
     version: 1
+    profile: release
     mandatory: true
     owner: Frontend
     predecessors: [observability]
@@ -196,6 +212,7 @@ gates:
     rerunPolicy: new-run-id-only
   - id: aroma_sandbox
     version: 1
+    profile: release
     mandatory: true
     owner: Integration+Reliability
     predecessors: [browser]
@@ -208,6 +225,7 @@ gates:
     rerunPolicy: new-run-id-only
   - id: backup_restore
     version: 1
+    profile: release
     mandatory: true
     owner: DB owners
     predecessors: [aroma_sandbox]
@@ -220,6 +238,7 @@ gates:
     rerunPolicy: new-run-id-only
   - id: rollback
     version: 1
+    profile: release
     mandatory: true
     owner: Operations
     predecessors: [backup_restore]
@@ -232,6 +251,7 @@ gates:
     rerunPolicy: new-run-id-only
   - id: report
     version: 1
+    profile: both
     mandatory: true
     owner: Release owner
     predecessors:

@@ -146,7 +146,9 @@
       ],
       "items": false
     },
-    "reportStatus": { "enum": ["PASS", "FAIL", "NOT_RUN"] },
+    "reportStatus": {
+      "enum": ["PASS", "FAIL", "NOT_RUN", "SKIPPED_BY_FILTER"]
+    },
     "decision": { "enum": ["ДОПУСТИТЬ", "НЕ ДОПУСТИТЬ"] }
   },
   "allOf": [
@@ -187,13 +189,25 @@
       ],
       "properties": {
         "id": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
-        "status": { "enum": ["PASS", "FAIL", "NOT_RUN"] },
+        "status": { "enum": ["PASS", "FAIL", "NOT_RUN", "SKIPPED_BY_FILTER"] },
         "expectedCommand": { "type": "string" },
         "startedAt": { "type": ["string", "null"], "format": "date-time" },
         "endedAt": { "type": ["string", "null"], "format": "date-time" },
         "durationMs": { "type": "integer", "minimum": 0 },
         "timeoutSeconds": { "type": "integer", "minimum": 1 },
         "reason": { "type": "string" },
+        "reusedFrom": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["runId", "evidenceDir"],
+          "properties": {
+            "runId": {
+              "type": "string",
+              "pattern": "^[0-9]{8}T[0-9]{6}Z-[0-9a-f]{7}$"
+            },
+            "evidenceDir": { "type": "string", "minLength": 1 }
+          }
+        },
         "runs": { "type": "array", "items": { "$ref": "#/$defs/commandRun" } },
         "artifacts": {
           "type": "array",
