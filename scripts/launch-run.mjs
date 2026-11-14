@@ -14,12 +14,9 @@ import { execFileSync, spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
   access,
-  copyFile,
-  cp,
   mkdir,
   readFile,
   readdir,
-  rename,
   rm,
   stat,
   statfs,
@@ -126,12 +123,6 @@ async function exists(path) {
     () => true,
     () => false,
   );
-}
-
-async function sha256(path) {
-  return createHash("sha256")
-    .update(await readFile(path))
-    .digest("hex");
 }
 
 async function ensureFreeSpace(minimumGiB) {
@@ -346,7 +337,8 @@ async function newestQualificationReceipt(candidateRoot) {
   for (const path of entries)
     if (await exists(path)) {
       const info = await stat(path);
-      if (!newest || info.mtimeMs > newest.mtimeMs) newest = { path, ...info };
+      if (!newest || info.mtimeMs > newest.mtimeMs)
+        newest = { path, mtimeMs: info.mtimeMs };
     }
   if (!newest) fail("soak не создал qualification.json");
   return newest.path;
@@ -520,8 +512,11 @@ async function main() {
     cwd: candidateRoot,
     env: { SOPS_AGE_KEY_FILE: sopsKey },
   });
-  await printSummary(join(evidenceDir, "run-result.json"));
-  process.stdout.write(`\nevidence: ${evidenceDir}\nлоги: ${logDir}\n`);
+  // Runner создаёт собственный run-id, поэтому итог ищется в самом свежем
+  // каталоге evidence, а не в каталоге, подготовленном обёрткой.
+  const producedEvidence = await newestRunEvidence(candidateRoot, evidenceDir);
+  await printSummary(join(producedEvidence, "run-result.json"));
+  process.stdout.write(`\nevidence: ${producedEvidence}\nлоги: ${logDir}\n`);
   if (run.code !== 0) process.exitCode = 1;
 }
 
@@ -536,4 +531,19 @@ try {
       keepCandidates: Number(process.env.COFFEE_LAUNCH_KEEP_CANDIDATES ?? 2),
       keepSoak: Number(process.env.COFFEE_LAUNCH_KEEP_SOAK ?? 3),
     }).catch(() => {});
+}
+
+async function newestRunEvidence(candidateRoot, fallback) {
+  const root = join(candidateRoot, "evidence/launch");
+  const entries = (await readdir(root, { withFileTypes: true }))
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => join(root, entry.name));
+  let newest = null;
+  for (const path of entries) {
+    const info = await stat(join(path, "run-result.json")).catch(() => null);
+    if (!info) continue;
+    if (!newest || info.mtimeMs > newest.mtimeMs)
+      newest = { path, mtimeMs: info.mtimeMs };
+  }
+  return newest?.path ?? fallback;
 }
