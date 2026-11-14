@@ -207,7 +207,10 @@ Node entrypoint, listener или service transport secret scope больше н�
 ## 10. `aroma-convergence`
 
 - **Назначение:** lease/fence/reservation state machine и строго один
-  GET → максимум одна mutation → GET цикл на attempt.
+  GET → максимум одна mutation → GET цикл на attempt. Reference config имеет
+  `mutationsEnabled=false`; provider mutations выполняются только при явно
+  включённом значении, а controlled launch sandbox использует отдельный
+  verification config с `true`.
 - **Владелец:** Orders.
 - **Входящие HTTP:** только health.
 - **Входящие события:** `AromaConvergenceRequested.v1`.

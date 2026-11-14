@@ -15,7 +15,19 @@
       "to": "api-public",
       "mode": "http",
       "contract": "client-v1",
-      "operations": ["ANY /api/client-v1/**"],
+      "operations": [
+        "POST /api/client-v1/customers",
+        "GET /api/client-v1/customers",
+        "GET /api/client-v1/catalog/products",
+        "POST /api/client-v1/pricing/catalog-preview",
+        "POST /api/client-v1/pricing/quotes",
+        "POST /api/client-v1/orders/drafts",
+        "PUT /api/client-v1/orders/{orderRef}/items/{itemRef}",
+        "DELETE /api/client-v1/orders/{orderRef}/items/{itemRef}",
+        "POST /api/client-v1/orders/{orderRef}/commands/confirm",
+        "POST /api/client-v1/orders/{orderRef}/commands/request-aroma-reconciliation",
+        "GET /api/client-v1/orders/{orderRef}"
+      ],
       "timeout": "5s",
       "retryOwner": "edge-nginx",
       "dataExposure": "validated-actor-and-client-payload"
@@ -30,6 +42,23 @@
       "timeout": "stream",
       "retryOwner": "browser",
       "dataExposure": "bounded-invalidation-only"
+    },
+    {
+      "id": "edge-auth",
+      "from": "edge-nginx",
+      "to": "edge-gateway",
+      "mode": "http",
+      "contract": "edge-auth-v1",
+      "operations": [
+        "GET /auth/login",
+        "GET /auth/callback",
+        "GET /auth/session",
+        "POST /auth/logout",
+        "GET /_edge/authorize"
+      ],
+      "timeout": "5s",
+      "retryOwner": "edge-nginx",
+      "dataExposure": "browser-session-and-actor-assertion"
     },
 
     {
@@ -77,7 +106,14 @@
       "to": "orders-service",
       "mode": "http",
       "contract": "orders-v1",
-      "operations": ["ANY /api/client-v1/orders/**"],
+      "operations": [
+        "POST /api/client-v1/orders/drafts",
+        "PUT /api/client-v1/orders/{orderRef}/items/{itemRef}",
+        "DELETE /api/client-v1/orders/{orderRef}/items/{itemRef}",
+        "POST /api/client-v1/orders/{orderRef}/commands/confirm",
+        "POST /api/client-v1/orders/{orderRef}/commands/request-aroma-reconciliation",
+        "GET /api/client-v1/orders/{orderRef}"
+      ],
       "timeout": "4.5s",
       "retryOwner": "api-public",
       "dataExposure": "delegated-actor-orders-contract"
@@ -297,17 +333,6 @@
       "dataExposure": "order-ref-version-requested-at"
     },
     {
-      "id": "orders-convergence-request",
-      "from": "orders-service",
-      "to": "aroma-convergence",
-      "mode": "event",
-      "contract": "AromaConvergenceRequested.v1",
-      "operations": ["coffee.aroma.cart.commands.v1"],
-      "timeout": "durable",
-      "retryOwner": "aroma-convergence",
-      "dataExposure": "desired-revision-reason"
-    },
-    {
       "id": "preparation-convergence-request",
       "from": "orders-aroma-preparation",
       "to": "aroma-convergence",
@@ -350,17 +375,6 @@
       "timeout": "durable",
       "retryOwner": "orders-aroma-preparation",
       "dataExposure": "convergence-facts"
-    },
-    {
-      "id": "orders-realtime",
-      "from": "orders-service",
-      "to": "realtime-gateway",
-      "mode": "event",
-      "contract": "RealtimeInvalidated.v1",
-      "operations": ["coffee.realtime.invalidate.v1"],
-      "timeout": "durable",
-      "retryOwner": "realtime-gateway",
-      "dataExposure": "order-ref-projection-version-reason"
     },
     {
       "id": "preparation-realtime",

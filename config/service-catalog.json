@@ -50,14 +50,16 @@
       "name": "edge-gateway",
       "owner": "platform",
       "sourceRoot": "apps/edge-gateway",
-      "purpose": "Единственный публичный TLS/auth/routing ingress без бизнес-решений",
+      "purpose": "Private application authorizer: OIDC/session, exact permission/CSRF и actor assertion; business/SSE/static не проксирует",
       "contractPackages": ["packages/contracts/edge-v1"],
       "incomingHttp": [
-        "GET /",
-        "GET /assets/**",
-        "ANY /api/client-v1/**",
-        "GET /events",
-        "GET /health/live"
+        "GET /auth/login",
+        "GET /auth/callback",
+        "GET /auth/session",
+        "POST /auth/logout",
+        "GET /_edge/authorize",
+        "GET /health/live",
+        "GET /health/ready"
       ],
       "incomingEvents": [],
       "schedules": [],
@@ -80,7 +82,19 @@
       "sourceRoot": "apps/api-public",
       "purpose": "Stateless composition root только для client-v1",
       "contractPackages": ["packages/contracts/client-v1"],
-      "incomingHttp": ["ANY /api/client-v1/**"],
+      "incomingHttp": [
+        "POST /api/client-v1/customers",
+        "GET /api/client-v1/customers",
+        "GET /api/client-v1/catalog/products",
+        "POST /api/client-v1/pricing/catalog-preview",
+        "POST /api/client-v1/pricing/quotes",
+        "POST /api/client-v1/orders/drafts",
+        "PUT /api/client-v1/orders/{orderRef}/items/{itemRef}",
+        "DELETE /api/client-v1/orders/{orderRef}/items/{itemRef}",
+        "POST /api/client-v1/orders/{orderRef}/commands/confirm",
+        "POST /api/client-v1/orders/{orderRef}/commands/request-aroma-reconciliation",
+        "GET /api/client-v1/orders/{orderRef}"
+      ],
       "incomingEvents": [],
       "schedules": [],
       "outgoingHttp": [
@@ -106,7 +120,16 @@
       "sourceRoot": "apps/api-internal",
       "purpose": "Stateless mTLS/delegation root только для internal-v1",
       "contractPackages": ["packages/contracts/internal-v1"],
-      "incomingHttp": ["ANY /api/internal-v1/**"],
+      "incomingHttp": [
+        "GET /api/internal-v1/customers/{customerRef}/order-input",
+        "GET /api/internal-v1/catalog/products/{productRef}/variants/{variantRef}/pricing-input",
+        "POST /api/internal-v1/pricing/quotes:verify",
+        "POST /api/internal-v1/aroma/catalog-exports",
+        "POST /api/internal-v1/aroma/offer-bindings",
+        "POST /api/internal-v1/aroma/cart-snapshots:read",
+        "POST /api/internal-v1/aroma/cart-lines/{offerRef}:set-quantity",
+        "POST /api/internal-v1/aroma/cart-lines/{offerRef}:remove"
+      ],
       "incomingEvents": [],
       "schedules": [],
       "outgoingHttp": [
@@ -308,9 +331,7 @@
       ],
       "outgoingEvents": [
         "OrderConfirmed.v1",
-        "OrderReconciliationRequested.v1",
-        "AromaConvergenceRequested.v1",
-        "RealtimeInvalidated.v1"
+        "OrderReconciliationRequested.v1"
       ],
       "database": {
         "name": "coffee_platform_orders",
@@ -398,7 +419,7 @@
       "name": "aroma-convergence",
       "owner": "orders",
       "sourceRoot": "apps/aroma-convergence",
-      "purpose": "Lease/fence/reservation GET-mutate-GET state machine",
+      "purpose": "Lease/fence/reservation state machine; provider mutations only when mutationsEnabled=true (reference default false; launch sandbox uses a separate verification config)",
       "contractPackages": [
         "packages/contracts/catalog-v1",
         "packages/contracts/aroma-v1",

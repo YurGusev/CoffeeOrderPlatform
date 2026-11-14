@@ -57,7 +57,7 @@ Transport mode задан явно: только `edge-nginx` используе
 | catalog-supplier-sync     | 4201 | 15m / 1 export                     |       4 | none                  | postgres.catalogImport, service identity, telemetry                                            | coffee_postgres:5432, api-internal:4051                                                                           |
 | catalog-activation-worker | 4202 | 5s DB batch / 1                    |       4 | P: snapshot, mapping | postgres.catalogActivate, kafka.catalog, service identity, telemetry                           | coffee_postgres:5432, kafka:9092, api-internal:4051                                                                 |
 | pricing-service           | 4103 | 5s / 100                           |       8 | none                  | postgres.pricing, service identity, telemetry                                                  | coffee_postgres:5432, api-internal:4051                                                                           |
-| orders-service            | 4104 | 5s / 150                           |       4 | P: lifecycle, commands, realtime | postgres.ordersService, kafka.orders, own transport, Orders delegation signing, api-public verification, telemetry | coffee_postgres:5432, api-internal:4051, kafka:9092 |
+| orders-service            | 4104 | 5s / 150                           |       4 | P: lifecycle | postgres.ordersService, kafka.orders, own transport, Orders delegation signing, api-public verification, telemetry | coffee_postgres:5432, api-internal:4051, kafka:9092 |
 | orders-aroma-preparation  | 4203 | 5s / 16                            |       4 | P: commands, realtime; C: mapping, lifecycle, projection | postgres.ordersPreparation, kafka.orders, service identity, telemetry                          | coffee_postgres:5432, kafka:9092                                                                                  |
 | aroma-observer            | 4204 | 15s / 4                            |       4 | P: aroma events | postgres.aromaObserver, kafka.orders, service identity, telemetry                              | coffee_postgres:5432, api-internal:4051, kafka:9092                                                               |
 | aroma-convergence         | 4205 | 30s / 4                            |       4 | P: aroma events, realtime; C: commands | postgres.aromaConvergence, kafka.orders, service identity, telemetry                           | coffee_postgres:5432, api-internal:4051, kafka:9092                                                               |
@@ -122,7 +122,7 @@ proxy buffering не делает этот буфер header-only. TLS transport
 | Runtime | Producers | Consumers (`groupId`: topics; processing) |
 |---|---|---|
 | `catalog-activation-worker` | `coffee.catalog.snapshot.v1`, `coffee.catalog.mapping.v2` | — |
-| `orders-service` | `coffee.orders.lifecycle.v1`, `coffee.aroma.cart.commands.v1`, `coffee.realtime.invalidate.v1` | — |
+| `orders-service` | `coffee.orders.lifecycle.v1` | — |
 | `orders-aroma-preparation` | `coffee.aroma.cart.commands.v1`, `coffee.realtime.invalidate.v1` | `orders-catalog-mapping-v2`: `coffee.catalog.mapping.v2`; `orders-aroma-preparation-v1`: `coffee.orders.lifecycle.v1`; `orders-aroma-projection-v1`: `coffee.aroma.cart.events.v1` — `durable` |
 | `aroma-observer` | `coffee.aroma.cart.events.v1` | — |
 | `aroma-convergence` | `coffee.aroma.cart.events.v1`, `coffee.realtime.invalidate.v1` | `aroma-convergence-v1`: `coffee.aroma.cart.commands.v1` — `durable` |
