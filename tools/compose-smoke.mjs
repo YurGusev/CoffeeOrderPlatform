@@ -10681,14 +10681,40 @@ export async function runComposeSmoke({
         composeFile,
         kafkaNamespaceIdentity,
       );
-    runTrackedRollbackCompose(
-      "runtime-stack-up",
-      projectName,
-      secretsDir,
-      upArguments,
-      { composeFile, inherit: true },
-      databaseProofContainer,
-    );
+    try {
+      runTrackedRollbackCompose(
+        "runtime-stack-up",
+        projectName,
+        secretsDir,
+        upArguments,
+        { composeFile, inherit: true },
+        databaseProofContainer,
+      );
+    } catch (error) {
+      // Диагностика отказов старта: без логов контейнеров причина не видна,
+      // потому что cleanup удаляет их вместе с evidence.
+      try {
+        const logs = execFileSync(
+          "docker",
+          composeArgs(
+            projectName,
+            ["logs", "--no-color", "--tail", "200"],
+            composeFile,
+          ),
+          {
+            cwd: ROOT,
+            env: { ...process.env, COFFEE_COMPOSE_SECRETS_DIR: secretsDir },
+            encoding: "utf8",
+            stdio: ["ignore", "pipe", "pipe"],
+            maxBuffer: 32 * 1024 * 1024,
+          },
+        );
+        error.message = `${error.message}\n--- failure logs ---\n${logs}`;
+      } catch {
+        // логи недоступны — исходная ошибка важнее
+      }
+      throw error;
+    }
     throwIfRollbackTerminationRequested();
     if (launchImageInventory)
       assertRuntimeContainersMatchInventory(projectName, launchImageInventory, {

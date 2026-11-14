@@ -107,6 +107,7 @@ export type RuntimeTransport = Readonly<{
   material?: ServiceTransportMaterial;
   publicTls?: PublicTlsMaterial;
   setupError?: string;
+  setupDetail?: string;
 }>;
 
 export type RuntimeIdentity = RuntimeComposition &
@@ -308,6 +309,7 @@ function transportMaterial(
       runtime,
       mode,
       setupError: "RUNTIME_TRANSPORT_SECRET_SCOPE",
+      setupDetail: "serviceTransportKeys reference is missing or duplicated",
     };
   try {
     const material = parseServiceTransportMaterial(
@@ -327,6 +329,7 @@ function transportMaterial(
         mode,
         material,
         setupError: "RUNTIME_PUBLIC_TLS_SECRET_SCOPE",
+        setupDetail: "edge TLS material or public hostname is missing",
       };
     }
     const publicCaPem = optionalRefs.includes("edge.tlsCaBundle")
@@ -351,6 +354,8 @@ function transportMaterial(
       mode,
       setupError:
         error instanceof Error ? error.name : "TransportValidationError",
+      setupDetail:
+        error instanceof Error ? error.message : "unknown transport error",
     };
   }
 }
@@ -631,8 +636,10 @@ export async function createRuntime(
   const runningChecks = new Map<string, Promise<boolean>>();
   const stopped = Promise.withResolvers<RuntimeShutdownResult>();
   let transportError: string | undefined;
+  let transportDetail = "unknown";
   if (identity.transport !== undefined) {
     transportError = identity.transport.setupError;
+    transportDetail = identity.transport.setupDetail ?? "unknown";
     if (
       transportError === undefined &&
       identity.transport.material === undefined
@@ -820,7 +827,7 @@ export async function createRuntime(
             signal.throwIfAborted();
             if (transportError !== undefined)
               throw new RuntimeError(
-                `RUNTIME_TRANSPORT_NOT_CONFIGURED:${transportError}`,
+                `RUNTIME_TRANSPORT_NOT_CONFIGURED:${transportError}:${transportDetail}`,
               );
             await app.listen({ host: identity.host, port: identity.port });
             signal.throwIfAborted();

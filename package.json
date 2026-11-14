@@ -107,7 +107,9 @@
     "test": "node --test 'tests/*/!(soak).test.mjs' tests/realtime/fixtures/harness.test.mjs packages/*/test/**/*.test.mjs verification/launch/v1/runner.test.mjs verification/launch/v1/scenarios/preflight.test.mjs",
     "check": "pnpm authority:check && pnpm versions:check && pnpm compatibility:check && pnpm config:check && pnpm contracts:lint && pnpm contracts:check-generated && pnpm contracts:breaking && pnpm typecheck && pnpm contracts:test && pnpm architecture:check && pnpm rule-parity:check && pnpm matrix:sync:check && pnpm naming:check && pnpm lint && pnpm web:build && pnpm browser:bundle:check && pnpm test:ui && pnpm test:web-foundation && pnpm test:web-operator && pnpm test",
     "verify:customer-slice": "node tools/grokverify-customer.mjs",
-    "security:scan": "node tools/security-scan.mjs"
+    "security:scan": "node tools/security-scan.mjs",
+    "secrets:renew-transport": "node scripts/renew-service-transport-certs.mjs",
+    "secrets:check-transport": "node scripts/renew-service-transport-certs.mjs --check"
   },
   "devDependencies": {
     "ajv": "8.20.0",

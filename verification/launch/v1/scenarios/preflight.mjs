@@ -2,7 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { constants } from "node:fs";
 import { createRequire } from "node:module";
 import { cpus, totalmem } from "node:os";
-import { spawn } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import { lstat, mkdir, open, readFile, realpath, stat } from "node:fs/promises";
 import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -1667,6 +1667,15 @@ export async function runPreflight(context, deps = {}) {
     ),
   );
 
+  const transportValidity = await inspectTransportCertificateValidity(io, cwd);
+  checks.push(
+    check(
+      "TRANSPORT_MATERIAL_VALIDITY",
+      transportValidity.status === "PASS",
+      transportValidity.facts,
+    ),
+  );
+
   const snapshotStartedAtUtc = io.now();
   const issueRecords = [];
   const acceptedByIssue = new Map();
@@ -2055,3 +2064,43 @@ if (
   fileURLToPath(import.meta.url) === resolve(process.argv[1])
 )
   await main();
+
+async function inspectTransportCertificateValidity(io, cwd) {
+  const script = resolve(cwd, "scripts/renew-service-transport-certs.mjs");
+  if (
+    (await io
+      .stat(script)
+      .then(() => true)
+      .catch(() => false)) !== true
+  )
+    return {
+      status: "FAIL",
+      facts: { reason: "renewal script is missing", script },
+    };
+  if (!io.env.SOPS_AGE_KEY_FILE)
+    return {
+      status: "SKIP",
+      facts: {
+        reason:
+          "SOPS_AGE_KEY_FILE is unavailable; certificate expiry unchecked",
+      },
+    };
+  try {
+    execFileSync(process.execPath, [script, "--check"], {
+      cwd,
+      env: io.env,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    return { status: "PASS", facts: { expired: 0 } };
+  } catch (error) {
+    const output = `${error.stdout ?? ""}${error.stderr ?? ""}`.trim();
+    return {
+      status: "FAIL",
+      facts: {
+        reason: "transport certificates are expired",
+        detail: output.slice(0, 4000),
+      },
+    };
+  }
+}
