@@ -566,6 +566,9 @@ async function measurement(cookie) {
     reloadRunning = false,
     checkpoint = 0,
     sampleRunning = false;
+  // Граница очереди ACK измеряет устойчивую пропускную способность, а не
+  // дрожание планировщика: не меньше двух секунд публикации на текущем темпе.
+  const maxPendingPublishes = Math.max(100, fixture.rate * 2);
   const secondCounts = new Map(),
     pendingPublishes = new Set();
   let peakPendingPublishes = 0;
@@ -634,8 +637,8 @@ async function measurement(cookie) {
         "100/s publisher schedule fell >1000ms behind; no auto tuning",
       );
     assert.ok(
-      pendingPublishes.size < 100,
-      "bounded publisher exceeded 100 in-flight ACKs",
+      pendingPublishes.size < maxPendingPublishes,
+      `bounded publisher exceeded ${maxPendingPublishes} in-flight ACKs`,
     );
     const subject = Math.floor(sent / 4) % fixture.subjects,
       version = ++sequence;
@@ -743,7 +746,7 @@ async function measurement(cookie) {
     acked: result.published,
     pending: pendingPublishes.size,
     peakPending: peakPendingPublishes,
-    maxPending: 100,
+    maxPending: maxPendingPublishes,
   };
   checkpoint++;
   covered.set(checkpoint, new Set());
