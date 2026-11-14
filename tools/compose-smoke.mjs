@@ -29,7 +29,7 @@ import { createWriteStream, readFileSync } from "node:fs";
 import { Buffer } from "node:buffer";
 import { execFileSync, spawn } from "node:child_process";
 import { request as httpsRequest } from "node:https";
-import { dirname, join, resolve } from "node:path";
+import { dirname, isAbsolute, join, resolve } from "node:path";
 import { createHash, generateKeyPairSync, randomUUID } from "node:crypto";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { tmpdir } from "node:os";
@@ -1393,7 +1393,9 @@ function usage() {
     "  --aroma-binding-proof             run the isolated native HTTPS AROMA offer-binding proof",
     "  --aroma-cart-proof                run the isolated native mTLS safe cart-read proof with a local provider fixture",
     "  --provision-empty-postgres-network create coffee_postgres_data only when absent; never starts PostgreSQL",
-    "  --no-build                         use already-built runtime images",
+    "  --reuse-images                     require already-built runtime images; never run docker buildx",
+    "  --artifact-manifest <path>         absolute path to the supply_chain artifact manifest",
+    "  --no-build                         compatibility synonym of --reuse-images for local runs",
     "  --project-name <name>              explicit isolated Compose project name",
     "  --keep                             leave the stack and tmpfs secret directory running",
   ].join("\n");
@@ -1404,6 +1406,8 @@ function parseArguments(argv) {
     stubSecrets: false,
     provisionNetwork: false,
     noBuild: false,
+    reuseImages: false,
+    artifactManifestPath: undefined,
     keep: false,
     databaseProof: false,
     customerProof: false,
@@ -1425,7 +1429,13 @@ function parseArguments(argv) {
     else if (argument === "--provision-empty-postgres-network")
       options.provisionNetwork = true;
     else if (argument === "--no-build") options.noBuild = true;
-    else if (argument === "--database-proof") options.databaseProof = true;
+    else if (argument === "--reuse-images") options.reuseImages = true;
+    else if (argument === "--artifact-manifest") {
+      const value = argv[++index];
+      if (!value || !isAbsolute(value))
+        throw new Error("--artifact-manifest must be an absolute path");
+      options.artifactManifestPath = value;
+    } else if (argument === "--database-proof") options.databaseProof = true;
     else if (argument === "--customer-proof") options.customerProof = true;
     else if (argument === "--recovery-proof") options.recoveryProof = true;
     else if (argument === "--observability-fixture")
@@ -1463,6 +1473,8 @@ function parseArguments(argv) {
       options.stubSecrets ||
       options.provisionNetwork ||
       options.noBuild ||
+      options.reuseImages ||
+      options.artifactManifestPath !== undefined ||
       options.keep ||
       options.databaseProof ||
       options.customerProof ||
@@ -1501,7 +1513,6 @@ function parseArguments(argv) {
   if (options.mutationDisableRollback) {
     if (
       options.stubSecrets ||
-      options.noBuild ||
       options.keep ||
       !options.projectName ||
       !options.disabledRoot ||
@@ -1510,7 +1521,7 @@ function parseArguments(argv) {
       !COMMIT_SHA.test(options.restoredSha ?? "")
     ) {
       throw new Error(
-        "--mutation-disable-rollback requires source builds, an isolated project name and validated D/R checkouts",
+        "--mutation-disable-rollback requires an isolated project name and validated D/R checkouts",
       );
     }
     options.recoveryProof = true;
@@ -1695,7 +1706,7 @@ export function buildRuntimeImages(
 }
 
 export function removeBuiltRuntimeImages(images, options) {
-  if (options.keep || options.noBuild) return;
+  if (options.keep || options.noBuild || options.reuseImages) return;
   for (const image of images) {
     try {
       runDocker(["image", "rm", "--no-prune", image]);
@@ -1716,16 +1727,112 @@ export function runtimeImageBuildTargets(projectName, pending, customerOnly) {
 }
 
 /**
- * Опубликованный манифест supply_chain покрывает все runtime-образы, поэтому
- * ownership-фаза не должна инициировать сборку. Отдельная функция позволяет
- * topology-тесту доказать решение reuse без запуска Docker.
+ * Определяет источник образов launch-режима. Верхнеуровневый гейт читает
+ * манифест из собственного evidence; дочерний scope (browser, observability,
+ * rollback) — из контекста родителя, который создал этот scope. Явный путь
+ * манифеста только подтверждает ожидаемый путь и не подменяет источник.
+ */
+export async function resolveLaunchImageSource({
+  launchIdentity,
+  rollbackParent,
+  browserParentModules,
+  requestedManifestPath,
+}) {
+  const resources = launchIdentity.context.resources ?? {};
+  let identity = launchIdentity;
+  let contextPath;
+  if (Object.hasOwn(resources, "g08PreparationContextPath")) {
+    const parentPath = resources.g08PreparationContextPath;
+    assert.equal(
+      typeof parentPath,
+      "string",
+      "browser parent context is missing",
+    );
+    assert.ok(browserParentModules, "browser parent modules are missing");
+    identity = await browserParentModules.validateLaunchContext(parentPath);
+    assert.equal(
+      resources.g15ParentRunId,
+      identity.context.runId,
+      "browser parent run ID mismatch",
+    );
+    assert.equal(
+      resources.g15ParentCandidateSha,
+      identity.context.candidateSha,
+      "browser parent candidate mismatch",
+    );
+    assert.equal(
+      resources.g15ParentCheckoutRoot,
+      identity.candidateRoot,
+      "browser parent checkout mismatch",
+    );
+    contextPath = parentPath;
+  } else if (Object.hasOwn(resources, "controlledParentContextPath")) {
+    assert.ok(rollbackParent, "controlled parent context is missing");
+    assert.equal(
+      resources.controlledParentContextPath,
+      rollbackParent.contextFile,
+      "controlled parent context mismatch",
+    );
+    assert.equal(
+      resources.controlledParentRunId,
+      rollbackParent.identity.context.runId,
+      "controlled parent run ID mismatch",
+    );
+    assert.equal(
+      resources.controlledParentCandidateSha,
+      rollbackParent.identity.context.candidateSha,
+      "controlled parent candidate mismatch",
+    );
+    identity = rollbackParent.identity;
+    contextPath = rollbackParent.contextFile;
+  }
+  const expectedManifestPath = artifactManifestPath(identity.evidenceDir);
+  if (
+    requestedManifestPath !== undefined &&
+    requestedManifestPath !== expectedManifestPath
+  )
+    throw new Error("IMAGE_INVENTORY_REQUIRED", {
+      cause: new Error("launch artifact manifest path is invalid"),
+    });
+  let manifest;
+  try {
+    manifest = await readArtifactManifest({
+      evidenceDir: identity.evidenceDir,
+      context: identity.context,
+      services: PUBLISHED_RUNTIME_SERVICES,
+    });
+  } catch (error) {
+    throw new Error("IMAGE_INVENTORY_REQUIRED", { cause: error });
+  }
+  if (!manifest) throw new Error("IMAGE_INVENTORY_REQUIRED");
+  return {
+    identity,
+    contextPath,
+    manifest,
+    runtimeImages: manifest.images.filter((image) => image.role === "runtime"),
+  };
+}
+
+/**
+ * В launch-режиме единственный источник образов — манифест `supply_chain`:
+ * сборка запрещена, а отсутствие или невалидность манифеста даёт явную ошибку
+ * `IMAGE_INVENTORY_REQUIRED`. Вне launch context сборка остаётся допустимой;
+ * ownership-фаза и явный reuse дают `reuse`. Отдельная функция позволяет
+ * topology-тесту доказать решение без запуска Docker.
  */
 export function resolveRuntimeImageMode({
+  launchMode = false,
   launchArtifactManifest,
   ownedImagePhase,
   ownedTargets,
+  reuseImages = false,
 }) {
-  return launchArtifactManifest ||
+  if (launchMode) {
+    if (!launchArtifactManifest) throw new Error("IMAGE_INVENTORY_REQUIRED");
+    return "reuse";
+  }
+  return reuseImages ||
+    launchArtifactManifest ||
     ownedImagePhase === "ready" ||
     (ownedTargets && ownedTargets.runtimes.length === 0 && !ownedTargets.nginx)
     ? "reuse"
@@ -9433,10 +9540,14 @@ export async function runBrowserProof({
   baseCandidateSha,
   observability,
   onProof,
+  artifactManifestPath,
+  reuseImages = false,
 }) {
   return runComposeSmoke({
     args: ["--recovery-proof"],
     observability,
+    artifactManifestPath,
+    reuseImages,
     observabilityBrowser: {
       baseCandidateSha,
       onReady: async (context) => {
@@ -9454,9 +9565,14 @@ export async function runComposeSmoke({
   observability,
   browser,
   observabilityBrowser,
+  artifactManifestPath: requestedArtifactManifestPath,
+  reuseImages: requestedReuseImages = false,
 } = {}) {
   rollbackComposeDiagnostic = undefined;
   const options = parseArguments(args);
+  const reuseImages = Boolean(
+    options.noBuild || options.reuseImages || requestedReuseImages,
+  );
   assert.ok(
     !(browser && observabilityBrowser),
     "observability and browser hooks are mutually exclusive",
@@ -9468,6 +9584,7 @@ export async function runComposeSmoke({
         options.recoveryProof &&
         !options.stubSecrets &&
         !options.noBuild &&
+        !options.reuseImages &&
         !options.keep &&
         !options.browserProof &&
         !options.mutationDisableRollback &&
@@ -9476,6 +9593,10 @@ export async function runComposeSmoke({
     );
   }
   const launchContextPath = process.env.COFFEE_LAUNCH_CONTEXT_FILE;
+  const requestedManifestPath =
+    requestedArtifactManifestPath ?? options.artifactManifestPath;
+  if (!launchContextPath && requestedManifestPath !== undefined)
+    throw new Error("--artifact-manifest requires a launch context");
   const externalRecovery =
     isExternalRecoveryProof(options) ||
     Boolean(
@@ -9497,6 +9618,7 @@ export async function runComposeSmoke({
       options.recoveryProof &&
         !options.stubSecrets &&
         !options.noBuild &&
+        !options.reuseImages &&
         !options.keep,
       "observability hooks require --recovery-proof without --stub-secrets, --no-build or --keep",
     );
@@ -9531,6 +9653,7 @@ export async function runComposeSmoke({
       options.recoveryProof &&
         !options.stubSecrets &&
         !options.noBuild &&
+        !options.reuseImages &&
         !options.keep &&
         !options.mutationDisableRollback,
       "browser hooks require an ordinary --recovery-proof run",
@@ -9549,6 +9672,7 @@ export async function runComposeSmoke({
       options.recoveryProof &&
         !options.stubSecrets &&
         !options.noBuild &&
+        !options.reuseImages &&
         !options.keep &&
         !options.mutationDisableRollback &&
         !options.observabilityFixture,
@@ -9566,29 +9690,12 @@ export async function runComposeSmoke({
   if (options.aromaBindingProof)
     assertAromaGatewaySocketAssociationRegression();
   let launchIdentity;
+  let launchImageIdentity;
+  let launchImageContextPath;
   let launchArtifactManifest = null;
   let launchRuntimeImages = null;
   if (launchContextPath) {
     launchIdentity = await validateLaunchContext(launchContextPath);
-    // Контракт гейтов: COFFEE_LAUNCH_IMAGE_OWNERSHIP несёт путь к artifact-manifest.json.
-    const manifestPath = process.env.COFFEE_LAUNCH_IMAGE_OWNERSHIP;
-    if (manifestPath !== undefined)
-      assert.equal(
-        manifestPath,
-        artifactManifestPath(launchIdentity.evidenceDir),
-        "launch artifact manifest path is invalid",
-      );
-    launchArtifactManifest = await readArtifactManifest({
-      evidenceDir: launchIdentity.evidenceDir,
-      context: launchIdentity.context,
-      services: PUBLISHED_RUNTIME_SERVICES,
-    });
-    if (manifestPath !== undefined)
-      assert.ok(launchArtifactManifest, "launch artifact manifest is missing");
-    launchRuntimeImages =
-      launchArtifactManifest?.images.filter(
-        (image) => image.role === "runtime",
-      ) ?? null;
     await withEarlyRollbackGuardReceipt(
       {
         mutationDisableRollback: options.mutationDisableRollback,
@@ -9967,6 +10074,18 @@ export async function runComposeSmoke({
           recoveryProofCredentials.browserParentRoot,
         )
       : undefined;
+    if (launchIdentity) {
+      const imageSource = await resolveLaunchImageSource({
+        launchIdentity,
+        rollbackParent,
+        browserParentModules,
+        requestedManifestPath,
+      });
+      launchImageIdentity = imageSource.identity;
+      launchImageContextPath = imageSource.contextPath;
+      launchArtifactManifest = imageSource.manifest;
+      launchRuntimeImages = imageSource.runtimeImages;
+    }
     const needsKafka =
       platformConfig.verification?.kafkaNamespaceIsolation === true ||
       !(
@@ -10040,8 +10159,8 @@ export async function runComposeSmoke({
         )
       : undefined;
     if (
-      manifestPath &&
-      !options.noBuild &&
+      launchArtifactManifest &&
+      !reuseImages &&
       !observabilityBrowser &&
       !browser &&
       !(
@@ -10105,9 +10224,10 @@ export async function runComposeSmoke({
         ? undefined
         : launchContextPath,
       kafkaImage: verifiedKafka?.imageId,
-      edgeNginxImage: options.noBuild
-        ? undefined
-        : `${projectName}-edge-nginx:latest`,
+      edgeNginxImage:
+        launchRuntimeImages || options.noBuild || reuseImages
+          ? undefined
+          : `${projectName}-edge-nginx:latest`,
       // Приоритет источников образов: D/R-сборки rollback > манифест supply_chain.
       ...(launchRuntimeImages
         ? {
@@ -10201,9 +10321,10 @@ export async function runComposeSmoke({
         recoveryProof: true,
         launchContextPath,
         kafkaImage: verifiedKafka?.imageId,
-        edgeNginxImage: options.noBuild
-          ? undefined
-          : `${projectName}-edge-nginx:latest`,
+        edgeNginxImage:
+          launchRuntimeImages || options.noBuild || reuseImages
+            ? undefined
+            : `${projectName}-edge-nginx:latest`,
         runtimeImages: launchRuntimeImages
           ? Object.fromEntries(
               launchRuntimeImages.map((image) => [
@@ -10554,12 +10675,8 @@ export async function runComposeSmoke({
       browser ||
       options.mutationDisableRollback
     );
-    const imageContextPath = observabilityBrowser
-      ? recoveryProofCredentials?.g08PreparationContextPath
-      : launchContextPath;
-    const imageIdentity = observabilityBrowser
-      ? await browserParentModules.validateLaunchContext(imageContextPath)
-      : launchIdentity;
+    const imageContextPath = launchImageContextPath ?? launchContextPath;
+    const imageIdentity = launchImageIdentity;
     if (launchRuntimeImages) assertPublishedRuntimeImages(launchRuntimeImages);
     const ownedTargets = parentOwnedRuntimeImages
       ? runtimeImageBuildTargets(
@@ -10569,11 +10686,18 @@ export async function runComposeSmoke({
         )
       : null;
     const imageMode = resolveRuntimeImageMode({
+      launchMode: Boolean(launchIdentity),
       launchArtifactManifest,
       ownedImagePhase,
       ownedTargets,
+      reuseImages,
     });
-    if (!options.noBuild && !rollbackRuntimeImages && imageMode === "build") {
+    if (
+      !launchIdentity &&
+      !reuseImages &&
+      !rollbackRuntimeImages &&
+      imageMode === "build"
+    ) {
       let temporary;
       let snapshot;
       const imageStart = Date.now();
@@ -10626,9 +10750,9 @@ export async function runComposeSmoke({
       assertVerifiedRuntimeImages({
         projectName,
         verifiedImages,
-        // С опубликованным инвентарём edge-nginx уже лежит под тегом проекта
+        // С опубликованным манифестом edge-nginx уже лежит под тегом проекта
         // запуска, поэтому проверяем именно его, а не локальный :local.
-        noBuild: launchRuntimeImages ? false : options.noBuild,
+        noBuild: launchRuntimeImages ? false : reuseImages,
         directImageIds: parentOwnedRuntimeImages,
       });
       if (parentOwnedRuntimeImages)
@@ -11914,7 +12038,7 @@ export async function runComposeSmoke({
         }
       }
       if (!parentOwnedRuntimeImages)
-        removeBuiltRuntimeImages(builtImages, options);
+        removeBuiltRuntimeImages(builtImages, { ...options, reuseImages });
       if (composeFile !== COMPOSE_FILE && !options.keep)
         await rm(composeFile, { force: true });
       if (!options.keep && secretsDir)

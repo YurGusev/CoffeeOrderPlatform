@@ -8740,7 +8740,7 @@ void test("published artifact manifest selects reuse and rejects an image withou
     boundManifest.images.filter((image) => image.role === "runtime").length,
     services.length,
   );
-  const { resolveRuntimeImageMode } =
+  const { resolveLaunchImageSource, resolveRuntimeImageMode } =
     await import("../../tools/compose-smoke.mjs");
   assert.equal(
     resolveRuntimeImageMode({
@@ -8758,9 +8758,89 @@ void test("published artifact manifest selects reuse and rejects an image withou
     }),
     "build",
   );
+  const launchIdentity = {
+    context,
+    evidenceDir,
+    candidateRoot: join(directory, "candidate"),
+  };
+  const imageSource = await resolveLaunchImageSource({
+    launchIdentity,
+    rollbackParent: undefined,
+    browserParentModules: undefined,
+    requestedManifestPath: manifestPath,
+  });
+  assert.deepEqual(imageSource.manifest, boundManifest);
+  assert.deepEqual(
+    imageSource.runtimeImages.map((image) => image.service).sort(),
+    [...services].sort(),
+  );
+  assert.equal(
+    resolveRuntimeImageMode({
+      launchMode: true,
+      launchArtifactManifest: boundManifest,
+      ownedImagePhase: undefined,
+      ownedTargets: null,
+    }),
+    "reuse",
+  );
+  assert.throws(
+    () =>
+      resolveRuntimeImageMode({
+        launchMode: true,
+        launchArtifactManifest: null,
+        ownedImagePhase: undefined,
+        ownedTargets: null,
+      }),
+    { message: "IMAGE_INVENTORY_REQUIRED" },
+  );
+  assert.equal(
+    resolveRuntimeImageMode({
+      launchMode: false,
+      launchArtifactManifest: null,
+      ownedImagePhase: undefined,
+      ownedTargets: null,
+    }),
+    "build",
+  );
+  assert.equal(
+    resolveRuntimeImageMode({
+      launchMode: false,
+      launchArtifactManifest: null,
+      ownedImagePhase: undefined,
+      ownedTargets: null,
+      reuseImages: true,
+    }),
+    "reuse",
+  );
+  await assert.rejects(
+    resolveLaunchImageSource({
+      launchIdentity,
+      rollbackParent: undefined,
+      browserParentModules: undefined,
+      requestedManifestPath: join(directory, "foreign-artifact-manifest.json"),
+    }),
+    { message: "IMAGE_INVENTORY_REQUIRED" },
+  );
   const source = await readFile(
     join(REPO_ROOT, "tools/compose-smoke.mjs"),
     "utf8",
+  );
+  const sourceIndex = source.indexOf(
+    "const imageSource = await resolveLaunchImageSource({",
+  );
+  const launchGuardIndex = source.indexOf("!launchIdentity &&", sourceIndex);
+  const buildDirIndex = source.indexOf(
+    'mkdtemp(join(tmpdir(), "coffee-runtime-build-"))',
+  );
+  assert.ok(
+    sourceIndex >= 0 &&
+      launchGuardIndex > sourceIndex &&
+      buildDirIndex > launchGuardIndex,
+    "launch image source must be resolved before any build directory exists",
+  );
+  assert.match(
+    source,
+    /!launchIdentity &&\s*!reuseImages &&\s*!rollbackRuntimeImages &&\s*imageMode === "build"/u,
   );
   const modeIndex = source.indexOf(
     "const imageMode = resolveRuntimeImageMode({",
@@ -8778,10 +8858,28 @@ void test("published artifact manifest selects reuse and rejects an image withou
     readArtifactManifest(manifestInput),
     /ARTIFACT_MANIFEST_INVALID/u,
   );
+  await assert.rejects(
+    resolveLaunchImageSource({
+      launchIdentity,
+      rollbackParent: undefined,
+      browserParentModules: undefined,
+      requestedManifestPath: manifestPath,
+    }),
+    { message: "IMAGE_INVENTORY_REQUIRED" },
+  );
   await writeFile(manifestPath, manifestBytes, { mode: 0o600 });
   await rm(manifestPath, { force: true });
   await assert.rejects(
     readArtifactManifest(manifestInput),
     /ARTIFACT_MANIFEST_MISSING/u,
+  );
+  await assert.rejects(
+    resolveLaunchImageSource({
+      launchIdentity,
+      rollbackParent: undefined,
+      browserParentModules: undefined,
+      requestedManifestPath: manifestPath,
+    }),
+    { message: "IMAGE_INVENTORY_REQUIRED" },
   );
 });

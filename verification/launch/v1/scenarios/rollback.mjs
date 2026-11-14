@@ -16,6 +16,7 @@ import { isDeepStrictEqual } from "node:util";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { load as parseYaml } from "js-yaml";
 import { validateLaunchContext } from "../report.mjs";
+import { artifactManifestPath } from "../../../../tools/image-inventory.mjs";
 
 const CONFIG_PATH = "config/platform.yaml";
 const CONFIG_PATH_BYTES = Buffer.from(CONFIG_PATH);
@@ -1903,9 +1904,31 @@ export async function runRollbackScenario(
       candidateSha: context.candidateSha,
       evidenceDir: context.evidenceDir,
     });
+    // Образы приходят только из манифеста supply_chain. В controlled child
+    // манифест принадлежит родительскому запуску, поэтому путь выводится из
+    // явного parent run ID, а не из дочернего evidenceDir.
+    const controlledParentRunId =
+      launchIdentity.context.resources?.controlledParentRunId;
+    if (
+      controlledParentRunId !== undefined &&
+      !/^[0-9]{8}T[0-9]{6}Z-[0-9a-f]{7}$/u.test(controlledParentRunId)
+    )
+      fail("ROLLBACK_CONTROLLED_PARENT_INVALID");
+    const artifactManifest = artifactManifestPath(
+      controlledParentRunId
+        ? join(
+            launchIdentity.sourceRoot,
+            "evidence/launch",
+            controlledParentRunId,
+          )
+        : launchIdentity.evidenceDir,
+    );
     const args = [
       join(candidateRoot, "tools/compose-smoke.mjs"),
       "--mutation-disable-rollback",
+      "--reuse-images",
+      "--artifact-manifest",
+      artifactManifest,
       "--project-name",
       expectedProject,
       "--disabled-root",

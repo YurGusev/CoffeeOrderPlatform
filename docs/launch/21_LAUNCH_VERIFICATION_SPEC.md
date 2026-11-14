@@ -332,11 +332,35 @@ Standalone-запуски без launch context и без манифеста с�
 и несовпадение provenance.
 
 Runner передаёт абсолютный путь манифеста последующим гейтам в
-`COFFEE_LAUNCH_IMAGE_OWNERSHIP`. `compose-smoke` читает только манифест через
+`COFFEE_LAUNCH_IMAGE_OWNERSHIP`, но источник образов `compose-smoke` выводит из
+launch context: для дочернего scope — из parent-контекста, а явный путь служит
+только проверкой согласия. `compose-smoke` читает только манифест через
 `readArtifactManifest`, берёт из него `runtime`-образы для Compose и проверяет
 по ним `container.Image`; `image-inventory.json` остаётся входом манифеста и в
 этой задаче не удаляется. `runtime-image-ownership.json` остаётся внутренним
 состоянием runner для cleanup и не является источником образов.
+
+### Сборка только в supply_chain
+
+В launch-режиме единственная точка сборки образов — `supply_chain`. При наличии
+`COFFEE_LAUNCH_CONTEXT_FILE` `compose-smoke` не вызывает `docker buildx` и не
+создаёт каталог build input: он обязан использовать манифест текущего запуска.
+Отсутствие, невалидность или несовпадение манифеста завершают гейт ошибкой
+`IMAGE_INVENTORY_REQUIRED`; эта ошибка — контракт для потребителей, а не текст
+для лога, и не маскируется сборкой или предупреждением.
+
+Дочерние scope гейтов (`observability`, `browser`, `rollback`) читают манифест
+родительского запуска; путь проверяется против parent-контекста
+(`g08PreparationContextPath` для browser/observability, controlled parent для
+rollback). `runBrowserProof` получает признак reuse и путь манифеста явно, а
+rollback передаёт `--reuse-images` и `--artifact-manifest` дочернему
+`compose-smoke`; browser выводит parent-манифест из своего launch context.
+Сборка в дочернем scope так же запрещена.
+
+Вне launch context сборка остаётся допустимой: это локальный деплой
+`platform-service` и standalone-отладка. `--no-build` перестаёт быть
+обязательным флагом launch-гейтов и остаётся совместимым синонимом
+`--reuse-images` в локальном режиме; оба флага не запускают `docker buildx`.
 
 Требование к хосту: BuildKit GC не должен стирать кеш между сборками.
 Измеренный кеш для 14 runtime-образов и `edge-nginx` — 9.07 GiB; с

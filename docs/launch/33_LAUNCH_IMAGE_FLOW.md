@@ -2,7 +2,8 @@
 
 Статус: действует. Относится к `verification/launch/v1/**`, `tools/**`,
 `tests/**` и документации первого запуска. Документ описывает существующее
-поведение; он не вводит новый контракт манифеста и не разрешает новую сборку.
+поведение, действующий контракт `artifact-manifest.json` и границу сборки;
+он не разрешает новую сборку.
 
 Документ отвечает на три вопроса:
 
@@ -58,27 +59,31 @@ supply_chain (pnpm security:scan)
   ├─ публикует 15 runtime-образов в Docker daemon под тегами проекта запуска;
   ├─ пишет OCI-артефакты и receipts для всех собранных образов;
   └─ пишет artifacts/image-inventory.json и artifacts/artifact-manifest.json
-     только при PASS; downstream-гейты получают путь манифеста в
-     COFFEE_LAUNCH_IMAGE_OWNERSHIP.
+     только при PASS.
 
 compose / integration / recovery ── compose-smoke
   └─ readArtifactManifest → imageMode = "reuse" → docker compose up --no-build
 
 observability ── tools/observability/verify.mjs
   ├─ loadVerifiedGateImage для инфраструктурных образов;
-  └─ runBrowserProof → дочерний compose-smoke → reuse runtime-образов
+  └─ runBrowserProof({reuseImages, artifactManifestPath}) → дочерний compose-smoke
+     → reuse runtime-образов из parent-манифеста
 
 browser ── verification/launch/v1/scenarios/browser.mjs
   └─ дочерний compose-smoke --browser-proof → reuse runtime-образов
+     из parent-манифеста (parent задан g08PreparationContextPath)
 
 rollback ── verification/launch/v1/scenarios/rollback.mjs
-  └─ дочерний compose-smoke --mutation-disable-rollback → reuse runtime-образов
+  └─ дочерний compose-smoke --mutation-disable-rollback --reuse-images
+     --artifact-manifest <parent-манифест> → reuse runtime-образов
 ```
 
 Правило, которое следует из этой схемы: в launch-прогоне канонические
 runtime-образы собирает только `supply_chain`; остальные гейты обязаны
 использовать опубликованный манифест (runtime-образы) или verified artifact
-(инфраструктурные образы). Сборка внутри `compose-smoke` допустима только для
+(инфраструктурные образы). Сборка внутри `compose-smoke` в launch-режиме
+запрещена: отсутствие или невалидность манифеста даёт ошибку
+`IMAGE_INVENTORY_REQUIRED`, а не тихую сборку. Сборка допустима только для
 standalone-запуска без launch context — это отладочный путь, а не часть полного
 прогона.
 
@@ -111,15 +116,16 @@ standalone-запуска без launch context — это отладочный 
 
 | Место вызова | Что собирает | Когда достижимо |
 | --- | --- | --- |
-| `tools/compose-smoke.mjs:10565` | Все `RUNTIMES` или их подмножество, плюс `edge-nginx`; выбор зависит от proof-режима | Только при `imageMode === "build"` (`10567-10580`), то есть без опубликованного манифеста, без ownership-ready и без rollback-образов |
+| `tools/compose-smoke.mjs:10716` | Все `RUNTIMES` или их подмножество, плюс `edge-nginx`; выбор зависит от proof-режима | Только при `imageMode === "build"` вне launch context; в launch-режиме путь недостижим, манифест обязателен |
 | `tools/platform-service.mjs:867` | Недостающие runtime-образы для локального деплоя | Только локальный деплой, вне launch |
 | `tests/realtime/fixtures/setup.mjs:1217` | `edge-gateway`, `api-public`, `realtime-gateway`, `edge-nginx` для подготовки realtime qualification | Подготовка qualification (`tests/realtime/fixtures/setup.mjs:1206-1235`), не команда одного из 20 гейтов |
 | `tests/compose/topology.test.mjs:2322`, `2339`, `2345`, `2354` | Тестовые вызовы с подменённым Docker | Unit-тесты; реальный `docker buildx build` не запускается |
 
-Вызов в `tools/compose-smoke.mjs:10565` — единственное место, где
+Вызов в `tools/compose-smoke.mjs:10716` — единственное место, где
 `buildRuntimeImages` может выполниться в ходе запуска гейта. Он защищён
-условием `imageMode === "build"` и проверкой `!options.noBuild &&
-!rollbackRuntimeImages` (`10549`).
+условием `imageMode === "build"` и проверкой `!launchIdentity && !reuseImages &&
+!rollbackRuntimeImages` (`10695-10730`). В launch-режиме
+`resolveRuntimeImageMode` возвращает только `reuse` и требует манифест.
 
 ### 3.3 Где ещё выполняется `pnpm image:build`
 
@@ -144,39 +150,47 @@ standalone-запуска без launch context — это отладочный 
 ### 3.4 Как `compose-smoke` выбирает build или reuse
 
 Ключевая логика находится в `resolveRuntimeImageMode`
-(`tools/compose-smoke.mjs:1718-1733`), вызов — `10567-10580`:
+(`tools/compose-smoke.mjs:1823-1840`), вызов — `10695-10730`:
 
-- при наличии `launchArtifactManifest` выбирается `reuse`;
-- при `ownedImagePhase === "ready"` или отсутствии недостающих ownership-ссылок
-  выбирается `reuse`;
-- иначе выбирается `build`, и при `!options.noBuild` вызывается
+- при наличии launch context `resolveRuntimeImageMode` возвращает только
+  `reuse`; отсутствие или невалидность манифеста даёт
+  `IMAGE_INVENTORY_REQUIRED` до создания build-каталога;
+- при `ownedImagePhase === "ready"`, отсутствии недостающих ownership-ссылок
+  или явном `--reuse-images`/`--no-build` выбирается `reuse`;
+- иначе, только без launch context, выбирается `build`, и вызывается
   `buildRuntimeImages`.
 
 `launchArtifactManifest` читается через `readArtifactManifest` из evidence
-`supply_chain` при наличии `COFFEE_LAUNCH_CONTEXT_FILE`
-(`tools/compose-smoke.mjs:9568-9590`). Если манифест отсутствует, но
-`result.json` или `image-inventory.json` гейта `supply_chain` уже существуют,
-чтение завершается ошибкой `ARTIFACT_MANIFEST_MISSING`
-(`tools/image-inventory.mjs:440-452`): тихая пересборка вместо опубликованного
-набора запрещена.
+текущего запуска (`resolveLaunchImageSource`, `tools/compose-smoke.mjs:1735-1821`,
+вызов `10078`). Если манифест отсутствует или невалиден, чтение завершается
+ошибкой, которую `compose-smoke` переводит в контрактную
+`IMAGE_INVENTORY_REQUIRED`: тихая пересборка вместо опубликованного набора
+запрещена.
+
+Дочерний scope (`observability`, `browser`, `rollback`) читает манифест
+родительского запуска. Родитель определяется по `g08PreparationContextPath`
+для browser/observability и по controlled parent для rollback; явный путь
+манифеста (`runBrowserProof`/`--artifact-manifest`) проверяется против
+ожидаемого пути и не подменяет источник.
 
 Переключатели:
 
-- `COFFEE_LAUNCH_CONTEXT_FILE` — включает чтение манифеста и привязку к
-  `evidenceDir`/`composeProject`;
-- `COFFEE_LAUNCH_IMAGE_OWNERSHIP` — несёт абсолютный путь к
-  `artifact-manifest.json`; `compose-smoke` сверяет его с каноническим путём
-  evidence (`verification/launch/v1/run.mjs:749-752`). Ownership-файл
-  `gates/integration/artifacts/runtime-image-ownership.json` остаётся
-  внутренним состоянием runner для lifecycle/cleanup и в окружение не
-  передаётся;
-- `--no-build` — запрещает сборку в `compose-smoke`;
+- `COFFEE_LAUNCH_CONTEXT_FILE` — включает launch-режим, чтение манифеста и
+  привязку к `evidenceDir`/`composeProject`
+  (`verification/launch/v1/run.mjs:740-766`);
+- `COFFEE_LAUNCH_IMAGE_OWNERSHIP` — путь к манифесту, который runner передаёт
+  гейтам; источник образов `compose-smoke` выводит из launch context, а не из
+  этой переменной (`verification/launch/v1/run.mjs:749-752`);
+- `--reuse-images` — требует уже собранные образы и запрещает `docker buildx`;
+- `--no-build` — совместимый синоним `--reuse-images` для локального режима;
+- `--artifact-manifest <path>` — явный путь parent-манифеста для дочернего
+  scope; проверяется против ожидаемого пути;
 - `--project-name` — задаёт Compose-проект; манифест проверяется на точное
   совпадение `composeProject` (`tools/image-inventory.mjs:338-370`);
 - `--browser-proof` — выбирает browser-стенд и запрещает остальные режимы
   (`tools/compose-smoke.mjs:1457-1478`), но не меняет источник образов;
 - `--mutation-disable-rollback` — выбирает rollback-стенд с D/R checkout;
-  образы всё равно берутся из манифеста/rollback-контекста
+  образы берутся из parent-манифеста и rollback-контекста
   (`tools/compose-smoke.mjs:1498-1518`).
 
 ## 4. Публикация
@@ -271,7 +285,10 @@ Upstream-образы `loki`, `prometheus`, `tempo` только тянутся 
 
 `compose-smoke` — основной потребитель манифеста:
 
-- читает манифест при наличии launch context (`tools/compose-smoke.mjs:9568-9590`);
+- при наличии launch context читает только манифест
+  (`resolveLaunchImageSource`, `tools/compose-smoke.mjs:1735-1821`, вызов
+  `10079`); отсутствие или невалидность манифеста даёт
+  `IMAGE_INVENTORY_REQUIRED` до создания build-каталога;
 - выбирает `runtime`-образы по `role` и проверяет, что опубликованные теги
   указывают на ожидаемые image ID (`assertPublishedRuntimeImages`,
   `tools/compose-smoke.mjs:1773-1793`);
@@ -281,8 +298,9 @@ Upstream-образы `loki`, `prometheus`, `tempo` только тянутся 
 - после старта сверяет `container.Image` с манифестом
   (`assertRuntimeContainersMatchManifest`, вызов `10746-10751`).
 
-Если манифеста нет, `compose-smoke` возвращается к сборке только в отсутствие
-launch context либо в дочернем scope без результата `supply_chain`.
+Сборка в `compose-smoke` остаётся только без launch context (standalone).
+Явные `--reuse-images` и совместимый `--no-build` выбирают reuse и в локальном
+режиме, но launch-режим не зависит от этих флагов.
 
 ### 5.2 `integration` и `recovery`
 
@@ -305,9 +323,11 @@ standalone-путь со сборкой.
 - запускает browser-дочерний процесс, который читает runtime-образы через
   `readVerifiedRuntimeImages` (`6352-6355`);
 - передаёт дочернему процессу launch context и запускает
-  `runBrowserProof` (`5800-5816`, `6381-6412`); внутри используется
-  `runComposeSmoke` с `--recovery-proof`, поэтому runtime-образы берутся из
-  манифеста, а не собираются.
+  `runBrowserProof({reuseImages: true, artifactManifestPath})`
+  (`5800-5816`, `6381-6412`); путь манифеста — аргумент дочернего процесса, а
+  не переменная окружения; внутри используется `runComposeSmoke` с
+  `--recovery-proof`, поэтому runtime-образы берутся из parent-манифеста, а не
+  собираются.
 
 При этом `runLaunchPath` в `tests/observability/launch-path.mjs` собирает
 fixture-образы `edge-nginx` и нативный `realtime-gateway` через
@@ -320,8 +340,9 @@ fixture-образы `edge-nginx` и нативный `realtime-gateway` чер�
 `verification/launch/v1/scenarios/browser.mjs` создаёт дочерний checkout и
 запускает `tools/compose-smoke.mjs --browser-proof`
 (`verification/launch/v1/scenarios/browser.mjs:1738`). Дочерний
-`compose-smoke` читает манифест из launch context и использует
-опубликованные runtime-образы. После этого `browser` запускает
+`compose-smoke` читает parent-манифест через `g08PreparationContextPath`
+дочернего контекста и использует опубликованные runtime-образы. После этого
+`browser` запускает
 `owner-browser`, который собирает fixture `edge-nginx`
 (`tests/realtime/fixtures/owner-browser.mjs:297-305`) и нативный
 `realtime-gateway` через общий fixture (`tests/realtime/fixtures/setup.mjs:1256-1263`).
@@ -329,11 +350,13 @@ fixture-образы `edge-nginx` и нативный `realtime-gateway` чер�
 ### 5.5 `rollback`
 
 `verification/launch/v1/scenarios/rollback.mjs` валидирует привязку образов к
-родительскому контексту (`1442-1455`) и запускает
-`tools/compose-smoke.mjs --mutation-disable-rollback`
-(`verification/launch/v1/scenarios/rollback.mjs:1906-1912`). Внутри
-`compose-smoke` использует манифест и `rollbackRuntimeImages`; сборка для
-rollback-стенда не выполняется.
+родительскому контексту (`1442-1455`) и запускает дочерний
+`tools/compose-smoke.mjs --mutation-disable-rollback --reuse-images
+--artifact-manifest <parent-манифест>`
+(`verification/launch/v1/scenarios/rollback.mjs:1906-1938`). Путь манифеста
+выводится из controlled parent run, а не из дочернего evidenceDir. Внутри
+`compose-smoke` использует parent-манифест и `rollbackRuntimeImages`; сборка
+для rollback-стенда не выполняется и невозможна.
 
 ### 5.6 `platform-service` (вне launch)
 
@@ -386,49 +409,36 @@ rollback-стенда не выполняется.
 | `rollback` | `pnpm test:mutation-disable-rollback` | В launch — reuse runtime-образов из манифеста родительского контекста | Не собирает и не публикует | `COFFEE_LAUNCH_CONTEXT_FILE`; дочерний `--mutation-disable-rollback` |
 | `report` | `pnpm launch:verify:report` | Не использует | Не собирает и не публикует | `COFFEE_LAUNCH_CONTEXT_FILE` (только чтение evidence) |
 
-## 7. Где сборка обязана исчезнуть
+## 7. Граница канонической сборки
 
-Следующие задачи меняют эту карту; до их merge описанное выше остаётся
-источником истины:
+Каноническая граница после Э1 (#311) и Э2 (#312) такая: `supply_chain` —
+единственный владелец сборки и публикации runtime-образов; `compose-smoke` в
+launch-режиме только читает `artifact-manifest.json`. Отсутствие или
+невалидность манифеста даёт `IMAGE_INVENTORY_REQUIRED`. Сборка допустима только
+в `supply_chain`, локальном `platform-service` и standalone-отладке без launch
+context.
 
-- **Э1, #311 «Artifact manifest как единственный контракт передачи образов»**
-  (реализовано в этом PR): `supply_chain` публикует
-  `artifact-manifest.json` рядом с inventory, а потребители
-  (`compose-smoke`, `observability`, `rollback`) получают путь манифеста через
-  `COFFEE_LAUNCH_IMAGE_OWNERSHIP` и читают его через
-  `readArtifactManifest`. Inventory остаётся входом манифеста.
-- **Э2, #312 «Запретить сборку образов вне supply_chain»**: при наличии
-  launch context отсутствие манифеста должно давать `IMAGE_INVENTORY_REQUIRED`,
-  а не тихую сборку; fallback `imageMode === "build"` для launch-режима должен
-  исчезнуть. Сборка остаётся только в `supply_chain` и локальном
-  `platform-service`.
+Остаточные сборки вне канонического набора (fixture-образы тестовых стендов):
 
-Текущие отклонения, которые Э2 должен устранить или явно классифицировать:
-
-1. `compose-smoke` всё ещё допускает `imageMode === "build"` при наличии
-   launch context, если `supply_chain` в этом scope ещё не публиковал
-   манифест (`tools/compose-smoke.mjs:10567-10580`). Для полного прогона это
-   недостижимо из-за порядка гейтов, но контракт пока не запрещает путь.
-2. `observability` и `browser` собирают fixture-образы `edge-nginx` и
+1. `observability` и `browser` собирают fixture-образы `edge-nginx` и
    нативный `realtime-gateway` через `pnpm image:build` в тестовых стендах
    (`tests/observability/launch-path.mjs:452-460`,
    `tests/realtime/fixtures/setup.mjs:1256-1263`,
    `tests/realtime/fixtures/owner-browser.mjs:297-305`). Это не публикация
-   канонического набора, но это вызовы buildx внутри launch-гейтов.
-3. Подготовка realtime qualification (`tests/realtime/fixtures/setup.mjs:1206-1235`,
+   канонического набора и не замена manifest-образов.
+2. Подготовка realtime qualification (`tests/realtime/fixtures/setup.mjs:1206-1235`,
    `tools/realtime-capacity.mjs:252-254`) может пересобрать `edge-gateway`,
    `api-public`, `realtime-gateway` и `edge-nginx`, если verified image
-   отсутствует в daemon. Это pre-launch шаг, не один из 20 гейтов, но он
-   должен быть учтён при переходе на reuse-only.
-4. `tools/nginx/fixtures/served-backend.mjs`, `tests/nginx/image.test.mjs` и
+   отсутствует в daemon. Это pre-launch шаг, не один из 20 гейтов, и он не
+   расширяет право `compose-smoke` на сборку.
+3. `tools/nginx/fixtures/served-backend.mjs`, `tests/nginx/image.test.mjs` и
    `tests/nginx/cutover.test.mjs` собирают `edge-nginx` только в собственных
    тестах и не входят в 20 гейтов; их не нужно смешивать с launch-потоком.
 
-После Э2 критерий простой: в launch-прогоне `docker buildx build` вызывается
-только из `supply_chain`; `compose-smoke` в launch-режиме имеет единственный
-режим `reuse`, а `observability`/`browser` либо перестают собирать fixture-
-образы, либо фиксируют их как явно разрешённое исключение с отдельным
-контрактом.
+Критерий: в launch-прогоне `docker buildx build` вызывается только из
+`supply_chain`; `compose-smoke` в launch-режиме имеет единственный режим
+`reuse`, а fixture-сборки `observability`/`browser` остаются явно
+классифицированным исключением и не подменяют manifest-образы.
 
 ## 8. Ссылки
 

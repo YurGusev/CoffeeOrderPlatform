@@ -43,6 +43,7 @@ import {
   removeVerifiedGateImage,
   readVerifiedRuntimeImages,
 } from "../verified-infrastructure-image.mjs";
+import { artifactManifestPath } from "../image-inventory.mjs";
 import { provisionStorage, removeStorage } from "./storage.mjs";
 import { validateLaunchContext } from "../../verification/launch/v1/report.mjs";
 import {
@@ -6391,7 +6392,7 @@ const request=(stage,payload)=>new Promise((resolve,reject)=>{
 const init=await request('init',null);
 const observability={exporterToken:init.exporterToken,onReady:context=>request('roles-ready',context),onCleanup:()=>request('cleanup',null)};
 try {
- const r=await runBrowserProof({baseCandidateSha:process.argv[1],observability,onProof:proof=>request('browser-proof',proof)});
+ const r=await runBrowserProof({baseCandidateSha:process.argv[1],artifactManifestPath:process.argv[2],reuseImages:true,observability,onProof:proof=>request('browser-proof',proof)});
  if(process.connected)process.disconnect();console.log(JSON.stringify({browserProof:r.browserProof,cleanup:r.cleanup,externalCleanup:r.externalCleanup}));
 } catch(error) {
  if(error.observabilityRetained)console.log(JSON.stringify({observabilityRetained:error.observabilityRetained}));
@@ -6407,6 +6408,7 @@ try {
                 "--eval",
                 script,
                 provenanceStart.baseSha,
+                artifactManifestPath(validatedLaunch.evidenceDir),
               ],
               cwd: identity.candidateRoot,
               env: { ...process.env, COFFEE_LAUNCH_CONTEXT_FILE: contextPath },
