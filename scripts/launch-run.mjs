@@ -190,7 +190,7 @@ async function createCandidateRoot(sha) {
 function runStep({ name, logFile, command, args, cwd, env }) {
   const child = spawn(command, args, {
     cwd,
-    env: { ...process.env, ...env },
+    env: { ...stepEnvironment(), ...env },
     stdio: ["ignore", "pipe", "pipe"],
   });
   const out = [];
@@ -546,4 +546,17 @@ async function newestRunEvidence(candidateRoot, fallback) {
       newest = { path, mtimeMs: info.mtimeMs };
   }
   return newest?.path ?? fallback;
+}
+
+function stepEnvironment() {
+  // Служебные переменные обёртки не должны попадать в дочерние процессы:
+  // runtime принимает только объявленные локаторы.
+  const env = { ...process.env };
+  for (const name of [
+    "COFFEE_LAUNCH_NO_PRUNE",
+    "COFFEE_LAUNCH_KEEP_CANDIDATES",
+    "COFFEE_LAUNCH_KEEP_SOAK",
+  ])
+    delete env[name];
+  return env;
 }

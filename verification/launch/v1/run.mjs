@@ -729,6 +729,15 @@ export async function executeArgv(
   const startedAt = nowIso();
   const start = Date.now();
   const childEnv = { ...process.env };
+  // Гейты и тесты запускают runtime, который принимает только известные
+  // локаторы. Служебные COFFEE_LAUNCH_* переменные оператора не должны
+  // протекать в дочерние процессы: они задаются здесь явно.
+  for (const name of Object.keys(childEnv))
+    if (
+      name.startsWith("COFFEE_LAUNCH_") &&
+      name !== "COFFEE_LAUNCH_CONTEXT_FILE"
+    )
+      delete childEnv[name];
   delete childEnv.COFFEE_LAUNCH_DATA_TEMP_DIR;
   if (options.dataTempDir && options.gateId === "supply_chain")
     childEnv.COFFEE_LAUNCH_DATA_TEMP_DIR = options.dataTempDir;
