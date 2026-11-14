@@ -61,6 +61,7 @@
 37. [Наблюдаемость Operations и `observability`](../operations/observability.md) — #64,
     `pnpm test:observability` и handoff; FAIL/NOT_RUN не разрешает launch.
 38. [Имена гейтов запуска](22_GATE_NAMING.md) — slug-адресация, `pnpm naming:check` и снимок нарушений.
+39. [Карта потоков образов в гейтах запуска](33_LAUNCH_IMAGE_FLOW.md) — где собирается и публикуется runtime-образ, а где обязателен reuse.
 
 Продолжение после первого запуска: [план второй волны — закупка, счета и оплата](../wave-2/README.md).
 
