@@ -12,7 +12,6 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { load, dump } from "js-yaml";
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const SECRETS_FILE = join(REPO_ROOT, "secrets/platform.secrets.sops.yaml");
@@ -146,8 +145,45 @@ async function issueCertificate(
   return { keyPem, certPem };
 }
 
+function checkOnly(options) {
+  const extracted = sops([
+    "-d",
+    "--extract",
+    `["environments"]["${options.environment}"]["security"]["serviceTransportKeys"]`,
+    "--output-type",
+    "json",
+    SECRETS_FILE,
+  ]);
+  const materials = JSON.parse(extracted);
+  const expired = [];
+  const services = Object.keys(materials).sort();
+  for (const service of services) {
+    const material = JSON.parse(materials[service]);
+    const { notAfterEpochMs, notAfter } = certificateValidity(material.certPem);
+    if (!(notAfterEpochMs > Date.now())) {
+      expired.push({ service, notAfter });
+      continue;
+    }
+    if (!(notAfterEpochMs - Date.now() > 7 * 24 * 60 * 60 * 1000))
+      expired.push({ service, notAfter, warning: true });
+  }
+  const hardFailures = expired.filter((entry) => !entry.warning);
+  for (const entry of expired)
+    process.stdout.write(
+      `${entry.warning ? "WARN" : "FAIL"} ${entry.service}: notAfter=${entry.notAfter}\n`,
+    );
+  process.stdout.write(
+    hardFailures.length === 0
+      ? `transport certificates: ${services.length} проверено, просроченных нет\n`
+      : `transport certificates: просрочено ${hardFailures.length} из ${services.length}\n`,
+  );
+  return hardFailures.length === 0 ? 0 : 1;
+}
+
 async function main() {
   const options = parseArguments(process.argv.slice(2));
+  if (options.check) return checkOnly(options);
+  const { load, dump } = await import("js-yaml");
   const plaintext = sops(["-d", "--input-type", "yaml", SECRETS_FILE]);
   const document = load(plaintext);
   const environmentSecrets = document?.environments?.[options.environment];
@@ -169,31 +205,6 @@ async function main() {
     );
 
   const services = Object.keys(security.serviceTransportKeys).sort();
-  const expired = [];
-  for (const service of services) {
-    const material = JSON.parse(security.serviceTransportKeys[service]);
-    const validity = certificateValidity(material.certPem);
-    if (!(validity.notAfterEpochMs > Date.now())) {
-      expired.push({ service, notAfter: validity.notAfter });
-      continue;
-    }
-    if (!(validity.notAfterEpochMs - Date.now() > 7 * 24 * 60 * 60 * 1000))
-      expired.push({ service, notAfter: validity.notAfter, warning: true });
-  }
-
-  if (options.check) {
-    const hardFailures = expired.filter((entry) => !entry.warning);
-    for (const entry of expired)
-      process.stdout.write(
-        `${entry.warning ? "WARN" : "FAIL"} ${entry.service}: notAfter=${entry.notAfter}\n`,
-      );
-    process.stdout.write(
-      hardFailures.length === 0
-        ? `transport certificates: ${services.length} проверено, просроченных нет\n`
-        : `transport certificates: просрочено ${hardFailures.length} из ${services.length}\n`,
-    );
-    return hardFailures.length === 0 ? 0 : 1;
-  }
 
   const directory = await mkdtemp(join(tmpdir(), "coffee-transport-renew-"));
   try {
