@@ -44,6 +44,27 @@ Handoff создаётся по текущему protocol и только из �
 После любого изменения output пересчитать hashes. Historical handoff не
 переписывать ради нового формата.
 
+## Комментарии и review threads перед merge
+
+До merge проверить не только checks, но и все замечания ревьювера на текущем head:
+
+1. Прочитать `headRefOid`, `mergeable`, `mergeStateStatus`, `reviewDecision` и
+   `statusCheckRollup`; checks должны относиться к текущему head, а не к прежнему push.
+   Пустой `reviewDecision` не доказывает отсутствие замечаний.
+2. Получить все review threads и комментарии на текущем head. `coffee_pr` даёт
+   unresolved threads и последние reviews; полный список, включая resolved,
+   читать через `gh api graphql` (threads) и `gh pr view --comments` (общие
+   комментарии). Не ограничиваться unresolved: закрытый без ответа thread может
+   скрывать неисправленное замечание.
+3. На каждое существенное замечание подготовить ответ: commit/файл/строка и
+   фактическая проверка либо обоснованный отказ. Публикация ответа и resolve —
+   remote mutation: выполнять при разрешении пользователя, иначе оставить thread
+   открытым. Resolve только после ответа и исправления; не закрывать молча.
+4. После push снова прочитать head и checks; старый зелёный CI не подтверждает
+   новый commit. Повторить проверку threads, если появились новые комментарии.
+5. Merge только при отсутствии unresolved P0/P1 и при явном разрешении. Если риск
+   принят, прямо записать, какие замечания оставлены и почему.
+
 ## Закрытие
 
 После подтверждения всех acceptance criteria:
@@ -54,7 +75,8 @@ Handoff создаётся по текущему protocol и только из �
    доказательства и limitations.
 3. Проверить base/head, соответствие номера branch issue и единственную
    `closingIssuesReferences` на это issue.
-4. Merge выполнять только для полного diff и при наличии разрешения пользователя.
+4. Merge выполнять только для полного diff, после проверки review threads по
+   разделу выше и при наличии разрешения пользователя.
 5. После merge подтвердить merge commit и закрытое issue. Для каждого
    непосредственного successor проверить все обязательные inputs по
    `docs/launch/13_DELIVERY_DEPENDENCY_GRAPH.md`: accepted merge в `develop` и
