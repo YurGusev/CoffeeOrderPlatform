@@ -472,7 +472,11 @@ async function main() {
         soakDir,
       ],
       cwd: candidateRoot,
-      env: { SOPS_AGE_KEY_FILE: sopsKey },
+      env: {
+        SOPS_AGE_KEY_FILE: sopsKey,
+        COFFEE_LAUNCH_SCRATCH: join(options.state, "soak"),
+        TMPDIR: join(options.state, "tmp"),
+      },
     });
     if (soak.code !== 0) fail(`soak упал: ${soak.tail}`);
   }
