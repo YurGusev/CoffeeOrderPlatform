@@ -4510,7 +4510,7 @@ void test("supply_chain builds product images, records pinned upstream identity,
   const checksumInventory = JSON.parse(
     await readFile(join(outputDir, "artifacts/checksums.json"), "utf8"),
   );
-  assert.equal(checksumInventory.length, 70);
+  assert.equal(checksumInventory.length, 71);
   const inventoryBytes = await readFile(
     join(outputDir, "artifacts/image-inventory.json"),
     "utf8",
@@ -4536,27 +4536,110 @@ void test("supply_chain builds product images, records pinned upstream identity,
     savedResult.imageInventory.sha256,
     createHash("sha256").update(inventoryBytes).digest("hex"),
   );
-  const { readLaunchImageInventory } =
+  const manifestBytes = await readFile(
+    join(outputDir, "artifacts/artifact-manifest.json"),
+    "utf8",
+  );
+  const artifactManifest = JSON.parse(manifestBytes);
+  assert.equal(artifactManifest.generatedBy, "supply_chain");
+  assert.equal(artifactManifest.schemaVersion, 1);
+  assert.equal(artifactManifest.runId, context.runId);
+  assert.equal(artifactManifest.candidateSha, context.candidateSha);
+  assert.equal(artifactManifest.treeSha, imageInventory.treeSha);
+  assert.equal(artifactManifest.configSha256, imageInventory.configSha256);
+  assert.equal(
+    artifactManifest.toolchainVersionsSha256,
+    imageInventory.toolchainVersionsSha256,
+  );
+  assert.equal(artifactManifest.lockfileSha256, imageInventory.lockfileSha256);
+  assert.equal(
+    artifactManifest.buildInputSha256,
+    imageInventory.buildInputSha256,
+  );
+  assert.equal(
+    artifactManifest.composeProject,
+    context.resources.composeProject,
+  );
+  assert.equal(
+    artifactManifest.imageInventorySha256,
+    createHash("sha256").update(inventoryBytes).digest("hex"),
+  );
+  assert.equal(artifactManifest.images.length, 20);
+  assert.deepEqual(
+    artifactManifest.images.map((image) => image.service).sort(),
+    [
+      ...RUNTIME_NAMES,
+      "grafana",
+      "keycloak",
+      "storage-helper",
+      "edge-nginx",
+      "kafka",
+      "otel-collector",
+    ].sort(),
+  );
+  const runtimeManifestImages = artifactManifest.images.filter(
+    (image) => image.role === "runtime",
+  );
+  assert.deepEqual(
+    runtimeManifestImages.map((image) => image.service).sort(),
+    [...RUNTIME_NAMES, "edge-nginx"].sort(),
+  );
+  assert.deepEqual(
+    artifactManifest.images
+      .filter((image) => image.role === "infra")
+      .map((image) => image.service)
+      .sort(),
+    ["grafana", "kafka", "keycloak", "otel-collector", "storage-helper"],
+  );
+  for (const image of artifactManifest.images) {
+    assert.match(image.imageId, /^sha256:[a-f0-9]{64}$/u);
+    assert.match(image.manifestDigest, /^sha256:[a-f0-9]{64}$/u);
+    assert.match(image.platformManifestDigest, /^sha256:[a-f0-9]{64}$/u);
+    assert.match(image.provenanceSha256, /^[a-f0-9]{64}$/u);
+    assert.match(image.attestationSha256, /^[a-f0-9]{64}$/u);
+  }
+  assert.ok(
+    checksumInventory.some(
+      (entry) =>
+        entry.path === "artifacts/artifact-manifest.json" &&
+        entry.sha256 ===
+          createHash("sha256").update(manifestBytes).digest("hex"),
+    ),
+  );
+  const { readArtifactManifest } =
     await import("../../tools/image-inventory.mjs");
-  const launchInventoryInput = {
+  const manifestInput = {
     evidenceDir: context.evidenceDir,
     context,
     services: [...RUNTIME_NAMES, "edge-nginx"],
   };
-  const boundInventory = await readLaunchImageInventory(launchInventoryInput);
+  const boundManifest = await readArtifactManifest(manifestInput);
+  assert.equal(boundManifest.buildInputSha256, imageInventory.buildInputSha256);
   assert.equal(
-    boundInventory.buildInputSha256,
-    imageInventory.buildInputSha256,
+    boundManifest.imageInventorySha256,
+    createHash("sha256").update(inventoryBytes).digest("hex"),
   );
-  await writeFile(
-    join(outputDir, "artifacts/image-inventory.json"),
-    JSON.stringify({ ...imageInventory, candidateSha: "0".repeat(40) }),
-    { mode: 0o600 },
-  );
-  await assert.rejects(
-    readLaunchImageInventory(launchInventoryInput),
-    /IMAGE_INVENTORY/u,
-  );
+  const manifestPath = join(outputDir, "artifacts/artifact-manifest.json");
+  for (const alter of [
+    (value) => {
+      value.runId = "20260101T000000Z-0000000";
+    },
+    (value) => {
+      value.candidateSha = "0".repeat(40);
+    },
+    (value) => {
+      delete value.images[0].role;
+    },
+  ]) {
+    const changed = structuredClone(artifactManifest);
+    alter(changed);
+    await writeFile(manifestPath, JSON.stringify(changed), { mode: 0o600 });
+    await assert.rejects(
+      readArtifactManifest(manifestInput),
+      /ARTIFACT_MANIFEST/u,
+    );
+  }
+  await writeFile(manifestPath, manifestBytes, { mode: 0o600 });
   assert.ok(
     checksumInventory.some(
       (entry) =>

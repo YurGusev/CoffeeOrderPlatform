@@ -8601,3 +8601,187 @@ void test("observability provider boundary rejects enabled mutations and non-iso
     }),
   );
 });
+
+void test("published artifact manifest selects reuse and rejects an image without role", async (t) => {
+  const {
+    artifactManifestPath,
+    buildArtifactManifest,
+    buildImageInventory,
+    imageInventoryPath,
+    readArtifactManifest,
+    serializeArtifactManifest,
+    serializeImageInventory,
+  } = await import("../../tools/image-inventory.mjs");
+  const { RUNTIME_NAMES } =
+    await import("../../packages/platform-config/src/index.ts");
+  const directory = await mkdtemp(join(tmpdir(), "artifact-manifest-"));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const evidenceDir = join(directory, "evidence");
+  const artifactsDir = join(
+    evidenceDir,
+    "gates/supply_chain/artifacts/supply-chain/artifacts",
+  );
+  await mkdir(artifactsDir, { recursive: true });
+  const composeProject = "coffee-launch-manifest";
+  const runId = "20261114T000000Z-abcdef0";
+  const candidateSha = "a".repeat(40);
+  const treeSha = "b".repeat(40);
+  const configSha256 = "c".repeat(64);
+  const toolchainVersionsSha256 = "d".repeat(64);
+  const lockfileSha256 = "e".repeat(64);
+  const environment = {
+    runId,
+    candidateSha,
+    dirty: false,
+    treeSha,
+    configSha256,
+    toolchainVersionsSha256,
+    lockfileSha256,
+  };
+  const context = {
+    runId,
+    candidateSha,
+    resources: { composeProject },
+  };
+  await writeFile(
+    join(evidenceDir, "environment.json"),
+    JSON.stringify(environment),
+  );
+  let counter = 0;
+  const digest = () =>
+    `sha256:${createHash("sha256").update(`image-${counter++}`).digest("hex")}`;
+  const sha = () =>
+    createHash("sha256").update(`tool-${counter++}`).digest("hex");
+  const services = [...RUNTIME_NAMES, "edge-nginx"];
+  const buildImage = (service, role) => ({
+    service,
+    role,
+    tag:
+      role === "runtime"
+        ? `${composeProject}-${service}:latest`
+        : `coffee-g12-0123456789ab-${service}:latest`,
+    imageId: digest(),
+    manifestDigest: digest(),
+    platformManifestDigest: digest(),
+    provenanceSha256: sha(),
+    attestationSha256: sha(),
+  });
+  const images = [
+    ...services.map((service) => buildImage(service, "runtime")),
+    ...["grafana", "kafka", "keycloak", "otel-collector", "storage-helper"].map(
+      (service) => buildImage(service, "infra"),
+    ),
+  ];
+  const inventoryBytes = serializeImageInventory(
+    buildImageInventory({
+      context,
+      environment,
+      composeProject,
+      services,
+      images: images.filter((image) => image.role === "runtime"),
+    }),
+  );
+  await writeFile(imageInventoryPath(evidenceDir), inventoryBytes, {
+    mode: 0o600,
+  });
+  const resultBytes = Buffer.from(
+    JSON.stringify({
+      gate: "supply_chain",
+      status: "PASS",
+      code: "SUPPLY_CHAIN_SCAN_CLEAN",
+      runId,
+      candidateSha,
+      provenance: {
+        status: "PASS",
+        sourceRevision: candidateSha,
+        treeSha,
+        configSha256,
+        toolchainVersionsSha256,
+        lockfileSha256,
+        images: images.map((image) => ({
+          service: image.service,
+          imageId: image.imageId,
+          manifestDigest: image.manifestDigest,
+          platformManifestDigest: image.platformManifestDigest,
+          provenanceStatus: "PASS",
+          metadataSha256: image.provenanceSha256,
+          attestationSha256: image.attestationSha256,
+        })),
+      },
+      imageInventory: {
+        path: "artifacts/image-inventory.json",
+        sha256: createHash("sha256").update(inventoryBytes).digest("hex"),
+        sizeBytes: inventoryBytes.length,
+      },
+    }),
+  );
+  const resultPath = join(
+    evidenceDir,
+    "gates/supply_chain/artifacts/supply-chain/result.json",
+  );
+  await writeFile(resultPath, resultBytes, { mode: 0o600 });
+  const manifest = buildArtifactManifest({
+    context,
+    environment,
+    composeProject,
+    services,
+    images,
+    imageInventorySha256: createHash("sha256")
+      .update(inventoryBytes)
+      .digest("hex"),
+  });
+  const manifestBytes = serializeArtifactManifest(manifest);
+  const manifestPath = artifactManifestPath(evidenceDir);
+  await writeFile(manifestPath, manifestBytes, { mode: 0o600 });
+  const manifestInput = { evidenceDir, context, services };
+  const boundManifest = await readArtifactManifest(manifestInput);
+  assert.equal(boundManifest.images.length, 20);
+  assert.equal(
+    boundManifest.images.filter((image) => image.role === "runtime").length,
+    services.length,
+  );
+  const { resolveRuntimeImageMode } =
+    await import("../../tools/compose-smoke.mjs");
+  assert.equal(
+    resolveRuntimeImageMode({
+      launchArtifactManifest: boundManifest,
+      ownedImagePhase: undefined,
+      ownedTargets: null,
+    }),
+    "reuse",
+  );
+  assert.equal(
+    resolveRuntimeImageMode({
+      launchArtifactManifest: null,
+      ownedImagePhase: undefined,
+      ownedTargets: null,
+    }),
+    "build",
+  );
+  const source = await readFile(
+    join(REPO_ROOT, "tools/compose-smoke.mjs"),
+    "utf8",
+  );
+  const modeIndex = source.indexOf(
+    "const imageMode = resolveRuntimeImageMode({",
+  );
+  const guardIndex = source.indexOf('imageMode === "build"', modeIndex);
+  const buildIndex = source.indexOf("buildRuntimeImages(", modeIndex);
+  assert.ok(
+    modeIndex >= 0 && guardIndex > modeIndex && buildIndex > guardIndex,
+    "docker buildx must stay unreachable when the manifest selects reuse",
+  );
+  const broken = structuredClone(manifest);
+  delete broken.images[0].role;
+  await writeFile(manifestPath, JSON.stringify(broken), { mode: 0o600 });
+  await assert.rejects(
+    readArtifactManifest(manifestInput),
+    /ARTIFACT_MANIFEST_INVALID/u,
+  );
+  await writeFile(manifestPath, manifestBytes, { mode: 0o600 });
+  await rm(manifestPath, { force: true });
+  await assert.rejects(
+    readArtifactManifest(manifestInput),
+    /ARTIFACT_MANIFEST_MISSING/u,
+  );
+});

@@ -30,9 +30,12 @@ import { validateLaunchContext } from "../verification/launch/v1/report.mjs";
 import { materializeBuildRegistryCredentials } from "./config-bootstrap/index.mjs";
 import { buildkitPolicy, verifyBuildkitPolicy } from "./buildkit-policy.mjs";
 import {
+  ARTIFACT_MANIFEST_FILE,
   IMAGE_INVENTORY_REFERENCE,
+  buildArtifactManifest,
   buildImageInventory,
   runtimeImageTag,
+  serializeArtifactManifest,
   serializeImageInventory,
 } from "./image-inventory.mjs";
 
@@ -3493,6 +3496,7 @@ export async function runSecurityScan({
       typeof composeProject === "string" &&
       /^[a-z0-9][a-z0-9_-]{0,62}$/u.test(composeProject);
     const publishedRuntimeImages = [];
+    const builtImages = [];
     if (publishesRuntimeImages)
       await pruneStaleLaunchImages(runBounded, composeProject);
     const sourceSnapshot = await createBuildInputSnapshot({
@@ -3845,6 +3849,7 @@ export async function runSecurityScan({
       keycloakBaseMaterial,
       vendorPlugins,
       onValidatedImage: async (image) => {
+        builtImages.push(image);
         markStage("image-scan");
         await scanValidatedImage(image);
         markStage("product-image-build");
@@ -3995,15 +4000,14 @@ export async function runSecurityScan({
     if (result.status === "FAIL") result.failure = { code: result.code, stage };
     if (result.status === "PASS" && publishesRuntimeImages) {
       markStage("image-inventory");
-      const inventoryBytes = serializeImageInventory(
-        buildImageInventory({
-          context: identity.context,
-          environment: identity.environment,
-          composeProject,
-          services: PUBLISHED_RUNTIME_SERVICES,
-          images: publishedRuntimeImages,
-        }),
-      );
+      const inventory = buildImageInventory({
+        context: identity.context,
+        environment: identity.environment,
+        composeProject,
+        services: PUBLISHED_RUNTIME_SERVICES,
+        images: publishedRuntimeImages,
+      });
+      const inventoryBytes = serializeImageInventory(inventory);
       await writeScannerOutput(
         join(outputRoot, "image-inventory.json"),
         inventoryBytes,
@@ -4013,6 +4017,22 @@ export async function runSecurityScan({
         sha256: sha256(inventoryBytes),
         sizeBytes: inventoryBytes.length,
       };
+      // Манифест публикуется тем же шагом, что и инвентарь: downstream-гейты
+      // получают только его, а imageInventorySha256 связывает оба файла.
+      const manifestBytes = serializeArtifactManifest(
+        buildArtifactManifest({
+          context: identity.context,
+          environment: identity.environment,
+          composeProject,
+          services: PUBLISHED_RUNTIME_SERVICES,
+          images: builtImages,
+          imageInventorySha256: sha256(inventoryBytes),
+        }),
+      );
+      await writeScannerOutput(
+        join(outputRoot, ARTIFACT_MANIFEST_FILE),
+        manifestBytes,
+      );
     }
     if (result.status === "PASS") {
       for (const [target, build, baseImage, resultKey] of [

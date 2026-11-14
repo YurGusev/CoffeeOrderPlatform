@@ -181,6 +181,7 @@ void test("launch controller reaches evidence preflight without compiled service
   execFileSync("tar", ["-x", "-C", controller], { input: archive });
   for (const path of [
     "tools/compose-smoke.mjs",
+    "tools/image-inventory.mjs",
     "tools/runtime-image-inventory.mjs",
     "verification/launch/v1/run.mjs",
   ])
@@ -413,15 +414,15 @@ void test("report runs image cleanup before writing the final decision", async (
   );
 });
 
-void test("runner passes image ownership only when explicitly selected", async (t) => {
+void test("runner passes the artifact manifest only when explicitly selected", async (t) => {
   const directory = await mkdtemp(join(tmpdir(), "launch-image-env-"));
   t.after(() => rm(directory, { recursive: true, force: true }));
-  const marker = join(directory, "ownership.json");
+  const marker = join(directory, "artifact-manifest.json");
   for (const { name, options, expected } of [
     { name: "normal", options: {}, expected: "" },
     {
-      name: "owned",
-      options: { imageOwnershipPath: marker },
+      name: "manifest",
+      options: { imageManifestPath: marker },
       expected: marker,
     },
   ]) {

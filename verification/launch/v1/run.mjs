@@ -49,6 +49,7 @@ import {
   loadVerifiedGateImage,
   readVerifiedRuntimeImages,
 } from "../../../tools/verified-infrastructure-image.mjs";
+import { artifactManifestPath } from "../../../tools/image-inventory.mjs";
 import {
   cleanupLaunchRuntimeImages,
   captureRuntimeImageBaseline,
@@ -747,8 +748,9 @@ export async function executeArgv(
   delete childEnv.COFFEE_AROMA_SANDBOX_SIGNER_PATH;
   if (options.g16SignerPath)
     childEnv.COFFEE_AROMA_SANDBOX_SIGNER_PATH = options.g16SignerPath;
-  if (options.imageOwnershipPath)
-    childEnv.COFFEE_LAUNCH_IMAGE_OWNERSHIP = options.imageOwnershipPath;
+  if (options.imageManifestPath)
+    // Имя переменной — контракт гейтов; значение — путь artifact-manifest.json.
+    childEnv.COFFEE_LAUNCH_IMAGE_OWNERSHIP = options.imageManifestPath;
   childEnv.pnpm_config_verify_deps_before_run = "false";
   if (Number.isSafeInteger(options.deadlineEpochMs))
     childEnv.COFFEE_LAUNCH_GATE_DEADLINE_EPOCH_MS = String(
@@ -1999,7 +2001,7 @@ export async function runGate(
   outputBudget,
   migrationsExpectedSystemIdentifier,
   realtimeQualificationPath,
-  imageOwnershipPath,
+  imageManifestPath,
   g16SignerPath,
   dataTempDir,
 ) {
@@ -2179,7 +2181,7 @@ export async function runGate(
         contextPath,
         outputBudget,
         {
-          imageOwnershipPath,
+          imageManifestPath,
           gateId: gate.id,
           dataTempDir,
           g16SignerPath:
@@ -2444,6 +2446,7 @@ export async function executeRun(options = {}) {
   const checkout = await makeCandidateCheckout(candidateSha);
   let imageOwnership;
   let imageOwnershipPath;
+  let launchArtifactManifestPath;
   let imageCleanupVerified = false;
   let imageCleanupReported = false;
   try {
@@ -2692,11 +2695,7 @@ export async function executeRun(options = {}) {
         outputBudget,
         options.migrationsExpectedSystemIdentifier,
         options.realtimeQualificationPath,
-        ["integration", "recovery", "compose", "observability"].includes(
-          gate.id,
-        )
-          ? imageOwnershipPath
-          : undefined,
+        launchArtifactManifestPath,
         options.g16SignerPath,
         dataTempDir,
       );
@@ -2709,6 +2708,8 @@ export async function executeRun(options = {}) {
           record,
           workloadDeadline,
         });
+        if (record.status === "PASS")
+          launchArtifactManifestPath = artifactManifestPath(evidenceDir);
         await updateGateArtifact(evidenceDir, record);
       }
       if (

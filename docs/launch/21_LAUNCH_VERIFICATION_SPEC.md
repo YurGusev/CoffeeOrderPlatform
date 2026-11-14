@@ -279,12 +279,35 @@ Docker daemon под тегами проекта запуска
 digests, `buildInputSha256` и для каждого сервиса `imageId`, manifest digest,
 provenance и attestation hashes. Инвентарь пишется только при PASS `supply_chain`.
 
-Гейты от `compose` до `rollback` не собирают runtime-образы: Compose получает `image:` из инвентаря,
+Гейты от `compose` до `rollback` не собирают runtime-образы: Compose получает `image:` из манифеста,
 `docker compose up` выполняется с `--no-build`, а после старта каждый контейнер
-проверяется по `container.Image === inventory.imageId`. Тем самым исполняется
+проверяется по `container.Image === manifest.imageId`. Тем самым исполняется
 именно просканированный артефакт, а не пересборка «с теми же намерениями».
-Standalone-запуски без launch context и без инвентаря сохраняют прежнюю сборку.
+Standalone-запуски без launch context и без манифеста сохраняют прежнюю сборку.
 Устаревшие образы прошлых launch-проектов удаляются в начале `supply_chain`.
+
+### Единственный контракт образов: artifact manifest
+
+При PASS `supply_chain` публикует рядом с инвентарём
+`artifacts/artifact-manifest.json` (mode `0600`) и включает его SHA-256 в
+`artifacts/checksums.json` гейта. Манифест — единственный контракт передачи
+образов между гейтами. Он содержит `generatedBy: "supply_chain"`,
+`schemaVersion: 1`, `runId`, `candidateSha`, `treeSha`, `configSha256`,
+`toolchainVersionsSha256`, `lockfileSha256`, `buildInputSha256`,
+`composeProject`, `imageInventorySha256` и `images[]`; запись образа содержит
+`service`, `role` (`runtime` | `infra`), `tag`, `imageId`, `manifestDigest`,
+`platformManifestDigest`, `provenanceSha256`, `attestationSha256`.
+`runtime`-записи точно совпадают с `image-inventory.json`, `infra` — остальные
+собранные `supply_chain` образы. `imageInventorySha256` связывает манифест с
+инвентарём, а читатель отвергает чужой run/candidate/tree/config/toolchain/lock
+и несовпадение provenance.
+
+Runner передаёт абсолютный путь манифеста последующим гейтам в
+`COFFEE_LAUNCH_IMAGE_OWNERSHIP`. `compose-smoke` читает только манифест через
+`readArtifactManifest`, берёт из него `runtime`-образы для Compose и проверяет
+по ним `container.Image`; `image-inventory.json` остаётся входом манифеста и в
+этой задаче не удаляется. `runtime-image-ownership.json` остаётся внутренним
+состоянием runner для cleanup и не является источником образов.
 
 Требование к хосту: BuildKit GC не должен стирать кеш между сборками.
 Измеренный кеш для 14 runtime-образов и `edge-nginx` — 9.07 GiB; с
