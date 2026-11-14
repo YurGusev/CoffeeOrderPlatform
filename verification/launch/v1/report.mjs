@@ -59,7 +59,9 @@ export function validateRunResultContract(result) {
     !Array.isArray(result.gates) ||
     result.gates.length !== EXPECTED_GATES.length ||
     (result.schemaVersion === 2 &&
-      !["PASS", "FAIL", "NOT_RUN"].includes(result.reportStatus)) ||
+      !["PASS", "FAIL", "NOT_RUN", "SKIPPED_BY_FILTER"].includes(
+        result.reportStatus,
+      )) ||
     !["ДОПУСТИТЬ", "НЕ ДОПУСТИТЬ"].includes(result.decision)
   ) {
     throw new Error("Некорректная структура run-result.json");
@@ -73,7 +75,13 @@ export function validateRunResultContract(result) {
       gateSlug(gate?.id) !== id ||
       gate.expectedCommand !== command ||
       gate.timeoutSeconds !== timeoutSeconds ||
-      !["PASS", "FAIL", "NOT_RUN"].includes(gate.status) ||
+      !["PASS", "FAIL", "NOT_RUN", "SKIPPED_BY_FILTER"].includes(gate.status) ||
+      (gate.reusedFrom !== undefined &&
+        (gate.status !== "PASS" ||
+          typeof gate.reusedFrom?.runId !== "string" ||
+          !/^[0-9]{8}T[0-9]{6}Z-[0-9a-f]{7}$/.test(gate.reusedFrom.runId) ||
+          typeof gate.reusedFrom?.evidenceDir !== "string" ||
+          gate.reusedFrom.evidenceDir.length === 0)) ||
       !Array.isArray(gate.runs) ||
       !Array.isArray(gate.artifacts) ||
       !Number.isInteger(gate.durationMs) ||
@@ -398,7 +406,17 @@ async function validateEvidence(evidenceDir, result, sourceRoot) {
         `${gate.id}: фактический argv не соответствует exact command`,
       );
     }
-    if (gate.status === "PASS" && gate.runs.length !== expectedArgvs.length)
+    if (
+      gate.status === "PASS" &&
+      gate.reusedFrom !== undefined &&
+      gate.runs.length !== 0
+    )
+      errors.push(`${gate.id}: reused PASS не должен иметь command runs`);
+    if (
+      gate.status === "PASS" &&
+      gate.reusedFrom === undefined &&
+      gate.runs.length !== expectedArgvs.length
+    )
       errors.push(`${gate.id}: PASS без полного набора argv`);
     for (const artifact of gate.artifacts) {
       const path = resolve(artifact.path);
@@ -417,6 +435,7 @@ async function validateEvidence(evidenceDir, result, sourceRoot) {
     }
     if (
       gate.status === "PASS" &&
+      gate.reusedFrom === undefined &&
       gate.runs.some(
         (run) =>
           run.exitCode !== 0 ||
@@ -475,7 +494,10 @@ async function validateEvidence(evidenceDir, result, sourceRoot) {
     "preflight.json",
   );
   let preflight = null;
-  if (result.gates[0].status === "PASS") {
+  if (
+    result.gates[0].status === "PASS" &&
+    result.gates[0].reusedFrom === undefined
+  ) {
     try {
       preflight = JSON.parse(await readFile(preflightPath, "utf8"));
       if (
@@ -893,7 +915,8 @@ function reportMarkdown(
     ...environmentErrors.map((error) => `- Environment: ${error}`),
     ...unproven.map((entry) => `- ${entry}`),
     "- aroma_sandbox без проверенного detached signature verifier и signed approval не выполняет provider-вызов.",
-    "- Непрошедшие gates сохраняют FAIL или NOT_RUN; автоматического retry нет.",
+    "- Непрошедшие gates сохраняют FAIL, NOT_RUN или SKIPPED_BY_FILTER; автоматического retry нет.",
+    "- PASS с reusedFrom взят из identity-совпавшего источника; его evidence не переносится в этот run.",
     "",
   );
   return `${lines.join("\n").trimEnd()}\n`;

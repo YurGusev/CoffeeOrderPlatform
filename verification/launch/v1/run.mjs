@@ -33,7 +33,7 @@ import {
   validateLaunchContext,
   writeDefects,
 } from "./report.mjs";
-import { decisive, reportGateStatus } from "./decision.mjs";
+import { decisive, reportGateStatus, RESUMABLE_GATE_IDS } from "./decision.mjs";
 import {
   inspectLaunchCheckout,
   verifyControlledRollbackEvidence,
@@ -69,7 +69,14 @@ const BASE = join(ROOT, "verification/launch/v1");
 const MATRIX_PATH = join(BASE, "matrix.yaml");
 const MATRIX_SCHEMA_PATH = join(BASE, "schemas/matrix.schema.json");
 const RESULT_SCHEMA_PATH = join(BASE, "schemas/run-result.schema.json");
-const TOTAL_TIMEOUT_MS = 120 * 60 * 1000;
+const PROFILE_BUDGET_MS = Object.freeze({
+  fast: 20 * 60 * 1000,
+  release: 180 * 60 * 1000,
+});
+const DEFAULT_PROFILE = "release";
+const DIAGNOSTIC_PROFILE = "diagnostic";
+export const SKIPPED_BY_FILTER = "SKIPPED_BY_FILTER";
+const RUN_ID_PATTERN = /^[0-9]{8}T[0-9]{6}Z-[0-9a-f]{7}$/;
 const REPORT_FINALIZATION_RESERVE_MS = 120 * 1000;
 const REPORT_COMMAND_RESERVE_MS = EXPECTED_GATES.at(-1)[2] * 1000;
 const REPORT_TOTAL_RESERVE_MS =
@@ -88,11 +95,34 @@ ajv.addFormat("date-time", {
     Number.isFinite(Date.parse(value)),
 });
 
-export function gateBudgetMs(gateId, totalRemainingMs) {
+export function profileBudgetMs(profile = DEFAULT_PROFILE) {
+  const budget = PROFILE_BUDGET_MS[profile];
+  if (budget === undefined) throw new Error(`Неизвестный профиль: ${profile}`);
+  return budget;
+}
+
+function reportReserveMs(profile = DEFAULT_PROFILE) {
+  // Полный резерв report-команды оставляет от fast-бюджета только несколько
+  // минут работы, поэтому резерв ограничен четвертью бюджета профиля.
+  return Math.min(
+    REPORT_TOTAL_RESERVE_MS,
+    Math.floor(profileBudgetMs(profile) / 4),
+  );
+}
+
+export function workloadReserveMs(profile = DEFAULT_PROFILE) {
+  return reportReserveMs(profile);
+}
+
+export function gateBudgetMs(
+  gateId,
+  totalRemainingMs,
+  profile = DEFAULT_PROFILE,
+) {
   if (!Number.isFinite(totalRemainingMs)) return 0;
   if (gateId === "report")
     return Math.max(0, totalRemainingMs - REPORT_FINALIZATION_RESERVE_MS);
-  return Math.max(0, totalRemainingMs - REPORT_TOTAL_RESERVE_MS);
+  return Math.max(0, totalRemainingMs - reportReserveMs(profile));
 }
 
 export async function loadJsonSchema(path) {
@@ -959,6 +989,247 @@ function gateRecord(gate) {
     runs: [],
     artifacts: [],
   };
+}
+
+// Выбор гейтов: профиль, явный --gate или диагностический --from.
+export function selectGates(matrixGates, options = {}) {
+  const orderedIds = matrixGates.map((gate) => gate.id);
+  const gateIds = options.gateIds ?? [];
+  let profile = options.profile ?? DEFAULT_PROFILE;
+  let selectedIds;
+  let skipReason;
+  if (gateIds.length) {
+    profile = DIAGNOSTIC_PROFILE;
+    selectedIds = new Set(gateIds);
+    skipReason = "--gate запускает только явно указанные гейты";
+  } else if (options.from !== undefined) {
+    profile = DIAGNOSTIC_PROFILE;
+    const start = orderedIds.indexOf(options.from);
+    if (start < 0)
+      throw new Error(`Неизвестный гейт для --from: ${options.from}`);
+    selectedIds = new Set(orderedIds.slice(start));
+    skipReason = `--from ${options.from} запускает гейт и все последующие`;
+  } else {
+    if (profile !== "fast" && profile !== "release")
+      throw new Error(`Неизвестный профиль: ${profile}`);
+    selectedIds = new Set(
+      matrixGates
+        .filter(
+          (gate) =>
+            profile === "release" ||
+            gate.profile === "both" ||
+            gate.profile === "fast",
+        )
+        .map((gate) => gate.id),
+    );
+    skipReason = `гейт вне профиля ${profile}`;
+  }
+  const gates = new Map();
+  for (const gate of matrixGates)
+    gates.set(
+      gate.id,
+      selectedIds.has(gate.id)
+        ? { id: gate.id, status: "RUN", reason: null }
+        : {
+            id: gate.id,
+            status: SKIPPED_BY_FILTER,
+            reason: `SKIPPED_BY_FILTER: ${skipReason}`,
+          },
+    );
+  return {
+    profile,
+    budgetProfile: profile === DIAGNOSTIC_PROFILE ? DEFAULT_PROFILE : profile,
+    gates,
+  };
+}
+
+export function assertResumableGate(gateId) {
+  if (!RESUMABLE_GATE_IDS.has(gateId))
+    throw Object.assign(
+      new Error(
+        `RESUME_FORBIDDEN_GATE: ${gateId} снимает живое состояние и не может быть переиспользован через --resume`,
+      ),
+      { code: "RESUME_FORBIDDEN_GATE" },
+    );
+}
+
+export function resumeIdentityOf(result) {
+  return {
+    candidateSha: result?.candidateSha,
+    treeSha: result?.environment?.treeSha,
+    configSha256: result?.environment?.configSha256,
+    toolchainVersionsSha256: result?.environment?.toolchainVersionsSha256,
+    lockfileSha256: result?.environment?.lockfileSha256,
+  };
+}
+
+export function assertResumeIdentity(sourceResult, identity) {
+  const source = resumeIdentityOf(sourceResult);
+  const mismatched = Object.keys(identity).filter(
+    (key) => source[key] !== identity[key],
+  );
+  if (mismatched.length)
+    throw Object.assign(
+      new Error(
+        `RESUME_IDENTITY_MISMATCH: ${mismatched
+          .map(
+            (key) => `${key} источник=${source[key]} текущий=${identity[key]}`,
+          )
+          .join("; ")}`,
+      ),
+      { code: "RESUME_IDENTITY_MISMATCH" },
+    );
+}
+
+function predecessorsOf(matrixGates, gateId) {
+  const byId = new Map(matrixGates.map((gate) => [gate.id, gate]));
+  const ancestors = new Set();
+  const pending = [...(byId.get(gateId)?.predecessors ?? [])];
+  while (pending.length) {
+    const id = pending.pop();
+    if (ancestors.has(id)) continue;
+    ancestors.add(id);
+    pending.push(...(byId.get(id)?.predecessors ?? []));
+  }
+  return [...ancestors];
+}
+
+export function assertFromPredecessors(matrixGates, fromId, sourceResult) {
+  const sourceById = new Map(
+    (sourceResult?.gates ?? []).map((gate) => [gate.id, gate]),
+  );
+  const failing = predecessorsOf(matrixGates, fromId).filter(
+    (id) => sourceById.get(id)?.status !== "PASS",
+  );
+  if (failing.length)
+    throw Object.assign(
+      new Error(
+        `FROM_PREDECESSORS_NOT_PASS: в источнике resume нет PASS для ${failing.join(", ")}`,
+      ),
+      { code: "FROM_PREDECESSORS_NOT_PASS" },
+    );
+}
+
+// Артефакты источника не переносятся, поэтому PASS supply_chain переиспользуется
+// только в выборке без его живых потребителей; иначе гейт выполняется заново.
+const SUPPLY_CHAIN_CONSUMER_IDS = new Set([
+  "integration",
+  "recovery",
+  "compose",
+  "observability",
+  "rollback",
+]);
+// preflight и report работают без установленных зависимостей candidate.
+const INSTALL_INDEPENDENT_IDS = new Set(["preflight", "report"]);
+
+export function resumableGateRecords(
+  sourceResult,
+  sourceEvidenceDir,
+  selection,
+) {
+  const reused = new Map();
+  const supplyChainConsumed = [...selection.gates.values()].some(
+    (entry) =>
+      entry.status === "RUN" && SUPPLY_CHAIN_CONSUMER_IDS.has(entry.id),
+  );
+  for (const [id, entry] of selection.gates) {
+    if (entry.status !== "RUN" || !RESUMABLE_GATE_IDS.has(id)) continue;
+    if (id === "supply_chain" && supplyChainConsumed) continue;
+    const sourceGate = sourceResult.gates.find((gate) => gate.id === id);
+    if (sourceGate?.status !== "PASS") continue;
+    reused.set(id, {
+      runId: sourceResult.runId,
+      evidenceDir: relativeEvidencePath(sourceEvidenceDir),
+    });
+  }
+  // Свежий candidate checkout не содержит node_modules: если хоть один
+  // выбранный гейт будет выполняться и зависит от install, install идёт заново.
+  const installNeeded = [...selection.gates.values()].some(
+    (entry) =>
+      entry.status === "RUN" &&
+      entry.id !== "install" &&
+      !INSTALL_INDEPENDENT_IDS.has(entry.id) &&
+      !reused.has(entry.id),
+  );
+  if (installNeeded) reused.delete("install");
+  return reused;
+}
+
+async function loadResumeSource(value) {
+  const requested = String(value);
+  const pathLike = isAbsolute(requested) || /[\\/]/u.test(requested);
+  const evidenceDir = pathLike
+    ? resolve(requested)
+    : RUN_ID_PATTERN.test(requested)
+      ? join(ROOT, "evidence/launch", requested)
+      : null;
+  if (!evidenceDir)
+    throw new Error(
+      `--resume требует evidenceDir или runId вида 20260101T000000Z-abcdef0, получено: ${requested}`,
+    );
+  const directory = await lstat(evidenceDir);
+  if (!directory.isDirectory() || directory.isSymbolicLink())
+    throw new Error(
+      "--resume evidenceDir должен быть обычным каталогом без symlink",
+    );
+  const resultPath = join(evidenceDir, "run-result.json");
+  const contextPath = join(evidenceDir, "context.json");
+  const [resultInfo, contextInfo] = await Promise.all([
+    lstat(resultPath),
+    lstat(contextPath),
+  ]);
+  if (
+    !resultInfo.isFile() ||
+    resultInfo.isSymbolicLink() ||
+    !contextInfo.isFile() ||
+    contextInfo.isSymbolicLink()
+  )
+    throw new Error(
+      "--resume требует обычные run-result.json и context.json без symlink",
+    );
+  const result = JSON.parse(await readFile(resultPath, "utf8"));
+  validateRunResultContract(result);
+  const context = JSON.parse(await readFile(contextPath, "utf8"));
+  if (
+    resolve(context.evidenceDir ?? "") !== evidenceDir ||
+    context.runId !== result.runId ||
+    context.candidateSha !== result.candidateSha
+  )
+    throw new Error(
+      "RESUME_SOURCE_INVALID: context/result не совпадают с evidenceDir",
+    );
+  return { evidenceDir, result };
+}
+
+function usageText() {
+  return [
+    "Использование: node verification/launch/v1/run.mjs [опции]",
+    "",
+    "Профили и фильтры:",
+    "  --profile fast|release  fast: девять гейтов без живого состояния; release: все двадцать (по умолчанию)",
+    "  --gate <id>             диагностический запуск только указанных гейтов (можно повторять)",
+    "  --from <id>             диагностический запуск гейта и всех последующих; требует --resume",
+    "",
+    "Переиспользование ранее полученного PASS:",
+    "  --resume <evidenceDir|runId>",
+    "                          переиспользовать PASS разрешённых гейтов при совпадении",
+    "                          candidateSha, treeSha, configSha256, toolchainVersionsSha256, lockfileSha256",
+    "",
+    "Identity и прочие опции:",
+    "  --candidate-sha <sha>                полный SHA кандидата (по умолчанию HEAD)",
+    "  --accepted-base-commit <sha>         принятая база до начала работы",
+    "  --github-snapshot <path>             reference artifact GitHub-снимка",
+    "  --g16-signer <abs-path>              RAM signer для aroma_sandbox",
+    "  --data-temp-dir <abs-path>           приватный каталог объёмных временных данных",
+    "  --realtime-qualification <abs-path>  receipt realtime qualification",
+    "  --g08-expected-system-identifier <id> утверждённый PostgreSQL system identifier",
+    "  -h, --help                           показать эту справку",
+    "",
+    "Решение ДОПУСТИТЬ выносит только профиль release без фильтров и только при",
+    "всех 19 рабочих PASS (PASS переиспользованного гейта фиксируется в reusedFrom);",
+    "статус report публикуется отдельно и в решение не входит.",
+    "--gate и --from всегда дают диагностический результат НЕ ДОПУСТИТЬ.",
+  ].join("\n");
 }
 
 function relativeEvidencePath(path) {
@@ -1941,11 +2212,13 @@ async function saveCommandsNdjson(evidenceDir, gates) {
   return path;
 }
 
-function dependencyStatus(gate, records) {
-  const failed = gate.predecessors.filter(
-    (id) => records.find((entry) => entry.id === id)?.status !== "PASS",
-  );
-  return failed;
+// Гейт вне выборки не блокирует запуск последующих гейтов выборки, но FAIL и
+// NOT_RUN предков блокируют как раньше.
+export function blockingPredecessors(gate, records) {
+  return gate.predecessors.filter((id) => {
+    const status = records.find((entry) => entry.id === id)?.status;
+    return status !== "PASS" && status !== SKIPPED_BY_FILTER;
+  });
 }
 
 function formatPnpmVersion(output) {
@@ -1999,6 +2272,7 @@ export async function runGate(
   imageManifestPath,
   g16SignerPath,
   dataTempDir,
+  profile = DEFAULT_PROFILE,
 ) {
   if (outputBudget.exceeded && gate.id !== "report") {
     record.reason =
@@ -2015,7 +2289,7 @@ export async function runGate(
     await updateGateArtifact(evidenceDir, record);
     return;
   }
-  const failedPredecessors = dependencyStatus(gate, runStart);
+  const failedPredecessors = blockingPredecessors(gate, runStart);
   if (failedPredecessors.length && gate.id !== "report") {
     record.reason = `NOT_RUN: predecessor не PASS: ${failedPredecessors.join(", ")}`;
     record.endedAt = nowIso();
@@ -2154,7 +2428,7 @@ export async function runGate(
       logBase,
       `stderr${commands.length > 1 ? `-${index + 1}` : ""}.log`,
     );
-    const remainingTotal = TOTAL_TIMEOUT_MS - (Date.now() - runEpochMs);
+    const remainingTotal = profileBudgetMs(profile) - (Date.now() - runEpochMs);
     const timeoutMs = Math.min(
       Math.max(
         1,
@@ -2163,7 +2437,7 @@ export async function runGate(
             ? Date.now() - started
             : 0),
       ),
-      Math.max(1, gateBudgetMs(gate.id, remainingTotal)),
+      Math.max(1, gateBudgetMs(gate.id, remainingTotal, profile)),
     );
     let run;
     try {
@@ -2422,6 +2696,7 @@ export async function executeRun(options = {}) {
       ? undefined
       : await validateLaunchDataTempDir(options.dataTempDir);
   const matrix = await loadMatrix();
+  const selection = selectGates(matrix.gates, options);
   const state = await sourceState();
   if (state.status)
     throw new Error(
@@ -2525,6 +2800,24 @@ export async function executeRun(options = {}) {
     if (databaseNames.length !== 5 || new Set(databaseNames).size !== 5)
       throw new Error("canonical launch database owner set is invalid");
     const treeSha = await git(checkout.candidate, "rev-parse", "HEAD^{tree}");
+    const resume =
+      options.resume === undefined
+        ? null
+        : await loadResumeSource(options.resume);
+    if (resume) {
+      assertResumeIdentity(resume.result, {
+        candidateSha,
+        treeSha,
+        configSha256: baseConfigSha256,
+        toolchainVersionsSha256,
+        lockfileSha256,
+      });
+      if (options.from !== undefined)
+        assertFromPredecessors(matrix.gates, options.from, resume.result);
+    }
+    const reuse = resume
+      ? resumableGateRecords(resume.result, resume.evidenceDir, selection)
+      : new Map();
     const result = {
       schemaVersion: 2,
       runId,
@@ -2571,9 +2864,10 @@ export async function executeRun(options = {}) {
       decision: "НЕ ДОПУСТИТЬ",
     };
     const resultPath = join(evidenceDir, "run-result.json");
+    const budgetProfile = selection.budgetProfile;
     const save = async () => {
       result.endedAt = nowIso();
-      result.decision = decisive(result.gates);
+      result.decision = decisive(result.gates, budgetProfile);
       result.reportStatus = reportGateStatus(result.gates);
       await validateRunResult(result);
       await atomicJson(resultPath, result);
@@ -2587,16 +2881,51 @@ export async function executeRun(options = {}) {
       observedBytes: 0,
       exceeded: false,
     };
-    const totalDeadline = runEpochMs + TOTAL_TIMEOUT_MS;
-    const workloadDeadline = totalDeadline - REPORT_TOTAL_RESERVE_MS;
+    const totalDeadline = runEpochMs + profileBudgetMs(budgetProfile);
+    const workloadDeadline = totalDeadline - workloadReserveMs(budgetProfile);
     for (let index = 0; index < matrix.gates.length; index += 1) {
       const gate = matrix.gates[index];
       const record = result.gates[index];
+      const selectionEntry = selection.gates.get(gate.id);
+      if (selectionEntry.status === SKIPPED_BY_FILTER) {
+        record.status = SKIPPED_BY_FILTER;
+        record.reason = selectionEntry.reason;
+        record.endedAt = nowIso();
+        await writeFile(join(evidenceDir, "gates", gate.id, "stdout.log"), "", {
+          mode: 0o600,
+        });
+        await writeFile(
+          join(evidenceDir, "gates", gate.id, "stderr.log"),
+          `${record.reason}\n`,
+          { mode: 0o600 },
+        );
+        await updateGateArtifact(evidenceDir, record);
+        await save();
+        continue;
+      }
+      const reusedFrom = reuse.get(gate.id);
+      if (reusedFrom) {
+        record.status = "PASS";
+        record.reusedFrom = reusedFrom;
+        record.reason = `PASS переиспользован из ${reusedFrom.runId} (${reusedFrom.evidenceDir})`;
+        record.endedAt = nowIso();
+        await writeFile(join(evidenceDir, "gates", gate.id, "stdout.log"), "", {
+          mode: 0o600,
+        });
+        await writeFile(
+          join(evidenceDir, "gates", gate.id, "stderr.log"),
+          `${record.reason}\n`,
+          { mode: 0o600 },
+        );
+        await updateGateArtifact(evidenceDir, record);
+        await save();
+        continue;
+      }
       if (
         gate.id === "integration" &&
         !outputBudget.exceeded &&
         Date.now() < workloadDeadline &&
-        dependencyStatus(gate, result.gates).length === 0
+        blockingPredecessors(gate, result.gates).length === 0
       ) {
         try {
           const images = await readVerifiedRuntimeImages({
@@ -2665,8 +2994,7 @@ export async function executeRun(options = {}) {
         await save();
       }
       if (Date.now() >= workloadDeadline && gate.id !== "report") {
-        record.reason =
-          "NOT_RUN: остановлено для резерва report и финализации внутри общего лимита 120 минут";
+        record.reason = `NOT_RUN: остановлено для резерва report и финализации внутри лимита профиля ${budgetProfile} (${Math.round(profileBudgetMs(budgetProfile) / 60_000)} минут)`;
         record.endedAt = nowIso();
         await writeFile(join(evidenceDir, "gates", gate.id, "stdout.log"), "", {
           mode: 0o600,
@@ -2694,6 +3022,7 @@ export async function executeRun(options = {}) {
         launchArtifactManifestPath,
         options.g16SignerPath,
         dataTempDir,
+        budgetProfile,
       );
       if (gate.id === "supply_chain" && record.status === "PASS") {
         await applyLaunchImageEvidence({
@@ -2734,12 +3063,17 @@ export async function executeRun(options = {}) {
       await saveCommandsNdjson(evidenceDir, result.gates);
       await save();
     }
+    await saveCommandsNdjson(evidenceDir, result.gates);
+    result.decision = decisive(result.gates, budgetProfile);
     await save();
     const reportResult = await runCapture(
       process.execPath,
       [join(BASE, "report.mjs"), "--finalize", evidenceDir],
       ROOT,
-      Math.max(1, TOTAL_TIMEOUT_MS - (Date.now() - runnerStartedAt)),
+      Math.max(
+        1,
+        profileBudgetMs(budgetProfile) - (Date.now() - runnerStartedAt),
+      ),
     ).catch((error) => ({ code: 1, stderr: error.message }));
     if (reportResult.code !== 0) {
       const reportGate = result.gates[19];
@@ -2752,7 +3086,10 @@ export async function executeRun(options = {}) {
         process.execPath,
         [join(BASE, "report.mjs"), "--finalize", evidenceDir],
         ROOT,
-        Math.max(1, TOTAL_TIMEOUT_MS - (Date.now() - runnerStartedAt)),
+        Math.max(
+          1,
+          profileBudgetMs(budgetProfile) - (Date.now() - runnerStartedAt),
+        ),
       ).catch(() => {});
     }
     const finalResult = JSON.parse(await readFile(resultPath, "utf8"));
@@ -2785,13 +3122,42 @@ export async function executeRun(options = {}) {
 
 export function parseArgs(argv) {
   const options = {};
+  const gateIds = [];
+  const knownGate = (value, flag) => {
+    if (typeof value !== "string" || !IDS.includes(value))
+      throw new Error(`${flag} требует id гейта из matrix.yaml`);
+    return value;
+  };
   for (let index = 0; index < argv.length; index += 1) {
-    if (argv[index] === "--candidate-sha") options.candidateSha = argv[++index];
-    else if (argv[index] === "--github-snapshot")
+    const argument = argv[index];
+    if (argument === "--help" || argument === "-h") return { help: true };
+    if (argument === "--profile") {
+      const value = argv[++index];
+      if (options.profile !== undefined)
+        throw new Error("--profile может быть указан только один раз");
+      if (!Object.hasOwn(PROFILE_BUDGET_MS, value))
+        throw new Error("--profile принимает только fast или release");
+      options.profile = value;
+    } else if (argument === "--gate") {
+      gateIds.push(knownGate(argv[++index], "--gate"));
+    } else if (argument === "--from") {
+      if (options.from !== undefined)
+        throw new Error("--from может быть указан только один раз");
+      options.from = knownGate(argv[++index], "--from");
+    } else if (argument === "--resume") {
+      const value = argv[++index];
+      if (options.resume !== undefined)
+        throw new Error("--resume может быть указан только один раз");
+      if (typeof value !== "string" || !value.trim())
+        throw new Error("--resume требует evidenceDir или runId");
+      options.resume = value;
+    } else if (argument === "--candidate-sha")
+      options.candidateSha = argv[++index];
+    else if (argument === "--github-snapshot")
       options.githubSnapshotPath = resolve(argv[++index]);
-    else if (argv[index] === "--accepted-base-commit")
+    else if (argument === "--accepted-base-commit")
       options.acceptedBaseCommit = argv[++index];
-    else if (argv[index] === "--g16-signer") {
+    else if (argument === "--g16-signer") {
       const path = argv[++index];
       if (
         options.g16SignerPath !== undefined ||
@@ -2800,7 +3166,7 @@ export function parseArgs(argv) {
       )
         throw new Error("--g16-signer requires one absolute path");
       options.g16SignerPath = resolve(path);
-    } else if (argv[index] === "--data-temp-dir") {
+    } else if (argument === "--data-temp-dir") {
       const path = argv[++index];
       if (
         options.dataTempDir !== undefined ||
@@ -2810,7 +3176,7 @@ export function parseArgs(argv) {
       )
         throw new Error("--data-temp-dir requires one absolute canonical path");
       options.dataTempDir = path;
-    } else if (argv[index] === "--realtime-qualification") {
+    } else if (argument === "--realtime-qualification") {
       const path = argv[++index];
       if (options.realtimeQualificationPath !== undefined)
         throw new Error("--realtime-qualification may be specified only once");
@@ -2819,7 +3185,7 @@ export function parseArgs(argv) {
           "--realtime-qualification requires an absolute receipt path",
         );
       options.realtimeQualificationPath = path;
-    } else if (argv[index] === "--g08-expected-system-identifier") {
+    } else if (argument === "--g08-expected-system-identifier") {
       const identifier = argv[++index];
       if (!/^[0-9]{1,20}$/u.test(identifier ?? ""))
         throw new Error(
@@ -2828,6 +3194,17 @@ export function parseArgs(argv) {
       options.migrationsExpectedSystemIdentifier = identifier;
     } else throw new Error(`Неизвестный аргумент: ${argv[index]}`);
   }
+  if (gateIds.length) options.gateIds = [...new Set(gateIds)];
+  if (options.profile !== undefined && options.gateIds !== undefined)
+    throw new Error("--profile и --gate взаимоисключающие");
+  if (options.profile !== undefined && options.from !== undefined)
+    throw new Error("--profile и --from взаимоисключающие");
+  if (options.gateIds !== undefined && options.from !== undefined)
+    throw new Error("--gate и --from взаимоисключающие");
+  if (options.from !== undefined && options.resume === undefined)
+    throw new Error("--from требует --resume с PASS-предками");
+  if (options.resume !== undefined)
+    for (const gateId of options.gateIds ?? []) assertResumableGate(gateId);
   return options;
 }
 
@@ -2836,13 +3213,16 @@ if (
   resolve(process.argv[1]) === fileURLToPath(import.meta.url)
 ) {
   try {
-    const { result, evidenceDir } = await executeRun(
-      parseArgs(process.argv.slice(2)),
-    );
-    console.log(
-      `${result.decision}: ${result.runId} (${relativeEvidencePath(evidenceDir)})`,
-    );
-    if (result.decision !== "ДОПУСТИТЬ") process.exitCode = 1;
+    const options = parseArgs(process.argv.slice(2));
+    if (options.help) {
+      process.stdout.write(`${usageText()}\n`);
+    } else {
+      const { result, evidenceDir } = await executeRun(options);
+      console.log(
+        `${result.decision}: ${result.runId} (${relativeEvidencePath(evidenceDir)})`,
+      );
+      if (result.decision !== "ДОПУСТИТЬ") process.exitCode = 1;
+    }
   } catch (error) {
     console.error(
       redactText(error.stack ?? error.message, sensitiveEnvironmentValues()),

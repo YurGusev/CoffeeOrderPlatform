@@ -32,15 +32,22 @@ import test from "node:test";
 import {
   captureKafkaNamespaceArtifact,
   applyLaunchImageEvidence,
+  assertFromPredecessors,
+  assertResumeIdentity,
+  blockingPredecessors,
   executeArgv,
   executeRun,
   finishRuntimeImageOwnership,
   gateBudgetMs,
   loadMatrix,
   normalizeCandidateInputModes,
+  profileBudgetMs,
   readLaunchImageEvidence,
   parseArgs as parseLaunchArguments,
+  resumableGateRecords,
   runGate,
+  selectGates,
+  SKIPPED_BY_FILTER,
   splitCommand,
   validateRunResult,
   validateLaunchDataTempDir,
@@ -6815,7 +6822,8 @@ void test("run result validates exact gate order and command identities", async 
 
 void test("report status stays outside the decision and cannot compensate a working gate", async () => {
   const { gates } = await loadMatrix();
-  const records = () => gates.map((gate) => ({ id: gate.id, status: "PASS" }));
+  const records = () =>
+    gates.map((gate) => ({ id: gate.id, status: "PASS", runs: [{}] }));
 
   const reportFail = records();
   reportFail.at(-1).status = "FAIL";
@@ -8458,4 +8466,315 @@ void test("supply_chain image hydration persists atomically and fails closed on 
       );
     }
   }
+});
+
+void test("fast profile runs exactly nine gates and filters the other eleven", async () => {
+  const { gates } = await loadMatrix();
+  const options = parseLaunchArguments(["--profile", "fast"]);
+  const selection = selectGates(gates, options);
+  assert.equal(selection.profile, "fast");
+  assert.equal(selection.budgetProfile, "fast");
+  const running = [...selection.gates.values()]
+    .filter((entry) => entry.status === "RUN")
+    .map((entry) => entry.id);
+  assert.deepEqual(running, [
+    "preflight",
+    "install",
+    "generated",
+    "static",
+    "unit",
+    "contracts",
+    "architecture",
+    "config_security",
+    "report",
+  ]);
+  assert.equal(running.length, 9);
+  const filtered = [...selection.gates.values()]
+    .filter((entry) => entry.status === SKIPPED_BY_FILTER)
+    .map((entry) => entry.id);
+  assert.deepEqual(filtered, [
+    "supply_chain",
+    "migrations",
+    "db_boundaries",
+    "integration",
+    "recovery",
+    "compose",
+    "observability",
+    "browser",
+    "aroma_sandbox",
+    "backup_restore",
+    "rollback",
+  ]);
+  const records = gates.map((gate) => {
+    const entry = selection.gates.get(gate.id);
+    return {
+      id: gate.id,
+      status: entry.status === "RUN" ? "PASS" : SKIPPED_BY_FILTER,
+      runs: entry.status === "RUN" ? [{}] : [],
+    };
+  });
+  assert.equal(
+    decisive(records, selection.budgetProfile),
+    "НЕ ДОПУСТИТЬ",
+    "fast всегда даёт диагностический результат",
+  );
+  const release = selectGates(
+    gates,
+    parseLaunchArguments(["--profile", "release"]),
+  );
+  assert.equal(
+    [...release.gates.values()].filter((entry) => entry.status === "RUN")
+      .length,
+    20,
+  );
+});
+
+void test("single-gate diagnostic skips ancestors and cannot be admitted", async () => {
+  const { gates } = await loadMatrix();
+  const selection = selectGates(
+    gates,
+    parseLaunchArguments(["--gate", "compose"]),
+  );
+  const running = [...selection.gates.values()]
+    .filter((entry) => entry.status === "RUN")
+    .map((entry) => entry.id);
+  assert.deepEqual(running, ["compose"]);
+  const records = gates.map((gate) => {
+    const entry = selection.gates.get(gate.id);
+    return {
+      id: gate.id,
+      status: entry.status === "RUN" ? "PASS" : SKIPPED_BY_FILTER,
+      runs: entry.status === "RUN" ? [{}] : [],
+    };
+  });
+  assert.equal(decisive(records, selection.budgetProfile), "НЕ ДОПУСТИТЬ");
+  for (const id of [
+    "preflight",
+    "install",
+    "generated",
+    "supply_chain",
+    "integration",
+    "recovery",
+  ])
+    assert.equal(selection.gates.get(id).status, SKIPPED_BY_FILTER);
+  const compose = gates.find((gate) => gate.id === "compose");
+  assert.equal(compose.predecessors.length, 2);
+  assert.deepEqual(blockingPredecessors(compose, records), []);
+  records.find((gate) => gate.id === "recovery").status = "FAIL";
+  assert.deepEqual(blockingPredecessors(compose, records), ["recovery"]);
+});
+
+void test("--from requires PASS ancestors in the resume source", async () => {
+  const { gates } = await loadMatrix();
+  assert.throws(
+    () => parseLaunchArguments(["--from", "compose"]),
+    /--from требует --resume/u,
+  );
+  const options = parseLaunchArguments([
+    "--from",
+    "compose",
+    "--resume",
+    "20260101T000000Z-abcdef0",
+  ]);
+  const selection = selectGates(gates, options);
+  assert.deepEqual(
+    [...selection.gates.values()]
+      .filter((entry) => entry.status === "RUN")
+      .map((entry) => entry.id),
+    [
+      "compose",
+      "observability",
+      "browser",
+      "aroma_sandbox",
+      "backup_restore",
+      "rollback",
+      "report",
+    ],
+  );
+  const source = {
+    gates: gates.map((gate) => ({ id: gate.id, status: "PASS" })),
+  };
+  assert.doesNotThrow(() => assertFromPredecessors(gates, "compose", source));
+  source.gates.find((gate) => gate.id === "recovery").status = "FAIL";
+  assert.throws(
+    () => assertFromPredecessors(gates, "compose", source),
+    /FROM_PREDECESSORS_NOT_PASS/u,
+  );
+});
+
+void test("resume rejects any of the five identity hash mismatches", () => {
+  const identity = {
+    candidateSha: "a".repeat(40),
+    treeSha: "b".repeat(40),
+    configSha256: "c".repeat(64),
+    toolchainVersionsSha256: "d".repeat(64),
+    lockfileSha256: "e".repeat(64),
+  };
+  const source = {
+    candidateSha: identity.candidateSha,
+    environment: {
+      treeSha: identity.treeSha,
+      configSha256: identity.configSha256,
+      toolchainVersionsSha256: identity.toolchainVersionsSha256,
+      lockfileSha256: identity.lockfileSha256,
+    },
+  };
+  assert.doesNotThrow(() => assertResumeIdentity(source, identity));
+  for (const [field, path] of [
+    ["candidateSha", ["candidateSha"]],
+    ["treeSha", ["environment", "treeSha"]],
+    ["configSha256", ["environment", "configSha256"]],
+    ["toolchainVersionsSha256", ["environment", "toolchainVersionsSha256"]],
+    ["lockfileSha256", ["environment", "lockfileSha256"]],
+  ]) {
+    const changed = structuredClone(source);
+    if (path.length === 1) changed.candidateSha = "f".repeat(40);
+    else changed.environment[path[1]] = "f".repeat(64);
+    assert.throws(
+      () => assertResumeIdentity(changed, identity),
+      /RESUME_IDENTITY_MISMATCH/u,
+      field,
+    );
+  }
+});
+
+void test("resume of live-state gates is forbidden by explicit error", () => {
+  for (const gateId of [
+    "preflight",
+    "observability",
+    "browser",
+    "aroma_sandbox",
+    "backup_restore",
+    "rollback",
+    "compose",
+    "integration",
+    "recovery",
+    "migrations",
+    "db_boundaries",
+  ])
+    assert.throws(
+      () =>
+        parseLaunchArguments([
+          "--gate",
+          gateId,
+          "--resume",
+          "20260101T000000Z-abcdef0",
+        ]),
+      /RESUME_FORBIDDEN_GATE/u,
+      gateId,
+    );
+  assert.doesNotThrow(() =>
+    parseLaunchArguments([
+      "--gate",
+      "static",
+      "--resume",
+      "20260101T000000Z-abcdef0",
+    ]),
+  );
+});
+
+void test("release without resume still requires all nineteen working gates to pass", async () => {
+  const { gates } = await loadMatrix();
+  const options = parseLaunchArguments(["--profile", "release"]);
+  assert.equal(options.resume, undefined);
+  const selection = selectGates(gates, options);
+  const running = [...selection.gates.values()].filter(
+    (entry) => entry.status === "RUN",
+  );
+  assert.equal(running.length, 20);
+  const records = gates.map((gate) => ({
+    id: gate.id,
+    status: "PASS",
+    runs: [{}],
+  }));
+  assert.equal(decisive(records, "release"), "ДОПУСТИТЬ");
+  const reportFailed = structuredClone(records);
+  reportFailed.find((gate) => gate.id === "report").status = "FAIL";
+  assert.equal(decisive(reportFailed, "release"), "ДОПУСТИТЬ");
+  const oneWorkingGateFailed = structuredClone(records);
+  oneWorkingGateFailed.find((gate) => gate.id === "integration").status =
+    "FAIL";
+  assert.equal(decisive(oneWorkingGateFailed, "release"), "НЕ ДОПУСТИТЬ");
+  const sourceRunId = "20260101T000000Z-abcdef0";
+  const reuse = resumableGateRecords(
+    { runId: sourceRunId, gates: records },
+    join(process.cwd(), "evidence/launch", sourceRunId),
+    selection,
+  );
+  assert.deepEqual(
+    [...reuse.keys()],
+    [
+      "generated",
+      "static",
+      "unit",
+      "contracts",
+      "architecture",
+      "config_security",
+    ],
+  );
+  for (const id of [
+    "preflight",
+    "install",
+    "supply_chain",
+    "compose",
+    "observability",
+    "report",
+  ])
+    assert.equal(reuse.has(id), false);
+  const fastReuse = resumableGateRecords(
+    { runId: sourceRunId, gates: records },
+    join(process.cwd(), "evidence/launch", sourceRunId),
+    selectGates(gates, parseLaunchArguments(["--profile", "fast"])),
+  );
+  assert.ok(fastReuse.has("install"));
+  assert.equal(fastReuse.has("supply_chain"), false);
+  assert.ok(fastReuse.has("config_security"));
+  const supplyChainReuse = resumableGateRecords(
+    { runId: sourceRunId, gates: records },
+    join(process.cwd(), "evidence/launch", sourceRunId),
+    selectGates(gates, parseLaunchArguments(["--gate", "supply_chain"])),
+  );
+  assert.ok(supplyChainReuse.has("supply_chain"));
+});
+
+void test("decisive accepts only PASS with runs or a valid allowed reusedFrom", async () => {
+  const { gates } = await loadMatrix();
+  const records = gates.map((gate) => ({
+    id: gate.id,
+    status: "PASS",
+    runs: [{}],
+  }));
+  assert.equal(decisive(records, "release"), "ДОПУСТИТЬ");
+  assert.equal(decisive(records, "fast"), "НЕ ДОПУСТИТЬ");
+  const reused = structuredClone(records);
+  reused.find((gate) => gate.id === "install").runs = [];
+  reused.find((gate) => gate.id === "install").reusedFrom = {
+    runId: "20260101T000000Z-abcdef0",
+    evidenceDir: "evidence/launch/20260101T000000Z-abcdef0",
+  };
+  assert.equal(decisive(reused, "release"), "ДОПУСТИТЬ");
+  const noProof = structuredClone(records);
+  noProof.find((gate) => gate.id === "install").runs = [];
+  assert.equal(decisive(noProof, "release"), "НЕ ДОПУСТИТЬ");
+  const forbiddenReuse = structuredClone(records);
+  forbiddenReuse.find((gate) => gate.id === "compose").runs = [];
+  forbiddenReuse.find((gate) => gate.id === "compose").reusedFrom = {
+    runId: "20260101T000000Z-abcdef0",
+    evidenceDir: "evidence/launch/20260101T000000Z-abcdef0",
+  };
+  assert.equal(decisive(forbiddenReuse, "release"), "НЕ ДОПУСТИТЬ");
+});
+
+void test("profile budgets replace the single 120-minute deadline", () => {
+  assert.equal(profileBudgetMs("fast"), 20 * 60_000);
+  assert.equal(profileBudgetMs("release"), 180 * 60_000);
+  assert.throws(() => profileBudgetMs("diagnostic"), /Неизвестный профиль/u);
+  assert.equal(
+    gateBudgetMs("install", profileBudgetMs("fast"), "fast"),
+    profileBudgetMs("fast") - 300_000,
+  );
+  assert.equal(
+    gateBudgetMs("install", profileBudgetMs("release"), "release"),
+    profileBudgetMs("release") - (900_000 + 120_000),
+  );
 });

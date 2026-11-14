@@ -203,8 +203,16 @@ Inventory `unit` включает 60 существующих unit/property suit
 ## 4. Версионированная matrix
 
 Каждая строка `matrix.yaml` содержит:
-`id`, `version`, `mandatory`, `owner`, `predecessors`, `command`, `timeout`,
+`id`, `version`, `profile`, `mandatory`, `owner`, `predecessors`, `command`, `timeout`,
 `inputs`, `expectedArtifacts`, `passCriteria`, `cleanup`, `rerunPolicy`.
+
+Поле `profile` (`fast` | `release` | `both`) задаёт принадлежность гейта профилю.
+Профиль `fast` содержит девять гейтов без съёма живого состояния:
+`preflight`, `install`, `generated`, `static`, `unit`, `contracts`,
+`architecture`, `config_security`, `report`. Профиль `release` содержит все
+двадцать гейтов в порядке таблицы; гейты с `profile: fast` или `profile: both`
+входят в оба профиля, гейты с `profile: release` (включая `supply_chain`) —
+только в `release`. Состав и порядок гейтов не меняются.
 
 | id                | Позиция | Владелец                | Exact command                                                                      | PASS                                                                                                                         |
 | ----------------- | ------- | ----------------------- | ---------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
@@ -944,3 +952,62 @@ sha256sum -c evidence/launch/<run-id>/checksums.sha256
 node --test verification/launch/v1/runner.test.mjs \
   verification/launch/v1/scenarios/preflight.test.mjs
 ```
+
+## 18. Профили, выборочный запуск и resume
+
+### 18.1. Профили и бюджет
+
+| Профиль | Гейты | Бюджет | Решение |
+| --- | --- | ---: | --- |
+| `fast` | девять гейтов без съёма живого состояния (см. раздел 4) | 20 минут | только диагностический `НЕ ДОПУСТИТЬ` |
+| `release` | все двадцать гейтов | 180 минут | `ДОПУСТИТЬ` при 19 рабочих PASS; `reportStatus` отдельно |
+| `--gate` / `--from` | явно выбранное подмножество | 180 минут | только `НЕ ДОПУСТИТЬ` |
+
+`--profile` по умолчанию равен `release`. Бюджет профиля заменяет прежний
+единый лимит 120 минут и ограничивает и каждую команду гейта, и прогон целиком.
+Резерв на `report` и финализацию внутри `fast` ограничен четвертью бюджета,
+чтобы девяти гейтам оставалось время на работу. Исчерпанный бюджет завершает
+оставшиеся гейты как `NOT_RUN`; решение в этом случае `НЕ ДОПУСТИТЬ`.
+
+### 18.2. Фильтры
+
+- `--gate <id>` запускает только явно указанные гейты; можно повторять.
+  Предки не запускаются.
+- `--from <id>` запускает указанный гейт и все последующие в порядке matrix;
+  обязателен `--resume`, и все предки стартового гейта должны иметь PASS в
+  источнике resume.
+- `--profile`, `--gate` и `--from` взаимно исключаются; `--gate` и `--from`
+  взаимоисключающие. Неизвестный id, повтор одиночного флага и отсутствие
+  `--resume` у `--from` дают явную ошибку аргументов.
+- Гейт вне выборки получает статус `SKIPPED_BY_FILTER` и не блокирует запуск
+  последующих гейтов выборки. `FAIL` и `NOT_RUN` предков блокируют как раньше.
+  `--gate`/`--from` всегда завершаются диагностическим `НЕ ДОПУСТИТЬ`.
+
+### 18.3. Resume и identity
+
+`--resume <evidenceDir|runId>` переиспользует ранее полученный PASS только при
+точном совпадении пяти хешей текущего и источника:
+
+- `candidateSha`;
+- `environment.treeSha`;
+- `environment.configSha256`;
+- `environment.toolchainVersionsSha256`;
+- `environment.lockfileSha256`.
+
+Любое расхождение даёт `RESUME_IDENTITY_MISMATCH` до запуска гейтов. Источник
+задаётся каталогом evidence или run-id в `evidence/launch/<runId>`; source
+evidence не переписывается, артефакты между прогонами не переносятся.
+
+Переиспользовать можно только PASS гейтов `install`, `generated`, `static`,
+`unit`, `contracts`, `architecture`, `config_security`, `supply_chain`.
+Для гейтов `preflight`, `migrations`, `db_boundaries`, `integration`,
+`recovery`, `compose`, `observability`, `browser`, `aroma_sandbox`,
+`backup_restore`, `rollback` переиспользование запрещено: они снимают живое
+состояние. Явный `--gate <живой-гейт> --resume` даёт `RESUME_FORBIDDEN_GATE`;
+в профильном прогоне такие гейты просто выполняются заново.
+
+Переиспользованный PASS записывается в `run-result.json` со статусом `PASS`,
+пустым `runs` и полем `reusedFrom: {runId, evidenceDir}`. Решение
+`ДОПУСТИТЬ` возможно только для `release`, всех 19 рабочих PASS и валидного
+`reusedFrom` (или собственного command run) у каждого рабочего PASS-гейта;
+статус `report` публикуется как `reportStatus` и в решение не входит.
