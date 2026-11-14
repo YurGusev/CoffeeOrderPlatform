@@ -71,7 +71,7 @@ legacy/                 посторонние каталоги, ожидающ�
 
 | Потребитель        | Требование                     | Откуда                                                     |
 | ------------------ | ------------------------------ | ---------------------------------------------------------- |
-| supply_chain (G12) | 10 GiB свободно                | `config/platform.yaml` → `securityScan.minimumFreeDiskGiB` |
+| supply_chain | 10 GiB свободно                | `config/platform.yaml` → `securityScan.minimumFreeDiskGiB` |
 | BuildKit           | 12 GiB свободно, кеш до 18 GiB | `config/platform.yaml` → `buildkit`                        |
 | observability      | `max(6 GiB, 5% тома)`          | `tools/observability/service.mjs`                          |
 | launch-обёртка     | 15 GiB до старта               | `scripts/launch-run.mjs --min-free-gib`                    |
@@ -94,7 +94,7 @@ pnpm launch:run -- --sha <commit> [--base <commit>] [--g16-signer <path>]
 Шаги: предусловия (SOPS-ключ, закреплённые образы, свободное место, lock
 сканеров) → worktree кандидата → `pnpm install --offline` и `tsc -b` → контекст
 и environment → `supply_chain` → `realtime qualification` → полный прогон
-G00–G19 → сводка гейтов.
+preflight…report → сводка гейтов.
 
 Обёртка оставляет два последних кандидата и три последних soak-каталога,
 выполняет `git worktree prune` и поддерживает `README.md` в корне состояния.

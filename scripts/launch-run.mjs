@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 // Единая точка входа для launch-верификации: кандидат, контекст, supply_chain,
-// realtime qualification и полный прогон G00–G19 в одном корне состояния.
+// realtime qualification и полный прогон preflight…report в одном корне состояния.
 //
 // Раскладка состояния (по умолчанию ~/coffee-platform/launch):
 //   candidates/<sha>/     git worktree кандидата; evidence принадлежит ему по контракту
@@ -54,13 +54,13 @@ function parseArguments(argv) {
     sha: null,
     base: null,
     state: STATE_ROOT,
-    skipG12: false,
+    skipSupplyChain: false,
     skipSoak: false,
     skipRun: false,
     keepCandidates: 2,
     keepSoak: 3,
     minFreeGiB: 15,
-    signer: process.env.COFFEE_G16_SIGNER ?? null,
+    signer: process.env.COFFEE_APPROVAL_SIGNER ?? null,
     systemIdentifier: "7613370342949990434",
   };
   for (let index = 0; index < argv.length; index += 1) {
@@ -72,7 +72,7 @@ function parseArguments(argv) {
     else if (argument === "--g16-signer") options.signer = resolve(value());
     else if (argument === "--g08-expected-system-identifier")
       options.systemIdentifier = value();
-    else if (argument === "--skip-supply-chain") options.skipG12 = true;
+    else if (argument === "--skip-supply-chain") options.skipSupplyChain = true;
     else if (argument === "--skip-soak") options.skipSoak = true;
     else if (argument === "--skip-run") options.skipRun = true;
     else if (argument === "--keep-candidates")
@@ -448,7 +448,7 @@ async function main() {
     COFFEE_SCAN_CACHE_DIR: join(options.state, "scan-cache"),
   };
 
-  if (!options.skipG12) {
+  if (!options.skipSupplyChain) {
     process.stdout.write("supply_chain...\n");
     const scan = await runStep({
       name: "supply_chain",
@@ -503,7 +503,7 @@ async function main() {
     options.systemIdentifier,
   ];
   if (options.signer) args.push("--g16-signer", options.signer);
-  process.stdout.write("полный прогон G00–G19...\n");
+  process.stdout.write("полный прогон preflight…report...\n");
   const run = await runStep({
     name: "run",
     logFile: join(logDir, "run.log"),
