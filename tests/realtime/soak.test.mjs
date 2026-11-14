@@ -13,7 +13,6 @@ import assert from "node:assert/strict";
 import { readFile, writeFile, mkdir, stat, readdir } from "node:fs/promises";
 import { resolve, join, relative, isAbsolute, sep } from "node:path";
 import { randomUUID } from "node:crypto";
-import { homedir } from "node:os";
 import {
   prepare,
   verifyPrepared,
@@ -399,11 +398,12 @@ export async function bootstrapOwnedOrdersKafka({
 }
 
 export function scratchRoot() {
-  return resolve(
-    process.env.COFFEE_LAUNCH_SCRATCH ??
-      process.env.TMPDIR ??
-      join(homedir(), ".hermes", "cache", "scratch"),
-  );
+  const declared = process.env.COFFEE_LAUNCH_SCRATCH ?? process.env.TMPDIR;
+  if (declared === undefined || declared.length === 0)
+    throw new Error(
+      "COFFEE_LAUNCH_SCRATCH или TMPDIR обязателен: каталог soak задаётся явно",
+    );
+  return resolve(declared);
 }
 
 export function parse(args) {

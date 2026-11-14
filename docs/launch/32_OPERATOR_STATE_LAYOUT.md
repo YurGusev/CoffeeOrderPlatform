@@ -37,10 +37,12 @@ legacy/                 посторонние каталоги, ожидающ�
 - `evidence` обязан лежать внутри checkout кандидата:
   `evidenceDir = <sourceRepoRoot>/evidence/launch/<runId>`
   (`verification/launch/v1/report.mjs`).
-- Каталог результата realtime qualification должен быть абсолютным, а его
-  родитель — принадлежать пользователю и не иметь битов записи для группы и
-  остальных (`tools/realtime-capacity.mjs`). Поэтому `launch/soak` создаётся с
-  правами `0700`.
+- Каталог результата realtime qualification должен быть абсолютным, находиться
+  внутри объявленного scratch-корня (`COFFEE_LAUNCH_SCRATCH`, затем `TMPDIR`) и
+  иметь родителя, принадлежащего пользователю без битов записи для группы и
+  остальных (`tests/realtime/soak.test.mjs`, `tools/realtime-capacity.mjs`).
+  Скрытого значения по умолчанию нет: без объявленного корня запуск завершается
+  ошибкой. Поэтому `launch/soak` создаётся с правами `0700`.
 - Приватный checkout прогона создаётся в `TMPDIR`, поэтому временные каталоги
   ограничены `launch/tmp` при явной передаче переменной.
 
