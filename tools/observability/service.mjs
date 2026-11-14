@@ -2,6 +2,7 @@ import { execFileSync } from "node:child_process";
 import { lstat, readFile, realpath, statfs } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { observabilityReleasesRoot } from "../state-paths.mjs";
 import { homedir } from "node:os";
 import { isDeepStrictEqual } from "node:util";
 import { dump as dumpYaml, load as loadYaml } from "js-yaml";
@@ -262,10 +263,7 @@ export async function readAcceptedObservabilityRelease() {
     !match
   )
     throw new Error("accepted observability release is unavailable");
-  const releases = join(
-    homedir(),
-    ".local/share/coffee-platform/observability/releases",
-  );
+  const releases = observabilityReleasesRoot();
   const releaseSha = root.slice(releases.length + 1);
   const rootInfo = await lstat(root);
   if (

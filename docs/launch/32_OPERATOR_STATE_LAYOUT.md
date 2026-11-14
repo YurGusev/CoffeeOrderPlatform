@@ -32,6 +32,25 @@ backups/<date>/         архивы и манифесты резервных к
 legacy/                 посторонние каталоги, ожидающие решения об удалении
 ```
 
+## Пути, которые задаёт код
+
+Все каталоги состояния резолвятся через `tools/state-paths.mjs`; скрытых
+значений в коде нет, каждый путь переопределяется переменной окружения:
+
+| Функция | Переменная | Значение по умолчанию |
+| --- | --- | --- |
+| `deploymentStateRoot` | `COFFEE_PLATFORM_STATE` | `~/coffee-platform` |
+| `deploymentReleasesRoot` | — | `<state>/runtime/releases` |
+| `deploymentRuntimeStateRoot` | — | `<state>/runtime/state` |
+| `systemdUserUnitRoot` | `COFFEE_SYSTEMD_USER_DIR` | `~/.config/systemd/user` |
+| `observabilityReleasesRoot` | `COFFEE_OBSERVABILITY_RELEASES` | `~/.local/share/coffee-platform/observability/releases` |
+| корень сканера | `COFFEE_SCAN_CACHE_DIR` | `~/.cache/coffee-platform/scan` |
+| корень launch-состояния | `COFFEE_LAUNCH_STATE` | `~/coffee-platform/launch` |
+| корень soak | `COFFEE_LAUNCH_SCRATCH` | без значения по умолчанию |
+
+Относительный путь в любой из переменных отвергается с явной ошибкой:
+инструмент не угадывает каталог и не создаёт файлы «где-то рядом».
+
 ## Обязательные требования, которые формируют раскладку
 
 - `evidence` обязан лежать внутри checkout кандидата:
