@@ -657,7 +657,7 @@ function parseProcStat(value) {
   const state = fields[0];
   const processGroup = Number(fields[2]);
   if (
-    !/^[A-Ztx]$/.test(state ?? "") ||
+    !/^[A-Za-z]$/.test(state ?? "") ||
     !Number.isSafeInteger(processGroup) ||
     processGroup < 0
   )
@@ -687,8 +687,13 @@ async function readPeakRssBytes(pgid) {
   for (const entry of procEntries) {
     if (!/^\d+$/.test(entry)) continue;
     const pid = Number(entry);
-    if (!Number.isSafeInteger(pid)) throw peakRssError("stat", "EINVAL");
-    const process = await readProcStat(pid);
+    if (!Number.isSafeInteger(pid)) continue;
+    // Если stat чужого процесса не разбирается, группу определить нельзя —
+    // запись пропускается, а не отменяет уже собранные измерения.
+    const process = await readProcStat(pid).catch((error) => {
+      if (error?.rssStage === "stat") return null;
+      throw error;
+    });
     if (
       !process ||
       process.processGroup !== pgid ||
