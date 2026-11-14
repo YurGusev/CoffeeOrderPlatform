@@ -17,9 +17,12 @@ import {
 } from "../../../packages/platform-config/src/launch-database-target.ts";
 import { CANONICAL_KAFKA_TOPIC_NAMES } from "../../../packages/platform-config/src/launch-kafka-target.ts";
 import { EXPECTED_GATES } from "./gate-matrix.generated.mjs";
+import { decisive, reportGateStatus } from "./decision.mjs";
 import { gateLabel, gateSlug } from "./gate-identity.mjs";
 
 export { EXPECTED_GATES };
+
+const SUPPORTED_SCHEMA_VERSIONS = [1, 2];
 
 // `report` must work even when `preflight`/`install` failed before candidate dependencies were installed.
 // Keep this small validation contract local and builtin-only.
@@ -49,12 +52,14 @@ function redactText(text) {
 export function validateRunResultContract(result) {
   if (
     !result ||
-    result.schemaVersion !== 1 ||
+    !SUPPORTED_SCHEMA_VERSIONS.includes(result.schemaVersion) ||
     !/^[0-9]{8}T[0-9]{6}Z-[0-9a-f]{7}$/.test(result.runId ?? "") ||
     !/^[0-9a-f]{40}$/.test(result.candidateSha ?? "") ||
     !/^[0-9a-f]{40}$/.test(result.sourceSha ?? "") ||
     !Array.isArray(result.gates) ||
     result.gates.length !== EXPECTED_GATES.length ||
+    (result.schemaVersion === 2 &&
+      !["PASS", "FAIL", "NOT_RUN"].includes(result.reportStatus)) ||
     !["ДОПУСТИТЬ", "НЕ ДОПУСТИТЬ"].includes(result.decision)
   ) {
     throw new Error("Некорректная структура run-result.json");
@@ -97,6 +102,11 @@ export function validateRunResultContract(result) {
         throw new Error(`Некорректный command record ${id}`);
     }
   }
+  if (
+    result.schemaVersion === 2 &&
+    result.reportStatus !== result.gates[EXPECTED_GATES.length - 1]?.status
+  )
+    throw new Error("reportStatus не совпадает со статусом report");
   const environment = result.environment;
   let expectedDatabases;
   try {
@@ -446,10 +456,12 @@ async function validateEvidence(evidenceDir, result, sourceRoot) {
       );
   }
   if (
-    result.gates.some((gate) => gate.status !== "PASS") &&
+    result.gates.some(
+      (gate) => gateSlug(gate.id) !== "report" && gate.status !== "PASS",
+    ) &&
     result.decision === "ДОПУСТИТЬ"
   )
-    errors.push("Решение допускает run с непрошедшим mandatory gate");
+    errors.push("Решение допускает run с непрошедшим рабочим gate");
   if (
     result.decision === "ДОПУСТИТЬ" &&
     environmentProofErrors(result.environment).length
@@ -1069,15 +1081,15 @@ async function writeFinalFiles(
     result.runId,
     "ОТЧЁТ.md",
   );
-  const mandatoryPass =
-    result.gates.length === 20 &&
-    result.gates.every((gate) => gate.status === "PASS");
+  // Решение выносится по 19 рабочим гейтам; reportStatus публикуется отдельно.
+  const workingGatesPass = decisive(result.gates) === "ДОПУСТИТЬ";
   result.decision =
-    mandatoryPass &&
+    workingGatesPass &&
     evidenceErrors.length === 0 &&
     environmentErrors.length === 0
       ? "ДОПУСТИТЬ"
       : "НЕ ДОПУСТИТЬ";
+  result.reportStatus = reportGateStatus(result.gates);
   await writeRegularNoFollow(evidenceDir, resultPath, json(result));
   await writeRegularNoFollow(
     evidenceDir,
@@ -1086,7 +1098,8 @@ async function writeFinalFiles(
       decision: result.decision,
       runId: result.runId,
       candidateSha: result.candidateSha,
-      mandatoryGatesPass: mandatoryPass,
+      mandatoryGatesPass: workingGatesPass,
+      reportStatus: result.reportStatus,
       evidenceErrors: [...evidenceErrors, ...environmentErrors],
     }),
   );
@@ -1110,7 +1123,8 @@ async function writeFinalFiles(
       sourceDescriptorSha256: sourceDescriptor.sha256,
       sourceDescriptorStatus: sourceDescriptor.status,
       decision: result.decision,
-      mandatoryGatesPass: mandatoryPass,
+      mandatoryGatesPass: workingGatesPass,
+      reportStatus: result.reportStatus,
       evidenceErrors: [...evidenceErrors, ...environmentErrors].map(redactText),
       limits: {
         gateTimeoutSeconds: Object.fromEntries(
