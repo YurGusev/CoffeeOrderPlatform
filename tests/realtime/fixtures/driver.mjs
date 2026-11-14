@@ -723,6 +723,9 @@ async function measurement(cookie) {
         });
     }
   }
+  // Окно измерения закрывается условием цикла, поэтому последняя записанная
+  // длительность может оказаться на доли миллисекунды меньше целевой.
+  result.durationMs = Math.max(result.durationMs, performance.now() - start);
   await until(
     () =>
       !sampleRunning &&
