@@ -55,6 +55,7 @@ import {
   validateKafkaNamespaceInventory,
   validateRunResultContract,
 } from "./report.mjs";
+import { decisive, reportGateStatus } from "./decision.mjs";
 import { LEGACY_GATE_IDS } from "./gate-identity.mjs";
 import {
   CANONICAL_DATABASE_OWNERS,
@@ -182,6 +183,7 @@ void test("launch controller reaches evidence preflight without compiled service
   for (const path of [
     "tools/compose-smoke.mjs",
     "tools/runtime-image-inventory.mjs",
+    "verification/launch/v1/decision.mjs",
     "verification/launch/v1/run.mjs",
   ])
     await cp(join(source, path), join(controller, path));
@@ -6713,7 +6715,7 @@ void test("command splitting rejects shell control and substitutions", () => {
 void test("run result validates exact gate order and command identities", async () => {
   const { gates } = await loadMatrix();
   const result = {
-    schemaVersion: 1,
+    schemaVersion: 2,
     runId: "20261023T120000Z-1234567",
     candidateSha: `1234567${"1".repeat(33)}`,
     sourceSha: "2".repeat(40),
@@ -6775,9 +6777,26 @@ void test("run result validates exact gate order and command identities", async 
       runs: [],
       artifacts: [],
     })),
+    reportStatus: "NOT_RUN",
     decision: "НЕ ДОПУСТИТЬ",
   };
   await validateRunResult(result);
+  const legacyVersion = structuredClone(result);
+  legacyVersion.schemaVersion = 1;
+  delete legacyVersion.reportStatus;
+  await validateRunResult(legacyVersion);
+  const missingReportStatus = structuredClone(result);
+  delete missingReportStatus.reportStatus;
+  await assert.rejects(
+    validateRunResult(missingReportStatus),
+    /required property 'reportStatus'/u,
+  );
+  const mismatchedReportStatus = structuredClone(result);
+  mismatchedReportStatus.reportStatus = "PASS";
+  assert.throws(
+    () => validateRunResultContract(mismatchedReportStatus),
+    /reportStatus/u,
+  );
   const legacyIdBySlug = new Map(
     Object.entries(LEGACY_GATE_IDS).map(([legacy, slug]) => [slug, legacy]),
   );
@@ -6791,6 +6810,24 @@ void test("run result validates exact gate order and command identities", async 
   );
   [result.gates[0], result.gates[1]] = [result.gates[1], result.gates[0]];
   await assert.rejects(validateRunResult(result), /must be equal to constant/);
+});
+
+void test("report status stays outside the decision and cannot compensate a working gate", async () => {
+  const { gates } = await loadMatrix();
+  const records = () => gates.map((gate) => ({ id: gate.id, status: "PASS" }));
+
+  const reportFail = records();
+  reportFail.at(-1).status = "FAIL";
+  assert.equal(decisive(reportFail), "ДОПУСТИТЬ");
+  assert.equal(reportGateStatus(reportFail), "FAIL");
+
+  const workingFail = records();
+  workingFail.at(-2).status = "NOT_RUN";
+  assert.equal(decisive(workingFail), "НЕ ДОПУСТИТЬ");
+  assert.equal(reportGateStatus(workingFail), "PASS");
+
+  const missingWorkingGate = records().filter((gate) => gate.id !== "install");
+  assert.equal(decisive(missingWorkingGate), "НЕ ДОПУСТИТЬ");
 });
 
 void test("builtin report finalizes a complete fail-closed result without candidate dependencies", async (t) => {
@@ -6848,7 +6885,7 @@ void test("builtin report finalizes a complete fail-closed result without candid
     artifacts: [],
   }));
   const result = {
-    schemaVersion: 1,
+    schemaVersion: 2,
     runId: runId,
     candidateSha: candidateSha,
     sourceSha: "2".repeat(40),
@@ -6899,6 +6936,7 @@ void test("builtin report finalizes a complete fail-closed result without candid
       },
     },
     gates,
+    reportStatus: "NOT_RUN",
     decision: "НЕ ДОПУСТИТЬ",
   };
   await mkdir(evidenceDir, { recursive: true });
@@ -6924,6 +6962,12 @@ void test("builtin report finalizes a complete fail-closed result without candid
   }
   const finalized = await finalizeReport(evidenceDir);
   assert.equal(finalized.result.decision, "НЕ ДОПУСТИТЬ");
+  assert.equal(finalized.result.reportStatus, "NOT_RUN");
+  const finalizedDecision = JSON.parse(
+    await readFile(join(evidenceDir, "decision.json"), "utf8"),
+  );
+  assert.equal(finalizedDecision.reportStatus, "NOT_RUN");
+  assert.equal(finalizedDecision.mandatoryGatesPass, false);
   assert.equal(
     finalized.result.gates.find((gate) => gate.id === "supply_chain").status,
     "FAIL",
@@ -6977,6 +7021,12 @@ void test("builtin report finalizes a complete fail-closed result without candid
   assert.equal(unboundHandoff.sourceDescriptorStatus, "NOT_PROVEN");
   assert.equal(unboundHandoff.sourceDescriptorSha256, null);
   assert.equal(unbound.result.decision, "НЕ ДОПУСТИТЬ");
+  assert.equal(unbound.result.reportStatus, "FAIL");
+  assert.equal(
+    JSON.parse(await readFile(join(evidenceDir, "run-result.json"), "utf8"))
+      .reportStatus,
+    "FAIL",
+  );
   assert.equal(unbound.result.gates[19].status, "FAIL");
   assert.match(unbound.result.gates[19].reason, /source descriptor/u);
   assert.equal(
@@ -7059,6 +7109,7 @@ void test("builtin report finalizes a complete fail-closed result without candid
     join(evidenceDir, "commands.ndjson"),
     `${JSON.stringify({ gateId: reportGate.id, ...reportGate.runs[0] })}\n`,
   );
+  result.reportStatus = reportGate.status;
   await writeFile(join(evidenceDir, "run-result.json"), JSON.stringify(result));
   await writeFile(
     join(evidenceDir, "gates", reportGate.id, "result.json"),
@@ -7066,6 +7117,7 @@ void test("builtin report finalizes a complete fail-closed result without candid
   );
   const exactReportCommand = await finalizeReport(evidenceDir);
   assert.equal(exactReportCommand.errors.length, 0);
+  assert.equal(exactReportCommand.result.reportStatus, "PASS");
   const finalHandoff = JSON.parse(await readFile(handoffPath, "utf8"));
   assert.equal(finalHandoff.gates[19].status, "PASS");
   assert.deepEqual(finalHandoff.gates[19].runs[0].argv, [
@@ -7232,7 +7284,11 @@ void test("candidate report and owner suites accept only the exact launch candid
     candidateReport,
     await readFile(new URL("./report.mjs", import.meta.url)),
   );
-  for (const name of ["gate-matrix.generated.mjs", "gate-identity.mjs"])
+  for (const name of [
+    "decision.mjs",
+    "gate-matrix.generated.mjs",
+    "gate-identity.mjs",
+  ])
     await writeFile(
       join(candidateRoot, "verification/launch/v1", name),
       await readFile(new URL(`./${name}`, import.meta.url)),
@@ -7282,7 +7338,7 @@ void test("candidate report and owner suites accept only the exact launch candid
   gates[0].status = "FAIL";
   gates[0].reason = "GitHub preflight blockers";
   const result = {
-    schemaVersion: 1,
+    schemaVersion: 2,
     runId,
     candidateSha,
     sourceSha: "2".repeat(40),
@@ -7327,6 +7383,7 @@ void test("candidate report and owner suites accept only the exact launch candid
       },
     },
     gates,
+    reportStatus: "NOT_RUN",
     decision: "НЕ ДОПУСТИТЬ",
   };
   await mkdir(evidenceDir, { recursive: true });
@@ -7365,7 +7422,11 @@ void test("candidate report and owner suites accept only the exact launch candid
     sourceReport,
     await readFile(new URL("./report.mjs", import.meta.url)),
   );
-  for (const name of ["gate-matrix.generated.mjs", "gate-identity.mjs"])
+  for (const name of [
+    "decision.mjs",
+    "gate-matrix.generated.mjs",
+    "gate-identity.mjs",
+  ])
     await writeFile(
       join(sourceRoot, "verification/launch/v1", name),
       await readFile(new URL(`./${name}`, import.meta.url)),

@@ -33,6 +33,7 @@ import {
   validateLaunchContext,
   writeDefects,
 } from "./report.mjs";
+import { decisive, reportGateStatus } from "./decision.mjs";
 import {
   inspectLaunchCheckout,
   verifyControlledRollbackEvidence,
@@ -956,12 +957,6 @@ function gateRecord(gate) {
     runs: [],
     artifacts: [],
   };
-}
-
-function decisive(gates) {
-  return gates.length === 20 && gates.every((gate) => gate.status === "PASS")
-    ? "ДОПУСТИТЬ"
-    : "НЕ ДОПУСТИТЬ";
 }
 
 function relativeEvidencePath(path) {
@@ -2528,7 +2523,7 @@ export async function executeRun(options = {}) {
       throw new Error("canonical launch database owner set is invalid");
     const treeSha = await git(checkout.candidate, "rev-parse", "HEAD^{tree}");
     const result = {
-      schemaVersion: 1,
+      schemaVersion: 2,
       runId,
       candidateSha,
       sourceSha: state.sourceSha,
@@ -2576,6 +2571,7 @@ export async function executeRun(options = {}) {
     const save = async () => {
       result.endedAt = nowIso();
       result.decision = decisive(result.gates);
+      result.reportStatus = reportGateStatus(result.gates);
       await validateRunResult(result);
       await atomicJson(resultPath, result);
     };
@@ -2737,7 +2733,6 @@ export async function executeRun(options = {}) {
       await saveCommandsNdjson(evidenceDir, result.gates);
       await save();
     }
-    result.decision = decisive(result.gates);
     await save();
     const reportResult = await runCapture(
       process.execPath,

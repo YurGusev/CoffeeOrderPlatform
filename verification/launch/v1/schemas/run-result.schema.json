@@ -15,7 +15,7 @@
     "decision"
   ],
   "properties": {
-    "schemaVersion": { "const": 1 },
+    "schemaVersion": { "enum": [1, 2] },
     "runId": {
       "type": "string",
       "pattern": "^[0-9]{8}T[0-9]{6}Z-[0-9a-f]{7}$"
@@ -146,8 +146,21 @@
       ],
       "items": false
     },
+    "reportStatus": { "enum": ["PASS", "FAIL", "NOT_RUN"] },
     "decision": { "enum": ["ДОПУСТИТЬ", "НЕ ДОПУСТИТЬ"] }
   },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "schemaVersion": { "const": 2 } },
+        "required": ["schemaVersion"]
+      },
+      "then": {
+        "required": ["reportStatus"],
+        "properties": { "reportStatus": true }
+      }
+    }
+  ],
   "$defs": {
     "declaredResource": {
       "type": "object",
