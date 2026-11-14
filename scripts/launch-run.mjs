@@ -62,7 +62,7 @@ function parseArguments(argv) {
     skipRun: false,
     keepCandidates: 2,
     keepSoak: 3,
-    minFreeGiB: 25,
+    minFreeGiB: 15,
     signer: process.env.COFFEE_G16_SIGNER ?? null,
     systemIdentifier: "7613370342949990434",
   };
@@ -137,11 +137,23 @@ async function sha256(path) {
 async function ensureFreeSpace(minimumGiB) {
   const info = await statfs(STATE_ROOT);
   const freeGiB = (info.bavail * info.bsize) / 1024 ** 3;
-  if (freeGiB < minimumGiB)
+  if (freeGiB < minimumGiB) {
+    let reclaimable = "";
+    try {
+      const report = execFileSync(
+        "docker",
+        ["buildx", "du", "--builder", "coffee-platform-mtu"],
+        { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] },
+      );
+      const match = /Reclaimable:\s*([0-9.]+)([kMG]B)/u.exec(report);
+      if (match)
+        reclaimable = `, освобождаемо в BuildKit: ${match[1]}${match[2]}`;
+    } catch {}
     fail(
-      `свободно ${freeGiB.toFixed(1)} GiB, нужно не меньше ${minimumGiB} GiB; ` +
-        "почистите старые кандидаты и образы",
+      `свободно ${freeGiB.toFixed(1)} GiB, нужно не меньше ${minimumGiB} GiB${reclaimable}; ` +
+        "почистите кеш сборки: docker buildx prune --builder coffee-platform-mtu --keep-storage 6GB",
     );
+  }
   return freeGiB;
 }
 

@@ -6,11 +6,11 @@
 
 ## Корни
 
-| Путь | Назначение | Кто пишет |
-| --- | --- | --- |
-| `~/CoffeeOrderPlatform` | основной репозиторий (`develop`) | git |
-| `~/CoffeeOrderPlatform-worktrees/<task>` | рабочие ветки задач | `git worktree add` |
-| `~/coffee-platform` | корень операторского состояния | `tools/platform-service.mjs`, `scripts/launch-run.mjs` |
+| Путь                                     | Назначение                       | Кто пишет                                              |
+| ---------------------------------------- | -------------------------------- | ------------------------------------------------------ |
+| `~/CoffeeOrderPlatform`                  | основной репозиторий (`develop`) | git                                                    |
+| `~/CoffeeOrderPlatform-worktrees/<task>` | рабочие ветки задач              | `git worktree add`                                     |
+| `~/coffee-platform`                      | корень операторского состояния   | `tools/platform-service.mjs`, `scripts/launch-run.mjs` |
 
 Путь `~/coffee-platform` закреплён в коде (`tools/platform-service.mjs`
 использует `~/coffee-platform/runtime` и `~/coffee-platform/certificates`),
@@ -37,16 +37,16 @@ legacy/                 посторонние каталоги, ожидающ�
 Все каталоги состояния резолвятся через `tools/state-paths.mjs`; скрытых
 значений в коде нет, каждый путь переопределяется переменной окружения:
 
-| Функция | Переменная | Значение по умолчанию |
-| --- | --- | --- |
-| `deploymentStateRoot` | `COFFEE_PLATFORM_STATE` | `~/coffee-platform` |
-| `deploymentReleasesRoot` | — | `<state>/runtime/releases` |
-| `deploymentRuntimeStateRoot` | — | `<state>/runtime/state` |
-| `systemdUserUnitRoot` | `COFFEE_SYSTEMD_USER_DIR` | `~/.config/systemd/user` |
-| `observabilityReleasesRoot` | `COFFEE_OBSERVABILITY_RELEASES` | `~/.local/share/coffee-platform/observability/releases` |
-| корень сканера | `COFFEE_SCAN_CACHE_DIR` | `~/.cache/coffee-platform/scan` |
-| корень launch-состояния | `COFFEE_LAUNCH_STATE` | `~/coffee-platform/launch` |
-| корень soak | `COFFEE_LAUNCH_SCRATCH` | без значения по умолчанию |
+| Функция                      | Переменная                      | Значение по умолчанию                                   |
+| ---------------------------- | ------------------------------- | ------------------------------------------------------- |
+| `deploymentStateRoot`        | `COFFEE_PLATFORM_STATE`         | `~/coffee-platform`                                     |
+| `deploymentReleasesRoot`     | —                               | `<state>/runtime/releases`                              |
+| `deploymentRuntimeStateRoot` | —                               | `<state>/runtime/state`                                 |
+| `systemdUserUnitRoot`        | `COFFEE_SYSTEMD_USER_DIR`       | `~/.config/systemd/user`                                |
+| `observabilityReleasesRoot`  | `COFFEE_OBSERVABILITY_RELEASES` | `~/.local/share/coffee-platform/observability/releases` |
+| корень сканера               | `COFFEE_SCAN_CACHE_DIR`         | `~/.cache/coffee-platform/scan`                         |
+| корень launch-состояния      | `COFFEE_LAUNCH_STATE`           | `~/coffee-platform/launch`                              |
+| корень soak                  | `COFFEE_LAUNCH_SCRATCH`         | без значения по умолчанию                               |
 
 Относительный путь в любой из переменных отвергается с явной ошибкой:
 инструмент не угадывает каталог и не создаёт файлы «где-то рядом».
@@ -64,6 +64,26 @@ legacy/                 посторонние каталоги, ожидающ�
   ошибкой. Поэтому `launch/soak` создаётся с правами `0700`.
 - Приватный checkout прогона создаётся в `TMPDIR`, поэтому временные каталоги
   ограничены `launch/tmp` при явной передаче переменной.
+
+## Требования к свободному месту
+
+Пороги подобраны по фактическому потреблению, а не по проценту тома:
+
+| Потребитель        | Требование                     | Откуда                                                     |
+| ------------------ | ------------------------------ | ---------------------------------------------------------- |
+| supply_chain (G12) | 10 GiB свободно                | `config/platform.yaml` → `securityScan.minimumFreeDiskGiB` |
+| BuildKit           | 12 GiB свободно, кеш до 18 GiB | `config/platform.yaml` → `buildkit`                        |
+| observability      | `max(6 GiB, 5% тома)`          | `tools/observability/service.mjs`                          |
+| launch-обёртка     | 15 GiB до старта               | `scripts/launch-run.mjs --min-free-gib`                    |
+
+Процентный порог для observability заменён на абсолютный минимум: на томе 168 GiB
+прежняя формула требовала 34 GiB, что не связано с реальной потребностью стека.
+
+Перед прогоном стоит освобождать кеш сборки — он восстанавливается:
+
+```
+docker buildx prune --builder coffee-platform-mtu --keep-storage 6GB
+```
 
 ## Единая команда
 
