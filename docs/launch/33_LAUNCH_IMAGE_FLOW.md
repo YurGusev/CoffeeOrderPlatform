@@ -31,9 +31,14 @@
   `evidenceDir` и `resources.composeProject`
   (`verification/launch/v1/run.mjs:998-1020`, `740-766`).
 - **Inventory** — файл `artifacts/image-inventory.json` в evidence
-  `supply_chain`. Он описывает только 15 runtime-образов и является входом для
-  Compose-гейтов, а не заменой OCI-артефактам инфраструктурных образов
-  (`tools/image-inventory.mjs:6-8`, `68-74`).
+  `supply_chain`. Он описывает только 15 runtime-образов и остаётся входом
+  манифеста, а не заменой OCI-артефактам инфраструктурных образов
+  (`tools/image-inventory.mjs:6-8`, `68-84`).
+- **Artifact manifest** — файл `artifacts/artifact-manifest.json` рядом с
+  inventory. Это единственный контракт передачи образов: `role`
+  (`runtime` | `infra`), опубликованные теги, все собранные образы и
+  `imageInventorySha256`, связывающий манифест с inventory
+  (`tools/image-inventory.mjs:10-11`, `240-360`).
 - **Verified artifact** — OCI-архив и receipt `supply_chain`, по которым
   потребитель загружает инфраструктурный образ в Docker daemon и сверяет
   image ID (`tools/verified-infrastructure-image.mjs:312-392`, `1015-1035`).
@@ -52,10 +57,12 @@ supply_chain (pnpm security:scan)
   │  через docker buildx build;
   ├─ публикует 15 runtime-образов в Docker daemon под тегами проекта запуска;
   ├─ пишет OCI-артефакты и receipts для всех собранных образов;
-  └─ пишет artifacts/image-inventory.json только при PASS.
+  └─ пишет artifacts/image-inventory.json и artifacts/artifact-manifest.json
+     только при PASS; downstream-гейты получают путь манифеста в
+     COFFEE_LAUNCH_IMAGE_OWNERSHIP.
 
 compose / integration / recovery ── compose-smoke
-  └─ readLaunchImageInventory → imageMode = "reuse" → docker compose up --no-build
+  └─ readArtifactManifest → imageMode = "reuse" → docker compose up --no-build
 
 observability ── tools/observability/verify.mjs
   ├─ loadVerifiedGateImage для инфраструктурных образов;
@@ -70,14 +77,15 @@ rollback ── verification/launch/v1/scenarios/rollback.mjs
 
 Правило, которое следует из этой схемы: в launch-прогоне канонические
 runtime-образы собирает только `supply_chain`; остальные гейты обязаны
-использовать опубликованный inventory или verified artifact. Сборка внутри
-`compose-smoke` допустима только для standalone-запуска без launch context —
-это отладочный путь, а не часть полного прогона.
+использовать опубликованный манифест (runtime-образы) или verified artifact
+(инфраструктурные образы). Сборка внутри `compose-smoke` допустима только для
+standalone-запуска без launch context — это отладочный путь, а не часть полного
+прогона.
 
 Отдельно нужно различать **fixture-сборки**: `observability` и `browser`
 собирают вспомогательные `edge-nginx` и нативный `realtime-gateway` из
 рабочего дерева для своих тестовых стендов. Эти образы не являются
-каноническим набором запуска и не публикуются в inventory; они перечислены в
+каноническим набором запуска и не публикуются в манифест; они перечислены в
 разделе 3.3 и являются кандидатами на устранение в successor-задачах.
 
 ## 3. Сборка
@@ -103,7 +111,7 @@ runtime-образы собирает только `supply_chain`; осталь�
 
 | Место вызова | Что собирает | Когда достижимо |
 | --- | --- | --- |
-| `tools/compose-smoke.mjs:10565` | Все `RUNTIMES` или их подмножество, плюс `edge-nginx`; выбор зависит от proof-режима | Только при `imageMode === "build"` (`10541-10549`), то есть без опубликованного inventory, без ownership-ready и без rollback-образов |
+| `tools/compose-smoke.mjs:10565` | Все `RUNTIMES` или их подмножество, плюс `edge-nginx`; выбор зависит от proof-режима | Только при `imageMode === "build"` (`10567-10580`), то есть без опубликованного манифеста, без ownership-ready и без rollback-образов |
 | `tools/platform-service.mjs:867` | Недостающие runtime-образы для локального деплоя | Только локальный деплой, вне launch |
 | `tests/realtime/fixtures/setup.mjs:1217` | `edge-gateway`, `api-public`, `realtime-gateway`, `edge-nginx` для подготовки realtime qualification | Подготовка qualification (`tests/realtime/fixtures/setup.mjs:1206-1235`), не команда одного из 20 гейтов |
 | `tests/compose/topology.test.mjs:2322`, `2339`, `2345`, `2354` | Тестовые вызовы с подменённым Docker | Unit-тесты; реальный `docker buildx build` не запускается |
@@ -117,7 +125,7 @@ runtime-образы собирает только `supply_chain`; осталь�
 
 Кроме `buildRuntimeImages`, канонический Dockerfile запускается через
 `pnpm image:build` в тестовых фикстурах. Эти вызовы не публикуют образы в
-inventory и не заменяют `supply_chain`.
+манифест и не заменяют `supply_chain`.
 
 | Место вызова | Что собирает | Достижимость в launch |
 | --- | --- | --- |
@@ -135,36 +143,40 @@ inventory и не заменяют `supply_chain`.
 
 ### 3.4 Как `compose-smoke` выбирает build или reuse
 
-Ключевая логика находится в `tools/compose-smoke.mjs:10541-10549`:
+Ключевая логика находится в `resolveRuntimeImageMode`
+(`tools/compose-smoke.mjs:1718-1733`), вызов — `10567-10580`:
 
-- при наличии `launchImageInventory` выбирается `reuse`;
+- при наличии `launchArtifactManifest` выбирается `reuse`;
 - при `ownedImagePhase === "ready"` или отсутствии недостающих ownership-ссылок
   выбирается `reuse`;
 - иначе выбирается `build`, и при `!options.noBuild` вызывается
-  `buildRuntimeImages` (`10549-10565`).
+  `buildRuntimeImages`.
 
-`launchImageInventory` читается из evidence `supply_chain` при наличии
-`COFFEE_LAUNCH_CONTEXT_FILE` (`tools/compose-smoke.mjs:9548-9556`). Если
-inventory отсутствует, но `result.json` гейта `supply_chain` уже существует,
-чтение завершается ошибкой `IMAGE_INVENTORY_MISSING`
-(`tools/image-inventory.mjs:330-338`): тихая пересборка вместо опубликованного
+`launchArtifactManifest` читается через `readArtifactManifest` из evidence
+`supply_chain` при наличии `COFFEE_LAUNCH_CONTEXT_FILE`
+(`tools/compose-smoke.mjs:9568-9590`). Если манифест отсутствует, но
+`result.json` или `image-inventory.json` гейта `supply_chain` уже существуют,
+чтение завершается ошибкой `ARTIFACT_MANIFEST_MISSING`
+(`tools/image-inventory.mjs:440-452`): тихая пересборка вместо опубликованного
 набора запрещена.
 
 Переключатели:
 
-- `COFFEE_LAUNCH_CONTEXT_FILE` — включает чтение inventory и привязку к
-  `evidenceDir`/`composeProject` (`verification/launch/v1/run.mjs:740-766`);
-- `COFFEE_LAUNCH_IMAGE_OWNERSHIP` — путь к
-  `gates/integration/artifacts/runtime-image-ownership.json`; включает
-  ownership-режим для `integration`, `recovery`, `compose`, `observability`
-  (`verification/launch/v1/run.mjs:749-751`, `2695-2704`);
-- `--no-build` — запрещает сборку в `compose-smoke` (`10549`, `10604`);
-- `--project-name` — задаёт Compose-проект; inventory проверяется на точное
-  совпадение `composeProject` (`tools/image-inventory.mjs:160-183`);
+- `COFFEE_LAUNCH_CONTEXT_FILE` — включает чтение манифеста и привязку к
+  `evidenceDir`/`composeProject`;
+- `COFFEE_LAUNCH_IMAGE_OWNERSHIP` — несёт абсолютный путь к
+  `artifact-manifest.json`; `compose-smoke` сверяет его с каноническим путём
+  evidence (`verification/launch/v1/run.mjs:749-752`). Ownership-файл
+  `gates/integration/artifacts/runtime-image-ownership.json` остаётся
+  внутренним состоянием runner для lifecycle/cleanup и в окружение не
+  передаётся;
+- `--no-build` — запрещает сборку в `compose-smoke`;
+- `--project-name` — задаёт Compose-проект; манифест проверяется на точное
+  совпадение `composeProject` (`tools/image-inventory.mjs:338-370`);
 - `--browser-proof` — выбирает browser-стенд и запрещает остальные режимы
   (`tools/compose-smoke.mjs:1457-1478`), но не меняет источник образов;
 - `--mutation-disable-rollback` — выбирает rollback-стенд с D/R checkout;
-  образы всё равно берутся из inventory/rollback-контекста
+  образы всё равно берутся из манифеста/rollback-контекста
   (`tools/compose-smoke.mjs:1498-1518`).
 
 ## 4. Публикация
@@ -192,17 +204,19 @@ provenance и attestation, затем:
    добавляет запись в `publishedRuntimeImages`
    (`tools/security-scan.mjs:3701-3739`). Шаблон тега задаёт
    `runtimeImageTag` (`tools/image-inventory.mjs:76-78`).
-4. При `status === "PASS"` и `publishesRuntimeImages` пишет inventory
-   (`tools/security-scan.mjs:3996-4016`) и добавляет в `result.json` ссылку
-   `result.imageInventory = { path, sha256, sizeBytes }`
-   (`4011-4016`). Inventory пишется только при PASS; при FAIL ссылки нет.
+4. При `status === "PASS"` и `publishesRuntimeImages` пишет inventory и
+   `artifact-manifest.json` одним шагом
+   (`tools/security-scan.mjs:3996-4038`), добавляет в `result.json` ссылку
+   `result.imageInventory = { path, sha256, sizeBytes }` и включает SHA
+   манифеста в `artifacts/checksums.json`. Оба файла пишутся только при PASS;
+   при FAIL ссылки и манифеста нет.
 
 `publishesRuntimeImages` вычисляется из `resources.composeProject` контекста
 (`tools/security-scan.mjs:3492-3495`). Если Compose-проект не задан, runtime
-образы всё равно собираются и сканируются, но не публикуются и inventory не
-создаётся.
+образы всё равно собираются и сканируются, но не публикуются, а inventory и
+манифест не создаются.
 
-### 4.2 Контракт `image-inventory.json`
+### 4.2 Контракты `image-inventory.json` и `artifact-manifest.json`
 
 Файл лежит по пути
 `<evidenceDir>/gates/supply_chain/artifacts/supply-chain/artifacts/image-inventory.json`
@@ -224,18 +238,29 @@ provenance и attestation, затем:
 контексту и environment, совпадение `composeProject`, полный набор 15 сервисов
 и формат всех digest/hash (`tools/image-inventory.mjs:160-201`).
 
-`readLaunchImageInventory` дополнительно сверяет inventory с независимо
+`readArtifactManifest` дополнительно сверяет inventory с независимо
 прочитанным `supply_chain/result.json`: PASS, `SUPPLY_CHAIN_SCAN_CLEAN`,
 provenance, checksum-ссылку `result.imageInventory` и записи provenance для
-каждого образа (`tools/image-inventory.mjs:256-320`, `322-372`). Inventory сам
-по себе не является доказательством — только согласие с evidence гейта.
+каждого образа (`tools/image-inventory.mjs:420-545`). Inventory сам по себе не
+является доказательством — только согласие с evidence гейта и манифестом.
+
+`artifact-manifest.json` лежит рядом с inventory, пишется с режимом `0600` и
+содержит `generatedBy: "supply_chain"`, `schemaVersion`, run/candidate/tree,
+config/toolchain/lock digests, `buildInputSha256`, `composeProject`,
+`imageInventorySha256` и `images[]`: `service`, `role`
+(`runtime` | `infra`), `tag`, `imageId`, `manifestDigest`,
+`platformManifestDigest`, `provenanceSha256`, `attestationSha256`.
+`runtime`-записи точно совпадают с inventory, `infra` — остальные собранные
+образы; манифест дополнительно сверяется с provenance `result.json`.
+Единственный источник runtime-образов для downstream-гейтов — манифест.
 
 ### 4.3 Инфраструктурные и upstream-образы
 
-Инфраструктурные образы не попадают в `image-inventory.json`. Для них
-публикуются OCI-архив и receipt; потребитель загружает образ по требованию
-через `loadVerifiedGateImage` и сверяет image ID, digest и provenance с
-receipt (`tools/verified-infrastructure-image.mjs:312-392`, `1015-1035`).
+Инфраструктурные образы не попадают в `image-inventory.json`, но входят в
+`artifact-manifest.json` с ролью `infra`. Для них публикуются OCI-архив и
+receipt; потребитель загружает образ по требованию через
+`loadVerifiedGateImage` и сверяет image ID, digest и provenance с receipt
+(`tools/verified-infrastructure-image.mjs:312-392`, `1015-1035`).
 Upstream-образы `loki`, `prometheus`, `tempo` только тянутся по digest и
 сканируются; отдельного артефакта публикации у них нет
 (`tools/security-scan.mjs:53-57`, `2787-2865`).
@@ -244,19 +269,19 @@ Upstream-образы `loki`, `prometheus`, `tempo` только тянутся 
 
 ### 5.1 `compose-smoke`
 
-`compose-smoke` — основной потребитель inventory:
+`compose-smoke` — основной потребитель манифеста:
 
-- читает inventory при наличии launch context (`tools/compose-smoke.mjs:9548-9556`);
-- проверяет, что опубликованные теги указывают на ожидаемые image ID
-  (`assertPublishedRuntimeImages`, `tools/compose-smoke.mjs:1755-1774`, вызов
-  `10530-10531`);
-- подставляет образы в scoped Compose override как `runtimeImages` с
-  `pull_policy: never` (`10074-10087`, `3161-3184`);
-- запускает Compose с `--no-build` (`10664`);
-- после старта сверяет `container.Image` с inventory
-  (`assertRuntimeContainersMatchInventory`, `1776-1884`, вызов `10719-10723`).
+- читает манифест при наличии launch context (`tools/compose-smoke.mjs:9568-9590`);
+- выбирает `runtime`-образы по `role` и проверяет, что опубликованные теги
+  указывают на ожидаемые image ID (`assertPublishedRuntimeImages`,
+  `tools/compose-smoke.mjs:1773-1793`);
+- подставляет ID runtime-образов в scoped Compose override как `runtimeImages`
+  с `pull_policy: never`;
+- запускает Compose с `--no-build`;
+- после старта сверяет `container.Image` с манифестом
+  (`assertRuntimeContainersMatchManifest`, вызов `10746-10751`).
 
-Если inventory нет, `compose-smoke` возвращается к сборке только в отсутствие
+Если манифеста нет, `compose-smoke` возвращается к сборке только в отсутствие
 launch context либо в дочернем scope без результата `supply_chain`.
 
 ### 5.2 `integration` и `recovery`
@@ -264,9 +289,10 @@ launch context либо в дочернем scope без результата `s
 Оба гейта запускают `verification/launch/v1/scenarios/owner-suites.mjs`; после
 owner-тестов он вызывает `tools/compose-smoke.mjs` с `--customer-proof` и
 `--recovery-proof` (`verification/launch/v1/scenarios/owner-suites.mjs:157-170`).
-В launch-прогоне `run.mjs` передаёт этим гейтам контекст и ownership-файл
-(`verification/launch/v1/run.mjs:742-766`, `2695-2704`), поэтому
-`compose-smoke` выбирает `reuse` и не вызывает `buildRuntimeImages`. Запуск
+В launch-прогоне `run.mjs` передаёт этим гейтам контекст и путь манифеста в
+`COFFEE_LAUNCH_IMAGE_OWNERSHIP` (`verification/launch/v1/run.mjs:742-766`,
+`2694-2715`), поэтому `compose-smoke` выбирает `reuse` и не вызывает
+`buildRuntimeImages`. Запуск
 `pnpm test:integration` или `pnpm test:recovery` без launch context сохраняет
 standalone-путь со сборкой.
 
@@ -281,7 +307,7 @@ standalone-путь со сборкой.
 - передаёт дочернему процессу launch context и запускает
   `runBrowserProof` (`5800-5816`, `6381-6412`); внутри используется
   `runComposeSmoke` с `--recovery-proof`, поэтому runtime-образы берутся из
-  inventory, а не собираются.
+  манифеста, а не собираются.
 
 При этом `runLaunchPath` в `tests/observability/launch-path.mjs` собирает
 fixture-образы `edge-nginx` и нативный `realtime-gateway` через
@@ -294,7 +320,7 @@ fixture-образы `edge-nginx` и нативный `realtime-gateway` чер�
 `verification/launch/v1/scenarios/browser.mjs` создаёт дочерний checkout и
 запускает `tools/compose-smoke.mjs --browser-proof`
 (`verification/launch/v1/scenarios/browser.mjs:1738`). Дочерний
-`compose-smoke` читает inventory из launch context и использует
+`compose-smoke` читает манифест из launch context и использует
 опубликованные runtime-образы. После этого `browser` запускает
 `owner-browser`, который собирает fixture `edge-nginx`
 (`tests/realtime/fixtures/owner-browser.mjs:297-305`) и нативный
@@ -306,8 +332,8 @@ fixture-образы `edge-nginx` и нативный `realtime-gateway` чер�
 родительскому контексту (`1442-1455`) и запускает
 `tools/compose-smoke.mjs --mutation-disable-rollback`
 (`verification/launch/v1/scenarios/rollback.mjs:1906-1912`). Внутри
-`compose-smoke` использует inventory и `rollbackRuntimeImages`; сборка для
-rollback-стенда не выполняется (`tools/compose-smoke.mjs:10541-10549`).
+`compose-smoke` использует манифест и `rollbackRuntimeImages`; сборка для
+rollback-стенда не выполняется.
 
 ### 5.6 `platform-service` (вне launch)
 
@@ -323,11 +349,12 @@ rollback-стенда не выполняется (`tools/compose-smoke.mjs:1054
 
 - после PASS `supply_chain` читает image evidence и записывает
   `environment.imageDigests`/`nodeImageDigest` (`2261-2358`, `2367-2438`);
-- создаёт ownership-файл перед `integration` и передаёт его в
-  `integration`/`recovery`/`compose`/`observability` (`2601-2630`,
-  `2695-2704`);
-- после PASS `integration` переводит ownership в `ready`
-  (`2716-2733`);
+- после PASS `supply_chain` передаёт абсолютный путь
+  `artifact-manifest.json` последующим гейтам через
+  `COFFEE_LAUNCH_IMAGE_OWNERSHIP` (`2694-2715`);
+- создаёт ownership-файл перед `integration` только для собственного
+  lifecycle/cleanup; в окружение он не передаётся;
+- после PASS `integration` переводит ownership в `ready`;
 - при cleanup удаляет только run-owned образы, не затрагивая опубликованные
   `supply_chain` (`tools/runtime-image-inventory.mjs:186-245`).
 
@@ -346,29 +373,30 @@ rollback-стенда не выполняется (`tools/compose-smoke.mjs:1054
 | `contracts` | `pnpm contracts:check-generated && pnpm contracts:breaking && pnpm contracts:test` | Не использует | Не собирает и не публикует | — |
 | `architecture` | `pnpm architecture:check` | Не использует | Не собирает и не публикует | — |
 | `config_security` | `pnpm versions:check && pnpm config:check && pnpm security:secrets` | Не использует | Не собирает и не публикует | — |
-| `supply_chain` | `pnpm security:scan` | Собирает 14 Node runtime + `edge-nginx` + 5 инфраструктурных; upstream тянет по digest | Публикует 15 runtime-образов в daemon под тегами проекта; пишет OCI/receipts инфраструктурных и `image-inventory.json` | `COFFEE_LAUNCH_CONTEXT_FILE`; опционально `COFFEE_LAUNCH_DATA_TEMP_DIR`; кэш `COFFEE_SCAN_CACHE_DIR` |
+| `supply_chain` | `pnpm security:scan` | Собирает 14 Node runtime + `edge-nginx` + 5 инфраструктурных; upstream тянет по digest | Публикует 15 runtime-образов в daemon под тегами проекта; пишет OCI/receipts инфраструктурных, `image-inventory.json` и `artifact-manifest.json` | `COFFEE_LAUNCH_CONTEXT_FILE`; опционально `COFFEE_LAUNCH_DATA_TEMP_DIR`; кэш `COFFEE_SCAN_CACHE_DIR` |
 | `migrations` | `pnpm test:migrations:clean && pnpm test:migrations:forward` | Не использует | Не собирает и не публикует | — |
 | `db_boundaries` | `pnpm db:smoke` | Не использует | Не собирает и не публикует | — |
-| `integration` | `pnpm test:integration` | В launch — reuse 15 runtime-образов из inventory; standalone — fallback-сборка `customer-service`/всех runtime | В launch не собирает и не публикует | `COFFEE_LAUNCH_CONTEXT_FILE`, `COFFEE_LAUNCH_IMAGE_OWNERSHIP`, `--customer-proof`, `--recovery-proof`, `--project-name` |
+| `integration` | `pnpm test:integration` | В launch — reuse 15 runtime-образов из манифеста; standalone — fallback-сборка `customer-service`/всех runtime | В launch не собирает и не публикует | `COFFEE_LAUNCH_CONTEXT_FILE`, `COFFEE_LAUNCH_IMAGE_OWNERSHIP`, `--customer-proof`, `--recovery-proof`, `--project-name` |
 | `recovery` | `pnpm test:recovery` | В launch — reuse 15 runtime-образов; standalone — fallback-сборка всех runtime | В launch не собирает и не публикует | `COFFEE_LAUNCH_CONTEXT_FILE`, `COFFEE_LAUNCH_IMAGE_OWNERSHIP`, `--recovery-proof`, `--project-name` |
 | `compose` | `pnpm test:compose-smoke` | В launch — reuse 15 runtime-образов; без launch context — fallback-сборка | В launch не собирает и не публикует; fallback-сборка только без контекста | `COFFEE_LAUNCH_CONTEXT_FILE`, `COFFEE_LAUNCH_IMAGE_OWNERSHIP`, `--no-build`, `--project-name` |
-| `observability` | `pnpm test:observability` | Использует verified runtime- и инфраструктурные образы; fixture собирает `edge-nginx` и нативный `realtime-gateway` | Канонические образы не собирает и не публикует; fixture-сборка через `image:build` | `COFFEE_LAUNCH_CONTEXT_FILE`; дочерний browser-процесс наследует контекст |
+| `observability` | `pnpm test:observability` | Использует runtime-образы из манифеста и verified инфраструктурные образы; fixture собирает `edge-nginx` и нативный `realtime-gateway` | Канонические образы не собирает и не публикует; fixture-сборка через `image:build` | `COFFEE_LAUNCH_CONTEXT_FILE`; дочерний browser-процесс наследует контекст |
 | `browser` | `pnpm test:playwright` | В дочернем `compose-smoke` — reuse 15 runtime-образов; fixture собирает `edge-nginx` и нативный `realtime-gateway` | Канонические образы не собирает и не публикует; fixture-сборка через `image:build` | `COFFEE_LAUNCH_CONTEXT_FILE`; дочерний `--browser-proof` |
 | `aroma_sandbox` | `pnpm test:aroma-sandbox -- --approval-file "$AROMA_SANDBOX_APPROVAL_FILE"` | Не использует runtime-образы; работает с pinned PostgreSQL fixture | Не собирает и не публикует | `COFFEE_LAUNCH_CONTEXT_FILE` (контекст изолированного scope) |
 | `backup_restore` | `pnpm test:backup-restore` | Не использует | Не собирает и не публикует | `COFFEE_LAUNCH_CONTEXT_FILE` |
-| `rollback` | `pnpm test:mutation-disable-rollback` | В launch — reuse verified runtime-образов родительского контекста | Не собирает и не публикует | `COFFEE_LAUNCH_CONTEXT_FILE`; дочерний `--mutation-disable-rollback` |
+| `rollback` | `pnpm test:mutation-disable-rollback` | В launch — reuse runtime-образов из манифеста родительского контекста | Не собирает и не публикует | `COFFEE_LAUNCH_CONTEXT_FILE`; дочерний `--mutation-disable-rollback` |
 | `report` | `pnpm launch:verify:report` | Не использует | Не собирает и не публикует | `COFFEE_LAUNCH_CONTEXT_FILE` (только чтение evidence) |
 
 ## 7. Где сборка обязана исчезнуть
 
-Следующие задачи меняют эту карту; до их merge текущее поведение остаётся
+Следующие задачи меняют эту карту; до их merge описанное выше остаётся
 источником истины:
 
-- **Э1, #311 «Artifact manifest как единственный контракт передачи образов»**:
-  `supply_chain` начнёт публиковать `artifact-manifest.json` рядом с
-  inventory, а потребители (`compose-smoke`, `observability`, `rollback`)
-  получат единый `readArtifactManifest`. Эта карта — вход для Э1; новый формат
-  манифеста здесь не проектируется.
+- **Э1, #311 «Artifact manifest как единственный контракт передачи образов»**
+  (реализовано в этом PR): `supply_chain` публикует
+  `artifact-manifest.json` рядом с inventory, а потребители
+  (`compose-smoke`, `observability`, `rollback`) получают путь манифеста через
+  `COFFEE_LAUNCH_IMAGE_OWNERSHIP` и читают его через
+  `readArtifactManifest`. Inventory остаётся входом манифеста.
 - **Э2, #312 «Запретить сборку образов вне supply_chain»**: при наличии
   launch context отсутствие манифеста должно давать `IMAGE_INVENTORY_REQUIRED`,
   а не тихую сборку; fallback `imageMode === "build"` для launch-режима должен
@@ -379,7 +407,7 @@ rollback-стенда не выполняется (`tools/compose-smoke.mjs:1054
 
 1. `compose-smoke` всё ещё допускает `imageMode === "build"` при наличии
    launch context, если `supply_chain` в этом scope ещё не публиковал
-   inventory (`tools/compose-smoke.mjs:10541-10549`). Для полного прогона это
+   манифест (`tools/compose-smoke.mjs:10567-10580`). Для полного прогона это
    недостижимо из-за порядка гейтов, но контракт пока не запрещает путь.
 2. `observability` и `browser` собирают fixture-образы `edge-nginx` и
    нативный `realtime-gateway` через `pnpm image:build` в тестовых стендах

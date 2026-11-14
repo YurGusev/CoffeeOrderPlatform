@@ -6,11 +6,15 @@ import { isAbsolute, join, relative, resolve, sep } from "node:path";
 export const IMAGE_INVENTORY_SCHEMA_VERSION = 1;
 export const IMAGE_INVENTORY_FILE = "image-inventory.json";
 export const IMAGE_INVENTORY_REFERENCE = `artifacts/${IMAGE_INVENTORY_FILE}`;
+export const ARTIFACT_MANIFEST_SCHEMA_VERSION = 1;
+export const ARTIFACT_MANIFEST_FILE = "artifact-manifest.json";
 
 const IMAGE_ID = /^sha256:[a-f0-9]{64}$/u;
 const SHA256 = /^[a-f0-9]{64}$/u;
 const GIT_SHA = /^[a-f0-9]{40}$/u;
 const PROJECT = /^[a-z0-9][a-z0-9_-]{0,62}$/u;
+const IMAGE_TAG = /^[a-z0-9][a-z0-9._/-]*:latest$/u;
+const ARTIFACT_ROLES = new Set(["runtime", "infra"]);
 const MAX_INVENTORY_BYTES = 256 * 1024;
 const MAX_GATE_RESULT_BYTES = 8 * 1024 * 1024;
 const INVENTORY_KEYS = [
@@ -29,6 +33,30 @@ const INVENTORY_KEYS = [
 ];
 const IMAGE_KEYS = [
   "service",
+  "tag",
+  "imageId",
+  "manifestDigest",
+  "platformManifestDigest",
+  "provenanceSha256",
+  "attestationSha256",
+];
+const ARTIFACT_MANIFEST_KEYS = [
+  "generatedBy",
+  "schemaVersion",
+  "runId",
+  "candidateSha",
+  "treeSha",
+  "configSha256",
+  "toolchainVersionsSha256",
+  "lockfileSha256",
+  "buildInputSha256",
+  "composeProject",
+  "imageInventorySha256",
+  "images",
+];
+const ARTIFACT_IMAGE_KEYS = [
+  "service",
+  "role",
   "tag",
   "imageId",
   "manifestDigest",
@@ -65,12 +93,19 @@ function within(root, path) {
   return rel !== ".." && !rel.startsWith(`..${sep}`) && !isAbsolute(rel);
 }
 
-export function imageInventoryPath(evidenceDir) {
+function supplyChainArtifactsDir(evidenceDir) {
   return join(
     evidenceDir,
     "gates/supply_chain/artifacts/supply-chain/artifacts",
-    IMAGE_INVENTORY_FILE,
   );
+}
+
+export function imageInventoryPath(evidenceDir) {
+  return join(supplyChainArtifactsDir(evidenceDir), IMAGE_INVENTORY_FILE);
+}
+
+export function artifactManifestPath(evidenceDir) {
+  return join(supplyChainArtifactsDir(evidenceDir), ARTIFACT_MANIFEST_FILE);
 }
 
 export function runtimeImageTag(composeProject, service) {
@@ -205,18 +240,129 @@ export function serializeImageInventory(inventory) {
 }
 
 /**
- * Читает инвентарь образов `supply_chain` текущего запуска, если он опубликован.
- * Отсутствие файла означает, что `supply_chain` ещё не публиковал образы: вызывающий
- * обязан собрать их сам (standalone/тестовый путь).
+ * Манифест — явный контракт передачи образов между гейтами: `supply_chain`
+ * публикует runtime-образы под тегами запуска, а `role` отделяет их от
+ * инфраструктурных образов, собранных тем же гейтом. Связь с инвентарём
+ * фиксируется `imageInventorySha256`, поэтому оба файла проверяются вместе.
  */
+export function buildArtifactManifest({
+  context,
+  environment,
+  composeProject,
+  services,
+  images,
+  imageInventorySha256,
+}) {
+  if (
+    !PROJECT.test(composeProject ?? "") ||
+    !SHA256.test(imageInventorySha256 ?? "")
+  )
+    fail("ARTIFACT_MANIFEST_INVALID");
+  const runtime = [...services].sort(compareText);
+  const recorded = [...images].sort((left, right) =>
+    compareText(left.service, right.service),
+  );
+  if (recorded.length !== new Set(recorded.map((image) => image.service)).size)
+    fail("ARTIFACT_MANIFEST_INVALID");
+  return validateArtifactManifest(
+    {
+      generatedBy: "supply_chain",
+      schemaVersion: ARTIFACT_MANIFEST_SCHEMA_VERSION,
+      runId: context.runId,
+      candidateSha: context.candidateSha,
+      treeSha: environment.treeSha,
+      configSha256: environment.configSha256,
+      toolchainVersionsSha256: environment.toolchainVersionsSha256,
+      lockfileSha256: environment.lockfileSha256,
+      buildInputSha256: imageBuildInputSha256(environment),
+      composeProject,
+      imageInventorySha256,
+      images: recorded.map((image) => ({
+        service: image.service,
+        role: runtime.includes(image.service) ? "runtime" : "infra",
+        tag: runtime.includes(image.service)
+          ? runtimeImageTag(composeProject, image.service)
+          : image.tag,
+        imageId: image.imageId,
+        manifestDigest: image.manifestDigest,
+        platformManifestDigest: image.platformManifestDigest,
+        provenanceSha256: image.provenanceSha256,
+        attestationSha256: image.attestationSha256,
+      })),
+    },
+    { context, environment, services, composeProject },
+  );
+}
+
+export function validateArtifactManifest(
+  manifest,
+  { context, environment, services, composeProject },
+) {
+  const expected = [...services].sort(compareText);
+  if (
+    !exactKeys(manifest, ARTIFACT_MANIFEST_KEYS) ||
+    manifest.generatedBy !== "supply_chain" ||
+    manifest.schemaVersion !== ARTIFACT_MANIFEST_SCHEMA_VERSION ||
+    manifest.runId !== context.runId ||
+    manifest.candidateSha !== context.candidateSha ||
+    manifest.treeSha !== environment.treeSha ||
+    manifest.configSha256 !== environment.configSha256 ||
+    manifest.toolchainVersionsSha256 !== environment.toolchainVersionsSha256 ||
+    manifest.lockfileSha256 !== environment.lockfileSha256 ||
+    manifest.composeProject !== composeProject ||
+    !SHA256.test(manifest.buildInputSha256 ?? "") ||
+    manifest.buildInputSha256 !== imageBuildInputSha256(environment) ||
+    !SHA256.test(manifest.imageInventorySha256 ?? "") ||
+    !Array.isArray(manifest.images)
+  )
+    fail("ARTIFACT_MANIFEST_INVALID");
+  const seen = new Set();
+  const runtime = [];
+  for (const image of manifest.images) {
+    if (
+      !exactKeys(image, ARTIFACT_IMAGE_KEYS) ||
+      typeof image.service !== "string" ||
+      seen.has(image.service) ||
+      !ARTIFACT_ROLES.has(image.role) ||
+      !IMAGE_TAG.test(image.tag ?? "") ||
+      !IMAGE_ID.test(image.imageId ?? "") ||
+      !IMAGE_ID.test(image.manifestDigest ?? "") ||
+      !IMAGE_ID.test(image.platformManifestDigest ?? "") ||
+      !SHA256.test(image.provenanceSha256 ?? "") ||
+      !SHA256.test(image.attestationSha256 ?? "")
+    )
+      fail("ARTIFACT_MANIFEST_INVALID");
+    seen.add(image.service);
+    if (image.role === "runtime") runtime.push(image);
+  }
+  if (
+    runtime.length !== expected.length ||
+    runtime.some((image) => !expected.includes(image.service)) ||
+    manifest.images.some((image) =>
+      image.role === "runtime"
+        ? !expected.includes(image.service)
+        : expected.includes(image.service),
+    ) ||
+    runtime.some(
+      (image) => image.tag !== runtimeImageTag(composeProject, image.service),
+    )
+  )
+    fail("ARTIFACT_MANIFEST_INVALID");
+  return Object.freeze(manifest);
+}
+
+export function serializeArtifactManifest(manifest) {
+  return Buffer.from(`${JSON.stringify(manifest, null, 2)}\n`);
+}
+
 function supplyChainDir(evidenceDir) {
   return join(evidenceDir, "gates/supply_chain/artifacts/supply-chain");
 }
 
-async function readEvidenceJson(path, maxBytes) {
+async function readEvidenceJson(path, maxBytes, codes) {
   const absolute = resolve(path);
   if ((await realpath(absolute).catch(() => null)) !== absolute)
-    fail("IMAGE_INVENTORY_EVIDENCE_PATH_INVALID");
+    fail(codes.path);
   const info = await lstat(absolute).catch(() => null);
   if (
     !info?.isFile() ||
@@ -226,18 +372,16 @@ async function readEvidenceJson(path, maxBytes) {
     info.size < 1 ||
     info.size > maxBytes
   )
-    fail("IMAGE_INVENTORY_EVIDENCE_FILE_INVALID");
+    fail(codes.file);
   const handle = await open(
     absolute,
     constants.O_RDONLY | constants.O_NOFOLLOW,
   );
   try {
     const opened = await handle.stat();
-    if (!opened.isFile() || opened.size !== info.size)
-      fail("IMAGE_INVENTORY_EVIDENCE_FILE_INVALID");
+    if (!opened.isFile() || opened.size !== info.size) fail(codes.file);
     const bytes = await handle.readFile();
-    if (bytes.length !== info.size)
-      fail("IMAGE_INVENTORY_EVIDENCE_FILE_INVALID");
+    if (bytes.length !== info.size) fail(codes.file);
     try {
       return {
         bytes,
@@ -246,12 +390,23 @@ async function readEvidenceJson(path, maxBytes) {
         ),
       };
     } catch {
-      fail("IMAGE_INVENTORY_EVIDENCE_JSON_INVALID");
+      fail(codes.json);
     }
   } finally {
     await handle.close();
   }
 }
+
+const INVENTORY_EVIDENCE_CODES = Object.freeze({
+  path: "IMAGE_INVENTORY_EVIDENCE_PATH_INVALID",
+  file: "IMAGE_INVENTORY_EVIDENCE_FILE_INVALID",
+  json: "IMAGE_INVENTORY_EVIDENCE_JSON_INVALID",
+});
+const ARTIFACT_MANIFEST_CODES = Object.freeze({
+  path: "ARTIFACT_MANIFEST_PATH_INVALID",
+  file: "ARTIFACT_MANIFEST_FILE_INVALID",
+  json: "ARTIFACT_MANIFEST_JSON_INVALID",
+});
 
 /**
  * Сверяет инвентарь с независимо прочитанным evidence `supply_chain`: PASS-результатом,
@@ -271,6 +426,7 @@ async function verifyInventoryAgainstGateEvidence({
   const { value: result } = await readEvidenceJson(
     join(gateDir, "result.json"),
     MAX_GATE_RESULT_BYTES,
+    INVENTORY_EVIDENCE_CODES,
   );
   if (
     result?.gate !== "supply_chain" ||
@@ -317,28 +473,12 @@ async function verifyInventoryAgainstGateEvidence({
     composeProject !== inventory.composeProject
   )
     fail("IMAGE_INVENTORY_IMAGE_SET_INVALID");
+  return result;
 }
 
-export async function readLaunchImageInventory({
-  evidenceDir,
-  context,
-  environmentFile,
-  services,
-}) {
-  const path = imageInventoryPath(evidenceDir);
-  const info = await lstat(path).catch(() => null);
-  if (info === null) {
-    // Если `supply_chain` в этом scope уже дал PASS-результат, инвентарь обязан быть:
-    // иначе proof-стеки, которые не сверяют образ `supply_chain`, тихо пересобрали бы его.
-    const gateResult = await lstat(
-      join(supplyChainDir(evidenceDir), "result.json"),
-    ).catch(() => null);
-    if (gateResult !== null) fail("IMAGE_INVENTORY_MISSING");
-    // Иного `supply_chain` в этом scope нет (например, дочерний run), сборка допустима.
-    return null;
-  }
+async function readLaunchEnvironment(evidenceDir, context) {
   const environment = JSON.parse(
-    await readFile(environmentFile ?? join(evidenceDir, "environment.json"), {
+    await readFile(join(evidenceDir, "environment.json"), {
       encoding: "utf8",
     }),
   );
@@ -347,19 +487,48 @@ export async function readLaunchImageInventory({
     environment?.candidateSha !== context.candidateSha ||
     environment?.dirty !== false
   )
-    fail("IMAGE_INVENTORY_ENVIRONMENT_INVALID");
+    fail("ARTIFACT_MANIFEST_ENVIRONMENT_INVALID");
+  return environment;
+}
+
+/**
+ * Читает манифест образов `supply_chain` текущего запуска. Отсутствие файла
+ * означает, что `supply_chain` ещё не публиковал образы: вызывающий обязан
+ * собрать их сам (standalone-путь). Если PASS-результат `supply_chain` уже есть,
+ * отсутствие манифеста — ошибка: иначе downstream-гейт тихо пересобрал бы образы.
+ */
+export async function readArtifactManifest({ evidenceDir, context, services }) {
+  const path = artifactManifestPath(evidenceDir);
+  const info = await lstat(path).catch(() => null);
+  if (info === null) {
+    const [gateResult, inventoryFile] = await Promise.all([
+      lstat(join(supplyChainDir(evidenceDir), "result.json")).catch(() => null),
+      lstat(imageInventoryPath(evidenceDir)).catch(() => null),
+    ]);
+    if (gateResult !== null || inventoryFile !== null)
+      fail("ARTIFACT_MANIFEST_MISSING");
+    return null;
+  }
+  const environment = await readLaunchEnvironment(evidenceDir, context);
   const composeProject = context.resources?.composeProject;
-  const inventory = await readImageInventoryFile(path, {
-    evidenceDir,
-    expected: {
-      context,
-      environment,
-      services,
-      composeProject,
-    },
+  const { value: manifest } = await readEvidenceJson(
+    path,
+    MAX_INVENTORY_BYTES,
+    ARTIFACT_MANIFEST_CODES,
+  );
+  const verified = validateArtifactManifest(manifest, {
+    context,
+    environment,
+    services,
+    composeProject,
   });
-  const inventoryBytes = await readFile(path);
-  await verifyInventoryAgainstGateEvidence({
+  const inventoryPath = imageInventoryPath(evidenceDir);
+  const inventory = await readImageInventoryFile(inventoryPath, {
+    evidenceDir,
+    expected: { context, environment, services, composeProject },
+  });
+  const inventoryBytes = await readFile(inventoryPath);
+  const result = await verifyInventoryAgainstGateEvidence({
     evidenceDir,
     context,
     environment,
@@ -368,7 +537,44 @@ export async function readLaunchImageInventory({
     services,
     composeProject,
   });
-  return inventory;
+  if (verified.imageInventorySha256 !== sha256(inventoryBytes))
+    fail("ARTIFACT_MANIFEST_INVENTORY_MISMATCH");
+  const runtime = verified.images.filter((image) => image.role === "runtime");
+  for (const image of runtime) {
+    const recorded = inventory.images.find(
+      (entry) => entry.service === image.service,
+    );
+    if (
+      !recorded ||
+      recorded.tag !== image.tag ||
+      recorded.imageId !== image.imageId ||
+      recorded.manifestDigest !== image.manifestDigest ||
+      recorded.platformManifestDigest !== image.platformManifestDigest ||
+      recorded.provenanceSha256 !== image.provenanceSha256 ||
+      recorded.attestationSha256 !== image.attestationSha256
+    )
+      fail("ARTIFACT_MANIFEST_INVENTORY_MISMATCH");
+  }
+  const provenance = result.provenance.images.filter(
+    (entry) => entry?.provenanceStatus === "PASS",
+  );
+  if (provenance.length !== verified.images.length)
+    fail("ARTIFACT_MANIFEST_PROVENANCE_MISMATCH");
+  for (const image of verified.images) {
+    const records = provenance.filter(
+      (entry) => entry?.service === image.service,
+    );
+    if (
+      records.length !== 1 ||
+      records[0].imageId !== image.imageId ||
+      records[0].manifestDigest !== image.manifestDigest ||
+      records[0].platformManifestDigest !== image.platformManifestDigest ||
+      records[0].metadataSha256 !== image.provenanceSha256 ||
+      records[0].attestationSha256 !== image.attestationSha256
+    )
+      fail("ARTIFACT_MANIFEST_PROVENANCE_MISMATCH");
+  }
+  return verified;
 }
 
 export async function readImageInventoryFile(path, { expected, evidenceDir }) {

@@ -97,7 +97,10 @@ import {
   readVerifiedRuntimeImages,
   removeVerifiedGateImage,
 } from "./verified-infrastructure-image.mjs";
-import { readLaunchImageInventory } from "./image-inventory.mjs";
+import {
+  artifactManifestPath,
+  readArtifactManifest,
+} from "./image-inventory.mjs";
 import {
   deriveRuntimeDatabaseTarget,
   verifyLaunchConfigBytes,
@@ -1712,6 +1715,23 @@ export function runtimeImageBuildTargets(projectName, pending, customerOnly) {
   };
 }
 
+/**
+ * Опубликованный манифест supply_chain покрывает все runtime-образы, поэтому
+ * ownership-фаза не должна инициировать сборку. Отдельная функция позволяет
+ * topology-тесту доказать решение reuse без запуска Docker.
+ */
+export function resolveRuntimeImageMode({
+  launchArtifactManifest,
+  ownedImagePhase,
+  ownedTargets,
+}) {
+  return launchArtifactManifest ||
+    ownedImagePhase === "ready" ||
+    (ownedTargets && ownedTargets.runtimes.length === 0 && !ownedTargets.nginx)
+    ? "reuse"
+    : "build";
+}
+
 export function assertVerifiedRuntimeImages({
   projectName,
   verifiedImages,
@@ -1749,11 +1769,12 @@ export function assertVerifiedRuntimeImages({
 }
 
 /**
- * Проверяет, что образы, опубликованные `supply_chain`, действительно лежат в daemon под
- * тегами проекта запуска: Compose запускает именно эти неизменяемые ID.
+ * Проверяет, что runtime-образы, опубликованные `supply_chain`, действительно
+ * лежат в daemon под тегами проекта запуска: Compose запускает именно эти
+ * неизменяемые ID.
  */
-export function assertPublishedRuntimeImages(inventory) {
-  for (const image of inventory.images) {
+export function assertPublishedRuntimeImages(runtimeImages) {
+  for (const image of runtimeImages) {
     const actual = runDocker([
       "image",
       "inspect",
@@ -1764,7 +1785,7 @@ export function assertPublishedRuntimeImages(inventory) {
     assert.equal(
       actual,
       image.imageId,
-      `${image.service} image is missing from the published supply_chain inventory`,
+      `${image.service} image is missing from the published supply_chain artifact manifest`,
     );
   }
 }
@@ -1773,13 +1794,13 @@ export function assertPublishedRuntimeImages(inventory) {
  * Доказывает, что запущенные контейнеры используют именно образы, опубликованные
  * `supply_chain`, а не пересобранные локально.
  */
-export function assertRuntimeContainersMatchInventory(
+export function assertRuntimeContainersMatchManifest(
   projectName,
-  inventory,
+  runtimeImages,
   { requireComplete = true } = {},
 ) {
   const expected = new Map(
-    inventory.images.map((image) => [image.service, image.imageId]),
+    runtimeImages.map((image) => [image.service, image.imageId]),
   );
   const containerIds = runDocker([
     "ps",
@@ -1805,7 +1826,7 @@ export function assertRuntimeContainersMatchInventory(
     assert.equal(
       imageId,
       expectedImageId,
-      `${service} container runs an image outside the published supply_chain inventory`,
+      `${service} container runs an image outside the published supply_chain artifact manifest`,
     );
     expected.delete(service);
   }
@@ -9545,14 +9566,29 @@ export async function runComposeSmoke({
   if (options.aromaBindingProof)
     assertAromaGatewaySocketAssociationRegression();
   let launchIdentity;
-  let launchImageInventory = null;
+  let launchArtifactManifest = null;
+  let launchRuntimeImages = null;
   if (launchContextPath) {
     launchIdentity = await validateLaunchContext(launchContextPath);
-    launchImageInventory = await readLaunchImageInventory({
+    // Контракт гейтов: COFFEE_LAUNCH_IMAGE_OWNERSHIP несёт путь к artifact-manifest.json.
+    const manifestPath = process.env.COFFEE_LAUNCH_IMAGE_OWNERSHIP;
+    if (manifestPath !== undefined)
+      assert.equal(
+        manifestPath,
+        artifactManifestPath(launchIdentity.evidenceDir),
+        "launch artifact manifest path is invalid",
+      );
+    launchArtifactManifest = await readArtifactManifest({
       evidenceDir: launchIdentity.evidenceDir,
       context: launchIdentity.context,
       services: PUBLISHED_RUNTIME_SERVICES,
     });
+    if (manifestPath !== undefined)
+      assert.ok(launchArtifactManifest, "launch artifact manifest is missing");
+    launchRuntimeImages =
+      launchArtifactManifest?.images.filter(
+        (image) => image.role === "runtime",
+      ) ?? null;
     await withEarlyRollbackGuardReceipt(
       {
         mutationDisableRollback: options.mutationDisableRollback,
@@ -9997,9 +10033,14 @@ export async function runComposeSmoke({
     );
     if (options.mutationDisableRollback)
       markRollbackBootstrapSubstage("compose-override");
-    const ownershipPath = process.env.COFFEE_LAUNCH_IMAGE_OWNERSHIP;
+    const ownershipPath = launchIdentity
+      ? join(
+          launchIdentity.evidenceDir,
+          "gates/integration/artifacts/runtime-image-ownership.json",
+        )
+      : undefined;
     if (
-      ownershipPath &&
+      manifestPath &&
       !options.noBuild &&
       !observabilityBrowser &&
       !browser &&
@@ -10011,13 +10052,6 @@ export async function runComposeSmoke({
       )
     ) {
       assert.ok(launchIdentity, "run-owned images require launch identity");
-      assert.equal(
-        ownershipPath,
-        join(
-          launchIdentity.evidenceDir,
-          "gates/integration/artifacts/runtime-image-ownership.json",
-        ),
-      );
       assert.equal(await realpath(ownershipPath), ownershipPath);
       const info = await lstat(ownershipPath);
       assert.ok(
@@ -10074,13 +10108,13 @@ export async function runComposeSmoke({
       edgeNginxImage: options.noBuild
         ? undefined
         : `${projectName}-edge-nginx:latest`,
-      // Приоритет источников образов: D/R-сборки rollback > ownership integration > инвентарь supply_chain.
-      ...(launchImageInventory
+      // Приоритет источников образов: D/R-сборки rollback > манифест supply_chain.
+      ...(launchRuntimeImages
         ? {
             runtimeImages: Object.fromEntries(
-              launchImageInventory.images.map((image) => [
+              launchRuntimeImages.map((image) => [
                 image.service,
-                image.tag,
+                image.imageId,
               ]),
             ),
           }
@@ -10094,7 +10128,6 @@ export async function runComposeSmoke({
             },
           }
         : {}),
-      ...(ownedRuntimeImages ? { runtimeImages: ownedRuntimeImages } : {}),
       runtimeLogging: observability ? platformConfig : undefined,
     });
     composeFiles.push(composeFile);
@@ -10171,11 +10204,11 @@ export async function runComposeSmoke({
         edgeNginxImage: options.noBuild
           ? undefined
           : `${projectName}-edge-nginx:latest`,
-        runtimeImages: launchImageInventory
+        runtimeImages: launchRuntimeImages
           ? Object.fromEntries(
-              launchImageInventory.images.map((image) => [
+              launchRuntimeImages.map((image) => [
                 image.service,
-                image.tag,
+                image.imageId,
               ]),
             )
           : undefined,
@@ -10527,8 +10560,7 @@ export async function runComposeSmoke({
     const imageIdentity = observabilityBrowser
       ? await browserParentModules.validateLaunchContext(imageContextPath)
       : launchIdentity;
-    if (launchImageInventory)
-      assertPublishedRuntimeImages(launchImageInventory);
+    if (launchRuntimeImages) assertPublishedRuntimeImages(launchRuntimeImages);
     const ownedTargets = parentOwnedRuntimeImages
       ? runtimeImageBuildTargets(
           projectName,
@@ -10536,16 +10568,11 @@ export async function runComposeSmoke({
           options.customerProof,
         )
       : null;
-    // Опубликованный инвентарь supply_chain покрывает все runtime-образы, поэтому
-    // ownership-фаза не должна инициировать сборку.
-    const imageMode =
-      launchImageInventory ||
-      ownedImagePhase === "ready" ||
-      (ownedTargets &&
-        ownedTargets.runtimes.length === 0 &&
-        !ownedTargets.nginx)
-        ? "reuse"
-        : "build";
+    const imageMode = resolveRuntimeImageMode({
+      launchArtifactManifest,
+      ownedImagePhase,
+      ownedTargets,
+    });
     if (!options.noBuild && !rollbackRuntimeImages && imageMode === "build") {
       let temporary;
       let snapshot;
@@ -10601,7 +10628,7 @@ export async function runComposeSmoke({
         verifiedImages,
         // С опубликованным инвентарём edge-nginx уже лежит под тегом проекта
         // запуска, поэтому проверяем именно его, а не локальный :local.
-        noBuild: launchImageInventory ? false : options.noBuild,
+        noBuild: launchRuntimeImages ? false : options.noBuild,
         directImageIds: parentOwnedRuntimeImages,
       });
       if (parentOwnedRuntimeImages)
@@ -10716,8 +10743,8 @@ export async function runComposeSmoke({
       throw error;
     }
     throwIfRollbackTerminationRequested();
-    if (launchImageInventory)
-      assertRuntimeContainersMatchInventory(projectName, launchImageInventory, {
+    if (launchRuntimeImages)
+      assertRuntimeContainersMatchManifest(projectName, launchRuntimeImages, {
         requireComplete: !(
           options.databaseProof ||
           options.customerProof ||
