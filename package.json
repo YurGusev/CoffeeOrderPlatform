@@ -109,7 +109,8 @@
     "verify:customer-slice": "node tools/grokverify-customer.mjs",
     "security:scan": "node tools/security-scan.mjs",
     "secrets:renew-transport": "node scripts/renew-service-transport-certs.mjs",
-    "secrets:check-transport": "node scripts/renew-service-transport-certs.mjs --check"
+    "secrets:check-transport": "node scripts/renew-service-transport-certs.mjs --check",
+    "launch:run": "node scripts/launch-run.mjs"
   },
   "devDependencies": {
     "ajv": "8.20.0",
