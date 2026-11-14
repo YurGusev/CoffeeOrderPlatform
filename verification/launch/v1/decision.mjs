@@ -16,6 +16,7 @@ export const RESUMABLE_GATE_IDS = new Set([
   "config_security",
   "supply_chain",
 ]);
+const SNAPSHOT_SHA256_PATTERN = /^[0-9a-f]{64}$/u;
 
 export function reportGateStatus(gates) {
   return (
@@ -43,12 +44,25 @@ function workingGatePass(gate) {
     return gate.runs.length > 0;
   // Переиспользованный PASS допустим только для разрешённого списка и без
   // собственных command runs: source evidence не переписывается.
-  return (
-    RESUMABLE_GATE_IDS.has(gateSlug(gate.id)) &&
-    gate.runs.length === 0 &&
-    typeof gate.reusedFrom.runId === "string" &&
-    typeof gate.reusedFrom.evidenceDir === "string"
-  );
+  if (
+    gate.runs.length !== 0 ||
+    typeof gate.reusedFrom.runId !== "string" ||
+    typeof gate.reusedFrom.evidenceDir !== "string"
+  )
+    return false;
+  // preflight переиспользуется только как admission-результат, замороженный
+  // вместе с GitHub-снимком; остальные разрешённые гейты не снимают живое
+  // состояние.
+  if (gateSlug(gate.id) === "preflight")
+    return (
+      SNAPSHOT_SHA256_PATTERN.test(
+        gate.reusedFrom.githubSnapshotSha256 ?? "",
+      ) &&
+      SNAPSHOT_SHA256_PATTERN.test(
+        gate.reusedFrom.preflightArtifactSha256 ?? "",
+      )
+    );
+  return RESUMABLE_GATE_IDS.has(gateSlug(gate.id));
 }
 
 // Только release без фильтров и при всех 19 рабочих PASS даёт ДОПУСТИТЬ.

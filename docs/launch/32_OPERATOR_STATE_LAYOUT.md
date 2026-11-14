@@ -116,38 +116,28 @@ pnpm launch:precheck --list        # список проверяемых
 Docker-образы и soak. Команды берутся из `matrix.yaml`, поэтому локальная
 проверка совпадает с тем, что выполняет runner.
 
-## Как запускать fast и release
+## Профили запуска
 
-Профиль `fast` — девять гейтов без съёма живого состояния и бюджет 20 минут;
-профиль `release` — все двадцать гейтов и бюджет 180 минут. Точки входа:
-
-```
-pnpm launch:fast                      # node verification/launch/v1/run.mjs --profile fast
-pnpm launch:release                   # node verification/launch/v1/run.mjs --profile release
-```
-
-Обе команды запускаются из чистого checkout репозитория: runner сам создаёт
-detached checkout кандидата и пишет evidence в `evidence/launch/<runId>`.
-Решение `ДОПУСТИТЬ` выносит только `release` при всех 19 рабочих PASS; статус
-`report` публикуется отдельно как `reportStatus`.
-
-Выборочный диагностический запуск и переиспользование ранее полученного PASS:
+`admission` проверяет только допуск кандидата и укладывается в минуту, `fast`
+прогоняет девять быстрых гейтов, `release` выносит решение `ДОПУСТИТЬ`. Состав,
+длительности и правила выбора профиля описаны в
+[профилях гейтов запуска](34_LAUNCH_GATE_PROFILES.md), решение — в
+[ADR-0044](../adr/ADR-0044-launch-gate-profiles.md), identity и resume —
+в [спецификации проверки](21_LAUNCH_VERIFICATION_SPEC.md), раздел 18.
 
 ```
+pnpm launch:admission                 # только preflight, диагностический результат
+pnpm launch:fast                      # девять быстрых гейтов без живого состояния
+pnpm launch:release                   # полный прогон и решение о допуске
+pnpm launch:release --resume <runId|evidenceDir>  # повторно использовать PASS
 node verification/launch/v1/run.mjs --gate static --gate unit
 node verification/launch/v1/run.mjs --from compose --resume <runId|evidenceDir>
-pnpm launch:release -- --resume <runId|evidenceDir>
 ```
 
-`--gate`/`--from` не запускают предков и всегда дают `НЕ ДОПУСТИТЬ`.
-`--resume` переиспользует PASS только гейтов `install`, `generated`, `static`,
-`unit`, `contracts`, `architecture`, `config_security`, `supply_chain` и только
-при совпадении `candidateSha`, `treeSha`, `configSha256`,
-`toolchainVersionsSha256` и `lockfileSha256`; иначе прогон завершается
-`RESUME_IDENTITY_MISMATCH`. Гейты, снимающие живое состояние, при resume
-выполняются заново, а явный `--gate` по такому гейту с `--resume` отвергается
-`RESUME_FORBIDDEN_GATE`. Переиспользованный PASS виден в записи гейта как
-`reusedFrom`; source evidence не переписывается.
+Все профили запускаются из чистого checkout: runner создаёт detached checkout
+кандидата и пишет evidence в `evidence/launch/<runId>`. `--gate`/`--from` не
+запускают предков и всегда дают `НЕ ДОПУСТИТЬ`. Переиспользованный PASS виден
+в записи гейта как `reusedFrom`; source evidence не переписывается.
 
 ## Правила уборки
 

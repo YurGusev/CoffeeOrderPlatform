@@ -57,6 +57,7 @@
       "properties": {
         "id": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
         "version": { "const": 1 },
+        "admission": { "const": true },
         "profile": { "enum": ["fast", "release", "both"] },
         "mandatory": { "const": true },
         "owner": { "type": "string", "minLength": 1 },
@@ -83,8 +84,10 @@
         { "$ref": "#/$defs/gate" },
         {
           "type": "object",
+          "required": ["admission"],
           "properties": {
             "id": { "const": "preflight" },
+            "admission": { "const": true },
             "command": { "const": "pnpm launch:verify:preflight" },
             "timeout": { "const": 900 }
           }

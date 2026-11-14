@@ -3,6 +3,7 @@ gates:
   - id: preflight
     version: 1
     profile: both
+    admission: true
     mandatory: true
     owner: Platform
     predecessors: []

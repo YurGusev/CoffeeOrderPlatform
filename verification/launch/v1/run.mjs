@@ -70,13 +70,16 @@ const MATRIX_PATH = join(BASE, "matrix.yaml");
 const MATRIX_SCHEMA_PATH = join(BASE, "schemas/matrix.schema.json");
 const RESULT_SCHEMA_PATH = join(BASE, "schemas/run-result.schema.json");
 const PROFILE_BUDGET_MS = Object.freeze({
+  admission: 90 * 1000,
   fast: 20 * 60 * 1000,
   release: 180 * 60 * 1000,
 });
 const DEFAULT_PROFILE = "release";
 const DIAGNOSTIC_PROFILE = "diagnostic";
+const ADMISSION_PROFILE = "admission";
 export const SKIPPED_BY_FILTER = "SKIPPED_BY_FILTER";
 const RUN_ID_PATTERN = /^[0-9]{8}T[0-9]{6}Z-[0-9a-f]{7}$/;
+const SNAPSHOT_SHA256_PATTERN = /^[0-9a-f]{64}$/u;
 const REPORT_FINALIZATION_RESERVE_MS = 120 * 1000;
 const REPORT_COMMAND_RESERVE_MS = EXPECTED_GATES.at(-1)[2] * 1000;
 const REPORT_TOTAL_RESERVE_MS =
@@ -1009,6 +1012,15 @@ export function selectGates(matrixGates, options = {}) {
       throw new Error(`Неизвестный гейт для --from: ${options.from}`);
     selectedIds = new Set(orderedIds.slice(start));
     skipReason = `--from ${options.from} запускает гейт и все последующие`;
+  } else if (profile === ADMISSION_PROFILE) {
+    selectedIds = new Set(
+      matrixGates
+        .filter((gate) => gate.admission === true)
+        .map((gate) => gate.id),
+    );
+    if (selectedIds.size === 0)
+      throw new Error("Профиль admission не содержит ни одного гейта");
+    skipReason = "гейт вне профиля admission";
   } else {
     if (profile !== "fast" && profile !== "release")
       throw new Error(`Неизвестный профиль: ${profile}`);
@@ -1060,6 +1072,7 @@ export function resumeIdentityOf(result) {
     configSha256: result?.environment?.configSha256,
     toolchainVersionsSha256: result?.environment?.toolchainVersionsSha256,
     lockfileSha256: result?.environment?.lockfileSha256,
+    githubSnapshotSha256: result?.environment?.githubSnapshotSha256 ?? null,
   };
 }
 
@@ -1133,10 +1146,34 @@ export function resumableGateRecords(
       entry.status === "RUN" && SUPPLY_CHAIN_CONSUMER_IDS.has(entry.id),
   );
   for (const [id, entry] of selection.gates) {
-    if (entry.status !== "RUN" || !RESUMABLE_GATE_IDS.has(id)) continue;
+    if (entry.status !== "RUN") continue;
+    if (id !== "preflight" && !RESUMABLE_GATE_IDS.has(id)) continue;
     if (id === "supply_chain" && supplyChainConsumed) continue;
     const sourceGate = sourceResult.gates.find((gate) => gate.id === id);
     if (sourceGate?.status !== "PASS") continue;
+    if (id === "preflight") {
+      // Admission-результат замораживает пару (candidateSha, GitHub-снимок).
+      // Только её и можно переиспользовать в release; live evidence не
+      // переносится между прогонами.
+      const githubSnapshotSha256 =
+        sourceResult.environment?.githubSnapshotSha256;
+      const preflightArtifactSha256 = sourceGate.artifacts?.find((artifact) =>
+        artifact.path.endsWith("artifacts/preflight.json"),
+      )?.sha256;
+      if (
+        sourceResult.profile !== ADMISSION_PROFILE ||
+        !SNAPSHOT_SHA256_PATTERN.test(githubSnapshotSha256 ?? "") ||
+        !SNAPSHOT_SHA256_PATTERN.test(preflightArtifactSha256 ?? "")
+      )
+        continue;
+      reused.set(id, {
+        runId: sourceResult.runId,
+        evidenceDir: relativeEvidencePath(sourceEvidenceDir),
+        githubSnapshotSha256,
+        preflightArtifactSha256,
+      });
+      continue;
+    }
     reused.set(id, {
       runId: sourceResult.runId,
       evidenceDir: relativeEvidencePath(sourceEvidenceDir),
@@ -1153,6 +1190,31 @@ export function resumableGateRecords(
   );
   if (installNeeded) reused.delete("install");
   return reused;
+}
+
+export async function readAdmissionSnapshot(
+  evidenceDir,
+  { runId, candidateSha },
+) {
+  const path = join(evidenceDir, "gates/preflight/artifacts/preflight.json");
+  await assertNoSymlinkPath(evidenceDir, path);
+  const preflight = JSON.parse(await readFile(path, "utf8"));
+  const githubSnapshotSha256 = preflight?.githubSnapshot?.sha256;
+  if (
+    preflight?.schemaVersion !== 1 ||
+    preflight.gateId !== "preflight" ||
+    preflight.status !== "PASS" ||
+    preflight.runId !== runId ||
+    preflight.candidateSha !== candidateSha ||
+    !SNAPSHOT_SHA256_PATTERN.test(githubSnapshotSha256 ?? "")
+  )
+    throw Object.assign(
+      new Error(
+        "RESUME_IDENTITY_MISMATCH: admission должен подтверждаться preflight-артефактом с GitHub-снимком",
+      ),
+      { code: "RESUME_IDENTITY_MISMATCH" },
+    );
+  return githubSnapshotSha256;
 }
 
 async function loadResumeSource(value) {
@@ -1206,14 +1268,17 @@ function usageText() {
     "Использование: node verification/launch/v1/run.mjs [опции]",
     "",
     "Профили и фильтры:",
-    "  --profile fast|release  fast: девять гейтов без живого состояния; release: все двадцать (по умолчанию)",
+    "  --profile admission|fast|release",
+    "                          admission: только допуск кандидата (preflight, до минуты),",
+    "                          fast: девять гейтов без живого состояния; release: все двадцать (по умолчанию)",
     "  --gate <id>             диагностический запуск только указанных гейтов (можно повторять)",
     "  --from <id>             диагностический запуск гейта и всех последующих; требует --resume",
     "",
     "Переиспользование ранее полученного PASS:",
     "  --resume <evidenceDir|runId>",
     "                          переиспользовать PASS разрешённых гейтов при совпадении",
-    "                          candidateSha, treeSha, configSha256, toolchainVersionsSha256, lockfileSha256",
+    "                          candidateSha, treeSha, configSha256, toolchainVersionsSha256, lockfileSha256;",
+    "                          preflight переиспользуется только из admission-результата с тем же GitHub-снимком",
     "",
     "Identity и прочие опции:",
     "  --candidate-sha <sha>                полный SHA кандидата (по умолчанию HEAD)",
@@ -1228,7 +1293,7 @@ function usageText() {
     "Решение ДОПУСТИТЬ выносит только профиль release без фильтров и только при",
     "всех 19 рабочих PASS (PASS переиспользованного гейта фиксируется в reusedFrom);",
     "статус report публикуется отдельно и в решение не входит.",
-    "--gate и --from всегда дают диагностический результат НЕ ДОПУСТИТЬ.",
+    "admission, fast, --gate и --from всегда дают диагностический НЕ ДОПУСТИТЬ.",
   ].join("\n");
 }
 
@@ -2547,19 +2612,36 @@ export async function readLaunchImageEvidence({
   const preflightGate = result.gates.find((entry) => entry.id === "preflight");
   if (preflightGate?.status !== "PASS")
     throw new Error("G12_IMAGE_PREFLIGHT_NOT_PASSED");
-  const path = join(evidenceDir, "gates/preflight/artifacts/preflight.json");
-  await assertNoSymlinkPath(evidenceDir, path);
-  const bytes = await readFile(path);
-  const matchingArtifacts = preflightGate.artifacts.filter(
-    (entry) => resolve(entry.path) === path,
-  );
-  if (
-    matchingArtifacts.length !== 1 ||
-    matchingArtifacts[0].sha256 !==
-      createHash("sha256").update(bytes).digest("hex") ||
-    matchingArtifacts[0].sizeBytes !== bytes.length
-  )
+  // Release может переиспользовать admission-preflight. Source evidence
+  // остаётся на месте и read-only; artifact не копируется между прогонами.
+  const reuse = preflightGate.reusedFrom ?? null;
+  const sourceEvidenceDir = reuse ? resolve(ROOT, reuse.evidenceDir) : null;
+  if (reuse && sourceEvidenceDir !== join(ROOT, "evidence/launch", reuse.runId))
     throw new Error("G12_IMAGE_PREFLIGHT_HASH_MISMATCH");
+  const path = join(
+    sourceEvidenceDir ?? evidenceDir,
+    "gates/preflight/artifacts/preflight.json",
+  );
+  await assertNoSymlinkPath(sourceEvidenceDir ?? evidenceDir, path);
+  const bytes = await readFile(path);
+  const bytesSha256 = createHash("sha256").update(bytes).digest("hex");
+  if (reuse) {
+    if (
+      !SNAPSHOT_SHA256_PATTERN.test(reuse.preflightArtifactSha256 ?? "") ||
+      reuse.preflightArtifactSha256 !== bytesSha256
+    )
+      throw new Error("G12_IMAGE_PREFLIGHT_HASH_MISMATCH");
+  } else {
+    const matchingArtifacts = preflightGate.artifacts.filter(
+      (entry) => resolve(entry.path) === path,
+    );
+    if (
+      matchingArtifacts.length !== 1 ||
+      matchingArtifacts[0].sha256 !== bytesSha256 ||
+      matchingArtifacts[0].sizeBytes !== bytes.length
+    )
+      throw new Error("G12_IMAGE_PREFLIGHT_HASH_MISMATCH");
+  }
   const preflight = JSON.parse(bytes.toString("utf8"));
   const checks = preflight.checks?.filter(
     (entry) => entry.id === "NATIVE_IMAGE_RUNTIME_IDENTITY",
@@ -2570,8 +2652,10 @@ export async function readLaunchImageEvidence({
     preflight.schemaVersion !== 1 ||
     preflight.gateId !== "preflight" ||
     preflight.status !== "PASS" ||
-    preflight.runId !== context.runId ||
+    preflight.runId !== (reuse ? reuse.runId : context.runId) ||
     preflight.candidateSha !== context.candidateSha ||
+    (reuse !== null &&
+      preflight.githubSnapshot?.sha256 !== reuse.githubSnapshotSha256) ||
     checks?.length !== 1 ||
     checks[0].status !== "PASS" ||
     native?.status !== "PASS" ||
@@ -2628,6 +2712,7 @@ async function writeEnvironment(evidenceDir, result) {
     encryptedSecretsSha256: result.environment.encryptedSecretsSha256,
     toolchainVersionsSha256: result.environment.toolchainVersionsSha256,
     lockfileSha256: result.environment.lockfileSha256,
+    githubSnapshotSha256: result.environment.githubSnapshotSha256 ?? null,
     imageDigests: result.environment.imageDigests,
     resources: result.environment.resources,
     candidatePath: result.environment.candidatePath,
@@ -2804,13 +2889,22 @@ export async function executeRun(options = {}) {
       options.resume === undefined
         ? null
         : await loadResumeSource(options.resume);
+    let githubSnapshotSha256 = null;
     if (resume) {
+      githubSnapshotSha256 =
+        resume.result.profile === ADMISSION_PROFILE
+          ? await readAdmissionSnapshot(resume.evidenceDir, {
+              runId: resume.result.runId,
+              candidateSha: resume.result.candidateSha,
+            })
+          : (resume.result.environment?.githubSnapshotSha256 ?? null);
       assertResumeIdentity(resume.result, {
         candidateSha,
         treeSha,
         configSha256: baseConfigSha256,
         toolchainVersionsSha256,
         lockfileSha256,
+        githubSnapshotSha256,
       });
       if (options.from !== undefined)
         assertFromPredecessors(matrix.gates, options.from, resume.result);
@@ -2820,6 +2914,7 @@ export async function executeRun(options = {}) {
       : new Map();
     const result = {
       schemaVersion: 2,
+      profile: selection.profile,
       runId,
       candidateSha,
       sourceSha: state.sourceSha,
@@ -2850,6 +2945,7 @@ export async function executeRun(options = {}) {
         encryptedSecretsSha256,
         toolchainVersionsSha256,
         lockfileSha256,
+        githubSnapshotSha256,
         imageDigests: null,
         resources: {
           composeProject: {
@@ -2867,7 +2963,7 @@ export async function executeRun(options = {}) {
     const budgetProfile = selection.budgetProfile;
     const save = async () => {
       result.endedAt = nowIso();
-      result.decision = decisive(result.gates, budgetProfile);
+      result.decision = decisive(result.gates, result.profile);
       result.reportStatus = reportGateStatus(result.gates);
       await validateRunResult(result);
       await atomicJson(resultPath, result);
@@ -2907,6 +3003,11 @@ export async function executeRun(options = {}) {
       if (reusedFrom) {
         record.status = "PASS";
         record.reusedFrom = reusedFrom;
+        if (gate.id === "preflight") {
+          result.environment.githubSnapshotSha256 =
+            reusedFrom.githubSnapshotSha256;
+          await writeEnvironment(evidenceDir, result);
+        }
         record.reason = `PASS переиспользован из ${reusedFrom.runId} (${reusedFrom.evidenceDir})`;
         record.endedAt = nowIso();
         await writeFile(join(evidenceDir, "gates", gate.id, "stdout.log"), "", {
@@ -3024,6 +3125,22 @@ export async function executeRun(options = {}) {
         dataTempDir,
         budgetProfile,
       );
+      if (gate.id === "preflight" && record.status === "PASS") {
+        try {
+          result.environment.githubSnapshotSha256 = await readAdmissionSnapshot(
+            evidenceDir,
+            {
+              runId,
+              candidateSha,
+            },
+          );
+          await writeEnvironment(evidenceDir, result);
+        } catch (error) {
+          record.status = "FAIL";
+          record.reason = redactText(error.message);
+          await updateGateArtifact(evidenceDir, record);
+        }
+      }
       if (gate.id === "supply_chain" && record.status === "PASS") {
         await applyLaunchImageEvidence({
           contextFile: contextPath,
@@ -3136,7 +3253,7 @@ export function parseArgs(argv) {
       if (options.profile !== undefined)
         throw new Error("--profile может быть указан только один раз");
       if (!Object.hasOwn(PROFILE_BUDGET_MS, value))
-        throw new Error("--profile принимает только fast или release");
+        throw new Error("--profile принимает только admission, fast и release");
       options.profile = value;
     } else if (argument === "--gate") {
       gateIds.push(knownGate(argv[++index], "--gate"));
