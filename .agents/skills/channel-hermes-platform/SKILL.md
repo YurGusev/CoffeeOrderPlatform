@@ -5,6 +5,8 @@ description: Менять production VK/Hermes-каналы приложения
 
 # Канальная платформа Hermes
 
+> Hermes здесь — имя VK-канала и продукта, не удалённый агент Hermes. Агентская среда проекта — DSH.
+
 Channel Platform владеет transport identity ledger, inbound/outbound delivery и
 проверкой провайдера. Agent Platform владеет turn routing/journal и Hermes
 binding. Ни одна из них не владеет истиной Customer, Catalog, Pricing или Orders.

@@ -15,7 +15,7 @@ with current fence.
 Никогда не повторять мутацию вслепую. Timeout после возможной мутации означает
 `UnknownOutcome`; следующей мутации предшествует reconciliation со свежим GET.
 Failed GET не очищает Observed. Kafka — сигнал пробуждения/версии, а не
-доказательство. Browser, Hermes, Catalog и edge не мутируют корзину.
+доказательство. Browser, Hermes-канал, Catalog и edge не мутируют корзину.
 
 Проверять потерю ответа, stale fence, lease expiry, restart с reservation,
 partial/failed GET, mapping state, rate/circuit, redaction и authorization.
