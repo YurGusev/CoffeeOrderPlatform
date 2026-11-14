@@ -6724,6 +6724,7 @@ void test("run result validates exact gate order and command identities", async 
   const { gates } = await loadMatrix();
   const result = {
     schemaVersion: 2,
+    profile: "release",
     runId: "20261023T120000Z-1234567",
     candidateSha: `1234567${"1".repeat(33)}`,
     sourceSha: "2".repeat(40),
@@ -6895,6 +6896,7 @@ void test("builtin report finalizes a complete fail-closed result without candid
   }));
   const result = {
     schemaVersion: 2,
+    profile: "release",
     runId: runId,
     candidateSha: candidateSha,
     sourceSha: "2".repeat(40),
@@ -7348,6 +7350,7 @@ void test("candidate report and owner suites accept only the exact launch candid
   gates[0].reason = "GitHub preflight blockers";
   const result = {
     schemaVersion: 2,
+    profile: "release",
     runId,
     candidateSha,
     sourceSha: "2".repeat(40),
@@ -8777,4 +8780,156 @@ void test("profile budgets replace the single 120-minute deadline", () => {
     gateBudgetMs("install", profileBudgetMs("release"), "release"),
     profileBudgetMs("release") - (900_000 + 120_000),
   );
+});
+
+void test("admission profile runs only the admission gate and stays diagnostic", async () => {
+  const { gates } = await loadMatrix();
+  const selection = selectGates(
+    gates,
+    parseLaunchArguments(["--profile", "admission"]),
+  );
+  assert.equal(selection.profile, "admission");
+  assert.equal(selection.budgetProfile, "admission");
+  assert.equal(profileBudgetMs("admission"), 90_000);
+  const running = [...selection.gates.values()]
+    .filter((entry) => entry.status === "RUN")
+    .map((entry) => entry.id);
+  assert.deepEqual(running, ["preflight"]);
+  const filtered = [...selection.gates.values()]
+    .filter((entry) => entry.status === SKIPPED_BY_FILTER)
+    .map((entry) => entry.id);
+  assert.equal(filtered.length, EXPECTED_GATES.length - 1);
+  const admitted = gates.map((gate) => ({
+    id: gate.id,
+    status: "PASS",
+    runs: [{}],
+  }));
+  assert.equal(decisive(admitted, "admission"), "НЕ ДОПУСТИТЬ");
+});
+
+void test("admission preflight reuse requires the same frozen candidate and GitHub snapshot", async () => {
+  const { gates } = await loadMatrix();
+  const selection = selectGates(
+    gates,
+    parseLaunchArguments(["--profile", "release"]),
+  );
+  const snapshot = "a".repeat(64);
+  const preflightArtifactSha256 = "b".repeat(64);
+  const sourceEvidenceDir = join(
+    process.cwd(),
+    "evidence/launch/20260101T000000Z-abcdef0",
+  );
+  const source = {
+    runId: "20260101T000000Z-abcdef0",
+    profile: "admission",
+    environment: { githubSnapshotSha256: snapshot },
+    gates: gates.map((gate) =>
+      gate.id === "preflight"
+        ? {
+            id: gate.id,
+            status: "PASS",
+            runs: [{}],
+            artifacts: [
+              {
+                path: join(
+                  sourceEvidenceDir,
+                  "gates/preflight/artifacts/preflight.json",
+                ),
+                sha256: preflightArtifactSha256,
+                sizeBytes: 1,
+              },
+            ],
+          }
+        : { id: gate.id, status: SKIPPED_BY_FILTER, runs: [], artifacts: [] },
+    ),
+  };
+  const reused = resumableGateRecords(source, sourceEvidenceDir, selection);
+  assert.deepEqual([...reused.keys()], ["preflight"]);
+  assert.deepEqual(reused.get("preflight"), {
+    runId: source.runId,
+    evidenceDir: "evidence/launch/20260101T000000Z-abcdef0",
+    githubSnapshotSha256: snapshot,
+    preflightArtifactSha256,
+  });
+  const identity = {
+    candidateSha: "c".repeat(40),
+    treeSha: "d".repeat(40),
+    configSha256: "e".repeat(64),
+    toolchainVersionsSha256: "f".repeat(64),
+    lockfileSha256: "0".repeat(64),
+    githubSnapshotSha256: snapshot,
+  };
+  source.candidateSha = identity.candidateSha;
+  source.environment.treeSha = identity.treeSha;
+  source.environment.configSha256 = identity.configSha256;
+  source.environment.toolchainVersionsSha256 = identity.toolchainVersionsSha256;
+  source.environment.lockfileSha256 = identity.lockfileSha256;
+  assert.doesNotThrow(() => assertResumeIdentity(source, identity));
+  assert.throws(
+    () =>
+      assertResumeIdentity(source, {
+        ...identity,
+        githubSnapshotSha256: "1".repeat(64),
+      }),
+    /RESUME_IDENTITY_MISMATCH: githubSnapshotSha256/u,
+  );
+});
+
+void test("only an admission result can freeze preflight for release reuse", async () => {
+  const { gates } = await loadMatrix();
+  const selection = selectGates(
+    gates,
+    parseLaunchArguments(["--profile", "release"]),
+  );
+  const snapshot = "a".repeat(64);
+  const preflightArtifactSha256 = "b".repeat(64);
+  const sourceEvidenceDir = join(
+    process.cwd(),
+    "evidence/launch/20260101T000000Z-abcdef0",
+  );
+  const source = {
+    runId: "20260101T000000Z-abcdef0",
+    profile: "release",
+    environment: { githubSnapshotSha256: snapshot },
+    gates: gates.map((gate) =>
+      gate.id === "preflight"
+        ? {
+            id: gate.id,
+            status: "PASS",
+            runs: [{}],
+            artifacts: [
+              {
+                path: join(
+                  sourceEvidenceDir,
+                  "gates/preflight/artifacts/preflight.json",
+                ),
+                sha256: preflightArtifactSha256,
+                sizeBytes: 1,
+              },
+            ],
+          }
+        : { id: gate.id, status: "PASS", runs: [{}], artifacts: [] },
+    ),
+  };
+  const reused = resumableGateRecords(source, sourceEvidenceDir, selection);
+  assert.equal(reused.has("preflight"), false);
+  const releaseDecision = decisive(
+    gates.map((gate) => ({
+      id: gate.id,
+      status: "PASS",
+      runs: gate.id === "preflight" ? [] : [{}],
+      ...(gate.id === "preflight"
+        ? {
+            reusedFrom: {
+              runId: source.runId,
+              evidenceDir: "evidence/launch/20260101T000000Z-abcdef0",
+              githubSnapshotSha256: snapshot,
+              preflightArtifactSha256,
+            },
+          }
+        : {}),
+    })),
+    "release",
+  );
+  assert.equal(releaseDecision, "ДОПУСТИТЬ");
 });

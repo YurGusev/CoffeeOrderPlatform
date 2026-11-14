@@ -62,6 +62,10 @@ export function validateRunResultContract(result) {
       !["PASS", "FAIL", "NOT_RUN", "SKIPPED_BY_FILTER"].includes(
         result.reportStatus,
       )) ||
+    (result.profile !== undefined &&
+      !["admission", "fast", "release", "diagnostic"].includes(
+        result.profile,
+      )) ||
     !["ДОПУСТИТЬ", "НЕ ДОПУСТИТЬ"].includes(result.decision)
   ) {
     throw new Error("Некорректная структура run-result.json");
@@ -81,7 +85,14 @@ export function validateRunResultContract(result) {
           typeof gate.reusedFrom?.runId !== "string" ||
           !/^[0-9]{8}T[0-9]{6}Z-[0-9a-f]{7}$/.test(gate.reusedFrom.runId) ||
           typeof gate.reusedFrom?.evidenceDir !== "string" ||
-          gate.reusedFrom.evidenceDir.length === 0)) ||
+          gate.reusedFrom.evidenceDir.length === 0 ||
+          (gateSlug(gate.id) === "preflight" &&
+            (!/^[0-9a-f]{64}$/u.test(
+              gate.reusedFrom?.githubSnapshotSha256 ?? "",
+            ) ||
+              !/^[0-9a-f]{64}$/u.test(
+                gate.reusedFrom?.preflightArtifactSha256 ?? "",
+              ))))) ||
       !Array.isArray(gate.runs) ||
       !Array.isArray(gate.artifacts) ||
       !Number.isInteger(gate.durationMs) ||
@@ -115,6 +126,20 @@ export function validateRunResultContract(result) {
     result.reportStatus !== result.gates[EXPECTED_GATES.length - 1]?.status
   )
     throw new Error("reportStatus не совпадает со статусом report");
+  if (
+    result.environment.githubSnapshotSha256 !== undefined &&
+    result.environment.githubSnapshotSha256 !== null &&
+    !/^[0-9a-f]{64}$/u.test(result.environment.githubSnapshotSha256)
+  )
+    throw new Error("Некорректный githubSnapshotSha256 в environment");
+  if (
+    result.gates[0].reusedFrom !== undefined &&
+    result.gates[0].status === "PASS" &&
+    (result.environment.githubSnapshotSha256 !==
+      result.gates[0].reusedFrom.githubSnapshotSha256 ||
+      result.gates[0].reusedFrom.preflightArtifactSha256 === undefined)
+  )
+    throw new Error("reused preflight не связан с GitHub-снимком run-result");
   const environment = result.environment;
   let expectedDatabases;
   try {
@@ -744,11 +769,14 @@ export async function validateChecksumManifest(evidenceDir, sourceRoot, runId) {
   return rows;
 }
 
-async function preflightFindings(evidenceDir, gateId) {
+async function preflightFindings(evidenceDir, gateId, reusedFrom = null) {
   try {
+    const root = reusedFrom
+      ? resolve(ROOT, reusedFrom.evidenceDir)
+      : evidenceDir;
     const value = JSON.parse(
       await readFile(
-        join(evidenceDir, "gates", gateId, "artifacts/preflight.json"),
+        join(root, "gates", gateId, "artifacts/preflight.json"),
         "utf8",
       ),
     );
@@ -810,6 +838,7 @@ function reportMarkdown(
     `# ${result.decision}`,
     "",
     `- Run ID: \`${result.runId}\``,
+    `- Профиль запуска: \`${result.profile ?? "release (legacy)"}\``,
     `- Candidate SHA: \`${result.candidateSha}\``,
     `- Source SHA: \`${result.sourceSha}\``,
     `- Время UTC: ${result.startedAt} — ${result.endedAt}`,
@@ -838,7 +867,7 @@ function reportMarkdown(
     "",
     "## Предварительная проверка preflight",
     "",
-    `Статус: ${preflight.status}. Артефакт: [preflight.json](../../../../evidence/launch/${result.runId}/gates/${result.gates[0].id}/artifacts/preflight.json).`,
+    `Статус: ${preflight.status}. Артефакт: [preflight.json](../../../../evidence/launch/${result.gates[0].reusedFrom?.runId ?? result.runId}/gates/${result.gates[0].id}/artifacts/preflight.json).`,
   );
   if (preflight.checks.length)
     lines.push(...preflight.checks.map((check) => `- ${check}`));
@@ -1105,7 +1134,8 @@ async function writeFinalFiles(
     "ОТЧЁТ.md",
   );
   // Решение выносится по 19 рабочим гейтам; reportStatus публикуется отдельно.
-  const workingGatesPass = decisive(result.gates) === "ДОПУСТИТЬ";
+  const workingGatesPass =
+    decisive(result.gates, result.profile) === "ДОПУСТИТЬ";
   result.decision =
     workingGatesPass &&
     evidenceErrors.length === 0 &&
@@ -1286,7 +1316,11 @@ export async function finalizeReport(evidenceDir, expectedSourceRoot = null) {
   let evidenceErrors = await validateEvidence(evidenceDir, result, sourceRoot);
   if (sourceDescriptor.status !== "BOUND") evidenceErrors.push(descriptorError);
   const environmentErrors = environmentProofErrors(result.environment);
-  const preflight = await preflightFindings(evidenceDir, result.gates[0].id);
+  const preflight = await preflightFindings(
+    evidenceDir,
+    result.gates[0].id,
+    result.gates[0].reusedFrom ?? null,
+  );
   const fingerprint = await sandboxFingerprint(evidenceDir, result.gates[16]);
   let reportPath = await writeFinalFiles(
     evidenceDir,

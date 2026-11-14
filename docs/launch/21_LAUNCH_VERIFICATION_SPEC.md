@@ -206,13 +206,14 @@ Inventory `unit` включает 60 существующих unit/property suit
 `id`, `version`, `profile`, `mandatory`, `owner`, `predecessors`, `command`, `timeout`,
 `inputs`, `expectedArtifacts`, `passCriteria`, `cleanup`, `rerunPolicy`.
 
-Поле `profile` (`fast` | `release` | `both`) задаёт принадлежность гейта профилю.
-Профиль `fast` содержит девять гейтов без съёма живого состояния:
-`preflight`, `install`, `generated`, `static`, `unit`, `contracts`,
-`architecture`, `config_security`, `report`. Профиль `release` содержит все
-двадцать гейтов в порядке таблицы; гейты с `profile: fast` или `profile: both`
-входят в оба профиля, гейты с `profile: release` (включая `supply_chain`) —
-только в `release`. Состав и порядок гейтов не меняются.
+Поле `profile` (`fast` | `release` | `both`) задаёт участие гейта в профилях
+`fast` и `release`; пометка `admission: true` отмечает гейт профиля `admission`
+и сейчас есть только у `preflight`. Состав профилей, измеренные длительности и
+порядок применения описаны в [профилях гейтов запуска](34_LAUNCH_GATE_PROFILES.md),
+решение и компромиссы — в [ADR-0044](../adr/ADR-0044-launch-gate-profiles.md).
+Гейты с `profile: fast` или `profile: both` входят в оба профиля, гейты с
+`profile: release` (включая `supply_chain`) — только в `release`. Состав и
+порядок гейтов не меняются.
 
 | id                | Позиция | Владелец                | Exact command                                                                      | PASS                                                                                                                         |
 | ----------------- | ------- | ----------------------- | ---------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
@@ -957,17 +958,17 @@ node --test verification/launch/v1/runner.test.mjs \
 
 ### 18.1. Профили и бюджет
 
-| Профиль | Гейты | Бюджет | Решение |
-| --- | --- | ---: | --- |
-| `fast` | девять гейтов без съёма живого состояния (см. раздел 4) | 20 минут | только диагностический `НЕ ДОПУСТИТЬ` |
-| `release` | все двадцать гейтов | 180 минут | `ДОПУСТИТЬ` при 19 рабочих PASS; `reportStatus` отдельно |
-| `--gate` / `--from` | явно выбранное подмножество | 180 минут | только `НЕ ДОПУСТИТЬ` |
+Профили `admission`, `fast` и `release`, их состав, измеренные длительности и
+порядок применения описаны в
+[34_LAUNCH_GATE_PROFILES.md](34_LAUNCH_GATE_PROFILES.md); причины решения —
+в [ADR-0044](../adr/ADR-0044-launch-gate-profiles.md).
 
 `--profile` по умолчанию равен `release`. Бюджет профиля заменяет прежний
 единый лимит 120 минут и ограничивает и каждую команду гейта, и прогон целиком.
-Резерв на `report` и финализацию внутри `fast` ограничен четвертью бюджета,
-чтобы девяти гейтам оставалось время на работу. Исчерпанный бюджет завершает
-оставшиеся гейты как `NOT_RUN`; решение в этом случае `НЕ ДОПУСТИТЬ`.
+Только `release` может вынести `ДОПУСТИТЬ`; `admission`, `fast`, `--gate` и
+`--from` всегда диагностические. `report` публикует статус отчёта отдельно и
+не участвует в решении. Исчерпанный бюджет завершает оставшиеся гейты как
+`NOT_RUN`; решение в этом случае `НЕ ДОПУСТИТЬ`.
 
 ### 18.2. Фильтры
 
@@ -994,20 +995,30 @@ node --test verification/launch/v1/runner.test.mjs \
 - `environment.toolchainVersionsSha256`;
 - `environment.lockfileSha256`.
 
-Любое расхождение даёт `RESUME_IDENTITY_MISMATCH` до запуска гейтов. Источник
-задаётся каталогом evidence или run-id в `evidence/launch/<runId>`; source
-evidence не переписывается, артефакты между прогонами не переносятся.
+Admission-результат дополнительно замораживает пару `candidateSha` и
+`environment.githubSnapshotSha256` — sha256 из `githubSnapshot` в
+`gates/preflight/artifacts/preflight.json`. Release может переиспользовать
+`preflight` только при совпадении обоих значений; источник обязан подтвердить
+заявленный снимок своим preflight-артефактом, иначе прогон завершается
+`RESUME_IDENTITY_MISMATCH` до запуска гейтов. Новый GitHub-снимок требует нового
+admission-прогона. Источник задаётся каталогом evidence или run-id в
+`evidence/launch/<runId>`; source evidence не переписывается, артефакты между
+прогонами не переносятся.
 
-Переиспользовать можно только PASS гейтов `install`, `generated`, `static`,
-`unit`, `contracts`, `architecture`, `config_security`, `supply_chain`.
-Для гейтов `preflight`, `migrations`, `db_boundaries`, `integration`,
-`recovery`, `compose`, `observability`, `browser`, `aroma_sandbox`,
-`backup_restore`, `rollback` переиспользование запрещено: они снимают живое
-состояние. Явный `--gate <живой-гейт> --resume` даёт `RESUME_FORBIDDEN_GATE`;
-в профильном прогоне такие гейты просто выполняются заново.
+Переиспользовать можно PASS гейтов `install`, `generated`, `static`, `unit`,
+`contracts`, `architecture`, `config_security`, `supply_chain`. Для
+`preflight` разрешено только переиспользование admission-результата с
+совпавшими `candidateSha` и GitHub-снимком. Для гейтов `migrations`,
+`db_boundaries`, `integration`, `recovery`, `compose`, `observability`,
+`browser`, `aroma_sandbox`, `backup_restore`, `rollback` переиспользование
+запрещено: они снимают живое состояние. Явный `--gate <живой-гейт> --resume`
+даёт `RESUME_FORBIDDEN_GATE`; в профильном прогоне такие гейты выполняются
+заново.
 
 Переиспользованный PASS записывается в `run-result.json` со статусом `PASS`,
-пустым `runs` и полем `reusedFrom: {runId, evidenceDir}`. Решение
-`ДОПУСТИТЬ` возможно только для `release`, всех 19 рабочих PASS и валидного
-`reusedFrom` (или собственного command run) у каждого рабочего PASS-гейта;
-статус `report` публикуется как `reportStatus` и в решение не входит.
+пустым `runs` и полем `reusedFrom: {runId, evidenceDir}`; для `preflight`
+добавляются `githubSnapshotSha256` и `preflightArtifactSha256`. `run-result.json`
+содержит профиль запуска в поле `profile`. Решение `ДОПУСТИТЬ` возможно только
+для `release`, всех PASS рабочих гейтов и валидного `reusedFrom` (или
+собственного command run) у каждого PASS-гейта; статус `report` публикуется
+как `reportStatus` и в решение не входит.
