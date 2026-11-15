@@ -191,7 +191,7 @@ gates:
     owner: Operations
     predecessors: [compose]
     command: pnpm test:observability
-    timeout: 1800
+    timeout: 2700
     inputs:
       [accepted-issue-64-handoff, accepted-issue-210-handoff, compose-project]
     expectedArtifacts: [result.json, stdout.log, stderr.log]

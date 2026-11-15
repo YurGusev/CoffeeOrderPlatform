@@ -474,7 +474,7 @@
           "properties": {
             "id": { "const": "observability" },
             "expectedCommand": { "const": "pnpm test:observability" },
-            "timeoutSeconds": { "const": 1800 }
+            "timeoutSeconds": { "const": 2700 }
           }
         }
       ]

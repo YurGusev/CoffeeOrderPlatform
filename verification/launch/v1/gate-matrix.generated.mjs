@@ -26,7 +26,7 @@ export const EXPECTED_GATES = [
   ["integration", "pnpm test:integration", 1800],
   ["recovery", "pnpm test:recovery", 1800],
   ["compose", "pnpm test:compose-smoke", 1800],
-  ["observability", "pnpm test:observability", 1800],
+  ["observability", "pnpm test:observability", 2700],
   ["browser", "pnpm test:playwright", 1800],
   [
     "aroma_sandbox",

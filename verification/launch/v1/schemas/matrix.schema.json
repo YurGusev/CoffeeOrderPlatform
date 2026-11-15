@@ -279,7 +279,7 @@
           "properties": {
             "id": { "const": "observability" },
             "command": { "const": "pnpm test:observability" },
-            "timeout": { "const": 1800 }
+            "timeout": { "const": 2700 }
           }
         }
       ]

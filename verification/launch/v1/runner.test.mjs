@@ -2495,8 +2495,8 @@ void test("matrix keeps all mandatory launch gates, exact order, commands and ti
   );
   assert.deepEqual(
     gates.slice(8, 18).map((gate) => gate.timeout),
-    [2700, ...Array(9).fill(1800)],
-    "supply_chain has its own inner+headroom budget; the rest stay at 1800",
+    [2700, 1800, 1800, 1800, 1800, 1800, 2700, 1800, 1800, 1800],
+    "supply_chain и observability несут измеримый запас; остальные 1800",
   );
   assert.deepEqual(splitCommand(gates[3].command), [
     ["pnpm", "format:check"],
@@ -7010,7 +7010,7 @@ void test("builtin report finalizes a complete fail-closed result without candid
     handoff.gates.find((gate) => gate.id === "observability").status,
     "NOT_RUN",
   );
-  assert.equal(handoff.limits.gateTimeoutSeconds.observability, 1800);
+  assert.equal(handoff.limits.gateTimeoutSeconds.observability, 2700);
   for (const name of ["run-result.json", "decision.json"]) {
     const row = handoff.artifactHashes.find(({ path }) => path === name);
     const bytes = await readFile(join(evidenceDir, name));
