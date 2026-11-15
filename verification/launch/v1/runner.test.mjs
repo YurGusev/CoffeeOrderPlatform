@@ -7650,7 +7650,7 @@ void test("stream redaction catches secrets split across chunks and preserves UT
   }
 });
 
-void test("oversized log lines fail closed when redaction parsing state is uncertain", async (t) => {
+void test("oversized log lines are dropped without failing the run", async (t) => {
   const directory = await mkdtemp(join(tmpdir(), "launch-redaction-"));
   t.after(() => rm(directory, { recursive: true, force: true }));
   const path = join(directory, "stdout.log");
@@ -7668,12 +7668,12 @@ void test("oversized log lines fail closed when redaction parsing state is uncer
   const output = await readFile(path, "utf8");
   assert.doesNotMatch(output, /PRIVATE-TAIL/);
   assert.doesNotMatch(output, /visible/);
-  assert.match(output, /parsing state uncertain/);
-  assert.equal(result.outputLimitExceeded, true);
-  assert.equal(killed, 1);
+  assert.match(output, /oversized log line/);
+  assert.equal(result.outputLimitExceeded, false);
+  assert.equal(killed, 0);
 });
 
-void test("oversized lines with sensitive JSON openers fail closed across chunks", async (t) => {
+void test("oversized lines with sensitive JSON openers drop content across chunks", async (t) => {
   const directory = await mkdtemp(join(tmpdir(), "launch-redaction-state-"));
   t.after(() => rm(directory, { recursive: true, force: true }));
   const cases = [
@@ -7700,9 +7700,9 @@ void test("oversized lines with sensitive JSON openers fail closed across chunks
       () => {},
     );
     const output = await readFile(path, "utf8");
-    assert.equal(result.outputLimitExceeded, true);
+    assert.equal(result.outputLimitExceeded, false);
     assert.doesNotMatch(output, /PRIVATE_PROVIDER_BODY_CANARY/);
-    assert.match(output, /parsing state uncertain/);
+    assert.match(output, /oversized log line/);
   }
 });
 

@@ -238,12 +238,20 @@ export async function writeRedactedStream(
   );
   let pending = "";
   let droppingLine = false;
+  // После строки сверх предела состояние redaction неизвестно: дальнейшие
+  // строки этого потока могут содержать остаток секрета, поэтому поток
+  // считается отравленным и больше не пишется.
+  let tainted = false;
   let outputLimitExceeded = Boolean(outputBudget?.exceeded);
   let limitSignalled = false;
   const redactionState = { sensitiveDepth: 0 };
   const decoder = new StringDecoder("utf8");
   const marker =
     "\n[REDACTED: run log budget exceeded; child terminated and remaining output discarded]\n";
+  // Строка сверх предела не пишется вовсе: содержимое не проверено на секреты.
+  // Остальные строки продолжают попадать в evidence — гейт не теряется целиком.
+  const oversizedLineMarker =
+    "\n[REDACTED: oversized log line; content dropped while parsing state is uncertain]\n";
   const markerSize = Buffer.byteLength(marker);
   const tripLimit = async (reason = marker) => {
     if (outputLimitExceeded || outputBudget?.exceeded) return;
@@ -306,6 +314,7 @@ export async function writeRedactedStream(
           await tripLimit();
       }
       let incoming = decoder.write(chunk);
+      if (tainted) continue;
       if (droppingLine) {
         const end = incoming.indexOf("\n");
         if (end < 0) continue;
@@ -317,26 +326,24 @@ export async function writeRedactedStream(
       while ((boundary = pending.indexOf("\n")) >= 0) {
         const line = pending.slice(0, boundary + 1);
         pending = pending.slice(boundary + 1);
-        if (Buffer.byteLength(line) > maxLineBytes)
-          await tripLimit(
-            "\n[REDACTED: oversized log line; parsing state uncertain; child terminated and remaining output discarded]\n",
-          );
-        else await emit(redactLogLine(redactionState, line, secretValues));
+        if (Buffer.byteLength(line) > maxLineBytes) {
+          await emit(oversizedLineMarker);
+          tainted = true;
+          pending = "";
+          break;
+        }
+        await emit(redactLogLine(redactionState, line, secretValues));
       }
       if (Buffer.byteLength(pending) > maxLineBytes) {
-        await tripLimit(
-          "\n[REDACTED: oversized log line; parsing state uncertain; child terminated and remaining output discarded]\n",
-        );
+        await emit(oversizedLineMarker);
+        tainted = true;
         pending = "";
-        droppingLine = true;
       }
     }
     pending += decoder.end();
-    if (pending) {
+    if (pending && !tainted) {
       if (Buffer.byteLength(pending) > maxLineBytes)
-        await tripLimit(
-          "\n[REDACTED: oversized log line; parsing state uncertain; child terminated and remaining output discarded]\n",
-        );
+        await emit(oversizedLineMarker);
       else await emit(redactLogLine(redactionState, pending, secretValues));
     }
     await new Promise((resolvePromise, reject) =>
