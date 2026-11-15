@@ -48,11 +48,7 @@ const EXPECTED_KAFKA_PRODUCERS = {
     "coffee.catalog.mapping.v2",
   ],
   "pricing-service": [],
-  "orders-service": [
-    "coffee.orders.lifecycle.v1",
-    "coffee.aroma.cart.commands.v1",
-    "coffee.realtime.invalidate.v1",
-  ],
+  "orders-service": ["coffee.orders.lifecycle.v1"],
   "orders-aroma-preparation": [
     "coffee.aroma.cart.commands.v1",
     "coffee.realtime.invalidate.v1",

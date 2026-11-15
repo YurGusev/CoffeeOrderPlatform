@@ -22,9 +22,9 @@ const RUNTIME_FIELDS = new Set([
   "transportMode",
 ]);
 const CATALOG_DIGEST =
-  "43ab20f1347135747cd96071f038bd9c6f10bdc3d5faafdbb93f12c2e7039578";
+  "eabea2349a79d4b44601005c7ec9022e9c9ce017ee79135e3f3876d18daac6f5";
 const INTERACTIONS_DIGEST =
-  "ed8b82f5d71740c7f85136e88277de6217d19a294d78ee29fe44b3e184b551ef";
+  "42633863b46b731c558561478a6be4ec4e79415e369eeab720f85876c48df7ad";
 
 function fail(rule, message) {
   const error = new Error(`${rule} ${message}`);

@@ -967,12 +967,7 @@ services:
     database: coffee_platform_orders
     kafka:
       {
-        producers:
-          [
-            coffee.orders.lifecycle.v1,
-            coffee.aroma.cart.commands.v1,
-            coffee.realtime.invalidate.v1,
-          ],
+        producers: [coffee.orders.lifecycle.v1],
         consumers: [],
       }
     outbound: [api-internal:4051]
