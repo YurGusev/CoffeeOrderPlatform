@@ -9,7 +9,7 @@ Payments владеет PaymentIntent, Attempt, WebhookInbox, Refund, provider p
 reconciliation. Он никогда не изменяет хранилище Orders.
 
 - Amount/currency come from durable server-owned `OrderPaymentRequired`.
-- Card data never passes through business services, Kafka, logs, or Hermes.
+- Card data never passes through business services, Kafka, logs, or the Hermes channel.
 - Browser redirect is not payment proof; authenticate webhook and reconcile.
 - Provider create/refund uses stable idempotency and lookup after timeout.
 - Timeout can be UnknownOutcome; never switch provider or blind-create.
