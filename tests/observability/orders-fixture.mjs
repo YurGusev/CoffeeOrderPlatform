@@ -295,13 +295,14 @@ export async function fixture(run, options = {}) {
           cleanupFailure ??= new Error(
             "external Orders fixture cleanup is incomplete",
           );
+        const primary = failure ?? cleanupFailure;
         const error =
           failure && cleanupFailure
             ? new AggregateError(
                 [failure, cleanupFailure],
-                "Orders fixture and cleanup failed",
+                `Orders fixture and cleanup failed: ${failure?.message ?? "unknown failure"}`,
               )
-            : (failure ?? cleanupFailure);
+            : primary;
         if (error) {
           error.externalCleanup = cleanup;
           throw error;

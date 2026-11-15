@@ -7450,6 +7450,19 @@ try {
             await boundedResponseText(response, 8 * 1024 * 1024),
           );
         };
+        // Счётчик WAL растёт ещё несколько секунд после снятия давления:
+        // сравниваем не мгновенный срез, а установившееся значение.
+        const stableWalFailures = async () => {
+          const deadline = Date.now() + 90_000;
+          let previous = await walFailures();
+          while (Date.now() < deadline) {
+            await sleep(2000);
+            const current = await walFailures();
+            if (current === previous) return current;
+            previous = current;
+          }
+          return previous;
+        };
         const hasDiskLog = (since, pattern) => {
           const result = spawnSync(
             "docker",
@@ -7597,10 +7610,10 @@ try {
           });
           assertGeneration();
           const walAfter =
-            name === "prometheus" ? await walFailures() : undefined;
+            name === "prometheus" ? await stableWalFailures() : undefined;
           if (name === "prometheus" && walAfter !== walPressure)
             throw new Error(
-              "Prometheus WAL failure counter did not stabilize after relief",
+              `Prometheus WAL failure counter did not stabilize after relief (pressure ${walPressure}, after ${walAfter})`,
             );
           Object.assign(pressureEvidence, {
             status: "PASS",

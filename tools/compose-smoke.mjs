@@ -142,6 +142,9 @@ const ROOT = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const COMPOSE_FILE = join(ROOT, "compose.yaml");
 const GATE_DEADLINE_ENV = "COFFEE_LAUNCH_GATE_DEADLINE_EPOCH_MS";
 const STANDALONE_WAIT_MS = 5 * 60_000;
+// Готовность после отключения зависимости определяется следующим probe
+// внутри контейнера; под нагрузкой он может занять больше 10 секунд.
+const DEPENDENCY_HEALTH_TIMEOUT_MS = 30_000;
 // Оставляем время на finally: compose down, удаление временных секретов и БД,
 // чтобы SIGKILL от runner не прервал очистку ресурсов.
 export const COMPOSE_SMOKE_CLEANUP_RESERVE_MS = 60_000;
@@ -7126,18 +7129,28 @@ function dependencyHealthStatus(containerId, path) {
   return Number(output);
 }
 
-async function waitForDependencyHealth(containerId, path, expected) {
-  const deadline = Date.now() + 10_000;
+async function waitForDependencyHealth(
+  containerId,
+  path,
+  expected,
+  { timeoutMs = DEPENDENCY_HEALTH_TIMEOUT_MS, context = "" } = {},
+) {
+  const deadline = Date.now() + timeoutMs;
+  let last = "unobserved";
   while (Date.now() < deadline) {
     try {
-      if (dependencyHealthStatus(containerId, path) === expected)
-        return expected;
-    } catch {
+      const status = dependencyHealthStatus(containerId, path);
+      last = String(status);
+      if (status === expected) return expected;
+    } catch (error) {
       // A timeout or transport error is not an HTTP readiness response.
+      last = error instanceof Error ? error.name : "error";
     }
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
-  throw new Error(`dependency health did not reach HTTP ${expected}`);
+  throw new Error(
+    `dependency health did not reach HTTP ${expected} within ${timeoutMs}ms (last ${last})${context ? `: ${context}` : ""}`,
+  );
 }
 
 function dependencyFailureLogged(containerId, dependency, since) {
@@ -7242,10 +7255,12 @@ export async function proveOwnedNetworkDependency({
   const otherNetworks = { ...before.NetworkSettings.Networks };
   delete otherNetworks[networkName];
   const route = ownedDefaultRoute(containerId);
+  const context = `${runtime}/${dependency} network=${networkName}`;
   const beforeStatus = await waitForDependencyHealth(
     containerId,
     "/health/ready",
     200,
+    { context },
   );
   const since = new Date().toISOString();
   let bodyError;
@@ -7279,7 +7294,9 @@ export async function proveOwnedNetworkDependency({
       disconnected.NetworkSettings?.Networks?.[networkName],
       undefined,
     );
-    during = await waitForDependencyHealth(containerId, "/health/ready", 503);
+    during = await waitForDependencyHealth(containerId, "/health/ready", 503, {
+      context,
+    });
     liveDuring = await waitForDependencyHealth(
       containerId,
       "/health/live",
