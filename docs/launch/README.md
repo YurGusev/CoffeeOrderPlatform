@@ -57,9 +57,12 @@
 33. [Эксплуатация операторской SPA: маршруты, recovery и rollback](30_FRONTEND_OPERATOR_RUNBOOK.md)
 34. [Контракт помола и параллельность #9/#11](30_AROMA_GRIND_CONTRACT_AND_PARALLEL_DELIVERY.md) — утверждённый backend contract closure и физическая идентичность; не evidence реализации.
 35. [Локальное управление контейнерами CoffeeOrderPlatform и CoffeeOrderSystem](31_LOCAL_CONTAINERS_RUNBOOK.md)
-36. [Наблюдаемость Operations и `observability`](../operations/observability.md) — #64,
+36. [Раскладка операторского состояния](32_OPERATOR_STATE_LAYOUT.md) — где лежат кандидаты, soak, логи, кэш сканера и бэкапы.
+37. [Наблюдаемость Operations и `observability`](../operations/observability.md) — #64,
     `pnpm test:observability` и handoff; FAIL/NOT_RUN не разрешает launch.
-37. [Имена гейтов запуска](22_GATE_NAMING.md) — slug-адресация, `pnpm naming:check` и снимок нарушений.
+38. [Имена гейтов запуска](22_GATE_NAMING.md) — slug-адресация, `pnpm naming:check` и снимок нарушений.
+39. [Карта потоков образов в гейтах запуска](33_LAUNCH_IMAGE_FLOW.md) — где собирается и публикуется runtime-образ, а где обязателен reuse.
+40. [Профили гейтов запуска](34_LAUNCH_GATE_PROFILES.md) — `admission`, `fast`, `release`, бюджет и переиспользование admission-результата; решение — [ADR-0044](../adr/ADR-0044-launch-gate-profiles.md).
 
 Продолжение после первого запуска: [план второй волны — закупка, счета и оплата](../wave-2/README.md).
 

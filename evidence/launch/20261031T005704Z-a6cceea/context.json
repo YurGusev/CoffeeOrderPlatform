@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "candidateSha": "a6cceeaa822f9641c678b5dcae521c282391dd3d",
+  "baseConfigSha256": "891e5a82ffd3ebf647226c07313aca4be426d4ed25b28b7afdf91296db631a8e",
+  "runId": "20261031T005704Z-a6cceea",
+  "checkoutDir": "/home/yurgusev/.cache/coffee-launch-delivery/tmp/coffee-launch-private-qC0rSu/checkout",
+  "sourceRepoRoot": "/home/yurgusev/.codex/worktrees/preserve-non-openobserve/CoffeeOrderPlatform",
+  "acceptedBaseCommit": "a6cceeaa822f9641c678b5dcae521c282391dd3d",
+  "startedAtUtc": "2026-10-31T00:57:04.807Z",
+  "evidenceDir": "/home/yurgusev/.codex/worktrees/preserve-non-openobserve/CoffeeOrderPlatform/evidence/launch/20261031T005704Z-a6cceea",
+  "githubSnapshotPath": null,
+  "resources": {
+    "composeProject": "coffee-launch-20261031t005704z-a6cceea",
+    "kafkaPrefix": "20261031T005704Z-a6cceea"
+  }
+}

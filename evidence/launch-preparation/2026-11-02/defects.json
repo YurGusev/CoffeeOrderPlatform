@@ -1,0 +1,13 @@
+[
+  {
+    "gateId": "G10_INTEGRATION",
+    "defectId": "DEF-G10_INTEGRATION-G10_INTEGRATION-20261102T064519Z-4393aea",
+    "blockerId": "G10_INTEGRATION",
+    "runId": "20261102T064519Z-4393aea",
+    "candidateSha": "4393aeaa920d7884d01caa19b62358fea36a5a6a",
+    "githubIssueNumber": 257,
+    "githubIssueUrl": "https://github.com/YurGusev/CoffeeOrderPlatform/issues/257",
+    "sourceArtifact": "evidence/launch/20261102T064519Z-4393aea/defects.json",
+    "sourceSha256": "bfb1ab3bfebcb8842342945bcc95f859f9ac9f8081e2ccccd5a68b4409ea09f5"
+  }
+]

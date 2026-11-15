@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { runInNewContext } from "node:vm";
 import { spawnSync } from "node:child_process";
+import { syncBuiltinESMExports } from "node:module";
+import os from "node:os";
 import { createHash } from "node:crypto";
 import { load as parseYaml } from "js-yaml";
 import path from "node:path";
@@ -22,7 +24,11 @@ import {
   createGrafanaAlertProvisioning,
 } from "../../tools/observability/alerts.mjs";
 import { createAlertSink } from "../../tools/observability/alert-sink.mjs";
-import { createCollectorConfig } from "../../tools/observability/generate.mjs";
+import {
+  createCollectorConfig,
+  OBSERVABILITY_TARGETS,
+  prometheusMetricName,
+} from "../../tools/observability/generate.mjs";
 import {
   parseTempoStatusConfigResponse,
   captureContainerDiagnostics,
@@ -43,6 +49,9 @@ import {
   durationMilliseconds,
   parseCollectorExpiredRetryDrops,
   observabilityGateComplete,
+  verifySyntheticAlertTransitions,
+  startSyntheticAlertWorker,
+  readObservabilityQualification,
   persistVerificationResult,
   collectorMemorySelfTelemetry,
   isExporterMetricForSignal,
@@ -82,6 +91,391 @@ const config = {
     },
   },
 };
+
+const syntheticNodeNotReady = {
+  status: "PASS",
+  service: "g14-synthetic",
+  ruleUid: "g14-v1-service-not-ready-synthetic",
+  forMs: 300000,
+  threshold: 0,
+  nativeProbeAbsent: true,
+  cleanupVerified: true,
+  productionRuleUnchanged: true,
+  activationMs: 1000000,
+  recoveryMs: 1301000,
+  baseline: { value: 1, timestampUs: 999000000 },
+  failed: { value: 0, timestampUs: 1001000000 },
+  recovered: { value: 1, timestampUs: 1302000000 },
+  firing: {
+    episodeId: "1234567890abcdef:1970-01-01T00:21:40.000Z",
+    receivedAt: "1970-01-01T00:21:40.500Z",
+  },
+  resolved: {
+    episodeId: "1234567890abcdef:1970-01-01T00:21:40.000Z",
+    receivedAt: "1970-01-01T00:21:42.500Z",
+  },
+};
+
+void test("synthetic alerts activate before matrix and complete only after cleanup", async (t) => {
+  const dir = await mkdtemp(path.join(tmpdir(), "alert-transitions-"));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const alertPath = path.join(dir, "episodes.jsonl");
+  await writeFile(alertPath, "");
+  const definitions = createAlertDefinitions({ config });
+  const provisioning = createGrafanaAlertProvisioning(config, {
+    notificationUrl: "http://alerts.test",
+  });
+  const synthetic = createAlertDefinitions({
+    config,
+    readinessServices: ["g14-synthetic"],
+  }).find((rule) => rule.key === "notReady");
+  const productionRule = definitions.find((rule) => rule.key === "notReady");
+  const production = structuredClone(
+    provisioning.alerts.groups[0].rules.find(
+      (rule) => rule.uid === productionRule.name,
+    ),
+  );
+  let now = Date.parse("2026-10-31T00:00:00.000Z");
+  t.mock.method(Date, "now", () => (now += 100));
+  let active = false;
+  let group;
+  let activated = false;
+  let cleaned = false;
+  let firingEvents = [];
+  t.mock.method(globalThis, "fetch", async (input, options = {}) => {
+    const url = new URL(input);
+    const method = options.method ?? "GET";
+    const reply = (value, status = 200) =>
+      new Response(value === undefined ? null : JSON.stringify(value), {
+        status,
+      });
+    if (url.hostname === "producer.test") {
+      if (url.pathname === "/test/state") {
+        const next = JSON.parse(options.body).active;
+        if (active && !next) {
+          now += 1000;
+          const resolved = firingEvents.map((event) => ({
+            ...event,
+            status: "resolved",
+            receivedAt: new Date(now).toISOString(),
+          }));
+          await writeFile(
+            alertPath,
+            [...firingEvents, ...resolved]
+              .map((event) => JSON.stringify(event))
+              .join("\n") + "\n",
+          );
+        }
+        active = next;
+      }
+      return reply({ accepted: true }, 202);
+    }
+    if (url.hostname === "prometheus.test") {
+      const expression = url.searchParams.get("query");
+      if (url.pathname.endsWith("query_range")) {
+        const end = Number(url.searchParams.get("end"));
+        return reply({
+          status: "success",
+          data: {
+            resultType: "matrix",
+            result: [
+              {
+                metric: { service_name: "g14-synthetic" },
+                values: [
+                  [
+                    end,
+                    expression.startsWith("timestamp(")
+                      ? String(end)
+                      : active
+                        ? "0"
+                        : "1",
+                  ],
+                ],
+              },
+            ],
+          },
+        });
+      }
+      const result = expression.startsWith("probe_success{")
+        ? []
+        : [{ value: [now / 1000, active ? "0" : "1"] }];
+      return reply({
+        status: "success",
+        data: { resultType: "vector", result },
+      });
+    }
+    if (url.hostname !== "grafana.test") throw new Error("unexpected host");
+    if (url.pathname.endsWith(productionRule.name)) return reply(production);
+    if (url.pathname.endsWith("/rule-groups/g14-synthetic")) {
+      if (method === "PUT") {
+        group = JSON.parse(options.body);
+        return reply({});
+      }
+      if (method === "DELETE") {
+        group = undefined;
+        cleaned = true;
+        return reply(undefined, 204);
+      }
+      return group ? reply(group) : reply({}, 404);
+    }
+    if (url.pathname.endsWith(synthetic.name))
+      return group ? reply(group.rules[0]) : reply({}, 404);
+    throw new Error(`unexpected path ${url.pathname}`);
+  });
+  const outcome = await verifySyntheticAlertTransitions({
+    config,
+    definitions,
+    provisioning,
+    baseUrls: {
+      prometheus: "http://prometheus.test",
+      grafana: "http://grafana.test",
+    },
+    authorization: "Basic test",
+    folderUid: "fixture",
+    producerUrl: "http://producer.test",
+    runId: "synthetic-run",
+    alertPath,
+    onActivated: async ({ activationMs, baseline, failed }) => {
+      assert.equal(baseline.value, 1);
+      assert.equal(failed.value, 0);
+      assert.equal(cleaned, false);
+      activated = true;
+      now = activationMs + 300_500;
+      firingEvents = [
+        ...definitions.filter(
+          (rule) => !["diskWatermark", "notReady"].includes(rule.key),
+        ),
+        synthetic,
+      ].map((rule, index) => ({
+        name: rule.name,
+        status: "firing",
+        episodeId: `${String(index + 1).repeat(16)}:${new Date(activationMs + rule.forMs).toISOString()}`,
+        receivedAt: new Date(activationMs + rule.forMs).toISOString(),
+      }));
+      await writeFile(
+        alertPath,
+        firingEvents.map((event) => JSON.stringify(event)).join("\n") + "\n",
+      );
+    },
+  });
+  assert.equal(activated, true);
+  assert.equal(cleaned, true);
+  assert.equal(outcome.syntheticNodeNotReady.cleanupVerified, true);
+  assert.equal(outcome.syntheticNodeNotReady.forMs, 300000);
+  assert.equal(outcome.alerts.length, 4);
+  await writeFile(alertPath, "");
+  firingEvents = [];
+  cleaned = false;
+  await assert.rejects(
+    verifySyntheticAlertTransitions({
+      config,
+      definitions,
+      provisioning,
+      baseUrls: {
+        prometheus: "http://prometheus.test",
+        grafana: "http://grafana.test",
+      },
+      authorization: "Basic test",
+      folderUid: "fixture",
+      producerUrl: "http://producer.test",
+      runId: "synthetic-run",
+      alertPath,
+      onActivated: async () => {
+        throw new Error("activation handoff failed");
+      },
+    }),
+    /activation handoff failed/u,
+  );
+  assert.equal(active, false);
+  assert.equal(
+    cleaned,
+    true,
+    "failed handoff must still reset fixture and remove its Grafana group",
+  );
+  await writeFile(alertPath, "");
+  cleaned = false;
+  const controller = new AbortController();
+  await assert.rejects(
+    verifySyntheticAlertTransitions({
+      config,
+      definitions,
+      provisioning,
+      baseUrls: {
+        prometheus: "http://prometheus.test",
+        grafana: "http://grafana.test",
+      },
+      authorization: "Basic test",
+      folderUid: "fixture",
+      producerUrl: "http://producer.test",
+      runId: "synthetic-run",
+      alertPath,
+      signal: controller.signal,
+      onActivated: async () => {
+        controller.abort();
+      },
+    }),
+    /synthetic alert worker interrupted/u,
+  );
+  assert.equal(active, false);
+  assert.equal(
+    cleaned,
+    true,
+    "interrupted worker must still reset and clean up",
+  );
+});
+
+void test("native collector waits for validated synthetic cleanup and fails closed", async () => {
+  const definitions = createAlertDefinitions({ config });
+  const alerts = definitions
+    .filter((rule) => !["diskWatermark", "notReady"].includes(rule.key))
+    .map((rule) => ({
+      ...rule,
+      episodeId: "episode",
+      firing: true,
+      resolved: true,
+    }));
+  for (const cleanupVerified of [true, false]) {
+    let release;
+    const pending = new Promise((resolve) => {
+      release = resolve;
+    });
+    const steps = [];
+    const worker = await startSyntheticAlertWorker({
+      root: process.cwd(),
+      config,
+      definitions,
+      runChild: async ({ onIpc }) => {
+        await onIpc({ stage: "init", payload: null });
+        await onIpc({
+          stage: "activated",
+          payload: {
+            activationMs: 1,
+            baseline: { value: 1 },
+            failed: { value: 0, timestampUs: 2000 },
+          },
+        });
+        await onIpc({ stage: "running", payload: null });
+        steps.push("matrix");
+        await pending;
+        steps.push("cleanup");
+        await onIpc({
+          stage: "cleanup",
+          payload: {
+            syntheticNodeNotReady: {
+              ...syntheticNodeNotReady,
+              cleanupVerified,
+            },
+            alerts,
+          },
+        });
+        return {};
+      },
+    });
+    const native = worker.wait().then(() => {
+      steps.push("native");
+    });
+    await Promise.resolve();
+    assert.deepEqual(steps, ["matrix"]);
+    release();
+    if (cleanupVerified) {
+      await native;
+      assert.deepEqual(steps, ["matrix", "cleanup", "native"]);
+    } else {
+      await assert.rejects(native, /synthetic alert completion invalid/u);
+      assert.deepEqual(steps, ["matrix", "cleanup"]);
+    }
+  }
+  await assert.rejects(
+    startSyntheticAlertWorker({
+      root: process.cwd(),
+      config,
+      definitions,
+      runChild: async ({ onIpc }) => {
+        await onIpc({ stage: "init", payload: null });
+        await onIpc({
+          stage: "activated",
+          payload: {
+            activationMs: 1,
+            baseline: { value: 0 },
+            failed: { value: 0, timestampUs: 2000 },
+          },
+        });
+      },
+    }),
+    /synthetic alert activation invalid/u,
+  );
+});
+
+void test("supervised alert worker continues while matrix parent blocks", async () => {
+  const { runManagedRollbackChild } =
+    await import("../../verification/launch/v1/scenarios/rollback.mjs");
+  const definitions = createAlertDefinitions({ config });
+  const alerts = definitions
+    .filter((rule) => !["diskWatermark", "notReady"].includes(rule.key))
+    .map((rule) => ({
+      ...rule,
+      episodeId: "episode",
+      firing: true,
+      resolved: true,
+    }));
+  const payload = JSON.stringify({ syntheticNodeNotReady, alerts });
+  const script = `
+const request=(stage,payload)=>new Promise((resolve,reject)=>{
+ const listener=(message)=>{if(message.stage!==stage)return;process.removeListener('message',listener);message.ok?resolve():reject(new Error('rejected'));};
+ process.on('message',listener);process.send({stage,payload});
+});
+await request('init',null);
+await request('activated',{activationMs:1,baseline:{value:1},failed:{value:0,timestampUs:2000}});
+process.send({stage:'running',payload:null});
+await new Promise(resolve=>setTimeout(resolve,40));
+const completedAt=Date.now();
+await request('cleanup',{...${payload},completedAt});
+process.disconnect();`;
+  const worker = await startSyntheticAlertWorker({
+    root: process.cwd(),
+    config,
+    definitions,
+    runChild: (options) =>
+      runManagedRollbackChild({
+        ...options,
+        args: ["--input-type=module", "--eval", script],
+      }),
+  });
+  const blocker = spawnSync(
+    process.execPath,
+    ["-e", "setTimeout(()=>{},300)"],
+    { timeout: 3000 },
+  );
+  assert.equal(blocker.status, 0);
+  const parentUnblockedAt = Date.now();
+  const receipt = await worker.wait();
+  assert.ok(
+    receipt.completedAt <= parentUnblockedAt,
+    "worker must complete while the parent event loop is blocked",
+  );
+});
+
+void test("actual alert worker failure blocks matrix activation", async () => {
+  const definitions = createAlertDefinitions({ config });
+  const provisioning = createGrafanaAlertProvisioning(config, {
+    notificationUrl: "http://alerts.test",
+  });
+  await assert.rejects(
+    startSyntheticAlertWorker({
+      root: process.cwd(),
+      config,
+      definitions,
+      provisioning,
+      baseUrls: { grafana: "not-a-url", prometheus: "not-a-url" },
+      authorization: "Basic test",
+      folderUid: "fixture",
+      producerUrl: "not-a-url",
+      runId: "synthetic-run",
+      alertPath: "/nonexistent-alert-episodes",
+    }),
+    /ROLLBACK_CHILD_(?:IPC_FAILED|FAILED)/u,
+  );
+});
 
 void test("Tempo effective config is parsed after its native status request header", () => {
   const expected = {
@@ -2010,7 +2404,10 @@ void test("observability evidence distinguishes selected live roles from full 14
     },
     metricApplicability: {
       "messaging.kafka.consumer.lag": [],
-      aromaConvergenceProof: { owner: "aroma-convergence" },
+      aromaConvergenceProof: {
+        "unknown-current": { status: "PASS" },
+        "recovered-terminal": { status: "PASS" },
+      },
     },
   });
   assert.equal(coverage.verificationScope, "operations-component");
@@ -2426,16 +2823,28 @@ void test("observability queries actual child telemetry before cleanup and fails
   const traceId = "a".repeat(32);
   const cid = "8f53d687-fd3b-47be-b32b-2081d08bc55a";
   const nativeNginxContainerId = "b".repeat(64);
+  const ordersContainerId = "d".repeat(64);
+  const apiContainerId = "9".repeat(64);
+  const apiLogPath = `/var/lib/docker/containers/${apiContainerId}/${apiContainerId}-json.log`;
+  const ordersLogPath = `/var/lib/docker/containers/${ordersContainerId}/${ordersContainerId}-json.log`;
   const nativeLogPath = `/var/lib/docker/containers/${nativeNginxContainerId}/${nativeNginxContainerId}-json.log`;
   const proof = {
     correlationId: cid,
     traceId,
+    ownerTraceparent: `00-${traceId}-${"c".repeat(16)}-01`,
+    realtimeTraceparent: `00-${traceId}-${"c".repeat(16)}-01`,
     runId: "20261030T120000Z-abcdef0",
     candidateSha: "abcdef0" + "0".repeat(33),
     configSha256: "c".repeat(64),
   };
   const required = {
-    "orders-service": ["Outbox.relay", "Kafka.produce"],
+    "api-public": ["HTTP POST"],
+    "orders-service": [
+      "Outbox.relay",
+      "Kafka.produce",
+      "HTTP POST",
+      "db.transaction",
+    ],
     "orders-aroma-preparation": [
       "Kafka.consume",
       "Inbox.consumeOnce",
@@ -2450,6 +2859,11 @@ void test("observability queries actual child telemetry before cleanup and fails
   const responses =
     ({
       wrongCid = false,
+      missingApi = false,
+      wrongApiCid = false,
+      foreignApi = false,
+      wrongApiTrace = false,
+      wrongApiSpan = false,
       empty = false,
       wrongTrace = false,
       privateLog = false,
@@ -2457,6 +2871,12 @@ void test("observability queries actual child telemetry before cleanup and fails
       privateField,
       privateLocation,
       privateLogField,
+      splitTrace = false,
+      wrongLink = false,
+      detachedRequest = false,
+      requestLink = false,
+      wrongRequestLink = false,
+      wrongAnchor = false,
       missingCompletion = false,
       foreignContainer = false,
       extraRows = [],
@@ -2473,7 +2893,10 @@ void test("observability queries actual child telemetry before cleanup and fails
             status: "success",
             data: {
               resultType: "streams",
-              result: ["edge-nginx", "orders-service"].map((role) => ({
+              result: (missingApi
+                ? ["edge-nginx", "orders-service"]
+                : ["edge-nginx", "api-public", "orders-service"]
+              ).map((role) => ({
                 stream: { service_name: role },
                 values: (role === "edge-nginx" ? ["POST", "GET"] : ["orders"])
                   .map((method, index) => [
@@ -2481,12 +2904,30 @@ void test("observability queries actual child telemetry before cleanup and fails
                     JSON.stringify({
                       ...(role === "edge-nginx"
                         ? { correlation_id: correlation }
-                        : { correlationId: correlation }),
+                        : {
+                            correlationId:
+                              role === "api-public" && wrongApiCid
+                                ? "8f53d687-fd3b-47be-b32b-2081d08bc55b"
+                                : correlation,
+                          }),
                       ...(wrongCid ? { unrelated: cid } : {}),
                       ...(privateLog ? { password: "canary-secret" } : {}),
                       ...(privateLogField
                         ? { [privateLogField]: "private-marker" }
-                        : {}),
+                        : {
+                            traceId:
+                              role === "api-public" && wrongApiTrace
+                                ? "f".repeat(32)
+                                : detachedRequest
+                                  ? "e".repeat(32)
+                                  : traceId,
+                            spanId:
+                              role === "api-public"
+                                ? (wrongApiSpan ? "f" : "1").repeat(16)
+                                : wrongAnchor && role === "orders-service"
+                                  ? "f".repeat(16)
+                                  : "c".repeat(16),
+                          }),
                       ...(role === "edge-nginx"
                         ? {
                             method,
@@ -2511,7 +2952,16 @@ void test("observability queries actual child telemetry before cleanup and fails
                               : nativeLogPath,
                           },
                         ]
-                      : []),
+                      : [
+                          {
+                            log_file_path:
+                              role === "api-public"
+                                ? foreignApi
+                                  ? "/foreign/log"
+                                  : apiLogPath
+                                : ordersLogPath,
+                          },
+                        ]),
                   ])
                   .concat(role === "edge-nginx" ? extraRows : []),
               })),
@@ -2520,11 +2970,32 @@ void test("observability queries actual child telemetry before cleanup and fails
         );
       }
       events.push("tempo");
+      if (url.pathname === "/api/search")
+        return new Response(
+          JSON.stringify({
+            traces: splitTrace ? [{ traceID: "d".repeat(32) }] : [],
+          }),
+        );
+      const requestedTrace = url.pathname.split("/").at(-1);
+      const linked = requestedTrace === "d".repeat(32);
+      const requestTrace = requestedTrace === "e".repeat(32);
+      const selected = requestTrace
+        ? {
+            "api-public": ["HTTP POST"],
+            "orders-service": ["HTTP POST", "db.transaction"],
+          }
+        : linked
+          ? { "realtime-gateway": ["Kafka.consume"] }
+          : Object.fromEntries(
+              Object.entries(required).filter(
+                ([role]) => !splitTrace || role !== "realtime-gateway",
+              ),
+            );
       return new Response(
         JSON.stringify({
           resourceSpans: empty
             ? []
-            : Object.entries(required).map(([role, names]) => ({
+            : Object.entries(selected).map(([role, names]) => ({
                 resource: {
                   attributes: [
                     { key: "service.name", value: { stringValue: role } },
@@ -2533,8 +3004,31 @@ void test("observability queries actual child telemetry before cleanup and fails
                 scopeSpans: [
                   {
                     spans: names.map((name) => ({
-                      traceId: wrongTrace ? "b".repeat(32) : traceId,
+                      traceId: wrongTrace ? "b".repeat(32) : requestedTrace,
+                      spanId: (role === "api-public" ? "1" : "c").repeat(16),
                       name,
+                      ...(linked
+                        ? {
+                            links: [
+                              {
+                                traceId,
+                                spanId: (wrongLink ? "f" : "c").repeat(16),
+                              },
+                            ],
+                          }
+                        : {}),
+                      ...(requestTrace && requestLink
+                        ? {
+                            links: [
+                              {
+                                traceId,
+                                spanId: (wrongRequestLink ? "f" : "c").repeat(
+                                  16,
+                                ),
+                              },
+                            ],
+                          }
+                        : {}),
                       ...(privateSpan
                         ? {
                             attributes: [
@@ -2617,6 +3111,11 @@ void test("observability queries actual child telemetry before cleanup and fails
       lokiUrl: "http://loki:3100",
       tempoUrl: "http://tempo:3200",
       nativeNginxContainerId,
+      nativeNginxImageId: `sha256:${"e".repeat(64)}`,
+      ordersContainerId,
+      ordersImageId: `sha256:${"f".repeat(64)}`,
+      apiContainerId,
+      apiImageId: `sha256:${"1".repeat(64)}`,
       fetchImpl,
       timeoutMs: 30,
       intervalMs: 1,
@@ -2650,13 +3149,56 @@ void test("observability queries actual child telemetry before cleanup and fails
     /nonempty role spans/u,
   );
   assert.equal(result.status, "OBSERVED");
+  const multiTrace = await collect(
+    responses({ splitTrace: true, detachedRequest: true, requestLink: true }),
+  );
+  assert.equal(multiTrace.status, "OBSERVED");
+  assert.deepEqual(multiTrace.durableTraceIds, [traceId, "d".repeat(32)]);
+  assert.deepEqual(multiTrace.requestTraceIds, ["e".repeat(32)]);
+  assert.equal(
+    (await collect(responses({ detachedRequest: true }))).status,
+    "NOT_PROVEN",
+  );
+  assert.equal(
+    (
+      await collect(
+        responses({
+          detachedRequest: true,
+          requestLink: true,
+          wrongRequestLink: true,
+        }),
+      )
+    ).status,
+    "NOT_PROVEN",
+  );
+  assert.equal(
+    (await collect(responses({ splitTrace: true, wrongLink: true }))).status,
+    "NOT_PROVEN",
+  );
+  assert.equal(
+    (await collect(responses({ detachedRequest: true, wrongAnchor: true })))
+      .status,
+    "NOT_PROVEN",
+  );
   assert.ok(
     events.indexOf("loki") < events.indexOf("proof-ack") &&
       events.indexOf("tempo") < events.indexOf("proof-ack") &&
       events.indexOf("proof-ack") < events.indexOf("cleanup"),
   );
   assert.equal(JSON.stringify(result).includes("canary-secret"), false);
-  assert.deepEqual(result.logCounts, { "edge-nginx": 2, "orders-service": 1 });
+  assert.deepEqual(result.logCounts, {
+    "edge-nginx": 2,
+    "api-public": 1,
+    "orders-service": 1,
+  });
+  for (const altered of [
+    { missingApi: true },
+    { wrongApiCid: true },
+    { foreignApi: true },
+    { wrongApiTrace: true },
+    { wrongApiSpan: true },
+  ])
+    assert.equal((await collect(responses(altered))).status, "NOT_PROVEN");
   const { windowStartUtc, windowEndUtc, ...measurement } =
     result.ordinaryApiMeasurement;
   assert.equal(windowStartUtc, new Date(startTimeUs / 1000).toISOString());
@@ -3171,7 +3713,7 @@ void test("Loki retention fixture changes cache TTL on a clone of the original p
   const start = source.indexOf(
     "const lokiProfile = structuredClone(originalLokiConfig);",
   );
-  const end = source.indexOf("\n      const readLokiKnobs =", start);
+  const end = source.indexOf("const readLokiKnobs =", start);
   assert.ok(start >= 0 && end > start);
   for (const cache of [
     undefined,
@@ -3285,21 +3827,6 @@ void test("restoration preserves proof failure and reports both failures without
       variable: "backupRestorationError",
       first: "fixtureCompose.volumes = originalVolumes;",
     },
-    {
-      name: "Loki retention",
-      variable: "lokiRestorationError",
-      first: "await writeLokiConfig(originalLokiConfig);",
-    },
-    {
-      name: "Prometheus retention",
-      variable: "prometheusRestorationError",
-      first: "services.prometheus.command = originalPrometheusCommand;",
-    },
-    {
-      name: "Tempo retention",
-      variable: "tempoRestorationError",
-      first: "await writeTempoConfig(originalTempoConfig);",
-    },
   ];
   for (const { name, variable, first } of restorations) {
     const position = source.indexOf(first);
@@ -3332,30 +3859,6 @@ void test("restoration preserves proof failure and reports both failures without
         fixtureCompose,
         originalVolumes: {},
         backendStopStarted: false,
-        writeLokiConfig: restore,
-        writeTempoConfig: restore,
-        originalLokiConfig: {},
-        originalTempoConfig: {},
-        recreateBackend() {},
-        readLokiKnobs: () => ({}),
-        readTempoKnobs: () => ({}),
-        originalLokiKnobs: {},
-        originalTempoKnobs: {},
-        originalLokiHash: "same",
-        originalTempoHash: "same",
-        createHash: () => ({ update: () => ({ digest: () => "same" }) }),
-        readFile: async () => "",
-        backendConfigPaths: {},
-        services: { prometheus: {} },
-        originalPrometheusCommand: [],
-        saveCompose: restore,
-        api: async () => ({ data: {} }),
-        baseUrls: {},
-        loadYaml: () => ({ services: { prometheus: { command: [] } } }),
-        composeFile: "",
-        profileFlagNames: [],
-        originalFlags: {},
-        profileHash: () => "same",
       };
       const execute = runInNewContext(
         `(async () => { let ${variable}; try { await proof(); ${source.slice(start, end)} })`,
@@ -3379,6 +3882,84 @@ void test("restoration preserves proof failure and reports both failures without
         assert.equal(observabilityGateComplete({ cleanupErrors }), false, name);
     }
   }
+  const cleanupStart = source.indexOf(
+    "    let syntheticResetVerified = false;",
+  );
+  const cleanupEnd = source.indexOf(
+    "\n  }\n  if (!syntheticCleanupVerified)",
+    cleanupStart,
+  );
+  const guardStart = source.indexOf(
+    "\n  if (!syntheticCleanupVerified)",
+    cleanupEnd,
+  );
+  const guardEnd = source.indexOf(
+    "\n  const syntheticNodeNotReady =",
+    guardStart,
+  );
+  assert.ok(
+    cleanupStart >= 0 &&
+      cleanupEnd > cleanupStart &&
+      guardStart > cleanupEnd &&
+      guardEnd > guardStart,
+  );
+  for (const resetFails of [false, true]) {
+    const calls = [];
+    let nativeCalled = false;
+    const productionBefore = {
+      uid: "production",
+      title: "production",
+      for: "5m",
+      condition: "B",
+      noDataState: "Alerting",
+      execErrState: "Alerting",
+      data: [{ refId: "A", model: { expr: "production-query" } }],
+    };
+    const execute = runInNewContext(
+      `(async () => { let syntheticCleanupVerified = false; try { ${source.slice(cleanupStart, cleanupEnd)} } catch {} ${source.slice(guardStart, guardEnd)} nativeProof(); })`,
+      {
+        Error,
+        producerUrl: "producer",
+        runId: "run",
+        baseUrls: { grafana: "grafana" },
+        authorization: "auth",
+        groupPath: "group",
+        syntheticPath: "synthetic",
+        productionPath: "production",
+        productionBefore,
+        productionRule: { query: "production-query" },
+        isDeepStrictEqual: (left, right) =>
+          JSON.stringify(left) === JSON.stringify(right),
+        fixtureRequest: async () => {
+          if (resetFails) throw new Error("reset failed");
+        },
+        api: async (options) => {
+          const status =
+            options.method === "DELETE"
+              ? 204
+              : options.path === "production"
+                ? 200
+                : 404;
+          assert.ok((options.expected ?? [200]).includes(status));
+          calls.push([options.method ?? "GET", options.path, status]);
+          return options.path === "production" ? productionBefore : undefined;
+        },
+        nativeProof: () => {
+          nativeCalled = true;
+        },
+      },
+    );
+    if (resetFails)
+      await assert.rejects(execute(), /cleanup was not verified/u);
+    else await execute();
+    assert.deepEqual(calls, [
+      ["DELETE", "group", 204],
+      ["GET", "group", 404],
+      ["GET", "synthetic", 404],
+      ["GET", "production", 200],
+    ]);
+    assert.equal(nativeCalled, !resetFails);
+  }
 });
 
 void test("observability cannot pass with a missing or incomplete required phase", () => {
@@ -3401,6 +3982,7 @@ void test("observability cannot pass with a missing or incomplete required phase
       ].map((name) => [name, "PASS"]),
     ),
     alertTransitions: "PASS",
+    syntheticNodeNotReady: structuredClone(syntheticNodeNotReady),
     launchPathCorrelation: "PASS",
     nativeNginxAlert: pass,
     redactionScan: pass,
@@ -3428,6 +4010,49 @@ void test("observability cannot pass with a missing or incomplete required phase
     runtimeShutdownStatus: "PASS",
   };
   assert.equal(observabilityGateComplete(evidence), true);
+  for (const mutate of [
+    (value) => {
+      delete value.syntheticNodeNotReady;
+    },
+    (value) => {
+      value.syntheticNodeNotReady.forMs = 1;
+    },
+    (value) => {
+      value.syntheticNodeNotReady.firing.episodeId =
+        "1234567890abcdef:1970-01-01T00:21:39.000Z";
+    },
+    (value) => {
+      value.syntheticNodeNotReady.resolved.episodeId = "foreign";
+    },
+    (value) => {
+      value.syntheticNodeNotReady.failed.timestampUs = 999000000;
+    },
+    (value) => {
+      value.syntheticNodeNotReady.failed.timestampUs = 2000000000;
+    },
+    (value) => {
+      value.syntheticNodeNotReady.baseline.value = 0;
+    },
+    (value) => {
+      value.syntheticNodeNotReady.recovered.value = 0;
+    },
+    (value) => {
+      value.syntheticNodeNotReady.recovered.timestampUs = 1300000000;
+    },
+    (value) => {
+      value.syntheticNodeNotReady.nativeProbeAbsent = false;
+    },
+    (value) => {
+      value.syntheticNodeNotReady.cleanupVerified = false;
+    },
+    (value) => {
+      value.syntheticNodeNotReady.productionRuleUnchanged = false;
+    },
+  ]) {
+    const changed = structuredClone(evidence);
+    mutate(changed);
+    assert.equal(observabilityGateComplete(changed), false);
+  }
   for (const name of ["loki", "grafana", "prometheus", "tempo"]) {
     delete evidence.diskPressure.backends[name];
     assert.equal(observabilityGateComplete(evidence), false, `${name} missing`);
@@ -3452,6 +4077,461 @@ void test("observability cannot pass with a missing or incomplete required phase
   evidence.phases.retention = "PASS";
   evidence.cleanupErrors.push("cleanup failed");
   assert.equal(observabilityGateComplete(evidence), false);
+});
+
+void test("observability reads only the admitted qualification and its owned one-use claim", async (t) => {
+  const root = await mkdtemp(path.join(tmpdir(), "g14-admission-"));
+  const originalUser = os.userInfo();
+  const mockedUser = t.mock.method(os, "userInfo", () => ({
+    ...originalUser,
+    homedir: root,
+  }));
+  syncBuiltinESMExports();
+  t.after(async () => {
+    mockedUser.mock.restore();
+    syncBuiltinESMExports();
+    await rm(root, { recursive: true, force: true });
+  });
+  const runId = `i12-${"a".repeat(16)}`;
+  const context = {
+    candidateSha: "b".repeat(40),
+    baseConfigSha256: "c".repeat(64),
+  };
+  const policy = {
+    verification: {
+      realtimeQualification: { maximumAgeSeconds: 7200, budgetSeconds: 2700 },
+    },
+  };
+  const receiptSha256 = "d".repeat(64);
+  const claimPath = path.join(
+    root,
+    ".local/state/coffee-platform/realtime-claims",
+    `${runId}.json`,
+  );
+  const admissionPath = path.join(
+    root,
+    "gates/observability/artifacts/realtime-capacity.json",
+  );
+  await mkdir(path.dirname(claimPath), { recursive: true });
+  await mkdir(path.dirname(admissionPath), { recursive: true });
+  const admission = {
+    receipt: {
+      status: "PASS",
+      runId,
+      ...context,
+      endedAt: new Date(Date.now() - 1000).toISOString(),
+      elapsedMs: 1800000,
+    },
+    receiptSha256,
+    claimPath,
+    admittedAt: new Date().toISOString(),
+  };
+  await writeFile(claimPath, JSON.stringify({ runId, receiptSha256 }), {
+    mode: 0o400,
+  });
+  await writeFile(admissionPath, JSON.stringify(admission), { mode: 0o600 });
+  assert.deepEqual(
+    await readObservabilityQualification(root, context, policy),
+    {
+      runId,
+      ...context,
+      receiptSha256,
+      admittedAt: admission.admittedAt,
+    },
+  );
+  for (const mutate of [
+    (entry) => {
+      entry.receipt.candidateSha = "e".repeat(40);
+    },
+    (entry) => {
+      entry.receipt.baseConfigSha256 = "e".repeat(64);
+    },
+    (entry) => {
+      entry.receipt.endedAt = new Date(Date.now() - 7201000).toISOString();
+    },
+    (entry) => {
+      entry.receipt.elapsedMs = 2700001;
+    },
+    (entry) => {
+      entry.receiptSha256 = "e".repeat(64);
+    },
+    (entry) => {
+      entry.claimPath = path.join(root, "different.json");
+    },
+  ]) {
+    const invalid = structuredClone(admission);
+    mutate(invalid);
+    await writeFile(admissionPath, JSON.stringify(invalid));
+    await assert.rejects(readObservabilityQualification(root, context, policy));
+  }
+});
+
+void test("full observability coverage requires bound readiness, images, browser traces and admission", async () => {
+  const platform = parseYaml(
+    await readFile(
+      new URL("../../config/platform.yaml", import.meta.url),
+      "utf8",
+    ),
+  );
+  const pairs = {
+    database: [
+      "customer-service",
+      "catalog-service",
+      "catalog-supplier-sync",
+      "catalog-activation-worker",
+      "pricing-service",
+      "orders-service",
+      "orders-aroma-preparation",
+      "aroma-observer",
+      "aroma-convergence",
+      "aroma-gateway",
+    ],
+    kafka: [
+      "catalog-activation-worker",
+      "orders-service",
+      "orders-aroma-preparation",
+      "aroma-observer",
+      "aroma-convergence",
+      "realtime-gateway",
+    ],
+    "internal-api": ["orders-service", "aroma-observer", "aroma-convergence"],
+  };
+  const readiness = {
+    status: "PASS",
+    localChecks: "NOT_PROVEN",
+    checks: Object.entries(pairs).flatMap(([dependency, runtimes]) =>
+      runtimes.map((runtime) => ({
+        runtime,
+        dependency,
+        before: 200,
+        during: 503,
+        after: 200,
+        liveDuring: 200,
+        restored: true,
+        addressChanged:
+          dependency === "kafka" && runtime !== "orders-aroma-preparation"
+            ? null
+            : false,
+      })),
+    ),
+    notApplicable: ["edge-gateway", "api-public", "api-internal"].map(
+      (runtime) => ({ runtime, reason: "no-registered-readiness-dependency" }),
+    ),
+  };
+  const id = `sha256:${"1".repeat(64)}`;
+  const traceId = "2".repeat(32);
+  const carrier = `00-${traceId}-${"3".repeat(16)}-01`;
+  const pass = { status: "PASS" };
+  const proof = {
+    status: "PASS",
+    browserCleanup: "EXACT_OWNED_CONTAINER_REMOVED",
+    runId: "child-run",
+    candidateSha: "8".repeat(40),
+    configSha256: "9".repeat(64),
+    correlationId: "cid",
+    traceId,
+    ownerTraceparent: carrier,
+    realtimeTraceparent: carrier,
+  };
+  const telemetry = {
+    status: "OBSERVED",
+    runId: proof.runId,
+    candidateSha: proof.candidateSha,
+    configSha256: proof.configSha256,
+    correlationId: "cid",
+    traceId,
+    carrier,
+    ordinaryApiMeasurement: {
+      status: "MEASURED",
+      sampleCount: 2,
+      successCount: 2,
+      min: 0.1,
+      p50: 0.1,
+      p95: 0.2,
+      max: 0.2,
+      windowStartUtc: "2026-10-30T00:00:00.000Z",
+      windowEndUtc: "2026-10-30T00:00:01.000Z",
+    },
+    nativeSource: {
+      role: "edge-nginx",
+      containerId: "4".repeat(64),
+      imageId: id,
+    },
+    ownerSource: {
+      role: "orders-service",
+      containerId: "5".repeat(64),
+      imageId: id,
+    },
+    apiSource: { role: "api-public", containerId: "6".repeat(64), imageId: id },
+    logCounts: { "api-public": 1 },
+    durableTraceIds: [traceId],
+    durableLinks: [],
+    requestTraceIds: [traceId],
+    requestBindings: [
+      {
+        traceId,
+        spanId: "7".repeat(16),
+        role: "orders-service",
+        apiSpanId: "8".repeat(16),
+      },
+    ],
+    spans: {
+      "orders-service": ["Outbox.relay", "Kafka.produce"],
+      "orders-aroma-preparation": [
+        "Kafka.consume",
+        "Inbox.consumeOnce",
+        "Outbox.relay",
+        "Kafka.produce",
+      ],
+      "realtime-gateway": ["Kafka.consume"],
+    },
+  };
+  const evidence = {
+    status: "PASS",
+    cleanupErrors: [],
+    phases: Object.fromEntries(
+      [
+        "startup",
+        "signals",
+        "alerts",
+        "outage",
+        "persistence",
+        "backupRestore",
+        "runtimeMatrix",
+        "memory",
+        "retention",
+        "launchPath",
+        "diskRecovery",
+      ].map((phase) => [phase, "PASS"]),
+    ),
+    alertTransitions: "PASS",
+    syntheticNodeNotReady: structuredClone(syntheticNodeNotReady),
+    launchPathCorrelation: "PASS",
+    nativeNginxAlert: pass,
+    redactionScan: pass,
+    networkIsolation: { status: "PASS", launchPathNetworkStatus: "PASS" },
+    telemetryHealth: {
+      dockerLogRotation: pass,
+      producerLoggingPolicy: pass,
+      collectorLoggingPolicy: pass,
+      launchPathCollectorConfig: "PASS",
+      launchPathOutageStatus: "PASS",
+      collectorMemoryProof: pass,
+    },
+    collectorQueueMetrics: pass,
+    processCounterRestart: pass,
+    diskPressureStatus: "PASS",
+    runtimeShutdownStatus: "PASS",
+    diskPressure: {
+      status: "PASS",
+      backends: Object.fromEntries(
+        ["loki", "grafana", "prometheus", "tempo"].map((name) => [name, pass]),
+      ),
+    },
+    provenanceStart: {
+      baseSha: "a".repeat(40),
+      configSha256: "b".repeat(64),
+      bomSha256: "c".repeat(64),
+      identityHash: "d".repeat(64),
+      sourceFiles: pass,
+    },
+    qualificationAdmission: {
+      runId: `i12-${"1".repeat(16)}`,
+      candidateSha: "a".repeat(40),
+      baseConfigSha256: "b".repeat(64),
+      receiptSha256: "c".repeat(64),
+      admittedAt: new Date().toISOString(),
+    },
+    verifiedRuntimeImages: OBSERVABILITY_TARGETS.map((service) => ({
+      service,
+      imageId: id,
+    })),
+    metricApplicability: {
+      aromaConvergenceProof: {
+        "unknown-current": pass,
+        "recovered-terminal": pass,
+      },
+    },
+    runtimeMetricMatrix: {
+      status: "PASS",
+      source: {
+        baseSha: "a".repeat(40),
+        configSha256: "b".repeat(64),
+        bomSha256: "c".repeat(64),
+        identityHash: "d".repeat(64),
+      },
+      configuration: {
+        platformConfigSha256: "b".repeat(64),
+        bomSha256: "c".repeat(64),
+      },
+      cleanupVerified: true,
+      runtimeMetrics: {
+        roles: NODE_RUNTIME_ROLES.map((role) => ({ role, status: "PASS" })),
+        otlpFamilies: runtimeMetricFamilies(platform).map((family) => ({
+          ...family,
+          status: "PASS",
+          matches: family.components.map((component) => ({
+            stream: `${prometheusMetricName(family.name)}${component}`,
+            sampleCount: 1,
+            services: family.owners,
+          })),
+        })),
+      },
+      images: OBSERVABILITY_TARGETS.map((role) => ({
+        role,
+        imageId: id,
+        status: "PASS",
+      })),
+      composeReceipt: {
+        postgres: { externalPostgres: true },
+        externalCleanup: { verified: true },
+        dependencyReadiness: readiness,
+      },
+    },
+    browserCorrelationChild: {
+      checkoutRemoved: true,
+      evidenceRemoved: true,
+      cleanup: { verified: true },
+      proof,
+    },
+    launchPathProof: {
+      browserRefetchMatched: true,
+      ownerCausation: true,
+      traceStatus: "PASS",
+      telemetrySubproof: telemetry,
+    },
+  };
+  const options = {
+    config: platform,
+    sourceHashStable: true,
+    backendArtifactsComplete: true,
+  };
+  assert.equal(
+    observabilityVerificationCoverage(evidence, options).fullSystemObservability
+      .status,
+    "PASS",
+  );
+  for (const change of [
+    (value) => {
+      value.syntheticNodeNotReady.ruleUid =
+        "g14-v2-service-not-ready-synthetic";
+    },
+    (value) => {
+      delete value.qualificationAdmission;
+    },
+    (value) => {
+      value.qualificationAdmission.candidateSha = "f".repeat(40);
+    },
+    (value) => {
+      value.runtimeMetricMatrix.runtimeMetrics.roles.pop();
+    },
+    ...["baseSha", "configSha256", "bomSha256", "identityHash"].flatMap(
+      (key) => [
+        (value) => {
+          delete value.runtimeMetricMatrix.source[key];
+        },
+        (value) => {
+          value.runtimeMetricMatrix.source[key] = "f".repeat(
+            key === "baseSha" ? 40 : 64,
+          );
+        },
+      ],
+    ),
+    ...["platformConfigSha256", "bomSha256"].flatMap((key) => [
+      (value) => {
+        delete value.runtimeMetricMatrix.configuration[key];
+      },
+      (value) => {
+        value.runtimeMetricMatrix.configuration[key] = "f".repeat(64);
+      },
+    ]),
+    ...["runId", "candidateSha", "configSha256"].flatMap((key) => [
+      (value) => {
+        delete value.launchPathProof.telemetrySubproof[key];
+      },
+      (value) => {
+        value.launchPathProof.telemetrySubproof[key] = "foreign";
+      },
+    ]),
+    (value) => {
+      value.launchPathProof.telemetrySubproof.requestTraceIds = [
+        "f".repeat(32),
+      ];
+      value.launchPathProof.telemetrySubproof.requestBindings[0].traceId =
+        "f".repeat(32);
+    },
+    (value) => {
+      value.runtimeMetricMatrix.runtimeMetrics.otlpFamilies.pop();
+    },
+    (value) => {
+      value.metricApplicability.aromaConvergenceProof[
+        "unknown-current"
+      ].status = "FAIL";
+    },
+    (value) => {
+      value.runtimeMetricMatrix.images[0].imageId = `sha256:${"f".repeat(64)}`;
+    },
+    (value) => {
+      value.runtimeMetricMatrix.composeReceipt.dependencyReadiness.checks.pop();
+    },
+    (value) => {
+      value.runtimeMetricMatrix.composeReceipt.externalCleanup.verified = false;
+    },
+    (value) => {
+      value.launchPathProof.telemetrySubproof.correlationId = "foreign";
+    },
+    (value) => {
+      value.launchPathProof.telemetrySubproof.ordinaryApiMeasurement.status =
+        "NOT_PROVEN";
+    },
+    (value) => {
+      value.launchPathProof.telemetrySubproof.nativeSource.imageId = `sha256:${"f".repeat(64)}`;
+    },
+    (value) => {
+      delete value.launchPathProof.telemetrySubproof.apiSource;
+    },
+    (value) => {
+      value.launchPathProof.telemetrySubproof.apiSource.imageId = `sha256:${"f".repeat(64)}`;
+    },
+    (value) => {
+      value.launchPathProof.telemetrySubproof.apiSource.containerId = "foreign";
+    },
+    (value) => {
+      value.launchPathProof.telemetrySubproof.logCounts["api-public"] = 0;
+    },
+    (value) => {
+      delete value.launchPathProof.telemetrySubproof.requestBindings[0]
+        .apiSpanId;
+    },
+    (value) => {
+      value.browserCorrelationChild.proof.realtimeTraceparent = "foreign";
+    },
+    (value) => {
+      value.cleanupErrors.push("unverified");
+    },
+  ]) {
+    const altered = structuredClone(evidence);
+    change(altered);
+    assert.equal(
+      observabilityVerificationCoverage(altered, options)
+        .fullSystemObservability.status,
+      "NOT_RUN",
+    );
+  }
+  assert.equal(
+    observabilityVerificationCoverage(evidence, {
+      ...options,
+      sourceHashStable: false,
+    }).fullSystemObservability.status,
+    "NOT_RUN",
+  );
+  assert.equal(
+    observabilityVerificationCoverage(evidence, {
+      ...options,
+      backendArtifactsComplete: false,
+    }).fullSystemObservability.status,
+    "NOT_RUN",
+  );
 });
 
 void test("Prometheus native WAL failure counter is unambiguous", () => {
@@ -3783,4 +4863,293 @@ void test("Alloy native logfmt retry expiry reports the exact dropped_items fiel
       line.replace("dropped_items=128", "dropped_items=128x"),
     ),
   );
+});
+
+void test("retention observers reject early loss and reset absence on stale controls", async () => {
+  const source = await readFile(
+    new URL("../../tools/observability/verify.mjs", import.meta.url),
+    "utf8",
+  );
+  const predicate = (marker, initial, context) => {
+    const start = source.indexOf(marker);
+    const first = source.indexOf("async () => {", start);
+    const boundary = /\n\s*\},\n\s*\{\n\s*timeoutMs:/u.exec(
+      source.slice(first),
+    );
+    const end = boundary ? first + boundary.index : -1;
+    assert.ok(start >= 0 && first > start && end > first);
+    return runInNewContext(
+      `(() => { let ${initial}; return ${source.slice(first, end)}\n          }; })()`,
+      context,
+    );
+  };
+  let now = 119999;
+  let fresh = true;
+  const clock = class extends Date {
+    constructor(...args) {
+      super(...(args.length ? args : [now]));
+    }
+    static now() {
+      return now;
+    }
+  };
+  const prom = predicate("let metricAbsentSince;", "metricAbsentSince", {
+    Date: clock,
+    cancelObservation: false,
+    metricTimeMs: 0,
+    metricTimeUs: 0,
+    metricQuery: async () => [],
+    baseUrls: { prometheus: "http://prometheus" },
+    queryPrometheusRange: async () => [
+      { value: 1, _timestamp: (fresh ? now : now - 30000) * 1000 },
+    ],
+    config: { platform: { health: { intervalMs: 10000 } } },
+  });
+  await assert.rejects(prom(), /before fixture retention elapsed/u);
+  now = 120000;
+  assert.equal(await prom(), false);
+  now = 125000;
+  fresh = false;
+  await assert.rejects(prom(), /current-data control unavailable/u);
+  fresh = true;
+  now = 130000;
+  assert.equal(await prom(), false);
+  now = 149999;
+  assert.equal(await prom(), false);
+  now = 150000;
+  assert.equal(await prom(), true);
+
+  now = 119999;
+  let live = true;
+  let controls = 0;
+  const tempo = predicate("let traceAbsentSince;", "traceAbsentSince", {
+    Date: clock,
+    cancelObservation: false,
+    URL,
+    AbortSignal,
+    baseUrls: { tempo: "http://tempo" },
+    expiredTraceId: "abcd",
+    tempoMarkerAtMs: 0,
+    activeTempo: {},
+    evidence: { retention: {} },
+    fetch: async () => ({ status: 404 }),
+    putTrace: async () => `control-${++controls}`,
+    waitForSameTraceSpans: async () => {
+      if (!live) throw new Error("fresh trace unavailable");
+    },
+  });
+  await assert.rejects(tempo(), /before fixture retention elapsed/u);
+  now = 120000;
+  assert.equal(await tempo(), false);
+  now = 180000;
+  live = false;
+  await assert.rejects(tempo(), /fresh trace unavailable/u);
+  live = true;
+  now = 190000;
+  assert.equal(await tempo(), false);
+  now = 309999;
+  assert.equal(await tempo(), false);
+  now = 310000;
+  assert.equal(await tempo(), true);
+  assert.equal(controls, 5);
+
+  now = 120000;
+  let lokiFresh = true;
+  const loki = predicate(
+    "const absentSince = { value: undefined };",
+    "absentSince = { value: undefined }",
+    {
+      Date: clock,
+      cancelObservation: false,
+      retentionActivatedAtMs: 120000,
+      baseUrls: { loki: "http://loki" },
+      retentionId: "old",
+      evidence: { retention: { lokiObservation: {} } },
+      api: async ({ path }) =>
+        path === "/metrics"
+          ? "loki_compactor_apply_retention_last_successful_run_timestamp_seconds 120"
+          : undefined,
+      oldLogs: async () => [],
+      newRunId: () => "control",
+      structuredClone,
+      body: {
+        resourceLogs: [
+          {
+            resource: { attributes: [{ value: {} }] },
+            scopeLogs: [{ logRecords: [{ body: {} }] }],
+          },
+        ],
+      },
+      queryLokiLogs: async () =>
+        lokiFresh ? [{ id: "control", _timestamp: now * 1000 }] : [],
+      hasExactValue: (item, value) => item.id === value,
+    },
+  );
+  assert.equal(await loki(), false);
+  now = 150000;
+  lokiFresh = false;
+  await assert.rejects(loki(), /fresh current-data control is unavailable/u);
+  lokiFresh = true;
+  now = 160000;
+  assert.equal(await loki(), false);
+  now = 219999;
+  assert.equal(await loki(), false);
+  now = 220000;
+  assert.equal(await loki(), true);
+});
+
+void test("retention observers settle before all independent restore attempts", async () => {
+  const source = await readFile(
+    new URL("../../tools/observability/verify.mjs", import.meta.url),
+    "utf8",
+  );
+  const between = (first, last) => {
+    const start = source.indexOf(first);
+    const end = source.indexOf(last, start);
+    assert.ok(start >= 0 && end > start);
+    return source.slice(start, end);
+  };
+  const init = between(
+    "const retentionRestorers = [];",
+    "evidence.retention = {",
+  );
+  const loki = between(
+    "let lokiRestorationError;",
+    "await writeLokiConfig(lokiStagingProfile);",
+  );
+  const prom = between(
+    "let prometheusRestorationError;",
+    "services.prometheus.command = prometheusProfile;",
+  );
+  const tempo = between(
+    "let tempoRestorationError;",
+    "await writeTempoConfig(tempoProfile);",
+  );
+  const finish = between(
+    "const results = await Promise.allSettled(retentionObservers);",
+    "if (\n        Object.keys(expectedEffective)",
+  );
+  for (const [failObserver, restoreFails] of [
+    [false, false],
+    [true, false],
+    [false, true],
+    [true, true],
+  ]) {
+    const events = [];
+    const evidence = { retention: {} };
+    const restore = (name) => async () => {
+      events.push(`restore-${name}`);
+      if (restoreFails) throw new Error(`${name} restore failed`);
+    };
+    const context = {
+      evidence,
+      events,
+      failObserver,
+      cleanupErrors: [],
+      cleanError: (error) => error.message,
+      writeLokiConfig: restore("loki"),
+      originalLokiConfig: {},
+      services: { prometheus: {} },
+      originalPrometheusCommand: [],
+      saveCompose: restore("prometheus"),
+      writeTempoConfig: restore("tempo"),
+      originalTempoConfig: {},
+      recreateBackend: async () => {},
+      readLokiKnobs: async () => ({}),
+      readTempoKnobs: async () => ({}),
+      originalLokiKnobs: {},
+      originalTempoKnobs: {},
+      originalLokiHash: "same",
+      originalTempoHash: "same",
+      createHash: () => ({ update: () => ({ digest: () => "same" }) }),
+      readFile: async () => "",
+      backendConfigPaths: {},
+      api: async () => ({ data: {} }),
+      baseUrls: {},
+      loadYaml: () => ({ services: { prometheus: { command: [] } } }),
+      composeFile: "",
+      profileFlagNames: [],
+      originalFlags: {},
+      profileHash: () => "same",
+      setImmediate,
+      readEffective: async () => {
+        events.push("readback");
+        return {};
+      },
+    };
+    const run = runInNewContext(
+      `(async () => { ${init} try { ${loki} ${prom} ${tempo}
+      for (const name of ["loki", "prometheus", "tempo"]) {
+        observeRetention((async () => {
+          events.push("start-" + name); await new Promise(setImmediate);
+          events.push("end-" + name);
+          if (failObserver && name === "prometheus") throw new Error("observation failed");
+          evidence.retention[name] = { status: "PASS" };
+        })());
+      }
+      ${finish} })()`,
+      context,
+    );
+    if (failObserver || restoreFails)
+      await assert.rejects(
+        run,
+        failObserver ? /observation failed/u : /retention restoration failed/u,
+      );
+    else await run;
+    assert.deepEqual(events.slice(0, 3), [
+      "start-loki",
+      "start-prometheus",
+      "start-tempo",
+    ]);
+    assert.ok(events.lastIndexOf("end-tempo") < events.indexOf("restore-loki"));
+    assert.deepEqual(events.slice(-4), [
+      "restore-loki",
+      "restore-prometheus",
+      "restore-tempo",
+      "readback",
+    ]);
+    assert.deepEqual(
+      context.cleanupErrors,
+      restoreFails
+        ? [
+            "Loki retention restore: loki restore failed",
+            "Prometheus retention restore: prometheus restore failed",
+            "Tempo retention restore: tempo restore failed",
+          ]
+        : [],
+    );
+    if (restoreFails)
+      assert.equal(
+        observabilityGateComplete({ cleanupErrors: context.cleanupErrors }),
+        false,
+      );
+    assert.deepEqual(
+      Object.keys(evidence.retention).sort(),
+      failObserver
+        ? ["loki", "restoredEffective", "tempo"]
+        : ["loki", "prometheus", "restoredEffective", "tempo"],
+    );
+  }
+  const earlyEvents = [];
+  const earlyContext = {
+    evidence: { retention: {} },
+    cleanupErrors: [],
+    cleanError: (error) => error.message,
+    originalLokiConfig: {},
+    writeLokiConfig: async () => {
+      earlyEvents.push("restore-loki");
+      throw new Error("restore unavailable");
+    },
+    readEffective: async () => {
+      earlyEvents.push("readback");
+      return {};
+    },
+  };
+  const earlyRun = runInNewContext(
+    `(async () => { ${init} try { ${loki} throw new Error("prepare failed"); ${finish} })()`,
+    earlyContext,
+  );
+  await assert.rejects(earlyRun, /prepare failed/u);
+  assert.deepEqual(earlyEvents, ["restore-loki", "readback"]);
+  assert.equal(earlyContext.cleanupErrors.length, 1);
 });

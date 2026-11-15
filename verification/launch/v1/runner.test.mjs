@@ -9,9 +9,11 @@ import {
 import {
   access,
   chmod,
+  cp,
   mkdir,
   mkdtemp,
   readFile,
+  readdir,
   rename,
   rm,
   stat,
@@ -23,23 +25,36 @@ import fsPromises from "node:fs/promises";
 import { syncBuiltinESMExports } from "node:module";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { Readable } from "node:stream";
-import { pathToFileURL } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import test from "node:test";
 import {
   captureKafkaNamespaceArtifact,
+  applyLaunchImageEvidence,
+  assertFromPredecessors,
+  assertResumeIdentity,
+  blockingPredecessors,
   executeArgv,
+  executeRun,
+  finishRuntimeImageOwnership,
   gateBudgetMs,
   loadMatrix,
   normalizeCandidateInputModes,
+  profileBudgetMs,
+  readLaunchImageEvidence,
   parseArgs as parseLaunchArguments,
+  resumableGateRecords,
   runGate,
+  selectGates,
+  SKIPPED_BY_FILTER,
   splitCommand,
   validateRunResult,
+  validateLaunchDataTempDir,
   verifyGateArtifacts,
   writeRedactedStream,
 } from "./run.mjs";
+
 import {
   EXPECTED_GATES,
   finalizeReport,
@@ -47,6 +62,7 @@ import {
   validateKafkaNamespaceInventory,
   validateRunResultContract,
 } from "./report.mjs";
+import { decisive, reportGateStatus } from "./decision.mjs";
 import { LEGACY_GATE_IDS } from "./gate-identity.mjs";
 import {
   CANONICAL_DATABASE_OWNERS,
@@ -78,25 +94,35 @@ import {
   captureAromaPhaseFailureFacts,
   computeExistingAccountFingerprint,
   createAromaMutationGrant,
+  createAromaSandboxCheckout,
+  buildAromaSandboxChildConfig,
+  handleControlledAromaSandboxChildFailure,
+  readApprovedAromaSandboxPolicy,
   createAromaProviderMutationGuard,
   inspectAromaProfile,
   loadAromaPackingWireProof,
   normalizeCleanupFailureOutcome,
   parseArguments as parseAromaArguments,
+  runControlledAromaSandboxParent,
   safeAromaConvergenceEvidence,
   safeAromaDiagnostic,
   safeAromaFailureCode,
   safeAromaPhaseFailureEvidence,
+  sanitizeControlledAromaSandboxRecovery,
   startAcknowledgementDropProxy,
   validateAromaPackingWireProof,
+  validateControlledAromaSandboxResult,
+  verifyControlledAromaSandboxEvidence,
   waitForAromaRestartEligibility,
 } from "./scenarios/aroma-sandbox.mjs";
 import {
   parseTapSummary,
   tapSummaryPassed,
 } from "./scenarios/owner-suites.mjs";
+import { aromaSandboxResourceNames } from "./scenarios/aroma-sandbox-resources.mjs";
 import {
   attachRollbackDisabledReconcileSubstage,
+  createRollbackBaseline,
   createRollbackCheckouts,
   createRollbackFailureReceipt,
   inspectLaunchCheckout,
@@ -105,6 +131,7 @@ import {
   runManagedRollbackChild,
   ROLLBACK_DISABLED_RECONCILE_SUBSTAGES,
   validateRollbackLineage,
+  validateRollbackBaseline,
   validateRollbackFailureArtifact,
   validateRollbackRuntimeArtifact,
   writeRollbackRuntimeArtifact,
@@ -146,6 +173,287 @@ import {
   writeUnitEvidenceArtifacts,
 } from "./scenarios/unit.mjs";
 import { selectFormatPaths } from "../../../scripts/format.mjs";
+
+void test("launch controller reaches evidence preflight without compiled services", async (t) => {
+  const source = fileURLToPath(new URL("../../..", import.meta.url));
+  const temporary = await mkdtemp(join(tmpdir(), "launch-controller-test-"));
+  t.after(() => rm(temporary, { recursive: true, force: true }));
+  const controller = join(temporary, "controller");
+  const outside = join(temporary, "outside");
+  await mkdir(controller);
+  await mkdir(outside);
+  const archive = execFileSync("git", ["archive", "--format=tar", "HEAD"], {
+    cwd: source,
+    maxBuffer: 128 * 1024 * 1024,
+  });
+  execFileSync("tar", ["-x", "-C", controller], { input: archive });
+  for (const path of [
+    "tools/compose-smoke.mjs",
+    "tools/image-inventory.mjs",
+    "tools/runtime-image-inventory.mjs",
+    "verification/launch/v1/decision.mjs",
+    "verification/launch/v1/run.mjs",
+  ])
+    await cp(join(source, path), join(controller, path));
+  await rm(join(controller, "evidence/launch"), {
+    recursive: true,
+    force: true,
+  });
+  const git = (...args) =>
+    execFileSync("git", args, { cwd: controller, stdio: "ignore" });
+  git("init", "-q");
+  git("add", "-A");
+  git(
+    "-c",
+    "user.name=Test",
+    "-c",
+    "user.email=test@example.invalid",
+    "-c",
+    "core.hooksPath=/dev/null",
+    "commit",
+    "-qm",
+    "isolated controller fixture",
+  );
+  await symlink(join(source, "node_modules"), join(controller, "node_modules"));
+  await symlink(
+    join(source, "apps/web/node_modules"),
+    join(controller, "apps/web/node_modules"),
+  );
+  await cp(
+    join(source, "packages/platform-config/dist"),
+    join(controller, "packages/platform-config/dist"),
+    { recursive: true },
+  );
+  const directories = [join(controller, "apps"), join(controller, "packages")];
+  while (directories.length) {
+    const parent = directories.pop();
+    assert.ok(parent);
+    for (const entry of await readdir(parent, { withFileTypes: true })) {
+      if (!entry.isDirectory() || entry.name === "node_modules") continue;
+      const path = join(parent, entry.name);
+      if (entry.name === "dist")
+        assert.equal(path, join(controller, "packages/platform-config/dist"));
+      else directories.push(path);
+    }
+  }
+  await writeFile(
+    join(controller, ".git/info/exclude"),
+    "/evidence/launch\n/node_modules\n/apps/web/node_modules\n",
+    { flag: "a" },
+  );
+  await symlink(outside, join(controller, "evidence/launch"));
+  assert.equal(
+    execFileSync("git", ["status", "--porcelain=v1", "--untracked-files=all"], {
+      cwd: controller,
+      encoding: "utf8",
+    }),
+    "",
+  );
+  const result = spawnSync(
+    process.execPath,
+    ["verification/launch/v1/run.mjs"],
+    {
+      cwd: controller,
+      env: { ...process.env, TMPDIR: temporary },
+      encoding: "utf8",
+      timeout: 60_000,
+    },
+  );
+  assert.equal(result.status, 1, result.stderr);
+  assert.match(
+    result.stderr,
+    /Evidence parent не является обычным каталогом: evidence\/launch/u,
+  );
+  assert.doesNotMatch(result.stderr, /ERR_MODULE_NOT_FOUND/u);
+  assert.deepEqual(await readdir(outside), []);
+});
+
+void test("launch data temporary directory is private, canonical and gate scoped", async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), "launch-data-temp-test-"));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const privateDir = join(directory, "data");
+  await mkdir(privateDir, { mode: 0o700 });
+  assert.deepEqual(parseLaunchArguments(["--data-temp-dir", privateDir]), {
+    dataTempDir: privateDir,
+  });
+  for (const args of [
+    ["--data-temp-dir"],
+    ["--data-temp-dir", "relative"],
+    ["--data-temp-dir", `${privateDir}/../data`],
+    ["--data-temp-dir", privateDir, "--data-temp-dir", privateDir],
+  ])
+    assert.throws(() => parseLaunchArguments(args), /data-temp-dir/u);
+  assert.equal(await validateLaunchDataTempDir(privateDir), privateDir);
+  await assert.rejects(validateLaunchDataTempDir(join(directory, "missing")));
+  await assert.rejects(
+    executeRun({ dataTempDir: "relative" }),
+    /data-temp-dir/u,
+  );
+  const link = join(directory, "link");
+  await symlink(privateDir, link);
+  await assert.rejects(validateLaunchDataTempDir(link));
+  await mkdir(join(privateDir, "nested"), { mode: 0o700 });
+  await assert.rejects(validateLaunchDataTempDir(join(link, "nested")));
+  await chmod(privateDir, 0o755);
+  await assert.rejects(validateLaunchDataTempDir(privateDir), /private owned/u);
+  await chmod(privateDir, 0o700);
+  const uid = process.getuid();
+  t.mock.method(process, "getuid", () => uid + 1);
+  await assert.rejects(validateLaunchDataTempDir(privateDir), /private owned/u);
+  t.mock.restoreAll();
+
+  const prior = {
+    TMPDIR: process.env.TMPDIR,
+    COFFEE_LAUNCH_DATA_TEMP_DIR: process.env.COFFEE_LAUNCH_DATA_TEMP_DIR,
+  };
+  process.env.TMPDIR = "/tmp/launch-original-temp";
+  process.env.COFFEE_LAUNCH_DATA_TEMP_DIR = "/tmp/untrusted-inherited";
+  try {
+    for (const [index, [gateId, expectedTmp, expectedData, configured]] of [
+      ["supply_chain", "/tmp/launch-original-temp", privateDir, true],
+      ["observability", privateDir, null, true],
+      ["integration", "/tmp/launch-original-temp", null, true],
+      ["supply_chain", "/tmp/launch-original-temp", null, false],
+    ].entries()) {
+      const stdout = join(directory, `${gateId}-${index}.out`);
+      const stderr = join(directory, `${gateId}-${index}.err`);
+      const run = await executeArgv(
+        [
+          process.execPath,
+          "-e",
+          "process.stdout.write(JSON.stringify({tmp:process.env.TMPDIR,data:process.env.COFFEE_LAUNCH_DATA_TEMP_DIR??null}))",
+        ],
+        directory,
+        10_000,
+        stdout,
+        stderr,
+        undefined,
+        null,
+        { gateId, dataTempDir: configured ? privateDir : undefined },
+      );
+      assert.equal(run.exitCode, 0);
+      assert.deepEqual(JSON.parse(await readFile(stdout, "utf8")), {
+        tmp: expectedTmp,
+        data: expectedData,
+      });
+    }
+  } finally {
+    for (const [key, value] of Object.entries(prior)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
+});
+
+void test("image cleanup completes before ownership can pass; unknown cleanup fails the gate", () => {
+  const ownership = {
+    projectName: "coffee-launch-test",
+    images: [],
+    phase: "ready",
+  };
+  const gate = { status: "PASS" };
+  assert.equal(
+    finishRuntimeImageOwnership(ownership, gate, () => {
+      assert.equal(ownership.phase, "ready");
+      throw new Error("cannot inspect image");
+    }),
+    false,
+  );
+  assert.equal(ownership.phase, "cleanup-failed");
+  assert.equal(gate.status, "FAIL");
+  assert.match(gate.reason, /cannot inspect image/);
+  ownership.phase = "ready";
+  gate.status = "PASS";
+  assert.equal(
+    finishRuntimeImageOwnership(ownership, gate, () => {
+      assert.equal(ownership.phase, "ready");
+    }),
+    true,
+  );
+  assert.equal(ownership.phase, "cleaned");
+  ownership.phase = "ready";
+  ownership.baseline = [
+    { imageId: `sha256:${"a".repeat(64)}`, references: ["foreign:latest"] },
+  ];
+  ownership.baselineSha256 = "0".repeat(64);
+  gate.status = "PASS";
+  let called = false;
+  assert.equal(
+    finishRuntimeImageOwnership(ownership, gate, () => {
+      called = true;
+    }),
+    false,
+  );
+  assert.equal(called, false);
+  assert.equal(gate.status, "FAIL");
+  assert.match(gate.reason, /baseline hash mismatch/u);
+  ownership.phase = "ready";
+  ownership.baselineSha256 = createHash("sha256")
+    .update(JSON.stringify(ownership.baseline))
+    .digest("hex");
+  gate.status = "PASS";
+  assert.equal(
+    finishRuntimeImageOwnership(
+      ownership,
+      gate,
+      (_project, _images, _run, baseline) => {
+        assert.deepEqual(baseline, ownership.baseline);
+      },
+    ),
+    true,
+  );
+});
+
+void test("report runs image cleanup before writing the final decision", async () => {
+  const source = await readFile(new URL("./run.mjs", import.meta.url), "utf8");
+  const gates = source.indexOf(
+    "for (let index = 0; index < matrix.gates.length",
+  );
+  const report = source.indexOf('if (gate.id === "report")', gates);
+  const cleanup = source.indexOf(
+    "imageCleanupVerified = finishRuntimeImageOwnership(",
+    report,
+  );
+  const defects = source.indexOf(
+    "await writeDefects(evidenceDir, ROOT, result)",
+    report,
+  );
+  assert.ok(
+    gates >= 0 && report > gates && cleanup > report && defects > cleanup,
+  );
+});
+
+void test("runner passes the artifact manifest only when explicitly selected", async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), "launch-image-env-"));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const marker = join(directory, "artifact-manifest.json");
+  for (const { name, options, expected } of [
+    { name: "normal", options: {}, expected: "" },
+    {
+      name: "manifest",
+      options: { imageManifestPath: marker },
+      expected: marker,
+    },
+  ]) {
+    const stdout = join(directory, `${name}.out`);
+    const result = await executeArgv(
+      [
+        process.execPath,
+        "-e",
+        "process.stdout.write(process.env.COFFEE_LAUNCH_IMAGE_OWNERSHIP || '')",
+      ],
+      directory,
+      5000,
+      stdout,
+      join(directory, `${name}.err`),
+      undefined,
+      null,
+      options,
+    );
+    assert.equal(result.exitCode, 0);
+    assert.equal(await readFile(stdout, "utf8"), expected);
+  }
+});
 
 const rollbackGit = (cwd, ...args) =>
   execFileSync("git", args, {
@@ -372,6 +680,110 @@ void test("owner-suite TAP summary rejects empty or omitted integration/recovery
   ]) {
     assert.equal(tapSummaryPassed(parseTapSummary(summary)), false, summary);
   }
+});
+
+void test("rollback baseline child changes only the approved parent mutation flag", async (t) => {
+  const fixture = await rollbackGitFixture(t);
+  const base = await createRollbackBaseline({
+    candidateRoot: fixture.roots.disabled,
+    candidateSha: fixture.disabledSha,
+  });
+  t.after(() => rm(base.directory, { recursive: true, force: true }));
+  assert.equal(base.lineage.parent.commitSha, fixture.disabledSha);
+  assert.equal(base.lineage.baseline.commitSha, base.baselineSha);
+  await assert.rejects(
+    validateRollbackBaseline({
+      parentRoot: fixture.roots.disabled,
+      parentSha: fixture.disabledSha,
+      baselineRoot: base.baselineRoot,
+      baselineSha: "0".repeat(40),
+    }),
+    /ROLLBACK_CHECKOUT_HEAD_MISMATCH/u,
+  );
+  await assert.rejects(
+    createRollbackBaseline({
+      candidateRoot: fixture.roots.candidate,
+      candidateSha: fixture.candidateSha,
+    }),
+    /ROLLBACK_BASELINE_PARENT_FLAG_INVALID/u,
+  );
+  await writeFile(
+    join(base.baselineRoot, "config/platform.yaml"),
+    "services: {}\n",
+  );
+  await assert.rejects(
+    validateRollbackBaseline({
+      parentRoot: fixture.roots.disabled,
+      parentSha: fixture.disabledSha,
+      baselineRoot: base.baselineRoot,
+      baselineSha: base.baselineSha,
+    }),
+    /ROLLBACK_CONFIG_WORKTREE_MISMATCH/u,
+  );
+});
+
+void test("controlled config checkout retains Git objects after borrowed parent cleanup", async (t) => {
+  const fixture = await rollbackGitFixture(t);
+  const directory = await mkdtemp(join(tmpdir(), "launch-borrowed-parent-"));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const parent = join(directory, "parent");
+  execFileSync(
+    "git",
+    [
+      "clone",
+      "--quiet",
+      "--shared",
+      "--no-hardlinks",
+      fixture.roots.disabled,
+      parent,
+    ],
+    { stdio: "ignore" },
+  );
+  assert.equal(
+    (
+      await readFile(join(parent, ".git/objects/info/alternates"), "utf8")
+    ).trim(),
+    join(fixture.roots.disabled, ".git/objects"),
+  );
+  const child = await createRollbackBaseline({
+    candidateRoot: parent,
+    candidateSha: fixture.disabledSha,
+    parentDirectory: directory,
+  });
+  await rm(parent, { recursive: true, force: true });
+  assert.equal(
+    rollbackGit(child.baselineRoot, "show", `${child.baselineSha}:stable.txt`),
+    "unchanged",
+  );
+  assert.equal(
+    rollbackGit(
+      child.baselineRoot,
+      "show",
+      `${fixture.disabledSha}:stable.txt`,
+    ),
+    "unchanged",
+  );
+  await rm(fixture.roots.disabled, { recursive: true, force: true });
+  assert.equal(
+    rollbackGit(
+      child.baselineRoot,
+      "show",
+      `${fixture.disabledSha}:config/platform.yaml`,
+    ).includes("mutationsEnabled: false"),
+    true,
+  );
+  assert.equal(
+    rollbackGit(
+      child.baselineRoot,
+      "show",
+      `${child.baselineSha}:config/platform.yaml`,
+    ).includes("mutationsEnabled: true"),
+    true,
+  );
+  assert.equal(
+    rollbackGit(child.baselineRoot, "rev-parse", "HEAD^"),
+    fixture.disabledSha,
+  );
 });
 
 void test("rollback validates only a clean config-only B→D→R lineage", async (t) => {
@@ -628,7 +1040,7 @@ void test("migrations approved target is explicit, private and bound to the curr
       "--g08-expected-system-identifier",
       value.systemIdentifier,
     ]),
-    { g08ExpectedSystemIdentifier: value.systemIdentifier },
+    { migrationsExpectedSystemIdentifier: value.systemIdentifier },
   );
   for (const identifier of [undefined, "", "abc", "1".repeat(21)])
     assert.throws(
@@ -2083,8 +2495,8 @@ void test("matrix keeps all mandatory launch gates, exact order, commands and ti
   );
   assert.deepEqual(
     gates.slice(8, 18).map((gate) => gate.timeout),
-    [2700, ...Array(9).fill(1800)],
-    "supply_chain has its own inner+headroom budget; the rest stay at 1800",
+    [2700, 1800, 1800, 1800, 1800, 1800, 2700, 1800, 1800, 1800],
+    "supply_chain и observability несут измеримый запас; остальные 1800",
   );
   assert.deepEqual(splitCommand(gates[3].command), [
     ["pnpm", "format:check"],
@@ -2151,7 +2563,7 @@ void test("db_boundaries accepts only exact context-bound 10/40 runtime database
     database: databaseByOwner[owner],
     migrationCount: {
       catalog: 12,
-      customer: 2,
+      customer: 3,
       integration: 7,
       orders: 24,
       pricing: 5,
@@ -2388,7 +2800,7 @@ void test("migrations rejects receipts without exact derived targets and cleanup
   await mkdir(artifactDir, { recursive: true });
   const owners = [
     ["catalog", 12],
-    ["customer", 2],
+    ["customer", 3],
     ["integration", 7],
     ["orders", 24],
     ["pricing", 5],
@@ -2768,6 +3180,850 @@ void test("browser failed gate records only a matching child failure receipt", a
   );
   assert.deepEqual(wrongIdentity.artifacts, []);
   assert.equal(wrongIdentity.status, "FAIL");
+});
+
+function syntheticControlledAromaSandboxResult(context, policy, image) {
+  const names = aromaSandboxResourceNames(context.runId);
+  const phase = (name, fields = {}) => ({
+    phase: name,
+    status: "PASS",
+    ...fields,
+  });
+  return {
+    gate: "aroma_sandbox",
+    status: "PASS",
+    code: "CONTROLLED_LIVE_SCENARIO_COMPLETE",
+    ...context,
+    accountFingerprint: policy.accountFingerprint,
+    selected: { offerRef: "offer" },
+    cleanup: { removed: true, retained: false },
+    resourceIDs: {
+      runId: context.runId,
+      image,
+      imageId: `sha256:${"4".repeat(64)}`,
+      container: { name: names.container, id: "5".repeat(64) },
+      network: { name: names.network, id: "6".repeat(64) },
+      databaseSystemIdentifier: "123",
+    },
+    baselineFingerprint: "baseline",
+    finalFingerprint: "baseline",
+    mutationJournalRows: 3,
+    unknownOperationRef: "unknown",
+    phases: [
+      phase("baseline-read", {
+        cartFingerprint: "baseline",
+        lineCount: 0,
+        capturedAtUtc: "2026-10-31T12:35:00.000Z",
+      }),
+      phase("noop", {
+        workDirty: false,
+        observedLineCount: 0,
+        gatewayJournalRows: 0,
+      }),
+      phase("single-mutation", {
+        workDirty: false,
+        gateway: { operationKind: "SetLineQuantity", state: "Acknowledged" },
+        observedLines: [{ offerRef: "offer", quantityMilli: "1000" }],
+      }),
+      phase("lost-response", {
+        workDirty: true,
+        reservation: {
+          state: "UnknownOutcome",
+          resolved: false,
+          operationRef: "unknown",
+        },
+        gateway: { state: "Acknowledged" },
+        droppedAcknowledgementCount: 1,
+      }),
+      phase("restart-reconcile", {
+        workDirty: false,
+        reservation: { resolved: true, operationRef: "unknown" },
+        oldOperationJournalRows: 1,
+      }),
+      phase("restore", {
+        workDirty: false,
+        gateway: { operationKind: "RemoveLine", state: "Acknowledged" },
+        observedLineCount: 0,
+      }),
+      phase("final-read", {
+        cartFingerprint: "baseline",
+        matchesBaseline: true,
+        lineCount: 0,
+      }),
+    ],
+  };
+}
+
+void test("aroma_sandbox controlled result requires bound phases, restore and owned cleanup", () => {
+  const context = {
+    runId: "20261031T123456Z-abcdef0",
+    candidateSha: `abcdef0${"1".repeat(33)}`,
+  };
+  const policy = { accountFingerprint: `sha256:${"2".repeat(64)}` };
+  const image = `postgres:17.11-alpine@sha256:${"3".repeat(64)}`;
+  const value = syntheticControlledAromaSandboxResult(context, policy, image);
+  assert.equal(
+    validateControlledAromaSandboxResult(value, context, policy, image),
+    value,
+  );
+  for (const mutate of [
+    (v) => {
+      v.candidateSha = "f".repeat(40);
+    },
+    (v) => {
+      v.resourceIDs.image = "postgres:17.11-alpine";
+    },
+    (v) => {
+      v.resourceIDs.imageId = "";
+    },
+    (v) => {
+      v.cleanup.removed = false;
+    },
+    (v) => {
+      v.cleanup.retained = true;
+    },
+    (v) => {
+      v.phases[3].reservation.resolved = true;
+    },
+    (v) => {
+      v.phases[4].oldOperationJournalRows = 2;
+    },
+    (v) => {
+      v.phases[5].status = "FAIL";
+    },
+    (v) => {
+      v.finalFingerprint = "different";
+    },
+    (v) => {
+      v.phases.pop();
+    },
+  ]) {
+    const altered = structuredClone(value);
+    mutate(altered);
+    assert.throws(
+      () =>
+        validateControlledAromaSandboxResult(altered, context, policy, image),
+      /G16_CHILD_RESULT_INVALID/u,
+    );
+  }
+});
+
+void test("aroma_sandbox parent persists sanitized recovery from a failed managed child", async (t) => {
+  const root = fileURLToPath(new URL("../../..", import.meta.url));
+  const parent = {
+    runId: "20261031T120000Z-1234567",
+    candidateSha: execFileSync("git", ["rev-parse", "HEAD"], {
+      cwd: root,
+      encoding: "utf8",
+    }).trim(),
+  };
+  const childContext = {
+    runId: "20261031T123456Z-abcdef0",
+    candidateSha: `abcdef0${"1".repeat(33)}`,
+  };
+  const policy = await readApprovedAromaSandboxPolicy(
+    root,
+    parent.candidateSha,
+  );
+  const image = JSON.parse(
+    await readFile(join(root, "config/toolchain-versions.json"), "utf8"),
+  ).postgresImage;
+  const names = aromaSandboxResourceNames(childContext.runId);
+  const outcome = {
+    gate: "aroma_sandbox",
+    status: "FAIL",
+    code: "RECOVERY_REQUIRED",
+    ...childContext,
+    mode: policy.mode,
+    origin: policy.origin,
+    accountFingerprint: policy.accountFingerprint,
+    secret: "NO_LEAK_SENTINEL",
+    recovery: {
+      runId: childContext.runId,
+      stage: "phases",
+      failureCode: "AROMA_RESTART_RECOVERY_FAILED",
+      diagnostic: { substage: "selection", ownerCode: "NO_LEAK_SENTINEL" },
+      cartState: "UNRESOLVED_OR_NONBASELINE",
+      mutationsDisabled: true,
+      requiredAction:
+        "CONTROLLED_AROMA_SANDBOX_RECOVERY_BEFORE_RESOURCE_CLEANUP",
+      cleanup: { removed: false, retained: true },
+      resourceIDs: {
+        runId: childContext.runId,
+        image,
+        imageId: `sha256:${"4".repeat(64)}`,
+        container: {
+          name: names.container,
+          id: "5".repeat(64),
+          label: "coffee.g16.run-id",
+        },
+        network: {
+          name: names.network,
+          id: "6".repeat(64),
+          label: "coffee.g16.run-id",
+        },
+        databaseSystemIdentifier: "7613370342949990434",
+      },
+    },
+    failureEvidence: {
+      partialPhaseEvidence: [
+        {
+          phase: "baseline-read",
+          status: "PASS",
+          capturedAtUtc: "2026-10-31T12:00:00Z",
+        },
+        {
+          phase: "single-mutation",
+          status: "FAIL",
+          capturedAtUtc: "2026-10-31T12:01:00Z",
+        },
+      ],
+      convergenceEvidence: {
+        latestAttempt: {
+          state: "UnknownOutcome",
+          failureCode: "AROMA_OPERATION_UNKNOWN_OUTCOME",
+          blockerCodes: [],
+          selectedAction: "SetQuantity",
+          selectedOfferMatches: true,
+        },
+        reservationStateCounts: [{ state: "UnknownOutcome", count: 1 }],
+        gatewayJournalStateCounts: [],
+      },
+    },
+  };
+  const directory = await mkdtemp(join(tmpdir(), "coffee-g16-failure-test-"));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  for (const [name, line, signerApproved, expected] of [
+    ["valid", JSON.stringify(outcome), true, "RECOVERY_REQUIRED"],
+    ["malformed", "{NO_LEAK_SENTINEL", true, "G16_CHILD_FAILURE_UNVERIFIED"],
+    [
+      "unapproved",
+      JSON.stringify(outcome),
+      false,
+      "G16_CHILD_FAILURE_UNVERIFIED",
+    ],
+    [
+      "foreign",
+      JSON.stringify({ ...outcome, candidateSha: "0".repeat(40) }),
+      true,
+      "G16_CHILD_FAILURE_UNVERIFIED",
+    ],
+  ]) {
+    const artifacts = join(directory, name);
+    await mkdir(artifacts, { mode: 0o700 });
+    const source = `process.stdout.write(${JSON.stringify(`${line}\n`)});process.stderr.write('NO_LEAK_SENTINEL');process.exitCode=1`;
+    let failure;
+    try {
+      await runManagedRollbackChild({
+        args: ["--input-type=module", "-e", source],
+        cwd: root,
+        env: process.env,
+      }).catch((error) =>
+        handleControlledAromaSandboxChildFailure({
+          error,
+          parent,
+          childContext,
+          candidateRoot: root,
+          signerApproved,
+          approvalRequests: 1,
+          artifacts,
+        }),
+      );
+      assert.fail("failed child must reject");
+    } catch (error) {
+      failure = error;
+    }
+    assert.equal(failure.message, expected);
+    assert.equal(safeAromaFailureCode(failure), expected);
+    const path = join(artifacts, "controlled-child-failure.json");
+    const bytes = await readFile(path);
+    const receipt = JSON.parse(bytes);
+    assert.equal((await stat(path)).mode & 0o777, 0o600);
+    assert.equal(
+      createHash("sha256").update(bytes).digest("hex"),
+      failure.safeDetails.failureReceipt.sha256,
+    );
+    assert.equal(receipt.status, "FAIL");
+    assert.equal(receipt.code, expected);
+    assert.equal(receipt.childFailure, "ROLLBACK_CHILD_FAILED");
+    assert.equal(bytes.includes("NO_LEAK_SENTINEL"), false);
+    assert.equal(
+      JSON.stringify(failure.safeDetails).includes("NO_LEAK_SENTINEL"),
+      false,
+    );
+    if (name === "valid") {
+      assert.equal(receipt.recovery.resourceIDs.container.id, "5".repeat(64));
+      assert.equal(receipt.failureEvidence.partialPhaseEvidence.length, 2);
+      assert.deepEqual(failure.safeDetails.recovery, receipt.recovery);
+    } else assert.equal(receipt.recovery, undefined);
+  }
+  for (const mutate of [
+    (value) => {
+      value.runId = "foreign";
+    },
+    (value) => {
+      value.candidateSha = "0".repeat(40);
+    },
+    (value) => {
+      value.accountFingerprint = "foreign";
+    },
+    (value) => {
+      value.recovery.resourceIDs.network.id = "foreign";
+    },
+    (value) => {
+      value.recovery.cleanup.retained = false;
+    },
+    (value) => {
+      value.failureEvidence.partialPhaseEvidence.at(-1).status = "PASS";
+    },
+  ]) {
+    const altered = structuredClone(outcome);
+    mutate(altered);
+    assert.equal(
+      sanitizeControlledAromaSandboxRecovery(
+        altered,
+        childContext,
+        policy,
+        image,
+      ),
+      null,
+    );
+  }
+});
+
+void test("aroma_sandbox signer locator requires a single absolute path", () => {
+  assert.deepEqual(
+    parseLaunchArguments(["--g16-signer", "/tmp/g16-operator.mjs"]),
+    { g16SignerPath: "/tmp/g16-operator.mjs" },
+  );
+  for (const args of [
+    ["--g16-signer"],
+    ["--g16-signer", "relative"],
+    ["--g16-signer", "/a", "--g16-signer", "/b"],
+  ])
+    assert.throws(() => parseLaunchArguments(args), /g16-signer/u);
+});
+
+void test("aroma_sandbox parent joins a refused signer without touching foreign tmpfs", async () => {
+  const root = await mkdtemp(join(tmpdir(), "coffee-g16-refusal-test-"));
+  const foreign = await mkdtemp("/dev/shm/coffee-g16-operator-");
+  try {
+    const signer = join(root, "signer.mjs");
+    const joined = join(root, "signer-joined");
+    const child = join(root, "child-must-not-exist");
+    const foreignMarker = join(foreign, "foreign-resource");
+    await writeFile(foreignMarker, "preserve");
+    await writeFile(
+      signer,
+      `import { writeFileSync } from "node:fs";
+process.on("SIGTERM", () => { writeFileSync(${JSON.stringify(joined)}, "joined"); process.exit(0); });
+process.stdout.write(JSON.stringify({ mode: "INVALID", approvalFile: ${JSON.stringify(join(foreign, "approval.json"))}, approver: "g16-operator" }) + "\\n");
+setInterval(() => {}, 1000);
+`,
+    );
+    await assert.rejects(
+      runControlledAromaSandboxParent({
+        parentIdentity: {
+          context: {},
+          sourceRoot: root,
+          candidateRoot: child,
+          evidenceDir: root,
+        },
+        parentContextPath: join(root, "missing-context"),
+        signerPath: signer,
+      }),
+      /G16_SIGNER_READY_INVALID/u,
+    );
+    assert.equal(await readFile(joined, "utf8"), "joined");
+    assert.equal(await readFile(foreignMarker, "utf8"), "preserve");
+    await assert.rejects(access(child), { code: "ENOENT" });
+    await assert.rejects(access(join(root, "gates")), { code: "ENOENT" });
+  } finally {
+    await rm(root, { recursive: true, force: true });
+    await rm(foreign, { recursive: true, force: true });
+  }
+});
+
+void test("aroma_sandbox controlled evidence rejects unknown cleanup and altered child context", async () => {
+  const root = await mkdtemp(join(tmpdir(), "coffee-g16-parent-test-"));
+  try {
+    const artifacts = join(root, "gates/aroma_sandbox/artifacts");
+    await mkdir(artifacts, { recursive: true });
+    const parentIdentity = {
+      evidenceDir: root,
+      sourceRoot: root,
+      candidateRoot: root,
+      context: {
+        runId: "20261031T123456Z-abcdef0",
+        candidateSha: `abcdef0${"1".repeat(33)}`,
+      },
+    };
+    const receipt = {
+      schemaVersion: 1,
+      ...parentIdentity.context,
+      signerSha256: "a".repeat(64),
+      cleanup: {
+        checkoutRemoved: true,
+        evidenceRemoved: true,
+        signerRemoved: false,
+      },
+    };
+    const path = join(artifacts, "controlled-parent.json");
+    await writeFile(path, JSON.stringify(receipt));
+    await assert.rejects(
+      verifyControlledAromaSandboxEvidence({
+        parentIdentity,
+        parentContextPath: "/parent",
+      }),
+      /G16_PARENT_RECEIPT_INVALID/u,
+    );
+    receipt.cleanup.signerRemoved = true;
+    receipt.childContextSha256 = "b".repeat(64);
+    await writeFile(path, JSON.stringify(receipt));
+    await writeFile(join(artifacts, "controlled-child-context.json"), "{}");
+    await assert.rejects(
+      verifyControlledAromaSandboxEvidence({
+        parentIdentity,
+        parentContextPath: "/parent",
+      }),
+      /G16_PARENT_ARTIFACT_HASH_INVALID/u,
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+void test("aroma_sandbox controlled evidence verifies signed child bundle and rejects altered binding", async () => {
+  const temporary = await mkdtemp(join(tmpdir(), "coffee-g16-evidence-test-"));
+  let child;
+  let parentEvidenceDir;
+  const previousAgeKey = process.env.SOPS_AGE_KEY_FILE;
+  try {
+    const candidateRoot = join(temporary, "parent");
+    execFileSync(
+      "git",
+      [
+        "clone",
+        "--quiet",
+        "--shared",
+        "--no-hardlinks",
+        process.cwd(),
+        candidateRoot,
+      ],
+      { stdio: "ignore" },
+    );
+    const git = (...args) =>
+      execFileSync("git", args, {
+        cwd: candidateRoot,
+        encoding: "utf8",
+      }).trim();
+    git(
+      "remote",
+      "set-url",
+      "origin",
+      "https://github.com/YurGusev/CoffeeOrderPlatform",
+    );
+    const ageKey = join(temporary, "synthetic-age-key");
+    execFileSync("age-keygen", ["-o", ageKey], { stdio: "ignore" });
+    await chmod(ageKey, 0o600);
+    const recipient = execFileSync("age-keygen", ["-y", ageKey], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim();
+    await writeFile(
+      join(candidateRoot, ".sops.yaml"),
+      `creation_rules:\n  - path_regex: secrets/platform\\.secrets\\.sops\\.yaml$\n    age:\n      - ${recipient}\n`,
+    );
+    git("add", "--", ".sops.yaml");
+    git(
+      "-c",
+      "user.name=aroma_sandbox synthetic test",
+      "-c",
+      "user.email=fixture@example.invalid",
+      "commit",
+      "--quiet",
+      "-m",
+      "synthetic recipient",
+    );
+    const candidateSha = git("rev-parse", "HEAD");
+    git("checkout", "--quiet", "--detach", candidateSha);
+    const keys = generateKeyPairSync("ed25519");
+    const publicKeyPem = keys.publicKey
+      .export({ type: "spki", format: "pem" })
+      .toString();
+    const keyId = `g16-${createHash("sha256")
+      .update(keys.publicKey.export({ type: "spki", format: "der" }))
+      .digest("hex")
+      .slice(0, 20)}`;
+    const signer = { publicKeyPem, keyId, approver: "g16-operator" };
+    child = await createAromaSandboxCheckout({
+      candidateRoot,
+      candidateSha,
+      ...signer,
+    });
+    const hash = (bytes) => createHash("sha256").update(bytes).digest("hex");
+    const sourceRoot = await fsPromises.realpath(process.cwd());
+    const parentRunId = `20261031T123400Z-${candidateSha.slice(0, 7)}`;
+    const evidenceDir = join(sourceRoot, "evidence/launch", parentRunId);
+    const parentContextPath = join(evidenceDir, "context.json");
+    await mkdir(evidenceDir, { mode: 0o700 });
+    parentEvidenceDir = evidenceDir;
+    const parent = {
+      schemaVersion: 1,
+      runId: parentRunId,
+      candidateSha,
+      acceptedBaseCommit: candidateSha,
+      checkoutDir: candidateRoot,
+      sourceRepoRoot: sourceRoot,
+      evidenceDir,
+      baseConfigSha256: hash(
+        await readFile(join(candidateRoot, "config/platform.yaml")),
+      ),
+    };
+    await writeFile(parentContextPath, JSON.stringify(parent), { mode: 0o400 });
+    const runId = `20261031T123456Z-${child.baselineSha.slice(0, 7)}`;
+    const context = {
+      runId,
+      candidateSha: child.baselineSha,
+      sourceRepoRoot: sourceRoot,
+      acceptedBaseCommit: candidateSha,
+      baseConfigSha256: hash(
+        await readFile(join(child.baselineRoot, "config/platform.yaml")),
+      ),
+      evidenceDir: join(sourceRoot, "evidence/launch", runId),
+      resources: {
+        composeProject: `coffee-launch-${runId.toLowerCase()}`,
+        kafkaPrefix: runId,
+        controlledScope: "aroma_sandbox",
+        controlledParentContextPath: parentContextPath,
+        controlledParentCandidateSha: candidateSha,
+        controlledParentRunId: parent.runId,
+      },
+    };
+    const policy = await readApprovedAromaSandboxPolicy(
+      candidateRoot,
+      candidateSha,
+    );
+    const toolchain = JSON.parse(
+      await readFile(
+        join(candidateRoot, "config/toolchain-versions.json"),
+        "utf8",
+      ),
+    );
+    const outcome = syntheticControlledAromaSandboxResult(
+      context,
+      policy,
+      toolchain.postgresImage,
+    );
+    const approval = {
+      schemaVersion: 1,
+      runId,
+      candidateSha: child.baselineSha,
+      mode: policy.mode,
+      origin: policy.origin,
+      exceptionAuthority: "user-2026-10-23",
+      accountFingerprint: policy.accountFingerprint,
+      offerRef: "offer",
+      maximumQuantity: "2",
+      approver: signer.approver,
+      keyId,
+      issuedAtUtc: "2026-10-31T12:34:00.000Z",
+      expiresAtUtc: "2026-10-31T13:34:00.000Z",
+    };
+    const approvalBytes = Buffer.from(JSON.stringify(approval));
+    const signature = Buffer.from(
+      sign(null, approvalBytes, keys.privateKey).toString("base64"),
+    );
+    const bundle = await writeRollbackLineageBundle({
+      candidateSha,
+      restoredRoot: child.baselineRoot,
+      restoredSha: child.baselineSha,
+      evidenceDir,
+      scope: "aroma_sandbox",
+    });
+    const artifacts = join(evidenceDir, "gates/aroma_sandbox/artifacts");
+    const encrypt = (bytes) =>
+      execFileSync("age", ["--recipient", recipient], {
+        input: bytes,
+        stdio: ["pipe", "pipe", "pipe"],
+      });
+    const approvalCiphertext = encrypt(approvalBytes);
+    const signatureCiphertext = encrypt(signature);
+    const files = [
+      ["controlled-child-context.json", Buffer.from(JSON.stringify(context))],
+      ["controlled-child-result.json", Buffer.from(JSON.stringify(outcome))],
+      ["controlled-approval.json.age", approvalCiphertext],
+      ["controlled-approval.sig.age", signatureCiphertext],
+    ];
+    for (const [name, bytes] of files)
+      await writeFile(join(artifacts, name), bytes, { mode: 0o600 });
+    const receipt = {
+      schemaVersion: 1,
+      ...parent,
+      childRunId: runId,
+      childSha: child.baselineSha,
+      signer,
+      signerSha256: "a".repeat(64),
+      bundleSha256: bundle.sha256,
+      childContextSha256: hash(files[0][1]),
+      childResultSha256: hash(files[1][1]),
+      approvalSha256: hash(approvalBytes),
+      signatureSha256: hash(signature),
+      approvalCiphertextSha256: hash(approvalCiphertext),
+      signatureCiphertextSha256: hash(signatureCiphertext),
+      cleanup: {
+        checkoutRemoved: true,
+        evidenceRemoved: true,
+        signerRemoved: true,
+      },
+    };
+    const receiptPath = join(artifacts, "controlled-parent.json");
+    await writeFile(receiptPath, JSON.stringify(receipt));
+    const parentIdentity = {
+      candidateRoot,
+      sourceRoot,
+      evidenceDir,
+      context: parent,
+    };
+    const verifyEvidence = (key = ageKey) =>
+      verifyControlledAromaSandboxEvidence({
+        parentIdentity,
+        parentContextPath,
+        env: { ...process.env, SOPS_AGE_KEY_FILE: key },
+      });
+    assert.equal(
+      await access(join(artifacts, "controlled-approval.json")).then(
+        () => true,
+        () => false,
+      ),
+      false,
+    );
+    assert.equal(
+      await access(join(artifacts, "controlled-approval.sig")).then(
+        () => true,
+        () => false,
+      ),
+      false,
+    );
+    assert.equal(approvalCiphertext.includes(approvalBytes), false);
+    assert.equal(signatureCiphertext.includes(signature), false);
+    assert.equal((await verifyEvidence()).childSha, child.baselineSha);
+    process.env.SOPS_AGE_KEY_FILE = ageKey;
+    const gate = { id: "aroma_sandbox" };
+    const pendingRecord = () => ({
+      status: "NOT_RUN",
+      runs: [],
+      artifacts: [],
+    });
+    const accepted = pendingRecord();
+    assert.equal(await verifyGateArtifacts(gate, accepted, evidenceDir), null);
+    assert.equal(accepted.artifacts.length, 7);
+    const ciphertextPath = join(artifacts, "controlled-approval.json.age");
+    await unlink(ciphertextPath);
+    const missing = pendingRecord();
+    assert.match(
+      await verifyGateArtifacts(gate, missing, evidenceDir),
+      /aroma_sandbox controlled child failed/u,
+    );
+    assert.deepEqual(missing.artifacts, []);
+    await writeFile(ciphertextPath, approvalCiphertext, { mode: 0o600 });
+    delete receipt.cleanup.signerRemoved;
+    await writeFile(receiptPath, JSON.stringify(receipt));
+    const missingCleanup = pendingRecord();
+    assert.match(
+      await verifyGateArtifacts(gate, missingCleanup, evidenceDir),
+      /aroma_sandbox controlled child failed/u,
+    );
+    assert.deepEqual(missingCleanup.artifacts, []);
+    receipt.cleanup.signerRemoved = false;
+    await writeFile(receiptPath, JSON.stringify(receipt));
+    const forgedCleanup = pendingRecord();
+    assert.match(
+      await verifyGateArtifacts(gate, forgedCleanup, evidenceDir),
+      /aroma_sandbox controlled child failed/u,
+    );
+    assert.deepEqual(forgedCleanup.artifacts, []);
+    receipt.cleanup.signerRemoved = true;
+    await writeFile(receiptPath, JSON.stringify(receipt));
+    await chmod(join(artifacts, "controlled-approval.json.age"), 0o644);
+    await assert.rejects(
+      verifyEvidence(),
+      /G16_APPROVAL_CIPHERTEXT_MODE_INVALID/u,
+    );
+    await chmod(join(artifacts, "controlled-approval.json.age"), 0o600);
+    for (const name of await fsPromises.readdir(artifacts)) {
+      const persisted = await readFile(join(artifacts, name));
+      assert.equal(persisted.includes(approvalBytes), false, name);
+      assert.equal(persisted.includes(signature), false, name);
+    }
+    context.resources.controlledParentRunId = "foreign";
+    files[0][1] = Buffer.from(JSON.stringify(context));
+    await writeFile(join(artifacts, files[0][0]), files[0][1]);
+    receipt.childContextSha256 = hash(files[0][1]);
+    await writeFile(receiptPath, JSON.stringify(receipt));
+    await assert.rejects(verifyEvidence(), /G16_CHILD_CONTEXT_INVALID/u);
+    context.resources.controlledParentRunId = parent.runId;
+    files[0][1] = Buffer.from(JSON.stringify(context));
+    await writeFile(join(artifacts, files[0][0]), files[0][1]);
+    receipt.childContextSha256 = hash(files[0][1]);
+    approval.offerRef = "other";
+    const forged = Buffer.from(JSON.stringify(approval));
+    const forgedCiphertext = encrypt(forged);
+    await writeFile(
+      join(artifacts, "controlled-approval.json.age"),
+      forgedCiphertext,
+    );
+    receipt.approvalSha256 = hash(forged);
+    receipt.approvalCiphertextSha256 = hash(forgedCiphertext);
+    await writeFile(receiptPath, JSON.stringify(receipt));
+    await assert.rejects(verifyEvidence(), /G16_APPROVAL_PROOF_INVALID/u);
+    await writeFile(
+      join(artifacts, "controlled-approval.json.age"),
+      approvalCiphertext,
+    );
+    receipt.approvalSha256 = hash(approvalBytes);
+    receipt.approvalCiphertextSha256 = hash(approvalCiphertext);
+    const otherKey = generateKeyPairSync("ed25519").privateKey;
+    const forgedSignature = Buffer.from(
+      sign(null, approvalBytes, otherKey).toString("base64"),
+    );
+    const forgedSignatureCiphertext = encrypt(forgedSignature);
+    await writeFile(
+      join(artifacts, "controlled-approval.sig.age"),
+      forgedSignatureCiphertext,
+    );
+    receipt.signatureSha256 = hash(forgedSignature);
+    receipt.signatureCiphertextSha256 = hash(forgedSignatureCiphertext);
+    await writeFile(receiptPath, JSON.stringify(receipt));
+    await assert.rejects(verifyEvidence(), /G16_APPROVAL_PROOF_INVALID/u);
+    await writeFile(
+      join(artifacts, "controlled-approval.sig.age"),
+      signatureCiphertext,
+    );
+    receipt.signatureSha256 = hash(signature);
+    receipt.signatureCiphertextSha256 = hash(signatureCiphertext);
+    const wrongKey = join(temporary, "synthetic-wrong-key");
+    execFileSync("age-keygen", ["-o", wrongKey], { stdio: "ignore" });
+    await chmod(wrongKey, 0o600);
+    await writeFile(receiptPath, JSON.stringify(receipt));
+    await assert.rejects(verifyEvidence(wrongKey), /G16_AGE_PREFLIGHT_FAILED/u);
+    const damaged = Buffer.from(approvalCiphertext);
+    damaged[damaged.length - 1] ^= 1;
+    await writeFile(join(artifacts, "controlled-approval.json.age"), damaged);
+    await assert.rejects(verifyEvidence(), /G16_PARENT_ARTIFACT_HASH_INVALID/u);
+    receipt.approvalCiphertextSha256 = hash(damaged);
+    await writeFile(receiptPath, JSON.stringify(receipt));
+    await assert.rejects(verifyEvidence(), /G16_AGE_OPERATION_FAILED/u);
+  } finally {
+    if (previousAgeKey === undefined) delete process.env.SOPS_AGE_KEY_FILE;
+    else process.env.SOPS_AGE_KEY_FILE = previousAgeKey;
+    if (child) await rm(child.directory, { recursive: true, force: true });
+    if (parentEvidenceDir)
+      await rm(parentEvidenceDir, { recursive: true, force: true });
+    await rm(temporary, { recursive: true, force: true });
+  }
+});
+
+void test("aroma_sandbox child config preserves parent except approved policy and mutation flag", async () => {
+  const fixture = await aromaApprovalFixture();
+  const { publicKey } = generateKeyPairSync("ed25519");
+  const publicKeyPem = publicKey
+    .export({ type: "spki", format: "pem" })
+    .toString();
+  const keyId = `g16-${createHash("sha256")
+    .update(publicKey.export({ type: "spki", format: "der" }))
+    .digest("hex")
+    .slice(0, 20)}`;
+  const parentBytes = Buffer.from(
+    "environment: development\nverification:\n  aromaSandbox: null\nservices:\n  aroma-convergence:\n    mutationsEnabled: false\n    unrelated: preserved\n",
+  );
+  const { trustedApprovers: _unusedApprovers, ...historicalPolicy } =
+    fixture.policy;
+  const input = {
+    parentBytes,
+    historicalPolicy,
+    publicKeyPem,
+    keyId,
+    approver: "g16-operator",
+  };
+  const child = parseYaml(buildAromaSandboxChildConfig(input).toString("utf8"));
+  assert.equal(child.services["aroma-convergence"].mutationsEnabled, true);
+  assert.equal(child.services["aroma-convergence"].unrelated, "preserved");
+  assert.deepEqual(child.verification.aromaSandbox.trustedApprovers, [
+    { keyId, approver: "g16-operator", publicKeyPem },
+  ]);
+  const { trustedApprovers: _childApprovers, ...childPolicy } =
+    child.verification.aromaSandbox;
+  assert.deepEqual(childPolicy, historicalPolicy);
+  assert.throws(
+    () => buildAromaSandboxChildConfig({ ...input, keyId: "g16-foreign" }),
+    /G16_APPROVER_IDENTITY_INVALID/u,
+  );
+  assert.throws(
+    () =>
+      buildAromaSandboxChildConfig({
+        ...input,
+        parentBytes: Buffer.from(
+          parentBytes
+            .toString()
+            .replace("mutationsEnabled: false", "mutationsEnabled: true"),
+        ),
+      }),
+    /G16_PARENT_CONFIG_INVALID/u,
+  );
+  assert.throws(
+    () =>
+      buildAromaSandboxChildConfig({
+        ...input,
+        historicalPolicy: {
+          ...historicalPolicy,
+          existingAccountException: {
+            ...fixture.policy.existingAccountException,
+            authority: "foreign",
+          },
+        },
+      }),
+    /G16_HISTORICAL_POLICY_INVALID/u,
+  );
+});
+
+void test("aroma_sandbox historical approval requires the exact committed proof artifact", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "coffee-approved-policy-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const git = (...args) =>
+    execFileSync("git", ["-C", root, ...args], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim();
+  git("init", "-q", "-b", "main");
+  git("config", "user.name", "Fixture");
+  git("config", "user.email", "fixture@example.invalid");
+  const path = join(root, "evidence/aroma-provider/controlled-account.json");
+  await mkdir(dirname(path), { recursive: true });
+  const bytes = await readFile(
+    new URL(
+      "../../../evidence/aroma-provider/controlled-account.json",
+      import.meta.url,
+    ),
+  );
+  await writeFile(path, bytes);
+  git("add", ".");
+  git("commit", "-qm", "approved proof");
+  const sha = git("rev-parse", "HEAD");
+  const policy = await readApprovedAromaSandboxPolicy(root, sha);
+  assert.equal(policy.existingAccountException.authority, "user-2026-10-23");
+  assert.equal(Object.hasOwn(policy, "trustedApprovers"), false);
+  await writeFile(path, `${bytes.toString()} `);
+  await assert.rejects(
+    readApprovedAromaSandboxPolicy(root, sha),
+    /G16_APPROVED_POLICY_BLOB_INVALID/u,
+  );
+  git("add", ".");
+  git("commit", "-qm", "altered proof");
+  await assert.rejects(
+    readApprovedAromaSandboxPolicy(root, git("rev-parse", "HEAD")),
+    /G16_APPROVED_POLICY_BLOB_INVALID/u,
+  );
 });
 
 void test("signed AROMA approval admits only the policy-bound controlled-live authorization", async () => {
@@ -5467,7 +6723,8 @@ void test("command splitting rejects shell control and substitutions", () => {
 void test("run result validates exact gate order and command identities", async () => {
   const { gates } = await loadMatrix();
   const result = {
-    schemaVersion: 1,
+    schemaVersion: 2,
+    profile: "release",
     runId: "20261023T120000Z-1234567",
     candidateSha: `1234567${"1".repeat(33)}`,
     sourceSha: "2".repeat(40),
@@ -5529,9 +6786,26 @@ void test("run result validates exact gate order and command identities", async 
       runs: [],
       artifacts: [],
     })),
+    reportStatus: "NOT_RUN",
     decision: "НЕ ДОПУСТИТЬ",
   };
   await validateRunResult(result);
+  const legacyVersion = structuredClone(result);
+  legacyVersion.schemaVersion = 1;
+  delete legacyVersion.reportStatus;
+  await validateRunResult(legacyVersion);
+  const missingReportStatus = structuredClone(result);
+  delete missingReportStatus.reportStatus;
+  await assert.rejects(
+    validateRunResult(missingReportStatus),
+    /required property 'reportStatus'/u,
+  );
+  const mismatchedReportStatus = structuredClone(result);
+  mismatchedReportStatus.reportStatus = "PASS";
+  assert.throws(
+    () => validateRunResultContract(mismatchedReportStatus),
+    /reportStatus/u,
+  );
   const legacyIdBySlug = new Map(
     Object.entries(LEGACY_GATE_IDS).map(([legacy, slug]) => [slug, legacy]),
   );
@@ -5547,15 +6821,63 @@ void test("run result validates exact gate order and command identities", async 
   await assert.rejects(validateRunResult(result), /must be equal to constant/);
 });
 
+void test("report status stays outside the decision and cannot compensate a working gate", async () => {
+  const { gates } = await loadMatrix();
+  const records = () =>
+    gates.map((gate) => ({ id: gate.id, status: "PASS", runs: [{}] }));
+
+  const reportFail = records();
+  reportFail.at(-1).status = "FAIL";
+  assert.equal(decisive(reportFail), "ДОПУСТИТЬ");
+  assert.equal(reportGateStatus(reportFail), "FAIL");
+
+  const workingFail = records();
+  workingFail.at(-2).status = "NOT_RUN";
+  assert.equal(decisive(workingFail), "НЕ ДОПУСТИТЬ");
+  assert.equal(reportGateStatus(workingFail), "PASS");
+
+  const missingWorkingGate = records().filter((gate) => gate.id !== "install");
+  assert.equal(decisive(missingWorkingGate), "НЕ ДОПУСТИТЬ");
+});
+
 void test("builtin report finalizes a complete fail-closed result without candidate dependencies", async (t) => {
   const directory = await mkdtemp(join(tmpdir(), "launch-report-"));
   t.after(() => rm(directory, { recursive: true, force: true }));
   const sourceRoot = join(directory, "source");
-  const evidenceDir = join(
+  const descriptorPath = join(sourceRoot, "evidence/handoffs/issue-13.yaml");
+  const descriptorBytes =
+    "issue: 13\nstatus: source-descriptor-before-formal-verification\n";
+  await mkdir(join(sourceRoot, "evidence/handoffs"), { recursive: true });
+  await writeFile(descriptorPath, descriptorBytes);
+  execFileSync("git", ["init", "--quiet", sourceRoot]);
+  execFileSync("git", [
+    "-C",
     sourceRoot,
-    "evidence",
-    "launch",
-    "20261023T120000Z-1234567",
+    "add",
+    "evidence/handoffs/issue-13.yaml",
+  ]);
+  execFileSync("git", [
+    "-C",
+    sourceRoot,
+    "-c",
+    "user.name=Fixture",
+    "-c",
+    "user.email=fixture@example.invalid",
+    "commit",
+    "--quiet",
+    "-m",
+    "fixture",
+  ]);
+  const candidateSha = execFileSync(
+    "git",
+    ["-C", sourceRoot, "rev-parse", "HEAD"],
+    { encoding: "utf8" },
+  ).trim();
+  const runId = `20261023T120000Z-${candidateSha.slice(0, 7)}`;
+  const evidenceDir = join(sourceRoot, "evidence", "launch", runId);
+  await writeFile(
+    descriptorPath,
+    "modified checkout descriptor; must not be used\n",
   );
   const gates = EXPECTED_GATES.map(([id, expectedCommand, timeoutSeconds]) => ({
     id,
@@ -5573,14 +6895,15 @@ void test("builtin report finalizes a complete fail-closed result without candid
     artifacts: [],
   }));
   const result = {
-    schemaVersion: 1,
-    runId: "20261023T120000Z-1234567",
-    candidateSha: `1234567${"1".repeat(33)}`,
+    schemaVersion: 2,
+    profile: "release",
+    runId: runId,
+    candidateSha: candidateSha,
     sourceSha: "2".repeat(40),
     startedAt: "2026-10-23T12:00:00Z",
     endedAt: "2026-10-23T12:00:00Z",
     environment: {
-      runId: "20261023T120000Z-1234567",
+      runId: runId,
       dirty: false,
       platform: "linux",
       osRelease: "fixture",
@@ -5591,7 +6914,7 @@ void test("builtin report finalizes a complete fail-closed result without candid
       pnpm: "unknown",
       nodeImageDigest: null,
       timezone: "UTC",
-      candidatePath: join(directory, "checkout"),
+      candidatePath: sourceRoot,
       treeSha: "3".repeat(40),
       toolVersions: {
         docker: null,
@@ -5607,23 +6930,24 @@ void test("builtin report finalizes a complete fail-closed result without candid
       imageDigests: null,
       resources: {
         composeProject: {
-          name: "coffee-launch-20261023t120000z-1234567",
+          name: `coffee-launch-${runId.toLowerCase()}`,
           created: false,
         },
         databases: CANONICAL_DATABASE_OWNERS.map((owner) => ({
           name: deriveLaunchDatabaseName(
             {
-              runId: "20261023T120000Z-1234567",
-              candidateSha: `1234567${"1".repeat(33)}`,
+              runId: runId,
+              candidateSha: candidateSha,
             },
             owner,
           ),
           created: false,
         })),
-        kafkaPrefix: { name: "20261023T120000Z-1234567", created: false },
+        kafkaPrefix: { name: runId, created: false },
       },
     },
     gates,
+    reportStatus: "NOT_RUN",
     decision: "НЕ ДОПУСТИТЬ",
   };
   await mkdir(evidenceDir, { recursive: true });
@@ -5649,6 +6973,12 @@ void test("builtin report finalizes a complete fail-closed result without candid
   }
   const finalized = await finalizeReport(evidenceDir);
   assert.equal(finalized.result.decision, "НЕ ДОПУСТИТЬ");
+  assert.equal(finalized.result.reportStatus, "NOT_RUN");
+  const finalizedDecision = JSON.parse(
+    await readFile(join(evidenceDir, "decision.json"), "utf8"),
+  );
+  assert.equal(finalizedDecision.reportStatus, "NOT_RUN");
+  assert.equal(finalizedDecision.mandatoryGatesPass, false);
   assert.equal(
     finalized.result.gates.find((gate) => gate.id === "supply_chain").status,
     "FAIL",
@@ -5660,6 +6990,73 @@ void test("builtin report finalizes a complete fail-closed result without candid
     );
   }
   assert.equal(finalized.errors.length, 0);
+  const handoffPath = join(evidenceDir, "handoff.yaml");
+  const handoff = JSON.parse(await readFile(handoffPath, "utf8"));
+  assert.equal(handoff.sourceDescriptorStatus, "BOUND");
+  assert.equal(handoff.sourceDescriptorPath, "evidence/handoffs/issue-13.yaml");
+  assert.equal(
+    handoff.sourceDescriptorSha256,
+    createHash("sha256").update(descriptorBytes).digest("hex"),
+  );
+  assert.equal(handoff.runId, runId);
+  assert.equal(handoff.candidateSha, candidateSha);
+  assert.equal(handoff.decision, "НЕ ДОПУСТИТЬ");
+  assert.equal(handoff.gates.length, 20);
+  assert.equal(
+    handoff.gates.find((gate) => gate.id === "supply_chain").status,
+    "FAIL",
+  );
+  assert.equal(
+    handoff.gates.find((gate) => gate.id === "observability").status,
+    "NOT_RUN",
+  );
+  assert.equal(handoff.limits.gateTimeoutSeconds.observability, 2700);
+  for (const name of ["run-result.json", "decision.json"]) {
+    const row = handoff.artifactHashes.find(({ path }) => path === name);
+    const bytes = await readFile(join(evidenceDir, name));
+    assert.equal(row.sha256, createHash("sha256").update(bytes).digest("hex"));
+  }
+  assert.equal(
+    handoff.artifactHashes.some(({ path }) =>
+      ["handoff.yaml", "checksums.sha256"].includes(path),
+    ),
+    false,
+  );
+  assert.match(
+    await readFile(join(evidenceDir, "checksums.sha256"), "utf8"),
+    /handoff\.yaml$/m,
+  );
+  await rename(join(sourceRoot, ".git"), join(directory, "saved-git"));
+  const unbound = await finalizeReport(evidenceDir);
+  const unboundHandoff = JSON.parse(await readFile(handoffPath, "utf8"));
+  assert.equal(unboundHandoff.sourceDescriptorStatus, "NOT_PROVEN");
+  assert.equal(unboundHandoff.sourceDescriptorSha256, null);
+  assert.equal(unbound.result.decision, "НЕ ДОПУСТИТЬ");
+  assert.equal(unbound.result.reportStatus, "FAIL");
+  assert.equal(
+    JSON.parse(await readFile(join(evidenceDir, "run-result.json"), "utf8"))
+      .reportStatus,
+    "FAIL",
+  );
+  assert.equal(unbound.result.gates[19].status, "FAIL");
+  assert.match(unbound.result.gates[19].reason, /source descriptor/u);
+  assert.equal(
+    unbound.result.gates.find((gate) => gate.id === "supply_chain").status,
+    "FAIL",
+  );
+  assert.ok(unbound.errors.some((error) => /source descriptor/u.test(error)));
+  assert.equal(unboundHandoff.gates[19].status, "FAIL");
+  const repeatedUnbound = await finalizeReport(evidenceDir);
+  assert.equal(
+    repeatedUnbound.result.gates[19].reason,
+    unbound.result.gates[19].reason,
+  );
+  await rename(join(directory, "saved-git"), join(sourceRoot, ".git"));
+  await finalizeReport(evidenceDir);
+  assert.equal(
+    JSON.parse(await readFile(handoffPath, "utf8")).sourceDescriptorStatus,
+    "BOUND",
+  );
   const report = await readFile(finalized.reportPath, "utf8");
   assert.match(report, /^# НЕ ДОПУСТИТЬ/m);
   assert.doesNotMatch(report, /\n\n$/);
@@ -5723,6 +7120,7 @@ void test("builtin report finalizes a complete fail-closed result without candid
     join(evidenceDir, "commands.ndjson"),
     `${JSON.stringify({ gateId: reportGate.id, ...reportGate.runs[0] })}\n`,
   );
+  result.reportStatus = reportGate.status;
   await writeFile(join(evidenceDir, "run-result.json"), JSON.stringify(result));
   await writeFile(
     join(evidenceDir, "gates", reportGate.id, "result.json"),
@@ -5730,6 +7128,19 @@ void test("builtin report finalizes a complete fail-closed result without candid
   );
   const exactReportCommand = await finalizeReport(evidenceDir);
   assert.equal(exactReportCommand.errors.length, 0);
+  assert.equal(exactReportCommand.result.reportStatus, "PASS");
+  const finalHandoff = JSON.parse(await readFile(handoffPath, "utf8"));
+  assert.equal(finalHandoff.gates[19].status, "PASS");
+  assert.deepEqual(finalHandoff.gates[19].runs[0].argv, [
+    "pnpm",
+    "launch:verify:report",
+  ]);
+  assert.equal(finalHandoff.gates[19].runs[0].exitCode, 0);
+  assert.equal(
+    finalHandoff.gates.find((gate) => gate.id === "supply_chain").status,
+    "FAIL",
+  );
+  assert.equal(finalHandoff.decision, "НЕ ДОПУСТИТЬ");
 
   reportGate.runs[0].argv = ["pnpm", "forged-report"];
   await writeFile(
@@ -5748,7 +7159,6 @@ void test("builtin report finalizes a complete fail-closed result without candid
     ),
   );
 
-  const runId = result.runId;
   const baseConfigSha256 = "4".repeat(64);
   result.environment.configSha256 = baseConfigSha256;
   await writeFile(
@@ -5885,7 +7295,11 @@ void test("candidate report and owner suites accept only the exact launch candid
     candidateReport,
     await readFile(new URL("./report.mjs", import.meta.url)),
   );
-  for (const name of ["gate-matrix.generated.mjs", "gate-identity.mjs"])
+  for (const name of [
+    "decision.mjs",
+    "gate-matrix.generated.mjs",
+    "gate-identity.mjs",
+  ])
     await writeFile(
       join(candidateRoot, "verification/launch/v1", name),
       await readFile(new URL(`./${name}`, import.meta.url)),
@@ -5905,6 +7319,11 @@ void test("candidate report and owner suites accept only the exact launch candid
       await readFile(new URL(`../../../${helperPath}`, import.meta.url)),
     );
   await writeFile(join(candidateRoot, "candidate.txt"), "candidate checkout\n");
+  await mkdir(join(candidateRoot, "evidence/handoffs"), { recursive: true });
+  await writeFile(
+    join(candidateRoot, "evidence/handoffs/issue-13.yaml"),
+    "issue: 13\n",
+  );
   execFileSync("git", ["add", "."], { cwd: candidateRoot });
   execFileSync("git", ["commit", "-qm", "candidate fixture"], {
     cwd: candidateRoot,
@@ -5930,7 +7349,8 @@ void test("candidate report and owner suites accept only the exact launch candid
   gates[0].status = "FAIL";
   gates[0].reason = "GitHub preflight blockers";
   const result = {
-    schemaVersion: 1,
+    schemaVersion: 2,
+    profile: "release",
     runId,
     candidateSha,
     sourceSha: "2".repeat(40),
@@ -5975,6 +7395,7 @@ void test("candidate report and owner suites accept only the exact launch candid
       },
     },
     gates,
+    reportStatus: "NOT_RUN",
     decision: "НЕ ДОПУСТИТЬ",
   };
   await mkdir(evidenceDir, { recursive: true });
@@ -6013,7 +7434,11 @@ void test("candidate report and owner suites accept only the exact launch candid
     sourceReport,
     await readFile(new URL("./report.mjs", import.meta.url)),
   );
-  for (const name of ["gate-matrix.generated.mjs", "gate-identity.mjs"])
+  for (const name of [
+    "decision.mjs",
+    "gate-matrix.generated.mjs",
+    "gate-identity.mjs",
+  ])
     await writeFile(
       join(sourceRoot, "verification/launch/v1", name),
       await readFile(new URL(`./${name}`, import.meta.url)),
@@ -6096,6 +7521,7 @@ void test("candidate report and owner suites accept only the exact launch candid
     join(evidenceDir, "run-result.json"),
     join(evidenceDir, "defects.json"),
     join(evidenceDir, "decision.json"),
+    join(evidenceDir, "handoff.yaml"),
     join(evidenceDir, "checksums.sha256"),
     join(evidenceDir, "gates/preflight/artifacts/defect.json"),
     reportPath,
@@ -6224,7 +7650,7 @@ void test("stream redaction catches secrets split across chunks and preserves UT
   }
 });
 
-void test("oversized log lines fail closed when redaction parsing state is uncertain", async (t) => {
+void test("oversized log lines are dropped without failing the run", async (t) => {
   const directory = await mkdtemp(join(tmpdir(), "launch-redaction-"));
   t.after(() => rm(directory, { recursive: true, force: true }));
   const path = join(directory, "stdout.log");
@@ -6242,12 +7668,12 @@ void test("oversized log lines fail closed when redaction parsing state is uncer
   const output = await readFile(path, "utf8");
   assert.doesNotMatch(output, /PRIVATE-TAIL/);
   assert.doesNotMatch(output, /visible/);
-  assert.match(output, /parsing state uncertain/);
-  assert.equal(result.outputLimitExceeded, true);
-  assert.equal(killed, 1);
+  assert.match(output, /oversized log line/);
+  assert.equal(result.outputLimitExceeded, false);
+  assert.equal(killed, 0);
 });
 
-void test("oversized lines with sensitive JSON openers fail closed across chunks", async (t) => {
+void test("oversized lines with sensitive JSON openers drop content across chunks", async (t) => {
   const directory = await mkdtemp(join(tmpdir(), "launch-redaction-state-"));
   t.after(() => rm(directory, { recursive: true, force: true }));
   const cases = [
@@ -6274,9 +7700,9 @@ void test("oversized lines with sensitive JSON openers fail closed across chunks
       () => {},
     );
     const output = await readFile(path, "utf8");
-    assert.equal(result.outputLimitExceeded, true);
+    assert.equal(result.outputLimitExceeded, false);
     assert.doesNotMatch(output, /PRIVATE_PROVIDER_BODY_CANARY/);
-    assert.match(output, /parsing state uncertain/);
+    assert.match(output, /oversized log line/);
   }
 });
 
@@ -6514,6 +7940,8 @@ void test(
       activeStatusReads: 0,
       maxActiveStatusReads: 0,
       readdirDelayMs: 0,
+      unknownEntryGone: false,
+      readdirErrno: null,
       procScans: 0,
     };
     const procError = (code) =>
@@ -6526,6 +7954,7 @@ void test(
     t.mock.method(fsPromises, "readdir", async (path, ...args) => {
       if (path === "/proc") {
         state.procScans += 1;
+        if (state.readdirErrno) throw procError(state.readdirErrno);
         if (state.readdirDelayMs) {
           const delay = state.readdirDelayMs;
           state.readdirDelayMs = 0;
@@ -6534,9 +7963,15 @@ void test(
           );
         }
         if (!state.targetPid) return [];
-        return state.records.map((record) =>
-          fakeDirent(String(state.targetPid + record.offset)),
-        );
+        if (state.unknownEntryGone && args[0]?.withFileTypes)
+          throw procError("ENOENT");
+        const names = [
+          "self",
+          ...state.records.map((record) =>
+            String(state.targetPid + record.offset),
+          ),
+        ];
+        return args[0]?.withFileTypes ? names.map(fakeDirent) : names;
       }
       return originalReaddir(path, ...args);
     });
@@ -6596,6 +8031,8 @@ void test(
         readdirDelayMs = 0,
         statusHook = null,
         outputBudget = null,
+        unknownEntryGone = false,
+        readdirErrno = null,
       }) => {
         runNumber += 1;
         state.targetPid = null;
@@ -6606,6 +8043,8 @@ void test(
         state.activeStatusReads = 0;
         state.maxActiveStatusReads = 0;
         state.readdirDelayMs = readdirDelayMs;
+        state.unknownEntryGone = unknownEntryGone;
+        state.readdirErrno = readdirErrno;
         state.procScans = 0;
         const runDirectory = join(directory, String(runNumber));
         await mkdir(runDirectory);
@@ -6647,6 +8086,7 @@ void test(
       };
 
       const races = await runFixture({
+        unknownEntryGone: true,
         records: [
           { offset: 0, kind: "live" },
           { offset: 1, kind: "stat-exit", errno: "ENOENT" },
@@ -6661,6 +8101,16 @@ void test(
       assert.equal(races.result.peakRssBytes, 128 * 1024);
       assert.equal(races.result.outputLimitExceeded, false);
       assert.equal(races.stderr, "");
+
+      const directoryError = await runFixture({
+        records: [{ offset: 0, kind: "live" }],
+        readdirErrno: "EIO",
+      });
+      assert.equal(directoryError.result.peakRssBytes, null);
+      assert.match(
+        directoryError.stderr,
+        /^\[RSS\] stage=readdir errno=EIO attempted=\d+ valid=0 no-match=\d+ errors=\d+\n$/,
+      );
 
       const accessDenied = await runFixture({
         records: [
@@ -6825,4 +8275,661 @@ void test("observability cannot pass without sealed browser correlation lineage"
   } finally {
     await rm(evidenceDir, { recursive: true, force: true });
   }
+});
+
+void test("supply_chain image hydration binds native preflight proof and verified runtime receipts", async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), "launch-image-evidence-"));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const contextFile = join(directory, "context.json");
+  const preflightPath = join(
+    directory,
+    "gates/preflight/artifacts/preflight.json",
+  );
+  await mkdir(join(directory, "gates/preflight/artifacts"), {
+    recursive: true,
+  });
+  const runId = "20261101T000000Z-abcdef0";
+  const candidateSha = `abcdef0${"1".repeat(33)}`;
+  const configSha256 = "2".repeat(64);
+  const base = `node:26.8.1-alpine@sha256:${"3".repeat(64)}`;
+  const nodeImageId = `sha256:${"4".repeat(64)}`;
+  const proof = {
+    schemaVersion: 1,
+    gateId: "preflight",
+    status: "PASS",
+    runId,
+    candidateSha,
+    checks: [
+      {
+        id: "NATIVE_IMAGE_RUNTIME_IDENTITY",
+        status: "PASS",
+        facts: {
+          declaredBomImages: { node: base },
+          actualRuntimeProof: {
+            node: {
+              status: "PASS",
+              imageId: nodeImageId,
+              repoDigest: `node@sha256:${"3".repeat(64)}`,
+              os: "linux",
+              architecture: "amd64",
+              cleanupSucceeded: true,
+            },
+          },
+        },
+      },
+    ],
+  };
+  const context = {
+    runId,
+    candidateSha,
+    baseConfigSha256: configSha256,
+    evidenceDir: directory,
+  };
+  await writeFile(contextFile, JSON.stringify(context));
+  const g00 = { id: "preflight", status: "PASS", artifacts: [] };
+  const result = {
+    runId,
+    candidateSha,
+    environment: { configSha256 },
+    gates: [g00],
+  };
+  const images = Array.from({ length: 15 }, (_, index) => ({
+    service: `role-${index}`,
+    imageId: `sha256:${String(index.toString(16)).padStart(64, "0")}`,
+  }));
+  const options = {
+    contextFile,
+    evidenceDir: directory,
+    result,
+    readRuntimeImages: async () => images,
+    readStorageImage: async () => ({ runId, candidateSha, baseImage: base }),
+  };
+  const writeProof = async (value) => {
+    const bytes = Buffer.from(JSON.stringify(value));
+    await writeFile(preflightPath, bytes);
+    g00.artifacts = [
+      {
+        path: preflightPath,
+        sizeBytes: bytes.length,
+        sha256: createHash("sha256").update(bytes).digest("hex"),
+      },
+    ];
+  };
+  await writeProof(proof);
+  assert.deepEqual(await readLaunchImageEvidence(options), {
+    nodeImageDigest: nodeImageId,
+    imageDigests: images.map(({ imageId }) => imageId),
+  });
+  for (const change of [
+    (value) => {
+      value.runId = "20261101T000001Z-abcdef0";
+    },
+    (value) => {
+      value.candidateSha = "f".repeat(40);
+    },
+    (value) => {
+      value.checks[0].facts.actualRuntimeProof.node.imageId = "invalid";
+    },
+    (value) => {
+      value.checks[0].facts.actualRuntimeProof.node.repoDigest = `node@sha256:${"f".repeat(64)}`;
+    },
+    (value) => {
+      value.checks[0].facts.actualRuntimeProof.node.cleanupSucceeded = false;
+    },
+  ]) {
+    const altered = structuredClone(proof);
+    change(altered);
+    await writeProof(altered);
+    await assert.rejects(readLaunchImageEvidence(options));
+  }
+  await writeProof(proof);
+  await writeFile(preflightPath, `${JSON.stringify(proof)} `);
+  await assert.rejects(
+    readLaunchImageEvidence(options),
+    /G12_IMAGE_PREFLIGHT_HASH_MISMATCH/u,
+  );
+  await writeProof(proof);
+  await assert.rejects(
+    readLaunchImageEvidence({
+      ...options,
+      readStorageImage: async () => ({
+        runId: "foreign",
+        candidateSha,
+        baseImage: base,
+      }),
+    }),
+    /G12_IMAGE_NODE_BASE_MISMATCH/u,
+  );
+  await assert.rejects(
+    readLaunchImageEvidence({
+      ...options,
+      readRuntimeImages: async () => {
+        throw new Error("G12_RUNTIME_IMAGE_PROVENANCE_INVALID");
+      },
+    }),
+    /G12_RUNTIME_IMAGE_PROVENANCE_INVALID/u,
+  );
+});
+
+void test("supply_chain image hydration persists atomically and fails closed on error or deadline", async () => {
+  for (const scenario of [
+    "success",
+    "reader-error",
+    "write-error",
+    "late-read",
+    "late-write",
+  ]) {
+    let now = Date.parse("2026-11-01T00:00:00Z");
+    const previous = { nodeImageDigest: null, imageDigests: null };
+    const result = { environment: { ...previous } };
+    const record = {
+      status: "PASS",
+      reason: "",
+      startedAt: new Date(now).toISOString(),
+    };
+    const images = {
+      nodeImageDigest: `sha256:${"1".repeat(64)}`,
+      imageDigests: Array(15).fill(`sha256:${"2".repeat(64)}`),
+    };
+    const persisted = [];
+    await applyLaunchImageEvidence({
+      contextFile: "/fixture/context.json",
+      evidenceDir: "/fixture",
+      result,
+      gate: { timeout: 1800 },
+      record,
+      workloadDeadline: now + 2000000,
+      now: () => now,
+      readEvidence: async () => {
+        if (scenario === "reader-error") throw new Error("invalid receipt");
+        if (scenario === "late-read") now += 1800001;
+        return images;
+      },
+      persist: async (_directory, current) => {
+        if (scenario === "write-error") throw new Error("write failed");
+        persisted.push(structuredClone(current.environment));
+        if (scenario === "late-write" && persisted.length === 1) now += 1800001;
+      },
+    });
+    if (scenario === "success") {
+      assert.equal(record.status, "PASS");
+      assert.deepEqual(result.environment, images);
+      assert.deepEqual(persisted, [images]);
+    } else {
+      assert.equal(record.status, "FAIL", scenario);
+      assert.deepEqual(result.environment, previous, scenario);
+      assert.match(
+        record.reason,
+        /supply_chain image evidence validation failed/u,
+      );
+      assert.deepEqual(
+        persisted,
+        scenario === "late-write" ? [images, previous] : [],
+        scenario,
+      );
+    }
+  }
+});
+
+void test("fast profile runs exactly nine gates and filters the other eleven", async () => {
+  const { gates } = await loadMatrix();
+  const options = parseLaunchArguments(["--profile", "fast"]);
+  const selection = selectGates(gates, options);
+  assert.equal(selection.profile, "fast");
+  assert.equal(selection.budgetProfile, "fast");
+  const running = [...selection.gates.values()]
+    .filter((entry) => entry.status === "RUN")
+    .map((entry) => entry.id);
+  assert.deepEqual(running, [
+    "preflight",
+    "install",
+    "generated",
+    "static",
+    "unit",
+    "contracts",
+    "architecture",
+    "config_security",
+    "report",
+  ]);
+  assert.equal(running.length, 9);
+  const filtered = [...selection.gates.values()]
+    .filter((entry) => entry.status === SKIPPED_BY_FILTER)
+    .map((entry) => entry.id);
+  assert.deepEqual(filtered, [
+    "supply_chain",
+    "migrations",
+    "db_boundaries",
+    "integration",
+    "recovery",
+    "compose",
+    "observability",
+    "browser",
+    "aroma_sandbox",
+    "backup_restore",
+    "rollback",
+  ]);
+  const records = gates.map((gate) => {
+    const entry = selection.gates.get(gate.id);
+    return {
+      id: gate.id,
+      status: entry.status === "RUN" ? "PASS" : SKIPPED_BY_FILTER,
+      runs: entry.status === "RUN" ? [{}] : [],
+    };
+  });
+  assert.equal(
+    decisive(records, selection.budgetProfile),
+    "НЕ ДОПУСТИТЬ",
+    "fast всегда даёт диагностический результат",
+  );
+  const release = selectGates(
+    gates,
+    parseLaunchArguments(["--profile", "release"]),
+  );
+  assert.equal(
+    [...release.gates.values()].filter((entry) => entry.status === "RUN")
+      .length,
+    20,
+  );
+});
+
+void test("single-gate diagnostic skips ancestors and cannot be admitted", async () => {
+  const { gates } = await loadMatrix();
+  const selection = selectGates(
+    gates,
+    parseLaunchArguments(["--gate", "compose"]),
+  );
+  const running = [...selection.gates.values()]
+    .filter((entry) => entry.status === "RUN")
+    .map((entry) => entry.id);
+  assert.deepEqual(running, ["compose"]);
+  const records = gates.map((gate) => {
+    const entry = selection.gates.get(gate.id);
+    return {
+      id: gate.id,
+      status: entry.status === "RUN" ? "PASS" : SKIPPED_BY_FILTER,
+      runs: entry.status === "RUN" ? [{}] : [],
+    };
+  });
+  assert.equal(decisive(records, selection.budgetProfile), "НЕ ДОПУСТИТЬ");
+  for (const id of [
+    "preflight",
+    "install",
+    "generated",
+    "supply_chain",
+    "integration",
+    "recovery",
+  ])
+    assert.equal(selection.gates.get(id).status, SKIPPED_BY_FILTER);
+  const compose = gates.find((gate) => gate.id === "compose");
+  assert.equal(compose.predecessors.length, 2);
+  assert.deepEqual(blockingPredecessors(compose, records), []);
+  records.find((gate) => gate.id === "recovery").status = "FAIL";
+  assert.deepEqual(blockingPredecessors(compose, records), ["recovery"]);
+});
+
+void test("--from requires PASS ancestors in the resume source", async () => {
+  const { gates } = await loadMatrix();
+  assert.throws(
+    () => parseLaunchArguments(["--from", "compose"]),
+    /--from требует --resume/u,
+  );
+  const options = parseLaunchArguments([
+    "--from",
+    "compose",
+    "--resume",
+    "20260101T000000Z-abcdef0",
+  ]);
+  const selection = selectGates(gates, options);
+  assert.deepEqual(
+    [...selection.gates.values()]
+      .filter((entry) => entry.status === "RUN")
+      .map((entry) => entry.id),
+    [
+      "compose",
+      "observability",
+      "browser",
+      "aroma_sandbox",
+      "backup_restore",
+      "rollback",
+      "report",
+    ],
+  );
+  const source = {
+    gates: gates.map((gate) => ({ id: gate.id, status: "PASS" })),
+  };
+  assert.doesNotThrow(() => assertFromPredecessors(gates, "compose", source));
+  source.gates.find((gate) => gate.id === "recovery").status = "FAIL";
+  assert.throws(
+    () => assertFromPredecessors(gates, "compose", source),
+    /FROM_PREDECESSORS_NOT_PASS/u,
+  );
+});
+
+void test("resume rejects any of the five identity hash mismatches", () => {
+  const identity = {
+    candidateSha: "a".repeat(40),
+    treeSha: "b".repeat(40),
+    configSha256: "c".repeat(64),
+    toolchainVersionsSha256: "d".repeat(64),
+    lockfileSha256: "e".repeat(64),
+  };
+  const source = {
+    candidateSha: identity.candidateSha,
+    environment: {
+      treeSha: identity.treeSha,
+      configSha256: identity.configSha256,
+      toolchainVersionsSha256: identity.toolchainVersionsSha256,
+      lockfileSha256: identity.lockfileSha256,
+    },
+  };
+  assert.doesNotThrow(() => assertResumeIdentity(source, identity));
+  for (const [field, path] of [
+    ["candidateSha", ["candidateSha"]],
+    ["treeSha", ["environment", "treeSha"]],
+    ["configSha256", ["environment", "configSha256"]],
+    ["toolchainVersionsSha256", ["environment", "toolchainVersionsSha256"]],
+    ["lockfileSha256", ["environment", "lockfileSha256"]],
+  ]) {
+    const changed = structuredClone(source);
+    if (path.length === 1) changed.candidateSha = "f".repeat(40);
+    else changed.environment[path[1]] = "f".repeat(64);
+    assert.throws(
+      () => assertResumeIdentity(changed, identity),
+      /RESUME_IDENTITY_MISMATCH/u,
+      field,
+    );
+  }
+});
+
+void test("resume of live-state gates is forbidden by explicit error", () => {
+  for (const gateId of [
+    "preflight",
+    "observability",
+    "browser",
+    "aroma_sandbox",
+    "backup_restore",
+    "rollback",
+    "compose",
+    "integration",
+    "recovery",
+    "migrations",
+    "db_boundaries",
+  ])
+    assert.throws(
+      () =>
+        parseLaunchArguments([
+          "--gate",
+          gateId,
+          "--resume",
+          "20260101T000000Z-abcdef0",
+        ]),
+      /RESUME_FORBIDDEN_GATE/u,
+      gateId,
+    );
+  assert.doesNotThrow(() =>
+    parseLaunchArguments([
+      "--gate",
+      "static",
+      "--resume",
+      "20260101T000000Z-abcdef0",
+    ]),
+  );
+});
+
+void test("release without resume still requires all nineteen working gates to pass", async () => {
+  const { gates } = await loadMatrix();
+  const options = parseLaunchArguments(["--profile", "release"]);
+  assert.equal(options.resume, undefined);
+  const selection = selectGates(gates, options);
+  const running = [...selection.gates.values()].filter(
+    (entry) => entry.status === "RUN",
+  );
+  assert.equal(running.length, 20);
+  const records = gates.map((gate) => ({
+    id: gate.id,
+    status: "PASS",
+    runs: [{}],
+  }));
+  assert.equal(decisive(records, "release"), "ДОПУСТИТЬ");
+  const reportFailed = structuredClone(records);
+  reportFailed.find((gate) => gate.id === "report").status = "FAIL";
+  assert.equal(decisive(reportFailed, "release"), "ДОПУСТИТЬ");
+  const oneWorkingGateFailed = structuredClone(records);
+  oneWorkingGateFailed.find((gate) => gate.id === "integration").status =
+    "FAIL";
+  assert.equal(decisive(oneWorkingGateFailed, "release"), "НЕ ДОПУСТИТЬ");
+  const sourceRunId = "20260101T000000Z-abcdef0";
+  const reuse = resumableGateRecords(
+    { runId: sourceRunId, gates: records },
+    join(process.cwd(), "evidence/launch", sourceRunId),
+    selection,
+  );
+  assert.deepEqual(
+    [...reuse.keys()],
+    [
+      "generated",
+      "static",
+      "unit",
+      "contracts",
+      "architecture",
+      "config_security",
+    ],
+  );
+  for (const id of [
+    "preflight",
+    "install",
+    "supply_chain",
+    "compose",
+    "observability",
+    "report",
+  ])
+    assert.equal(reuse.has(id), false);
+  const fastReuse = resumableGateRecords(
+    { runId: sourceRunId, gates: records },
+    join(process.cwd(), "evidence/launch", sourceRunId),
+    selectGates(gates, parseLaunchArguments(["--profile", "fast"])),
+  );
+  assert.ok(fastReuse.has("install"));
+  assert.equal(fastReuse.has("supply_chain"), false);
+  assert.ok(fastReuse.has("config_security"));
+  const supplyChainReuse = resumableGateRecords(
+    { runId: sourceRunId, gates: records },
+    join(process.cwd(), "evidence/launch", sourceRunId),
+    selectGates(gates, parseLaunchArguments(["--gate", "supply_chain"])),
+  );
+  assert.ok(supplyChainReuse.has("supply_chain"));
+});
+
+void test("decisive accepts only PASS with runs or a valid allowed reusedFrom", async () => {
+  const { gates } = await loadMatrix();
+  const records = gates.map((gate) => ({
+    id: gate.id,
+    status: "PASS",
+    runs: [{}],
+  }));
+  assert.equal(decisive(records, "release"), "ДОПУСТИТЬ");
+  assert.equal(decisive(records, "fast"), "НЕ ДОПУСТИТЬ");
+  const reused = structuredClone(records);
+  reused.find((gate) => gate.id === "install").runs = [];
+  reused.find((gate) => gate.id === "install").reusedFrom = {
+    runId: "20260101T000000Z-abcdef0",
+    evidenceDir: "evidence/launch/20260101T000000Z-abcdef0",
+  };
+  assert.equal(decisive(reused, "release"), "ДОПУСТИТЬ");
+  const noProof = structuredClone(records);
+  noProof.find((gate) => gate.id === "install").runs = [];
+  assert.equal(decisive(noProof, "release"), "НЕ ДОПУСТИТЬ");
+  const forbiddenReuse = structuredClone(records);
+  forbiddenReuse.find((gate) => gate.id === "compose").runs = [];
+  forbiddenReuse.find((gate) => gate.id === "compose").reusedFrom = {
+    runId: "20260101T000000Z-abcdef0",
+    evidenceDir: "evidence/launch/20260101T000000Z-abcdef0",
+  };
+  assert.equal(decisive(forbiddenReuse, "release"), "НЕ ДОПУСТИТЬ");
+});
+
+void test("profile budgets replace the single 120-minute deadline", () => {
+  assert.equal(profileBudgetMs("fast"), 20 * 60_000);
+  assert.equal(profileBudgetMs("release"), 180 * 60_000);
+  assert.throws(() => profileBudgetMs("diagnostic"), /Неизвестный профиль/u);
+  assert.equal(
+    gateBudgetMs("install", profileBudgetMs("fast"), "fast"),
+    profileBudgetMs("fast") - 300_000,
+  );
+  assert.equal(
+    gateBudgetMs("install", profileBudgetMs("release"), "release"),
+    profileBudgetMs("release") - (900_000 + 120_000),
+  );
+});
+
+void test("admission profile runs only the admission gate and stays diagnostic", async () => {
+  const { gates } = await loadMatrix();
+  const selection = selectGates(
+    gates,
+    parseLaunchArguments(["--profile", "admission"]),
+  );
+  assert.equal(selection.profile, "admission");
+  assert.equal(selection.budgetProfile, "admission");
+  assert.equal(profileBudgetMs("admission"), 90_000);
+  const running = [...selection.gates.values()]
+    .filter((entry) => entry.status === "RUN")
+    .map((entry) => entry.id);
+  assert.deepEqual(running, ["preflight"]);
+  const filtered = [...selection.gates.values()]
+    .filter((entry) => entry.status === SKIPPED_BY_FILTER)
+    .map((entry) => entry.id);
+  assert.equal(filtered.length, EXPECTED_GATES.length - 1);
+  const admitted = gates.map((gate) => ({
+    id: gate.id,
+    status: "PASS",
+    runs: [{}],
+  }));
+  assert.equal(decisive(admitted, "admission"), "НЕ ДОПУСТИТЬ");
+});
+
+void test("admission preflight reuse requires the same frozen candidate and GitHub snapshot", async () => {
+  const { gates } = await loadMatrix();
+  const selection = selectGates(
+    gates,
+    parseLaunchArguments(["--profile", "release"]),
+  );
+  const snapshot = "a".repeat(64);
+  const preflightArtifactSha256 = "b".repeat(64);
+  const sourceEvidenceDir = join(
+    process.cwd(),
+    "evidence/launch/20260101T000000Z-abcdef0",
+  );
+  const source = {
+    runId: "20260101T000000Z-abcdef0",
+    profile: "admission",
+    environment: { githubSnapshotSha256: snapshot },
+    gates: gates.map((gate) =>
+      gate.id === "preflight"
+        ? {
+            id: gate.id,
+            status: "PASS",
+            runs: [{}],
+            artifacts: [
+              {
+                path: join(
+                  sourceEvidenceDir,
+                  "gates/preflight/artifacts/preflight.json",
+                ),
+                sha256: preflightArtifactSha256,
+                sizeBytes: 1,
+              },
+            ],
+          }
+        : { id: gate.id, status: SKIPPED_BY_FILTER, runs: [], artifacts: [] },
+    ),
+  };
+  const reused = resumableGateRecords(source, sourceEvidenceDir, selection);
+  assert.deepEqual([...reused.keys()], ["preflight"]);
+  assert.deepEqual(reused.get("preflight"), {
+    runId: source.runId,
+    evidenceDir: "evidence/launch/20260101T000000Z-abcdef0",
+    githubSnapshotSha256: snapshot,
+    preflightArtifactSha256,
+  });
+  const identity = {
+    candidateSha: "c".repeat(40),
+    treeSha: "d".repeat(40),
+    configSha256: "e".repeat(64),
+    toolchainVersionsSha256: "f".repeat(64),
+    lockfileSha256: "0".repeat(64),
+    githubSnapshotSha256: snapshot,
+  };
+  source.candidateSha = identity.candidateSha;
+  source.environment.treeSha = identity.treeSha;
+  source.environment.configSha256 = identity.configSha256;
+  source.environment.toolchainVersionsSha256 = identity.toolchainVersionsSha256;
+  source.environment.lockfileSha256 = identity.lockfileSha256;
+  assert.doesNotThrow(() => assertResumeIdentity(source, identity));
+  assert.throws(
+    () =>
+      assertResumeIdentity(source, {
+        ...identity,
+        githubSnapshotSha256: "1".repeat(64),
+      }),
+    /RESUME_IDENTITY_MISMATCH: githubSnapshotSha256/u,
+  );
+});
+
+void test("only an admission result can freeze preflight for release reuse", async () => {
+  const { gates } = await loadMatrix();
+  const selection = selectGates(
+    gates,
+    parseLaunchArguments(["--profile", "release"]),
+  );
+  const snapshot = "a".repeat(64);
+  const preflightArtifactSha256 = "b".repeat(64);
+  const sourceEvidenceDir = join(
+    process.cwd(),
+    "evidence/launch/20260101T000000Z-abcdef0",
+  );
+  const source = {
+    runId: "20260101T000000Z-abcdef0",
+    profile: "release",
+    environment: { githubSnapshotSha256: snapshot },
+    gates: gates.map((gate) =>
+      gate.id === "preflight"
+        ? {
+            id: gate.id,
+            status: "PASS",
+            runs: [{}],
+            artifacts: [
+              {
+                path: join(
+                  sourceEvidenceDir,
+                  "gates/preflight/artifacts/preflight.json",
+                ),
+                sha256: preflightArtifactSha256,
+                sizeBytes: 1,
+              },
+            ],
+          }
+        : { id: gate.id, status: "PASS", runs: [{}], artifacts: [] },
+    ),
+  };
+  const reused = resumableGateRecords(source, sourceEvidenceDir, selection);
+  assert.equal(reused.has("preflight"), false);
+  const releaseDecision = decisive(
+    gates.map((gate) => ({
+      id: gate.id,
+      status: "PASS",
+      runs: gate.id === "preflight" ? [] : [{}],
+      ...(gate.id === "preflight"
+        ? {
+            reusedFrom: {
+              runId: source.runId,
+              evidenceDir: "evidence/launch/20260101T000000Z-abcdef0",
+              githubSnapshotSha256: snapshot,
+              preflightArtifactSha256,
+            },
+          }
+        : {}),
+    })),
+    "release",
+  );
+  assert.equal(releaseDecision, "ДОПУСТИТЬ");
 });

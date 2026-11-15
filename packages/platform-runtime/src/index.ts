@@ -107,6 +107,7 @@ export type RuntimeTransport = Readonly<{
   material?: ServiceTransportMaterial;
   publicTls?: PublicTlsMaterial;
   setupError?: string;
+  setupDetail?: string;
 }>;
 
 export type RuntimeIdentity = RuntimeComposition &
@@ -308,6 +309,7 @@ function transportMaterial(
       runtime,
       mode,
       setupError: "RUNTIME_TRANSPORT_SECRET_SCOPE",
+      setupDetail: "serviceTransportKeys reference is missing or duplicated",
     };
   try {
     const material = parseServiceTransportMaterial(
@@ -327,6 +329,7 @@ function transportMaterial(
         mode,
         material,
         setupError: "RUNTIME_PUBLIC_TLS_SECRET_SCOPE",
+        setupDetail: "edge TLS material or public hostname is missing",
       };
     }
     const publicCaPem = optionalRefs.includes("edge.tlsCaBundle")
@@ -351,6 +354,8 @@ function transportMaterial(
       mode,
       setupError:
         error instanceof Error ? error.name : "TransportValidationError",
+      setupDetail:
+        error instanceof Error ? error.message : "unknown transport error",
     };
   }
 }
@@ -631,8 +636,10 @@ export async function createRuntime(
   const runningChecks = new Map<string, Promise<boolean>>();
   const stopped = Promise.withResolvers<RuntimeShutdownResult>();
   let transportError: string | undefined;
+  let transportDetail = "unknown";
   if (identity.transport !== undefined) {
     transportError = identity.transport.setupError;
+    transportDetail = identity.transport.setupDetail ?? "unknown";
     if (
       transportError === undefined &&
       identity.transport.material === undefined
@@ -820,7 +827,7 @@ export async function createRuntime(
             signal.throwIfAborted();
             if (transportError !== undefined)
               throw new RuntimeError(
-                `RUNTIME_TRANSPORT_NOT_CONFIGURED:${transportError}`,
+                `RUNTIME_TRANSPORT_NOT_CONFIGURED:${transportError}:${transportDetail}`,
               );
             await app.listen({ host: identity.host, port: identity.port });
             signal.throwIfAborted();
@@ -1245,7 +1252,8 @@ export async function startConfiguredRuntime(
       (key.startsWith("COFFEE_") || key.startsWith("SOPS_")) &&
       key !== "COFFEE_CONFIG_FILE" &&
       key !== "COFFEE_RUNTIME_SECRETS_FILE" &&
-      key !== "COFFEE_LAUNCH_CONTEXT_FILE"
+      key !== "COFFEE_LAUNCH_CONTEXT_FILE" &&
+      key !== "COFFEE_LAUNCH_GATE_DEADLINE_EPOCH_MS"
     )
       throw new Error(
         `${key}: runtime accepts only configuration locator variables`,
@@ -1263,7 +1271,9 @@ export async function startConfiguredRuntime(
   const config = loadedConfig.config;
   if (/^\/dev\/shm\/coffee-g17-[a-f0-9]{16,64}$/u.test(config.postgres.host))
     throw new RuntimeError("RUNTIME_BACKUP_SOCKET_STANDALONE_ONLY");
-  if (config.databaseIsolation.enabled !== Boolean(launchContextPath))
+  // Изоляция БД обязательна в launch-режиме; обычный Compose запускается без
+  // launch identity и использует общий dev-каталог из config.
+  if (launchContextPath && !config.databaseIsolation.enabled)
     throw new RuntimeError("RUNTIME_LAUNCH_CONTEXT_POLICY_MISMATCH");
   if (launchContextPath && config.environment === "production")
     throw new RuntimeError("RUNTIME_LAUNCH_CONTEXT_PRODUCTION_DENIED");

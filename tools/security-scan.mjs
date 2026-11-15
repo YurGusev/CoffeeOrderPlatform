@@ -30,9 +30,12 @@ import { validateLaunchContext } from "../verification/launch/v1/report.mjs";
 import { materializeBuildRegistryCredentials } from "./config-bootstrap/index.mjs";
 import { buildkitPolicy, verifyBuildkitPolicy } from "./buildkit-policy.mjs";
 import {
+  ARTIFACT_MANIFEST_FILE,
   IMAGE_INVENTORY_REFERENCE,
+  buildArtifactManifest,
   buildImageInventory,
   runtimeImageTag,
+  serializeArtifactManifest,
   serializeImageInventory,
 } from "./image-inventory.mjs";
 
@@ -187,6 +190,28 @@ export function adjudicateCve78661({ proof, reports, images, toolchain }) {
 
 function fail(code) {
   throw Object.assign(new Error(code), { code });
+}
+
+export async function securityScanTempRoot(
+  value = process.env.COFFEE_LAUNCH_DATA_TEMP_DIR,
+) {
+  if (value === undefined) return tmpdir();
+  if (
+    typeof value !== "string" ||
+    !isAbsolute(value) ||
+    resolve(value) !== value
+  )
+    fail("SCAN_TEMP_DIRECTORY_INVALID");
+  const info = await lstat(value).catch(() => null);
+  if (
+    !info?.isDirectory() ||
+    info.isSymbolicLink() ||
+    info.uid !== process.getuid() ||
+    (info.mode & 0o7777) !== 0o700 ||
+    (await realpath(value).catch(() => null)) !== value
+  )
+    fail("SCAN_TEMP_DIRECTORY_INVALID");
+  return value;
 }
 function sha256(bytes) {
   return createHash("sha256").update(bytes).digest("hex");
@@ -3194,6 +3219,7 @@ export async function runSecurityScan({
   let identity;
   let policy;
   let temporary;
+  let sourceTemporary;
   let lockHandle;
   let activeChild = null;
   let stopped = null;
@@ -3422,6 +3448,7 @@ export async function runSecurityScan({
     result.runId = identity.context.runId;
     result.candidateSha = identity.context.candidateSha;
     if (stopped) fail("INTERRUPTED");
+    const tempRoot = await securityScanTempRoot();
     markStage("lock-acquisition");
     lockHandle = await open(
       lockPath,
@@ -3434,7 +3461,7 @@ export async function runSecurityScan({
     if (!lockHandle) fail("SCANNER_ALREADY_RUNNING");
     await lockHandle.writeFile(`${process.pid} ${identity.context.runId}\n`);
     await lockHandle.sync();
-    temporary = await mkdtemp(join(tmpdir(), "coffee-image-scan-"));
+    temporary = await mkdtemp(join(tempRoot, "coffee-image-scan-"));
     await chmod(temporary, 0o700);
     const cacheDir = join(cacheRoot, "trivy");
     await mkdir(cacheDir, { recursive: true, mode: 0o700 });
@@ -3463,17 +3490,19 @@ export async function runSecurityScan({
     );
     const outputRoot = join(outputDir, "artifacts");
     await mkdir(outputRoot, { recursive: true, mode: 0o700 });
+    sourceTemporary = await mkdtemp(join(tmpdir(), "coffee-image-source-"));
     const composeProject = identity.context.resources?.composeProject;
     const publishesRuntimeImages =
       typeof composeProject === "string" &&
       /^[a-z0-9][a-z0-9_-]{0,62}$/u.test(composeProject);
     const publishedRuntimeImages = [];
+    const builtImages = [];
     if (publishesRuntimeImages)
       await pruneStaleLaunchImages(runBounded, composeProject);
     const sourceSnapshot = await createBuildInputSnapshot({
       candidateRoot: identity.candidateRoot,
       candidateSha: identity.context.candidateSha,
-      temporary,
+      temporary: sourceTemporary,
       run: runBounded,
       onChild,
     });
@@ -3820,6 +3849,7 @@ export async function runSecurityScan({
       keycloakBaseMaterial,
       vendorPlugins,
       onValidatedImage: async (image) => {
+        builtImages.push(image);
         markStage("image-scan");
         await scanValidatedImage(image);
         markStage("product-image-build");
@@ -3970,15 +4000,14 @@ export async function runSecurityScan({
     if (result.status === "FAIL") result.failure = { code: result.code, stage };
     if (result.status === "PASS" && publishesRuntimeImages) {
       markStage("image-inventory");
-      const inventoryBytes = serializeImageInventory(
-        buildImageInventory({
-          context: identity.context,
-          environment: identity.environment,
-          composeProject,
-          services: PUBLISHED_RUNTIME_SERVICES,
-          images: publishedRuntimeImages,
-        }),
-      );
+      const inventory = buildImageInventory({
+        context: identity.context,
+        environment: identity.environment,
+        composeProject,
+        services: PUBLISHED_RUNTIME_SERVICES,
+        images: publishedRuntimeImages,
+      });
+      const inventoryBytes = serializeImageInventory(inventory);
       await writeScannerOutput(
         join(outputRoot, "image-inventory.json"),
         inventoryBytes,
@@ -3988,6 +4017,22 @@ export async function runSecurityScan({
         sha256: sha256(inventoryBytes),
         sizeBytes: inventoryBytes.length,
       };
+      // Манифест публикуется тем же шагом, что и инвентарь: downstream-гейты
+      // получают только его, а imageInventorySha256 связывает оба файла.
+      const manifestBytes = serializeArtifactManifest(
+        buildArtifactManifest({
+          context: identity.context,
+          environment: identity.environment,
+          composeProject,
+          services: PUBLISHED_RUNTIME_SERVICES,
+          images: builtImages,
+          imageInventorySha256: sha256(inventoryBytes),
+        }),
+      );
+      await writeScannerOutput(
+        join(outputRoot, ARTIFACT_MANIFEST_FILE),
+        manifestBytes,
+      );
     }
     if (result.status === "PASS") {
       for (const [target, build, baseImage, resultKey] of [
@@ -4096,6 +4141,10 @@ export async function runSecurityScan({
         containerCleanupFailed = true;
       }
     }
+    if (sourceTemporary)
+      await rm(sourceTemporary, { recursive: true, force: true }).catch(() => {
+        setCleanupFailure("TEMP_CLEANUP_FAILED", "temporary-cleanup");
+      });
     if (containerCleanupFailed) {
       setCleanupFailure("CONTAINER_CLEANUP_FAILED", "container-cleanup");
       await lockHandle?.close().catch(() => {});

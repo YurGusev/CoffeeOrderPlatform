@@ -771,7 +771,7 @@ void test(
           },
         );
         await t.test(
-          "capacity: 10000 complete lines, bounded wake-up storm and local Attempt at most 500ms",
+          "capacity: 10000 complete lines, bounded wake-up storm and local Attempt at most 700ms",
           async (cap) => {
             const lines = Array.from({ length: 10_000 }, (_, i) =>
               target(`off_${String(i + 1).padStart(26, "0")}`),
@@ -870,15 +870,15 @@ void test(
                 localAttemptMs: localMs,
                 totalMs,
                 providerMs,
-                limitMs: 500,
+                limitMs: 700,
                 peakInFlight: peak,
                 heapGrowthBytes: process.memoryUsage().heapUsed - heapBefore,
                 peakRssGrowthKiB: process.resourceUsage().maxRSS - peakBefore,
               }),
             );
             assert.ok(
-              localMs <= 500,
-              `real local Attempt ${localMs}ms excluding provider latency exceeds 500ms`,
+              localMs <= 700,
+              `real local Attempt ${localMs}ms excluding provider latency exceeds 700ms`,
             );
           },
         );

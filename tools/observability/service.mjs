@@ -2,6 +2,7 @@ import { execFileSync } from "node:child_process";
 import { lstat, readFile, realpath, statfs } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { observabilityReleasesRoot } from "../state-paths.mjs";
 import { homedir } from "node:os";
 import { isDeepStrictEqual } from "node:util";
 import { dump as dumpYaml, load as loadYaml } from "js-yaml";
@@ -262,10 +263,7 @@ export async function readAcceptedObservabilityRelease() {
     !match
   )
     throw new Error("accepted observability release is unavailable");
-  const releases = join(
-    homedir(),
-    ".local/share/coffee-platform/observability/releases",
-  );
+  const releases = observabilityReleasesRoot();
   const releaseSha = root.slice(releases.length + 1);
   const rootInfo = await lstat(root);
   if (
@@ -616,7 +614,17 @@ export async function runService(action, overrides = {}) {
   });
   if (action === "start") {
     const fs = await deps.statfs("/", { bigint: true });
-    if (fs.bavail * fs.bsize < (fs.blocks * fs.bsize) / 5n + 536870912n)
+    // Стеку наблюдаемости нужны образы и дисковое хранилище: абсолютный минимум
+    // важнее процента диска, иначе на большом томе требование становится
+    // недостижимым без реальной необходимости.
+    const totalBytes = fs.blocks * fs.bsize;
+    const minimumReserve = 6n * 1024n ** 3n;
+    const proportionalReserve = totalBytes / 20n;
+    const reserve =
+      proportionalReserve > minimumReserve
+        ? proportionalReserve
+        : minimumReserve;
+    if (fs.bavail * fs.bsize < reserve)
       throw new Error("insufficient root filesystem reserve");
     for (const reference of [
       storageHelper.imageId,

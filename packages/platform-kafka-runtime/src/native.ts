@@ -345,7 +345,11 @@ function producerConfig(options: NativeProducerOptions): NativeConfig {
     ...baseConfig(options),
     "message.max.bytes": options.maxMessageBytes,
     "enable.idempotence": true,
-    "max.in.flight.requests.per.connection": 1,
+    // Идемпотентный продюсер допускает до пяти запросов в полёте: KIP-98
+    // сохраняет порядок при повторных отправках. Один запрос в полёте упирается
+    // в RTT брокера, поэтому кратковременная задержка сразу копит неподтверждённые
+    // ACK и ограничивает устойчивый темп публикации.
+    "max.in.flight.requests.per.connection": 5,
     "message.send.max.retries": options.producerRetries,
     "request.required.acks": -1,
     "delivery.report.only.error": false,

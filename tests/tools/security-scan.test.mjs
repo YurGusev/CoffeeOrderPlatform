@@ -36,6 +36,7 @@ import {
   parseKafkaBaseIndex,
   runCommand,
   runSecurityScan,
+  securityScanTempRoot,
   _SCAN_BUDGET_MS,
   _SCAN_RESERVE_MS,
   scanBudgetMs,
@@ -94,6 +95,52 @@ function buildMetadata() {
     },
   };
 }
+
+void test("supply_chain temporary root validates a private owned canonical directory", async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), "g12-data-temp-test-"));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const privateDir = join(directory, "data");
+  await mkdir(privateDir, { mode: 0o700 });
+  assert.equal(await securityScanTempRoot(privateDir), privateDir);
+  for (const bad of [
+    null,
+    "",
+    "relative",
+    `${privateDir}/../data`,
+    join(directory, "missing"),
+  ])
+    await assert.rejects(securityScanTempRoot(bad), {
+      code: "SCAN_TEMP_DIRECTORY_INVALID",
+    });
+  const link = join(directory, "link");
+  await symlink(privateDir, link);
+  await assert.rejects(securityScanTempRoot(link), {
+    code: "SCAN_TEMP_DIRECTORY_INVALID",
+  });
+  await mkdir(join(privateDir, "nested"), { mode: 0o700 });
+  await assert.rejects(securityScanTempRoot(join(link, "nested")), {
+    code: "SCAN_TEMP_DIRECTORY_INVALID",
+  });
+  await chmod(privateDir, 0o755);
+  await assert.rejects(securityScanTempRoot(privateDir), {
+    code: "SCAN_TEMP_DIRECTORY_INVALID",
+  });
+  await chmod(privateDir, 0o700);
+  const uid = process.getuid();
+  t.mock.method(process, "getuid", () => uid + 1);
+  await assert.rejects(securityScanTempRoot(privateDir), {
+    code: "SCAN_TEMP_DIRECTORY_INVALID",
+  });
+  t.mock.restoreAll();
+  const prior = process.env.COFFEE_LAUNCH_DATA_TEMP_DIR;
+  delete process.env.COFFEE_LAUNCH_DATA_TEMP_DIR;
+  try {
+    assert.equal(await securityScanTempRoot(), tmpdir());
+  } finally {
+    if (prior === undefined) delete process.env.COFFEE_LAUNCH_DATA_TEMP_DIR;
+    else process.env.COFFEE_LAUNCH_DATA_TEMP_DIR = prior;
+  }
+});
 
 void test("build snapshot retains committed modes, omits ignored files and detects tampering", async (t) => {
   const temporary = await mkdtemp(join(tmpdir(), "coffee-build-context-test-"));
@@ -1655,6 +1702,23 @@ void test("supply_chain builds product images, records pinned upstream identity,
   let databaseFullReads = 0;
   let tamperAtDatabaseRead = false;
   const originalOpen = fsPromises.open;
+  const originalRm = fsPromises.rm;
+  let failSourceCleanup = false;
+  let retainedSourceDirectory;
+  const rmMock = t.mock.method(fsPromises, "rm", async (path, options) => {
+    if (
+      failSourceCleanup &&
+      typeof path === "string" &&
+      path.startsWith(join(tmpdir(), "coffee-image-source-"))
+    ) {
+      failSourceCleanup = false;
+      retainedSourceDirectory = path;
+      throw Object.assign(new Error("synthetic source cleanup failure"), {
+        code: "EACCES",
+      });
+    }
+    return originalRm(path, options);
+  });
   const openMock = t.mock.method(fsPromises, "open", async (path, ...args) => {
     const handle = await originalOpen(path, ...args);
     if (
@@ -1679,7 +1743,15 @@ void test("supply_chain builds product images, records pinned upstream identity,
   syncBuiltinESMExports();
   t.after(() => {
     openMock.mock.restore();
+    rmMock.mock.restore();
     syncBuiltinESMExports();
+  });
+  t.after(async () => {
+    if (retainedSourceDirectory)
+      await originalRm(retainedSourceDirectory, {
+        recursive: true,
+        force: true,
+      });
   });
   const temp = await mkdtemp(join(tmpdir(), "image-scan-fixture-"));
   let cacheIndex = 0;
@@ -2131,6 +2203,42 @@ void test("supply_chain builds product images, records pinned upstream identity,
     assert.equal(Object.hasOwn(loaded, "environment"), false);
     return { context: loaded, candidateRoot, evidenceDir };
   };
+  const selectedTempRoot = join(temp, "selected-data-temp");
+  const distinctLock = join(temp, "scanner-placement.lock");
+  await mkdir(selectedTempRoot, { mode: 0o700 });
+  const priorDataTemp = process.env.COFFEE_LAUNCH_DATA_TEMP_DIR;
+  process.env.COFFEE_LAUNCH_DATA_TEMP_DIR = selectedTempRoot;
+  try {
+    let observedScratch = false;
+    const placement = await runSecurityScan({
+      materializeRegistryCredentials: fakeRegistryCredentials,
+      contextFile: contextPath,
+      outputDir: join(gateArtifactsDir, "supply-chain-placement"),
+      validateContext: validateSyntheticContext,
+      lockPath: distinctLock,
+      run: async (_command, _args, options) => {
+        assert.ok(
+          options.dockerConfig.startsWith("/dev/shm/coffee-image-registry-"),
+        );
+        const scratch = await readdir(selectedTempRoot);
+        assert.equal(scratch.length, 1);
+        assert.match(scratch[0], /^coffee-image-scan-/u);
+        assert.equal((await lstat(distinctLock)).isFile(), true);
+        observedScratch = true;
+        throw Object.assign(new Error("synthetic stop"), {
+          code: "SYNTHETIC_STOP",
+        });
+      },
+    });
+    assert.equal(observedScratch, true);
+    assert.equal(placement.code, "BUILD_BUILDER_REGISTRATION_FAILED");
+    assert.deepEqual(await readdir(selectedTempRoot), []);
+    await assert.rejects(lstat(distinctLock), { code: "ENOENT" });
+  } finally {
+    if (priorDataTemp === undefined)
+      delete process.env.COFFEE_LAUNCH_DATA_TEMP_DIR;
+    else process.env.COFFEE_LAUNCH_DATA_TEMP_DIR = priorDataTemp;
+  }
   const validCompose = await readFile(join(candidateRoot, "compose.yaml"));
   const commitCompose = async (bytes) => {
     await writeFile(join(candidateRoot, "compose.yaml"), bytes);
@@ -2213,6 +2321,10 @@ void test("supply_chain builds product images, records pinned upstream identity,
   }
   await commitCompose(validCompose);
   let scanCache;
+  let observedSourceDirectory;
+  let checkTempPlacement = false;
+  let placementLock;
+  let interruptDuringBuild = false;
   let imageExports = 0;
   let productBuilds = 0;
   let upstreamPulls = 0;
@@ -2476,6 +2588,24 @@ void test("supply_chain builds product images, records pinned upstream identity,
         }
         flowEvents.push(`build:${service}`);
         const sourceContext = args.at(-1);
+        if (checkTempPlacement) {
+          observedSourceDirectory = dirname(sourceContext);
+          assert.equal(dirname(observedSourceDirectory), tmpdir());
+          assert.equal(
+            (
+              await lstat(join(observedSourceDirectory, "candidate-source.tar"))
+            ).isFile(),
+            true,
+          );
+          // Trivy DB живёт в постоянном cacheRoot, а не в per-run data temp.
+          assert.equal(scanCache.startsWith(`${selectedTempRoot}/`), false);
+          assert.match(scanCache, /\/trivy$/u);
+          assert.equal((await lstat(placementLock)).isFile(), true);
+        }
+        if (interruptDuringBuild) {
+          interruptDuringBuild = false;
+          process.emit("SIGTERM", "SIGTERM");
+        }
         assert.notEqual(sourceContext, candidateRoot);
         assert.equal(
           await readFile(join(sourceContext, "pnpm-lock.yaml"), "utf8"),
@@ -2581,6 +2711,8 @@ void test("supply_chain builds product images, records pinned upstream identity,
           .find((value) => value.startsWith("type=oci,tar=false,dest="))
           .slice("type=oci,tar=false,dest=".length)
           .split(",")[0];
+        if (checkTempPlacement)
+          assert.ok(ociLayout.startsWith(`${selectedTempRoot}/`));
         lastProductLayoutPath = ociLayout;
         const buildLayerBytes =
           service === "grafana"
@@ -3459,6 +3591,9 @@ void test("supply_chain builds product images, records pinned upstream identity,
   const initialTimeoutStart = trivyRunTimeouts.length;
   const readsBefore = databaseFullReads;
   databaseAdvanceMs = 5 * 60_000;
+  process.env.COFFEE_LAUNCH_DATA_TEMP_DIR = selectedTempRoot;
+  checkTempPlacement = true;
+  placementLock = join(tmpdir(), "coffee-platform-trivy.lock");
   const result = await runSecurityScan({
     materializeRegistryCredentials: fakeRegistryCredentials,
     contextFile: contextPath,
@@ -3478,8 +3613,17 @@ void test("supply_chain builds product images, records pinned upstream identity,
       return output;
     },
     statfsFn: async () => ({ bavail: 30 * 1024 ** 3, bsize: 1 }),
-    lockPath: join(temp, "scanner.lock"),
   });
+  checkTempPlacement = false;
+  if (priorDataTemp === undefined)
+    delete process.env.COFFEE_LAUNCH_DATA_TEMP_DIR;
+  else process.env.COFFEE_LAUNCH_DATA_TEMP_DIR = priorDataTemp;
+  assert.ok(observedSourceDirectory);
+  await assert.rejects(lstat(observedSourceDirectory), { code: "ENOENT" });
+  await assert.rejects(lstat(join(tmpdir(), "coffee-platform-trivy.lock")), {
+    code: "ENOENT",
+  });
+  assert.deepEqual(await readdir(selectedTempRoot), []);
   databaseAdvanceMs = 0;
   assert.equal(
     result.status,
@@ -4366,7 +4510,7 @@ void test("supply_chain builds product images, records pinned upstream identity,
   const checksumInventory = JSON.parse(
     await readFile(join(outputDir, "artifacts/checksums.json"), "utf8"),
   );
-  assert.equal(checksumInventory.length, 70);
+  assert.equal(checksumInventory.length, 71);
   const inventoryBytes = await readFile(
     join(outputDir, "artifacts/image-inventory.json"),
     "utf8",
@@ -4392,27 +4536,110 @@ void test("supply_chain builds product images, records pinned upstream identity,
     savedResult.imageInventory.sha256,
     createHash("sha256").update(inventoryBytes).digest("hex"),
   );
-  const { readLaunchImageInventory } =
+  const manifestBytes = await readFile(
+    join(outputDir, "artifacts/artifact-manifest.json"),
+    "utf8",
+  );
+  const artifactManifest = JSON.parse(manifestBytes);
+  assert.equal(artifactManifest.generatedBy, "supply_chain");
+  assert.equal(artifactManifest.schemaVersion, 1);
+  assert.equal(artifactManifest.runId, context.runId);
+  assert.equal(artifactManifest.candidateSha, context.candidateSha);
+  assert.equal(artifactManifest.treeSha, imageInventory.treeSha);
+  assert.equal(artifactManifest.configSha256, imageInventory.configSha256);
+  assert.equal(
+    artifactManifest.toolchainVersionsSha256,
+    imageInventory.toolchainVersionsSha256,
+  );
+  assert.equal(artifactManifest.lockfileSha256, imageInventory.lockfileSha256);
+  assert.equal(
+    artifactManifest.buildInputSha256,
+    imageInventory.buildInputSha256,
+  );
+  assert.equal(
+    artifactManifest.composeProject,
+    context.resources.composeProject,
+  );
+  assert.equal(
+    artifactManifest.imageInventorySha256,
+    createHash("sha256").update(inventoryBytes).digest("hex"),
+  );
+  assert.equal(artifactManifest.images.length, 20);
+  assert.deepEqual(
+    artifactManifest.images.map((image) => image.service).sort(),
+    [
+      ...RUNTIME_NAMES,
+      "grafana",
+      "keycloak",
+      "storage-helper",
+      "edge-nginx",
+      "kafka",
+      "otel-collector",
+    ].sort(),
+  );
+  const runtimeManifestImages = artifactManifest.images.filter(
+    (image) => image.role === "runtime",
+  );
+  assert.deepEqual(
+    runtimeManifestImages.map((image) => image.service).sort(),
+    [...RUNTIME_NAMES, "edge-nginx"].sort(),
+  );
+  assert.deepEqual(
+    artifactManifest.images
+      .filter((image) => image.role === "infra")
+      .map((image) => image.service)
+      .sort(),
+    ["grafana", "kafka", "keycloak", "otel-collector", "storage-helper"],
+  );
+  for (const image of artifactManifest.images) {
+    assert.match(image.imageId, /^sha256:[a-f0-9]{64}$/u);
+    assert.match(image.manifestDigest, /^sha256:[a-f0-9]{64}$/u);
+    assert.match(image.platformManifestDigest, /^sha256:[a-f0-9]{64}$/u);
+    assert.match(image.provenanceSha256, /^[a-f0-9]{64}$/u);
+    assert.match(image.attestationSha256, /^[a-f0-9]{64}$/u);
+  }
+  assert.ok(
+    checksumInventory.some(
+      (entry) =>
+        entry.path === "artifacts/artifact-manifest.json" &&
+        entry.sha256 ===
+          createHash("sha256").update(manifestBytes).digest("hex"),
+    ),
+  );
+  const { readArtifactManifest } =
     await import("../../tools/image-inventory.mjs");
-  const launchInventoryInput = {
+  const manifestInput = {
     evidenceDir: context.evidenceDir,
     context,
     services: [...RUNTIME_NAMES, "edge-nginx"],
   };
-  const boundInventory = await readLaunchImageInventory(launchInventoryInput);
+  const boundManifest = await readArtifactManifest(manifestInput);
+  assert.equal(boundManifest.buildInputSha256, imageInventory.buildInputSha256);
   assert.equal(
-    boundInventory.buildInputSha256,
-    imageInventory.buildInputSha256,
+    boundManifest.imageInventorySha256,
+    createHash("sha256").update(inventoryBytes).digest("hex"),
   );
-  await writeFile(
-    join(outputDir, "artifacts/image-inventory.json"),
-    JSON.stringify({ ...imageInventory, candidateSha: "0".repeat(40) }),
-    { mode: 0o600 },
-  );
-  await assert.rejects(
-    readLaunchImageInventory(launchInventoryInput),
-    /IMAGE_INVENTORY/u,
-  );
+  const manifestPath = join(outputDir, "artifacts/artifact-manifest.json");
+  for (const alter of [
+    (value) => {
+      value.runId = "20260101T000000Z-0000000";
+    },
+    (value) => {
+      value.candidateSha = "0".repeat(40);
+    },
+    (value) => {
+      delete value.images[0].role;
+    },
+  ]) {
+    const changed = structuredClone(artifactManifest);
+    alter(changed);
+    await writeFile(manifestPath, JSON.stringify(changed), { mode: 0o600 });
+    await assert.rejects(
+      readArtifactManifest(manifestInput),
+      /ARTIFACT_MANIFEST/u,
+    );
+  }
+  await writeFile(manifestPath, manifestBytes, { mode: 0o600 });
   assert.ok(
     checksumInventory.some(
       (entry) =>
@@ -4822,6 +5049,10 @@ void test("supply_chain builds product images, records pinned upstream identity,
   replaceImageOnFirstScanReference = toolchain.lokiImage;
   foreignAliasOnFirstScanReference = scannerReference;
   const changedDatabaseRmStart = imageRmTargets.length;
+  observedSourceDirectory = undefined;
+  checkTempPlacement = true;
+  process.env.COFFEE_LAUNCH_DATA_TEMP_DIR = selectedTempRoot;
+  placementLock = join(temp, "scanner-db-changed.lock");
   const changedDatabaseResult = await runSecurityScan({
     materializeRegistryCredentials: fakeRegistryCredentials,
     contextFile: contextPath,
@@ -4833,6 +5064,13 @@ void test("supply_chain builds product images, records pinned upstream identity,
     statfsFn: async () => ({ bavail: 30 * 1024 ** 3, bsize: 1 }),
     lockPath: join(temp, "scanner-db-changed.lock"),
   });
+  checkTempPlacement = false;
+  if (priorDataTemp === undefined)
+    delete process.env.COFFEE_LAUNCH_DATA_TEMP_DIR;
+  else process.env.COFFEE_LAUNCH_DATA_TEMP_DIR = priorDataTemp;
+  assert.ok(observedSourceDirectory);
+  await assert.rejects(lstat(observedSourceDirectory), { code: "ENOENT" });
+  assert.deepEqual(await readdir(selectedTempRoot), []);
   assert.equal(changedDatabaseResult.status, "FAIL");
   assert.equal(changedDatabaseResult.code, "VULNERABILITY_DB_CHANGED");
   assert.deepEqual(changedDatabaseResult.failure, {
@@ -4884,6 +5122,53 @@ void test("supply_chain builds product images, records pinned upstream identity,
     changedDatabaseResult.databases[0].contentSha256,
     /^[0-9a-f]{64}$/u,
   );
+
+  tamperDbOnFirstScan = false;
+  failSourceCleanup = true;
+  const sourceCleanupFailure = await runSecurityScan({
+    materializeRegistryCredentials: fakeRegistryCredentials,
+    contextFile: contextPath,
+    outputDir: join(gateArtifactsDir, "supply-chain-source-cleanup"),
+    clock: () => fakeNow,
+    validateContext: validateSyntheticContext,
+    run: fakeRun,
+    statfsFn: async () => ({ bavail: 30 * 1024 ** 3, bsize: 1 }),
+    lockPath: join(temp, "scanner-source-cleanup.lock"),
+  });
+  assert.equal(sourceCleanupFailure.status, "FAIL");
+  assert.equal(sourceCleanupFailure.code, "TEMP_CLEANUP_FAILED");
+  assert.deepEqual(sourceCleanupFailure.failure, {
+    code: "TEMP_CLEANUP_FAILED",
+    stage: "temporary-cleanup",
+  });
+  assert.ok(retainedSourceDirectory);
+  await originalRm(retainedSourceDirectory, { recursive: true, force: true });
+  retainedSourceDirectory = undefined;
+
+  observedSourceDirectory = undefined;
+  checkTempPlacement = true;
+  interruptDuringBuild = true;
+  placementLock = join(temp, "scanner-source-interrupted.lock");
+  process.env.COFFEE_LAUNCH_DATA_TEMP_DIR = selectedTempRoot;
+  const interrupted = await runSecurityScan({
+    materializeRegistryCredentials: fakeRegistryCredentials,
+    contextFile: contextPath,
+    outputDir: join(gateArtifactsDir, "supply-chain-source-interrupted"),
+    clock: () => fakeNow,
+    validateContext: validateSyntheticContext,
+    run: fakeRun,
+    statfsFn: async () => ({ bavail: 30 * 1024 ** 3, bsize: 1 }),
+    lockPath: placementLock,
+  });
+  checkTempPlacement = false;
+  if (priorDataTemp === undefined)
+    delete process.env.COFFEE_LAUNCH_DATA_TEMP_DIR;
+  else process.env.COFFEE_LAUNCH_DATA_TEMP_DIR = priorDataTemp;
+  assert.equal(interrupted.status, "FAIL");
+  assert.equal(interrupted.code, "INTERRUPTED");
+  assert.ok(observedSourceDirectory);
+  await assert.rejects(lstat(observedSourceDirectory), { code: "ENOENT" });
+  assert.deepEqual(await readdir(selectedTempRoot), []);
 
   highFinding = true;
   findingService = "grafana";

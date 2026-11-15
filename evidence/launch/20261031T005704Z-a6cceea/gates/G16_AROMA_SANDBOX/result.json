@@ -1,0 +1,23 @@
+{
+  "id": "G16_AROMA_SANDBOX",
+  "status": "NOT_RUN",
+  "expectedCommand": "pnpm test:aroma-sandbox -- --approval-file \"$AROMA_SANDBOX_APPROVAL_FILE\"",
+  "startedAt": null,
+  "endedAt": "2026-10-31T00:57:35.769Z",
+  "durationMs": 0,
+  "timeoutSeconds": 1800,
+  "reason": "NOT_RUN: predecessor не PASS: G15_BROWSER",
+  "runs": [],
+  "artifacts": [
+    {
+      "path": "/home/yurgusev/.codex/worktrees/preserve-non-openobserve/CoffeeOrderPlatform/evidence/launch/20261031T005704Z-a6cceea/gates/G16_AROMA_SANDBOX/stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "sizeBytes": 0
+    },
+    {
+      "path": "/home/yurgusev/.codex/worktrees/preserve-non-openobserve/CoffeeOrderPlatform/evidence/launch/20261031T005704Z-a6cceea/gates/G16_AROMA_SANDBOX/stderr.log",
+      "sha256": "f19f762c73ba3412349f0ea692460a724db7b2e870f5c56db75de6fbb774d76b",
+      "sizeBytes": 44
+    }
+  ]
+}

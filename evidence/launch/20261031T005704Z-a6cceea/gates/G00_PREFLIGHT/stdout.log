@@ -1,0 +1,3 @@
+G00_PREFLIGHT FAIL: 34/36 checks; run=20261031T005704Z-a6cceea; sha=a6cceeaa822f9641c678b5dcae521c282391dd3d
+[ELIFECYCLE] Command failed with exit code 1.
+[WARN]  Local package.json exists, but node_modules missing, did you mean to install?

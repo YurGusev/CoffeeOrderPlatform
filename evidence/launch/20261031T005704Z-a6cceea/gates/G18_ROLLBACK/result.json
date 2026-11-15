@@ -1,0 +1,23 @@
+{
+  "id": "G18_ROLLBACK",
+  "status": "NOT_RUN",
+  "expectedCommand": "pnpm test:mutation-disable-rollback",
+  "startedAt": null,
+  "endedAt": "2026-10-31T00:57:35.782Z",
+  "durationMs": 0,
+  "timeoutSeconds": 1800,
+  "reason": "NOT_RUN: predecessor не PASS: G17_BACKUP_RESTORE",
+  "runs": [],
+  "artifacts": [
+    {
+      "path": "/home/yurgusev/.codex/worktrees/preserve-non-openobserve/CoffeeOrderPlatform/evidence/launch/20261031T005704Z-a6cceea/gates/G18_ROLLBACK/stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "sizeBytes": 0
+    },
+    {
+      "path": "/home/yurgusev/.codex/worktrees/preserve-non-openobserve/CoffeeOrderPlatform/evidence/launch/20261031T005704Z-a6cceea/gates/G18_ROLLBACK/stderr.log",
+      "sha256": "2080f843eca6fd5f66bb9dcda3a3851ca6ed14cbb154e672dd66f038168ddfec",
+      "sizeBytes": 51
+    }
+  ]
+}

@@ -1,17 +1,31 @@
 import {
   createHash,
   createHmac,
+  createPublicKey,
   randomBytes,
   randomUUID,
   timingSafeEqual,
+  verify,
 } from "node:crypto";
 import { createServer, request as httpRequest } from "node:http";
-import { spawn } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import { setTimeout as delay } from "node:timers/promises";
-import { lstat, readFile, readdir, realpath } from "node:fs/promises";
-import { join, resolve } from "node:path";
+import {
+  lstat,
+  mkdir,
+  mkdtemp,
+  readFile,
+  readdir,
+  realpath,
+  rm,
+  writeFile,
+} from "node:fs/promises";
+import { dirname, isAbsolute, join, resolve } from "node:path";
+import { tmpdir } from "node:os";
+import { createInterface } from "node:readline";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { load as parseYaml } from "js-yaml";
+import { dump as dumpYaml, load as parseYaml } from "js-yaml";
+import { isDeepStrictEqual } from "node:util";
 import {
   AdmissionError,
   assertAdmissionContractMatchesCandidate,
@@ -21,6 +35,211 @@ import {
   validateAdmission,
   validateContext,
 } from "./aroma-approval.mjs";
+import {
+  createConfigOnlyCheckout,
+  inspectLaunchCheckout,
+  runManagedRollbackChild,
+  validateConfigOnlyLineage,
+  writeRollbackLineageBundle,
+} from "./rollback.mjs";
+import { aromaSandboxResourceNames } from "./aroma-sandbox-resources.mjs";
+import { buildBackupRestorePlan } from "./backup-restore.mjs";
+
+export async function readApprovedAromaSandboxPolicy(
+  candidateRoot,
+  candidateSha,
+) {
+  const path = join(
+    candidateRoot,
+    "evidence/aroma-provider/controlled-account.json",
+  );
+  const info = await lstat(path);
+  if (
+    !info.isFile() ||
+    info.isSymbolicLink() ||
+    (await realpath(path)) !== path ||
+    info.size > 16384
+  )
+    throw new Error("G16_APPROVED_POLICY_BLOB_INVALID");
+  const bytes = execFileSync(
+    "git",
+    [
+      "cat-file",
+      "blob",
+      `${candidateSha}:evidence/aroma-provider/controlled-account.json`,
+    ],
+    {
+      cwd: candidateRoot,
+      stdio: ["ignore", "pipe", "ignore"],
+      maxBuffer: 4 * 1024 * 1024,
+      timeout: 10_000,
+    },
+  );
+  if (
+    createHash("sha256").update(bytes).digest("hex") !==
+      "e77a818d16b833f34c27de4c7500afe14160b96037eb6fe4767d53432ced5e8b" ||
+    !(await readFile(path)).equals(bytes)
+  )
+    throw new Error("G16_APPROVED_POLICY_BLOB_INVALID");
+  const artifact = JSON.parse(bytes.toString("utf8"));
+  const policy = artifact.policy;
+  if (
+    artifact.sourceCommit !== "0dbe0a40685cbf348f0a63f8633a8db3a74a5467" ||
+    artifact.sourceConfigSha256 !==
+      "c2024437a11dadb34da27085cca15097e91ac7ffbed1534f99ae0c6fd40f725e" ||
+    artifact.exceptionAuthority !== "user-2026-10-23" ||
+    policy?.mode !== "controlled-live-existing-account" ||
+    policy.existingAccountException?.authority !== "user-2026-10-23" ||
+    Object.hasOwn(policy, "trustedApprovers")
+  )
+    throw new Error("G16_APPROVED_POLICY_INVALID");
+  return policy;
+}
+
+export async function createAromaSandboxCheckout({
+  candidateRoot,
+  candidateSha,
+  publicKeyPem,
+  keyId,
+  approver,
+}) {
+  await inspectLaunchCheckout(candidateRoot, candidateSha);
+  const parentBytes = execFileSync(
+    "git",
+    ["cat-file", "blob", `${candidateSha}:config/platform.yaml`],
+    {
+      cwd: candidateRoot,
+      stdio: ["ignore", "pipe", "ignore"],
+      maxBuffer: 4 * 1024 * 1024,
+      timeout: 10_000,
+    },
+  );
+  const historicalPolicy = await readApprovedAromaSandboxPolicy(
+    candidateRoot,
+    candidateSha,
+  );
+  const childConfig = buildAromaSandboxChildConfig({
+    parentBytes,
+    historicalPolicy,
+    publicKeyPem,
+    keyId,
+    approver,
+  });
+  return createConfigOnlyCheckout({ candidateRoot, candidateSha, childConfig });
+}
+
+export async function validateAromaSandboxCheckout({
+  candidateRoot,
+  candidateSha,
+  baselineRoot,
+  baselineSha,
+  publicKeyPem,
+  keyId,
+  approver,
+}) {
+  await validateConfigOnlyLineage({
+    parentRoot: candidateRoot,
+    parentSha: candidateSha,
+    baselineRoot,
+    baselineSha,
+  });
+  const configBlob = (root, sha) =>
+    execFileSync("git", ["cat-file", "blob", `${sha}:config/platform.yaml`], {
+      cwd: root,
+      stdio: ["ignore", "pipe", "ignore"],
+      maxBuffer: 4 * 1024 * 1024,
+      timeout: 10_000,
+    });
+  const parentBytes = configBlob(candidateRoot, candidateSha);
+  const expected = buildAromaSandboxChildConfig({
+    parentBytes,
+    historicalPolicy: await readApprovedAromaSandboxPolicy(
+      candidateRoot,
+      candidateSha,
+    ),
+    publicKeyPem,
+    keyId,
+    approver,
+  });
+  if (!configBlob(baselineRoot, baselineSha).equals(expected))
+    throw new Error("G16_CHILD_CONFIG_LINEAGE_INVALID");
+  return {
+    parentSha: candidateSha,
+    childSha: baselineSha,
+    parentConfigSha256: createHash("sha256").update(parentBytes).digest("hex"),
+    childConfigSha256: createHash("sha256").update(expected).digest("hex"),
+  };
+}
+
+export function buildAromaSandboxChildConfig({
+  parentBytes,
+  historicalPolicy,
+  publicKeyPem,
+  keyId,
+  approver,
+}) {
+  const source = parentBytes.toString("utf8");
+  if (!Buffer.from(source, "utf8").equals(parentBytes))
+    throw new Error("G16_PARENT_CONFIG_INVALID");
+  const parent = parseYaml(source);
+  if (
+    parent?.verification?.aromaSandbox !== null ||
+    parent?.services?.["aroma-convergence"]?.mutationsEnabled !== false
+  )
+    throw new Error("G16_PARENT_CONFIG_INVALID");
+  const publicKey = createPublicKey(publicKeyPem);
+  if (
+    publicKey.asymmetricKeyType !== "ed25519" ||
+    approver !== "g16-operator" ||
+    keyId !==
+      `g16-${createHash("sha256")
+        .update(publicKey.export({ type: "spki", format: "der" }))
+        .digest("hex")
+        .slice(0, 20)}`
+  )
+    throw new Error("G16_APPROVER_IDENTITY_INVALID");
+  if (
+    historicalPolicy?.mode !== "controlled-live-existing-account" ||
+    historicalPolicy.existingAccountException?.authority !==
+      "user-2026-10-23" ||
+    Object.hasOwn(historicalPolicy, "trustedApprovers")
+  )
+    throw new Error("G16_HISTORICAL_POLICY_INVALID");
+  const policy = {
+    ...historicalPolicy,
+    trustedApprovers: [{ keyId, approver, publicKeyPem }],
+  };
+  const policyText = dumpYaml(
+    { aromaSandbox: policy },
+    { noRefs: true, lineWidth: -1 },
+  )
+    .trimEnd()
+    .split("\n")
+    .map((line) => `  ${line}`)
+    .join("\n");
+  const marker = /^  aromaSandbox: null[\t ]*$/gmu;
+  const flag = /^([\t ]*mutationsEnabled:[\t ]*)false([\t ]*(?:#.*)?)(\r?)$/gmu;
+  if (
+    [...source.matchAll(marker)].length !== 1 ||
+    [...source.matchAll(flag)].length !== 1
+  )
+    throw new Error("G16_PARENT_CONFIG_AMBIGUOUS");
+  const child = source.replace(marker, policyText).replace(flag, "$1true$2$3");
+  const expected = {
+    ...parent,
+    verification: { ...parent.verification, aromaSandbox: policy },
+    services: {
+      ...parent.services,
+      "aroma-convergence": {
+        ...parent.services["aroma-convergence"],
+        mutationsEnabled: true,
+      },
+    },
+  };
+  if (!isDeepStrictEqual(parseYaml(child), expected))
+    throw new Error("G16_CHILD_CONFIG_DIFF_INVALID");
+  return Buffer.from(child);
+}
 
 const ACCOUNT_FINGERPRINT_NAMESPACE = "coffee-platform:g16:account:v1";
 const AROMA_PACKING_PROOF_PATH =
@@ -962,6 +1181,8 @@ const SAFE_FAILURE_CODES = new Set([
   "AROMA_PACKING_WIRE_PROOF_NOT_PROVEN",
   "AROMA_CATALOG_STAGE_FAILED",
   "AROMA_SANDBOX_CATALOG_CHECK_FAILED",
+  "RECOVERY_REQUIRED",
+  "G16_CHILD_FAILURE_UNVERIFIED",
 ]);
 
 export function safeAromaFailureCode(error) {
@@ -2196,6 +2417,35 @@ async function waitForApproval(
   return null;
 }
 
+async function controlledParentRequest(stage, payload = {}) {
+  if (process.env.COFFEE_AROMA_SANDBOX_CONTROLLED_CHILD !== "1") return;
+  if (!process.connected || !process.send)
+    throw new Error("G16_PARENT_IPC_MISSING");
+  await new Promise((resolvePromise, reject) => {
+    const onDisconnect = () => {
+      cleanup();
+      reject(new Error("G16_PARENT_IPC_CLOSED"));
+    };
+    const onMessage = (message) => {
+      cleanup();
+      if (message?.ok === true && message.stage === stage) resolvePromise();
+      else reject(new Error("G16_PARENT_IPC_REJECTED"));
+    };
+    const cleanup = () => {
+      process.off("disconnect", onDisconnect);
+      process.off("message", onMessage);
+    };
+    process.once("disconnect", onDisconnect);
+    process.once("message", onMessage);
+    process.send({ stage, ...payload }, (error) => {
+      if (error) {
+        cleanup();
+        reject(error);
+      }
+    });
+  });
+}
+
 async function migrateSandboxDatabases(root, resources) {
   const applied = {};
   for (const owner of ["catalog", "orders", "integration"]) {
@@ -2834,6 +3084,7 @@ async function runAromaSandbox({ approvalFile, env = process.env } = {}) {
   const databases = {};
   let gateway;
   let baseline;
+  let verifiedAccountFingerprint;
   let mutationsAuthorized = false;
   let preserveResources = false;
   const cleanupEvidence = { removed: false, retained: false };
@@ -2925,6 +3176,7 @@ async function runAromaSandbox({ approvalFile, env = process.env } = {}) {
       policy,
       signal,
     });
+    verifiedAccountFingerprint = profile.accountFingerprint;
     currentStage = "baseline";
     baseline = await gateway.reader.read(signal);
     demand(
@@ -3020,6 +3272,13 @@ async function runAromaSandbox({ approvalFile, env = process.env } = {}) {
         maximumQuantity: "2",
       })}\n`,
     );
+    await controlledParentRequest("approval", {
+      runId,
+      candidateSha: identity.context.candidateSha,
+      accountFingerprint: profile.accountFingerprint,
+      selected: { offerRef: selected.offerRef },
+      maximumQuantity: "2",
+    });
     const approval = await waitForApproval(
       approvalFile,
       identity,
@@ -3069,6 +3328,7 @@ async function runAromaSandbox({ approvalFile, env = process.env } = {}) {
       },
       migrations,
       cleanup: cleanupEvidence,
+      resourceIDs: resources.resourceIDs,
       result,
     };
   } catch (error) {
@@ -3123,6 +3383,7 @@ async function runAromaSandbox({ approvalFile, env = process.env } = {}) {
         return {
           status: "FAIL",
           code: "RECOVERY_REQUIRED",
+          accountFingerprint: verifiedAccountFingerprint,
           recovery: {
             runId,
             stage: checkedStage(currentStage),
@@ -3173,6 +3434,933 @@ async function runAromaSandbox({ approvalFile, env = process.env } = {}) {
   }
 }
 
+const G16_PHASES = [
+  "baseline-read",
+  "noop",
+  "single-mutation",
+  "lost-response",
+  "restart-reconcile",
+  "restore",
+  "final-read",
+];
+const digest = (bytes) => createHash("sha256").update(bytes).digest("hex");
+
+export function sanitizeControlledAromaSandboxRecovery(
+  outcome,
+  context,
+  policy,
+  image,
+) {
+  const recovery = outcome?.recovery;
+  const ids = recovery?.resourceIDs;
+  const names = aromaSandboxResourceNames(context.runId);
+  if (
+    outcome?.gate !== "aroma_sandbox" ||
+    outcome.status !== "FAIL" ||
+    outcome.code !== "RECOVERY_REQUIRED" ||
+    outcome.runId !== context.runId ||
+    outcome.candidateSha !== context.candidateSha ||
+    outcome.mode !== policy.mode ||
+    outcome.origin !== policy.origin ||
+    outcome.accountFingerprint !== policy.accountFingerprint ||
+    recovery?.runId !== context.runId ||
+    !SANDBOX_STAGES.includes(recovery.stage) ||
+    recovery.cartState !== "UNRESOLVED_OR_NONBASELINE" ||
+    recovery.mutationsDisabled !== true ||
+    recovery.requiredAction !==
+      "CONTROLLED_AROMA_SANDBOX_RECOVERY_BEFORE_RESOURCE_CLEANUP" ||
+    recovery.cleanup?.removed !== false ||
+    recovery.cleanup?.retained !== true ||
+    recovery.cleanup?.failed ||
+    ids?.runId !== context.runId ||
+    ids.image !== image ||
+    !/^sha256:[a-f0-9]{64}$/u.test(ids.imageId ?? "") ||
+    ids.container?.name !== names.container ||
+    ids.network?.name !== names.network ||
+    ids.container?.label !== "coffee.g16.run-id" ||
+    ids.network?.label !== "coffee.g16.run-id" ||
+    !/^[a-f0-9]{64}$/u.test(ids.container?.id ?? "") ||
+    !/^[a-f0-9]{64}$/u.test(ids.network?.id ?? "") ||
+    !/^[0-9]{1,20}$/u.test(ids.databaseSystemIdentifier ?? "")
+  )
+    return null;
+  const partial = outcome.failureEvidence?.partialPhaseEvidence;
+  let failureEvidence;
+  if (partial !== undefined) {
+    if (!Array.isArray(partial) || partial.length === 0) return null;
+    const last = partial.at(-1);
+    if (last?.status !== "FAIL") return null;
+    const convergence = outcome.failureEvidence.convergenceEvidence;
+    const latest = convergence?.latestAttempt;
+    failureEvidence = safeAromaPhaseFailureEvidence({
+      completedPhases: partial.slice(0, -1),
+      failedPhase: last.phase,
+      failedAtUtc: last.capturedAtUtc,
+      convergenceEvidence: convergence && {
+        latestAttempt: latest && {
+          state: latest.state,
+          failure_code: latest.failureCode,
+          blocker_codes: latest.blockerCodes,
+          selected_action: latest.selectedAction,
+          selected_offer_matches: latest.selectedOfferMatches,
+        },
+        reservationStateCounts: convergence.reservationStateCounts,
+        gatewayJournalStateCounts: convergence.gatewayJournalStateCounts,
+      },
+    });
+    if (!failureEvidence) return null;
+  }
+  const checkedDiagnostic = safeAromaDiagnostic({
+    safeDiagnostic: recovery.diagnostic,
+  });
+  const diagnostic = checkedDiagnostic && {
+    substage: checkedDiagnostic.substage,
+    ...(SAFE_FAILURE_CODES.has(checkedDiagnostic.ownerCode)
+      ? { ownerCode: checkedDiagnostic.ownerCode }
+      : {}),
+    ...(SAFE_FAILURE_CODES.has(checkedDiagnostic.causeCode)
+      ? { causeCode: checkedDiagnostic.causeCode }
+      : {}),
+    ...(checkedDiagnostic.sqlState
+      ? { sqlState: checkedDiagnostic.sqlState }
+      : {}),
+  };
+  return {
+    gate: "aroma_sandbox",
+    status: "FAIL",
+    code: "RECOVERY_REQUIRED",
+    runId: context.runId,
+    candidateSha: context.candidateSha,
+    mode: policy.mode,
+    origin: policy.origin,
+    accountFingerprint: policy.accountFingerprint,
+    recovery: {
+      runId: context.runId,
+      stage: recovery.stage,
+      failureCode: safeAromaFailureCode(new Error(recovery.failureCode)),
+      ...(diagnostic ? { diagnostic } : {}),
+      cartState: "UNRESOLVED_OR_NONBASELINE",
+      mutationsDisabled: true,
+      resourceIDs: {
+        runId: context.runId,
+        image,
+        imageId: ids.imageId,
+        container: {
+          name: names.container,
+          id: ids.container.id,
+          label: "coffee.g16.run-id",
+        },
+        network: {
+          name: names.network,
+          id: ids.network.id,
+          label: "coffee.g16.run-id",
+        },
+        databaseSystemIdentifier: ids.databaseSystemIdentifier,
+      },
+      requiredAction:
+        "CONTROLLED_AROMA_SANDBOX_RECOVERY_BEFORE_RESOURCE_CLEANUP",
+      cleanup: { removed: false, retained: true },
+    },
+    ...(failureEvidence ? { failureEvidence } : {}),
+  };
+}
+
+async function prepareAromaSandboxAge({ candidateRoot, context }, env) {
+  const locator = env.SOPS_AGE_KEY_FILE;
+  if (
+    typeof locator !== "string" ||
+    !isAbsolute(locator) ||
+    resolve(locator) !== locator
+  )
+    throw new Error("G16_AGE_KEY_INVALID");
+  const info = await lstat(locator).catch(() => null);
+  if (
+    !info?.isFile() ||
+    info.isSymbolicLink() ||
+    info.uid !== process.getuid() ||
+    (info.mode & 0o777) !== 0o600 ||
+    (await realpath(locator)) !== locator
+  )
+    throw new Error("G16_AGE_KEY_INVALID");
+  const committed = async (path) => {
+    const bytes = await readRegular(join(candidateRoot, path), 8 * 1024 * 1024);
+    const expected = execFileSync(
+      "git",
+      ["cat-file", "blob", `${context.candidateSha}:${path}`],
+      {
+        cwd: candidateRoot,
+        stdio: ["ignore", "pipe", "ignore"],
+        timeout: 10000,
+        maxBuffer: 8 * 1024 * 1024,
+      },
+    );
+    if (!bytes.equals(expected)) throw new Error("G16_AGE_AUTHORITY_INVALID");
+    return bytes.toString("utf8");
+  };
+  const toolchain = JSON.parse(
+    await committed("config/toolchain-versions.json"),
+  );
+  const ownership = JSON.parse(
+    await committed("config/database-ownership.json"),
+  );
+  const roleMap = JSON.parse(await committed("config/database-role-map.json"));
+  const policy = parseYaml(await committed(".sops.yaml"));
+  const plan = buildBackupRestorePlan(context, ownership, roleMap, policy).age;
+  try {
+    const options = {
+      stdio: ["ignore", "pipe", "pipe"],
+      timeout: 10000,
+      maxBuffer: 16384,
+      encoding: "utf8",
+    };
+    if (
+      toolchain.age !== plan.version ||
+      execFileSync("age", ["--version"], options).trim() !==
+        `v${plan.version}` ||
+      execFileSync("age-keygen", ["--version"], options).trim() !==
+        `v${plan.version}`
+    )
+      throw new Error("version");
+    const publicKeys = execFileSync("age-keygen", ["-y", locator], options)
+      .trim()
+      .split(/\r?\n/u);
+    if (!publicKeys.some((key) => plan.recipients.includes(key)))
+      throw new Error("recipient");
+  } catch {
+    throw new Error("G16_AGE_PREFLIGHT_FAILED");
+  }
+  return { locator, recipients: plan.recipients };
+}
+
+function runAromaSandboxAge(args, input) {
+  try {
+    return execFileSync("age", args, {
+      input,
+      stdio: ["pipe", "pipe", "pipe"],
+      timeout: 10000,
+      maxBuffer: 65536,
+    });
+  } catch {
+    throw new Error("G16_AGE_OPERATION_FAILED");
+  }
+}
+
+export function validateControlledAromaSandboxResult(
+  outcome,
+  context,
+  policy,
+  image,
+) {
+  const names = aromaSandboxResourceNames(context.runId);
+  if (
+    outcome?.gate !== "aroma_sandbox" ||
+    outcome.status !== "PASS" ||
+    outcome.code !== "CONTROLLED_LIVE_SCENARIO_COMPLETE" ||
+    outcome.runId !== context.runId ||
+    outcome.candidateSha !== context.candidateSha ||
+    outcome.accountFingerprint !== policy.accountFingerprint ||
+    typeof outcome.selected?.offerRef !== "string" ||
+    !outcome.selected.offerRef ||
+    outcome.cleanup?.removed !== true ||
+    outcome.cleanup?.retained !== false ||
+    outcome.cleanup?.failed ||
+    outcome.resourceIDs?.runId !== context.runId ||
+    outcome.resourceIDs.image !== image ||
+    !/^sha256:[a-f0-9]{64}$/.test(outcome.resourceIDs?.imageId ?? "") ||
+    !/^[a-f0-9]{64}$/.test(outcome.resourceIDs?.container?.id ?? "") ||
+    !/^[a-f0-9]{64}$/.test(outcome.resourceIDs?.network?.id ?? "") ||
+    outcome.resourceIDs?.container?.name !== names.container ||
+    outcome.resourceIDs?.network?.name !== names.network ||
+    typeof outcome.resourceIDs?.databaseSystemIdentifier !== "string" ||
+    !outcome.resourceIDs.databaseSystemIdentifier ||
+    !Array.isArray(outcome.phases) ||
+    outcome.phases.length !== G16_PHASES.length ||
+    outcome.phases.some(
+      (phase, index) =>
+        phase.phase !== G16_PHASES[index] || phase.status !== "PASS",
+    ) ||
+    !outcome.baselineFingerprint ||
+    outcome.baselineFingerprint !== outcome.finalFingerprint ||
+    outcome.phases[0].cartFingerprint !== outcome.baselineFingerprint ||
+    outcome.phases[0].lineCount !== 0 ||
+    outcome.phases[1].workDirty !== false ||
+    outcome.phases[1].observedLineCount !== 0 ||
+    outcome.phases[1].gatewayJournalRows !== 0 ||
+    outcome.phases[2].workDirty !== false ||
+    outcome.phases[2].gateway?.operationKind !== "SetLineQuantity" ||
+    outcome.phases[2].gateway?.state !== "Acknowledged" ||
+    outcome.phases[2].observedLines?.length !== 1 ||
+    outcome.phases[2].observedLines[0].offerRef !== outcome.selected.offerRef ||
+    outcome.phases[2].observedLines[0].quantityMilli !== "1000" ||
+    outcome.phases[3].workDirty !== true ||
+    outcome.phases[3].reservation?.state !== "UnknownOutcome" ||
+    outcome.phases[3].reservation?.resolved !== false ||
+    outcome.phases[3].droppedAcknowledgementCount !== 1 ||
+    outcome.phases[3].reservation?.operationRef !==
+      outcome.unknownOperationRef ||
+    outcome.phases[3].gateway?.state !== "Acknowledged" ||
+    outcome.phases[4].workDirty !== false ||
+    outcome.phases[4].reservation?.operationRef !==
+      outcome.unknownOperationRef ||
+    outcome.phases[4].reservation?.resolved !== true ||
+    outcome.phases[4].oldOperationJournalRows !== 1 ||
+    outcome.phases[5].workDirty !== false ||
+    outcome.phases[5].gateway?.operationKind !== "RemoveLine" ||
+    outcome.phases[5].gateway?.state !== "Acknowledged" ||
+    outcome.phases[5].observedLineCount !== 0 ||
+    outcome.phases.at(-1).cartFingerprint !== outcome.baselineFingerprint ||
+    outcome.phases.at(-1).matchesBaseline !== true ||
+    outcome.phases.at(-1).lineCount !== 0 ||
+    outcome.mutationJournalRows !== 3 ||
+    !outcome.unknownOperationRef
+  )
+    throw new Error("G16_CHILD_RESULT_INVALID");
+  return outcome;
+}
+
+export async function verifyControlledAromaSandboxEvidence({
+  parentIdentity,
+  parentContextPath,
+  requireCleanup = true,
+  env = process.env,
+}) {
+  const {
+    context: parent,
+    candidateRoot,
+    sourceRoot,
+    evidenceDir,
+  } = parentIdentity;
+  const artifacts = join(evidenceDir, "gates/aroma_sandbox/artifacts");
+  const receipt = JSON.parse(
+    (
+      await readRegular(join(artifacts, "controlled-parent.json"), 16384)
+    ).toString("utf8"),
+  );
+  if (
+    receipt.schemaVersion !== 1 ||
+    receipt.runId !== parent.runId ||
+    receipt.candidateSha !== parent.candidateSha ||
+    receipt.cleanup?.checkoutRemoved !== requireCleanup ||
+    receipt.cleanup?.evidenceRemoved !== requireCleanup ||
+    receipt.cleanup?.signerRemoved !== requireCleanup ||
+    !/^[a-f0-9]{64}$/.test(receipt.signerSha256 ?? "")
+  )
+    throw new Error("G16_PARENT_RECEIPT_INVALID");
+  const checked = async (name, expected, maximum = 16 * 1024 * 1024) => {
+    const bytes = await readRegular(join(artifacts, name), maximum);
+    if (digest(bytes) !== expected)
+      throw new Error("G16_PARENT_ARTIFACT_HASH_INVALID");
+    return bytes;
+  };
+  const context = JSON.parse(
+    (
+      await checked(
+        "controlled-child-context.json",
+        receipt.childContextSha256,
+        16384,
+      )
+    ).toString("utf8"),
+  );
+  if (
+    context.runId !== receipt.childRunId ||
+    context.candidateSha !== receipt.childSha ||
+    !/^[0-9]{8}T[0-9]{6}Z-[a-f0-9]{7}$/.test(context.runId ?? "") ||
+    !/^[a-f0-9]{40}$/.test(context.candidateSha ?? "") ||
+    !context.runId.endsWith(`-${context.candidateSha.slice(0, 7)}`) ||
+    context.sourceRepoRoot !== sourceRoot ||
+    context.acceptedBaseCommit !== parent.acceptedBaseCommit ||
+    context.evidenceDir !==
+      join(sourceRoot, "evidence/launch", context.runId) ||
+    context.resources?.controlledScope !== "aroma_sandbox" ||
+    context.resources.controlledParentContextPath !== parentContextPath ||
+    context.resources.controlledParentCandidateSha !== parent.candidateSha ||
+    context.resources.controlledParentRunId !== parent.runId ||
+    context.resources.composeProject !==
+      `coffee-launch-${context.runId.toLowerCase()}` ||
+    context.resources.kafkaPrefix !== context.runId
+  )
+    throw new Error("G16_CHILD_CONTEXT_INVALID");
+  const outcome = JSON.parse(
+    (
+      await checked("controlled-child-result.json", receipt.childResultSha256)
+    ).toString("utf8"),
+  );
+  for (const name of ["controlled-approval.json", "controlled-approval.sig"]) {
+    const present = await lstat(join(artifacts, name)).then(
+      () => true,
+      (error) => {
+        if (error.code === "ENOENT") return false;
+        throw error;
+      },
+    );
+    if (present) throw new Error("G16_APPROVAL_PLAINTEXT_PRESENT");
+  }
+  for (const name of [
+    "controlled-approval.json.age",
+    "controlled-approval.sig.age",
+  ]) {
+    const info = await lstat(join(artifacts, name));
+    if (
+      !info.isFile() ||
+      info.isSymbolicLink() ||
+      info.uid !== process.getuid() ||
+      (info.mode & 0o777) !== 0o600
+    )
+      throw new Error("G16_APPROVAL_CIPHERTEXT_MODE_INVALID");
+  }
+  const encryptedApproval = await checked(
+    "controlled-approval.json.age",
+    receipt.approvalCiphertextSha256,
+    65536,
+  );
+  const encryptedSignature = await checked(
+    "controlled-approval.sig.age",
+    receipt.signatureCiphertextSha256,
+    65536,
+  );
+  const age = await prepareAromaSandboxAge(parentIdentity, env);
+  const approvalBytes = runAromaSandboxAge(
+    ["--decrypt", "--identity", age.locator],
+    encryptedApproval,
+  );
+  const signature = runAromaSandboxAge(
+    ["--decrypt", "--identity", age.locator],
+    encryptedSignature,
+  );
+  if (
+    approvalBytes.length > 16384 ||
+    signature.length > 1024 ||
+    digest(approvalBytes) !== receipt.approvalSha256 ||
+    digest(signature) !== receipt.signatureSha256
+  )
+    throw new Error("G16_APPROVAL_PLAINTEXT_HASH_INVALID");
+  const approval = JSON.parse(approvalBytes.toString("utf8"));
+  const policy = await readApprovedAromaSandboxPolicy(
+    candidateRoot,
+    parent.candidateSha,
+  );
+  const toolchain = JSON.parse(
+    (
+      await readRegular(
+        join(candidateRoot, "config/toolchain-versions.json"),
+        1024 * 1024,
+      )
+    ).toString("utf8"),
+  );
+  validateControlledAromaSandboxResult(
+    outcome,
+    context,
+    policy,
+    toolchain.postgresImage,
+  );
+  const issued = Date.parse(approval.issuedAtUtc),
+    expires = Date.parse(approval.expiresAtUtc),
+    firstPhase = Date.parse(outcome.phases[0].capturedAtUtc);
+  if (
+    approval.runId !== context.runId ||
+    approval.candidateSha !== context.candidateSha ||
+    approval.accountFingerprint !== policy.accountFingerprint ||
+    approval.offerRef !== outcome.selected.offerRef ||
+    approval.maximumQuantity !== "2" ||
+    approval.approver !== receipt.signer.approver ||
+    approval.keyId !== receipt.signer.keyId ||
+    approval.mode !== policy.mode ||
+    approval.origin !== policy.origin ||
+    approval.exceptionAuthority !== "user-2026-10-23" ||
+    !Number.isFinite(issued) ||
+    !Number.isFinite(expires) ||
+    !Number.isFinite(firstPhase) ||
+    expires <= issued ||
+    expires - issued > 3600000 ||
+    firstPhase < issued ||
+    firstPhase >= expires ||
+    !verify(
+      null,
+      approvalBytes,
+      createPublicKey(receipt.signer.publicKeyPem),
+      Buffer.from(signature.toString("utf8"), "base64"),
+    )
+  )
+    throw new Error("G16_APPROVAL_PROOF_INVALID");
+  const bundle = join(artifacts, "controlled-config.bundle");
+  await checked("controlled-config.bundle", receipt.bundleSha256);
+  const temporary = await mkdtemp(join(tmpdir(), "coffee-g16-admission-"));
+  try {
+    const childRoot = join(temporary, "child");
+    const git = (cwd, ...args) =>
+      execFileSync("git", args, {
+        cwd,
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "ignore"],
+        timeout: 60000,
+      }).trim();
+    execFileSync(
+      "git",
+      [
+        "clone",
+        "--quiet",
+        "--shared",
+        "--no-hardlinks",
+        candidateRoot,
+        childRoot,
+      ],
+      { stdio: "ignore", timeout: 60000 },
+    );
+    git(childRoot, "bundle", "verify", bundle);
+    if (
+      git(childRoot, "bundle", "list-heads", bundle) !==
+      `${context.candidateSha} HEAD`
+    )
+      throw new Error("G16_BUNDLE_INVALID");
+    git(childRoot, "fetch", "--quiet", "--no-tags", bundle, "HEAD");
+    git(childRoot, "checkout", "--quiet", "--detach", context.candidateSha);
+    const lineage = await validateAromaSandboxCheckout({
+      candidateRoot,
+      candidateSha: parent.candidateSha,
+      baselineRoot: childRoot,
+      baselineSha: context.candidateSha,
+      ...receipt.signer,
+    });
+    if (
+      lineage.parentConfigSha256 !== parent.baseConfigSha256 ||
+      lineage.childConfigSha256 !== context.baseConfigSha256
+    )
+      throw new Error("G16_CONFIG_BINDING_INVALID");
+  } finally {
+    await rm(temporary, { recursive: true, force: true });
+  }
+  return receipt;
+}
+
+export async function handleControlledAromaSandboxChildFailure({
+  error,
+  parent,
+  childContext,
+  candidateRoot,
+  signerApproved,
+  approvalRequests,
+  artifacts,
+}) {
+  let recovery = null;
+  if (
+    signerApproved &&
+    approvalRequests === 1 &&
+    error?.result?.joined === true &&
+    error.result.code !== 0
+  ) {
+    try {
+      const last = error.result.stdout.split(/\r?\n/u).filter(Boolean).at(-1);
+      const outcome = JSON.parse(last);
+      const policy = await readApprovedAromaSandboxPolicy(
+        candidateRoot,
+        parent.candidateSha,
+      );
+      const toolchain = JSON.parse(
+        (
+          await readRegular(
+            join(candidateRoot, "config/toolchain-versions.json"),
+            1024 * 1024,
+          )
+        ).toString("utf8"),
+      );
+      recovery = sanitizeControlledAromaSandboxRecovery(
+        outcome,
+        childContext,
+        policy,
+        toolchain.postgresImage,
+      );
+    } catch {
+      /* Untrusted or incomplete child output cannot establish recovery facts. */
+    }
+  }
+  const failure = {
+    schemaVersion: 1,
+    parentRunId: parent.runId,
+    parentCandidateSha: parent.candidateSha,
+    childRunId: childContext.runId,
+    childCandidateSha: childContext.candidateSha,
+    status: "FAIL",
+    code: recovery ? "RECOVERY_REQUIRED" : "G16_CHILD_FAILURE_UNVERIFIED",
+    childFailure: [
+      "ROLLBACK_CHILD_FAILED",
+      "ROLLBACK_CHILD_TIMEOUT",
+      "ROLLBACK_CHILD_INTERRUPTED_SIGINT",
+      "ROLLBACK_CHILD_INTERRUPTED_SIGTERM",
+      "ROLLBACK_CHILD_OUTPUT_LIMIT",
+      "ROLLBACK_CHILD_IPC_FAILED",
+    ].includes(error?.message)
+      ? error.message
+      : "ROLLBACK_CHILD_FAILED",
+    ...(recovery
+      ? {
+          mode: recovery.mode,
+          origin: recovery.origin,
+          accountFingerprint: recovery.accountFingerprint,
+          recovery: recovery.recovery,
+          ...(recovery.failureEvidence
+            ? { failureEvidence: recovery.failureEvidence }
+            : {}),
+        }
+      : {}),
+  };
+  const bytes = Buffer.from(`${JSON.stringify(failure, null, 2)}\n`);
+  const path = join(artifacts, "controlled-child-failure.json");
+  await writeFile(path, bytes, { flag: "wx", mode: 0o600 });
+  const failureError = new Error(failure.code);
+  failureError.safeDetails = {
+    failureReceipt: { path, sha256: digest(bytes) },
+    childFailure: failure.childFailure,
+    ...(recovery
+      ? {
+          recovery: recovery.recovery,
+          ...(recovery.failureEvidence
+            ? { failureEvidence: recovery.failureEvidence }
+            : {}),
+        }
+      : {}),
+  };
+  throw failureError;
+}
+
+export async function runControlledAromaSandboxParent({
+  parentIdentity,
+  parentContextPath,
+  signerPath,
+}) {
+  if (
+    typeof signerPath !== "string" ||
+    !isAbsolute(signerPath) ||
+    resolve(signerPath) !== signerPath ||
+    (await realpath(signerPath)) !== signerPath
+  )
+    throw new Error("G16_SIGNER_PATH_INVALID");
+  const signerBytes = await readRegular(signerPath, 1024 * 1024);
+  const signerSha256 = digest(signerBytes);
+  const {
+    context: parent,
+    candidateRoot,
+    sourceRoot,
+    evidenceDir,
+  } = parentIdentity;
+  const signer = spawn(process.execPath, [signerPath, "--hold"], {
+    cwd: sourceRoot,
+    stdio: ["pipe", "pipe", "pipe"],
+  });
+  signer.stdin.on("error", () => {});
+  const joined = new Promise((resolvePromise) => {
+    signer.once("error", () => resolvePromise({ code: null }));
+    signer.once("close", (code) => resolvePromise({ code }));
+  });
+  signer.stderr.resume();
+  const lines = createInterface({ input: signer.stdout, crlfDelay: Infinity })[
+    Symbol.asyncIterator
+  ]();
+  const nextLine = async () => {
+    const next = await Promise.race([
+      lines.next(),
+      delay(15000, null, { ref: false }).then(() => {
+        throw new Error("G16_SIGNER_TIMEOUT");
+      }),
+    ]);
+    if (next.done || next.value.length > 16384)
+      throw new Error("G16_SIGNER_PROTOCOL_INVALID");
+    return JSON.parse(next.value);
+  };
+  let ready,
+    baseline,
+    child,
+    childStarted = false,
+    childVerified = false,
+    signerDone = false;
+  let signerDirectory;
+  try {
+    ready = await nextLine();
+    if (
+      ready.mode !== "G16_RAM_SIGNER_READY" ||
+      typeof ready.approvalFile !== "string" ||
+      !/^\/dev\/shm\/coffee-g16-operator-[A-Za-z0-9]+\/approval\.json$/.test(
+        ready.approvalFile,
+      ) ||
+      ready.approver !== "g16-operator" ||
+      digest(await readRegular(signerPath, 1024 * 1024)) !== signerSha256
+    )
+      throw new Error("G16_SIGNER_READY_INVALID");
+    const readyDirectory = dirname(ready.approvalFile);
+    const signerInfo = await lstat(readyDirectory);
+    if (
+      !signerInfo.isDirectory() ||
+      signerInfo.isSymbolicLink() ||
+      signerInfo.uid !== process.getuid() ||
+      (signerInfo.mode & 0o777) !== 0o700 ||
+      (await realpath(readyDirectory)) !== readyDirectory
+    )
+      throw new Error("G16_SIGNER_DIRECTORY_INVALID");
+    signerDirectory = readyDirectory;
+    const age = await prepareAromaSandboxAge(parentIdentity, process.env);
+    const signerIdentity = {
+      publicKeyPem: ready.publicKeyPem,
+      keyId: ready.keyId,
+      approver: ready.approver,
+    };
+    baseline = await createAromaSandboxCheckout({
+      candidateRoot,
+      candidateSha: parent.candidateSha,
+      ...signerIdentity,
+    });
+    const { prepareBrowserChildCheckout, writeControlledChildContext } =
+      await import("./browser.mjs");
+    await prepareBrowserChildCheckout(baseline.baselineRoot);
+    child = await writeControlledChildContext({
+      contextPath: parentContextPath,
+      childRoot: baseline.baselineRoot,
+      childSha: baseline.baselineSha,
+      scope: "aroma_sandbox",
+      signer: signerIdentity,
+    });
+    const bundle = await writeRollbackLineageBundle({
+      candidateSha: parent.candidateSha,
+      restoredRoot: baseline.baselineRoot,
+      restoredSha: baseline.baselineSha,
+      evidenceDir,
+      scope: "aroma_sandbox",
+    });
+    const artifacts = join(evidenceDir, "gates/aroma_sandbox/artifacts");
+    await mkdir(artifacts, { recursive: true, mode: 0o700 });
+    const env = {
+      ...process.env,
+      COFFEE_LAUNCH_CONTEXT_FILE: child.path,
+      COFFEE_AROMA_SANDBOX_CONTROLLED_CHILD: "1",
+    };
+    delete env.COFFEE_AROMA_SANDBOX_SIGNER_PATH;
+    let signed;
+    let signerApproved = false;
+    let approvalRequests = 0;
+    childStarted = true;
+    const execution = await runManagedRollbackChild({
+      args: [
+        join(
+          baseline.baselineRoot,
+          "verification/launch/v1/scenarios/aroma-sandbox.mjs",
+        ),
+        "--approval-file",
+        ready.approvalFile,
+      ],
+      cwd: baseline.baselineRoot,
+      env,
+      onIpc: async (message) => {
+        if (message.stage === "cleanup") {
+          if (approvalRequests !== 1 || !signed)
+            throw new Error("G16_APPROVAL_MISSING");
+          return {};
+        }
+        const policy = await readApprovedAromaSandboxPolicy(
+          candidateRoot,
+          parent.candidateSha,
+        );
+        if (
+          message.stage !== "approval" ||
+          ++approvalRequests !== 1 ||
+          message.runId !== child.context.runId ||
+          message.candidateSha !== baseline.baselineSha ||
+          message.accountFingerprint !== policy.accountFingerprint ||
+          message.maximumQuantity !== "2" ||
+          !exactObjectKeys(message.selected, ["offerRef"]) ||
+          typeof message.selected.offerRef !== "string" ||
+          !message.selected.offerRef
+        )
+          throw new Error("G16_APPROVAL_REQUEST_INVALID");
+        signer.stdin.end(
+          `${JSON.stringify({
+            contextPath: child.path,
+            runId: message.runId,
+            candidateSha: message.candidateSha,
+            accountFingerprint: message.accountFingerprint,
+            selected: message.selected,
+            maximumQuantity: message.maximumQuantity,
+          })}\n`,
+        );
+        signed = await nextLine();
+        const finished = await joined;
+        signerDone = true;
+        if (
+          finished.code !== 0 ||
+          signed.mode !== "G16_RAM_SIGNER_SIGNED" ||
+          signed.approvalFile !== ready.approvalFile ||
+          signed.runId !== message.runId ||
+          signed.candidateSha !== message.candidateSha ||
+          signed.offerRef !== message.selected.offerRef
+        )
+          throw new Error("G16_SIGNER_RESPONSE_INVALID");
+        signerApproved = true;
+        return {};
+      },
+    }).catch(async (error) => {
+      return handleControlledAromaSandboxChildFailure({
+        error,
+        parent,
+        childContext: child.context,
+        candidateRoot,
+        signerApproved,
+        approvalRequests,
+        artifacts,
+      });
+    });
+    if (!signed || approvalRequests !== 1)
+      throw new Error("G16_APPROVAL_MISSING");
+    const last = execution.stdout.split(/\r?\n/u).filter(Boolean).at(-1);
+    const outcome = JSON.parse(last);
+    const policy = await readApprovedAromaSandboxPolicy(
+      candidateRoot,
+      parent.candidateSha,
+    );
+    const toolchain = JSON.parse(
+      (
+        await readRegular(
+          join(candidateRoot, "config/toolchain-versions.json"),
+          1024 * 1024,
+        )
+      ).toString("utf8"),
+    );
+    validateControlledAromaSandboxResult(
+      outcome,
+      child.context,
+      policy,
+      toolchain.postgresImage,
+    );
+    const approvalBytes = await readRegular(ready.approvalFile, 16384);
+    const signatureBytes = await readRegular(`${ready.approvalFile}.sig`, 1024);
+    if (
+      digest(approvalBytes) !== signed.approvalSha256 ||
+      digest(signatureBytes) !== signed.signatureSha256
+    )
+      throw new Error("G16_SIGNER_OUTPUT_HASH_INVALID");
+    const ageArgs = age.recipients.flatMap((recipient) => [
+      "--recipient",
+      recipient,
+    ]);
+    const files = [
+      ["controlled-child-context.json", await readRegular(child.path, 16384)],
+      [
+        "controlled-child-result.json",
+        Buffer.from(`${JSON.stringify(outcome, null, 2)}\n`),
+      ],
+      [
+        "controlled-approval.json.age",
+        runAromaSandboxAge(ageArgs, approvalBytes),
+      ],
+      [
+        "controlled-approval.sig.age",
+        runAromaSandboxAge(ageArgs, signatureBytes),
+      ],
+    ];
+    for (const [name, bytes] of files)
+      await writeFile(join(artifacts, name), bytes, {
+        flag: "wx",
+        mode: 0o600,
+      });
+    const receipt = {
+      schemaVersion: 1,
+      runId: parent.runId,
+      candidateSha: parent.candidateSha,
+      childRunId: child.context.runId,
+      childSha: baseline.baselineSha,
+      signer: signerIdentity,
+      signerSha256,
+      bundleSha256: bundle.sha256,
+      childContextSha256: digest(files[0][1]),
+      childResultSha256: digest(files[1][1]),
+      approvalSha256: digest(approvalBytes),
+      signatureSha256: digest(signatureBytes),
+      approvalCiphertextSha256: digest(files[2][1]),
+      signatureCiphertextSha256: digest(files[3][1]),
+      cleanup: {
+        checkoutRemoved: false,
+        evidenceRemoved: false,
+        signerRemoved: false,
+      },
+    };
+    const receiptPath = join(artifacts, "controlled-parent.json");
+    await writeFile(receiptPath, `${JSON.stringify(receipt, null, 2)}\n`, {
+      flag: "wx",
+      mode: 0o600,
+    });
+    await verifyControlledAromaSandboxEvidence({
+      parentIdentity,
+      parentContextPath,
+      requireCleanup: false,
+    });
+    childVerified = true;
+    await rm(baseline.directory, { recursive: true });
+    await rm(child.context.evidenceDir, { recursive: true });
+    await rm(signerDirectory, { recursive: true });
+    for (const path of [
+      baseline.directory,
+      child.context.evidenceDir,
+      signerDirectory,
+    ])
+      if (
+        await lstat(path).then(
+          () => true,
+          (error) => {
+            if (error.code === "ENOENT") return false;
+            throw error;
+          },
+        )
+      )
+        throw new Error("G16_CLEANUP_UNVERIFIED");
+    receipt.cleanup = {
+      checkoutRemoved: true,
+      evidenceRemoved: true,
+      signerRemoved: true,
+    };
+    await writeFile(receiptPath, `${JSON.stringify(receipt, null, 2)}\n`, {
+      mode: 0o600,
+    });
+    await verifyControlledAromaSandboxEvidence({
+      parentIdentity,
+      parentContextPath,
+    });
+    return {
+      schemaVersion: 1,
+      controlledChild: {
+        candidateSha: baseline.baselineSha,
+        runId: child.context.runId,
+        cleanup: receipt.cleanup,
+      },
+      parentArtifact: {
+        path: receiptPath,
+        sha256: digest(await readFile(receiptPath)),
+      },
+    };
+  } finally {
+    if (!signerDone) {
+      signer.kill("SIGTERM");
+      const ended = await Promise.race([
+        joined.then(() => true),
+        delay(10000, false, { ref: false }),
+      ]);
+      if (!ended) {
+        signer.kill("SIGKILL");
+        signerDone = await Promise.race([
+          joined.then(() => true),
+          delay(10000, false, { ref: false }),
+        ]);
+      } else {
+        signerDone = true;
+      }
+    }
+    if (!childStarted && baseline)
+      await rm(baseline.directory, { recursive: true, force: true });
+    if (!childStarted && child)
+      await rm(child.context.evidenceDir, { recursive: true, force: true });
+    if (signerDirectory && signerDone)
+      await rm(signerDirectory, { recursive: true, force: true });
+    if (childStarted && !childVerified) {
+      /* Preserve evidence and potentially unsafe owned resources. */
+    }
+  }
+}
+
 export async function main(args = process.argv.slice(2)) {
   if (args[0] === "--convergence-worker") {
     process.once("message", (message) => {
@@ -3193,9 +4381,26 @@ export async function main(args = process.argv.slice(2)) {
   }
   try {
     const { approvalFile } = parseArguments(args);
+    if (process.env.COFFEE_AROMA_SANDBOX_SIGNER_PATH) {
+      const contextPath = process.env.COFFEE_LAUNCH_CONTEXT_FILE;
+      const parentIdentity = await validateContext(contextPath);
+      const receipt = await runControlledAromaSandboxParent({
+        parentIdentity,
+        parentContextPath: contextPath,
+        signerPath: process.env.COFFEE_AROMA_SANDBOX_SIGNER_PATH,
+      });
+      result("PASS", "CONTROLLED_LIVE_SCENARIO_COMPLETE", receipt);
+      return 0;
+    }
     const outcome = normalizeCleanupFailureOutcome(
       await runAromaSandbox({ approvalFile }),
     );
+    await controlledParentRequest("cleanup");
+    if (
+      process.env.COFFEE_AROMA_SANDBOX_CONTROLLED_CHILD === "1" &&
+      process.connected
+    )
+      process.disconnect();
     result(
       outcome.status,
       outcome.code,
@@ -3207,6 +4412,7 @@ export async function main(args = process.argv.slice(2)) {
             catalogEvidence: outcome.catalogEvidence,
             migrations: outcome.migrations,
             cleanup: outcome.cleanup,
+            resourceIDs: outcome.resourceIDs,
             baselineFingerprint: outcome.result.baselineFingerprint,
             finalFingerprint: outcome.result.finalFingerprint,
             phases: outcome.result.phases,
@@ -3223,6 +4429,9 @@ export async function main(args = process.argv.slice(2)) {
         : outcome.status === "FAIL"
           ? {
               ...outcome.runMetadata,
+              ...(outcome.accountFingerprint
+                ? { accountFingerprint: outcome.accountFingerprint }
+                : {}),
               ...(outcome.stage ? { stage: outcome.stage } : {}),
               ...(outcome.diagnostic ? { diagnostic: outcome.diagnostic } : {}),
               ...(outcome.recovery ? { recovery: outcome.recovery } : {}),
@@ -3245,6 +4454,11 @@ export async function main(args = process.argv.slice(2)) {
         ? 78
         : 1;
   } catch (error) {
+    if (
+      process.env.COFFEE_AROMA_SANDBOX_CONTROLLED_CHILD === "1" &&
+      process.connected
+    )
+      process.disconnect();
     const code = safeAromaFailureCode(error);
     result(
       "FAIL",

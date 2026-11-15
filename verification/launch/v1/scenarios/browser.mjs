@@ -26,7 +26,11 @@ import {
   validateObservabilityBrowserEvidence,
 } from "../../../../tools/browser-proof.mjs";
 import { validateLaunchContext } from "../report.mjs";
-import { inspectLaunchCheckout, runManagedRollbackChild } from "./rollback.mjs";
+import {
+  inspectLaunchCheckout,
+  runManagedRollbackChild,
+  validateRollbackBaseline,
+} from "./rollback.mjs";
 
 const PROJECT_ROOT = resolve(
   dirname(fileURLToPath(import.meta.url)),
@@ -322,6 +326,90 @@ function newChildRunId(candidateSha) {
     .replace(/[-:]/gu, "")
     .replace(/\.\d{3}Z$/u, "Z");
   return `${timestamp}-${candidateSha.slice(0, 7)}`;
+}
+
+export async function writeControlledChildContext({
+  contextPath,
+  childRoot,
+  childSha,
+  scope,
+  signer,
+}) {
+  const launch = await validateLaunchContext(contextPath);
+  if (
+    launch.candidateRoot !== PROJECT_ROOT ||
+    resolve(process.cwd()) !== launch.candidateRoot
+  )
+    fail("CONTROLLED_PARENT_EXECUTION_MISMATCH");
+  let lineage;
+  if (scope === "rollback") {
+    lineage = await validateRollbackBaseline({
+      parentRoot: launch.candidateRoot,
+      parentSha: launch.context.candidateSha,
+      baselineRoot: childRoot,
+      baselineSha: childSha,
+    });
+  } else if (scope === "aroma_sandbox") {
+    const { validateAromaSandboxCheckout } =
+      await import("./aroma-sandbox.mjs");
+    lineage = await validateAromaSandboxCheckout({
+      sourceRoot: launch.sourceRoot,
+      candidateRoot: launch.candidateRoot,
+      candidateSha: launch.context.candidateSha,
+      baselineRoot: childRoot,
+      baselineSha: childSha,
+      ...signer,
+    });
+  } else fail("CONTROLLED_SCOPE_INVALID");
+  if (
+    (scope === "rollback"
+      ? lineage.parent.configSha256
+      : lineage.parentConfigSha256) !== launch.context.baseConfigSha256
+  )
+    fail("CONTROLLED_PARENT_CONFIG_INVALID");
+  const config = gitBytes(
+    childRoot,
+    "cat-file",
+    "blob",
+    `${childSha}:config/platform.yaml`,
+  );
+  const runId = newChildRunId(childSha);
+  const evidenceDir = await ensureChildEvidenceDirectory(
+    launch.sourceRoot,
+    runId,
+  );
+  const context = {
+    schemaVersion: 1,
+    candidateSha: childSha,
+    baseConfigSha256: sha256(config),
+    runId,
+    checkoutDir: childRoot,
+    sourceRepoRoot: launch.sourceRoot,
+    acceptedBaseCommit: launch.context.acceptedBaseCommit,
+    startedAtUtc: new Date().toISOString(),
+    evidenceDir,
+    githubSnapshotPath: null,
+    resources: {
+      composeProject: `coffee-launch-${runId.toLowerCase()}`,
+      kafkaPrefix: runId,
+      controlledScope: scope,
+      controlledParentContextPath: resolve(contextPath),
+      controlledParentCandidateSha: launch.context.candidateSha,
+      controlledParentRunId: launch.context.runId,
+    },
+  };
+  const path = join(evidenceDir, "context.json");
+  try {
+    await writePrivateFile(
+      path,
+      Buffer.from(`${JSON.stringify(context, null, 2)}\n`),
+      0o400,
+    );
+    return { path, context, lineage };
+  } catch (error) {
+    await rm(evidenceDir, { recursive: true, force: true });
+    throw error;
+  }
 }
 
 function lastJsonLine(stdout) {

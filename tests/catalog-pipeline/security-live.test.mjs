@@ -14,6 +14,7 @@ import {
   registerCatalogRoutes,
 } from "../../apps/catalog-service/dist/http/index.js";
 import { runLiveProof } from "../../scripts/db-live-proof.mjs";
+import { captureStdoutLogs } from "../log-capture.mjs";
 
 const root = resolve(import.meta.dirname, "../..");
 const PROVIDER_CREDENTIAL_CANARY =
@@ -116,21 +117,15 @@ void test("Catalog runtime config excludes provider credentials and external-pro
 });
 
 void test("synthetic provider credential is absent from Catalog API errors, logs and importer telemetry", async (t) => {
-  const logChunks = [];
-  const originalWrite = process.stdout.write.bind(process.stdout);
-  process.stdout.write = function (chunk, ...args) {
-    logChunks.push(
-      Buffer.isBuffer(chunk) ? chunk.toString("utf8") : String(chunk),
-    );
-    return originalWrite(chunk, ...args);
-  };
+  const logCapture = captureStdoutLogs(t);
+  const { chunks: logChunks } = logCapture;
   let app;
   t.after(async () => {
     try {
       if (app !== undefined)
         await app.runtimeController.closeRuntime("SIGTERM");
     } finally {
-      process.stdout.write = originalWrite;
+      t.mock.restoreAll();
     }
   });
   app = await createRuntime({
@@ -180,6 +175,15 @@ void test("synthetic provider credential is absent from Catalog API errors, logs
   assert.equal(response.statusCode, 503);
   assert.equal(response.json().code, "CATALOG_UNAVAILABLE");
   assert.equal(containsCanary(response.json()), false);
+  const correlationId = response.headers["x-correlation-id"];
+  assert.match(correlationId, /^[0-9a-f-]{36}$/u);
+  await logCapture.waitForRecord(
+    (record) =>
+      record.runtime === "catalog-security-canary-test" &&
+      record.correlationId === correlationId &&
+      record.msg === "request completed" &&
+      record.res?.statusCode === 503,
+  );
 
   const diagnostics = [];
   const telemetry = new CatalogTelemetry((value) => diagnostics.push(value));

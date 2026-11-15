@@ -1,0 +1,39 @@
+{
+  "scope": "Source-only development transport renewal for next issue13 candidate; not runtime or launch admission",
+  "command": "node tools/config-bootstrap/index.mjs --renew-development-transport",
+  "exitCode": 0,
+  "completedAtUtc": "2026-11-06T02:36:47.681229+00:00",
+  "sourceBeforeCommit": "6b0624526e9c1804f77f192874bbccf05ee9e9ec",
+  "beforeEncryptedSha256": "01744290a8d57dbda7271e3378a985d28b15c7d1355cebba64fe50fb036afaf3",
+  "afterEncryptedSha256": "c231ff3a3196975547f5ab236535c2b647133431b54a45e3099e6bb35a362814",
+  "authorityFingerprintUnchanged": true,
+  "previousPublicRenewalReceiptSha256": "1041ae8bed12d72bb50d74e59e1a898599941fd55916cd201bb002d0ee2e33df",
+  "rawRenewalReceiptSha256": "7e900cb64cb3016fad3c24b53d32b56b29ee63c6c9e516b7696abee64cb131a1",
+  "result": {
+    "changed": true,
+    "authorityFingerprint": "10:F3:13:97:99:BE:89:F7:DE:04:44:07:AD:8D:61:4A:29:8D:A2:C7:97:77:74:E6:EB:80:A8:E0:E8:CC:51:86",
+    "updatedRuntimes": [
+      "edge-gateway",
+      "api-public",
+      "api-internal",
+      "customer-service",
+      "catalog-service",
+      "catalog-supplier-sync",
+      "catalog-activation-worker",
+      "pricing-service",
+      "orders-service",
+      "orders-aroma-preparation",
+      "aroma-observer",
+      "aroma-convergence",
+      "aroma-gateway",
+      "realtime-gateway",
+      "edge-nginx"
+    ],
+    "encryptedSha256": "c231ff3a3196975547f5ab236535c2b647133431b54a45e3099e6bb35a362814"
+  },
+  "assurance": "Existing trusted bootstrap validates existing development authority, runtime key/identity and SAN, renews due certPem fields and verifies the atomically encrypted result. Public TLS pair, authority/private keys and other secrets are outside the renewal mutation.",
+  "limitations": [
+    "No runtime restart, provider mutation or deployment performed.",
+    "This preparation alone is not G13/G14/G15/G16 PASS; new frozen source requires its own CI/G12/qualification/full G00-G19."
+  ]
+}

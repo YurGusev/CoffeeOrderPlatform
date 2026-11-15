@@ -1,0 +1,61 @@
+{
+  "id": "G19_REPORT",
+  "status": "PASS",
+  "expectedCommand": "pnpm launch:verify:report",
+  "startedAt": "2026-10-31T00:57:35.796Z",
+  "endedAt": "2026-10-31T00:57:37.168Z",
+  "durationMs": 1372,
+  "timeoutSeconds": 900,
+  "reason": "",
+  "runs": [
+    {
+      "argv": [
+        "pnpm",
+        "launch:verify:report"
+      ],
+      "cwd": "/home/yurgusev/.cache/coffee-launch-delivery/tmp/coffee-launch-private-qC0rSu/checkout",
+      "startedAt": "2026-10-31T00:57:35.797Z",
+      "endedAt": "2026-10-31T00:57:37.098Z",
+      "exitCode": 0,
+      "timedOut": false,
+      "outputLimitExceeded": false,
+      "timeoutMs": 900000,
+      "durationMs": 1301,
+      "peakRssBytes": 230195200,
+      "artifacts": [
+        {
+          "path": "/home/yurgusev/.codex/worktrees/preserve-non-openobserve/CoffeeOrderPlatform/evidence/launch/20261031T005704Z-a6cceea/gates/G19_REPORT/stdout.log",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "sizeBytes": 0
+        },
+        {
+          "path": "/home/yurgusev/.codex/worktrees/preserve-non-openobserve/CoffeeOrderPlatform/evidence/launch/20261031T005704Z-a6cceea/gates/G19_REPORT/stderr.log",
+          "sha256": "b12c9faebbb5d6c759afd3a578224b3c44bbcd8f9dd4134b9f9548c3a382a822",
+          "sizeBytes": 41
+        }
+      ]
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "/home/yurgusev/.codex/worktrees/preserve-non-openobserve/CoffeeOrderPlatform/evidence/launch/20261031T005704Z-a6cceea/gates/G19_REPORT/stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "sizeBytes": 0
+    },
+    {
+      "path": "/home/yurgusev/.codex/worktrees/preserve-non-openobserve/CoffeeOrderPlatform/evidence/launch/20261031T005704Z-a6cceea/gates/G19_REPORT/stderr.log",
+      "sha256": "b12c9faebbb5d6c759afd3a578224b3c44bbcd8f9dd4134b9f9548c3a382a822",
+      "sizeBytes": 41
+    },
+    {
+      "path": "/home/yurgusev/.codex/worktrees/preserve-non-openobserve/CoffeeOrderPlatform/evidence/launch/20261031T005704Z-a6cceea/gates/G19_REPORT/stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "sizeBytes": 0
+    },
+    {
+      "path": "/home/yurgusev/.codex/worktrees/preserve-non-openobserve/CoffeeOrderPlatform/evidence/launch/20261031T005704Z-a6cceea/gates/G19_REPORT/stderr.log",
+      "sha256": "b12c9faebbb5d6c759afd3a578224b3c44bbcd8f9dd4134b9f9548c3a382a822",
+      "sizeBytes": 41
+    }
+  ]
+}

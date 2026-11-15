@@ -519,6 +519,9 @@ function spawnCustomerHarness(options) {
   );
   environment.COFFEE_CONFIG_FILE = options.configPath;
   environment.COFFEE_RUNTIME_SECRETS_FILE = options.secretsPath;
+  if (process.env.COFFEE_LAUNCH_CONTEXT_FILE)
+    environment.COFFEE_LAUNCH_CONTEXT_FILE =
+      process.env.COFFEE_LAUNCH_CONTEXT_FILE;
   environment.CUSTOMER_TEST_DB_ADAPTER_LOG_FILE = options.dbAdapterLogPath;
   const observer = fileURLToPath(
     new URL("./fixtures/db-adapter-command-observer.mjs", import.meta.url),

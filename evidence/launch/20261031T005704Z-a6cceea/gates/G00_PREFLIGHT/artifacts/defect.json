@@ -1,0 +1,16 @@
+{
+  "defectId": "DEF-G00_PREFLIGHT-KAFKA_NAMESPACE_PLAN-20261031T005704Z-a6cceea",
+  "gateId": "G00_PREFLIGHT",
+  "blockerId": "KAFKA_NAMESPACE_PLAN",
+  "runId": "20261031T005704Z-a6cceea",
+  "candidateSha": "a6cceeaa822f9641c678b5dcae521c282391dd3d",
+  "severity": "P2",
+  "ownerArea": "G00_PREFLIGHT",
+  "exactCommand": "pnpm launch:verify:preflight",
+  "expected": "Mandatory gate проходит с проверяемым evidence",
+  "actual": "{\"committedFlagEnabled\":false,\"baseConfigShaMatchesContext\":true,\"baseConfigSha256\":\"891e5a82ffd3ebf647226c07313aca4be426d4ed25b28b7afdf91296db631a8e\",\"candidateContextValid\":true,\"expectedPhysical\":null}",
+  "evidence": "evidence/launch/20261031T005704Z-a6cceea/gates/G00_PREFLIGHT/",
+  "reproduction": "pnpm launch:verify:preflight",
+  "impact": "Launch gate закрыт до отдельного исправления и нового run-id.",
+  "acceptanceTest": "Повторить G00_PREFLIGHT на новом candidate SHA после fix PR."
+}

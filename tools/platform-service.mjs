@@ -23,6 +23,12 @@ import {
 import { homedir, tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  deploymentReleasesRoot,
+  deploymentRuntimeStateRoot,
+  deploymentStateRoot,
+  systemdUserUnitRoot,
+} from "./state-paths.mjs";
 import { isDeepStrictEqual } from "node:util";
 import { createRuntimeLoggingOverride } from "./observability/generate.mjs";
 import { runtimeContainerLimits } from "../scripts/config-lib.mjs";
@@ -243,7 +249,7 @@ export function renderLocalCertificateMaintenanceUnits(options) {
 export async function identityState({
   identity,
   bootstrap,
-  directory = join(homedir(), "coffee-platform/runtime/state"),
+  directory = deploymentRuntimeStateRoot(),
 }) {
   await bootstrap.ensurePrivateSecretDirectory(directory);
   const path = join(directory, "identity.json");
@@ -912,7 +918,7 @@ export async function startLocalRuntime({
     throw new Error(
       "RECOVERY_REQUIRED: requested local release differs from the approved unit",
     );
-  const releaseParent = join(homedir(), "coffee-platform/runtime/releases");
+  const releaseParent = deploymentReleasesRoot();
   await bootstrap.ensurePrivateSecretDirectory(releaseParent);
   const releaseDir = join(releaseParent, releaseId);
   const configPath = join(releaseDir, "platform.yaml");
@@ -1489,11 +1495,7 @@ export async function recoverLocalIdentity({
     (await realpath(secretsDir)) !== secretsDir
   )
     throw new Error("RECOVERY_REQUIRED: identity secret directory is foreign");
-  const releaseDir = join(
-    homedir(),
-    "coffee-platform/runtime/releases",
-    releaseId,
-  );
+  const releaseDir = join(deploymentReleasesRoot(), releaseId);
   const releaseInfo = await lstat(releaseDir);
   const identity = JSON.parse(
     await readFile(join(releaseDir, "release.json"), "utf8"),
@@ -1911,11 +1913,7 @@ export async function stopLocalRuntime({
 async function readLocalRelease(releaseId) {
   if (!/^[a-f0-9]{40}-[a-f0-9]{16}-[a-f0-9]{12}$/u.test(releaseId))
     throw new Error("RECOVERY_REQUIRED: stop release identity is invalid");
-  const releaseDir = join(
-    homedir(),
-    "coffee-platform/runtime/releases",
-    releaseId,
-  );
+  const releaseDir = join(deploymentReleasesRoot(), releaseId);
   const info = await lstat(releaseDir);
   if (
     !info.isDirectory() ||
@@ -2464,8 +2462,8 @@ export async function installLocalRuntimeUnit({
       timeout: 30_000,
     }).trim();
   const controllerRoot = join(
-    homedir(),
-    "coffee-platform/runtime/controllers",
+    deploymentStateRoot(),
+    "runtime/controllers",
     active.context.candidateSha,
   );
   if (root !== controllerRoot || (await realpath(root)) !== root)
@@ -2518,7 +2516,7 @@ export async function installLocalRuntimeUnit({
   };
   const unit = renderLocalRuntimeUnit(unitOptions);
   const maintenance = renderLocalCertificateMaintenanceUnits(unitOptions);
-  const unitDir = join(homedir(), ".config/systemd/user");
+  const unitDir = systemdUserUnitRoot();
   await mkdir(unitDir, { recursive: true, mode: 0o700 });
   const unitDirInfo = await lstat(unitDir);
   if (

@@ -9,8 +9,8 @@
 
 | Правильно                              | Неправильно                        |
 | -------------------------------------- | ---------------------------------- |
-| `supply_chain`                         | `G12`, `G12_SUPPLY_CHAIN`          |
-| `COFFEE_SCAN_CACHE_DIR`                | `COFFEE_G12_CACHE_DIR`             |
+| `supply_chain`                         | `G12`, `supply_chain`          |
+| `COFFEE_SCAN_CACHE_DIR`                | `COFFEE_SUPPLY_CHAIN_CACHE_DIR`             |
 | `CONFIG-MIGRATIONS-SOPS-OUTPUT`        | `CONFIG-G08-SOPS-OUTPUT`           |
 | `captureKafkaNamespaceArtifact`        | `captureG13KafkaNamespaceArtifact` |
 | `// гейт supply_chain собирает образы` | `// G12 собирает образы`           |
@@ -35,7 +35,7 @@
   `G08 supply_chain`. Формируется рендерером отчёта из порядка `matrix.yaml`,
   в файлы и контракты не попадает.
 - Таблица алиасов для чтения прогонов, созданных до перехода
-  (`G12_SUPPLY_CHAIN → supply_chain`). Она живёт в коде отчёта и удаляется,
+  (`supply_chain → supply_chain`). Она живёт в коде отчёта и удаляется,
   когда исторические прогоны перестают быть нужны.
 - Ссылки на ADR и issues, где номер является частью исторического имени.
 

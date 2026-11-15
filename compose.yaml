@@ -30,7 +30,7 @@ x-runtime-defaults: &runtime-defaults
       - node -e "import('@coffee-platform/runtime/healthcheck').then(({main}) => main(process.argv.slice(1)))" /health/ready
     interval: 30s
     start_interval: 5s
-    timeout: 1s
+    timeout: 5s
     start_period: 30s
     retries: 3
 

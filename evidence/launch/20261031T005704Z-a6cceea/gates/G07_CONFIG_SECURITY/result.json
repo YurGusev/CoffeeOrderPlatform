@@ -1,0 +1,23 @@
+{
+  "id": "G07_CONFIG_SECURITY",
+  "status": "NOT_RUN",
+  "expectedCommand": "pnpm versions:check && pnpm config:check && pnpm security:secrets",
+  "startedAt": null,
+  "endedAt": "2026-10-31T00:57:35.721Z",
+  "durationMs": 0,
+  "timeoutSeconds": 900,
+  "reason": "NOT_RUN: predecessor не PASS: G05_CONTRACTS",
+  "runs": [],
+  "artifacts": [
+    {
+      "path": "/home/yurgusev/.codex/worktrees/preserve-non-openobserve/CoffeeOrderPlatform/evidence/launch/20261031T005704Z-a6cceea/gates/G07_CONFIG_SECURITY/stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "sizeBytes": 0
+    },
+    {
+      "path": "/home/yurgusev/.codex/worktrees/preserve-non-openobserve/CoffeeOrderPlatform/evidence/launch/20261031T005704Z-a6cceea/gates/G07_CONFIG_SECURITY/stderr.log",
+      "sha256": "e08dc0cebf92c103d5dc35c78bdc9e81085a319ff4041664dc1d48690fd8fa64",
+      "sizeBytes": 46
+    }
+  ]
+}

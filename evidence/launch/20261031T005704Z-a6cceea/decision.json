@@ -1,0 +1,12 @@
+{
+  "decision": "НЕ ДОПУСТИТЬ",
+  "runId": "20261031T005704Z-a6cceea",
+  "candidateSha": "a6cceeaa822f9641c678b5dcae521c282391dd3d",
+  "mandatoryGatesPass": false,
+  "evidenceErrors": [
+    "Не собран runtime digest pinned Node image",
+    "Не собраны 15 фактических runtime image digests",
+    "Версия инструмента не собрана: postgres",
+    "Версия инструмента не собрана: kafka"
+  ]
+}

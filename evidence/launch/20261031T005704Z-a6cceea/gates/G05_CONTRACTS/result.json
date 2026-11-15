@@ -1,0 +1,23 @@
+{
+  "id": "G05_CONTRACTS",
+  "status": "NOT_RUN",
+  "expectedCommand": "pnpm contracts:check-generated && pnpm contracts:breaking && pnpm contracts:test",
+  "startedAt": null,
+  "endedAt": "2026-10-31T00:57:35.710Z",
+  "durationMs": 0,
+  "timeoutSeconds": 900,
+  "reason": "NOT_RUN: predecessor не PASS: G03_STATIC",
+  "runs": [],
+  "artifacts": [
+    {
+      "path": "/home/yurgusev/.codex/worktrees/preserve-non-openobserve/CoffeeOrderPlatform/evidence/launch/20261031T005704Z-a6cceea/gates/G05_CONTRACTS/stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "sizeBytes": 0
+    },
+    {
+      "path": "/home/yurgusev/.codex/worktrees/preserve-non-openobserve/CoffeeOrderPlatform/evidence/launch/20261031T005704Z-a6cceea/gates/G05_CONTRACTS/stderr.log",
+      "sha256": "e9a690969c875a116caf069e2408cc46de0f170dd3dfe81908633e63e78f3e72",
+      "sizeBytes": 43
+    }
+  ]
+}

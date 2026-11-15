@@ -33,9 +33,10 @@ import {
   validateLaunchContext,
   writeDefects,
 } from "./report.mjs";
+import { decisive, reportGateStatus, RESUMABLE_GATE_IDS } from "./decision.mjs";
 import {
   inspectLaunchCheckout,
-  validateRollbackRuntimeArtifact,
+  verifyControlledRollbackEvidence,
 } from "./scenarios/rollback.mjs";
 import { validateRoleMap } from "../../../scripts/db-bootstrap.mjs";
 import {
@@ -45,13 +46,40 @@ import {
   validateBrowserParentRuntime,
 } from "./scenarios/browser.mjs";
 import { admitRealtimeCapacity } from "../../../tools/realtime-capacity.mjs";
+import {
+  loadVerifiedGateImage,
+  readVerifiedRuntimeImages,
+} from "../../../tools/verified-infrastructure-image.mjs";
+import { artifactManifestPath } from "../../../tools/image-inventory.mjs";
+import {
+  cleanupLaunchRuntimeImages,
+  captureRuntimeImageBaseline,
+  inspectLaunchRuntimeImages,
+  validateRuntimeImageOwnership,
+} from "../../../tools/runtime-image-inventory.mjs";
+import { validateDependencyReadiness } from "../../../tests/observability/runtime-matrix.mjs";
+import { loadPlatformConfig } from "../../../scripts/config-lib.mjs";
+import {
+  observabilityVerificationCoverage,
+  syntheticNodeNotReadyComplete,
+} from "../../../tools/observability/verify.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 const BASE = join(ROOT, "verification/launch/v1");
 const MATRIX_PATH = join(BASE, "matrix.yaml");
 const MATRIX_SCHEMA_PATH = join(BASE, "schemas/matrix.schema.json");
 const RESULT_SCHEMA_PATH = join(BASE, "schemas/run-result.schema.json");
-const TOTAL_TIMEOUT_MS = 120 * 60 * 1000;
+const PROFILE_BUDGET_MS = Object.freeze({
+  admission: 90 * 1000,
+  fast: 20 * 60 * 1000,
+  release: 180 * 60 * 1000,
+});
+const DEFAULT_PROFILE = "release";
+const DIAGNOSTIC_PROFILE = "diagnostic";
+const ADMISSION_PROFILE = "admission";
+export const SKIPPED_BY_FILTER = "SKIPPED_BY_FILTER";
+const RUN_ID_PATTERN = /^[0-9]{8}T[0-9]{6}Z-[0-9a-f]{7}$/;
+const SNAPSHOT_SHA256_PATTERN = /^[0-9a-f]{64}$/u;
 const REPORT_FINALIZATION_RESERVE_MS = 120 * 1000;
 const REPORT_COMMAND_RESERVE_MS = EXPECTED_GATES.at(-1)[2] * 1000;
 const REPORT_TOTAL_RESERVE_MS =
@@ -70,11 +98,34 @@ ajv.addFormat("date-time", {
     Number.isFinite(Date.parse(value)),
 });
 
-export function gateBudgetMs(gateId, totalRemainingMs) {
+export function profileBudgetMs(profile = DEFAULT_PROFILE) {
+  const budget = PROFILE_BUDGET_MS[profile];
+  if (budget === undefined) throw new Error(`Неизвестный профиль: ${profile}`);
+  return budget;
+}
+
+function reportReserveMs(profile = DEFAULT_PROFILE) {
+  // Полный резерв report-команды оставляет от fast-бюджета только несколько
+  // минут работы, поэтому резерв ограничен четвертью бюджета профиля.
+  return Math.min(
+    REPORT_TOTAL_RESERVE_MS,
+    Math.floor(profileBudgetMs(profile) / 4),
+  );
+}
+
+export function workloadReserveMs(profile = DEFAULT_PROFILE) {
+  return reportReserveMs(profile);
+}
+
+export function gateBudgetMs(
+  gateId,
+  totalRemainingMs,
+  profile = DEFAULT_PROFILE,
+) {
   if (!Number.isFinite(totalRemainingMs)) return 0;
   if (gateId === "report")
     return Math.max(0, totalRemainingMs - REPORT_FINALIZATION_RESERVE_MS);
-  return Math.max(0, totalRemainingMs - REPORT_TOTAL_RESERVE_MS);
+  return Math.max(0, totalRemainingMs - reportReserveMs(profile));
 }
 
 export async function loadJsonSchema(path) {
@@ -187,12 +238,20 @@ export async function writeRedactedStream(
   );
   let pending = "";
   let droppingLine = false;
+  // После строки сверх предела состояние redaction неизвестно: дальнейшие
+  // строки этого потока могут содержать остаток секрета, поэтому поток
+  // считается отравленным и больше не пишется.
+  let tainted = false;
   let outputLimitExceeded = Boolean(outputBudget?.exceeded);
   let limitSignalled = false;
   const redactionState = { sensitiveDepth: 0 };
   const decoder = new StringDecoder("utf8");
   const marker =
     "\n[REDACTED: run log budget exceeded; child terminated and remaining output discarded]\n";
+  // Строка сверх предела не пишется вовсе: содержимое не проверено на секреты.
+  // Остальные строки продолжают попадать в evidence — гейт не теряется целиком.
+  const oversizedLineMarker =
+    "\n[REDACTED: oversized log line; content dropped while parsing state is uncertain]\n";
   const markerSize = Buffer.byteLength(marker);
   const tripLimit = async (reason = marker) => {
     if (outputLimitExceeded || outputBudget?.exceeded) return;
@@ -255,6 +314,7 @@ export async function writeRedactedStream(
           await tripLimit();
       }
       let incoming = decoder.write(chunk);
+      if (tainted) continue;
       if (droppingLine) {
         const end = incoming.indexOf("\n");
         if (end < 0) continue;
@@ -266,26 +326,24 @@ export async function writeRedactedStream(
       while ((boundary = pending.indexOf("\n")) >= 0) {
         const line = pending.slice(0, boundary + 1);
         pending = pending.slice(boundary + 1);
-        if (Buffer.byteLength(line) > maxLineBytes)
-          await tripLimit(
-            "\n[REDACTED: oversized log line; parsing state uncertain; child terminated and remaining output discarded]\n",
-          );
-        else await emit(redactLogLine(redactionState, line, secretValues));
+        if (Buffer.byteLength(line) > maxLineBytes) {
+          await emit(oversizedLineMarker);
+          tainted = true;
+          pending = "";
+          break;
+        }
+        await emit(redactLogLine(redactionState, line, secretValues));
       }
       if (Buffer.byteLength(pending) > maxLineBytes) {
-        await tripLimit(
-          "\n[REDACTED: oversized log line; parsing state uncertain; child terminated and remaining output discarded]\n",
-        );
+        await emit(oversizedLineMarker);
+        tainted = true;
         pending = "";
-        droppingLine = true;
       }
     }
     pending += decoder.end();
-    if (pending) {
+    if (pending && !tainted) {
       if (Buffer.byteLength(pending) > maxLineBytes)
-        await tripLimit(
-          "\n[REDACTED: oversized log line; parsing state uncertain; child terminated and remaining output discarded]\n",
-        );
+        await emit(oversizedLineMarker);
       else await emit(redactLogLine(redactionState, pending, secretValues));
     }
     await new Promise((resolvePromise, reject) =>
@@ -339,6 +397,22 @@ async function assertNoSymlinkPath(root, target, allowMissing = false) {
     if (info.isSymbolicLink())
       throw new Error(`Symlink запрещён: ${relative(root, current)}`);
   }
+}
+
+export async function validateLaunchDataTempDir(path) {
+  if (typeof path !== "string" || !isAbsolute(path) || resolve(path) !== path)
+    throw new Error("--data-temp-dir requires an absolute canonical directory");
+  await assertNoSymlinkPath(resolve("/"), path);
+  const info = await lstat(path);
+  if (
+    !info.isDirectory() ||
+    info.isSymbolicLink() ||
+    info.uid !== process.getuid() ||
+    (info.mode & 0o7777) !== 0o700 ||
+    (await realpath(path)) !== path
+  )
+    throw new Error("--data-temp-dir requires a private owned directory");
+  return path;
 }
 async function ensureDirectoryTree(root, target) {
   root = resolve(root);
@@ -590,7 +664,7 @@ function parseProcStat(value) {
   const state = fields[0];
   const processGroup = Number(fields[2]);
   if (
-    !/^[A-Ztx]$/.test(state ?? "") ||
+    !/^[A-Za-z]$/.test(state ?? "") ||
     !Number.isSafeInteger(processGroup) ||
     processGroup < 0
   )
@@ -611,17 +685,22 @@ async function readProcStat(pid) {
 async function readPeakRssBytes(pgid) {
   let procEntries;
   try {
-    procEntries = await readdir("/proc", { withFileTypes: true });
+    procEntries = await readdir("/proc");
   } catch (error) {
     throw peakRssError("readdir", error?.code);
   }
   let total = 0;
   let found = false;
   for (const entry of procEntries) {
-    if (!entry.isDirectory() || !/^\d+$/.test(entry.name)) continue;
-    const pid = Number(entry.name);
-    if (!Number.isSafeInteger(pid)) throw peakRssError("stat", "EINVAL");
-    const process = await readProcStat(pid);
+    if (!/^\d+$/.test(entry)) continue;
+    const pid = Number(entry);
+    if (!Number.isSafeInteger(pid)) continue;
+    // Если stat чужого процесса не разбирается, группу определить нельзя —
+    // запись пропускается, а не отменяет уже собранные измерения.
+    const process = await readProcStat(pid).catch((error) => {
+      if (error?.rssStage === "stat") return null;
+      throw error;
+    });
     if (
       !process ||
       process.processGroup !== pgid ||
@@ -697,6 +776,27 @@ export async function executeArgv(
   const startedAt = nowIso();
   const start = Date.now();
   const childEnv = { ...process.env };
+  // Гейты и тесты запускают runtime, который принимает только известные
+  // локаторы. Служебные COFFEE_LAUNCH_* переменные оператора не должны
+  // протекать в дочерние процессы: они задаются здесь явно.
+  for (const name of Object.keys(childEnv))
+    if (
+      name.startsWith("COFFEE_LAUNCH_") &&
+      name !== "COFFEE_LAUNCH_CONTEXT_FILE"
+    )
+      delete childEnv[name];
+  delete childEnv.COFFEE_LAUNCH_DATA_TEMP_DIR;
+  if (options.dataTempDir && options.gateId === "supply_chain")
+    childEnv.COFFEE_LAUNCH_DATA_TEMP_DIR = options.dataTempDir;
+  if (options.dataTempDir && options.gateId === "observability")
+    childEnv.TMPDIR = options.dataTempDir;
+  delete childEnv.COFFEE_LAUNCH_IMAGE_OWNERSHIP;
+  delete childEnv.COFFEE_AROMA_SANDBOX_SIGNER_PATH;
+  if (options.g16SignerPath)
+    childEnv.COFFEE_AROMA_SANDBOX_SIGNER_PATH = options.g16SignerPath;
+  if (options.imageManifestPath)
+    // Имя переменной — контракт гейтов; значение — путь artifact-manifest.json.
+    childEnv.COFFEE_LAUNCH_IMAGE_OWNERSHIP = options.imageManifestPath;
   childEnv.pnpm_config_verify_deps_before_run = "false";
   if (Number.isSafeInteger(options.deadlineEpochMs))
     childEnv.COFFEE_LAUNCH_GATE_DEADLINE_EPOCH_MS = String(
@@ -906,10 +1006,307 @@ function gateRecord(gate) {
   };
 }
 
-function decisive(gates) {
-  return gates.length === 20 && gates.every((gate) => gate.status === "PASS")
-    ? "ДОПУСТИТЬ"
-    : "НЕ ДОПУСТИТЬ";
+// Выбор гейтов: профиль, явный --gate или диагностический --from.
+export function selectGates(matrixGates, options = {}) {
+  const orderedIds = matrixGates.map((gate) => gate.id);
+  const gateIds = options.gateIds ?? [];
+  let profile = options.profile ?? DEFAULT_PROFILE;
+  let selectedIds;
+  let skipReason;
+  if (gateIds.length) {
+    profile = DIAGNOSTIC_PROFILE;
+    selectedIds = new Set(gateIds);
+    skipReason = "--gate запускает только явно указанные гейты";
+  } else if (options.from !== undefined) {
+    profile = DIAGNOSTIC_PROFILE;
+    const start = orderedIds.indexOf(options.from);
+    if (start < 0)
+      throw new Error(`Неизвестный гейт для --from: ${options.from}`);
+    selectedIds = new Set(orderedIds.slice(start));
+    skipReason = `--from ${options.from} запускает гейт и все последующие`;
+  } else if (profile === ADMISSION_PROFILE) {
+    selectedIds = new Set(
+      matrixGates
+        .filter((gate) => gate.admission === true)
+        .map((gate) => gate.id),
+    );
+    if (selectedIds.size === 0)
+      throw new Error("Профиль admission не содержит ни одного гейта");
+    skipReason = "гейт вне профиля admission";
+  } else {
+    if (profile !== "fast" && profile !== "release")
+      throw new Error(`Неизвестный профиль: ${profile}`);
+    selectedIds = new Set(
+      matrixGates
+        .filter(
+          (gate) =>
+            profile === "release" ||
+            gate.profile === "both" ||
+            gate.profile === "fast",
+        )
+        .map((gate) => gate.id),
+    );
+    skipReason = `гейт вне профиля ${profile}`;
+  }
+  const gates = new Map();
+  for (const gate of matrixGates)
+    gates.set(
+      gate.id,
+      selectedIds.has(gate.id)
+        ? { id: gate.id, status: "RUN", reason: null }
+        : {
+            id: gate.id,
+            status: SKIPPED_BY_FILTER,
+            reason: `SKIPPED_BY_FILTER: ${skipReason}`,
+          },
+    );
+  return {
+    profile,
+    budgetProfile: profile === DIAGNOSTIC_PROFILE ? DEFAULT_PROFILE : profile,
+    gates,
+  };
+}
+
+export function assertResumableGate(gateId) {
+  if (!RESUMABLE_GATE_IDS.has(gateId))
+    throw Object.assign(
+      new Error(
+        `RESUME_FORBIDDEN_GATE: ${gateId} снимает живое состояние и не может быть переиспользован через --resume`,
+      ),
+      { code: "RESUME_FORBIDDEN_GATE" },
+    );
+}
+
+export function resumeIdentityOf(result) {
+  return {
+    candidateSha: result?.candidateSha,
+    treeSha: result?.environment?.treeSha,
+    configSha256: result?.environment?.configSha256,
+    toolchainVersionsSha256: result?.environment?.toolchainVersionsSha256,
+    lockfileSha256: result?.environment?.lockfileSha256,
+    githubSnapshotSha256: result?.environment?.githubSnapshotSha256 ?? null,
+  };
+}
+
+export function assertResumeIdentity(sourceResult, identity) {
+  const source = resumeIdentityOf(sourceResult);
+  const mismatched = Object.keys(identity).filter(
+    (key) => source[key] !== identity[key],
+  );
+  if (mismatched.length)
+    throw Object.assign(
+      new Error(
+        `RESUME_IDENTITY_MISMATCH: ${mismatched
+          .map(
+            (key) => `${key} источник=${source[key]} текущий=${identity[key]}`,
+          )
+          .join("; ")}`,
+      ),
+      { code: "RESUME_IDENTITY_MISMATCH" },
+    );
+}
+
+function predecessorsOf(matrixGates, gateId) {
+  const byId = new Map(matrixGates.map((gate) => [gate.id, gate]));
+  const ancestors = new Set();
+  const pending = [...(byId.get(gateId)?.predecessors ?? [])];
+  while (pending.length) {
+    const id = pending.pop();
+    if (ancestors.has(id)) continue;
+    ancestors.add(id);
+    pending.push(...(byId.get(id)?.predecessors ?? []));
+  }
+  return [...ancestors];
+}
+
+export function assertFromPredecessors(matrixGates, fromId, sourceResult) {
+  const sourceById = new Map(
+    (sourceResult?.gates ?? []).map((gate) => [gate.id, gate]),
+  );
+  const failing = predecessorsOf(matrixGates, fromId).filter(
+    (id) => sourceById.get(id)?.status !== "PASS",
+  );
+  if (failing.length)
+    throw Object.assign(
+      new Error(
+        `FROM_PREDECESSORS_NOT_PASS: в источнике resume нет PASS для ${failing.join(", ")}`,
+      ),
+      { code: "FROM_PREDECESSORS_NOT_PASS" },
+    );
+}
+
+// Артефакты источника не переносятся, поэтому PASS supply_chain переиспользуется
+// только в выборке без его живых потребителей; иначе гейт выполняется заново.
+const SUPPLY_CHAIN_CONSUMER_IDS = new Set([
+  "integration",
+  "recovery",
+  "compose",
+  "observability",
+  "rollback",
+]);
+// preflight и report работают без установленных зависимостей candidate.
+const INSTALL_INDEPENDENT_IDS = new Set(["preflight", "report"]);
+
+export function resumableGateRecords(
+  sourceResult,
+  sourceEvidenceDir,
+  selection,
+) {
+  const reused = new Map();
+  const supplyChainConsumed = [...selection.gates.values()].some(
+    (entry) =>
+      entry.status === "RUN" && SUPPLY_CHAIN_CONSUMER_IDS.has(entry.id),
+  );
+  for (const [id, entry] of selection.gates) {
+    if (entry.status !== "RUN") continue;
+    if (id !== "preflight" && !RESUMABLE_GATE_IDS.has(id)) continue;
+    if (id === "supply_chain" && supplyChainConsumed) continue;
+    const sourceGate = sourceResult.gates.find((gate) => gate.id === id);
+    if (sourceGate?.status !== "PASS") continue;
+    if (id === "preflight") {
+      // Admission-результат замораживает пару (candidateSha, GitHub-снимок).
+      // Только её и можно переиспользовать в release; live evidence не
+      // переносится между прогонами.
+      const githubSnapshotSha256 =
+        sourceResult.environment?.githubSnapshotSha256;
+      const preflightArtifactSha256 = sourceGate.artifacts?.find((artifact) =>
+        artifact.path.endsWith("artifacts/preflight.json"),
+      )?.sha256;
+      if (
+        sourceResult.profile !== ADMISSION_PROFILE ||
+        !SNAPSHOT_SHA256_PATTERN.test(githubSnapshotSha256 ?? "") ||
+        !SNAPSHOT_SHA256_PATTERN.test(preflightArtifactSha256 ?? "")
+      )
+        continue;
+      reused.set(id, {
+        runId: sourceResult.runId,
+        evidenceDir: relativeEvidencePath(sourceEvidenceDir),
+        githubSnapshotSha256,
+        preflightArtifactSha256,
+      });
+      continue;
+    }
+    reused.set(id, {
+      runId: sourceResult.runId,
+      evidenceDir: relativeEvidencePath(sourceEvidenceDir),
+    });
+  }
+  // Свежий candidate checkout не содержит node_modules: если хоть один
+  // выбранный гейт будет выполняться и зависит от install, install идёт заново.
+  const installNeeded = [...selection.gates.values()].some(
+    (entry) =>
+      entry.status === "RUN" &&
+      entry.id !== "install" &&
+      !INSTALL_INDEPENDENT_IDS.has(entry.id) &&
+      !reused.has(entry.id),
+  );
+  if (installNeeded) reused.delete("install");
+  return reused;
+}
+
+export async function readAdmissionSnapshot(
+  evidenceDir,
+  { runId, candidateSha },
+) {
+  const path = join(evidenceDir, "gates/preflight/artifacts/preflight.json");
+  await assertNoSymlinkPath(evidenceDir, path);
+  const preflight = JSON.parse(await readFile(path, "utf8"));
+  const githubSnapshotSha256 = preflight?.githubSnapshot?.sha256;
+  if (
+    preflight?.schemaVersion !== 1 ||
+    preflight.gateId !== "preflight" ||
+    preflight.status !== "PASS" ||
+    preflight.runId !== runId ||
+    preflight.candidateSha !== candidateSha ||
+    !SNAPSHOT_SHA256_PATTERN.test(githubSnapshotSha256 ?? "")
+  )
+    throw Object.assign(
+      new Error(
+        "RESUME_IDENTITY_MISMATCH: admission должен подтверждаться preflight-артефактом с GitHub-снимком",
+      ),
+      { code: "RESUME_IDENTITY_MISMATCH" },
+    );
+  return githubSnapshotSha256;
+}
+
+async function loadResumeSource(value) {
+  const requested = String(value);
+  const pathLike = isAbsolute(requested) || /[\\/]/u.test(requested);
+  const evidenceDir = pathLike
+    ? resolve(requested)
+    : RUN_ID_PATTERN.test(requested)
+      ? join(ROOT, "evidence/launch", requested)
+      : null;
+  if (!evidenceDir)
+    throw new Error(
+      `--resume требует evidenceDir или runId вида 20260101T000000Z-abcdef0, получено: ${requested}`,
+    );
+  const directory = await lstat(evidenceDir);
+  if (!directory.isDirectory() || directory.isSymbolicLink())
+    throw new Error(
+      "--resume evidenceDir должен быть обычным каталогом без symlink",
+    );
+  const resultPath = join(evidenceDir, "run-result.json");
+  const contextPath = join(evidenceDir, "context.json");
+  const [resultInfo, contextInfo] = await Promise.all([
+    lstat(resultPath),
+    lstat(contextPath),
+  ]);
+  if (
+    !resultInfo.isFile() ||
+    resultInfo.isSymbolicLink() ||
+    !contextInfo.isFile() ||
+    contextInfo.isSymbolicLink()
+  )
+    throw new Error(
+      "--resume требует обычные run-result.json и context.json без symlink",
+    );
+  const result = JSON.parse(await readFile(resultPath, "utf8"));
+  validateRunResultContract(result);
+  const context = JSON.parse(await readFile(contextPath, "utf8"));
+  if (
+    resolve(context.evidenceDir ?? "") !== evidenceDir ||
+    context.runId !== result.runId ||
+    context.candidateSha !== result.candidateSha
+  )
+    throw new Error(
+      "RESUME_SOURCE_INVALID: context/result не совпадают с evidenceDir",
+    );
+  return { evidenceDir, result };
+}
+
+function usageText() {
+  return [
+    "Использование: node verification/launch/v1/run.mjs [опции]",
+    "",
+    "Профили и фильтры:",
+    "  --profile admission|fast|release",
+    "                          admission: только допуск кандидата (preflight, до минуты),",
+    "                          fast: девять гейтов без живого состояния; release: все двадцать (по умолчанию)",
+    "  --gate <id>             диагностический запуск только указанных гейтов (можно повторять)",
+    "  --from <id>             диагностический запуск гейта и всех последующих; требует --resume",
+    "",
+    "Переиспользование ранее полученного PASS:",
+    "  --resume <evidenceDir|runId>",
+    "                          переиспользовать PASS разрешённых гейтов при совпадении",
+    "                          candidateSha, treeSha, configSha256, toolchainVersionsSha256, lockfileSha256;",
+    "                          preflight переиспользуется только из admission-результата с тем же GitHub-снимком",
+    "",
+    "Identity и прочие опции:",
+    "  --candidate-sha <sha>                полный SHA кандидата (по умолчанию HEAD)",
+    "  --accepted-base-commit <sha>         принятая база до начала работы",
+    "  --github-snapshot <path>             reference artifact GitHub-снимка",
+    "  --g16-signer <abs-path>              RAM signer для aroma_sandbox",
+    "  --data-temp-dir <abs-path>           приватный каталог объёмных временных данных",
+    "  --realtime-qualification <abs-path>  receipt realtime qualification",
+    "  --g08-expected-system-identifier <id> утверждённый PostgreSQL system identifier",
+    "  -h, --help                           показать эту справку",
+    "",
+    "Решение ДОПУСТИТЬ выносит только профиль release без фильтров и только при",
+    "всех 19 рабочих PASS (PASS переиспользованного гейта фиксируется в reusedFrom);",
+    "статус report публикуется отдельно и в решение не входит.",
+    "admission, fast, --gate и --from всегда дают диагностический НЕ ДОПУСТИТЬ.",
+  ].join("\n");
 }
 
 function relativeEvidencePath(path) {
@@ -1022,7 +1419,12 @@ export async function captureKafkaNamespaceArtifact({
   return await hashFile(path);
 }
 
-export async function verifyGateArtifacts(gate, record, evidenceDir) {
+export async function verifyGateArtifacts(
+  gate,
+  record,
+  evidenceDir,
+  realtimeQualification,
+) {
   const gateDir = join(evidenceDir, "gates", gate.id);
   const context = JSON.parse(
     await readFile(join(evidenceDir, "context.json"), "utf8"),
@@ -1307,7 +1709,7 @@ export async function verifyGateArtifacts(gate, record, evidenceDir) {
           owner.migrationCount ===
             {
               catalog: 12,
-              customer: 2,
+              customer: 3,
               integration: 7,
               orders: 24,
               pricing: 5,
@@ -1357,7 +1759,7 @@ export async function verifyGateArtifacts(gate, record, evidenceDir) {
       return "migrations oracle receipt is missing or invalid";
     const expectedOwners = [
       ["catalog", 12],
-      ["customer", 2],
+      ["customer", 3],
       ["integration", 7],
       ["orders", 24],
       ["pricing", 5],
@@ -1439,16 +1841,11 @@ export async function verifyGateArtifacts(gate, record, evidenceDir) {
         evidenceDir,
         parentContext: context,
       });
-      const traceNotProven = child.receipt.proof.traceStatus === "NOT_PROVEN";
       for (const path of child.files) {
         await assertNoSymlinkPath(evidenceDir, path);
         record.artifacts.push(await hashFile(path));
       }
-      if (
-        record.runs[0]?.timedOut ||
-        (!traceNotProven && record.runs[0]?.exitCode !== 0)
-      )
-        return failure;
+      if (record.runs[0]?.timedOut) return failure;
       const names = [
         "alert-transitions.json",
         "correlation-proof.json",
@@ -1476,6 +1873,7 @@ export async function verifyGateArtifacts(gate, record, evidenceDir) {
       }
       const result = documents["result.json"];
       const correlation = documents["correlation-proof.json"];
+      const traceNotProven = correlation.launchPath?.traceStatus !== "PASS";
       if (
         result.status !== (traceNotProven ? "FAIL" : "PASS") ||
         !/^[0-9a-f-]{36}$/u.test(result.runId ?? "") ||
@@ -1492,6 +1890,11 @@ export async function verifyGateArtifacts(gate, record, evidenceDir) {
         result.provenance.start?.baseSha !== context.candidateSha ||
         result.provenance.start?.configSha256 !== context.baseConfigSha256 ||
         result.provenance.start?.sourceFiles?.status !== "PASS" ||
+        !syntheticNodeNotReadyComplete(result.syntheticNodeNotReady) ||
+        !isDeepStrictEqual(
+          result.syntheticNodeNotReady,
+          documents["alert-transitions.json"].syntheticNodeNotReady,
+        ) ||
         !isDeepStrictEqual(result.browserCorrelationChild, child.receipt) ||
         correlation.launchPath?.correlationId !==
           child.receipt.proof.correlationId ||
@@ -1512,6 +1915,73 @@ export async function verifyGateArtifacts(gate, record, evidenceDir) {
         record.artifacts.push(...additions);
         return "observability W3C trace is not proven";
       }
+      const qualificationPath = join(
+        gateDir,
+        "artifacts/realtime-capacity.json",
+      );
+      await assertNoSymlinkPath(evidenceDir, qualificationPath);
+      const qualificationInfo = await lstat(qualificationPath);
+      if (
+        record.runs[0]?.exitCode !== 0 ||
+        !qualificationInfo.isFile() ||
+        qualificationInfo.isSymbolicLink() ||
+        qualificationInfo.uid !== process.getuid() ||
+        (qualificationInfo.mode & 0o777) !== 0o600 ||
+        qualificationInfo.size > 65536 ||
+        !realtimeQualification ||
+        !isDeepStrictEqual(
+          JSON.parse(await readFile(qualificationPath, "utf8")),
+          realtimeQualification,
+        )
+      )
+        return failure;
+      const active = await validateLaunchContext(
+        join(evidenceDir, "context.json"),
+      );
+      const expectedImages = await readVerifiedRuntimeImages({
+        contextFile: join(evidenceDir, "context.json"),
+      });
+      const expectedAdmission = {
+        runId: realtimeQualification.receipt.runId,
+        candidateSha: realtimeQualification.receipt.candidateSha,
+        baseConfigSha256: realtimeQualification.receipt.baseConfigSha256,
+        receiptSha256: realtimeQualification.receiptSha256,
+        admittedAt: realtimeQualification.admittedAt,
+      };
+      const expectedConfig = await loadPlatformConfig(active.candidateRoot);
+      validateDependencyReadiness(
+        result.runtimeMetricMatrix?.composeReceipt?.dependencyReadiness,
+        expectedConfig,
+      );
+      const computedCoverage = observabilityVerificationCoverage(result, {
+        config: expectedConfig,
+        sourceHashStable: result.provenance?.sourceHashStable === true,
+        backendArtifactsComplete: names.every(
+          (name) => documents[name].status === "PASS",
+        ),
+      });
+      if (
+        !isDeepStrictEqual(result.qualificationAdmission, expectedAdmission) ||
+        !isDeepStrictEqual(result.verifiedRuntimeImages, expectedImages) ||
+        !isDeepStrictEqual(result.launchPathProof, correlation.launchPath) ||
+        !isDeepStrictEqual(
+          result.fullSystemObservability,
+          documents["runtime-health-matrix.json"].fullSystemObservability,
+        ) ||
+        !isDeepStrictEqual(
+          result.fullSystemObservability,
+          computedCoverage.fullSystemObservability,
+        ) ||
+        !/^[a-f0-9]{64}$/u.test(result.provenance?.start?.identityHash ?? "") ||
+        result.provenance?.start?.identityHash !==
+          result.provenance?.end?.identityHash ||
+        correlation.launchPath?.telemetrySubproof?.status !== "OBSERVED" ||
+        correlation.launchPath?.telemetrySubproof?.ordinaryApiMeasurement
+          ?.status !== "MEASURED" ||
+        correlation.launchPath?.telemetrySubproof?.carrier !==
+          child.receipt.proof.ownerTraceparent
+      )
+        return failure;
       if (result.fullSystemObservability?.status !== "PASS") {
         record.artifacts.push(...additions);
         return "observability full-system SLO, chaos and capacity proof is not complete";
@@ -1706,24 +2176,49 @@ export async function verifyGateArtifacts(gate, record, evidenceDir) {
       return "compose missing or invalid Kafka namespace inventory receipt";
     }
   }
-  if (gate.id === "rollback" && gate.status === "PASS") {
-    const path = join(gateDir, "artifacts/mutation-disable-rollback.json");
-    let artifact;
+  if (gate.id === "aroma_sandbox" && record.status !== "FAIL") {
     try {
-      artifact = JSON.parse(await readFile(path, "utf8"));
-    } catch {
-      return "rollback missing or invalid artifacts/mutation-disable-rollback.json";
-    }
-    try {
-      validateRollbackRuntimeArtifact(artifact, {
-        runId: context.runId,
-        candidateSha: context.candidateSha,
-        lineage: artifact.lineage,
+      const contextPath = join(evidenceDir, "context.json");
+      const parentIdentity = await validateLaunchContext(contextPath);
+      const { verifyControlledAromaSandboxEvidence } =
+        await import("./scenarios/aroma-sandbox.mjs");
+      await verifyControlledAromaSandboxEvidence({
+        parentIdentity,
+        parentContextPath: contextPath,
       });
     } catch {
-      return "rollback runtime artifact failed identity, lineage, phase or cleanup validation";
+      return "aroma_sandbox controlled child failed parent binding, signature, runtime proof or cleanup validation";
     }
-    additions.push(await hashFile(path));
+    for (const name of [
+      "controlled-parent.json",
+      "controlled-child-context.json",
+      "controlled-child-result.json",
+      "controlled-approval.json.age",
+      "controlled-approval.sig.age",
+      "controlled-config.bundle",
+      "controlled-config.bundle.json",
+    ])
+      additions.push(await hashFile(join(gateDir, "artifacts", name)));
+  }
+  if (gate.id === "rollback" && record.status !== "FAIL") {
+    try {
+      const contextPath = join(evidenceDir, "context.json");
+      const parentIdentity = await validateLaunchContext(contextPath);
+      await verifyControlledRollbackEvidence({
+        parentIdentity,
+        parentContextPath: contextPath,
+      });
+    } catch {
+      return "rollback controlled child failed parent binding, lineage, runtime proof, images or cleanup validation";
+    }
+    for (const name of [
+      "rollback-parent.json",
+      "rollback-child-context.json",
+      "mutation-disable-rollback.json",
+      "rollback-config-lineage.bundle",
+      "rollback-runtime-lineage.bundle",
+    ])
+      additions.push(await hashFile(join(gateDir, "artifacts", name)));
   }
   if (gate.id === "report") {
     const result = JSON.parse(
@@ -1794,16 +2289,50 @@ async function saveCommandsNdjson(evidenceDir, gates) {
   return path;
 }
 
-function dependencyStatus(gate, records) {
-  const failed = gate.predecessors.filter(
-    (id) => records.find((entry) => entry.id === id)?.status !== "PASS",
-  );
-  return failed;
+// Гейт вне выборки не блокирует запуск последующих гейтов выборки, но FAIL и
+// NOT_RUN предков блокируют как раньше.
+export function blockingPredecessors(gate, records) {
+  return gate.predecessors.filter((id) => {
+    const status = records.find((entry) => entry.id === id)?.status;
+    return status !== "PASS" && status !== SKIPPED_BY_FILTER;
+  });
 }
 
 function formatPnpmVersion(output) {
   const match = output.match(/\d+\.\d+\.\d+/);
   return match?.[0] ?? "unknown";
+}
+
+function assertRuntimeImageBaselineHash(ownership) {
+  if (!ownership.baseline) return;
+  const hash = createHash("sha256")
+    .update(JSON.stringify(ownership.baseline))
+    .digest("hex");
+  if (hash !== ownership.baselineSha256)
+    throw new Error("runtime image baseline hash mismatch");
+}
+
+export function finishRuntimeImageOwnership(
+  ownership,
+  ownerGate,
+  cleanup = cleanupLaunchRuntimeImages,
+) {
+  try {
+    assertRuntimeImageBaselineHash(ownership);
+    cleanup(
+      ownership.projectName,
+      ownership.images,
+      undefined,
+      ownership.baseline,
+    );
+    ownership.phase = "cleaned";
+    return true;
+  } catch (error) {
+    ownership.phase = "cleanup-failed";
+    ownerGate.status = "FAIL";
+    ownerGate.reason = `Runtime image cleanup failed: ${redactText(error.message)}`;
+    return false;
+  }
 }
 
 export async function runGate(
@@ -1815,8 +2344,12 @@ export async function runGate(
   runStart,
   runEpochMs,
   outputBudget,
-  g08ExpectedSystemIdentifier,
+  migrationsExpectedSystemIdentifier,
   realtimeQualificationPath,
+  imageManifestPath,
+  g16SignerPath,
+  dataTempDir,
+  profile = DEFAULT_PROFILE,
 ) {
   if (outputBudget.exceeded && gate.id !== "report") {
     record.reason =
@@ -1833,7 +2366,7 @@ export async function runGate(
     await updateGateArtifact(evidenceDir, record);
     return;
   }
-  const failedPredecessors = dependencyStatus(gate, runStart);
+  const failedPredecessors = blockingPredecessors(gate, runStart);
   if (failedPredecessors.length && gate.id !== "report") {
     record.reason = `NOT_RUN: predecessor не PASS: ${failedPredecessors.join(", ")}`;
     record.endedAt = nowIso();
@@ -1848,9 +2381,9 @@ export async function runGate(
     await updateGateArtifact(evidenceDir, record);
     return;
   }
-  if (gate.id === "aroma_sandbox" && !process.env.AROMA_SANDBOX_APPROVAL_FILE) {
+  if (gate.id === "aroma_sandbox" && !g16SignerPath) {
     record.reason =
-      "NOT_RUN: AROMA_SANDBOX_APPROVAL_FILE отсутствует; controlled-live aroma_sandbox требует подписанный approval";
+      "NOT_RUN: --g16-signer отсутствует; controlled-live aroma_sandbox требует RAM signer";
     record.endedAt = nowIso();
     await writeFile(join(evidenceDir, "gates", gate.id, "stdout.log"), "", {
       mode: 0o600,
@@ -1866,6 +2399,7 @@ export async function runGate(
   record.startedAt = nowIso();
   record.reason = "";
   const started = Date.now();
+  let realtimeQualification;
   if (gate.id === "observability") {
     try {
       if (!realtimeQualificationPath)
@@ -1874,6 +2408,7 @@ export async function runGate(
         receiptPath: realtimeQualificationPath,
         contextFile: contextPath,
       });
+      realtimeQualification = { ...admitted, admittedAt: nowIso() };
       const path = join(
         evidenceDir,
         "gates",
@@ -1881,10 +2416,14 @@ export async function runGate(
         "artifacts",
         "realtime-capacity.json",
       );
-      await writeFile(path, `${JSON.stringify(admitted, null, 2)}\n`, {
-        flag: "wx",
-        mode: 0o600,
-      });
+      await writeFile(
+        path,
+        `${JSON.stringify(realtimeQualification, null, 2)}\n`,
+        {
+          flag: "wx",
+          mode: 0o600,
+        },
+      );
       record.artifacts.push(await hashFile(path));
       if (Date.now() - started >= gate.timeout * 1000)
         throw new Error(
@@ -1909,8 +2448,8 @@ export async function runGate(
   }
   if (gate.id === "migrations") {
     if (
-      typeof g08ExpectedSystemIdentifier !== "string" ||
-      !/^[0-9]{1,20}$/u.test(g08ExpectedSystemIdentifier)
+      typeof migrationsExpectedSystemIdentifier !== "string" ||
+      !/^[0-9]{1,20}$/u.test(migrationsExpectedSystemIdentifier)
     )
       record.reason =
         "migrations: требуется утверждённый system identifier PostgreSQL";
@@ -1930,7 +2469,7 @@ export async function runGate(
             runId: context.runId,
             candidateSha: context.candidateSha,
             baseConfigSha256: context.baseConfigSha256,
-            systemIdentifier: g08ExpectedSystemIdentifier,
+            systemIdentifier: migrationsExpectedSystemIdentifier,
           })}\n`,
           { flag: "wx", mode: 0o400 },
         );
@@ -1966,7 +2505,7 @@ export async function runGate(
       logBase,
       `stderr${commands.length > 1 ? `-${index + 1}` : ""}.log`,
     );
-    const remainingTotal = TOTAL_TIMEOUT_MS - (Date.now() - runEpochMs);
+    const remainingTotal = profileBudgetMs(profile) - (Date.now() - runEpochMs);
     const timeoutMs = Math.min(
       Math.max(
         1,
@@ -1975,7 +2514,7 @@ export async function runGate(
             ? Date.now() - started
             : 0),
       ),
-      Math.max(1, gateBudgetMs(gate.id, remainingTotal)),
+      Math.max(1, gateBudgetMs(gate.id, remainingTotal, profile)),
     );
     let run;
     try {
@@ -1987,7 +2526,14 @@ export async function runGate(
         stderrPath,
         contextPath,
         outputBudget,
-        { deadlineEpochMs: Date.now() + timeoutMs },
+        {
+          imageManifestPath,
+          gateId: gate.id,
+          dataTempDir,
+          g16SignerPath:
+            gate.id === "aroma_sandbox" ? g16SignerPath : undefined,
+          deadlineEpochMs: Date.now() + timeoutMs,
+        },
       );
     } catch (error) {
       run = {
@@ -2036,7 +2582,12 @@ export async function runGate(
       join(logBase, "stderr.log"),
     );
   }
-  const artifactError = await verifyGateArtifacts(gate, record, evidenceDir);
+  const artifactError = await verifyGateArtifacts(
+    gate,
+    record,
+    evidenceDir,
+    realtimeQualification,
+  );
   if (artifactError) {
     record.status = "FAIL";
     record.reason = record.reason
@@ -2045,8 +2596,110 @@ export async function runGate(
   }
   record.durationMs = Date.now() - started;
   record.endedAt = nowIso();
+  if (gate.id === "observability" && record.durationMs > gate.timeout * 1000) {
+    record.status = "FAIL";
+    record.reason = record.reason
+      ? `${record.reason}; Превышен timeout observability`
+      : "Превышен timeout observability";
+  }
   if (record.status !== "FAIL") record.status = "PASS";
   await updateGateArtifact(evidenceDir, record);
+}
+
+export async function readLaunchImageEvidence({
+  contextFile,
+  evidenceDir,
+  result,
+  readRuntimeImages = readVerifiedRuntimeImages,
+  readStorageImage = loadVerifiedGateImage,
+}) {
+  const context = JSON.parse(await readFile(contextFile, "utf8"));
+  if (
+    context.runId !== result.runId ||
+    context.candidateSha !== result.candidateSha ||
+    context.baseConfigSha256 !== result.environment.configSha256 ||
+    resolve(context.evidenceDir ?? "") !== resolve(evidenceDir)
+  )
+    throw new Error("G12_IMAGE_CONTEXT_MISMATCH");
+  const preflightGate = result.gates.find((entry) => entry.id === "preflight");
+  if (preflightGate?.status !== "PASS")
+    throw new Error("G12_IMAGE_PREFLIGHT_NOT_PASSED");
+  // Release может переиспользовать admission-preflight. Source evidence
+  // остаётся на месте и read-only; artifact не копируется между прогонами.
+  const reuse = preflightGate.reusedFrom ?? null;
+  const sourceEvidenceDir = reuse ? resolve(ROOT, reuse.evidenceDir) : null;
+  if (reuse && sourceEvidenceDir !== join(ROOT, "evidence/launch", reuse.runId))
+    throw new Error("G12_IMAGE_PREFLIGHT_HASH_MISMATCH");
+  const path = join(
+    sourceEvidenceDir ?? evidenceDir,
+    "gates/preflight/artifacts/preflight.json",
+  );
+  await assertNoSymlinkPath(sourceEvidenceDir ?? evidenceDir, path);
+  const bytes = await readFile(path);
+  const bytesSha256 = createHash("sha256").update(bytes).digest("hex");
+  if (reuse) {
+    if (
+      !SNAPSHOT_SHA256_PATTERN.test(reuse.preflightArtifactSha256 ?? "") ||
+      reuse.preflightArtifactSha256 !== bytesSha256
+    )
+      throw new Error("G12_IMAGE_PREFLIGHT_HASH_MISMATCH");
+  } else {
+    const matchingArtifacts = preflightGate.artifacts.filter(
+      (entry) => resolve(entry.path) === path,
+    );
+    if (
+      matchingArtifacts.length !== 1 ||
+      matchingArtifacts[0].sha256 !== bytesSha256 ||
+      matchingArtifacts[0].sizeBytes !== bytes.length
+    )
+      throw new Error("G12_IMAGE_PREFLIGHT_HASH_MISMATCH");
+  }
+  const preflight = JSON.parse(bytes.toString("utf8"));
+  const checks = preflight.checks?.filter(
+    (entry) => entry.id === "NATIVE_IMAGE_RUNTIME_IDENTITY",
+  );
+  const native = checks?.[0]?.facts?.actualRuntimeProof?.node;
+  const declaredNode = checks?.[0]?.facts?.declaredBomImages?.node;
+  if (
+    preflight.schemaVersion !== 1 ||
+    preflight.gateId !== "preflight" ||
+    preflight.status !== "PASS" ||
+    preflight.runId !== (reuse ? reuse.runId : context.runId) ||
+    preflight.candidateSha !== context.candidateSha ||
+    (reuse !== null &&
+      preflight.githubSnapshot?.sha256 !== reuse.githubSnapshotSha256) ||
+    checks?.length !== 1 ||
+    checks[0].status !== "PASS" ||
+    native?.status !== "PASS" ||
+    native.cleanupSucceeded !== true ||
+    native.os !== "linux" ||
+    native.architecture !== "amd64" ||
+    !/^sha256:[a-f0-9]{64}$/u.test(native.imageId ?? "")
+  )
+    throw new Error("G12_IMAGE_NATIVE_PROOF_INVALID");
+  const [images, storage] = await Promise.all([
+    readRuntimeImages({ contextFile }),
+    readStorageImage({
+      target: "storage-helper",
+      contextFile,
+      loadImage: false,
+    }),
+  ]);
+  const digest = /@(?<digest>sha256:[a-f0-9]{64})$/u.exec(
+    storage.baseImage ?? "",
+  )?.groups?.digest;
+  if (
+    storage.runId !== context.runId ||
+    storage.candidateSha !== context.candidateSha ||
+    declaredNode !== storage.baseImage ||
+    !digest ||
+    !native.repoDigest?.endsWith(`@${digest}`)
+  )
+    throw new Error("G12_IMAGE_NODE_BASE_MISMATCH");
+  return {
+    nodeImageDigest: native.imageId,
+    imageDigests: images.map(({ imageId }) => imageId),
+  };
 }
 
 async function writeEnvironment(evidenceDir, result) {
@@ -2071,6 +2724,7 @@ async function writeEnvironment(evidenceDir, result) {
     encryptedSecretsSha256: result.environment.encryptedSecretsSha256,
     toolchainVersionsSha256: result.environment.toolchainVersionsSha256,
     lockfileSha256: result.environment.lockfileSha256,
+    githubSnapshotSha256: result.environment.githubSnapshotSha256 ?? null,
     imageDigests: result.environment.imageDigests,
     resources: result.environment.resources,
     candidatePath: result.environment.candidatePath,
@@ -2078,10 +2732,68 @@ async function writeEnvironment(evidenceDir, result) {
   await atomicJson(join(evidenceDir, "environment.json"), env);
 }
 
+export async function applyLaunchImageEvidence({
+  contextFile,
+  evidenceDir,
+  result,
+  gate,
+  record,
+  workloadDeadline,
+  readEvidence = readLaunchImageEvidence,
+  persist = writeEnvironment,
+  now = Date.now,
+}) {
+  const originalNodeDigest = result.environment.nodeImageDigest;
+  const originalImageDigests = result.environment.imageDigests;
+  let environmentWritten = false;
+  try {
+    const images = await readEvidence({ contextFile, evidenceDir, result });
+    record.durationMs = now() - Date.parse(record.startedAt);
+    record.endedAt = nowIso();
+    if (record.durationMs > gate.timeout * 1000 || now() >= workloadDeadline)
+      throw new Error(
+        "supply_chain image evidence validation exceeded its budget",
+      );
+    result.environment.nodeImageDigest = images.nodeImageDigest;
+    result.environment.imageDigests = images.imageDigests;
+    await persist(evidenceDir, result);
+    environmentWritten = true;
+    record.durationMs = now() - Date.parse(record.startedAt);
+    record.endedAt = nowIso();
+    if (record.durationMs > gate.timeout * 1000 || now() >= workloadDeadline)
+      throw new Error(
+        "supply_chain image evidence validation exceeded its budget",
+      );
+  } catch (error) {
+    let failure = error;
+    result.environment.nodeImageDigest = originalNodeDigest;
+    result.environment.imageDigests = originalImageDigests;
+    if (environmentWritten) {
+      try {
+        await persist(evidenceDir, result);
+      } catch (rollbackError) {
+        failure = new AggregateError(
+          [error, rollbackError],
+          "supply_chain image evidence rollback failed",
+        );
+      }
+    }
+    record.durationMs = now() - Date.parse(record.startedAt);
+    record.endedAt = nowIso();
+    record.status = "FAIL";
+    record.reason = `supply_chain image evidence validation failed: ${redactText(failure.message)}`;
+  }
+}
+
 // Hold each source directory open so a renamed or replaced path cannot redirect copying.
 export async function executeRun(options = {}) {
   const runnerStartedAt = Date.now();
+  const dataTempDir =
+    options.dataTempDir === undefined
+      ? undefined
+      : await validateLaunchDataTempDir(options.dataTempDir);
   const matrix = await loadMatrix();
+  const selection = selectGates(matrix.gates, options);
   const state = await sourceState();
   if (state.status)
     throw new Error(
@@ -2099,6 +2811,11 @@ export async function executeRun(options = {}) {
   if (resolved !== candidateSha)
     throw new Error("candidate SHA не является разрешимым commit object");
   const checkout = await makeCandidateCheckout(candidateSha);
+  let imageOwnership;
+  let imageOwnershipPath;
+  let launchArtifactManifestPath;
+  let imageCleanupVerified = false;
+  let imageCleanupReported = false;
   try {
     const startedAt = nowIso();
     const runId = `${startedAt.replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z")}-${candidateSha.slice(0, 7)}`;
@@ -2180,8 +2897,36 @@ export async function executeRun(options = {}) {
     if (databaseNames.length !== 5 || new Set(databaseNames).size !== 5)
       throw new Error("canonical launch database owner set is invalid");
     const treeSha = await git(checkout.candidate, "rev-parse", "HEAD^{tree}");
+    const resume =
+      options.resume === undefined
+        ? null
+        : await loadResumeSource(options.resume);
+    let githubSnapshotSha256 = null;
+    if (resume) {
+      githubSnapshotSha256 =
+        resume.result.profile === ADMISSION_PROFILE
+          ? await readAdmissionSnapshot(resume.evidenceDir, {
+              runId: resume.result.runId,
+              candidateSha: resume.result.candidateSha,
+            })
+          : (resume.result.environment?.githubSnapshotSha256 ?? null);
+      assertResumeIdentity(resume.result, {
+        candidateSha,
+        treeSha,
+        configSha256: baseConfigSha256,
+        toolchainVersionsSha256,
+        lockfileSha256,
+        githubSnapshotSha256,
+      });
+      if (options.from !== undefined)
+        assertFromPredecessors(matrix.gates, options.from, resume.result);
+    }
+    const reuse = resume
+      ? resumableGateRecords(resume.result, resume.evidenceDir, selection)
+      : new Map();
     const result = {
-      schemaVersion: 1,
+      schemaVersion: 2,
+      profile: selection.profile,
       runId,
       candidateSha,
       sourceSha: state.sourceSha,
@@ -2212,6 +2957,7 @@ export async function executeRun(options = {}) {
         encryptedSecretsSha256,
         toolchainVersionsSha256,
         lockfileSha256,
+        githubSnapshotSha256,
         imageDigests: null,
         resources: {
           composeProject: {
@@ -2226,9 +2972,11 @@ export async function executeRun(options = {}) {
       decision: "НЕ ДОПУСТИТЬ",
     };
     const resultPath = join(evidenceDir, "run-result.json");
+    const budgetProfile = selection.budgetProfile;
     const save = async () => {
       result.endedAt = nowIso();
-      result.decision = decisive(result.gates);
+      result.decision = decisive(result.gates, result.profile);
+      result.reportStatus = reportGateStatus(result.gates);
       await validateRunResult(result);
       await atomicJson(resultPath, result);
     };
@@ -2241,12 +2989,116 @@ export async function executeRun(options = {}) {
       observedBytes: 0,
       exceeded: false,
     };
-    const totalDeadline = runEpochMs + TOTAL_TIMEOUT_MS;
-    const workloadDeadline = totalDeadline - REPORT_TOTAL_RESERVE_MS;
+    const totalDeadline = runEpochMs + profileBudgetMs(budgetProfile);
+    const workloadDeadline = totalDeadline - workloadReserveMs(budgetProfile);
     for (let index = 0; index < matrix.gates.length; index += 1) {
       const gate = matrix.gates[index];
       const record = result.gates[index];
+      const selectionEntry = selection.gates.get(gate.id);
+      if (selectionEntry.status === SKIPPED_BY_FILTER) {
+        record.status = SKIPPED_BY_FILTER;
+        record.reason = selectionEntry.reason;
+        record.endedAt = nowIso();
+        await writeFile(join(evidenceDir, "gates", gate.id, "stdout.log"), "", {
+          mode: 0o600,
+        });
+        await writeFile(
+          join(evidenceDir, "gates", gate.id, "stderr.log"),
+          `${record.reason}\n`,
+          { mode: 0o600 },
+        );
+        await updateGateArtifact(evidenceDir, record);
+        await save();
+        continue;
+      }
+      const reusedFrom = reuse.get(gate.id);
+      if (reusedFrom) {
+        record.status = "PASS";
+        record.reusedFrom = reusedFrom;
+        if (gate.id === "preflight") {
+          result.environment.githubSnapshotSha256 =
+            reusedFrom.githubSnapshotSha256;
+          await writeEnvironment(evidenceDir, result);
+        }
+        record.reason = `PASS переиспользован из ${reusedFrom.runId} (${reusedFrom.evidenceDir})`;
+        record.endedAt = nowIso();
+        await writeFile(join(evidenceDir, "gates", gate.id, "stdout.log"), "", {
+          mode: 0o600,
+        });
+        await writeFile(
+          join(evidenceDir, "gates", gate.id, "stderr.log"),
+          `${record.reason}\n`,
+          { mode: 0o600 },
+        );
+        await updateGateArtifact(evidenceDir, record);
+        await save();
+        continue;
+      }
+      if (
+        gate.id === "integration" &&
+        !outputBudget.exceeded &&
+        Date.now() < workloadDeadline &&
+        blockingPredecessors(gate, result.gates).length === 0
+      ) {
+        try {
+          const images = await readVerifiedRuntimeImages({
+            contextFile: contextPath,
+          });
+          const projectName = `coffee-launch-${runId.toLowerCase()}`;
+          const inventory = inspectLaunchRuntimeImages(projectName, images);
+          const baseline = captureRuntimeImageBaseline(inventory);
+          imageOwnership = {
+            runId,
+            candidateSha,
+            projectName,
+            images,
+            baseline,
+            baselineSha256: createHash("sha256")
+              .update(JSON.stringify(baseline))
+              .digest("hex"),
+            phase: "baseline",
+          };
+          const path = join(
+            evidenceDir,
+            "gates/integration/artifacts/runtime-image-ownership.json",
+          );
+          await atomicJson(path, imageOwnership);
+          await chmod(path, 0o400);
+          imageOwnershipPath = path;
+        } catch (error) {
+          record.status = "FAIL";
+          record.reason = `Runtime image ownership preflight failed: ${redactText(error.message)}`;
+          record.endedAt = nowIso();
+          await writeFile(
+            join(evidenceDir, "gates", gate.id, "stdout.log"),
+            "",
+            { mode: 0o600 },
+          );
+          await writeFile(
+            join(evidenceDir, "gates", gate.id, "stderr.log"),
+            `${record.reason}\n`,
+            { mode: 0o600 },
+          );
+          await updateGateArtifact(evidenceDir, record);
+          await save();
+          continue;
+        }
+      }
       if (gate.id === "report") {
+        if (imageOwnershipPath) {
+          const ownerGate = result.gates.find(
+            (item) => item.id === "integration",
+          );
+          imageCleanupVerified = finishRuntimeImageOwnership(
+            imageOwnership,
+            ownerGate,
+          );
+          imageCleanupReported = !imageCleanupVerified;
+          await atomicJson(imageOwnershipPath, imageOwnership);
+          await chmod(imageOwnershipPath, 0o400);
+          ownerGate.artifacts.push(await hashFile(imageOwnershipPath));
+          await updateGateArtifact(evidenceDir, ownerGate);
+        }
         await writeDefects(evidenceDir, ROOT, result);
         await atomicJson(
           join(evidenceDir, "gates", gate.id, "result.json"),
@@ -2255,8 +3107,7 @@ export async function executeRun(options = {}) {
         await save();
       }
       if (Date.now() >= workloadDeadline && gate.id !== "report") {
-        record.reason =
-          "NOT_RUN: остановлено для резерва report и финализации внутри общего лимита 120 минут";
+        record.reason = `NOT_RUN: остановлено для резерва report и финализации внутри лимита профиля ${budgetProfile} (${Math.round(profileBudgetMs(budgetProfile) / 60_000)} минут)`;
         record.endedAt = nowIso();
         await writeFile(join(evidenceDir, "gates", gate.id, "stdout.log"), "", {
           mode: 0o600,
@@ -2279,19 +3130,79 @@ export async function executeRun(options = {}) {
         result.gates,
         runEpochMs,
         outputBudget,
-        options.g08ExpectedSystemIdentifier,
+        options.migrationsExpectedSystemIdentifier,
         options.realtimeQualificationPath,
+        launchArtifactManifestPath,
+        options.g16SignerPath,
+        dataTempDir,
+        budgetProfile,
       );
+      if (gate.id === "preflight" && record.status === "PASS") {
+        try {
+          result.environment.githubSnapshotSha256 = await readAdmissionSnapshot(
+            evidenceDir,
+            {
+              runId,
+              candidateSha,
+            },
+          );
+          await writeEnvironment(evidenceDir, result);
+        } catch (error) {
+          record.status = "FAIL";
+          record.reason = redactText(error.message);
+          await updateGateArtifact(evidenceDir, record);
+        }
+      }
+      if (gate.id === "supply_chain" && record.status === "PASS") {
+        await applyLaunchImageEvidence({
+          contextFile: contextPath,
+          evidenceDir,
+          result,
+          gate,
+          record,
+          workloadDeadline,
+        });
+        if (record.status === "PASS")
+          launchArtifactManifestPath = artifactManifestPath(evidenceDir);
+        await updateGateArtifact(evidenceDir, record);
+      }
+      if (
+        gate.id === "integration" &&
+        imageOwnershipPath &&
+        record.status === "PASS"
+      ) {
+        try {
+          validateRuntimeImageOwnership(
+            inspectLaunchRuntimeImages(
+              imageOwnership.projectName,
+              imageOwnership.images,
+            ),
+            imageOwnership.baseline,
+            "ready",
+          );
+          imageOwnership.phase = "ready";
+          await atomicJson(imageOwnershipPath, imageOwnership);
+          await chmod(imageOwnershipPath, 0o400);
+        } catch (error) {
+          record.status = "FAIL";
+          record.reason = `Runtime image retention failed: ${redactText(error.message)}`;
+          await updateGateArtifact(evidenceDir, record);
+        }
+      }
       await saveCommandsNdjson(evidenceDir, result.gates);
       await save();
     }
-    result.decision = decisive(result.gates);
+    await saveCommandsNdjson(evidenceDir, result.gates);
+    result.decision = decisive(result.gates, budgetProfile);
     await save();
     const reportResult = await runCapture(
       process.execPath,
       [join(BASE, "report.mjs"), "--finalize", evidenceDir],
       ROOT,
-      Math.max(1, TOTAL_TIMEOUT_MS - (Date.now() - runnerStartedAt)),
+      Math.max(
+        1,
+        profileBudgetMs(budgetProfile) - (Date.now() - runnerStartedAt),
+      ),
     ).catch((error) => ({ code: 1, stderr: error.message }));
     if (reportResult.code !== 0) {
       const reportGate = result.gates[19];
@@ -2304,7 +3215,10 @@ export async function executeRun(options = {}) {
         process.execPath,
         [join(BASE, "report.mjs"), "--finalize", evidenceDir],
         ROOT,
-        Math.max(1, TOTAL_TIMEOUT_MS - (Date.now() - runnerStartedAt)),
+        Math.max(
+          1,
+          profileBudgetMs(budgetProfile) - (Date.now() - runnerStartedAt),
+        ),
       ).catch(() => {});
     }
     const finalResult = JSON.parse(await readFile(resultPath, "utf8"));
@@ -2314,19 +3228,84 @@ export async function executeRun(options = {}) {
       candidatePath: checkout.candidate,
     };
   } finally {
-    await rm(checkout.parent, { recursive: true, force: true });
+    try {
+      if (imageOwnershipPath && !imageCleanupVerified) {
+        assertRuntimeImageBaselineHash(imageOwnership);
+        cleanupLaunchRuntimeImages(
+          imageOwnership.projectName,
+          imageOwnership.images,
+          undefined,
+          imageOwnership.baseline,
+        );
+        imageOwnership.phase = imageCleanupReported
+          ? "cleanup-failed"
+          : "cleaned";
+        await atomicJson(imageOwnershipPath, imageOwnership);
+        await chmod(imageOwnershipPath, 0o400);
+      }
+    } finally {
+      await rm(checkout.parent, { recursive: true, force: true });
+    }
   }
 }
 
 export function parseArgs(argv) {
   const options = {};
+  const gateIds = [];
+  const knownGate = (value, flag) => {
+    if (typeof value !== "string" || !IDS.includes(value))
+      throw new Error(`${flag} требует id гейта из matrix.yaml`);
+    return value;
+  };
   for (let index = 0; index < argv.length; index += 1) {
-    if (argv[index] === "--candidate-sha") options.candidateSha = argv[++index];
-    else if (argv[index] === "--github-snapshot")
+    const argument = argv[index];
+    if (argument === "--help" || argument === "-h") return { help: true };
+    if (argument === "--profile") {
+      const value = argv[++index];
+      if (options.profile !== undefined)
+        throw new Error("--profile может быть указан только один раз");
+      if (!Object.hasOwn(PROFILE_BUDGET_MS, value))
+        throw new Error("--profile принимает только admission, fast и release");
+      options.profile = value;
+    } else if (argument === "--gate") {
+      gateIds.push(knownGate(argv[++index], "--gate"));
+    } else if (argument === "--from") {
+      if (options.from !== undefined)
+        throw new Error("--from может быть указан только один раз");
+      options.from = knownGate(argv[++index], "--from");
+    } else if (argument === "--resume") {
+      const value = argv[++index];
+      if (options.resume !== undefined)
+        throw new Error("--resume может быть указан только один раз");
+      if (typeof value !== "string" || !value.trim())
+        throw new Error("--resume требует evidenceDir или runId");
+      options.resume = value;
+    } else if (argument === "--candidate-sha")
+      options.candidateSha = argv[++index];
+    else if (argument === "--github-snapshot")
       options.githubSnapshotPath = resolve(argv[++index]);
-    else if (argv[index] === "--accepted-base-commit")
+    else if (argument === "--accepted-base-commit")
       options.acceptedBaseCommit = argv[++index];
-    else if (argv[index] === "--realtime-qualification") {
+    else if (argument === "--g16-signer") {
+      const path = argv[++index];
+      if (
+        options.g16SignerPath !== undefined ||
+        typeof path !== "string" ||
+        !isAbsolute(path)
+      )
+        throw new Error("--g16-signer requires one absolute path");
+      options.g16SignerPath = resolve(path);
+    } else if (argument === "--data-temp-dir") {
+      const path = argv[++index];
+      if (
+        options.dataTempDir !== undefined ||
+        typeof path !== "string" ||
+        !isAbsolute(path) ||
+        resolve(path) !== path
+      )
+        throw new Error("--data-temp-dir requires one absolute canonical path");
+      options.dataTempDir = path;
+    } else if (argument === "--realtime-qualification") {
       const path = argv[++index];
       if (options.realtimeQualificationPath !== undefined)
         throw new Error("--realtime-qualification may be specified only once");
@@ -2335,15 +3314,26 @@ export function parseArgs(argv) {
           "--realtime-qualification requires an absolute receipt path",
         );
       options.realtimeQualificationPath = path;
-    } else if (argv[index] === "--g08-expected-system-identifier") {
+    } else if (argument === "--g08-expected-system-identifier") {
       const identifier = argv[++index];
       if (!/^[0-9]{1,20}$/u.test(identifier ?? ""))
         throw new Error(
           "--g08-expected-system-identifier требует утверждённый system identifier",
         );
-      options.g08ExpectedSystemIdentifier = identifier;
+      options.migrationsExpectedSystemIdentifier = identifier;
     } else throw new Error(`Неизвестный аргумент: ${argv[index]}`);
   }
+  if (gateIds.length) options.gateIds = [...new Set(gateIds)];
+  if (options.profile !== undefined && options.gateIds !== undefined)
+    throw new Error("--profile и --gate взаимоисключающие");
+  if (options.profile !== undefined && options.from !== undefined)
+    throw new Error("--profile и --from взаимоисключающие");
+  if (options.gateIds !== undefined && options.from !== undefined)
+    throw new Error("--gate и --from взаимоисключающие");
+  if (options.from !== undefined && options.resume === undefined)
+    throw new Error("--from требует --resume с PASS-предками");
+  if (options.resume !== undefined)
+    for (const gateId of options.gateIds ?? []) assertResumableGate(gateId);
   return options;
 }
 
@@ -2352,13 +3342,16 @@ if (
   resolve(process.argv[1]) === fileURLToPath(import.meta.url)
 ) {
   try {
-    const { result, evidenceDir } = await executeRun(
-      parseArgs(process.argv.slice(2)),
-    );
-    console.log(
-      `${result.decision}: ${result.runId} (${relativeEvidencePath(evidenceDir)})`,
-    );
-    if (result.decision !== "ДОПУСТИТЬ") process.exitCode = 1;
+    const options = parseArgs(process.argv.slice(2));
+    if (options.help) {
+      process.stdout.write(`${usageText()}\n`);
+    } else {
+      const { result, evidenceDir } = await executeRun(options);
+      console.log(
+        `${result.decision}: ${result.runId} (${relativeEvidencePath(evidenceDir)})`,
+      );
+      if (result.decision !== "ДОПУСТИТЬ") process.exitCode = 1;
+    }
   } catch (error) {
     console.error(
       redactText(error.stack ?? error.message, sensitiveEnvironmentValues()),

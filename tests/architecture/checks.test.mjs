@@ -10,7 +10,7 @@ import {
 } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { spawnSync } from "node:child_process";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
@@ -967,6 +967,44 @@ void test("RED TOOLCHAIN-FINAL-IMAGE: build dependencies cannot enter final imag
     const result = run("check-toolchain-versions.mjs", root);
     assert.notEqual(result.status, 0, output(result));
     assert.match(output(result), /TOOLCHAIN-FINAL-IMAGE/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+void test("TOOLCHAIN-FINAL-IMAGE excludes only browser child test fixtures", async () => {
+  const root = await toolchainRoot();
+  const fixture = join(FIXTURES, "invalid-final-image", "Dockerfile");
+  try {
+    const childTests = join(root, ".g15-browser-child-Ab12", "tests");
+    await mkdir(childTests, { recursive: true });
+    await cp(fixture, join(childTests, "Dockerfile"));
+    const testFixture = run("check-toolchain-versions.mjs", root);
+    assert.equal(testFixture.status, 0, output(testFixture));
+
+    for (const path of [
+      join(root, ".g15-browser-child-Ab12", "apps", "Dockerfile"),
+      join(root, ".g15-browser-child-not_valid", "tests", "Dockerfile"),
+      join(root, "Dockerfile"),
+    ]) {
+      await mkdir(dirname(path), { recursive: true });
+      if (path === join(root, "Dockerfile")) {
+        // #278 требует, чтобы MUSL_VERSION root Dockerfile совпадал с BOM.
+        const { muslVersion } = JSON.parse(
+          await readFile(join(root, "config/toolchain-versions.json"), "utf8"),
+        );
+        await writeFile(
+          path,
+          `ARG MUSL_VERSION=${muslVersion}\n${await readFile(fixture, "utf8")}`,
+        );
+      } else {
+        await cp(fixture, path);
+      }
+      const invalid = run("check-toolchain-versions.mjs", root);
+      assert.notEqual(invalid.status, 0, output(invalid));
+      assert.match(output(invalid), /TOOLCHAIN-FINAL-IMAGE/);
+      await rm(path);
+    }
   } finally {
     await rm(root, { recursive: true, force: true });
   }

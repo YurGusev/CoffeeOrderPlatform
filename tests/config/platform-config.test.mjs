@@ -94,7 +94,12 @@ void test("BuildKit and container policies reject invalid budgets and reference 
     /immutable digest/u,
   );
 
-  const projected = projectLocalRuntimeConfig(original);
+  // Candidate #13 включает formal DB/Kafka isolation; локальный релиз
+  // проецируется из normal-профиля, поэтому здесь проверяется его копия.
+  const normalProfile = structuredClone(original);
+  normalProfile.verification.databaseIsolation.enabled = false;
+  normalProfile.verification.kafkaNamespaceIsolation = false;
+  const projected = projectLocalRuntimeConfig(normalProfile);
   assert.deepEqual(
     projected.platform.containerLimits,
     original.platform.containerLimits,
@@ -248,6 +253,8 @@ void test("local identity settings preserve the formal null browser profile", as
     await readFile(join(REPO_ROOT, "config/platform.yaml"), "utf8"),
     { json: true },
   );
+  document.verification.databaseIsolation.enabled = false;
+  document.verification.kafkaNamespaceIsolation = false;
   const schema = JSON.parse(
     await readFile(join(REPO_ROOT, "config/platform.schema.json"), "utf8"),
   );
@@ -658,11 +665,32 @@ void test("supply_chain scanner policy is strict verification-only configuration
   const parsed = parsePlatformConfig(document);
   assert.equal(Object.hasOwn(parsed, "verification"), false);
   assert.equal(Object.hasOwn(parsed, "securityScan"), false);
+  const schema = JSON.parse(
+    await readFile(join(REPO_ROOT, "config/platform.schema.json"), "utf8"),
+  );
+  const nginxSchema = JSON.parse(
+    await readFile(join(REPO_ROOT, "config/nginx-profile.schema.json"), "utf8"),
+  );
+  const ajv = new Ajv2020({ allErrors: true, strict: true });
+  ajv.addSchema(nginxSchema);
+  const validate = ajv.compile(schema);
+  assert.equal(validate(document), true, JSON.stringify(validate.errors));
+  const foreignRepository = structuredClone(document);
+  foreignRepository.verification.securityScan.egressRepositories[1] =
+    "registry.example.invalid/trivy-java-db";
+  assert.equal(validate(foreignRepository), false);
   for (const changed of [
     { ...expected, enabled: false },
     { ...expected, cpu: 3 },
     { ...expected, parallel: 2 },
     { ...expected, maximumDatabaseAgeHours: 25 },
+    {
+      ...expected,
+      egressRepositories: [
+        "ghcr.io/aquasecurity/trivy-db",
+        "registry.example.invalid/trivy-java-db",
+      ],
+    },
     {
       ...expected,
       egressRepositories: [

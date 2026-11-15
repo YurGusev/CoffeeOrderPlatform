@@ -1,0 +1,23 @@
+{
+  "id": "G02_GENERATED",
+  "status": "NOT_RUN",
+  "expectedCommand": "pnpm contracts:check-generated",
+  "startedAt": null,
+  "endedAt": "2026-10-31T00:57:35.692Z",
+  "durationMs": 0,
+  "timeoutSeconds": 900,
+  "reason": "NOT_RUN: predecessor не PASS: G01_INSTALL",
+  "runs": [],
+  "artifacts": [
+    {
+      "path": "/home/yurgusev/.codex/worktrees/preserve-non-openobserve/CoffeeOrderPlatform/evidence/launch/20261031T005704Z-a6cceea/gates/G02_GENERATED/stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "sizeBytes": 0
+    },
+    {
+      "path": "/home/yurgusev/.codex/worktrees/preserve-non-openobserve/CoffeeOrderPlatform/evidence/launch/20261031T005704Z-a6cceea/gates/G02_GENERATED/stderr.log",
+      "sha256": "4be9626096cf5a85095fe44760e465202b304c004f9fb2cd7280a61267cb9556",
+      "sizeBytes": 44
+    }
+  ]
+}

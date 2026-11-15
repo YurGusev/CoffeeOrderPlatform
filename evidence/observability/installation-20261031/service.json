@@ -1,0 +1,69 @@
+{
+  "schemaVersion": 1,
+  "scope": "permanent observability installation; not formal launch admission",
+  "status": "PASS",
+  "capturedAtUtc": "2026-10-31T05:10:22.353885+00:00",
+  "releaseSource": "0b7a95b2d7ef210ce2547087aa51d472eae770f6",
+  "acceptedMergeCommit": "de217f27de1973ef149be2a218b9c2cb45f070e9",
+  "acceptedDevelop": "f412aaa4657a435d2bb6f6d3c45ee162dbf8ec9a",
+  "postMergeCiRun": 41170450421,
+  "unit": {
+    "name": "coffee-observability.service",
+    "type": "oneshot",
+    "enabled": true,
+    "activeState": "active",
+    "subState": "exited",
+    "result": "success",
+    "exitCode": 0,
+    "restarts": 0,
+    "linger": true,
+    "sha256": "d2f69cd0fc46a9cb90a9cd26c81a29842f5759ef2e3f2a02cc4b6069063990c8"
+  },
+  "durationsSeconds": {
+    "record": 7.84,
+    "reload": 0.767,
+    "enable-start": 51.679,
+    "unit-state": 0.017,
+    "verify": 5.127
+  },
+  "runtime": {
+    "services": 6,
+    "healthyServices": 5,
+    "sinkState": "running; no healthcheck by design",
+    "newContainerIds": 6,
+    "preservedBackingIdentities": 4,
+    "signalsAndAuth": {
+      "context": "PASS",
+      "ownership": "PASS",
+      "health": "PASS",
+      "auth": "PASS",
+      "signals": "PASS",
+      "grafana": "PASS",
+      "persistence": "NOT_RUN",
+      "annotationCleanup": "NOT_RUN"
+    },
+    "persistenceAndAnnotationCleanup": {
+      "context": "PASS",
+      "ownership": "PASS",
+      "health": "PASS",
+      "auth": "NOT_RUN",
+      "signals": "NOT_RUN",
+      "grafana": "PASS",
+      "persistence": "PASS",
+      "annotationCleanup": "PASS"
+    },
+    "hostPorts": false
+  },
+  "evidenceSha256": {
+    "installation": "088ecc3744730340f6be65904e31207a824dd0653735b60cedebdbd26cc8eea5",
+    "record": "853bc75c9e64a45102be29194520c52d0f881e3abc55a2d1a07875b4a9b42a44",
+    "verify": "c3fe89ad2f2af9bcc86b94a5293553b3fe41de813064f6e6305b144a6973ce1c",
+    "operator": "737d5dc3bea35a7f5eef1a7c45d35f58e87668b600f10efc2f96aa83ff5a4ab3"
+  },
+  "limitations": [
+    "Real server reboot NOT_RUN; no Docker daemon restart",
+    "No fullSystem G14/HA/capacity/formal G00–G19 admission",
+    "No application filelog proof; backend-first startup has zero owner runtimes",
+    "Permanent operator browser login is not proved; DEV OIDC exception applies only to approved verification phases"
+  ]
+}

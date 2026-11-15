@@ -1,0 +1,23 @@
+{
+  "scope": "Историческое разрешение controlled-live; только вход построения config-only child, не runtime config и не PASS",
+  "sourceCommit": "0dbe0a40685cbf348f0a63f8633a8db3a74a5467",
+  "sourceConfigSha256": "c2024437a11dadb34da27085cca15097e91ac7ffbed1534f99ae0c6fd40f725e",
+  "exceptionAuthority": "user-2026-10-23",
+  "policy": {
+    "mode": "controlled-live-existing-account",
+    "origin": "https://aromateacoffee.ru",
+    "accountFingerprint": "sha256:2f8dd83aa108ac1734086d80886592520ec814ae4912bc0f0dcfc2deeceffe2f",
+    "credentialRefs": ["aroma.email", "aroma.password"],
+    "existingAccountException": {
+      "authority": "user-2026-10-23",
+      "origin": "https://aromateacoffee.ru",
+      "accountFingerprint": "sha256:2f8dd83aa108ac1734086d80886592520ec814ae4912bc0f0dcfc2deeceffe2f"
+    },
+    "productionOrigins": ["https://aromateacoffee.ru"],
+    "productionAccountFingerprints": [],
+    "resourceLimits": {
+      "postgresMemoryMiB": 1024,
+      "postgresTmpfsMiB": 512
+    }
+  }
+}

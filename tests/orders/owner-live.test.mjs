@@ -18,6 +18,7 @@ import { createDatabase } from "../../packages/platform-database/dist/index.js";
 import { registerOrdersRoutes } from "../../apps/orders-service/dist/http/index.js";
 import { OrderStore } from "../../apps/orders-service/dist/infrastructure/database/order-store.js";
 import { withCatalogPostgres } from "../../scripts/catalog-live-harness.mjs";
+import { captureStdoutLogs } from "../log-capture.mjs";
 
 const root = new URL("../../", import.meta.url);
 const migrations = [
@@ -2527,16 +2528,10 @@ void test(
         ? "set COFFEE_DB_LIVE_PROOF=1 to run isolated PostgreSQL owner proof"
         : false,
   },
-  async () => {
+  async (t) => {
     const piiCanary = "orders-private-customer-canary";
-    const logChunks = [];
-    const originalWrite = process.stdout.write.bind(process.stdout);
-    process.stdout.write = function (chunk, ...args) {
-      logChunks.push(
-        Buffer.isBuffer(chunk) ? chunk.toString("utf8") : String(chunk),
-      );
-      return originalWrite(chunk, ...args);
-    };
+    const logCapture = captureStdoutLogs(t);
+    const { chunks: logChunks } = logCapture;
     const spans = [];
     const measurements = [];
     assert.equal(
@@ -2905,7 +2900,6 @@ void test(
             );
             const recentSpans = spans.slice(beforeSignals.spans);
             const recentMetrics = measurements.slice(beforeSignals.metrics);
-            const recentLogs = logChunks.slice(beforeSignals.logs);
             assert.ok(
               recentSpans.some(
                 (span) => span.name.startsWith("orders.http.") && span.ended,
@@ -2934,13 +2928,12 @@ void test(
                 `${entry.name}: missing lookup metric`,
               );
             }
-            assert.ok(
-              recentLogs.some(
-                (chunk) =>
-                  chunk.includes('"msg":"incoming request"') &&
-                  chunk.includes(currentCorrelation),
-              ),
-              `${entry.name}: missing correlated request log`,
+            const recentLogs = await logCapture.waitForRecord(
+              (record) =>
+                record.runtime === "orders-owner-live-proof" &&
+                record.correlationId === currentCorrelation &&
+                record.msg === "incoming request",
+              beforeSignals.logs,
             );
             const emitted = JSON.stringify({
               spans: recentSpans,
@@ -3062,9 +3055,7 @@ void test(
             ),
           );
           assert.ok(
-            logChunks.some((chunk) =>
-              chunk.includes('"msg":"incoming request"'),
-            ),
+            logChunks.join("").includes('"msg":"incoming request"'),
             "must capture actual Fastify logs",
           );
           const telemetry = JSON.stringify({
@@ -3105,7 +3096,7 @@ void test(
         }
       });
     } finally {
-      process.stdout.write = originalWrite;
+      t.mock.restoreAll();
     }
   },
 );

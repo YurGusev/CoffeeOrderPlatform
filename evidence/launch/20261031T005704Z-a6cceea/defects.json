@@ -1,0 +1,12 @@
+[
+  {
+    "gateId": "G00_PREFLIGHT",
+    "defectId": "DEF-G00_PREFLIGHT-KAFKA_NAMESPACE_PLAN-20261031T005704Z-a6cceea",
+    "blockerId": "KAFKA_NAMESPACE_PLAN"
+  },
+  {
+    "gateId": "G00_PREFLIGHT",
+    "defectId": "DEF-G00_PREFLIGHT-CONFIG_AND_ISOLATION-20261031T005704Z-a6cceea",
+    "blockerId": "CONFIG_AND_ISOLATION"
+  }
+]

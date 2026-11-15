@@ -47,18 +47,62 @@ PASS не выводится. Эти исключения не означают 
 явно и принимается только после проверки parent/child lineage; оно не даёт
 права подменять SHA остальных gates или добавлять постоянный IdP.
 
+Владелец 1 ноября 2026 дополнительно согласовал изолированные config-only
+состояния aroma_sandbox и rollback. Основной candidate `P` сохраняет обычные
+`aromaSandbox=null` и `mutationsEnabled=false`. aroma_sandbox получает child с точной
+утверждённой policy, свежим публичным ключом RAM-signer и включённым флагом;
+rollback — отдельный baseline `B` с единственным изменением флага в `true`, затем
+существующие `B→D→R`. [Точные границы решения](../../evidence/launch-preparation/2026-11-01/controlled-config-lineage.md)
+требуют неизменного кода, проверенных Git/config/context/bundle/image bindings,
+прежнего provider scope и успешного cleanup. Таймауты не меняются. Эти child
+не разрешают постоянно включать mutations и не расширяют OIDC-only исключения.
+
 ## 1. Решение о допуске
+
+Решение выносится по девятнадцати рабочим гейтам. `report` остаётся
+обязательным артефактом прогона (`evidence/launch/<run-id>`,
+`checksums.sha256`, `docs/reports/launch/<run-id>/ОТЧЁТ.md`), но его статус не
+участвует в решении и публикуется в `run-result.json` отдельным полем
+`reportStatus`.
 
 Результат имеет только два значения:
 
-- `ДОПУСТИТЬ`: каждый mandatory gate имеет `PASS`, exact command, exit code 0,
-  артефакт и проверяемую связь с одним commit SHA;
-- `НЕ ДОПУСТИТЬ`: хотя бы один gate `FAIL`, `SKIPPED`, `NOT_RUN`, выполнен на
-  другом SHA/окружении или не имеет evidence.
+- `ДОПУСТИТЬ`: все 19 рабочих гейтов имеют `PASS`, exact command, exit code 0,
+  артефакт и проверяемую связь с одним product commit SHA; evidence/environment
+  proof полон; явно согласованные config-only состояния принимаются только через
+  их проверенную lineage. `report` при этом может быть `FAIL`: его статус
+  публикуется как `reportStatus` и не создаёт формальной блокировки;
+- `НЕ ДОПУСТИТЬ`: хотя бы один рабочий гейт `FAIL`, `SKIPPED`, `NOT_RUN`,
+  выполнен на другом SHA/окружении или не имеет evidence, либо неполон
+  evidence/environment proof. `PASS` отчёта не компенсирует провал рабочего гейта.
+
+Решение допустимо только при полном наборе из 19 рабочих гейтов: отсутствие,
+дублирование или подмена записи гейта даёт `НЕ ДОПУСТИТЬ`. `run-result.json`
+сохраняет неизменный набор 20 записей гейтов (`report` остаётся последним) и
+повышает `schemaVersion` до 2; поле `reportStatus` (`PASS`, `FAIL`, `NOT_RUN`)
+дублирует статус отчёта. Чтение артефактов версии 1 сохранено; предыдущие evidence
+проверяются verifier из их candidate SHA и не мигрируют. `decision.json` для
+потребителя `report`-гейта публикует решение
+по 19 гейтам, `reportStatus` и `mandatoryGatesPass` (PASS всех рабочих гейтов);
+`report`-гейт при проверке артефактов читает решение из `decision.json` и не
+пересчитывает его из своего статуса.
 
 Ручное «проверено глазами», скрытый retry до зелёного результата и accepted
 risk вместо обязательного gate запрещены. После исправления defect весь
 затронутый gate и downstream gates запускаются заново на новом SHA.
+
+Операционный locator `--data-temp-dir /absolute/private/directory` разделяет
+исполняемые checkout и объёмные временные данные. Runner принимает только
+существующий canonical directory текущего UID с режимом `0700`, без symlink,
+до создания checkout/evidence. supply_chain получает отдельный внутренний locator
+только для большого scratch; его исходные `TMPDIR` и scanner lock сохраняются.
+Git archive и извлечённый build context supply_chain остаются в исходном `TMPDIR`,
+как у остальных runtime-сборок; внешний locator применяется к DB/OCI данным.
+observability получает внешний `TMPDIR` для storage/backup, сохраняя существующее
+размещение browser child внутри candidate checkout. Parent, qualification
+и остальные gates используют прежние пути. Gate argv, DTO, config/BOM/image
+bindings, cleanup и лимиты сохраняются. Фактический outer runner argv с locator
+сохраняется вместе с operator evidence.
 
 ## 2. Файлы результата
 
@@ -74,6 +118,7 @@ evidence/launch/<run-id>/
   gates/<gate-id>/{result.json,stdout.log,stderr.log,artifacts/**}
   defects.json
   decision.json
+  handoff.yaml
   checksums.sha256
 evidence/handoffs/issue-13.yaml
 ```
@@ -105,7 +150,17 @@ config digest. Гейт `preflight` проверяет derived plan, runtime —
 bytes. Отдельная standalone runtime проверка с disposable PostgreSQL может
 диагностировать `rollback`, но не закрывает требование внешнего PostgreSQL для `compose`.
 
-Kafka topics/groups содержат run-id. AROMA mutation по умолчанию выключена.
+Обычный compose с launch context перед запуском Compose использует каноническую
+проекцию учётных данных, создаёт пять run-derived БД и применяет принятые
+миграции. В `finally` он подтверждает cleanup этих БД теми же scoped helpers,
+что integration/recovery: предыдущие gates удаляют свои БД и не подготавливают их для compose.
+
+Kafka topics/groups содержат run-id. Для обычного изолированного compose перед
+запуском runtimes создаётся registry и фиксируются начальные offsets только
+для durable consumer groups на новом принадлежащем запуску Kafka volume.
+Существующий volume отклоняется до изменения broker; политика offset и
+поведение постоянного не-launch окружения не меняются.
+AROMA mutation по умолчанию выключена.
 
 `environment.json`: commit/tree SHA, dirty=false, UTC/timezone, OS/arch, CPU/RAM,
 Node/pnpm/Docker/Compose/PostgreSQL/Kafka/browser versions, image digests,
@@ -148,8 +203,17 @@ Inventory `unit` включает 60 существующих unit/property suit
 ## 4. Версионированная matrix
 
 Каждая строка `matrix.yaml` содержит:
-`id`, `version`, `mandatory`, `owner`, `predecessors`, `command`, `timeout`,
+`id`, `version`, `profile`, `mandatory`, `owner`, `predecessors`, `command`, `timeout`,
 `inputs`, `expectedArtifacts`, `passCriteria`, `cleanup`, `rerunPolicy`.
+
+Поле `profile` (`fast` | `release` | `both`) задаёт участие гейта в профилях
+`fast` и `release`; пометка `admission: true` отмечает гейт профиля `admission`
+и сейчас есть только у `preflight`. Состав профилей, измеренные длительности и
+порядок применения описаны в [профилях гейтов запуска](34_LAUNCH_GATE_PROFILES.md),
+решение и компромиссы — в [ADR-0044](../adr/ADR-0044-launch-gate-profiles.md).
+Гейты с `profile: fast` или `profile: both` входят в оба профиля, гейты с
+`profile: release` (включая `supply_chain`) — только в `release`. Состав и
+порядок гейтов не меняются.
 
 | id                | Позиция | Владелец                | Exact command                                                                      | PASS                                                                                                                         |
 | ----------------- | ------- | ----------------------- | ---------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
@@ -244,12 +308,59 @@ Docker daemon под тегами проекта запуска
 digests, `buildInputSha256` и для каждого сервиса `imageId`, manifest digest,
 provenance и attestation hashes. Инвентарь пишется только при PASS `supply_chain`.
 
-Гейты от `compose` до `rollback` не собирают runtime-образы: Compose получает `image:` из инвентаря,
+Гейты от `compose` до `rollback` не собирают runtime-образы: Compose получает `image:` из манифеста,
 `docker compose up` выполняется с `--no-build`, а после старта каждый контейнер
-проверяется по `container.Image === inventory.imageId`. Тем самым исполняется
+проверяется по `container.Image === manifest.imageId`. Тем самым исполняется
 именно просканированный артефакт, а не пересборка «с теми же намерениями».
-Standalone-запуски без launch context и без инвентаря сохраняют прежнюю сборку.
+Standalone-запуски без launch context и без манифеста сохраняют прежнюю сборку.
 Устаревшие образы прошлых launch-проектов удаляются в начале `supply_chain`.
+
+### Единственный контракт образов: artifact manifest
+
+При PASS `supply_chain` публикует рядом с инвентарём
+`artifacts/artifact-manifest.json` (mode `0600`) и включает его SHA-256 в
+`artifacts/checksums.json` гейта. Манифест — единственный контракт передачи
+образов между гейтами. Он содержит `generatedBy: "supply_chain"`,
+`schemaVersion: 1`, `runId`, `candidateSha`, `treeSha`, `configSha256`,
+`toolchainVersionsSha256`, `lockfileSha256`, `buildInputSha256`,
+`composeProject`, `imageInventorySha256` и `images[]`; запись образа содержит
+`service`, `role` (`runtime` | `infra`), `tag`, `imageId`, `manifestDigest`,
+`platformManifestDigest`, `provenanceSha256`, `attestationSha256`.
+`runtime`-записи точно совпадают с `image-inventory.json`, `infra` — остальные
+собранные `supply_chain` образы. `imageInventorySha256` связывает манифест с
+инвентарём, а читатель отвергает чужой run/candidate/tree/config/toolchain/lock
+и несовпадение provenance.
+
+Runner передаёт абсолютный путь манифеста последующим гейтам в
+`COFFEE_LAUNCH_IMAGE_OWNERSHIP`, но источник образов `compose-smoke` выводит из
+launch context: для дочернего scope — из parent-контекста, а явный путь служит
+только проверкой согласия. `compose-smoke` читает только манифест через
+`readArtifactManifest`, берёт из него `runtime`-образы для Compose и проверяет
+по ним `container.Image`; `image-inventory.json` остаётся входом манифеста и в
+этой задаче не удаляется. `runtime-image-ownership.json` остаётся внутренним
+состоянием runner для cleanup и не является источником образов.
+
+### Сборка только в supply_chain
+
+В launch-режиме единственная точка сборки образов — `supply_chain`. При наличии
+`COFFEE_LAUNCH_CONTEXT_FILE` `compose-smoke` не вызывает `docker buildx` и не
+создаёт каталог build input: он обязан использовать манифест текущего запуска.
+Отсутствие, невалидность или несовпадение манифеста завершают гейт ошибкой
+`IMAGE_INVENTORY_REQUIRED`; эта ошибка — контракт для потребителей, а не текст
+для лога, и не маскируется сборкой или предупреждением.
+
+Дочерние scope гейтов (`observability`, `browser`, `rollback`) читают манифест
+родительского запуска; путь проверяется против parent-контекста
+(`g08PreparationContextPath` для browser/observability, controlled parent для
+rollback). `runBrowserProof` получает признак reuse и путь манифеста явно, а
+rollback передаёт `--reuse-images` и `--artifact-manifest` дочернему
+`compose-smoke`; browser выводит parent-манифест из своего launch context.
+Сборка в дочернем scope так же запрещена.
+
+Вне launch context сборка остаётся допустимой: это локальный деплой
+`platform-service` и standalone-отладка. `--no-build` перестаёт быть
+обязательным флагом launch-гейтов и остаётся совместимым синонимом
+`--reuse-images` в локальном режиме; оба флага не запускают `docker buildx`.
 
 Требование к хосту: BuildKit GC не должен стирать кеш между сборками.
 Измеренный кеш для 14 runtime-образов и `edge-nginx` — 9.07 GiB; с
@@ -265,8 +376,9 @@ Standalone-запуски без launch context и без инвентаря с�
 затем `compose`→`observability`→`browser`→`aroma_sandbox`→`backup_restore`→`rollback`→`report`. Принятая перестановка `supply_chain` по
 [ADR-0025](../adr/ADR-0025-fastify-launch-recovery.md) позволяет запускать Kafka
 consumers только после проверки точного OCI artifact.
-Gate не запускается при failed predecessor, кроме `report`: отчёт с решением
-`НЕ ДОПУСТИТЬ` формируется и при отказе предыдущих gates.
+Gate не запускается при failed predecessor, кроме `report`: отчёт формируется и
+при отказе предыдущих gates, а решение выносится по рабочим гейтам и в этом
+случае остаётся `НЕ ДОПУСТИТЬ`.
 
 ## 5. Общие правила команд
 
@@ -317,6 +429,14 @@ restore = immediate FAIL, mutation disable и defect. Production targets
 закодированы в deny-list; ADR-0034 разрешает единственное точное исключение
 origin/account для указанного запуска. Environment приложения `production`
 запрещён без исключений. Approval/secrets не попадают в evidence plaintext.
+
+Для повторяемой криптопроверки сохраняются только age ciphertext approval и
+подписи, их hashes и hashes исходных bytes. Используются существующие age,
+recipients `.sops.yaml` и операторский `SOPS_AGE_KEY_FILE`, как в backup_restore.
+Расшифрование и `crypto.verify` выполняются в ограниченной памяти без plaintext
+temp-файла на persistent FS и без вывода payload в логи. Доступность age,
+его закреплённая версия и совпадение identity с recipients проверяются до
+controlled child/provider phase. Без identity hashes не заменяют signature proof.
 
 Начальная корзина должна быть пустой. Разрешены один свежий offer без помола
 и количество не больше двух единиц Gateway. Provider checkout, заказы, счета,
@@ -505,7 +625,9 @@ image по `config/toolchain-versions.json`. Node 24 считается version 
 Исходное состояние: running stack, одна unfinished reservation/UnknownOutcome и
 доступный safe observer. Процедура:
 
-1. создать отдельный config-only commit `D` от product candidate `B` по
+1. от product candidate `P` с обычным флагом `false` создать отдельный baseline
+   `B`, меняющий только этот флаг в `true`; policy остаётся `null`;
+   затем создать config-only commit `D` от `B` по
    [ADR-0035](../adr/ADR-0035-launch-rollback-config-lineage.md): в единственном
    `config/platform.yaml` меняется только
    `services.aroma-convergence.mutationsEnabled: true → false`; overlay запрещён;
@@ -519,11 +641,12 @@ image по `config/toolchain-versions.json`. Node 24 считается version 
 8. config-only commit `R` от `D` возвращает прежние байты config из `B` и
    восстанавливает worker только после fresh GET; blind mutation отсутствует.
 
-В основном run-result остаётся product candidate `B`. Отдельное evidence `rollback`
-обязано доказать lineage `B → D → R`, unchanged product trees, точные config hashes
+В основном run-result остаётся product candidate `P`. Отдельное evidence rollback
+обязано доказать lineage `P → B → D → R`, unchanged product trees, точные config hashes
 и фактическое применение каждого config runtime. Дополнительные source изменения,
 неверные parent/diff или отсутствие receipts не допускаются. Разрешение владельца
-от 24 октября касается этой узкой процедуры; оно не означает PASS `rollback`.
+от 24 октября и расширение от 1 ноября касаются этой узкой процедуры;
+они не означают PASS rollback.
 
 PASS: zero provider mutation while flag false, no durable row loss, observer и
 owner paths healthy, recovery resumes safely.
@@ -541,7 +664,8 @@ Verification branch не исправляет defect, не меняет product 
 thresholds и не ослабляет test. `defects.json` содержит локальный defect id и,
 если публикация разрешена/успешна, GitHub issue number. Отсутствие разрешения не
 скрывает FAIL и не меняет `НЕ ДОПУСТИТЬ`.
-P0/P1 всегда блокирует; любой mandatory FAIL блокирует независимо от severity.
+P0/P1 всегда блокирует; любой FAIL рабочего гейта блокирует допуск независимо
+от severity.
 
 ## 11. Русский отчёт
 
@@ -551,6 +675,19 @@ digests, таблицу гейтов запуска, exact commands/durations/re
 times, observability/rollback результаты, defect issues, открытые риски и
 непроверенное поведение. Отчёт генерируется из result JSON; ручное изменение
 decision запрещено schema/checksum check.
+
+До заморозки candidate SHA исходный `evidence/handoffs/issue-13.yaml` фиксирует
+фактические inputs, outputs и выполненные проверки на момент подготовки, без
+предсказания PASS. report создаёт отдельный `evidence/launch/<run-id>/handoff.yaml`
+из фактических статусов, команд и хэшей evidence и связывает его с SHA-256
+точного Git blob исходного descriptor этого кандидата. Отсутствующий или
+недоступный descriptor означает FAIL report; это также evidence-ошибка, поэтому
+решение остаётся `НЕ ДОПУСТИТЬ`; отчёт и handoff с `NOT_PROVEN` всё равно
+сохраняются. Производный handoff включён в
+`checksums.sha256`, не хэширует себя или manifest. Владелец согласовал
+публикацию обоих артефактов и их хэшей в PR и Obsidian после запуска, без
+изменения source SHA. Лимиты observability 1800 с, основного запуска 7200 с и отдельной
+qualification 2700 с сохраняются.
 
 ## 12. Не входит
 
@@ -670,6 +807,13 @@ broker acknowledgement контейнер Kafka пересоздаётся с т
 record читается после health recovery, а named volume сохраняет только этот
 Compose project scope. Один broker и RF=1 — development limit; это не HA claim.
 Broker ack без recreate/retention evidence не считается durable delivery.
+
+В paused-broker proof оба пути восстановления после `unpause` ожидают Docker
+`healthy` не более 60 с, затем отдельно проверяют Kafka API. Окно ожидания
+учитывает интервал healthcheck 30 с и до 5 с на исполнение probe: Docker
+[планирует следующий probe после завершения предыдущего](https://docs.docker.com/reference/dockerfile/#healthcheck).
+Параметры healthcheck, границы unknown commit, Kafka API timeout 30 с и общий
+бюджет gate 1800 с сохраняются. Истечение окна без `healthy` остаётся FAIL.
 
 ### 15.3 Handoff наблюдаемости
 
@@ -833,3 +977,72 @@ sha256sum -c evidence/launch/<run-id>/checksums.sha256
 node --test verification/launch/v1/runner.test.mjs \
   verification/launch/v1/scenarios/preflight.test.mjs
 ```
+
+## 18. Профили, выборочный запуск и resume
+
+### 18.1. Профили и бюджет
+
+Профили `admission`, `fast` и `release`, их состав, измеренные длительности и
+порядок применения описаны в
+[34_LAUNCH_GATE_PROFILES.md](34_LAUNCH_GATE_PROFILES.md); причины решения —
+в [ADR-0044](../adr/ADR-0044-launch-gate-profiles.md).
+
+`--profile` по умолчанию равен `release`. Бюджет профиля заменяет прежний
+единый лимит 120 минут и ограничивает и каждую команду гейта, и прогон целиком.
+Только `release` может вынести `ДОПУСТИТЬ`; `admission`, `fast`, `--gate` и
+`--from` всегда диагностические. `report` публикует статус отчёта отдельно и
+не участвует в решении. Исчерпанный бюджет завершает оставшиеся гейты как
+`NOT_RUN`; решение в этом случае `НЕ ДОПУСТИТЬ`.
+
+### 18.2. Фильтры
+
+- `--gate <id>` запускает только явно указанные гейты; можно повторять.
+  Предки не запускаются.
+- `--from <id>` запускает указанный гейт и все последующие в порядке matrix;
+  обязателен `--resume`, и все предки стартового гейта должны иметь PASS в
+  источнике resume.
+- `--profile`, `--gate` и `--from` взаимно исключаются; `--gate` и `--from`
+  взаимоисключающие. Неизвестный id, повтор одиночного флага и отсутствие
+  `--resume` у `--from` дают явную ошибку аргументов.
+- Гейт вне выборки получает статус `SKIPPED_BY_FILTER` и не блокирует запуск
+  последующих гейтов выборки. `FAIL` и `NOT_RUN` предков блокируют как раньше.
+  `--gate`/`--from` всегда завершаются диагностическим `НЕ ДОПУСТИТЬ`.
+
+### 18.3. Resume и identity
+
+`--resume <evidenceDir|runId>` переиспользует ранее полученный PASS только при
+точном совпадении пяти хешей текущего и источника:
+
+- `candidateSha`;
+- `environment.treeSha`;
+- `environment.configSha256`;
+- `environment.toolchainVersionsSha256`;
+- `environment.lockfileSha256`.
+
+Admission-результат дополнительно замораживает пару `candidateSha` и
+`environment.githubSnapshotSha256` — sha256 из `githubSnapshot` в
+`gates/preflight/artifacts/preflight.json`. Release может переиспользовать
+`preflight` только при совпадении обоих значений; источник обязан подтвердить
+заявленный снимок своим preflight-артефактом, иначе прогон завершается
+`RESUME_IDENTITY_MISMATCH` до запуска гейтов. Новый GitHub-снимок требует нового
+admission-прогона. Источник задаётся каталогом evidence или run-id в
+`evidence/launch/<runId>`; source evidence не переписывается, артефакты между
+прогонами не переносятся.
+
+Переиспользовать можно PASS гейтов `install`, `generated`, `static`, `unit`,
+`contracts`, `architecture`, `config_security`, `supply_chain`. Для
+`preflight` разрешено только переиспользование admission-результата с
+совпавшими `candidateSha` и GitHub-снимком. Для гейтов `migrations`,
+`db_boundaries`, `integration`, `recovery`, `compose`, `observability`,
+`browser`, `aroma_sandbox`, `backup_restore`, `rollback` переиспользование
+запрещено: они снимают живое состояние. Явный `--gate <живой-гейт> --resume`
+даёт `RESUME_FORBIDDEN_GATE`; в профильном прогоне такие гейты выполняются
+заново.
+
+Переиспользованный PASS записывается в `run-result.json` со статусом `PASS`,
+пустым `runs` и полем `reusedFrom: {runId, evidenceDir}`; для `preflight`
+добавляются `githubSnapshotSha256` и `preflightArtifactSha256`. `run-result.json`
+содержит профиль запуска в поле `profile`. Решение `ДОПУСТИТЬ` возможно только
+для `release`, всех PASS рабочих гейтов и валидного `reusedFrom` (или
+собственного command run) у каждого PASS-гейта; статус `report` публикуется
+как `reportStatus` и в решение не входит.

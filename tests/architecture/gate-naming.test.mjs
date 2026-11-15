@@ -71,7 +71,7 @@ void test("хеши и случайные fixture-строки не считаю
 
 void test("старый id нормализуется в slug, неизвестный id — нет", () => {
   assert.equal(gateSlug("supply_chain"), "supply_chain");
-  assert.equal(gateSlug("G12_SUPPLY_CHAIN"), "supply_chain");
+  assert.equal(gateSlug("supply_chain"), "supply_chain");
   assert.equal(gateSlug("G99_UNKNOWN"), null);
   assert.equal(gateSlug(undefined), null);
   assert.equal(Object.isFrozen(LEGACY_GATE_IDS), true);

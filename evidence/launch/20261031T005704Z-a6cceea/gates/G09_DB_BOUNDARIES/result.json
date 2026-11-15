@@ -1,0 +1,23 @@
+{
+  "id": "G09_DB_BOUNDARIES",
+  "status": "NOT_RUN",
+  "expectedCommand": "pnpm db:smoke",
+  "startedAt": null,
+  "endedAt": "2026-10-31T00:57:35.737Z",
+  "durationMs": 0,
+  "timeoutSeconds": 1800,
+  "reason": "NOT_RUN: predecessor не PASS: G08_MIGRATIONS",
+  "runs": [],
+  "artifacts": [
+    {
+      "path": "/home/yurgusev/.codex/worktrees/preserve-non-openobserve/CoffeeOrderPlatform/evidence/launch/20261031T005704Z-a6cceea/gates/G09_DB_BOUNDARIES/stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "sizeBytes": 0
+    },
+    {
+      "path": "/home/yurgusev/.codex/worktrees/preserve-non-openobserve/CoffeeOrderPlatform/evidence/launch/20261031T005704Z-a6cceea/gates/G09_DB_BOUNDARIES/stderr.log",
+      "sha256": "5fc457932577039e4eae9039aa792a67cb729db81664facbc5fc0759652a7afb",
+      "sizeBytes": 47
+    }
+  ]
+}

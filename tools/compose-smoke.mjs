@@ -2,6 +2,17 @@
 
 import assert from "node:assert/strict";
 import {
+  RUNTIMES,
+  inspectLaunchRuntimeImages,
+  validateRuntimeImageOwnership,
+} from "./runtime-image-inventory.mjs";
+export {
+  captureRuntimeImageBaseline,
+  cleanupLaunchRuntimeImages,
+  inspectLaunchRuntimeImages,
+  validateRuntimeImageOwnership,
+} from "./runtime-image-inventory.mjs";
+import {
   chmod,
   chown,
   lstat,
@@ -18,7 +29,7 @@ import { createWriteStream, readFileSync } from "node:fs";
 import { Buffer } from "node:buffer";
 import { execFileSync, spawn } from "node:child_process";
 import { request as httpsRequest } from "node:https";
-import { dirname, join, resolve } from "node:path";
+import { dirname, isAbsolute, join, resolve } from "node:path";
 import { createHash, generateKeyPairSync, randomUUID } from "node:crypto";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { tmpdir } from "node:os";
@@ -86,7 +97,10 @@ import {
   readVerifiedRuntimeImages,
   removeVerifiedGateImage,
 } from "./verified-infrastructure-image.mjs";
-import { readLaunchImageInventory } from "./image-inventory.mjs";
+import {
+  artifactManifestPath,
+  readArtifactManifest,
+} from "./image-inventory.mjs";
 import {
   deriveRuntimeDatabaseTarget,
   verifyLaunchConfigBytes,
@@ -98,6 +112,7 @@ import {
 import {
   attachRollbackDisabledReconcileSubstage,
   createRollbackFailureReceipt,
+  readRollbackParent,
   ROLLBACK_DISABLED_RECONCILE_SUBSTAGES,
   ROLLBACK_FAILURE_STAGES,
   rollbackComposeProjectName,
@@ -127,6 +142,9 @@ const ROOT = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const COMPOSE_FILE = join(ROOT, "compose.yaml");
 const GATE_DEADLINE_ENV = "COFFEE_LAUNCH_GATE_DEADLINE_EPOCH_MS";
 const STANDALONE_WAIT_MS = 5 * 60_000;
+// Готовность после отключения зависимости определяется следующим probe
+// внутри контейнера; под нагрузкой он может занять больше 10 секунд.
+const DEPENDENCY_HEALTH_TIMEOUT_MS = 30_000;
 // Оставляем время на finally: compose down, удаление временных секретов и БД,
 // чтобы SIGKILL от runner не прервал очистку ресурсов.
 export const COMPOSE_SMOKE_CLEANUP_RESERVE_MS = 60_000;
@@ -1311,23 +1329,7 @@ const DATABASE_PROOF_IMAGE = JSON.parse(
 ).postgresFixtureImage;
 const CUSTOMER_TEST_IMAGE =
   "node:26.8.1-trixie-slim@sha256:c0753125a3789977aefe869cbebccf70e3cfd7ea84ca48547458f02e4f1d7146";
-const RUNTIMES = [
-  "edge-gateway",
-  "api-public",
-  "api-internal",
-  "customer-service",
-  "catalog-service",
-  "catalog-supplier-sync",
-  "catalog-activation-worker",
-  "pricing-service",
-  "orders-service",
-  "orders-aroma-preparation",
-  "aroma-observer",
-  "aroma-convergence",
-  "aroma-gateway",
-  "realtime-gateway",
-];
-// Образы, которые гейт `supply_chain` собирает один раз и публикует под тегами проекта запуска.
+// Образы, которые supply_chain собирает один раз и публикует под тегами проекта запуска.
 const PUBLISHED_RUNTIME_SERVICES = Object.freeze([...RUNTIMES, "edge-nginx"]);
 const ROLLBACK_CONTAINER_SERVICES = new Set([
   ...RUNTIMES,
@@ -1394,7 +1396,9 @@ function usage() {
     "  --aroma-binding-proof             run the isolated native HTTPS AROMA offer-binding proof",
     "  --aroma-cart-proof                run the isolated native mTLS safe cart-read proof with a local provider fixture",
     "  --provision-empty-postgres-network create coffee_postgres_data only when absent; never starts PostgreSQL",
-    "  --no-build                         use already-built runtime images",
+    "  --reuse-images                     require already-built runtime images; never run docker buildx",
+    "  --artifact-manifest <path>         absolute path to the supply_chain artifact manifest",
+    "  --no-build                         compatibility synonym of --reuse-images for local runs",
     "  --project-name <name>              explicit isolated Compose project name",
     "  --keep                             leave the stack and tmpfs secret directory running",
   ].join("\n");
@@ -1405,6 +1409,8 @@ function parseArguments(argv) {
     stubSecrets: false,
     provisionNetwork: false,
     noBuild: false,
+    reuseImages: false,
+    artifactManifestPath: undefined,
     keep: false,
     databaseProof: false,
     customerProof: false,
@@ -1426,7 +1432,13 @@ function parseArguments(argv) {
     else if (argument === "--provision-empty-postgres-network")
       options.provisionNetwork = true;
     else if (argument === "--no-build") options.noBuild = true;
-    else if (argument === "--database-proof") options.databaseProof = true;
+    else if (argument === "--reuse-images") options.reuseImages = true;
+    else if (argument === "--artifact-manifest") {
+      const value = argv[++index];
+      if (!value || !isAbsolute(value))
+        throw new Error("--artifact-manifest must be an absolute path");
+      options.artifactManifestPath = value;
+    } else if (argument === "--database-proof") options.databaseProof = true;
     else if (argument === "--customer-proof") options.customerProof = true;
     else if (argument === "--recovery-proof") options.recoveryProof = true;
     else if (argument === "--observability-fixture")
@@ -1464,6 +1476,8 @@ function parseArguments(argv) {
       options.stubSecrets ||
       options.provisionNetwork ||
       options.noBuild ||
+      options.reuseImages ||
+      options.artifactManifestPath !== undefined ||
       options.keep ||
       options.databaseProof ||
       options.customerProof ||
@@ -1502,7 +1516,6 @@ function parseArguments(argv) {
   if (options.mutationDisableRollback) {
     if (
       options.stubSecrets ||
-      options.noBuild ||
       options.keep ||
       !options.projectName ||
       !options.disabledRoot ||
@@ -1511,7 +1524,7 @@ function parseArguments(argv) {
       !COMMIT_SHA.test(options.restoredSha ?? "")
     ) {
       throw new Error(
-        "--mutation-disable-rollback requires source builds, an isolated project name and validated D/R checkouts",
+        "--mutation-disable-rollback requires an isolated project name and validated D/R checkouts",
       );
     }
     options.recoveryProof = true;
@@ -1696,7 +1709,7 @@ export function buildRuntimeImages(
 }
 
 export function removeBuiltRuntimeImages(images, options) {
-  if (options.keep || options.noBuild) return;
+  if (options.keep || options.noBuild || options.reuseImages) return;
   for (const image of images) {
     try {
       runDocker(["image", "rm", "--no-prune", image]);
@@ -1706,10 +1719,134 @@ export function removeBuiltRuntimeImages(images, options) {
   }
 }
 
+export function runtimeImageBuildTargets(projectName, pending, customerOnly) {
+  const references = new Set(pending.map(([reference]) => reference));
+  return {
+    runtimes: (customerOnly ? [DATABASE_PROOF_RUNTIME] : RUNTIMES).filter(
+      (service) => references.has(`${projectName}-${service}:latest`),
+    ),
+    nginx: references.has(`${projectName}-edge-nginx:latest`),
+  };
+}
+
+/**
+ * Определяет источник образов launch-режима. Верхнеуровневый гейт читает
+ * манифест из собственного evidence; дочерний scope (browser, observability,
+ * rollback) — из контекста родителя, который создал этот scope. Явный путь
+ * манифеста только подтверждает ожидаемый путь и не подменяет источник.
+ */
+export async function resolveLaunchImageSource({
+  launchIdentity,
+  rollbackParent,
+  browserParentModules,
+  requestedManifestPath,
+}) {
+  const resources = launchIdentity.context.resources ?? {};
+  let identity = launchIdentity;
+  let contextPath;
+  if (Object.hasOwn(resources, "g08PreparationContextPath")) {
+    const parentPath = resources.g08PreparationContextPath;
+    assert.equal(
+      typeof parentPath,
+      "string",
+      "browser parent context is missing",
+    );
+    assert.ok(browserParentModules, "browser parent modules are missing");
+    identity = await browserParentModules.validateLaunchContext(parentPath);
+    assert.equal(
+      resources.g15ParentRunId,
+      identity.context.runId,
+      "browser parent run ID mismatch",
+    );
+    assert.equal(
+      resources.g15ParentCandidateSha,
+      identity.context.candidateSha,
+      "browser parent candidate mismatch",
+    );
+    assert.equal(
+      resources.g15ParentCheckoutRoot,
+      identity.candidateRoot,
+      "browser parent checkout mismatch",
+    );
+    contextPath = parentPath;
+  } else if (Object.hasOwn(resources, "controlledParentContextPath")) {
+    assert.ok(rollbackParent, "controlled parent context is missing");
+    assert.equal(
+      resources.controlledParentContextPath,
+      rollbackParent.contextFile,
+      "controlled parent context mismatch",
+    );
+    assert.equal(
+      resources.controlledParentRunId,
+      rollbackParent.identity.context.runId,
+      "controlled parent run ID mismatch",
+    );
+    assert.equal(
+      resources.controlledParentCandidateSha,
+      rollbackParent.identity.context.candidateSha,
+      "controlled parent candidate mismatch",
+    );
+    identity = rollbackParent.identity;
+    contextPath = rollbackParent.contextFile;
+  }
+  const expectedManifestPath = artifactManifestPath(identity.evidenceDir);
+  if (
+    requestedManifestPath !== undefined &&
+    requestedManifestPath !== expectedManifestPath
+  )
+    throw new Error("IMAGE_INVENTORY_REQUIRED", {
+      cause: new Error("launch artifact manifest path is invalid"),
+    });
+  let manifest;
+  try {
+    manifest = await readArtifactManifest({
+      evidenceDir: identity.evidenceDir,
+      context: identity.context,
+      services: PUBLISHED_RUNTIME_SERVICES,
+    });
+  } catch (error) {
+    throw new Error("IMAGE_INVENTORY_REQUIRED", { cause: error });
+  }
+  if (!manifest) throw new Error("IMAGE_INVENTORY_REQUIRED");
+  return {
+    identity,
+    contextPath,
+    manifest,
+    runtimeImages: manifest.images.filter((image) => image.role === "runtime"),
+  };
+}
+
+/**
+ * В launch-режиме единственный источник образов — манифест `supply_chain`:
+ * сборка запрещена, а отсутствие или невалидность манифеста даёт явную ошибку
+ * `IMAGE_INVENTORY_REQUIRED`. Вне launch context сборка остаётся допустимой;
+ * ownership-фаза и явный reuse дают `reuse`. Отдельная функция позволяет
+ * topology-тесту доказать решение без запуска Docker.
+ */
+export function resolveRuntimeImageMode({
+  launchMode = false,
+  launchArtifactManifest,
+  ownedImagePhase,
+  ownedTargets,
+  reuseImages = false,
+}) {
+  if (launchMode) {
+    if (!launchArtifactManifest) throw new Error("IMAGE_INVENTORY_REQUIRED");
+    return "reuse";
+  }
+  return reuseImages ||
+    launchArtifactManifest ||
+    ownedImagePhase === "ready" ||
+    (ownedTargets && ownedTargets.runtimes.length === 0 && !ownedTargets.nginx)
+    ? "reuse"
+    : "build";
+}
+
 export function assertVerifiedRuntimeImages({
   projectName,
   verifiedImages,
   noBuild = false,
+  directImageIds = false,
 }) {
   const images = new Map(
     verifiedImages.map(({ service, imageId }) => [service, imageId]),
@@ -1721,8 +1858,9 @@ export function assertVerifiedRuntimeImages({
       /^sha256:[a-f0-9]{64}$/u,
       `supply_chain image ID missing for ${service}`,
     );
-    const reference =
-      service === "edge-nginx" && noBuild
+    const reference = directImageIds
+      ? expected
+      : service === "edge-nginx" && noBuild
         ? "coffee-platform-edge-nginx:local"
         : `${projectName}-${service}:latest`;
     const actual = runDocker([
@@ -1741,11 +1879,12 @@ export function assertVerifiedRuntimeImages({
 }
 
 /**
- * Проверяет, что образы, опубликованные `supply_chain`, действительно лежат в daemon под
- * тегами проекта запуска: Compose запускает именно эти неизменяемые ID.
+ * Проверяет, что runtime-образы, опубликованные `supply_chain`, действительно
+ * лежат в daemon под тегами проекта запуска: Compose запускает именно эти
+ * неизменяемые ID.
  */
-export function assertPublishedRuntimeImages(inventory) {
-  for (const image of inventory.images) {
+export function assertPublishedRuntimeImages(runtimeImages) {
+  for (const image of runtimeImages) {
     const actual = runDocker([
       "image",
       "inspect",
@@ -1756,7 +1895,7 @@ export function assertPublishedRuntimeImages(inventory) {
     assert.equal(
       actual,
       image.imageId,
-      `${image.service} image is missing from the published supply_chain inventory`,
+      `${image.service} image is missing from the published supply_chain artifact manifest`,
     );
   }
 }
@@ -1765,13 +1904,13 @@ export function assertPublishedRuntimeImages(inventory) {
  * Доказывает, что запущенные контейнеры используют именно образы, опубликованные
  * `supply_chain`, а не пересобранные локально.
  */
-export function assertRuntimeContainersMatchInventory(
+export function assertRuntimeContainersMatchManifest(
   projectName,
-  inventory,
+  runtimeImages,
   { requireComplete = true } = {},
 ) {
   const expected = new Map(
-    inventory.images.map((image) => [image.service, image.imageId]),
+    runtimeImages.map((image) => [image.service, image.imageId]),
   );
   const containerIds = runDocker([
     "ps",
@@ -1797,7 +1936,7 @@ export function assertRuntimeContainersMatchInventory(
     assert.equal(
       imageId,
       expectedImageId,
-      `${service} container runs an image outside the published supply_chain inventory`,
+      `${service} container runs an image outside the published supply_chain artifact manifest`,
     );
     expected.delete(service);
   }
@@ -2650,16 +2789,29 @@ async function materializeSecrets(secretsDir, options) {
       const kafkaRefs = platformConfig.services[runtime].secretRefs.filter(
         (ref) => ref.startsWith("kafka."),
       );
-      if (kafkaRefs.length > 0) {
+      const databaseCredential =
+        options.recoveryProofCredentials?.databaseCredentialsByRuntime?.[
+          runtime
+        ];
+      const databaseRefs = databaseCredential
+        ? platformConfig.services[runtime].secretRefs.filter((ref) =>
+            ref.startsWith("postgres."),
+          )
+        : [];
+      if (databaseCredential) assert.ok(databaseRefs.length > 0);
+      if (kafkaRefs.length > 0 || databaseRefs.length > 0) {
         const document = parseYaml(await readFile(path, "utf8"), {
           json: true,
         });
-        for (const ref of kafkaRefs) {
+        for (const [ref, credential] of [
+          ...kafkaRefs.map((ref) => [ref, kafkaCredential]),
+          ...databaseRefs.map((ref) => [ref, databaseCredential]),
+        ]) {
           const segments = ref.split(".");
           let target = document.secrets;
           for (const segment of segments.slice(0, -1))
             target = target[segment] ??= {};
-          target[segments.at(-1)] = kafkaCredential;
+          target[segments.at(-1)] = credential;
         }
         await chmod(path, 0o600);
         await writeFile(
@@ -3067,12 +3219,12 @@ export async function writeScopedComposeOverride(projectName, options = {}) {
       },
     });
   }
-  if (options.g14Config) {
+  if (options.observabilityConfig) {
     assert.ok(
       options.launchContextPath,
       "observability config requires child context",
     );
-    const { path: configPath, sha256 } = options.g14Config;
+    const { path: configPath, sha256 } = options.observabilityConfig;
     assert.match(sha256 ?? "", /^[a-f0-9]{64}$/u);
     assert.equal(
       await realpath(configPath),
@@ -3117,11 +3269,11 @@ export async function writeScopedComposeOverride(projectName, options = {}) {
           target: "/run/coffee-launch/context.json",
           read_only: true,
         },
-        ...(options.g14Config
+        ...(options.observabilityConfig
           ? [
               {
                 type: "bind",
-                source: options.g14Config.path,
+                source: options.observabilityConfig.path,
                 target: "/app/config/platform.yaml",
                 read_only: true,
               },
@@ -3135,12 +3287,32 @@ export async function writeScopedComposeOverride(projectName, options = {}) {
     service("kafka").image = options.kafkaImage;
     service("kafka").pull_policy = "never";
   }
+  // Поддерживаются обе формы: карта service→tag из инвентаря supply_chain и массив
+  // {service, imageId} из ownership integration; Compose принимает image ID напрямую.
   if (options.runtimeImages !== undefined) {
-    for (const [name, reference] of Object.entries(options.runtimeImages)) {
-      assert.match(reference, /^[a-z0-9][a-z0-9._/-]*:latest$/u);
+    const entries = new Map(
+      Array.isArray(options.runtimeImages)
+        ? options.runtimeImages.map(({ service: name, imageId }) => [
+            name,
+            imageId,
+          ])
+        : Object.entries(options.runtimeImages),
+    );
+    for (const [name, reference] of entries) {
+      assert.match(
+        reference,
+        /^(?:[a-z0-9][a-z0-9._/-]*:latest|sha256:[a-f0-9]{64})$/u,
+      );
       service(name).image = reference;
       service(name).pull_policy = "never";
     }
+    assert.equal(
+      entries.size,
+      RUNTIMES.length + 1,
+      "runtime image inventory must contain exact 15 services",
+    );
+    for (const name of [...RUNTIMES, "edge-nginx"])
+      assert.ok(entries.has(name), `runtime image is missing for ${name}`);
   }
   if (options.edgeNginxImage)
     service("edge-nginx").image = options.edgeNginxImage;
@@ -3195,6 +3367,7 @@ export function rollbackRuntimeComposeOptions(
   launchContextPath,
   configPath,
   kafkaImage,
+  controlled,
 ) {
   return {
     ...(kafkaImage ? { kafkaImage } : {}),
@@ -3202,7 +3375,17 @@ export function rollbackRuntimeComposeOptions(
     recoveryProof: true,
     launchContextPath,
     edgeNginxImage: `${projectName}-edge-nginx:latest`,
-    ...(configPath ? { aromaConvergenceConfigPath: configPath } : {}),
+    ...(controlled
+      ? {
+          runtimeImages: controlled.runtimeImages,
+          observabilityConfig: {
+            path: configPath,
+            sha256: controlled.configSha256,
+          },
+        }
+      : configPath
+        ? { aromaConvergenceConfigPath: configPath }
+        : {}),
   };
 }
 
@@ -3703,6 +3886,7 @@ async function runCustomerIntegrationProof(
   roles,
   composeFile,
   databaseName,
+  launchContextPath,
 ) {
   const databaseUrl = (username, password, database, host = "customer_db") =>
     `postgresql://${encodeURIComponent(username)}:${encodeURIComponent(password)}@${host}:5432/${database}`;
@@ -3771,6 +3955,14 @@ async function runCustomerIntegrationProof(
     "CUSTOMER_UNKNOWN_COMMIT_DB_ADAPTER_LOG_FILE=/run/customer-logs/db-adapter.log",
     "--env",
     "CUSTOMER_UNKNOWN_COMMIT_ENTRY=/workspace/apps/customer-service/dist/main.js",
+    ...(launchContextPath
+      ? [
+          "--volume",
+          `${resolve(launchContextPath)}:/run/coffee-launch/context.json:ro`,
+          "--env",
+          "COFFEE_LAUNCH_CONTEXT_FILE=/run/coffee-launch/context.json",
+        ]
+      : []),
     CUSTOMER_TEST_IMAGE,
     "sh",
     "-lc",
@@ -6015,6 +6207,7 @@ export function nativeFoundationSource({
   malformedEnvelope,
   ordersDatabase,
   kafkaTargets,
+  waitMs = remainingGateWaitMs(),
 }) {
   return `import {readFile} from 'node:fs/promises';
 import {createHash} from 'node:crypto';
@@ -6072,7 +6265,7 @@ let inbox = inboxModule.createSqlInboxStore(database, inboxOptions);
 let outbox = outboxModule.createSqlOutboxStore(database, outboxOptions);
 let ownerWrite = ownerModule.defineStatement(database, 'INSERT INTO orders.delivery_live_owner_effects (message_id, aggregate_ref, effect_value, applied_at) VALUES ($1, $2, $3, $4::timestamptz)');
 const countRows = ownerModule.defineStatement(database, 'SELECT (SELECT count(*)::int FROM orders.delivery_live_owner_effects WHERE aggregate_ref = $1) AS owner_count, (SELECT count(*)::int FROM orders.delivery_live_inbox_messages WHERE message_id = ANY($2::text[])) AS inbox_count, (SELECT count(*)::int FROM orders.delivery_live_outbox_messages WHERE message_id = ANY($2::text[])) AS outbox_count, (SELECT count(*)::int FROM orders.delivery_live_inbox_quarantine WHERE reason = $3 AND envelope = $4::jsonb) AS malformed_count, (SELECT count(*)::int FROM orders.delivery_live_inbox_quarantine WHERE reason = $5 AND message_id = $6) AS conflict_count');
-const waitFor = async (predicate, timeoutMs = remainingGateWaitMs()) => {
+const waitFor = async (predicate, timeoutMs = ${waitMs}) => {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     if (await predicate()) return;
@@ -6546,6 +6739,7 @@ async function runKafkaBlackholeProof(
   ordersDatabase,
   composeFile,
   physicalTargets,
+  onPaused,
 ) {
   const messageId = `${runId}-broker-blackhole`;
   const trace = randomUUID().replaceAll("-", "").padEnd(32, "0").slice(0, 32);
@@ -6590,6 +6784,9 @@ async function runKafkaBlackholeProof(
   );
   assert.ok(kafka, "Kafka is absent before paused-broker proof");
   assert.ok(orders, "orders-service is absent before paused-broker proof");
+  const kafkaBefore = onPaused
+    ? ownedDependencySnapshot(projectName, "kafka", kafka.ID)
+    : undefined;
   const outputLines = [];
   const waiters = [];
   let outputBuffer = "";
@@ -6640,6 +6837,9 @@ async function runKafkaBlackholeProof(
   );
   let paused = false;
   let finished = false;
+  let proofError;
+  let restoreError;
+  let evidence;
   const waitForKafkaApi = async (timeoutMs = remainingGateWaitMs()) => {
     const deadline = Date.now() + timeoutMs;
     let lastError;
@@ -6680,6 +6880,9 @@ async function runKafkaBlackholeProof(
     const readyLine = await waitForLine("BLACKHOLE_READY:", 15000);
     const port = Number(readyLine.slice("BLACKHOLE_READY:".length));
     assert.ok(Number.isSafeInteger(port) && port > 0 && port < 65536);
+    if (kafkaBefore)
+      assertDependencyIdentity(projectName, "kafka", kafkaBefore);
+    const pausedAt = new Date().toISOString();
     runDocker(["pause", kafka.ID]);
     paused = true;
     runDocker([
@@ -6695,10 +6898,14 @@ async function runKafkaBlackholeProof(
       "BLACKHOLE_UNKNOWN:OFFSET_COMMIT_OUTCOME_UNKNOWN",
       "paused-broker commit did not become a bounded unknown outcome",
     );
+    if (onPaused) await onPaused(pausedAt);
     runDocker(["unpause", kafka.ID]);
     paused = false;
-    await waitForDockerHealthy(kafka.ID);
+    // Kafka's 30s health interval and 5s probe can extend beyond 30s after unpause.
+    await waitForDockerHealthy(kafka.ID, 60_000);
     await waitForKafkaApi();
+    if (kafkaBefore)
+      assertDependencyIdentity(projectName, "kafka", kafkaBefore);
     runDocker([
       "exec",
       orders.ID,
@@ -6711,7 +6918,7 @@ async function runKafkaBlackholeProof(
       .reverse()
       .find((line) => line.startsWith("{"));
     assert.ok(finalLine, "paused-broker proof did not return evidence JSON");
-    const evidence = JSON.parse(finalLine);
+    evidence = JSON.parse(finalLine);
     assert.equal(evidence.kind, "paused-broker");
     assert.equal(evidence.commitOutcome, "OFFSET_COMMIT_OUTCOME_UNKNOWN");
     assert.ok(
@@ -6757,15 +6964,16 @@ async function runKafkaBlackholeProof(
         "paused-broker group offset did not advance after recovery",
       );
     }
-    return evidence;
+  } catch (error) {
+    proofError = error;
   } finally {
     if (paused) {
       try {
         runDocker(["unpause", kafka.ID]);
-        await waitForDockerHealthy(kafka.ID);
+        await waitForDockerHealthy(kafka.ID, 60_000);
         await waitForKafkaApi();
-      } catch {
-        /* preserve the original proof failure */
+      } catch (error) {
+        restoreError = error;
       }
     }
     if (!finished) {
@@ -6773,6 +6981,17 @@ async function runKafkaBlackholeProof(
       await child.done.catch(() => undefined);
     }
   }
+  if (proofError && restoreError)
+    throw new AggregateError(
+      [proofError, restoreError],
+      "paused-broker proof and restoration failed",
+    );
+  if (restoreError)
+    throw new Error("paused-broker restoration failed", {
+      cause: restoreError,
+    });
+  if (proofError) throw proofError;
+  return evidence;
 }
 
 async function assertReadiness(
@@ -6874,6 +7093,312 @@ function runtimeHealthStatus(
     { composeFile },
   ).trim();
   return Number(output.split("\n").at(-1));
+}
+
+// The ordinary healthcheck's 900 ms client deadline is shorter than a
+// dependency's 1000 ms readiness deadline, so a blackhole needs a longer probe.
+const DEPENDENCY_HEALTH_SOURCE = `import {createRequire} from 'node:module';
+import {readFile} from 'node:fs/promises';
+import {request} from 'node:https';
+const require=createRequire(createRequire('/app/package.json').resolve('@coffee-platform/runtime'));
+const {load}=require('js-yaml');
+const {parseServiceTransportMaterial,verifyTransportPeer}=require('@coffee-platform/security');
+try {
+  const runtime=process.env.RUNTIME_NAME,port=Number(process.env.PORT),path=process.argv[2];
+  if(!/^[a-z0-9-]+$/u.test(runtime??'')||!Number.isSafeInteger(port)||port<1||!['/health/live','/health/ready'].includes(path))throw Error();
+  const document=load(await readFile(process.env.COFFEE_RUNTIME_SECRETS_FILE,'utf8'),{json:true});
+  const config=load(await readFile(process.env.COFFEE_CONFIG_FILE,'utf8'),{json:true});
+  const environment=document.environment;
+  const material=parseServiceTransportMaterial(document.secrets.security.serviceTransportKeys[runtime],environment,runtime);
+  const timeout=config.platform.health.timeoutMs+config.platform.health.intervalMs;
+  const status=await new Promise((resolve,reject)=>{
+    const client=request({host:'127.0.0.1',port,path,method:'GET',ca:material.caPem,cert:material.certPem,key:material.keyPem,minVersion:'TLSv1.3',rejectUnauthorized:true,timeout,
+      checkServerIdentity:(_host,certificate)=>{try{verifyTransportPeer(certificate,environment,runtime);return undefined;}catch{return Error('peer identity invalid');}}},response=>{response.resume();response.once('end',()=>resolve(response.statusCode));});
+    client.once('timeout',()=>client.destroy(Error('request timed out')));client.once('error',reject);client.end();
+  });
+  if(!Number.isInteger(status))throw Error();
+  console.log(status);
+} catch { console.error('dependency health probe failed');process.exitCode=1; }`;
+
+function dependencyHealthStatus(containerId, path) {
+  const output = runDocker(
+    ["exec", "-i", containerId, "node", "--input-type=module", "-", path],
+    { input: DEPENDENCY_HEALTH_SOURCE, timeout: 10_000 },
+  ).trim();
+  assert.match(output, /^(?:200|503)$/u, "dependency health status invalid");
+  return Number(output);
+}
+
+async function waitForDependencyHealth(
+  containerId,
+  path,
+  expected,
+  { timeoutMs = DEPENDENCY_HEALTH_TIMEOUT_MS, context = "" } = {},
+) {
+  const deadline = Date.now() + timeoutMs;
+  let last = "unobserved";
+  while (Date.now() < deadline) {
+    try {
+      const status = dependencyHealthStatus(containerId, path);
+      last = String(status);
+      if (status === expected) return expected;
+    } catch (error) {
+      // A timeout or transport error is not an HTTP readiness response.
+      last = error instanceof Error ? error.name : "error";
+    }
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  throw new Error(
+    `dependency health did not reach HTTP ${expected} within ${timeoutMs}ms (last ${last})${context ? `: ${context}` : ""}`,
+  );
+}
+
+function dependencyFailureLogged(containerId, dependency, since) {
+  const output = runDocker(
+    ["logs", "--since", since, "--tail", "200", containerId],
+    { timeout: 10_000 },
+  );
+  return output.split("\n").some((line) => {
+    try {
+      const entry = JSON.parse(line);
+      return (
+        entry.event === "runtime.readiness.failed" &&
+        entry.dependency === dependency
+      );
+    } catch {
+      return false;
+    }
+  });
+}
+
+function ownedDependencySnapshot(projectName, runtime, containerId) {
+  const row = assertOwnedRuntimeContainer(projectName, runtime, containerId);
+  assert.match(row.Image ?? "", /^sha256:[a-f0-9]{64}$/u);
+  assert.equal(typeof row.State.StartedAt, "string");
+  return row;
+}
+
+function assertDependencyIdentity(projectName, runtime, before) {
+  const after = ownedDependencySnapshot(projectName, runtime, before.Id);
+  assert.equal(
+    after.Image,
+    before.Image,
+    "dependency fault changed image identity",
+  );
+  assert.equal(
+    after.State.StartedAt,
+    before.State.StartedAt,
+    "dependency fault restarted runtime",
+  );
+  return after;
+}
+
+function sharedPostgresSnapshot() {
+  const row = inspectDockerObject([APPROVED_EXTERNAL_POSTGRES.containerId]);
+  assert.equal(row.Id, APPROVED_EXTERNAL_POSTGRES.containerId);
+  assert.equal(row.Image, APPROVED_EXTERNAL_POSTGRES.imageId);
+  assert.equal(row.Name, "/coffee_postgres");
+  assert.equal(
+    row.NetworkSettings?.Networks?.[EXTERNAL_POSTGRES_NETWORK]?.NetworkID,
+    APPROVED_EXTERNAL_POSTGRES.dataNetworkId,
+  );
+  return {
+    networks: row.NetworkSettings.Networks,
+    route: externalPostgresRoute(row.Id),
+  };
+}
+
+function ownedDefaultRoute(containerId) {
+  return runDocker(
+    [
+      "exec",
+      containerId,
+      "sh",
+      "-c",
+      `awk '$2 == "00000000" {print $3 ":" $4 ":" $7 ":" $8}' /proc/net/route | sort`,
+    ],
+    { timeout: 10_000 },
+  ).trim();
+}
+
+export async function proveOwnedNetworkDependency({
+  projectName,
+  runtime,
+  containerId,
+  networkName,
+  dependency,
+  checkName,
+}) {
+  const before = ownedDependencySnapshot(projectName, runtime, containerId);
+  const endpoint = before.NetworkSettings?.Networks?.[networkName];
+  assert.match(endpoint?.NetworkID ?? "", /^[a-f0-9]{64}$/u);
+  assert.match(endpoint.IPAddress ?? "", /^(?:\d{1,3}\.){3}\d{1,3}$/u);
+  assert.ok(Array.isArray(endpoint.Aliases) && endpoint.Aliases.length > 0);
+  assert.ok(
+    endpoint.Aliases.every((alias) => /^[a-z0-9][a-z0-9_.-]*$/u.test(alias)),
+  );
+  if (networkName === EXTERNAL_POSTGRES_NETWORK)
+    assert.equal(endpoint.NetworkID, APPROVED_EXTERNAL_POSTGRES.dataNetworkId);
+  else
+    assert.ok(
+      networkName === `${projectName}_coffee_internal_api` ||
+        (networkName === `${projectName}_coffee_kafka_event` &&
+          runtime === "orders-aroma-preparation" &&
+          dependency === "kafka"),
+    );
+  const network = inspectDockerObject([endpoint.NetworkID]);
+  assert.equal(network.Id, endpoint.NetworkID);
+  assert.ok(network.Containers?.[containerId]);
+  const otherEndpoints = { ...network.Containers };
+  delete otherEndpoints[containerId];
+  const postgres = sharedPostgresSnapshot();
+  const otherNetworks = { ...before.NetworkSettings.Networks };
+  delete otherNetworks[networkName];
+  const route = ownedDefaultRoute(containerId);
+  const context = `${runtime}/${dependency} network=${networkName}`;
+  const beforeStatus = await waitForDependencyHealth(
+    containerId,
+    "/health/ready",
+    200,
+    { context },
+  );
+  const since = new Date().toISOString();
+  let bodyError;
+  let during;
+  let liveDuring;
+  let attempted = false;
+  let restored;
+  let restoreError;
+  try {
+    const current = assertDependencyIdentity(projectName, runtime, before);
+    assert.deepEqual(
+      current.NetworkSettings.Networks,
+      before.NetworkSettings.Networks,
+    );
+    assert.equal(
+      ownedDefaultRoute(containerId),
+      route,
+      "runtime default route changed before fault",
+    );
+    assert.deepEqual(
+      inspectDockerObject([endpoint.NetworkID]).Containers,
+      network.Containers,
+    );
+    assert.deepEqual(sharedPostgresSnapshot(), postgres);
+    attempted = true;
+    runDocker(["network", "disconnect", endpoint.NetworkID, containerId], {
+      timeout: 10_000,
+    });
+    const disconnected = assertDependencyIdentity(projectName, runtime, before);
+    assert.equal(
+      disconnected.NetworkSettings?.Networks?.[networkName],
+      undefined,
+    );
+    during = await waitForDependencyHealth(containerId, "/health/ready", 503, {
+      context,
+    });
+    liveDuring = await waitForDependencyHealth(
+      containerId,
+      "/health/live",
+      200,
+    );
+    assert.ok(
+      dependencyFailureLogged(containerId, checkName, since),
+      "expected dependency failure was not observed",
+    );
+  } catch (error) {
+    bodyError = error;
+  } finally {
+    if (attempted) {
+      try {
+        const current = inspectDockerObject([containerId]);
+        const labels = current.Config?.Labels ?? {};
+        assert.equal(current.Id, containerId);
+        assert.equal(current.Image, before.Image);
+        assert.equal(labels["com.docker.compose.project"], projectName);
+        assert.equal(labels["com.docker.compose.service"], runtime);
+        if (!current.NetworkSettings?.Networks?.[networkName]) {
+          runDocker(
+            [
+              "network",
+              "connect",
+              ...endpoint.Aliases.flatMap((alias) => ["--alias", alias]),
+              endpoint.NetworkID,
+              containerId,
+            ],
+            { timeout: 10_000 },
+          );
+        }
+        const after = assertDependencyIdentity(projectName, runtime, before);
+        const reattached = after.NetworkSettings?.Networks?.[networkName];
+        assert.equal(reattached?.NetworkID, endpoint.NetworkID);
+        assert.deepEqual(
+          [...reattached.Aliases].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0)),
+          [...endpoint.Aliases].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0)),
+        );
+        assert.match(reattached.IPAddress ?? "", /^(?:\d{1,3}\.){3}\d{1,3}$/u);
+        const remainingNetworks = { ...after.NetworkSettings.Networks };
+        delete remainingNetworks[networkName];
+        assert.deepEqual(
+          remainingNetworks,
+          otherNetworks,
+          "unrelated runtime endpoint changed",
+        );
+        assert.equal(
+          ownedDefaultRoute(containerId),
+          route,
+          "runtime default route changed after fault",
+        );
+        const currentNetwork = inspectDockerObject([endpoint.NetworkID]);
+        const currentOthers = { ...currentNetwork.Containers };
+        delete currentOthers[containerId];
+        assert.deepEqual(
+          currentOthers,
+          otherEndpoints,
+          "another network endpoint changed",
+        );
+        const afterStatus = await waitForDependencyHealth(
+          containerId,
+          "/health/ready",
+          200,
+        );
+        restored = {
+          runtime,
+          dependency,
+          before: beforeStatus,
+          during,
+          after: afterStatus,
+          liveDuring,
+          restored: true,
+          addressChanged: reattached.IPAddress !== endpoint.IPAddress,
+        };
+      } catch (error) {
+        restoreError = error;
+      }
+      try {
+        assert.deepEqual(
+          sharedPostgresSnapshot(),
+          postgres,
+          "shared PostgreSQL endpoint or route changed",
+        );
+      } catch (error) {
+        restoreError = restoreError
+          ? new AggregateError(
+              [restoreError, error],
+              "dependency and PostgreSQL restoration checks failed",
+            )
+          : error;
+      }
+    }
+  }
+  if (bodyError && restoreError)
+    throw new AggregateError(
+      [bodyError, restoreError],
+      "dependency fault and restoration failed",
+    );
+  if (restoreError) throw restoreError;
+  if (bodyError) throw bodyError;
+  return restored;
 }
 
 function readRealtimeAuthCloseCount(projectName, containerId) {
@@ -7444,6 +7969,7 @@ async function runMutationDisableRollbackProof({
   markInitialUnknownSubstage,
   markDisabledReconcileSubstage,
   kafkaImage,
+  runtimeImages,
 }) {
   assert.ok(
     rollbackOrder &&
@@ -7453,6 +7979,21 @@ async function runMutationDisableRollbackProof({
       recoveryProofCredentials,
     "rollback fixtures are missing",
   );
+  const verifyConvergenceImage = (override) => {
+    if (!runtimeImages) return;
+    const row = serviceRows(projectName, secretsDir, override).find(
+      ({ Service }) => Service === "aroma-convergence",
+    );
+    const expected = runtimeImages.find(
+      ({ service }) => service === "aroma-convergence",
+    ).imageId;
+    assert.ok(row?.ID, "rollback convergence container is missing");
+    assert.equal(
+      runDocker(["inspect", "--format", "{{.Image}}", row.ID]).trim(),
+      expected,
+      "rollback convergence image changed after restart",
+    );
+  };
   const port = recoveryDatabaseProof.port;
   const projectionConsumers = platformConfig.services[
     "orders-aroma-preparation"
@@ -7719,6 +8260,9 @@ async function runMutationDisableRollbackProof({
       launchContextPath,
       join(disabledRoot, "config/platform.yaml"),
       kafkaImage,
+      runtimeImages
+        ? { runtimeImages, configSha256: lineage.D.configSha256 }
+        : undefined,
     ),
   );
   const composeFiles = [composeFile, disabledOverride];
@@ -7750,6 +8294,7 @@ async function runMutationDisableRollbackProof({
     );
     throwIfRollbackTerminationRequested();
     markDisabledReconcileSubstage("config-attestation");
+    verifyConvergenceImage(disabledOverride);
     const disabledRuntimeConfig = await readContainerConfigProof(
       projectName,
       secretsDir,
@@ -7973,6 +8518,9 @@ async function runMutationDisableRollbackProof({
         launchContextPath,
         join(restoredRoot, "config/platform.yaml"),
         kafkaImage,
+        runtimeImages
+          ? { runtimeImages, configSha256: lineage.R.configSha256 }
+          : undefined,
       ),
     );
     composeFiles.push(restoredOverride);
@@ -8001,6 +8549,7 @@ async function runMutationDisableRollbackProof({
       },
     );
     throwIfRollbackTerminationRequested();
+    verifyConvergenceImage(restoredOverride);
     await waitForRuntimeReadiness(
       projectName,
       secretsDir,
@@ -9008,10 +9557,14 @@ export async function runBrowserProof({
   baseCandidateSha,
   observability,
   onProof,
+  artifactManifestPath,
+  reuseImages = false,
 }) {
   return runComposeSmoke({
     args: ["--recovery-proof"],
     observability,
+    artifactManifestPath,
+    reuseImages,
     observabilityBrowser: {
       baseCandidateSha,
       onReady: async (context) => {
@@ -9029,9 +9582,14 @@ export async function runComposeSmoke({
   observability,
   browser,
   observabilityBrowser,
+  artifactManifestPath: requestedArtifactManifestPath,
+  reuseImages: requestedReuseImages = false,
 } = {}) {
   rollbackComposeDiagnostic = undefined;
   const options = parseArguments(args);
+  const reuseImages = Boolean(
+    options.noBuild || options.reuseImages || requestedReuseImages,
+  );
   assert.ok(
     !(browser && observabilityBrowser),
     "observability and browser hooks are mutually exclusive",
@@ -9043,6 +9601,7 @@ export async function runComposeSmoke({
         options.recoveryProof &&
         !options.stubSecrets &&
         !options.noBuild &&
+        !options.reuseImages &&
         !options.keep &&
         !options.browserProof &&
         !options.mutationDisableRollback &&
@@ -9050,7 +9609,23 @@ export async function runComposeSmoke({
       "--observability-fixture requires programmatic observability hooks and isolated --recovery-proof",
     );
   }
-  const externalRecovery = isExternalRecoveryProof(options);
+  const launchContextPath = process.env.COFFEE_LAUNCH_CONTEXT_FILE;
+  const requestedManifestPath =
+    requestedArtifactManifestPath ?? options.artifactManifestPath;
+  if (!launchContextPath && requestedManifestPath !== undefined)
+    throw new Error("--artifact-manifest requires a launch context");
+  const externalRecovery =
+    isExternalRecoveryProof(options) ||
+    Boolean(
+      launchContextPath &&
+      !options.stubSecrets &&
+      !options.databaseProof &&
+      !options.customerProof &&
+      !options.recoveryProof &&
+      !options.mutationDisableRollback &&
+      !options.aromaBindingProof &&
+      !options.aromaCartProof,
+    );
   if (observability !== undefined) {
     assert.ok(
       observability && typeof observability === "object",
@@ -9060,6 +9635,7 @@ export async function runComposeSmoke({
       options.recoveryProof &&
         !options.stubSecrets &&
         !options.noBuild &&
+        !options.reuseImages &&
         !options.keep,
       "observability hooks require --recovery-proof without --stub-secrets, --no-build or --keep",
     );
@@ -9094,6 +9670,7 @@ export async function runComposeSmoke({
       options.recoveryProof &&
         !options.stubSecrets &&
         !options.noBuild &&
+        !options.reuseImages &&
         !options.keep &&
         !options.mutationDisableRollback,
       "browser hooks require an ordinary --recovery-proof run",
@@ -9112,6 +9689,7 @@ export async function runComposeSmoke({
       options.recoveryProof &&
         !options.stubSecrets &&
         !options.noBuild &&
+        !options.reuseImages &&
         !options.keep &&
         !options.mutationDisableRollback &&
         !options.observabilityFixture,
@@ -9128,16 +9706,13 @@ export async function runComposeSmoke({
   );
   if (options.aromaBindingProof)
     assertAromaGatewaySocketAssociationRegression();
-  const launchContextPath = process.env.COFFEE_LAUNCH_CONTEXT_FILE;
   let launchIdentity;
-  let launchImageInventory = null;
+  let launchImageIdentity;
+  let launchImageContextPath;
+  let launchArtifactManifest = null;
+  let launchRuntimeImages = null;
   if (launchContextPath) {
     launchIdentity = await validateLaunchContext(launchContextPath);
-    launchImageInventory = await readLaunchImageInventory({
-      evidenceDir: launchIdentity.evidenceDir,
-      context: launchIdentity.context,
-      services: PUBLISHED_RUNTIME_SERVICES,
-    });
     await withEarlyRollbackGuardReceipt(
       {
         mutationDisableRollback: options.mutationDisableRollback,
@@ -9269,6 +9844,7 @@ export async function runComposeSmoke({
       "Compose must use the launch context's exact project name",
     );
   let rollbackLineage;
+  let rollbackParent;
   if (options.mutationDisableRollback) {
     assert.ok(launchIdentity, "rollback launch context is missing");
     assert.equal(
@@ -9294,12 +9870,15 @@ export async function runComposeSmoke({
       restoredRoot: options.restoredRoot,
       restoredSha: options.restoredSha,
     });
+    if (launchIdentity.context.resources?.controlledScope === "rollback")
+      rollbackParent = await readRollbackParent(launchIdentity);
   }
   let secretsDir;
   let provisionedNetwork = false;
   let databaseProofNetwork;
   let externalPostgresAttachment;
   let verifiedKafka;
+  let rollbackRuntimeImages;
   const externalRunDatabaseResources = [];
   let externalDatabaseCleanupReceipt;
   let composeDownComplete = false;
@@ -9307,6 +9886,11 @@ export async function runComposeSmoke({
   const composeFiles = [];
   let composeAttempted = false;
   const builtImages = [];
+  let parentOwnedRuntimeImages = false;
+  let ownedRuntimeImages;
+  let ownedMissingRefs;
+  let ownedImagePhase;
+  let ownedImageBaseline;
   let databaseProofContainer;
   const fixturePostgresRunId = options.observabilityFixture
     ? randomUUID()
@@ -9434,9 +10018,14 @@ export async function runComposeSmoke({
       options.databaseProof ||
       options.customerProof ||
       options.recoveryProof ||
+      externalRecovery ||
       options.mutationDisableRollback ||
       options.aromaBindingProof ||
       options.aromaCartProof;
+    const bootstrapFreshKafka =
+      options.recoveryProof ||
+      (externalRecovery &&
+        platformConfig.verification?.kafkaNamespaceIsolation === true);
     const proofLaunchIdentity =
       launchIdentity && isolatedDatabaseProof && !options.observabilityFixture
         ? launchConfigIdentity(launchIdentity)
@@ -9460,7 +10049,7 @@ export async function runComposeSmoke({
         "isolated launch database proof requires the explicit database-isolation policy",
       );
     }
-    if (options.recoveryProof) {
+    if (bootstrapFreshKafka) {
       const kafkaVolume = `${projectName}_kafka_data`;
       const existingVolumes = runDocker([
         "volume",
@@ -9485,6 +10074,7 @@ export async function runComposeSmoke({
         ? await readDatabaseProofCredentials(proofLaunchIdentity)
         : undefined;
     recoveryProofCredentials =
+      externalRecovery ||
       options.recoveryProof ||
       options.aromaBindingProof ||
       options.aromaCartProof
@@ -9501,26 +10091,69 @@ export async function runComposeSmoke({
           recoveryProofCredentials.browserParentRoot,
         )
       : undefined;
-    if (!(
-      options.databaseProof ||
-      options.customerProof ||
-      options.aromaBindingProof ||
-      options.aromaCartProof
-    )) {
+    if (launchIdentity) {
+      const imageSource = await resolveLaunchImageSource({
+        launchIdentity,
+        rollbackParent,
+        browserParentModules,
+        requestedManifestPath,
+      });
+      launchImageIdentity = imageSource.identity;
+      launchImageContextPath = imageSource.contextPath;
+      launchArtifactManifest = imageSource.manifest;
+      launchRuntimeImages = imageSource.runtimeImages;
+    }
+    const needsKafka =
+      platformConfig.verification?.kafkaNamespaceIsolation === true ||
+      !(
+        options.databaseProof ||
+        options.customerProof ||
+        options.aromaBindingProof ||
+        options.aromaCartProof
+      );
+    if (needsKafka) {
       assert.ok(
         launchIdentity,
         "Kafka requires a launch context and supply_chain artifact",
       );
-      // `migrations` уже проверяет точный parent `browser` и его OIDC-only lineage.
+      // migrations already checks the exact browser parent and its OIDC-only lineage.
+      const parentImages = rollbackParent
+        ? await import(
+            pathToFileURL(
+              join(
+                rollbackParent.identity.candidateRoot,
+                "tools/verified-infrastructure-image.mjs",
+              ),
+            ).href
+          )
+        : null;
       verifiedKafka = await (
+        parentImages?.loadVerifiedGateImage ??
         browserParentModules?.images.loadVerifiedGateImage ??
         loadVerifiedGateImage
       )({
         target: "kafka",
         contextFile:
+          rollbackParent?.contextFile ??
           recoveryProofCredentials?.g08PreparationContextPath ??
           launchContextPath,
       });
+      if (parentImages) {
+        rollbackRuntimeImages = await parentImages.readVerifiedRuntimeImages({
+          contextFile: rollbackParent.contextFile,
+        });
+        assertVerifiedRuntimeImages({
+          projectName,
+          verifiedImages: rollbackRuntimeImages,
+          directImageIds: true,
+        });
+        for (const path of [
+          join(ROOT, "config/platform.yaml"),
+          join(options.disabledRoot, "config/platform.yaml"),
+          join(options.restoredRoot, "config/platform.yaml"),
+        ])
+          await chmod(path, 0o444);
+      }
     }
     const recoveryPlatformConfig =
       recoveryProofCredentials && proofLaunchIdentity
@@ -9536,6 +10169,63 @@ export async function runComposeSmoke({
     );
     if (options.mutationDisableRollback)
       markRollbackBootstrapSubstage("compose-override");
+    const ownershipPath = launchIdentity
+      ? join(
+          launchIdentity.evidenceDir,
+          "gates/integration/artifacts/runtime-image-ownership.json",
+        )
+      : undefined;
+    if (
+      launchArtifactManifest &&
+      !reuseImages &&
+      !observabilityBrowser &&
+      !browser &&
+      !(
+        options.databaseProof ||
+        options.aromaBindingProof ||
+        options.aromaCartProof ||
+        options.mutationDisableRollback
+      )
+    ) {
+      assert.ok(launchIdentity, "run-owned images require launch identity");
+      assert.equal(await realpath(ownershipPath), ownershipPath);
+      const info = await lstat(ownershipPath);
+      assert.ok(
+        info.isFile() &&
+          !info.isSymbolicLink() &&
+          info.uid === process.getuid() &&
+          (info.mode & 0o777) === 0o400 &&
+          info.size > 0 &&
+          info.size <= 16384,
+      );
+      const ownership = JSON.parse(await readFile(ownershipPath, "utf8"));
+      ownedRuntimeImages = await readVerifiedRuntimeImages({
+        contextFile: launchContextPath,
+      });
+      assert.equal(ownership.runId, launchIdentity.context.runId);
+      assert.equal(ownership.candidateSha, launchIdentity.context.candidateSha);
+      assert.equal(ownership.projectName, projectName);
+      assert.deepEqual(ownership.images, ownedRuntimeImages);
+      assert.equal(
+        createHash("sha256")
+          .update(JSON.stringify(ownership.baseline))
+          .digest("hex"),
+        ownership.baselineSha256,
+        "runtime image baseline hash mismatch",
+      );
+      const inventory = inspectLaunchRuntimeImages(
+        projectName,
+        ownedRuntimeImages,
+      );
+      ownedMissingRefs = validateRuntimeImageOwnership(
+        inventory,
+        ownership.baseline,
+        ownership.phase,
+      ).pending;
+      ownedImagePhase = ownership.phase;
+      ownedImageBaseline = ownership.baseline;
+      parentOwnedRuntimeImages = true;
+    }
     composeFile = await writeScopedComposeOverride(projectName, {
       sharedPostgres: !(
         options.databaseProof ||
@@ -9551,17 +10241,30 @@ export async function runComposeSmoke({
         ? undefined
         : launchContextPath,
       kafkaImage: verifiedKafka?.imageId,
-      edgeNginxImage: options.noBuild
-        ? undefined
-        : `${projectName}-edge-nginx:latest`,
-      runtimeImages: launchImageInventory
-        ? Object.fromEntries(
-            launchImageInventory.images.map((image) => [
-              image.service,
-              image.tag,
-            ]),
-          )
-        : undefined,
+      edgeNginxImage:
+        launchRuntimeImages || options.noBuild || reuseImages
+          ? undefined
+          : `${projectName}-edge-nginx:latest`,
+      // Приоритет источников образов: D/R-сборки rollback > манифест supply_chain.
+      ...(launchRuntimeImages
+        ? {
+            runtimeImages: Object.fromEntries(
+              launchRuntimeImages.map((image) => [
+                image.service,
+                image.imageId,
+              ]),
+            ),
+          }
+        : {}),
+      ...(rollbackRuntimeImages
+        ? {
+            runtimeImages: rollbackRuntimeImages,
+            observabilityConfig: {
+              path: join(ROOT, "config/platform.yaml"),
+              sha256: rollbackLineage.B.configSha256,
+            },
+          }
+        : {}),
       runtimeLogging: observability ? platformConfig : undefined,
     });
     composeFiles.push(composeFile);
@@ -9614,7 +10317,7 @@ export async function runComposeSmoke({
       });
       browserFixtureRoot = dirname(browserFixture.browser.homePath);
       const initialComposeFile = composeFile;
-      let g14Config;
+      let observabilityConfig;
       if (observabilityBrowser) {
         const path = join(secretsDir, "g14-platform.yaml");
         const bytes = await readFile(join(ROOT, "config/platform.yaml"));
@@ -9625,27 +10328,31 @@ export async function runComposeSmoke({
         );
         await writeFile(path, bytes, { mode: 0o444, flag: "wx" });
         await chmod(path, 0o444);
-        g14Config = { path, sha256: launchIdentity.context.baseConfigSha256 };
+        observabilityConfig = {
+          path,
+          sha256: launchIdentity.context.baseConfigSha256,
+        };
       }
       composeFile = await writeScopedComposeOverride(projectName, {
         sharedPostgres: externalRecovery,
         recoveryProof: true,
         launchContextPath,
         kafkaImage: verifiedKafka?.imageId,
-        edgeNginxImage: options.noBuild
-          ? undefined
-          : `${projectName}-edge-nginx:latest`,
-        runtimeImages: launchImageInventory
+        edgeNginxImage:
+          launchRuntimeImages || options.noBuild || reuseImages
+            ? undefined
+            : `${projectName}-edge-nginx:latest`,
+        runtimeImages: launchRuntimeImages
           ? Object.fromEntries(
-              launchImageInventory.images.map((image) => [
+              launchRuntimeImages.map((image) => [
                 image.service,
-                image.tag,
+                image.imageId,
               ]),
             )
           : undefined,
         runtimeLogging: observability ? platformConfig : undefined,
         browserFixture,
-        g14Config,
+        observabilityConfig,
         candidateRoot: launchIdentity.candidateRoot,
       });
       composeFiles.push(composeFile);
@@ -9922,52 +10629,58 @@ export async function runComposeSmoke({
         launchContextPath,
         externalRunDatabaseResources,
       );
-      recoveryAdminUrl = `postgresql://${encodeURIComponent(recoveryProofCredentials.admin.username)}:${encodeURIComponent(recoveryProofCredentials.admin.password)}@${recoveryDatabaseProof.host}:${recoveryDatabaseProof.port}/postgres`;
-      const deliveryDatabase = recoveryProofCredentials.roleMap.databases.find(
-        (candidate) =>
-          candidate.name ===
-          recoveryPlatformConfig.services["orders-service"].database,
-      );
-      assert.ok(deliveryDatabase, "recovery proof orders database is missing");
-      const ordersRole = deliveryDatabase.runtimeRoles.find(
-        (candidate) => candidate.runtime === "orders-service",
-      );
-      assert.ok(ordersRole, "recovery proof orders-service role is missing");
-      await createDeliveryTables(
-        recoveryAdminUrl,
-        deliveryDatabase,
-        recoveryProofCredentials.rolePasswords,
-        ordersRole.role,
-      );
-      recoveryDeliveryDatabase = deliveryDatabase;
-      recoveryDeliveryTables = true;
-      if (browserHook) {
-        const ownedDatabaseNames = new Set(
-          recoveryProofCredentials.roleMap.databases.map(
-            (database) => database.name,
-          ),
+      if (options.recoveryProof) {
+        recoveryAdminUrl = `postgresql://${encodeURIComponent(recoveryProofCredentials.admin.username)}:${encodeURIComponent(recoveryProofCredentials.admin.password)}@${recoveryDatabaseProof.host}:${recoveryDatabaseProof.port}/postgres`;
+        const deliveryDatabase =
+          recoveryProofCredentials.roleMap.databases.find(
+            (candidate) =>
+              candidate.name ===
+              recoveryPlatformConfig.services["orders-service"].database,
+          );
+        assert.ok(
+          deliveryDatabase,
+          "recovery proof orders database is missing",
         );
-        const ownerConnections = async (database) => {
-          assert.ok(
-            ownedDatabaseNames.has(database),
-            "browser owner evidence database is outside the run scope",
+        const ordersRole = deliveryDatabase.runtimeRoles.find(
+          (candidate) => candidate.runtime === "orders-service",
+        );
+        assert.ok(ordersRole, "recovery proof orders-service role is missing");
+        await createDeliveryTables(
+          recoveryAdminUrl,
+          deliveryDatabase,
+          recoveryProofCredentials.rolePasswords,
+          ordersRole.role,
+        );
+        recoveryDeliveryDatabase = deliveryDatabase;
+        recoveryDeliveryTables = true;
+        if (browserHook) {
+          const ownedDatabaseNames = new Set(
+            recoveryProofCredentials.roleMap.databases.map(
+              (database) => database.name,
+            ),
           );
-          return createPostgresClient(
-            replaceDatabase(recoveryAdminUrl, database),
-          );
-        };
-        browserOwnerEvidence = createBrowserOwnerEvidence({
-          connect: ownerConnections,
-          roleMap: recoveryProofCredentials.roleMap,
-          actorRef: "actor:g15-browser-fixture",
-          runId: launchIdentity.context.runId,
-        });
-        if (observabilityBrowser)
-          orderEvidence = createOrderEvidence({
+          const ownerConnections = async (database) => {
+            assert.ok(
+              ownedDatabaseNames.has(database),
+              "browser owner evidence database is outside the run scope",
+            );
+            return createPostgresClient(
+              replaceDatabase(recoveryAdminUrl, database),
+            );
+          };
+          browserOwnerEvidence = createBrowserOwnerEvidence({
             connect: ownerConnections,
             roleMap: recoveryProofCredentials.roleMap,
+            actorRef: "actor:g15-browser-fixture",
             runId: launchIdentity.context.runId,
           });
+          if (observabilityBrowser)
+            orderEvidence = createOrderEvidence({
+              connect: ownerConnections,
+              roleMap: recoveryProofCredentials.roleMap,
+              runId: launchIdentity.context.runId,
+            });
+        }
       }
     }
     if (options.mutationDisableRollback) markRollbackStage("build");
@@ -9979,19 +10692,34 @@ export async function runComposeSmoke({
       browser ||
       options.mutationDisableRollback
     );
-    const imageContextPath = observabilityBrowser
-      ? recoveryProofCredentials?.g08PreparationContextPath
-      : launchContextPath;
-    const imageIdentity = observabilityBrowser
-      ? await browserParentModules.validateLaunchContext(imageContextPath)
-      : launchIdentity;
-    if (launchImageInventory)
-      assertPublishedRuntimeImages(launchImageInventory);
-    if (!options.noBuild && !launchImageInventory) {
+    const imageContextPath = launchImageContextPath ?? launchContextPath;
+    const imageIdentity = launchImageIdentity;
+    if (launchRuntimeImages) assertPublishedRuntimeImages(launchRuntimeImages);
+    const ownedTargets = parentOwnedRuntimeImages
+      ? runtimeImageBuildTargets(
+          projectName,
+          ownedMissingRefs,
+          options.customerProof,
+        )
+      : null;
+    const imageMode = resolveRuntimeImageMode({
+      launchMode: Boolean(launchIdentity),
+      launchArtifactManifest,
+      ownedImagePhase,
+      ownedTargets,
+      reuseImages,
+    });
+    if (
+      !launchIdentity &&
+      !reuseImages &&
+      !rollbackRuntimeImages &&
+      imageMode === "build"
+    ) {
       let temporary;
       let snapshot;
+      const imageStart = Date.now();
       try {
-        if (imageIdentity && bindRuntimeImages) {
+        if (imageMode === "build" && imageIdentity && bindRuntimeImages) {
           temporary = await mkdtemp(join(tmpdir(), "coffee-runtime-build-"));
           snapshot = await createBuildInputSnapshot({
             candidateRoot: imageIdentity.candidateRoot,
@@ -10001,22 +10729,33 @@ export async function runComposeSmoke({
           await verifyBuildInputSnapshot(snapshot);
         }
         try {
-          buildRuntimeImages(
-            projectName,
-            options.databaseProof || options.customerProof
-              ? [DATABASE_PROOF_RUNTIME]
-              : options.aromaBindingProof || options.aromaCartProof
-                ? ["api-internal", "aroma-gateway"]
-                : RUNTIMES,
-            builtImages,
-            snapshot?.contextPath ?? ROOT,
-          );
+          if (imageMode === "build")
+            buildRuntimeImages(
+              projectName,
+              parentOwnedRuntimeImages
+                ? ownedTargets.runtimes
+                : options.databaseProof || options.customerProof
+                  ? [DATABASE_PROOF_RUNTIME]
+                  : options.aromaBindingProof || options.aromaCartProof
+                    ? ["api-internal", "aroma-gateway"]
+                    : RUNTIMES,
+              builtImages,
+              snapshot?.contextPath ?? ROOT,
+              { includeNginx: !parentOwnedRuntimeImages || ownedTargets.nginx },
+            );
         } finally {
           if (snapshot) await verifyBuildInputSnapshot(snapshot);
         }
       } finally {
         if (temporary) await rm(temporary, { recursive: true, force: true });
       }
+      if (parentOwnedRuntimeImages)
+        console.log(
+          JSON.stringify({
+            runtimeImages: imageMode,
+            durationMs: Date.now() - imageStart,
+          }),
+        );
     }
     if (bindRuntimeImages) {
       const verifiedImages = await (
@@ -10028,10 +10767,40 @@ export async function runComposeSmoke({
       assertVerifiedRuntimeImages({
         projectName,
         verifiedImages,
-        // С опубликованным инвентарём edge-nginx уже лежит под тегом проекта
+        // С опубликованным манифестом edge-nginx уже лежит под тегом проекта
         // запуска, поэтому проверяем именно его, а не локальный :local.
-        noBuild: launchImageInventory ? false : options.noBuild,
+        noBuild: launchRuntimeImages ? false : reuseImages,
+        directImageIds: parentOwnedRuntimeImages,
       });
+      if (parentOwnedRuntimeImages)
+        validateRuntimeImageOwnership(
+          inspectLaunchRuntimeImages(projectName, verifiedImages),
+          ownedImageBaseline,
+          "ready",
+        );
+    }
+    if (parentOwnedRuntimeImages && options.customerProof) {
+      validateRuntimeImageOwnership(
+        inspectLaunchRuntimeImages(projectName, ownedRuntimeImages),
+        ownedImageBaseline,
+        ownedImagePhase,
+      );
+      for (const service of [DATABASE_PROOF_RUNTIME, "edge-nginx"]) {
+        const expected = ownedRuntimeImages.find(
+          (image) => image.service === service,
+        ).imageId;
+        assert.equal(
+          runDocker([
+            "image",
+            "inspect",
+            "--format",
+            "{{.Id}}",
+            expected,
+          ]).trim(),
+          expected,
+          `${service} image differs from the scanned supply_chain artifact`,
+        );
+      }
     }
     throwIfRollbackTerminationRequested();
     if (options.customerProof)
@@ -10063,7 +10832,7 @@ export async function runComposeSmoke({
           : ["up", "--detach", "--wait", "--no-build"];
     if (options.mutationDisableRollback) markRollbackStage("up");
     composeAttempted = true;
-    if (options.recoveryProof)
+    if (bootstrapFreshKafka)
       prepareRecoveryKafkaBootstrap(
         projectName,
         secretsDir,
@@ -10080,17 +10849,43 @@ export async function runComposeSmoke({
         composeFile,
         kafkaNamespaceIdentity,
       );
-    runTrackedRollbackCompose(
-      "runtime-stack-up",
-      projectName,
-      secretsDir,
-      upArguments,
-      { composeFile, inherit: true },
-      databaseProofContainer,
-    );
+    try {
+      runTrackedRollbackCompose(
+        "runtime-stack-up",
+        projectName,
+        secretsDir,
+        upArguments,
+        { composeFile, inherit: true },
+        databaseProofContainer,
+      );
+    } catch (error) {
+      // Диагностика отказов старта: без логов контейнеров причина не видна,
+      // потому что cleanup удаляет их вместе с evidence.
+      try {
+        const logs = execFileSync(
+          "docker",
+          composeArgs(
+            projectName,
+            ["logs", "--no-color", "--tail", "200"],
+            composeFile,
+          ),
+          {
+            cwd: ROOT,
+            env: { ...process.env, COFFEE_COMPOSE_SECRETS_DIR: secretsDir },
+            encoding: "utf8",
+            stdio: ["ignore", "pipe", "pipe"],
+            maxBuffer: 32 * 1024 * 1024,
+          },
+        );
+        error.message = `${error.message}\n--- failure logs ---\n${logs}`;
+      } catch {
+        // логи недоступны — исходная ошибка важнее
+      }
+      throw error;
+    }
     throwIfRollbackTerminationRequested();
-    if (launchImageInventory)
-      assertRuntimeContainersMatchInventory(projectName, launchImageInventory, {
+    if (launchRuntimeImages)
+      assertRuntimeContainersMatchManifest(projectName, launchRuntimeImages, {
         requireComplete: !(
           options.databaseProof ||
           options.customerProof ||
@@ -10120,6 +10915,17 @@ export async function runComposeSmoke({
         "Kafka runtime differs from the scanned supply_chain artifact",
       );
     }
+    if (rollbackRuntimeImages) {
+      for (const { service: name, imageId } of rollbackRuntimeImages) {
+        const row = rows.get(name);
+        assert.ok(row?.ID, `verified runtime container is missing: ${name}`);
+        assert.equal(
+          runDocker(["inspect", "--format", "{{.Image}}", row.ID]).trim(),
+          imageId,
+          `${name} runtime differs from the scanned parent supply_chain artifact`,
+        );
+      }
+    }
     if (browserHook) {
       const idp = rows.get("g15-idp");
       assert.ok(idp, "browser IdP fixture is absent from Compose ps");
@@ -10129,6 +10935,7 @@ export async function runComposeSmoke({
     let kafkaRetention;
     let kafkaNamespaceInventory;
     let nativeFoundation;
+    let dependencyReadiness;
     if (options.aromaBindingProof) {
       assert.ok(
         aromaBindingSnapshot && aromaBindingFixture && recoveryDatabaseProof,
@@ -10450,6 +11257,7 @@ export async function runComposeSmoke({
         customerProofRoles,
         composeFile,
         databaseProofCredentials.databaseName,
+        proofLaunchIdentity ? launchContextPath : undefined,
       );
     } else {
       kafkaRetention = assertKafkaDurableRetention(
@@ -10597,7 +11405,12 @@ export async function runComposeSmoke({
         platformConfig.nginxTransport.publicHost,
         options.stubSecrets || options.recoveryProof
           ? materialized.transportMaterials.publicTls.caPem
-          : undefined,
+          : parseYaml(
+              await readFile(join(secretsDir, "edge-gateway.yaml"), "utf8"),
+              {
+                json: true,
+              },
+            )?.secrets?.edge?.tlsCaBundle,
       );
       if (browser) {
         throwIfRollbackTerminationRequested();
@@ -10639,11 +11452,22 @@ export async function runComposeSmoke({
           launchContextPath,
           launchIdentity,
           kafkaImage: verifiedKafka.imageId,
+          runtimeImages: rollbackRuntimeImages,
           markStage: markRollbackStage,
           markInitialUnknownSubstage: markRollbackInitialUnknownSubstage,
           markDisabledReconcileSubstage: markRollbackDisabledReconcileSubstage,
         });
-      } else if (options.recoveryProof && !browserHook) {
+        if (rollbackParent)
+          rollbackEvidence.imageBinding = {
+            parentRunId: rollbackParent.identity.context.runId,
+            parentCandidateSha: rollbackParent.identity.context.candidateSha,
+            runtimeImages: rollbackRuntimeImages,
+            kafkaImageId: verifiedKafka.imageId,
+          };
+      } else if (
+        options.recoveryProof &&
+        (!browserHook || observabilityBrowser)
+      ) {
         assert.ok(
           aromaCartProviderFixture,
           "recovery proof local provider fixture is missing",
@@ -10737,32 +11561,108 @@ export async function runComposeSmoke({
               "SIGTERM fixture left pending work",
             );
           }
-          nativeFoundation = {
-            ...normalEvidence,
-            ordersOutbox: await assertOrdersOutboxBrokerRecovery(
-              projectName,
-              secretsDir,
-              composeFile,
-              recoveryDatabaseProof.port,
-              recoveryDatabaseProof.host ?? "127.0.0.1",
-              recoveryProofCredentials,
+          const ordersOutbox = await assertOrdersOutboxBrokerRecovery(
+            projectName,
+            secretsDir,
+            composeFile,
+            recoveryDatabaseProof.port,
+            recoveryDatabaseProof.host ?? "127.0.0.1",
+            recoveryProofCredentials,
+            recoveryPlatformConfig,
+            fixture.kafkaTargets.orders,
+          );
+          const kafkaChecks = [];
+          if (observability && externalRecovery) {
+            for (const runtime of RUNTIMES.filter((name) => {
+              const kafka = recoveryPlatformConfig.services[name].kafka;
+              return (
+                name !== "orders-aroma-preparation" &&
+                (kafka.producers.length > 0 || kafka.consumers.length > 0)
+              );
+            })) {
+              const id = rows.get(runtime)?.ID;
+              const before = ownedDependencySnapshot(projectName, runtime, id);
+              const status = await waitForDependencyHealth(
+                id,
+                "/health/ready",
+                200,
+              );
+              kafkaChecks.push({ runtime, before, status });
+            }
+          }
+          const blackhole = await runKafkaBlackholeProof(
+            projectName,
+            secretsDir,
+            projectName,
+            fixture.mappingTopic,
+            databaseProofService(
               recoveryPlatformConfig,
-              fixture.kafkaTargets.orders,
-            ),
-            blackhole: await runKafkaBlackholeProof(
-              projectName,
-              secretsDir,
-              projectName,
-              fixture.mappingTopic,
-              databaseProofService(
-                recoveryPlatformConfig,
-                recoveryProofCredentials.ownership,
-                "orders-service",
-              ).database,
-              composeFile,
-              fixture.kafkaTargets.preparation,
-            ),
-          };
+              recoveryProofCredentials.ownership,
+              "orders-service",
+            ).database,
+            composeFile,
+            fixture.kafkaTargets.preparation,
+            kafkaChecks.length === 0
+              ? undefined
+              : async (kafkaSince) => {
+                  for (const entry of kafkaChecks) {
+                    assertDependencyIdentity(
+                      projectName,
+                      entry.runtime,
+                      entry.before,
+                    );
+                    entry.during = await waitForDependencyHealth(
+                      entry.before.Id,
+                      "/health/ready",
+                      503,
+                    );
+                    entry.liveDuring = await waitForDependencyHealth(
+                      entry.before.Id,
+                      "/health/live",
+                      200,
+                    );
+                    assert.ok(
+                      dependencyFailureLogged(
+                        entry.before.Id,
+                        "kafka",
+                        kafkaSince,
+                      ),
+                      "Kafka readiness failure was not observed",
+                    );
+                  }
+                },
+          );
+          if (kafkaChecks.length > 0) {
+            const checks = [];
+            for (const entry of kafkaChecks) {
+              assertDependencyIdentity(
+                projectName,
+                entry.runtime,
+                entry.before,
+              );
+              checks.push({
+                runtime: entry.runtime,
+                dependency: "kafka",
+                before: entry.status,
+                during: entry.during,
+                after: await waitForDependencyHealth(
+                  entry.before.Id,
+                  "/health/ready",
+                  200,
+                ),
+                liveDuring: entry.liveDuring,
+                restored: true,
+                addressChanged: null,
+              });
+            }
+            dependencyReadiness = {
+              status: "NOT_RUN",
+              checks,
+              notApplicable: [],
+              localChecks: "NOT_PROVEN",
+            };
+          }
+          nativeFoundation = { ...normalEvidence, ordersOutbox, blackhole };
         } catch (error) {
           recoveryBodyFailed = true;
           recoveryBodyError = error;
@@ -10799,6 +11699,57 @@ export async function runComposeSmoke({
           throw restoreError;
         }
         if (recoveryBodyFailed) throw recoveryBodyError;
+        if (dependencyReadiness) {
+          const preparation = rows.get("orders-aroma-preparation")?.ID;
+          dependencyReadiness.checks.push(
+            await proveOwnedNetworkDependency({
+              projectName,
+              runtime: "orders-aroma-preparation",
+              containerId: preparation,
+              networkName: `${projectName}_coffee_kafka_event`,
+              dependency: "kafka",
+              checkName: "kafka",
+            }),
+          );
+          for (const runtime of RUNTIMES) {
+            const service = recoveryPlatformConfig.services[runtime];
+            if (service.database !== null)
+              dependencyReadiness.checks.push(
+                await proveOwnedNetworkDependency({
+                  projectName,
+                  runtime,
+                  containerId: rows.get(runtime)?.ID,
+                  networkName: EXTERNAL_POSTGRES_NETWORK,
+                  dependency: "database",
+                  checkName: "database",
+                }),
+              );
+          }
+          for (const [runtime, checkName] of [
+            ["orders-service", "orders-internal-api"],
+            ["aroma-observer", "aroma-observation-internal-api"],
+            ["aroma-convergence", "aroma-convergence-internal-api"],
+          ])
+            dependencyReadiness.checks.push(
+              await proveOwnedNetworkDependency({
+                projectName,
+                runtime,
+                containerId: rows.get(runtime)?.ID,
+                networkName: `${projectName}_coffee_internal_api`,
+                dependency: "internal-api",
+                checkName,
+              }),
+            );
+          dependencyReadiness.notApplicable = [
+            "edge-gateway",
+            "api-public",
+            "api-internal",
+          ].map((runtime) => ({
+            runtime,
+            reason: "no-registered-readiness-dependency",
+          }));
+          dependencyReadiness.status = "PASS";
+        }
       }
     }
     if (!options.keep) {
@@ -10858,6 +11809,7 @@ export async function runComposeSmoke({
             ? undefined
             : kafkaRetention,
       kafkaNamespaceInventory,
+      ...(dependencyReadiness ? { dependencyReadiness } : {}),
       recoveryProof:
         options.recoveryProof && !browserHook
           ? {
@@ -11102,7 +12054,8 @@ export async function runComposeSmoke({
           cleanupHookError ??= error;
         }
       }
-      removeBuiltRuntimeImages(builtImages, options);
+      if (!parentOwnedRuntimeImages)
+        removeBuiltRuntimeImages(builtImages, { ...options, reuseImages });
       if (composeFile !== COMPOSE_FILE && !options.keep)
         await rm(composeFile, { force: true });
       if (!options.keep && secretsDir)
@@ -11242,7 +12195,7 @@ export async function runComposeSmoke({
   const errors = [primaryError, standardCleanupError, cleanupHookError].filter(
     Boolean,
   );
-  const g14Retained = retainObservabilityResources
+  const observabilityRetained = retainObservabilityResources
     ? {
         runId: launchIdentity?.context.runId,
         projectName,
@@ -11323,13 +12276,15 @@ export async function runComposeSmoke({
     );
     if (finalizedExternalCleanup)
       combined.externalCleanup = finalizedExternalCleanup;
-    if (g14Retained) combined.g14Retained = g14Retained;
+    if (observabilityRetained)
+      combined.observabilityRetained = observabilityRetained;
     throw combined;
   }
   if (errors.length === 1) {
     if (finalizedExternalCleanup)
       errors[0].externalCleanup = finalizedExternalCleanup;
-    if (g14Retained) errors[0].g14Retained = g14Retained;
+    if (observabilityRetained)
+      errors[0].observabilityRetained = observabilityRetained;
     throw errors[0];
   }
   console.log(JSON.stringify(receipt));

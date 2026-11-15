@@ -175,7 +175,7 @@ verification-ветки, но не замена прямых бизнес-пре
 
 ## Handoff protocol
 
-Каждый handoff хранится в `evidence/handoffs/issue-<N>.yaml`:
+Handoff задачи хранится в `evidence/handoffs/issue-<N>.yaml`:
 
 ```yaml
 issue: 4
@@ -201,7 +201,16 @@ workspace. Outputs содержат только реальные изменён
 ограничения описывают фактически выполненные проверки; live skip не является PASS.
 Historical handoffs не переписываются под новый protocol.
 
-## Дополнение #277: два CVE-блокера `supply_chain`
+Для #13 владелец согласовал два связанных артефакта: до заморозки кандидата
+`evidence/handoffs/issue-13.yaml` фиксирует фактические inputs, outputs и
+проверки на момент подготовки; после запуска report создаёт
+`evidence/launch/<run-id>/handoff.yaml` с результатами и SHA-256 точного Git blob
+исходного descriptor в том же candidate SHA. Производный файл входит в
+`checksums.sha256`. Оба артефакта и их хэши публикуются в PR и Obsidian;
+для внесения итогов не создаётся новый source SHA. Исходный descriptor сам по
+себе не означает PASS или допуск; итог определяется результатом preflight–report.
+
+## Дополнение #277: два CVE-блокера supply_chain
 
 `#275 → #277 → #13`. #277 обновляет только существующие musl/musl-utils
 конечных Node/storage-helper/Kafka и добавляет точный proof-bound `not_affected`

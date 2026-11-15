@@ -17,9 +17,12 @@ import {
 } from "../../../packages/platform-config/src/launch-database-target.ts";
 import { CANONICAL_KAFKA_TOPIC_NAMES } from "../../../packages/platform-config/src/launch-kafka-target.ts";
 import { EXPECTED_GATES } from "./gate-matrix.generated.mjs";
+import { decisive, reportGateStatus } from "./decision.mjs";
 import { gateLabel, gateSlug } from "./gate-identity.mjs";
 
 export { EXPECTED_GATES };
+
+const SUPPORTED_SCHEMA_VERSIONS = [1, 2];
 
 // `report` must work even when `preflight`/`install` failed before candidate dependencies were installed.
 // Keep this small validation contract local and builtin-only.
@@ -49,12 +52,20 @@ function redactText(text) {
 export function validateRunResultContract(result) {
   if (
     !result ||
-    result.schemaVersion !== 1 ||
+    !SUPPORTED_SCHEMA_VERSIONS.includes(result.schemaVersion) ||
     !/^[0-9]{8}T[0-9]{6}Z-[0-9a-f]{7}$/.test(result.runId ?? "") ||
     !/^[0-9a-f]{40}$/.test(result.candidateSha ?? "") ||
     !/^[0-9a-f]{40}$/.test(result.sourceSha ?? "") ||
     !Array.isArray(result.gates) ||
     result.gates.length !== EXPECTED_GATES.length ||
+    (result.schemaVersion === 2 &&
+      !["PASS", "FAIL", "NOT_RUN", "SKIPPED_BY_FILTER"].includes(
+        result.reportStatus,
+      )) ||
+    (result.profile !== undefined &&
+      !["admission", "fast", "release", "diagnostic"].includes(
+        result.profile,
+      )) ||
     !["ДОПУСТИТЬ", "НЕ ДОПУСТИТЬ"].includes(result.decision)
   ) {
     throw new Error("Некорректная структура run-result.json");
@@ -68,7 +79,20 @@ export function validateRunResultContract(result) {
       gateSlug(gate?.id) !== id ||
       gate.expectedCommand !== command ||
       gate.timeoutSeconds !== timeoutSeconds ||
-      !["PASS", "FAIL", "NOT_RUN"].includes(gate.status) ||
+      !["PASS", "FAIL", "NOT_RUN", "SKIPPED_BY_FILTER"].includes(gate.status) ||
+      (gate.reusedFrom !== undefined &&
+        (gate.status !== "PASS" ||
+          typeof gate.reusedFrom?.runId !== "string" ||
+          !/^[0-9]{8}T[0-9]{6}Z-[0-9a-f]{7}$/.test(gate.reusedFrom.runId) ||
+          typeof gate.reusedFrom?.evidenceDir !== "string" ||
+          gate.reusedFrom.evidenceDir.length === 0 ||
+          (gateSlug(gate.id) === "preflight" &&
+            (!/^[0-9a-f]{64}$/u.test(
+              gate.reusedFrom?.githubSnapshotSha256 ?? "",
+            ) ||
+              !/^[0-9a-f]{64}$/u.test(
+                gate.reusedFrom?.preflightArtifactSha256 ?? "",
+              ))))) ||
       !Array.isArray(gate.runs) ||
       !Array.isArray(gate.artifacts) ||
       !Number.isInteger(gate.durationMs) ||
@@ -97,6 +121,25 @@ export function validateRunResultContract(result) {
         throw new Error(`Некорректный command record ${id}`);
     }
   }
+  if (
+    result.schemaVersion === 2 &&
+    result.reportStatus !== result.gates[EXPECTED_GATES.length - 1]?.status
+  )
+    throw new Error("reportStatus не совпадает со статусом report");
+  if (
+    result.environment.githubSnapshotSha256 !== undefined &&
+    result.environment.githubSnapshotSha256 !== null &&
+    !/^[0-9a-f]{64}$/u.test(result.environment.githubSnapshotSha256)
+  )
+    throw new Error("Некорректный githubSnapshotSha256 в environment");
+  if (
+    result.gates[0].reusedFrom !== undefined &&
+    result.gates[0].status === "PASS" &&
+    (result.environment.githubSnapshotSha256 !==
+      result.gates[0].reusedFrom.githubSnapshotSha256 ||
+      result.gates[0].reusedFrom.preflightArtifactSha256 === undefined)
+  )
+    throw new Error("reused preflight не связан с GitHub-снимком run-result");
   const environment = result.environment;
   let expectedDatabases;
   try {
@@ -388,7 +431,17 @@ async function validateEvidence(evidenceDir, result, sourceRoot) {
         `${gate.id}: фактический argv не соответствует exact command`,
       );
     }
-    if (gate.status === "PASS" && gate.runs.length !== expectedArgvs.length)
+    if (
+      gate.status === "PASS" &&
+      gate.reusedFrom !== undefined &&
+      gate.runs.length !== 0
+    )
+      errors.push(`${gate.id}: reused PASS не должен иметь command runs`);
+    if (
+      gate.status === "PASS" &&
+      gate.reusedFrom === undefined &&
+      gate.runs.length !== expectedArgvs.length
+    )
       errors.push(`${gate.id}: PASS без полного набора argv`);
     for (const artifact of gate.artifacts) {
       const path = resolve(artifact.path);
@@ -407,6 +460,7 @@ async function validateEvidence(evidenceDir, result, sourceRoot) {
     }
     if (
       gate.status === "PASS" &&
+      gate.reusedFrom === undefined &&
       gate.runs.some(
         (run) =>
           run.exitCode !== 0 ||
@@ -446,10 +500,12 @@ async function validateEvidence(evidenceDir, result, sourceRoot) {
       );
   }
   if (
-    result.gates.some((gate) => gate.status !== "PASS") &&
+    result.gates.some(
+      (gate) => gateSlug(gate.id) !== "report" && gate.status !== "PASS",
+    ) &&
     result.decision === "ДОПУСТИТЬ"
   )
-    errors.push("Решение допускает run с непрошедшим mandatory gate");
+    errors.push("Решение допускает run с непрошедшим рабочим gate");
   if (
     result.decision === "ДОПУСТИТЬ" &&
     environmentProofErrors(result.environment).length
@@ -463,7 +519,10 @@ async function validateEvidence(evidenceDir, result, sourceRoot) {
     "preflight.json",
   );
   let preflight = null;
-  if (result.gates[0].status === "PASS") {
+  if (
+    result.gates[0].status === "PASS" &&
+    result.gates[0].reusedFrom === undefined
+  ) {
     try {
       preflight = JSON.parse(await readFile(preflightPath, "utf8"));
       if (
@@ -710,11 +769,14 @@ export async function validateChecksumManifest(evidenceDir, sourceRoot, runId) {
   return rows;
 }
 
-async function preflightFindings(evidenceDir, gateId) {
+async function preflightFindings(evidenceDir, gateId, reusedFrom = null) {
   try {
+    const root = reusedFrom
+      ? resolve(ROOT, reusedFrom.evidenceDir)
+      : evidenceDir;
     const value = JSON.parse(
       await readFile(
-        join(evidenceDir, "gates", gateId, "artifacts/preflight.json"),
+        join(root, "gates", gateId, "artifacts/preflight.json"),
         "utf8",
       ),
     );
@@ -776,6 +838,7 @@ function reportMarkdown(
     `# ${result.decision}`,
     "",
     `- Run ID: \`${result.runId}\``,
+    `- Профиль запуска: \`${result.profile ?? "release (legacy)"}\``,
     `- Candidate SHA: \`${result.candidateSha}\``,
     `- Source SHA: \`${result.sourceSha}\``,
     `- Время UTC: ${result.startedAt} — ${result.endedAt}`,
@@ -804,7 +867,7 @@ function reportMarkdown(
     "",
     "## Предварительная проверка preflight",
     "",
-    `Статус: ${preflight.status}. Артефакт: [preflight.json](../../../../evidence/launch/${result.runId}/gates/${result.gates[0].id}/artifacts/preflight.json).`,
+    `Статус: ${preflight.status}. Артефакт: [preflight.json](../../../../evidence/launch/${result.gates[0].reusedFrom?.runId ?? result.runId}/gates/${result.gates[0].id}/artifacts/preflight.json).`,
   );
   if (preflight.checks.length)
     lines.push(...preflight.checks.map((check) => `- ${check}`));
@@ -836,7 +899,7 @@ function reportMarkdown(
     "",
     "## Evidence links",
     "",
-    `[Полное evidence дерево](../../../../evidence/launch/${result.runId}/), [commands.ndjson](../../../../evidence/launch/${result.runId}/commands.ndjson), [checksums.sha256](../../../../evidence/launch/${result.runId}/checksums.sha256).`,
+    `[Полное evidence дерево](../../../../evidence/launch/${result.runId}/), [commands.ndjson](../../../../evidence/launch/${result.runId}/commands.ndjson), [handoff.yaml](../../../../evidence/launch/${result.runId}/handoff.yaml), [checksums.sha256](../../../../evidence/launch/${result.runId}/checksums.sha256).`,
     "",
   );
   lines.push(
@@ -881,7 +944,8 @@ function reportMarkdown(
     ...environmentErrors.map((error) => `- Environment: ${error}`),
     ...unproven.map((entry) => `- ${entry}`),
     "- aroma_sandbox без проверенного detached signature verifier и signed approval не выполняет provider-вызов.",
-    "- Непрошедшие gates сохраняют FAIL или NOT_RUN; автоматического retry нет.",
+    "- Непрошедшие gates сохраняют FAIL, NOT_RUN или SKIPPED_BY_FILTER; автоматического retry нет.",
+    "- PASS с reusedFrom взят из identity-совпавшего источника; его evidence не переносится в этот run.",
     "",
   );
   return `${lines.join("\n").trimEnd()}\n`;
@@ -1059,6 +1123,7 @@ async function writeFinalFiles(
   environmentErrors,
   preflight,
   fingerprint,
+  sourceDescriptor,
 ) {
   const decisionPath = join(evidenceDir, "decision.json");
   const resultPath = join(evidenceDir, "run-result.json");
@@ -1068,15 +1133,16 @@ async function writeFinalFiles(
     result.runId,
     "ОТЧЁТ.md",
   );
-  const mandatoryPass =
-    result.gates.length === 20 &&
-    result.gates.every((gate) => gate.status === "PASS");
+  // Решение выносится по 19 рабочим гейтам; reportStatus публикуется отдельно.
+  const workingGatesPass =
+    decisive(result.gates, result.profile) === "ДОПУСТИТЬ";
   result.decision =
-    mandatoryPass &&
+    workingGatesPass &&
     evidenceErrors.length === 0 &&
     environmentErrors.length === 0
       ? "ДОПУСТИТЬ"
       : "НЕ ДОПУСТИТЬ";
+  result.reportStatus = reportGateStatus(result.gates);
   await writeRegularNoFollow(evidenceDir, resultPath, json(result));
   await writeRegularNoFollow(
     evidenceDir,
@@ -1085,8 +1151,63 @@ async function writeFinalFiles(
       decision: result.decision,
       runId: result.runId,
       candidateSha: result.candidateSha,
-      mandatoryGatesPass: mandatoryPass,
+      mandatoryGatesPass: workingGatesPass,
+      reportStatus: result.reportStatus,
       evidenceErrors: [...evidenceErrors, ...environmentErrors],
+    }),
+  );
+  const handoffPath = join(evidenceDir, "handoff.yaml");
+  const artifactHashes = [];
+  for (const file of await listFiles(evidenceDir))
+    if (file !== handoffPath && file !== join(evidenceDir, "checksums.sha256"))
+      artifactHashes.push(await fileDigest(file, evidenceDir));
+  artifactHashes.sort((a, b) => a.path.localeCompare(b.path, "en"));
+  // JSON is YAML 1.2 and lets report run before candidate dependencies exist.
+  await writeRegularNoFollow(
+    evidenceDir,
+    handoffPath,
+    json({
+      issue: 13,
+      kind: "DERIVED_RUN_HANDOFF",
+      runId: result.runId,
+      candidateSha: result.candidateSha,
+      sourceSha: result.sourceSha,
+      sourceDescriptorPath: "evidence/handoffs/issue-13.yaml",
+      sourceDescriptorSha256: sourceDescriptor.sha256,
+      sourceDescriptorStatus: sourceDescriptor.status,
+      decision: result.decision,
+      mandatoryGatesPass: workingGatesPass,
+      reportStatus: result.reportStatus,
+      evidenceErrors: [...evidenceErrors, ...environmentErrors].map(redactText),
+      limits: {
+        gateTimeoutSeconds: Object.fromEntries(
+          result.gates.map((gate) => [gate.id, gate.timeoutSeconds]),
+        ),
+        otherLimitsSource:
+          "evidence/handoffs/issue-13.yaml#consumerContract.limitsSeconds",
+      },
+      gates: result.gates.map((gate) => ({
+        id: gate.id,
+        status: gate.status,
+        expectedCommand: gate.expectedCommand,
+        durationMs: gate.durationMs,
+        reason: redactText(gate.reason || ""),
+        runs: gate.runs.map((run) => ({
+          argv: run.argv,
+          timeoutMs: run.timeoutMs,
+          durationMs: run.durationMs,
+          exitCode: run.exitCode,
+          timedOut: run.timedOut,
+          outputLimitExceeded: run.outputLimitExceeded,
+        })),
+      })),
+      artifactHashes,
+      limitations:
+        sourceDescriptor.status === "BOUND"
+          ? []
+          : [
+              "Source descriptor absent from exact candidate commit or unavailable; source binding is NOT_PROVEN.",
+            ],
     }),
   );
   const rows = [];
@@ -1162,10 +1283,44 @@ export async function finalizeReport(evidenceDir, expectedSourceRoot = null) {
     "ОТЧЁТ.md",
   );
   await assertNoSymlinkPath(sourceRoot, reportTarget, true);
+  const descriptor = spawnSync(
+    "git",
+    ["show", `${result.candidateSha}:evidence/handoffs/issue-13.yaml`],
+    {
+      cwd: result.environment.candidatePath,
+      timeout: 10_000,
+      maxBuffer: 4 * 1024 * 1024,
+    },
+  );
+  const sourceDescriptor =
+    descriptor.status === 0 && !descriptor.error
+      ? {
+          status: "BOUND",
+          sha256: createHash("sha256").update(descriptor.stdout).digest("hex"),
+        }
+      : { status: "NOT_PROVEN", sha256: null };
+  const descriptorError =
+    "report: source descriptor отсутствует в точном candidate commit или недоступен";
+  if (sourceDescriptor.status !== "BOUND") {
+    const gate = result.gates[19];
+    gate.status = "FAIL";
+    if (!String(gate.reason ?? "").includes(descriptorError))
+      gate.reason = [gate.reason, descriptorError].filter(Boolean).join("; ");
+    await writeRegularNoFollow(
+      evidenceDir,
+      join(evidenceDir, "gates", gate.id, "result.json"),
+      json(gate),
+    );
+  }
   const defects = await writeDefects(evidenceDir, sourceRoot, result);
   let evidenceErrors = await validateEvidence(evidenceDir, result, sourceRoot);
+  if (sourceDescriptor.status !== "BOUND") evidenceErrors.push(descriptorError);
   const environmentErrors = environmentProofErrors(result.environment);
-  const preflight = await preflightFindings(evidenceDir, result.gates[0].id);
+  const preflight = await preflightFindings(
+    evidenceDir,
+    result.gates[0].id,
+    result.gates[0].reusedFrom ?? null,
+  );
   const fingerprint = await sandboxFingerprint(evidenceDir, result.gates[16]);
   let reportPath = await writeFinalFiles(
     evidenceDir,
@@ -1176,6 +1331,7 @@ export async function finalizeReport(evidenceDir, expectedSourceRoot = null) {
     environmentErrors,
     preflight,
     fingerprint,
+    sourceDescriptor,
   );
   try {
     await validateChecksumManifest(evidenceDir, sourceRoot, result.runId);
@@ -1190,6 +1346,7 @@ export async function finalizeReport(evidenceDir, expectedSourceRoot = null) {
       environmentErrors,
       preflight,
       fingerprint,
+      sourceDescriptor,
     );
   }
   try {

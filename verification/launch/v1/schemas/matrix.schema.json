@@ -42,6 +42,7 @@
       "required": [
         "id",
         "version",
+        "profile",
         "mandatory",
         "owner",
         "predecessors",
@@ -56,6 +57,8 @@
       "properties": {
         "id": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
         "version": { "const": 1 },
+        "admission": { "const": true },
+        "profile": { "enum": ["fast", "release", "both"] },
         "mandatory": { "const": true },
         "owner": { "type": "string", "minLength": 1 },
         "predecessors": {
@@ -81,8 +84,10 @@
         { "$ref": "#/$defs/gate" },
         {
           "type": "object",
+          "required": ["admission"],
           "properties": {
             "id": { "const": "preflight" },
+            "admission": { "const": true },
             "command": { "const": "pnpm launch:verify:preflight" },
             "timeout": { "const": 900 }
           }
@@ -274,7 +279,7 @@
           "properties": {
             "id": { "const": "observability" },
             "command": { "const": "pnpm test:observability" },
-            "timeout": { "const": 1800 }
+            "timeout": { "const": 2700 }
           }
         }
       ]

@@ -69,15 +69,26 @@ void test("capacity producer rejects invalid launch context before creating reso
   const { runRealtimeCapacity } =
     await import("../../../tools/realtime-capacity.mjs");
   const { scratchRoot } = await import("../soak.test.mjs");
-  const resultDir = join(scratchRoot(), `realtime-invalid-${process.pid}`);
-  await assert.rejects(
-    runRealtimeCapacity({
-      launchContextFile: "/missing/context.json",
-      resultDir,
-    }),
+  const previousScratch = process.env.COFFEE_LAUNCH_SCRATCH;
+  process.env.COFFEE_LAUNCH_SCRATCH ??= await mkdtemp(
+    join(tmpdir(), "realtime-invalid-scratch-"),
   );
-  await assert.rejects(stat(resultDir), { code: "ENOENT" });
-  await assert.rejects(stat(`${resultDir}.ownership.json`), { code: "ENOENT" });
+  try {
+    const resultDir = join(scratchRoot(), `realtime-invalid-${process.pid}`);
+    await assert.rejects(
+      runRealtimeCapacity({
+        launchContextFile: "/missing/context.json",
+        resultDir,
+      }),
+    );
+    await assert.rejects(stat(resultDir), { code: "ENOENT" });
+    await assert.rejects(stat(`${resultDir}.ownership.json`), {
+      code: "ENOENT",
+    });
+  } finally {
+    if (previousScratch === undefined) delete process.env.COFFEE_LAUNCH_SCRATCH;
+    else process.env.COFFEE_LAUNCH_SCRATCH = previousScratch;
+  }
 });
 
 void test("observability refuses to launch when qualification is missing", async () => {
@@ -252,6 +263,7 @@ void test("launch-path initializes offsets only for durable Orders owners on an 
       "utf8",
     ),
   );
+  config.verification.kafkaNamespaceIsolation = false;
   const expected = [];
   for (const serviceName of ["orders-service", "orders-aroma-preparation"])
     for (const consumer of config.services[serviceName].kafka.consumers.filter(
@@ -898,20 +910,28 @@ void test("catalog harness keeps default setup and scopes launch PostgreSQL owne
 void test("operator-1 CLI requires a frozen manifest and never admits old full5000", async () => {
   const { parse, scratchRoot } = await import("../soak.test.mjs");
   const previousTmpdir = process.env.TMPDIR;
+  const previousScratch = process.env.COFFEE_LAUNCH_SCRATCH;
   let portableTmpdir;
   try {
     delete process.env.TMPDIR;
+    delete process.env.COFFEE_LAUNCH_SCRATCH;
+    assert.throws(
+      () => parse(["--smoke"]),
+      /каталог soak задаётся явно/u,
+      "без объявленного scratch каталог soak не угадывается",
+    );
+    const declaredScratch = await mkdtemp(
+      join(tmpdir(), "realtime-declared-scratch-"),
+    );
+    process.env.COFFEE_LAUNCH_SCRATCH = declaredScratch;
     const defaultScratch = scratchRoot(),
       defaultOptions = parse(["--smoke"]);
-    assert.equal(
-      defaultScratch,
-      resolve("/home/yurgusev/.hermes/cache/scratch"),
-    );
+    assert.equal(defaultScratch, resolve(declaredScratch));
     assert.ok(
       relative(defaultScratch, defaultOptions.resultDir).startsWith(
         "realtime-soak-",
       ),
-      "unset TMPDIR uses the declared Hermes scratch root",
+      "declared scratch используется по умолчанию",
     );
     assert.throws(
       () =>
@@ -919,6 +939,7 @@ void test("operator-1 CLI requires a frozen manifest and never admits old full50
       /declared Hermes scratch/u,
       "a prefix-sharing sibling is outside scratch",
     );
+    delete process.env.COFFEE_LAUNCH_SCRATCH;
     portableTmpdir = await mkdtemp(join(tmpdir(), "realtime-operator-cli-"));
     process.env.TMPDIR = ROOT;
     assert.throws(
@@ -993,6 +1014,8 @@ void test("operator-1 CLI requires a frozen manifest and never admits old full50
   } finally {
     if (previousTmpdir === undefined) delete process.env.TMPDIR;
     else process.env.TMPDIR = previousTmpdir;
+    if (previousScratch === undefined) delete process.env.COFFEE_LAUNCH_SCRATCH;
+    else process.env.COFFEE_LAUNCH_SCRATCH = previousScratch;
     if (portableTmpdir)
       await rm(portableTmpdir, { recursive: true, force: true });
   }
@@ -3870,6 +3893,14 @@ void test("product launch scopes fixture mounts and proves role-local read acces
   );
   const launchDriver = await invoke("driver", expected("driver", true), true);
   assert.equal(launchDriver.execCalls.length, 1);
+  const driverMounts = launchDriver.calls[0].filter((arg) =>
+    arg.startsWith("type=bind,"),
+  );
+  assert.equal(driverMounts.length, 5);
+  assert.ok(
+    driverMounts.every((mount) => !mount.includes(",dst=/fixture/")),
+    "driver file mounts must not be nested inside the read-only fixture mount",
+  );
   assert.deepEqual(
     JSON.parse(JSON.stringify(launchDriver.receipts[0].scopedMounts)),
     {
@@ -3903,6 +3934,12 @@ void test("product launch scopes fixture mounts and proves role-local read acces
   await assert.rejects(
     invoke("driver", expected("driver", true), true, {
       platformBytes: Buffer.from("changed child config\n"),
+    }),
+    /driver fixture mount verification failed/u,
+  );
+  await assert.rejects(
+    invoke("driver", expected("driver", true), true, {
+      ownershipBytes: Buffer.from("changed ownership\n"),
     }),
     /driver fixture mount verification failed/u,
   );

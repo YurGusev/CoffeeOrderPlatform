@@ -1,0 +1,1120 @@
+issue: 13
+baseCommit: 58aacfcaa1fdc1e6fd59060587b3386fc6b33303
+status: source-descriptor-before-formal-verification
+asOfUtc: "2026-11-08T18:14:25.977931Z"
+inputs:
+  - issue: 2
+    acceptedMergeCommit: 327638d4494269a151ee7c0ac945ac0053c3e0d4
+    artifact: evidence/handoffs/issue-2.yaml
+    sha256: 7ea123b3e666e3a95b4b71ce58696478449b32b0070521fd6d12c135a7d84d33
+  - issue: 3
+    acceptedMergeCommit: 91c6ed927029604c82a25b2208371a98c4b62237
+    artifact: evidence/handoffs/issue-3.yaml
+    sha256: 890fa7da030702bab6c858d8069e0d50336e41d16ce1b628b96ecc2816ec09e2
+  - issue: 4
+    acceptedMergeCommit: eb34befd76c0654e75d82637251dc4d12d0e0213
+    artifact: evidence/handoffs/issue-4.yaml
+    sha256: 42c823ab2fca8037c741a65e27658ee87877c0f01515e7d2faa9fcd684cb3f0a
+  - issue: 5
+    acceptedMergeCommit: 7db7bc97b41962c0592b82853ebd7dc9bc43c290
+    artifact: evidence/handoffs/issue-5.yaml
+    sha256: f801608e05ca43243eb9258f58ae25b31a7fcfb943ba01f2afe370810998cbdb
+  - issue: 6
+    acceptedMergeCommit: 76c2d580c86bbd2b272369859cbecf97815e2b8e
+    artifact: evidence/handoffs/issue-6.yaml
+    sha256: 032b0a73a07e92cc1d870177505035257ac3e3ac8abd7b2e5e09c89897c4d685
+  - issue: 7
+    acceptedMergeCommit: c88c62c91e5a6833d26c8368e3f45e78948f051c
+    artifact: evidence/handoffs/issue-7.yaml
+    sha256: 692e3e7a6920e2e9203b7f8582636aeb692e4a6478a5473a95b8f2fa6395fc08
+  - issue: 8
+    acceptedMergeCommit: e278aeb10e57d37485542f8668f078456074b038
+    artifact: evidence/handoffs/issue-8.yaml
+    sha256: 7d793e9ffaa5030ea941323d1fa525427c3ff2ed903108fc6b5b884802ead411
+  - issue: 9
+    acceptedMergeCommit: d3b5a29fb0fcfff22d167e368c65566dc382af8d
+    artifact: evidence/handoffs/issue-9.yaml
+    sha256: f68636a4b7f4e1daee73f5f5334e421b44c431cfdce25d92a233b5f17b0ad96e
+  - issue: 10
+    acceptedMergeCommit: 4b2cad1dab30af66ad0b2fe64da280222e506574
+    artifact: evidence/handoffs/issue-10.yaml
+    sha256: 4d23f7ca941bbfbe3d02505a887d6750babfd04ed7ced7b398ccd46fdad67b37
+  - issue: 11
+    acceptedMergeCommit: 2191b82ea114db8f9b1c4839773ef7ca51a204b9
+    artifact: evidence/handoffs/issue-11.yaml
+    sha256: 60626b2c92789a8949b362b7a29d12c43b7e2df429a5a5b96eee7ae0fb60ebef
+  - issue: 12
+    acceptedMergeCommit: d6d860af092e3874f58d31506d473fe75dfc3d2f
+    artifact: evidence/handoffs/issue-12.yaml
+    sha256: 447a52e667d23502d0c29a25311dd9e96a8e08f6030e666f797eb2aa2c8caa8f
+  - issue: 16
+    acceptedMergeCommit: 63be432f2a452d4159abc32183678ca91819c013
+    artifact: evidence/handoffs/issue-16.yaml
+    sha256: b3be754dcfa806bc4703682883b7be7e7c660dc8cb5fef9c8ec6a9e5d0547dc4
+  - issue: 17
+    acceptedMergeCommit: 972e480fff560d2a8c1aed0af7c419322fe1eba4
+    artifact: evidence/handoffs/issue-17.yaml
+    sha256: bb593fe72358c832768de1cfb75a36a48062e72866c2df0988bf268b7871ca61
+  - issue: 18
+    acceptedMergeCommit: cd8cb2d8122622fd385b25944ebe9701f90f56e2
+    artifact: evidence/handoffs/issue-18.yaml
+    sha256: e91e59128844131e7011087bbdd9be3f315d48df1a38d76837d0f1e9186b31cb
+  - issue: 19
+    acceptedMergeCommit: 81aa403e682478ebdf3fb6b555ebcc969d4273f0
+    artifact: evidence/handoffs/issue-19.yaml
+    sha256: 9e5b43b80792a95417a3ef8db56243cadc9e0879e7a03243564700ddcde49c3d
+  - issue: 60
+    acceptedMergeCommit: 69cc341b6d9507f27c5e115aef519d0b96923bfc
+    artifact: evidence/handoffs/issue-60.yaml
+    sha256: c55f321fe2742b96d413377bb49689cdbc9b9860d2535e6945a2c61e4cb134bb
+  - issue: 61
+    acceptedMergeCommit: d1f462838da15b25049842a241f4e3f6f75a6b4f
+    artifact: evidence/handoffs/issue-61.yaml
+    sha256: 3c83d9e42870a35baeb2f12c7dfb62901b316bab536a54a3dadd099ca172459b
+  - issue: 62
+    acceptedMergeCommit: 56b0e99275573b6bdc2461703b3221c5c678cfa6
+    artifact: evidence/handoffs/issue-62.yaml
+    sha256: 704a093a2e18fe3de8fe963ab4b56d16fa6670b87de3ac89ee6c06bc59ceab76
+  - issue: 63
+    acceptedMergeCommit: d16b41dd58db4494a1fb743fa741010249d7afa7
+    artifact: evidence/handoffs/issue-63.yaml
+    sha256: e6df7df6405c7f5da423aa151857b5791211bc2bdbde8508e808f18fd1d3e03c
+  - issue: 64
+    acceptedMergeCommit: e6439599be85a5fc8b83d99293064e877a2ff012
+    artifact: evidence/handoffs/issue-64.yaml
+    sha256: 73283a79ba020cb126351506f324be9439975516af42a90b235d6bdf9484afae
+  - issue: 119
+    acceptedMergeCommit: 53753257b22021023f887050669fc964a7998909
+    artifact: evidence/handoffs/issue-119.yaml
+    sha256: 43a46f611046c36d6212711511192e37d27a48d16c1130692639eaf3d815b1bc
+  - issue: 162
+    acceptedMergeCommit: 327474d917e1f3f1dfd9d12da8a1273775f8591f
+    artifact: evidence/handoffs/issue-162.yaml
+    sha256: f7ba488cc54b5abc44d9e160a2815baf4abfbdaa4a99db70b5946a007f843a54
+  - issue: 210
+    acceptedMergeCommit: a6cceeaa822f9641c678b5dcae521c282391dd3d
+    artifact: evidence/handoffs/issue-210.yaml
+    sha256: 93dccd8c0c978977e4e6cae852d4801415e849b595ef233a95ad2936ba10d20f
+  - issue: 222
+    acceptedMergeCommit: bdeb74080880e25285ad99794c97a1ae63622cb6
+    artifact: evidence/handoffs/issue-222.yaml
+    sha256: 8e48fd09cb6a3afaf3faa20d310fa3b24c5c57eebbd52a5cecfdb058acba9ea6
+  - issue: 228
+    acceptedMergeCommit: b662dd435ec35bc89e0764ce16967fe52c2c143a
+    artifact: evidence/handoffs/issue-228.yaml
+    sha256: 8a115893b5b5d59c1646e87317a7c2b06ea73267db75c93236b5a2a048e3ae42
+  - issue: 236
+    acceptedMergeCommit: d42d42ee825909bd0bbdacd8eafc1bd9c0bca833
+    artifact: evidence/handoffs/issue-236.yaml
+    sha256: f5c651994c2c545fb1164c28667286e8d95c51b09a7ba1b86a8e983fe020b665
+  - issue: 243
+    acceptedMergeCommit: e7da7902b65822ec56b74335bbf7792299594458
+    artifact: evidence/handoffs/issue-243.yaml
+    sha256: 0ba3e7109b09c55524a7fa9c369b3bbb469178837299dbc002987edb08706901
+  - issue: 244
+    acceptedMergeCommit: e15ba1b67014ff392c6b28aec712eb772aa46177
+    artifact: evidence/handoffs/issue-244.yaml
+    sha256: d127ff4a6cca06d14edd37de22f68a37ec38511858d814bf83ad3be8f9841247
+  - issue: 247
+    acceptedMergeCommit: a37789c2bb13775f96f5590fb74b6e9a8f51aca2
+    artifact: evidence/handoffs/issue-247.yaml
+    sha256: 8dae367419436121f0dce2dce9935382f57f722a05957ea1d56c4f8436256b30
+  - issue: 250
+    acceptedMergeCommit: ad72338496f49241e83956aadfc12d17a6dedc2a
+    artifact: evidence/handoffs/issue-250.yaml
+    sha256: eec1b9898db579ca566fbc537930e9df91396016e0df7270f4de22549e16fb47
+  - issue: 252
+    acceptedMergeCommit: e06c5d478123d6dc2908739882171fbf5c06fa3a
+    artifact: evidence/handoffs/issue-252.yaml
+    sha256: 8825748ec8290b175c1cadb52a63cefa400a0e1e7914e92f7d8e33de1cfa3222
+  - issue: 255
+    acceptedMergeCommit: a572ef1899678381e6a27d8654cd4f0fc6b5428f
+    artifact: evidence/handoffs/issue-255.yaml
+    sha256: bee4c927421633aa57941fa59596e4fcd6e84096e6a1883b387e7554e245895b
+  - issue: 259
+    acceptedMergeCommit: b75a4a2681e5e8c9db742a830082a728245d180c
+    artifact: evidence/handoffs/issue-259.yaml
+    sha256: 6283e3486f50cc18ce006688697ab6031de4f452966e8153a5f5fb98ef754ba4
+  - issue: 257
+    acceptedMergeCommit: 6e770bef48b8a9739e2a3aea3b5f9c654a53cc71
+    artifact: evidence/handoffs/issue-257.yaml
+    sha256: 40d016508148fee93b8c2d3231dbc43f0c2b59703f1d552e38c0a34d6e02bb0e
+  - issue: 254
+    acceptedMergeCommit: 2a4f272444dd9484b0621104c300c07ee54dc2e2
+    artifact: evidence/handoffs/issue-254.yaml
+    sha256: 5391732611bf0473b5b71f215d25328548f9b20924cd018b7f3b8e30bc23135e
+  - issue: 262
+    acceptedMergeCommit: a5a5c27c7bb1ac5d563c4e7c22e1c2f4444fc7d5
+    artifact: evidence/handoffs/issue-262.yaml
+    sha256: dce3abd8b9c1258b15a0b29427612495127e2944837e94c5277078ac5c63146b
+  - issue: 264
+    acceptedMergeCommit: 0f117f3094362b670e4421c39c888de6830cc4f0
+    artifact: verification/launch/v1/scenarios/migrations.mjs
+    sha256: 8c678aa369fbeb94be74ac5feee2ccd811d9619d9ab27e46a8fc81ccc822781c
+  - issue: 267
+    acceptedMergeCommit: 919fab56210056ee3cfda5b4e58d6450f330bf66
+    artifact: evidence/handoffs/issue-267.yaml
+    sha256: d6a4680f2cd251f6507e3bee6d068e37d8f6fc3efbdee32afe97702debbd8eac
+  - issue: 269
+    acceptedMergeCommit: c5bb0e9bf66e05b75104e59d5325e1dedef6eee5
+    artifact: evidence/handoffs/issue-269.yaml
+    sha256: a7609561f683917b1de35754f353794729da503ea7b388f3254ceb277fa11706
+  - issue: 271
+    acceptedMergeCommit: ae599e6e2b8122e6101595c9ef4338a769ac54d3
+    artifact: evidence/handoffs/issue-271.yaml
+    sha256: 154e0089afdea41892d64146fc8846f5a4253d761cdb5a43fe518b9c7117b117
+  - issue: 266
+    acceptedMergeCommit: c1eac3dd568972d8e03e5549b00a83dd40a929d7
+    artifact: verification/launch/v1/scenarios/browser.mjs
+    sha256: 7ab9d98cb49f24cce89805a3893d1b10d4d4176e1062f88492f9ae143490a397
+  - issue: 275
+    acceptedMergeCommit: 7ee04f202054b39f47f504b1a4125e6598e59eae
+    artifact: evidence/handoffs/issue-275.yaml
+    sha256: 72ff5e79b0cd9fa840d006c222fb86ef72a6adc491570b0df1c44faf0454dc9a
+  - issue: 277
+    acceptedMergeCommit: 58aacfcaa1fdc1e6fd59060587b3386fc6b33303
+    artifact: evidence/handoffs/issue-277.yaml
+    sha256: c4f6aecf7aec762b370a9fa2193b1edc28e37b03abae9b9a6e0eea286b82da80
+  - issue: 279
+    acceptedMergeCommit: 66c77352d1235ccf1dbb7ca8bf7ee0f743979aec
+    artifact: evidence/handoffs/issue-279.yaml
+    sha256: 88f3a6f3897490af1d602249692c1d82997a71ab88ab1d27bc9e54d1e60da54d
+historicalAcceptance:
+  issue: 14
+  acceptedMergeCommit: 9b5a320b936cecafcb74de2d6a1253e3d0a155ce
+  artifactSource:
+    issue: 19
+    mergeCommit: 81aa403e682478ebdf3fb6b555ebcc969d4273f0
+  authorizationArtifact: verification/launch/v1/accepted-handoff-supplement.json
+  sha256: c292264366bf84cab07e87c6b4fcb1ee31093980b95e3afdf0249530a3c0056f
+  note: >-
+    Исторический issue14 принят по уже согласованному G00 supplement; отсутствующий historical
+    handoff не создаётся задним числом.
+outputs:
+  - artifact: config/platform.yaml
+    sha256: 822956bf677e3925ebfc9f867cefe030340ee15a572bdd3da5653f4f1dcbd3db
+    consumers:
+      - 1
+  - artifact: docs/launch/13_DELIVERY_DEPENDENCY_GRAPH.md
+    sha256: 175abb5de0dd45ede55ceaafa57931fa57b6aa393628b4f09866e0d9714fe490
+    consumers:
+      - 1
+  - artifact: docs/launch/21_LAUNCH_VERIFICATION_SPEC.md
+    sha256: 1299dd27a9793e15974fdcd3c3a42d1c5a6b189248f69139e001199a0db7fa00
+    consumers:
+      - 1
+  - artifact: docs/operations/observability.md
+    sha256: e86910cac18954df02ef8e79004057686a1974bd459e12f55d4042dbaf646c15
+    consumers:
+      - 1
+  - artifact: docs/reports/launch/20261031T005704Z-a6cceea/ОТЧЁТ.md
+    sha256: 4f40cb27f87d17edd8bbd781151a606df245411385a9d3d311bc7e69032592ce
+    consumers:
+      - 1
+  - artifact: docs/reports/observability-installation.md
+    sha256: 95ef3d18743dc395a008c5531aed2457b18b52d750c923a071b9da1b6beec478
+    consumers:
+      - 1
+  - artifact: evidence/launch-preparation/2026-10-31/load-qualification.md
+    sha256: 06efbbf831d5ee51c98dcdac86aa7774ab87acc7ef37e915e63ce55fdd7c685f
+    consumers:
+      - 1
+  - artifact: evidence/launch/20261031T005704Z-a6cceea/checksums.sha256
+    sha256: 10c9ffd2a50581ca80fc866c861c2745d03048a5652c052e84384de733501352
+    consumers:
+      - 1
+  - artifact: evidence/observability/installation-20261031/service.json
+    sha256: 351c851966de2c591cd2686cddfbb929fa410592d88cf9d54dadc4d8d436d9cf
+    consumers:
+      - 1
+  - artifact: tests/compose/topology.test.mjs
+    sha256: e735e2e142c1bd3508a2a3c3eef83d3dc198959084a3d27371b46ccaff73578c
+    consumers:
+      - 1
+  - artifact: tests/config/observability-bootstrap.test.mjs
+    sha256: 07b76d306ebc24f02005cd0c17d560ebd8dce6d032490606c943981a9149aded
+    consumers:
+      - 1
+  - artifact: tests/observability/alerts.test.mjs
+    sha256: c097c2307b225106a0f830c5fad339f7b157eaa40da4dafce1f551102166c41e
+    consumers:
+      - 1
+  - artifact: tests/observability/runtime-matrix.mjs
+    sha256: 97f050cf83aafa67eb8352750ffa601961df5e0e6fbd25f3e6097724a4976945
+    consumers:
+      - 1
+  - artifact: tests/realtime/fixtures/harness.test.mjs
+    sha256: ed64f175d7469ad9407a5f32bd84170a58146707288304a9a9a837c71a0644cc
+    consumers:
+      - 1
+  - artifact: tools/compose-smoke.mjs
+    sha256: 7dc42bdcd50472ea17ad2cd990b95d345bd0d4a8c01a95aa50de56db14e2ccc7
+    consumers:
+      - 1
+  - artifact: tools/observability/verify.mjs
+    sha256: fc3197bef55b0b3a05c34a1afee5a859de67f9759ad7daf33e0dc1b44ccdef9e
+    consumers:
+      - 1
+  - artifact: verification/launch/v1/report.mjs
+    sha256: c71405c3cb7076c55ef9ea755a7e1c25e2d492fe4dc3047737701f824b3b643c
+    consumers:
+      - 1
+  - artifact: verification/launch/v1/run.mjs
+    sha256: 8a018d20e0d3f4cbfa3d9e66381d0af783c32a46abdfa17814adfeca7edc01df
+    consumers:
+      - 1
+  - artifact: verification/launch/v1/runner.test.mjs
+    sha256: ee8ac5694f804ca667e6b7f6f04dd07e070d18ebb0aaa6ea0ae69774a2b36b66
+    consumers:
+      - 1
+  - artifact: docs/adr/ADR-0034-g16-existing-account-verification.md
+    sha256: 7eef0f7ca468695bfb29726877b46facb5d6ddd4eb1afac5dffc4d8805e0c8e5
+  - artifact: docs/adr/ADR-0035-launch-rollback-config-lineage.md
+    sha256: 75ff9840a288cb275e853ed63a22e4c9bc89bb979eab7d46b5e2cba249a5bd37
+  - artifact: evidence/aroma-provider/controlled-account.json
+    sha256: e77a818d16b833f34c27de4c7500afe14160b96037eb6fe4767d53432ced5e8b
+  - artifact: evidence/launch-preparation/2026-11-01/controlled-config-lineage.md
+    sha256: 1a6922ebac4f7bcc9e0c9de1672ec49d1438c6bcd65e529962f4b3180ad5d61e
+  - artifact: verification/launch/v1/scenarios/browser.mjs
+    sha256: 2fbc9a8ae9684b62b9b82f365a28d4fda891a6a2686071ca0d87522035ba5c53
+  - artifact: verification/launch/v1/scenarios/aroma-sandbox.mjs
+    sha256: 5667cdb9c0cc1244b58ad610536c28de8aed517622796a7d2dc518a77675a6d9
+  - artifact: verification/launch/v1/scenarios/aroma-sandbox-resources.mjs
+    sha256: d583229f493a23d582a37e4e020415333943207d2475a57ddc53ba433cd64304
+  - artifact: verification/launch/v1/scenarios/rollback.mjs
+    sha256: f4f0d372272cb670e9b74b725cec4839fc9b9af86f7d7f720de26b11654882b8
+  - artifact: tools/security-scan.mjs
+    sha256: c249f0757808c9b38d0dab50af09414ae99223cd973710ec616204f70cfb0df0
+    consumers:
+      - 1
+  - artifact: tests/tools/security-scan.test.mjs
+    sha256: a472566cdb8126ba92edefb2ebdf12e696c8318acdbe2135f5f29dea97376a86
+    consumers:
+      - 1
+  - artifact: evidence/launch-preparation/2026-11-01/security-database-integrity.md
+    sha256: 91cb54628e153f5e14e46d0be16923cbaeee3e4b67b0efe88b5008e28c96ae0e
+    consumers:
+      - 1
+  - artifact: evidence/launch-preparation/2026-11-01/temporary-data-placement.md
+    sha256: 01418e0f12afbba4224e63dbbac7f566a4c377e857570eb03da0781898d76581
+    consumers:
+      - 1
+  - artifact: scripts/check-toolchain-versions.mjs
+    sha256: ac286b6fcb426252ab49cc7a32915d6008b4982b58dc298d4e20f909b506273b
+    consumers:
+      - 1
+  - artifact: tests/architecture/checks.test.mjs
+    sha256: 06c38e3c4d8ffa1c790c2f7a24be268e975e406d831f665f8bddb2e28ed4d1a4
+    consumers:
+      - 1
+  - artifact: evidence/launch-preparation/2026-11-01/runtime-build-inputs.md
+    sha256: 81c210ff21d8b51aad04ac4a28521ffabe98330fd768cbe75504b36fd834cdbe
+    consumers:
+      - 1
+  - artifact: evidence/launch-preparation/2026-11-01/build-context-storage.md
+    sha256: a896674638eb84343e385af3a4a8272be4ee6919cc67b9345bed208c15629071
+    consumers:
+      - 1
+  - artifact: tests/realtime/soak.test.mjs
+    sha256: 5005add43e6ea251ca6342e5bed32f23067ddd5db9cf14e3e5dab1a3d62a98be
+    consumers:
+      - 1
+  - artifact: evidence/launch-preparation/2026-11-01/driver-mounts.md
+    sha256: 05e51fe611474585634a1576d6b9f42208645c578e8f194e8db1c29fbecda6fd
+    consumers:
+      - 1
+  - artifact: tools/runtime-image-inventory.mjs
+    sha256: e880bbe0c7560fe44758d5c921d5f40b654c5dd27135b70883a10381c57cc0f1
+    consumers:
+      - 1
+  - artifact: evidence/launch-preparation/2026-11-01/controller-readiness.md
+    sha256: c857bbd926da3bc06031bc0e49150a73fde274b6e5c75980fe46327a47662b3e
+    consumers:
+      - 1
+  - artifact: tests/catalog-pipeline/security-live.test.mjs
+    sha256: 6535df833f95cc850ff49db371679fd1da4ed61ed052e58b622e5e454e26d693
+    consumers:
+      - 1
+  - artifact: tests/orders/owner-live.test.mjs
+    sha256: 2609dfffcedef98178e7fc5abece46c37ac3f24db8e15118adcde2a63d537238
+    consumers:
+      - 1
+  - artifact: tests/log-capture.mjs
+    sha256: ff271a244721a8ac69077655873a89b2e2578c00a09342ff274941aed3807df2
+    consumers:
+      - 1
+  - artifact: tests/customer/customer-live.test.mjs
+    sha256: c3b1ca4446dbe4c44368b4a447446d06b65743329ba578c9720e9272e0685ee4
+    consumers:
+      - 1
+  - artifact: docs/reports/launch/20261102T064519Z-4393aea/ОТЧЁТ.md
+    sha256: 578161d7a54ce309b5c766250b8cc0a1ffba086eea292ad3c50ff1aad32b169b
+    consumers:
+      - 1
+  - artifact: evidence/launch-preparation/2026-11-02/defects.json
+    sha256: 205910dc5e73ce75c02571ca3467207498cc965b1cff15e90afedcc6f59b0ed6
+    consumers:
+      - 1
+  - artifact: tests/config/platform-config.test.mjs
+    sha256: ab36423a01a345dc33f79ee2dfe11a0d7b3f121ae7b70e77589d6891acb1639f
+    consumers:
+      - 1
+  - artifact: evidence/launch-preparation/2026-11-06/development-transport-renewal.json
+    sha256: 53c3f186b264a767ba22ba730774131f24ec648babf7074113fb28966fa12154
+    consumers:
+      - 1
+verification:
+  - command: gh api repos/YurGusev/CoffeeOrderPlatform/actions/runs/42083077207
+    result: >-
+      PASS: exact-head CI исходного состояния f0334d3e4316bdb137f7bf02505a8816edcf9915,
+      conclusion=success, completed 2026-11-05T18:30:24Z. Последующее обновление descriptor требует
+      нового exact-head CI; это не G12, qualification или полный допуск.
+  - command: pnpm test:integration
+    result: >-
+      FAIL: full run 20261102T064519Z-4393aea, exit 1 за 266.541 с; Customer unknown-COMMIT proof
+      ожидал открытый errorCode вместо штатного [REDACTED]. Именованное событие и HTTP 503
+      подтверждены; rollback/restart/replay после assertion не достигнуты. Отрицательный отчёт
+      сохранён.
+    logSha256: 2dd11f69727ac07b1ad7147a69086408973044ecda246855c5832033886bf779
+  - command: >-
+      node --test --test-name-pattern='G12 scanner policy is strict verification-only configuration'
+      tests/config/platform-config.test.mjs
+    result: >-
+      PASS: 1/1, fail/cancel/skip 0, 0.780 s; официальный GHCR Java DB соответствует accepted
+      develop, предел свежести 24 часа сохранён, до нового freeze
+    logSha256: 74db77c6d1e7a959ebba2917db444561b530a738320be9ce16e39bc85b508aff
+  - command: >-
+      pinned Trivy 0.76.1 image --java-db-repository ghcr.io/aquasecurity/trivy-java-db
+      --download-java-db-only
+    result: >-
+      PASS diagnostic: 92.272 s; UpdatedAt 2026-11-02T01:21:00Z, strict metadata guard 24h PASS; не
+      formal G12
+    logSha256: ad030adeb4d5c533d0a3ee8302ed172d87d96d250db038a6cda60033d2a43007
+  - command: >-
+      node --test --test-name-pattern='Kafka namespace inventory proves exact physical claims'
+      tests/compose/topology.test.mjs
+    result: >-
+      PASS: 1/1, fail/cancel/skip 0, 1.040 s; loader согласован с namespace policy для четырёх
+      proof-режимов, до нового freeze; runtime ещё не проверен
+    logSha256: edf63ed9575663aa8d63593d5639830d7b93b3844523fd009bb10e97408f707b
+  - command: >-
+      node --test --test-concurrency=1 tests/compose/topology.test.mjs
+      tests/tools/security-scan.test.mjs
+    result: PASS 65/65, fail/cancel/skip 0, 44.591 s, Node 26.8.1; после объединения принятого
+    logSha256: a6b576b6f8ed4db7ee726598641bc21c574f22d4594faf9ed881ec622fce449c
+  - command: >-
+      node --test --test-name-pattern='G14 queries actual child telemetry|full G14 coverage requires
+      bound readiness' tests/observability/alerts.test.mjs
+    result: "PASS: 2/2, 0 skipped; кодовое состояние 57bfccf"
+    logSha256: d00fc2700e542ef01210ce284cd4c25972e0f794d180cdd41ab278f2c6ce8ce8
+  - command: >-
+      node --test --test-name-pattern='retention observers|Loki retention fixture|Tempo retention
+      fixture' tests/observability/alerts.test.mjs
+    result: "PASS: 4/4, 0 skipped; кодовое состояние f01ce82"
+    logSha256: 0eff6c9f99beb182c001de042db0baec371c116a0d7390095db6cadba1d21a48
+  - command: >-
+      pnpm exec oxlint --type-aware --deny-warnings tools/compose-smoke.mjs
+      tests/compose/topology.test.mjs verification/launch/v1/run.mjs
+      verification/launch/v1/runner.test.mjs
+    result: PASS без исключений; кодовое состояние eb25bb5
+    logSha256: b2adde6ad9b4100bc53803006d2131da1002ab70766a9dc7ca8573375be855c4
+  - command: >-
+      node --test --test-name-pattern='builtin report finalizes a complete fail-closed
+      result|candidate report and owner suites accept only|checksum manifest requires the exact
+      complete' verification/launch/v1/runner.test.mjs
+    result: "PASS: 3/3, 0 skipped; 5.891 s"
+    logSha256: ff43faf75dcc91cc69c0f634b68bc7317168db9db99536e7a1662480f407f501
+  - command: >-
+      node --test --test-name-pattern='runner passes image ownership only when explicitly selected'
+      verification/launch/v1/runner.test.mjs
+    result: "PASS: 1/1, 0 skipped; именованные поля fixture, без изменения правил CI"
+  - command: >-
+      node --test --test-name-pattern='restoration|retention|synthetic alerts activate before
+      matrix|native collector waits for validated synthetic cleanup'
+      tests/observability/alerts.test.mjs
+    result: "PASS: 8/8, 0 skipped; исправлены source anchors без удаления сценариев"
+    logSha256: 2cd89ab85304ef2522ddaec0c53f38ef97f574ce5ecdd6f60f0db8e40be5ee3e
+  - command: >-
+      node --test --test-reporter=spec tests/observability/alerts.test.mjs
+      verification/launch/v1/runner.test.mjs
+    result: "PASS: 130/130, fail0/cancelled0/skipped0, 108.048 s; кодовое состояние f58fef4"
+    logSha256: 2e60ed0da2fbfaa96d7b2dc390cd1b3424b810439ada22bbf899c780969d08af
+  - command: pnpm check
+    result: >-
+      PASS на 27067f4: основной suite 1544 tests / 1465 pass / 0 fail / 0 cancelled / 79 skipped,
+      496.306 s; не formal admission
+    logSha256: 4a2aca55cd9548e92153f57b2b10adc08977335132d745b6254e48238d212981
+  - command: runner targeted G00/G12 metadata hydration tests
+    result: PASS 2/2, 1.310 s; atomic persist/rollback/deadline, неверные G00/G12 tuples отклонены
+    logSha256: 0b2ac078bdd89802d8623e52dbfd37fee9329aa93c7ffca7e2552fb4c2e59bb1
+  - command: existing synthetic G12/child lifecycle test
+    result: PASS 1/1, 56.028 s; actual strict 15-image reader, чужие SHA/run и missing role отклонены
+    logSha256: 1074045e37c106bbaac50662f005a57fb04b4bb8ff2f15b525008f430baeca15
+  - command: "PR #248 CI 41237794738 на 31b951d"
+    result: >-
+      PASS: основной suite 1530 tests / 1451 pass / 0 fail / 79 skipped, 272.119 s; отдельный
+      formatter PASS 662 files
+    logSha256: 6c0942c42b71bbe5c1d7fdd64d55d4f6f45c49364ac0ebeb92909e256c56ba6a
+  - command: pnpm format:check на dfd1b6a
+    result: PASS, 31.006 s
+    logSha256: 31ce62401b5d39dad14bd6fda5d7bb1f56ebbe6e9c959025fd1691c57f990570
+  - command: pnpm check на dfd1b6a
+    result: PASS, 469.185 s; основной suite 1546 tests / 1467 pass / 0 fail / 0 cancelled / 79 skipped
+    logSha256: ab9feebfbb15479bba5c304db0b087a69895644650088093f907e24cf43df963
+  - command: pnpm security:secrets на dfd1b6a
+    result: PASS, 1.920 s
+    logSha256: a219e1d01452451f8e90a321d14603bf7be45c9f68d471e8207118c5b4ad6c19
+  - command: G16 privacy и actual caller regression на замороженных файлах
+    result: >-
+      Synthetic age encryption/decryption, original-byte signature, malformed READY/owned cleanup и
+      actual verifyGateArtifacts NOT_RUN→PASS: PASS; live signer/provider/Docker NOT_RUN
+    logSha256: 574c13aa1a3e27acbb4727c3f92d4021e1cb866463b44faae399debd86050d5b
+  - command: G18 final synthetic parent/child lifecycle
+    result: >-
+      PASS 1/1, 99.7 s: Git P→B→D→R, bundles, parent G12 binding, actual caller и unknown cleanup
+      отказ; не Docker runtime
+    logSha256: 76847f1ee1255d74139321f2ea8dcd565a30344bda5194cb3f595660c1834d16
+  - command: independent runtime image ownership/cache targeted tests
+    result: >-
+      PASS 5/5, 1.47 s: zero/full/partial named+dangling baseline, selective G10 customer/recovery
+      build, foreign preservation, baseline hash and cleanup; fake Docker inventory
+    logSha256: 00f9e92664093c5428ebd6fbcacacd0f96ba08d54059d297fb3ca264aa23502e
+  - command: R18-2 affected cache regressions после удаления заменённого пути
+    result: >-
+      PASS 5/5, 1.013 s; zero/full/partial и foreign/dangling preservation сохранены, dead helpers
+      отсутствуют; scoped lint/format/syntax PASS
+    logSha256: 9eb9a52c3ca27741352cad5b4dec5c3838d01348eb08302c4abbe85836a7fab1
+  - command: pnpm check на aae20ab (локальный)
+    result: >-
+      FAIL 520.269 s: 1554 tests / 1474 pass / 1 fail / 79 skipped; existing lifecycle child ready
+      timeout 2 s, corrected by accepted #250
+    logSha256: 3b8dc6f4ffdbb1f9b25b705100c0ddb9248581aa1423e10cb2665cf40da5165c
+  - command: "PR #249 CI 41265835532 на aae20ab"
+    result: >-
+      PASS: 1554 tests / 1475 pass / 0 fail / 79 skipped, main suite 300.201 s; local failure
+      preserved separately
+    logSha256: d4941164b0ceb52014eb705b92fa629150e34fcecb7f4145143d1f0288f45df9
+  - command: "PR #251 CI 41267388955 на 632a2ef"
+    result: >-
+      PASS: 1530 tests / 1451 pass / 0 fail / 79 skipped, main suite 224.253 s; IPC readiness with
+      unchanged shutdown guarantee
+    logSha256: f827cb1be978cf51939e0616a809e62c607014f4b9222ee458ee709ea70fad3d
+  - command: "PR #249 CI 41268089144 на c4b38ce"
+    result: >-
+      PASS: 1554 tests / 1475 pass / 0 fail / 79 skipped, основной suite 272.884 s; до оптимизации
+      DB integrity
+    logSha256: 79cf2f5d38f38ccee20eede7a7ad66b946907fc6de7a56bb105c8148125615ac
+  - command: node --test tests/tools/security-scan.test.mjs
+    result: >-
+      PASS 16/16, 30.887 s; после добавления двух read-boundary negatives повторён затронутый test
+      1/1, 32.629 s
+    logSha256: 21b5dbf9e3c726545a2358bc76683000ca5bec90cc7263e3dc3bff7eeeaf8da5
+  - command: node --test --test-name-pattern='G12 builds product images' tests/tools/security-scan.test.mjs
+    result: >-
+      PASS 1/1, 32.629 s: четыре полных DB file reads вместо96; expiry/tamper/identity/read-boundary
+      negatives fail-closed
+    logSha256: bb9cb4ace8ad16ddd48ce099403f5678dbcb7ab6dca07b9a61de1e76e61031e2
+  - command: pinned Trivy Kafka readonly database compatibility
+    result: >-
+      PASS: 15.010 s, один Java result /109 Maven packages; live readonly mounts и оба FD, unchanged
+      DB/metadata SHA, own cleanup; не G12 admission
+    artifact: evidence/launch-preparation/2026-11-01/security-database-integrity.md
+  - command: "PR #249 CI 41279016913 на db30ffa"
+    result: "PASS: 1554 tests /1475 pass /0 fail /79 skipped,306.328 s; до scratch placement"
+    logSha256: 97299a50525f0c9db01675cbc506371502b951588f5cc3e8bdb15d9685430866
+  - command: standalone G12 db30ffa run055907
+    result: >-
+      FAIL/INTERRUPTED by root reserve+512MiB,1724.208 s,38/46reports; oldsource frozen,cleanup
+      verified; NOTbudgetFAIL/NOTadmission
+    logSha256: fccd7b957d839892ca80cc91e759391887a7eb7e67b27505ba25c600e0e3d7a2
+  - command: >-
+      node --test --test-name-pattern='launch data temporary directory is private'
+      verification/launch/v1/runner.test.mjs
+    result: >-
+      PASS1/1,1.79s;CLI/private canonical root and actualselectedchildenv, Parent/othergates
+      unchanged
+    logSha256: 0863bb65a8ec4e5dcf03481f62ec6ccd6669a1551d8c31d07447551dd415b408
+  - command: >-
+      node --test --test-name-pattern='G12 temporary root validates|G12 builds product images,
+      records pinned upstream identity' tests/tools/security-scan.test.mjs
+    result: PASS2/2,32.28s; bigscratch moved, originalscannerlock and cleanup preserved; mockedDocker
+    logSha256: 9cfb6816ebc93135d8dbe078bd9031da0c0273f76db811cf507b0b5b651f3c56
+  - command: "PR #249 CI 41282824691 на 1e95d5c"
+    result: >-
+      PASS: 1556 tests /1477 pass /0 fail /79 skipped,317.698 s; до исправления nested fixture
+      classification
+    logSha256: 32cd04a5fb34f0eb5083217083963f1b75a7e499568bbb8e61d719cd15725bce
+  - command: standalone G12 1e95d5c run065708
+    result: >-
+      PASS: 1462.207
+      s,23targets/46reports/22images;rawHIGH2→approvedFixed2,unresolvedHIGH0/CRITICAL0;guardsfalse,owncleanupPASS;componentonly
+    logSha256: a0299d9910a519884bc158f34b08aa1025221cffe5a4f517457570ddcdfa0135
+  - command: >-
+      node --test --test-name-pattern='TOOLCHAIN-FINAL-IMAGE|exact TS7 toolchain'
+      tests/architecture/checks.test.mjs
+    result: >-
+      PASS3/3,1.344s;nestedtestfixtureGREEN,child/rootproductionandforeignprefixRED;scopedlint/format/syntaxPASS
+    logSha256: aa40af8f54a848460c900a597bab5b7b6270092b1a17e60a62a4bd682fa239cc
+  - command: "PR #249 CI 41286926948 на 4777695"
+    result: "PASS: 1557 tests /1478 pass /0 fail /79 skipped,303.189 s;contracts49/49,architecture74/74"
+    logSha256: 7806577986782024ef1df671585bb00d3e341754228e48a0bccb27059e391ebe
+  - command: standalone G12 4777695 run080816
+    result: >-
+      PASS840.099s,46reports/22images,approvedFixed2/unresolvedHIGH0/CRITICAL0,owncleanupPASS,independentreviewPASS;componentonly
+    logSha256: cd1d8d2abfeef7fd24b80a991e438410656550145e52c75358066e23c51de0be
+  - command: qualification 4777695 i12-6de2a2cb04184272
+    result: >-
+      FAIL423.869s beforemeasurement(durationMs0): strict rebuilt image mismatch;
+      negativepreserved,manualcleanupPASS; NTFSsourcexattrs vs ext4
+    artifact: evidence/launch-preparation/2026-11-01/build-context-storage.md
+  - command: isolated exact OCI export of edge-gateway from ext4 source
+    result: >-
+      PASS22.006s: exact canonical --load imageID a64578..., not NTFS37955...; no image-store
+      tag,owncleanupPASS;diagnosticonly
+    logSha256: 7224ffd179ef6f44a5ba046d7cc05485662fbe5cd995fdfa71128d189443eb40
+  - command: node --test tests/tools/security-scan.test.mjs
+    result: >-
+      PASS17/17,37.715s: separate source/DB/OCI roots, original lock, PASS/lateFAIL/SIGTERM cleanup,
+      cleanup error blocks; synthetic Docker
+    logSha256: 0f523607611073c48f08c7c32eca248de0f2ba17730f14e20d5a629402de4127
+  - command: standalone G12 883c207 run103433
+    result: PASS 1696.201 s, 46 reports/22 images; component only, не admission для последующего Source
+  - command: qualification 883c207 i12-410581156d89479b
+    result: >-
+      FAIL до нагрузки, durationMs=0, Docker exit 125; четыре native image ID совпали с G12;
+      отдельная ручная очистка, два image refs сохранены при неизвестном владении
+    artifact: evidence/launch-preparation/2026-11-01/driver-mounts.md
+  - command: >-
+      node --test --test-name-pattern='product launch scopes fixture mounts and proves role-local
+      read access' tests/realtime/fixtures/harness.test.mjs
+    result: >-
+      PASS 1/1, 0 skipped, 422.518 ms; на parent 883 с двумя локальными WIP файлами, не на будущем
+      SHA
+    logSha256: c77676b627ca058b503cf5b3e2426c35ebcf58edd1fb6e763907e2ba2d06feaf
+  - command: Docker synthetic public driver bind mount diagnostic
+    result: >-
+      PASS; пять actual mounts, readonly/nonroot/identity/hash и own cleanup; parent 883 с двумя
+      локальными WIP файлами, не SSE qualification
+    artifact: evidence/launch-preparation/2026-11-01/driver-mounts.md
+    logSha256: a2dfd73f000895539dc59bbf96e0cef5316a3c533669be8e2a135ac7bbd2286b
+  - command: >-
+      node --test --test-name-pattern='RSS sampler distinguishes proc races|deadline terminates the
+      exact child process group' verification/launch/v1/runner.test.mjs
+    result: PASS 2/2, fail/cancel/skip 0, 8.336 s; Source 7078f36 с локальным RSS fix, не formal PASS
+    artifact: evidence/launch-preparation/2026-11-01/controller-readiness.md
+    logSha256: 870c16d056f9eeb2b2253c5a0348ea2a59b2dbc5c4b10dd72cc182e682d50678
+  - command: node --test verification/launch/v1/runner.test.mjs
+    result: >-
+      PASS 91/91, fail/cancel/skip 0; wall 116.859 s, Node test duration 116.775 s. Parent 5cb6e89 с
+      пятью локальными WIP файлами; CLI startup без service dist, image ownership и failure receipt
+      G16.
+    logSha256: 4c781681c8047bceb921c9862954cf918376fd062e2382b97bd77e36102237d5
+  - command: standalone G12 5cb6e89 run114056
+    result: >-
+      FAIL/INTERRUPTED по запросу владельца через 326.036 s, 10 частичных отчётов, guard не
+      сработал, cleanup failures отсутствуют; не G12 PASS.
+    artifact: evidence/launch-preparation/2026-11-01/controller-readiness.md
+  - command: >-
+      COFFEE_DB_LIVE_PROOF=1 TMPDIR=/tmp node --test --test-concurrency=1 --test-reporter=tap
+      tests/orders/owner-live.test.mjs
+    result: >-
+      PASS 5/5, 0 fail/cancel/skip, 29.392 s; реальный временный PostgreSQL, собственные containers
+      удалены, baseline сохранён; локальная проверка, не formal G10.
+    logSha256: 38e6add422d8e5a15048f5114686f211ae0db4817f237a5219db802ce5e316ef
+  - command: >-
+      COFFEE_DB_LIVE_PROOF=1 TMPDIR=/tmp node --test --test-concurrency=1 --test-reporter=tap
+      tests/catalog-pipeline/security-live.test.mjs
+    result: >-
+      PASS 4/4, 0 fail/cancel/skip, 10.531 s; реальный временный PostgreSQL, собственные containers
+      удалены, baseline сохранён; локальная проверка, не formal G10.
+    logSha256: 5099ae81279cf5f6309a287163e654588c444fb1051768c57718c1e725d3649d
+  - command: >-
+      node --test --test-name-pattern='^browser correlation executes the child lifecycle and
+      preserves early image failure evidence$' tests/config/observability-bootstrap.test.mjs
+    result: >-
+      PASS 1/1, fail/cancel/skip 0; тест 94.408 s, всего 95.181 s, Node 26.8.1 под общим heavy
+      lease. Синтетический failure receipt/context binding; wrapper: flock --no-fork -w 120 и
+      timeout 120s только для diagnostic; локальная проверка, не runtime admission G18.
+    logSha256: 58382edaff8ba50bce8fa7e253937c6c418734b471713d48b8757fb7928fd2ed
+  - command: node tools/config-bootstrap/index.mjs --renew-development-transport
+    result: >-
+      FAIL до записи: mode 0664 после Git merge отклонён trusted guard; encrypted SHA остался
+      5a82f66aaad02ab9f7feeed4032d8fc8b0eca46eba73ca42aeffd17ace1df384. Исторический receipt
+      сохранён.
+    logSha256: 17a333c2130abf50d611e3f8a27c6a088f7e87704d2b95b301667bd285fa545c
+  - command: node tools/config-bootstrap/index.mjs --renew-development-transport
+    result: >-
+      PASS после chmod 0600: 2026-11-03 15:05:22–15:05:32 UTC, 15 certPem обновлены; CA/key/SAN
+      сохранены обязательными assertions trusted function. Encrypted SHA
+      bcfaa602ef270ba2f3907fd905be29064dd83e86aa5bdd7918469a6ce640e9ef; не runtime admission.
+    logSha256: 7eb327d542d75fe08ff3fe91fd7ed9d059f7ecab2004396aa1f0f7ee692cc18e
+  - command: >-
+      node --test '--test-name-pattern=G12 temporary root validates|G12 builds product images,
+      records pinned upstream identity' tests/tools/security-scan.test.mjs
+    result: >-
+      FAIL, 0.219 s; первичный merge; Node 26.8.1, общий heavy lock, локальный working tree до
+      freeze. Дублирующий symlink import от автоматического merge; scanner tests не исполнились.
+      Исправлено удалением повторного импорта; отрицательный лог сохранён.
+    logSha256: 562d850a7859f495e312b54bbff8f3c69a75781e08229f9b6571e2e3d0bc1c25
+  - command: >-
+      node --test '--test-name-pattern=smoke removes only project-scoped images built by this
+      run|run-owned runtime image reuse rejects collisions and cleans only verified references'
+      tests/compose/topology.test.mjs
+    result: >-
+      PASS, 1.471 s; первичный merge; Node 26.8.1, общий heavy lock, локальный working tree до
+      freeze. Tests 2/2, fail/cancel/skip 0; synthetic проверка, не runtime admission.
+    logSha256: a53e425bcc9683c2171386f09ef0ce28c8680fa625650886c59f264d19520f55
+  - command: >-
+      pnpm exec prettier --check tools/compose-smoke.mjs tests/compose/topology.test.mjs
+      tests/tools/security-scan.test.mjs
+    result: >-
+      PASS, 4.036 s; первичный merge; Node 26.8.1, общий heavy lock, локальный working tree до
+      freeze.
+    logSha256: 17aa973d3f004560237d9a95171210b0671deff23d61628eecf7322ff5938f20
+  - command: >-
+      pnpm exec oxlint --type-aware --deny-warnings tools/compose-smoke.mjs
+      tests/compose/topology.test.mjs tests/tools/security-scan.test.mjs
+    result: >-
+      FAIL, 1.811 s; первичный merge; Node 26.8.1, общий heavy lock, локальный working tree до
+      freeze. Дублирующий symlink import от автоматического merge; scanner tests не исполнились.
+      Исправлено удалением повторного импорта; отрицательный лог сохранён.
+    logSha256: f87749447b2762213c179bc88e59688145560284610ad3c55305a63c1a0f9605
+  - command: >-
+      node --test '--test-name-pattern=G12 temporary root validates|G12 builds product images,
+      records pinned upstream identity' tests/tools/security-scan.test.mjs
+    result: >-
+      FAIL, 0.618 s; после удаления duplicate import; Node 26.8.1, общий heavy lock, локальный
+      working tree до freeze. Scanner 1/2: placement caller не получил fakeRegistryCredentials и
+      ожидал старый registry path; исправлен существующий synthetic caller, отрицательный лог
+      сохранён.
+    logSha256: ff8861444d9839ed820a8e28a4e354695de984da8538c379f67b9f7e3be4b9a2
+  - command: >-
+      pnpm exec oxlint --type-aware --deny-warnings tools/compose-smoke.mjs
+      tests/compose/topology.test.mjs tests/tools/security-scan.test.mjs
+    result: >-
+      PASS, 1.687 s; после удаления duplicate import; Node 26.8.1, общий heavy lock, локальный
+      working tree до freeze.
+    logSha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+  - command: pnpm exec prettier --check tests/tools/security-scan.test.mjs
+    result: >-
+      PASS, 2.049 s; после удаления duplicate import; Node 26.8.1, общий heavy lock, локальный
+      working tree до freeze.
+    logSha256: 17aa973d3f004560237d9a95171210b0671deff23d61628eecf7322ff5938f20
+  - command: >-
+      node --test '--test-name-pattern=G12 temporary root validates|G12 builds product images,
+      records pinned upstream identity' tests/tools/security-scan.test.mjs
+    result: >-
+      PASS, 86.969 s; после адаптации placement caller; Node 26.8.1, общий heavy lock, локальный
+      working tree до freeze. Tests 2/2, fail/cancel/skip 0; synthetic проверка, не runtime
+      admission.
+    logSha256: f99948b97501d69dbf7fc13ce6c181a025cd54ec8db6163fa14697d0c234bd27
+  - command: pnpm exec oxlint --type-aware --deny-warnings tests/tools/security-scan.test.mjs
+    result: >-
+      PASS, 1.832 s; после адаптации placement caller; Node 26.8.1, общий heavy lock, локальный
+      working tree до freeze.
+    logSha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+  - command: pnpm exec prettier --check tests/tools/security-scan.test.mjs
+    result: >-
+      PASS, 2.174 s; после адаптации placement caller; Node 26.8.1, общий heavy lock, локальный
+      working tree до freeze.
+    logSha256: 17aa973d3f004560237d9a95171210b0671deff23d61628eecf7322ff5938f20
+  - command: gh run view 41662677651 --repo YurGusev/CoffeeOrderPlatform --log-failed
+    result: >-
+      FAIL на Source45a69a5: 5 tests. Три normal-path fixtures наследовали formal isolation
+      true/true; две CLI ошибки отдельно не воспроизведены. Warm/G12/qualification/full для45a не
+      запускались.
+    logSha256: 3616c7db5f877d982351329776015b803a64ce083ebc4368ee7e84cf4240053d
+  - command: >-
+      node --test --test-concurrency=1 '--test-name-pattern=^(development preparation preserves
+      existing secrets and refreshes only trusted certificate identities|Keycloak materialization
+      isolates its credentials and rejects invalid TLS or secret syntax|local identity settings
+      preserve the formal null browser profile)$' tests/config/observability-bootstrap.test.mjs
+      tests/config/platform-config.test.mjs
+    result: >-
+      PARTIAL: 2/3 PASS после явного normal false/false в fixtures; local identity FAIL из-за
+      устаревшего ignored platform-config/dist на authoring host. Исходный FAIL сохранён; это не CI
+      failure mechanism.
+    logSha256: 8d7766e8d82275fa22b19dbbd9b8a92c9c9cb07c3883531ff12e8968761b62d4
+  - command: >-
+      pnpm exec prettier --check tests/config/observability-bootstrap.test.mjs
+      tests/config/platform-config.test.mjs
+    result: PASS, 3.154 s; только затронутые test files.
+    logSha256: 17aa973d3f004560237d9a95171210b0671deff23d61628eecf7322ff5938f20
+  - command: >-
+      pnpm exec oxlint --type-aware --deny-warnings tests/config/observability-bootstrap.test.mjs
+      tests/config/platform-config.test.mjs
+    result: PASS, 3.261 s; только затронутые test files.
+    logSha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+  - command: pnpm exec tsc -b packages/platform-config --pretty false
+    result: PASS, 2.206 s; обновлён только ignored platform-config/dist.
+    logSha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+  - command: >-
+      node --test '--test-name-pattern=^local identity settings preserve the formal null browser
+      profile$' tests/config/platform-config.test.mjs
+    result: PASS, 1.512 s; local identity 1/1 после scoped build; в сумме все3 исправленных сценария PASS.
+    logSha256: d21ed521453eb2eb0e7544666ec019d9b70c2e2da85982ec765aa975da28d91a
+  - command: >-
+      node --test --test-name-pattern='^(launch controller reaches evidence preflight without
+      compiled services|pnpm forwards the approval-file argument after its separator to the offline
+      CLI)$' verification/launch/v1/runner.test.mjs
+    result: >-
+      PASS 2/2, 9.921 s; Node26.8.1, heavy lock. Причины двух CI сбоев не установлены, нагрузка
+      полного CI отдельно не воспроизводилась; source/таймауты не менялись.
+    logSha256: c38b7a5f1185d7bbbcb50759eec010a8927638a75ccc3bf29b0b6403c4a009ab
+  - command: >-
+      node --test --test-concurrency=1 '--test-name-pattern=^(G09 accepts only exact context-bound
+      10/40 runtime database evidence|G08 rejects receipts without exact derived targets and
+      cleanup)$' verification/launch/v1/runner.test.mjs
+    result: >-
+      PASS, exit 0, 1.665 s; Node 26.8.1, shared heavy lock. G08/G09 существующие regressions 2/2;
+      без запуска gates и runtime.
+    logSha256: 38acffe1e63416ee4ccf65432e1b9e7ce39b1ea7f61469320fe895f200d47eec
+  - command: >-
+      pnpm exec oxlint --type-aware --deny-warnings verification/launch/v1/run.mjs
+      verification/launch/v1/runner.test.mjs
+    result: >-
+      PASS, exit 0, 1.563 s; Node 26.8.1, shared heavy lock. Только два изменённых verification
+      files; guards сохранены.
+    logSha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+  - command: pnpm exec tsc -b --pretty false
+    result: >-
+      PASS; до локального изменения окна Grafana, staged diff
+      d64a0e17d78ea85d9b85a03db2bb56bfd7b83164806ac22cb14c7adb303e429f
+  - command: node --experimental-strip-types --test tests/tools/security-scan.test.mjs
+    result: >-
+      PASS; до локального изменения окна Grafana, staged diff
+      d64a0e17d78ea85d9b85a03db2bb56bfd7b83164806ac22cb14c7adb303e429f; 19/19, fail=0, skip=0
+  - command: >-
+      node --experimental-strip-types --test '--test-name-pattern=Collector config
+      accepts|observability provenance includes|generated Collector and backend
+      configs|observability overlay keeps|persistent lifecycle orders|G12 binds storage helper'
+      tests/config/observability-bootstrap.test.mjs tests/compose/topology.test.mjs
+      tests/observability/storage.test.mjs
+    result: >-
+      PASS; до локального изменения окна Grafana, staged diff
+      d64a0e17d78ea85d9b85a03db2bb56bfd7b83164806ac22cb14c7adb303e429f; 6/6, fail=0, skip=0
+  - command: >-
+      node --experimental-strip-types --test '--test-name-pattern=synthetic alerts activate before
+      matrix|native collector waits for validated synthetic cleanup|supervised alert worker
+      continues|actual alert worker failure|observability evidence distinguishes selected live
+      roles|G14 component requires five child database removals|G14 cannot pass with a missing or
+      incomplete required phase|full G14 coverage requires bound readiness'
+      tests/observability/alerts.test.mjs
+    result: >-
+      PASS; до локального изменения окна Grafana, staged diff
+      d64a0e17d78ea85d9b85a03db2bb56bfd7b83164806ac22cb14c7adb303e429f; 8/8, fail=0, skip=0
+  - command: >-
+      pnpm exec oxlint --type-aware --deny-warnings tests/compose/topology.test.mjs
+      tests/config/observability-bootstrap.test.mjs tests/observability/storage.test.mjs
+      tests/tools/security-scan.test.mjs tools/observability/generate.mjs
+      tools/observability/service.mjs tools/observability/verify.mjs tools/security-scan.mjs
+      tools/verified-infrastructure-image.mjs
+    result: >-
+      PASS; до локального изменения окна Grafana, staged diff
+      d64a0e17d78ea85d9b85a03db2bb56bfd7b83164806ac22cb14c7adb303e429f
+  - command: >-
+      pnpm exec prettier --check -- tests/compose/topology.test.mjs
+      tests/config/observability-bootstrap.test.mjs tests/observability/storage.test.mjs
+      tests/tools/security-scan.test.mjs tools/observability/generate.mjs
+      tools/observability/service.mjs tools/observability/verify.mjs tools/security-scan.mjs
+      tools/verified-infrastructure-image.mjs docs/operations/observability.md
+      docs/operations/runtime-images.md evidence/handoffs/issue-13.yaml
+      evidence/handoffs/issue-275.yaml
+    result: >-
+      PASS; до локального изменения окна Grafana, staged diff
+      d64a0e17d78ea85d9b85a03db2bb56bfd7b83164806ac22cb14c7adb303e429f
+  - command: git diff --cached --check
+    result: >-
+      PASS; до локального изменения окна Grafana, staged diff
+      d64a0e17d78ea85d9b85a03db2bb56bfd7b83164806ac22cb14c7adb303e429f
+  - command: >-
+      node --test '--test-name-pattern=Grafana initial generation rejects a hidden restart even when
+      healthy' tests/observability/alerts.test.mjs
+    result: >-
+      PASS; после локального изменения окна Grafana, staged diff
+      b1c590e1c8cf1f274686ad9f9eb42774638d8d3af53f0983ea8f64185cbc9201; 1/1, fail=0, skip=0
+  - command: pnpm exec oxlint --type-aware --deny-warnings tools/observability/verify.mjs
+    result: >-
+      PASS; после локального изменения окна Grafana, staged diff
+      b1c590e1c8cf1f274686ad9f9eb42774638d8d3af53f0983ea8f64185cbc9201
+  - command: >-
+      pnpm exec prettier --check -- tools/observability/verify.mjs
+      evidence/launch-preparation/2026-11-01/temporary-data-placement.md
+      evidence/handoffs/issue-13.yaml
+    result: >-
+      PASS; после локального изменения окна Grafana, staged diff
+      b1c590e1c8cf1f274686ad9f9eb42774638d8d3af53f0983ea8f64185cbc9201
+  - command: git diff --cached --check
+    result: >-
+      PASS; после локального изменения окна Grafana, staged diff
+      b1c590e1c8cf1f274686ad9f9eb42774638d8d3af53f0983ea8f64185cbc9201
+  - command: >-
+      node --test '--test-name-pattern=Kafka unpause waits for the next Docker health probe|Recovery
+      proof|recovery proof' tests/compose/topology.test.mjs
+    result: >-
+      PASS 2/2, fail=0, cancel=0, skip=0; Node 26.8.1. Оба Kafka post-unpause await используют
+      настоящий helper: healthy после 32,721 с принимается, постоянный unhealthy остаётся FAIL.
+      Новый regression до исправления воспроизвёл отказ прежнего окна 30 с.
+    logSha256: 19b56e89bff4506e933ba0b2f762a913153326264092d6a30416ccc35a130e27
+  - command: >-
+      pnpm exec oxlint --type-aware --deny-warnings tools/compose-smoke.mjs
+      tests/compose/topology.test.mjs
+    result: PASS, exit 0; два изменённых codefiles, независимая проверка.
+    logSha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+  - command: >-
+      node --test --test-name-pattern='normal launch G13 prepares and cleans its external run databases|G13/G15 external PostgreSQL attachment|external PostgreSQL attachment cleanup|external PostgreSQL cleanup retains run databases|external recovery projection accepts canonical mapping' tests/compose/topology.test.mjs
+    result: >-
+      PASS: 5/5, fail/cancel/skip 0. Поведенческая regression сначала RED на прежнем коде:
+      отсутствовали credentials/prepare/cleanup/detach. GREEN проверяет обычный launch G13,
+      ошибки startup и миграций, запрет удаления БД при неуспешном compose down, исключения
+      proof-режимов и сохранение non-DB scoped secrets. Fake зависимости, без Docker и SQL;
+      это не runtime G13 или полный допуск.
+    logSha256: 5f7a69ee47a979a871e0c1f8b0dcb69895f68978a8223473a7e9abce12b04e85
+  - command: >-
+      node_modules/.bin/oxlint --type-aware --deny-warnings tools/compose-smoke.mjs tests/compose/topology.test.mjs
+    result: PASS; affected type-aware lint после исправления lifecycle G13.
+    logSha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+  - command: >-
+      node --test --test-name-pattern='nginx ingress uses the scoped public CA with strict TLS|normal launch G13 prepares and cleans its external run databases|programmatic observability hooks require a bounded recovery-proof run' tests/compose/topology.test.mjs
+    result: >-
+      PASS: 3/3, fail/cancel/skip 0; Node 26.8.1. Новый regression сначала RED без scoped CA,
+      затем GREEN на фактических caller и HTTPS helper: optional CA present/absent,
+      fixture/recovery CA, оба ingress endpoint, TLS1.3, SNI и rejectUnauthorized=true.
+      Fake transport, без runtime/SQL/HTTP; component FAIL и полный допуск этим не заменяются.
+    logSha256: 5f14800e21bf9dc8a81b5740767932c83baeab894c2df346092be93b90dca429
+  - command: >-
+      node --test --test-name-pattern='normal launch G13 bootstraps durable offsets|normal launch G13 prepares and cleans|G18 Compose failure diagnostics preserve|Kafka namespace inventory proves' tests/compose/topology.test.mjs
+    result: >-
+      PASS: 4/4, fail/cancel/skip 0; независимая проверка Node 26.8.1. Реальные source chunks
+      проверяют bootstrap обычного изолированного G13 и отказ при существующем Kafka volume
+      до записи. Persistent nonlaunch с включённой namespace policy сохраняет registry path;
+      исключённые proof-режимы и bootstrap только durable consumers проверены. Fake зависимости,
+      без Docker/Kafka/SQL; новый regression сначала RED на прежнем normal caller.
+    logSha256: de72e0d66d5e4d43ed28a160bcad48a4b3837c73ab244ac3a29ddbb6a6009b48
+  - command: >-
+      pnpm exec oxlint --type-aware --deny-warnings tools/compose-smoke.mjs tests/compose/topology.test.mjs
+    result: PASS, exit 0; независимая проверка окончательных двух codefiles.
+    logSha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+  - command: >-
+      node --test --test-name-pattern='controlled config checkout retains Git objects|G18 baseline child changes only|G18 validates only a clean config-only|G18 creates isolated config commits|G16 child config preserves parent' verification/launch/v1/runner.test.mjs
+    result: >-
+      PASS: 5/5, fail/cancel/skip 0, 6.833 s; независимая проверка Node 26.8.1. Новый real-Git
+      regression сначала RED на shared clone: git show после удаления parent exit 128.
+      После замены на dissociate при сохранённом no-hardlinks child читает обе ревизии и HEAD^
+      после удаления borrowed parent и его upstream. G16/G18 используют тот же existing helper;
+      cleanup и controlled config lineage сохранены. Platform runtime этим не проверен.
+    logSha256: 78f2039db23ac8ff300aae78a8684d6be187eae0e45aebe6c4d057d5db622efe
+  - command: >-
+      pnpm exec oxlint --type-aware --deny-warnings verification/launch/v1/scenarios/rollback.mjs verification/launch/v1/runner.test.mjs
+    result: PASS, exit 0; независимая проверка двух окончательных codefiles, 1.672 s.
+    logSha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+consumerContract:
+  consumer: 1
+  admission: >-
+    Только ДОПУСТИТЬ из полного G00–G19 для одного замороженного candidate SHA с согласованной OIDC
+    lineage и обязательной SSE qualification.
+  limitsSeconds:
+    G14: 1800
+    main: 7200
+    qualification: 2700
+  sourceDescriptor: >-
+    Фиксирует реальные inputs/outputs и проверки на момент подготовки. Не является runtime допуском
+    или обещанием будущего PASS.
+  publication:
+    ownerDecision: Владелец согласовал 2026-11-01 принятие двух связанных артефактов на одном candidate SHA.
+    source: evidence/handoffs/issue-13.yaml
+    derived: evidence/launch/<run-id>/handoff.yaml
+    binding: >-
+      Производный handoff содержит SHA-256 точного Git blob исходного descriptor и включён в
+      checksums.sha256.
+    channels:
+      - GitHub PR
+      - Obsidian
+    note: Фактические файлы и их хэши публикуются после запуска без изменения source SHA.
+  controlledConfigAuthority: >-
+    Решение владельца от 1 ноября 2026: parent false/null; ограниченные G16 policy/key/flag child и
+    G18 baseline flag child с проверенной lineage. Лимиты и provider scope сохранены; exact parent
+    G12 product images, отдельная BOM/image-ID проверка fixture PostgreSQL.
+limitations:
+  - >-
+    Source 1978a159: exact-head CI PASS1530/0FAIL/76existing optionalSKIP; standalone G12 run
+    20261106T192707Z-1978a15 FAIL/HIGH_OR_CRITICAL_FINDINGS за893.195 s: rawHIGH27,
+    resolvedFixed2, unresolvedHIGH25, CRITICAL0, cleanupFailures=[]. Сохранены24SBOM и24vulnerability
+    reports; curated PASS receipts не выданы. Блокеры — CVE-2026-107891 вmusl/musl-utils (17)
+    иCVE-2026-78661 вx/net (8); опубликованы PR249#issuecomment-6694165101. Новый security rule
+    не реализован, отдельный фикс требует решения владельца. Незакрытое review о retained Git
+    checkout устранено минимально: existing shared clone заменён на dissociate, включая inherited
+    alternates. Новому source нужны собственные CI, G12, native G13, fresh SSE qualification
+    иполный G00–G19; локальные real-Git проверки не являются runtime G16/G18 admission.
+  - >-
+    Source c31a937d: собственные CI и standalone G12 PASS, native normal G13 FAIL при stop
+    orders-aroma-preparation с KafkaRuntimeError. Отдельный контролируемый code-overlay diagnostic
+    на тех же проверенных image bytes наблюдал native code -140 (AUTO_OFFSET_RESET: отсутствует
+    начальный offset либо offset вне диапазона); его первичный FAIL — realtime-gateway readiness
+    503. Уникальная причина прежнего stop FAIL этим не доказана, diagnostic не является native
+    G13 admission. В normal isolated G13 отсутствовал существующий recovery bootstrap начальных
+    durable offsets. Verifier теперь использует этот helper и тот же fresh-volume guard до
+    любых изменений broker; persistent/nonlaunch, autoOffsetReset=error, pins и бюджеты сохранены.
+    Новому source обязательны собственные exact-head CI, G12, native normal G13, свежая SSE
+    qualification и полный G00–G19. Прежние отрицательные evidence сохранены.
+  - >-
+    Source b74fb10c: exact-head CI и отдельный G12 PASS; после исправления external DB lifecycle
+    все 16 контейнеров normal G13 healthy. Component G13 сохранён как FAIL:
+    assertNginxIngress не передавал существующий optional edge.tlsCaBundle и получил
+    UNABLE_TO_VERIFY_LEAF_SIGNATURE. Однократный строгий TLS1.3 GET /health/live с CA из
+    materialized scoped edge-gateway вернул 200; подпись leaf и hostname совпали, TLS verification
+    не отключалась. Receipt подтверждает cleanup пяти run-derived БД; scoped Docker resources
+    отсутствуют после завершения. Исправлен только CA wiring verifier; последующие ingress
+    проверки и полный G13 этим не доказаны. Новому source обязательны собственные exact-head CI,
+    G12, fresh SSE qualification и полный G00–G19; старый component FAIL не заменяется на PASS.
+  - >-
+    Полный run 20261106T123050Z-78ddca0 завершён НЕ ДОПУСТИТЬ: G00–G12 PASS,
+    G13 FAIL (orders-service unhealthy), G14–G18 NOT_RUN; отрицательные G19 report/handoff
+    опубликованы в PR249#issuecomment-6686037173 и #issuecomment-6686037813 и сохранены в Obsidian.
+    Диагностика подтвердила пропуск external DB lifecycle обычного launch G13: runtime получает
+    run-derived target, но его пять БД не создаются после cleanup предыдущих gates. Реальные
+    Customer/Catalog health503 database NotReady и read-only catalog probe опубликованы как
+    PR249#issuecomment-6687024100. Исправление verifier не меняет readiness, health limits, pins
+    или product code; новому source обязательны собственные CI, G12, fresh SSE qualification и
+    полный G00–G19. Успешная runtime-аутентификация и конкретный SQLSTATE не доказаны.
+  - >-
+    Source c567e544: полный run 20261106T091002Z-c567e54 завершён НЕ ДОПУСТИТЬ, G00–G09/G12
+    PASS, G10 recovery FAIL, G11/G13–G18 NOT_RUN, G19 отрицательный PASS без evidence errors.
+    Отчёт PR249#issuecomment-6682189605, производный handoff PR249#issuecomment-6682190141.
+    Узкий native diagnostic зафиксировал Docker healthy через 32,720548 с после unpause при
+    окне verifier 30 с; Kafka API exit0 за 2686 мс, тот же container/image, restart=0/OOM=false.
+    Исправлены только два Kafka ожидания до 60 с; Docker health 30/5 с, другие deadlines и
+    общие бюджеты сохранены. Это не runtime PASS исправленного source: ему обязательны свои
+    exact-head CI, G12, свежая SSE qualification и полный G00–G19.
+  - >-
+    После component FAIL при холодных Grafana SQLite migrations на внешнем TMPDIR локальное окно её
+    health увеличено до 1800 с; внешний storage и общий бюджет G14 1800 с сохранены. ROOT component
+    startup/signals не является полным G14; новому объединённому source требуется собственная cold
+    full G14-проверка.
+  - >-
+    Принят #275 через PR #276, merge 7ee04f202054b39f47f504b1a4125e6598e59eae: собственный G12 code
+    ab994cb прошёл 24 vulnerability + 24 SBOM, unresolved HIGH=0/CRITICAL=0; component proof
+    подтвердил startup, сигналы Loki/Tempo/Prometheus и cleanup, package proof — отсутствие двух
+    APT-пакетов и сохранение остальных. Это входные component evidence, не полный G14 или допуск
+    объединённого candidate; ему нужны собственные CI, G12, свежая SSE qualification и G00–G19.
+  - >-
+    Подготовка 2026-11-05: accepted base c1eac3dd включает #267/PR268, #269/PR270, #271/PR272, PR273
+    и #266/PR274. #266 остаётся OPEN: три реальных owner/browser proof и полный допуск нового
+    candidate ещё не доказаны. Для #264 и #266 входом служит точный исполнимый artifact принятого
+    merge; отсутствующие handoffs задним числом не создаются.
+  - >-
+    Полный run 20261104T003307Z-f84f862 завершён НЕ ДОПУСТИТЬ: G00–G10 и собственный G12 PASS, G11
+    FAIL (192/195), G13–G18 NOT_RUN, G19 выпустил отрицательный отчёт. Evidence и публикации
+    сохранены. Последующий компонентный G12 20261105T043836Z-c556c1f FAIL: две HIGH-находки
+    CVE-2026-109518 в APT закреплённого Alloy. Новый source ещё не проходил собственные G12, fresh
+    qualification и полный G00–G19. Диагностический образ без APT не является принятым fix или
+    допуском.
+  - >-
+    Full run 20261103T220615Z-26d1e2c: G00–G07 и G12 PASS, G08 clean PASS / forward FAIL (Catalog
+    category_name=NULL изменил to_jsonb fixture), downstream NOT_RUN, G19 НЕ ДОПУСТИТЬ без evidence
+    errors. Отрицательные report/defect опубликованы в PR249#issuecomment-6617317501 и сохранены;
+    qualification consumed. Принят отдельный fix #264 / PR265, merge
+    0f117f3094362b670e4421c39c888de6830cc4f0, exact head b41cfcc CI41734287920 PASS. Existing
+    PostgreSQL regression 3/3 PASS сохраняет отказы при actual category/legacy-field/missing-row
+    drift. Новому frozen SHA нужны собственные CI, matching G12, свежая SSE qualification и полный
+    G00–G19.
+  - >-
+    Принят #262 через PR #263: merge a5a5c27c7bb1ac5d563c4e7c22e1c2f4444fc7d5. CI и G12 normal
+    source 9c731f2 не являются admission нового formal candidate; ему нужны собственные CI, matching
+    G12, свежая SSE qualification и полный G00–G19.
+  - >-
+    При интеграции #262 выбран весь accepted ciphertext
+    01744290a8d57dbda7271e3378a985d28b15c7d1355cebba64fe50fb036afaf3 вместо исторического formal
+    renewal bcfaa602: оба trusted renewal от одного base сохраняют CA/key/SAN и меняют только 15
+    transport certPem. Новое renewal при интеграции не запускалось; исторические receipts и FAIL
+    сохранены.
+  - >-
+    Customer current исправлен с 2 на 3 в G08/G09 oracles и двух fixtures; Customer prefix 2 и
+    incoming Catalog current 12 / prefix 8 сохранены. Устаревшее изменение текста ошибки
+    platform-config снято: product package совпадает с accepted develop.
+  - >-
+    Source45a69a5 CI выявил3 normal-fixture mismatches и2 неповторившихся CLI failures. Исправлены
+    только3 normal-path fixtures в2existingtestfiles; service guards и canonical isolation не
+    менялись. Новый frozen SHA ещё требует собственные CI/G12/qualification/G00–G19;
+    подготовленный45a context не использовался для runtime admission.
+  - >-
+    Transport leaves обновлены trusted config-bootstrap 2026-11-03: 15 runtime, прежние CA/key/SAN
+    сохранены. Первая попытка отклонена до записи из-за mode 0664 после Git merge; после chmod 0600
+    renewal завершён. Исходный отрицательный receipt сохранён. Это не runtime admission нового
+    candidate.
+  - >-
+    Принят #254 через PR #261: merge 2a4f272444dd9484b0621104c300c07ee54dc2e2. Его CI и компонентный
+    G12 не переносятся на новый formal candidate; Новому SHA нужны собственные CI, matching G12,
+    свежая SSE qualification и полный G00–G19.
+  - >-
+    Оба evidence-каталога Source 16ff43a сохранены: 20261102T085322Z-16ff43a и
+    20261102T100507Z-16ff43a. Производный handoff второго запуска содержит НЕ ДОПУСТИТЬ и ошибки
+    отсутствующих evidence; неполные обязательные gates не считаются PASS. Исторические FAIL/NOT_RUN
+    не переписаны.
+  - >-
+    Приняты отдельные fixes #259 (nginx HTTPS readiness) и #257 (Customer redaction assertion), оба
+    с успешным CI и merge в develop. Новый candidate включает их accepted handoffs; ему нужны
+    собственные CI, matching G12, узкий Customer proof, свежая SSE qualification и полный G00–G19.
+    Публикация G10 defect связана с #257 отдельным defects.json receipt; исходный отрицательный
+    manifest не изменён.
+  - >-
+    Full run 20261102T064519Z-4393aea: G00–G09 и G12 PASS, G10 FAIL из-за устаревшего ожидания
+    errorCode в логе; G11 и G13–G18 NOT_RUN, G19 PASS с решением НЕ ДОПУСТИТЬ. Исправлен только
+    assertion: классификация по именованному событию, errorCode скрыт общим logger. Новому SHA нужны
+    собственные CI, G12, Customer proof, SSE qualification и полный G00–G19; результаты 4393aea не
+    переносятся.
+  - После объединения принятого
+  - >-
+    Исправление G18 parent failure receipt локально проверено, но не является runtime admission;
+    qualification Source 0dc прервана владельцем через SIGTERM до завершения и не является PASS или
+    sealed. Новому frozen Source нужны свежие CI, G12, SSE qualification и полный G00–G19.
+  - >-
+    Full run 2c4250a/185412: G00–G09 и G12 PASS, G10 FAIL при проверке захвата логов; G11 и G13–G18
+    NOT_RUN, G19 REPORT PASS не является admission. Локальный fix захвата fd 1 проверен на 9/9
+    существующих live tests; окончательному Source нужны собственные CI, G12, SSE qualification и
+    полный G00–G19.
+  - >-
+    Компонентный G12 5cb6e89 прерван по запросу владельца; отдельный G16 stub и CLI startup не
+    являются runtime admission. Будущему замороженному Source нужны собственные CI, G12, SSE
+    qualification и полный G00–G19.
+  - >-
+    Source 883 standalone G12 PASS; qualification FAIL до нагрузки с сохранённым отрицательным
+    результатом. Синтетический Docker-пробник WIP не является qualification или полным admission;
+    окончательному Source нужны собственные CI, G12, SSE и G00–G19.
+  - >-
+    Принятый #252 содержит парное подтверждение edge-gateway на Source 8009671; это не полный G12,
+    SSE qualification или G00–G19 issue13 на новом окончательном Source.
+  - >-
+    477 G12 component PASS не является SSE/full admission: qualification до измерения обнаружила
+    реальные different COPY layers. Source context возвращён в originaltmpdir; новый frozen SHA
+    требует собственные CI/G12/exact4IDs/qualification/G00–G19. Никакие thresholds/image bindings не
+    ослаблены.
+  - >-
+    Standalone G12 1e95d5c PASS за1462.207s не переносится на новый source. SSE qualification
+    прежнего SHA не началась: отрицательные operator preflights и nested fixture false positive
+    сохранены; own cleanup выполнен отдельно. Новый Source требует собственные
+    CI/G12/qualification/G00–G19.
+  - >-
+    Общий локальный check aae20ab: pnpm check FAIL на прежнем 2 s readiness fixture; отдельное
+    исправление #250 принято через PR #251. CI c4b38ce и db30ffa PASS. Новый source с раздельным
+    размещением scratch требует собственный CI, G12, qualification и ordered runtime; прежние
+    результаты не переносятся.
+  - >-
+    C4 component run050241: FAIL/INTERRUPTED по builder floor1GiB после1766.202
+    s,26частичныхотчётов; это не превышение1800 s и не PASS. Отдельный run031919 остановлен из-за
+    operator umask0077. Оба negative сохранены; thresholds не изменены.
+  - >-
+    Итоговые G12, обязательная SSE qualification и полный G00–G19 на окончательном SHA ещё NOT_RUN.
+    Component cffe147 и прежние qualification не переносятся.
+  - >-
+    Фактические runtime results и hashes появятся после выполнения; согласованная публикация двух
+    артефактов не является доказательством PASS до полного запуска.
+  - Отрицательный G00 a6cceea сохранён без изменения статуса, он не считается финальным PASS.
+  - >-
+    Свежие узкие проверки объединения и отдельного окна Grafana сохранены в локальных квитанциях:
+    /home/yurgusev/.cache/coffee-launch-delivery/issue13-merge-checks-20261106/receipt.json SHA-256
+    ed67e9a047643b7bce9766e0acc0baa435d2d8aa98d4ddd214dcce40f5469f16;
+    /home/yurgusev/.cache/coffee-launch-delivery/issue13-grafana-wait-checks-20261106/receipt.json
+    SHA-256 9e93d48f6ba71a03caba73d96dcda8b0ccfe4d65322cba0930fe9908dddeb257. После них изменён
+    только source descriptor с записью этих результатов; новый exact-head CI и холодный полный G14
+    ещё обязательны.

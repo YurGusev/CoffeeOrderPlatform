@@ -61,6 +61,15 @@ Go/Rust не компилируются. Её финальный image ID и ID 
 использовать старые binaries из data volume. Tempo использует согласованный
 готовый dev image по immutable digest; его стабильность проверяется гейтом `observability`.
 
+В одном launch run после supply_chain полная recovery-сборка integration может сохранить 15
+собственных image references для recovery, compose и observability. Повторное использование
+допускается только для полного набора с точными supply_chain image ID и проверенной
+идентичностью исходников, конфигурации и BOM. Если до integration уже присутствует
+один из этих image ID, ускорение отключается; коллизия собственных имён и
+неизвестное состояние завершают проверку с FAIL. Runner удаляет только
+подтверждённые собственные references до решения report; неподтверждённая очистка
+означает FAIL.
+
 Policy `verification.securityScan.approvedFixed` разрешает только два указанных
 в ADR-0040 already-fixed Tempo findings для exact artifact identity. Raw scan и
 UNKNOWN сохраняются. Изменение package/version/hash, иной HIGH/CRITICAL или
@@ -150,13 +159,15 @@ Loki WAL использует native `disk_full_threshold: 0.8`; отдельн�
 
 ## Alerts и проверка
 
-Пять правил ограничены `deployment_environment`, `service_namespace` и `service_version`: not-ready, consumer lag и Outbox age используют окно 5m; UnknownOutcome — 2m; SSE drop rate — 5m с порогом 5%. `notReady` учитывает Node `runtime_ready` и native nginx `probe_success`, включая отсутствие обязательной серии. Шестое правило проверяет заполнение каждого telemetry volume с `alerts.diskUsage.forMs`. Ошибка query не считается resolved. Firing и resolved должны относиться к одному episode; локальный sink хранит ограниченные ротируемые записи.
+Пять правил ограничены `deployment_environment`, `service_namespace` и `service_version`: not-ready, consumer lag и Outbox age используют окно 5m; UnknownOutcome — 2m; SSE drop rate — 5m с порогом 5%. `notReady` учитывает Node `runtime_ready` и native nginx `probe_success`, включая отсутствие обязательной серии. Шестое правило проверяет заполнение каждого telemetry volume с `alerts.diskUsage.forMs`. Ошибка query не считается resolved. Firing и resolved должны относиться к одному episode; локальный sink хранит ограниченные ротируемые записи. Синтетические alert transitions могут выполняться во время подготовки runtime matrix; подключение native nginx и проверка business path начинаются только после подтверждённого восстановления и очистки synthetic rules. Временные окна и критерии alert сохраняются.
 
 `pnpm test:observability` запускает disposable run-id proof и сохраняет результаты в `evidence/observability/<run-id>/`; формальный запуск также сохраняет их в `evidence/launch/<run-id>/gates/observability/artifacts/observability/`. Файлы: `alert-transitions.json`, `correlation-proof.json`, `redaction-scan.json`, `queue-loss-counters.json`, `retention-result.json`, `runtime-health-matrix.json` и `result.json`. Любой обязательный FAIL/NOT_RUN блокирует `observability`. Проверяются три сигнала и same-trace correlation, redaction, шесть alert episodes, outage/loss, memory/retry/stop, права и сети, persistence и восстановление после disk pressure. Проверка TTL в bounded fixture profile не доказывает истечение реальных 72 часов; сохранность после restart/recreate/checkpointed crash и restore требуют собственного evidence.
 
 Loki retention fixture сохраняет включённый embedded chunk cache и сокращает только его TTL до 30 секунд вместе с остальными тестовыми интервалами. Стандартный часовой TTL мог возвращать удалённый chunk из кеша дольше шестиминутного proof; парные native опыты подтвердили отсутствие старого маркера при сохранности свежего с TTL 30 секунд. Effective настройки проверяются до нагрузки и после восстановления исходного профиля; production retention и cache TTL не меняются. При timeout сохраняются последние наблюдения compactor и old/current controls.
 
 Tempo TTL fixture сокращает также `live_store.flush_op_timeout` до 30 секунд: в закреплённом [upstream](https://github.com/grafana/tempo/blob/a0826bc9eb8397d614dde91fb00b3809835b7e52/modules/livestore/live_store_background.go#L215-L236) это период cleanup, а `complete_block_timeout` задаёт возраст блока. С исходным cleanup 5 минут marker исчез лишь на 303-й секунде, поэтому обязательные следующие 2 минуты отсутствия не помещались в 6 минут. Парный опыт с единственным изменением cleanup подтвердил 122 секунды отсутствия и 13 свежих controls. Effective cadence и восстановление исходного значения проверяются; последние Tempo observations сохраняются. Production retention/cadence, compaction, deadline и required absence window не меняются; producer остановлен до retention.
+
+Retention fixtures подготавливаются последовательно: Loki с отключённым retention сохраняет и перечитывает старый marker, затем применяются профили Prometheus и Tempo, а Loki включается последним. После проверки здоровья и effective profile наблюдения трёх backend идут параллельно; каждое сохраняет собственные marker, live control, окно отсутствия и timeout. До завершения всех наблюдений конфигурации не восстанавливаются; при ошибке проверка ожидает остановки наблюдателей и отдельно пытается восстановить каждый изменённый профиль. Ошибка восстановления означает FAIL. Такой порядок не подтверждает фактическое время полного observability без отдельного запуска.
 
 Disk proof сначала достигает ENOSPC и нулевого `bavail`, затем требует настоящий native failure. После подтверждённой ошибки [SQLite может откатить транзакцию](https://www.sqlite.org/lang_transaction.html#response_to_errors_within_a_transaction) и освободить блоки; положительный post-request `bavail` сам по себе не отменяет наблюдённый отказ. Identity файловой системы проверяется всегда. Снимок и native failure записываются до assertions; точное удаление собственного filler, чтение старого и нового маркеров, тот же процесс и отсутствие OOM остаются обязательными.
 

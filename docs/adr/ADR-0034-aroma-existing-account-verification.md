@@ -46,6 +46,39 @@ Approval этого эксперимента подписывает однора
 До подписи допустимы только safe provider reads и локальная подготовка;
 отсутствие approval прекращает сценарий с cleanup без мутаций.
 
+По решению владельца от 1 ноября 2026 обычный product candidate сохраняет
+`aromaSandbox=null` и `mutationsEnabled=false`. Только aroma_sandbox создаёт отдельный
+config-only child: точная утверждённая policy со свежим публичным ключом и
+`mutationsEnabled=true`. Signer запускается непосредственно перед этой фазой;
+approval связывается с фактическими child SHA/run ID. Код продукта и остальные
+tracked bytes идентичны parent; Git/config/context/bundle и parent supply_chain image
+bindings проверяются до допуска. [Границы исключения](../../evidence/launch-preparation/2026-11-01/controlled-config-lineage.md)
+не меняют provider scope, срок подписи, семь фаз и обязательное восстановление.
+Незавершённый cleanup не допускается; этот child не меняет обычную конфигурацию.
+
+PostgreSQL этого изолированного fixture проверяется отдельно: точный registry
+digest берётся из неизменного parent BOM и связывается с фактическим image ID.
+Текущий supply_chain не сканирует этот fixture; parent supply_chain receipt для него не создаётся.
+Существующие resource limits, ownership и cleanup сохраняются.
+
+Несекретные поля ранее утверждённой policy сохранены как исторический
+[evidence-вход](../../evidence/aroma-provider/controlled-account.json).
+Он исключает зависимость от непубликованного локального Git commit; исходные
+commit/config hash сохраняются, прежний публичный ключ не переносится.
+Builder проверяет точный artifact hash и parent Git blob, затем записывает
+policy со свежим ключом в единственный versioned child config. Runtime не
+читает этот evidence-файл как конфигурацию.
+
+Persistent evidence содержит только `controlled-approval.json.age` и
+`controlled-approval.sig.age`. Используется уже закреплённый age и recipients
+из `.sops.yaml`, как в backup_restore. Исходные approval/signature bytes передаются через
+stdin/stdout только в памяти; plaintext-файлы остаются только в private tmpfs.
+Verifier проверяет ciphertext hashes, расшифровывает в ограниченные RAM buffers
+через существующий операторский `SOPS_AGE_KEY_FILE`, затем выполняет прежнюю
+проверку исходных hashes, binding и подписи. Approval wire format и TTL не меняются.
+Без operator identity криптографический допуск невозможен: одни hashes и
+утверждение `signatureVerified=true` не заменяют проверку подписи.
+
 Используются существующие canonical development refs `aroma.email/password`
 через trusted `config-bootstrap` и Gateway-scoped materialization в tmpfs.
 Копии credentials, второй encrypted inventory, legacy fallback и изменение

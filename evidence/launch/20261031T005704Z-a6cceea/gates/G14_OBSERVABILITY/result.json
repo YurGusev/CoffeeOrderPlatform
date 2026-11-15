@@ -1,0 +1,23 @@
+{
+  "id": "G14_OBSERVABILITY",
+  "status": "NOT_RUN",
+  "expectedCommand": "pnpm test:observability",
+  "startedAt": null,
+  "endedAt": "2026-10-31T00:57:35.758Z",
+  "durationMs": 0,
+  "timeoutSeconds": 1800,
+  "reason": "NOT_RUN: predecessor не PASS: G13_COMPOSE",
+  "runs": [],
+  "artifacts": [
+    {
+      "path": "/home/yurgusev/.codex/worktrees/preserve-non-openobserve/CoffeeOrderPlatform/evidence/launch/20261031T005704Z-a6cceea/gates/G14_OBSERVABILITY/stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "sizeBytes": 0
+    },
+    {
+      "path": "/home/yurgusev/.codex/worktrees/preserve-non-openobserve/CoffeeOrderPlatform/evidence/launch/20261031T005704Z-a6cceea/gates/G14_OBSERVABILITY/stderr.log",
+      "sha256": "b7910f852bac7c26458c1eea3a9a9e37ea10b872e65b454efc4d0d7159bc1952",
+      "sizeBytes": 44
+    }
+  ]
+}

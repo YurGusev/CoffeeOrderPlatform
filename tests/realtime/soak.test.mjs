@@ -398,7 +398,12 @@ export async function bootstrapOwnedOrdersKafka({
 }
 
 export function scratchRoot() {
-  return resolve(process.env.TMPDIR ?? "/home/yurgusev/.hermes/cache/scratch");
+  const declared = process.env.COFFEE_LAUNCH_SCRATCH ?? process.env.TMPDIR;
+  if (declared === undefined || declared.length === 0)
+    throw new Error(
+      "COFFEE_LAUNCH_SCRATCH или TMPDIR обязателен: каталог soak задаётся явно",
+    );
+  return resolve(declared);
 }
 
 export function parse(args) {
