@@ -965,11 +965,7 @@ services:
         maxLifetimeMs: 1800000,
       }
     database: coffee_platform_orders
-    kafka:
-      {
-        producers: [coffee.orders.lifecycle.v1],
-        consumers: [],
-      }
+    kafka: { producers: [coffee.orders.lifecycle.v1], consumers: [] }
     outbound: [api-internal:4051]
     secretRefs:
       [

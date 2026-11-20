@@ -1537,7 +1537,11 @@ void test("persistent lifecycle orders admission, safe replacement, storage, gen
         throw Error("collector receipt invalid");
       return { imageId };
     },
-    statfs: async () => ({ bavail: 10000000n, bsize: 4096n, blocks: 10000000n }),
+    statfs: async () => ({
+      bavail: 10000000n,
+      bsize: 4096n,
+      blocks: 10000000n,
+    }),
     discoverContainerLogs: async () => [],
     assertTelemetryNetworks: () => events.push("networks"),
     inspectOwnedTelemetry: () => {
