@@ -4154,7 +4154,7 @@ export async function runControlledAromaSandboxParent({
   let phase = "signer-start";
   const markPhase = (next) => {
     phase = next;
-    process.stderr.write(`[G16] phase=${phase}\n`);
+    process.stderr.write(`[aroma_sandbox] phase=${phase}\n`);
   };
   try {
     markPhase("signer-start");
