@@ -414,6 +414,14 @@ FAIL не удаляется.
   approver, allowed offerRef и maximum quantity; detached signature;
 - исходная complete cart observation и план восстановления.
 
+Подготовительные фазы controlled parent (RAM signer, age preflight, config-only
+checkout, browser child checkout, child context и lineage bundle) имеют
+отдельный бюджет не более десяти минут. Evidence фиксирует
+`[G16] phase=<...>`; исчерпание бюджета даёт FAIL
+`G16_PREPARATION_TIMEOUT` с этой фазой, а не ожидание общего timeout гейта.
+При сборке child context повторно используется уже проверенная идентичность
+родительского запуска, поэтому git-валидация не повторяется.
+
 Сценарии:
 
 1. GET baseline;
