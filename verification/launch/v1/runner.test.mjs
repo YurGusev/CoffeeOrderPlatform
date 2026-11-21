@@ -3558,9 +3558,9 @@ void test("aroma_sandbox controlled preparation fails with an explicit phase cod
         () => new Promise(() => {}),
       ),
       (error) =>
-        error.message === "G16_PREPARATION_TIMEOUT" &&
+        error.message === "AROMA_SANDBOX_PREPARATION_TIMEOUT" &&
         error.safeDetails?.phase === "child-context" &&
-        safeAromaFailureCode(error) === "G16_PREPARATION_TIMEOUT",
+        safeAromaFailureCode(error) === "AROMA_SANDBOX_PREPARATION_TIMEOUT",
     );
     await assert.rejects(
       runControlledPreparationStep(
@@ -3571,10 +3571,10 @@ void test("aroma_sandbox controlled preparation fails with an explicit phase cod
         },
       ),
       (error) =>
-        error.message === "G16_PREPARATION_FAILED" &&
+        error.message === "AROMA_SANDBOX_PREPARATION_FAILED" &&
         error.safeDetails?.phase === "child-context" &&
         error.safeDetails?.causeCode === "ROLLBACK_GIT_INSPECTION_FAILED" &&
-        safeAromaFailureCode(error) === "G16_PREPARATION_FAILED",
+        safeAromaFailureCode(error) === "AROMA_SANDBOX_PREPARATION_FAILED",
     );
   } finally {
     clearTimeout(keepAlive);

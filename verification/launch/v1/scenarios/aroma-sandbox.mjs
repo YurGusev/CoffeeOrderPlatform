@@ -1183,8 +1183,8 @@ const SAFE_FAILURE_CODES = new Set([
   "AROMA_SANDBOX_CATALOG_CHECK_FAILED",
   "RECOVERY_REQUIRED",
   "G16_CHILD_FAILURE_UNVERIFIED",
-  "G16_PREPARATION_FAILED",
-  "G16_PREPARATION_TIMEOUT",
+  "AROMA_SANDBOX_PREPARATION_FAILED",
+  "AROMA_SANDBOX_PREPARATION_TIMEOUT",
 ]);
 
 export function safeAromaFailureCode(error) {
@@ -4040,7 +4040,7 @@ function controlledPreparationDeadline() {
 }
 
 function controlledPreparationTimeout(phase) {
-  const error = new Error("G16_PREPARATION_TIMEOUT");
+  const error = new Error("AROMA_SANDBOX_PREPARATION_TIMEOUT");
   error.safeDetails = { phase };
   return error;
 }
@@ -4076,7 +4076,7 @@ function annotateControlledPreparationFailure(error, phase) {
     error?.safeDetails && typeof error.safeDetails === "object"
       ? error.safeDetails
       : {};
-  if (error?.message === "G16_PREPARATION_TIMEOUT")
+  if (error?.message === "AROMA_SANDBOX_PREPARATION_TIMEOUT")
     return Object.assign(error, { safeDetails: { ...details, phase } });
   const code = safeAromaFailureCode(error);
   if (code !== "AROMA_SANDBOX_FAILED") {
@@ -4084,7 +4084,7 @@ function annotateControlledPreparationFailure(error, phase) {
       error.safeDetails = { ...details, phase };
     return error;
   }
-  const failure = new Error("G16_PREPARATION_FAILED");
+  const failure = new Error("AROMA_SANDBOX_PREPARATION_FAILED");
   failure.safeDetails = {
     ...details,
     phase,
