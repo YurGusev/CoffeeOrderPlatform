@@ -2554,6 +2554,7 @@ function imageBuildArgs({
   keycloakDistributionImage,
   keycloakRuntimeImage,
   libexpatVersion,
+  libfontencVersion,
   muslVersion,
   pluginContext,
 }) {
@@ -2570,7 +2571,12 @@ function imageBuildArgs({
       ? ["--build-arg", `MUSL_VERSION=${muslVersion}`]
       : []),
     ...(["kafka", "keycloak"].includes(service)
-      ? ["--build-arg", `LIBEXPAT_VERSION=${libexpatVersion}`]
+      ? [
+          "--build-arg",
+          `LIBEXPAT_VERSION=${libexpatVersion}`,
+          "--build-arg",
+          `LIBFONTENC_VERSION=${libfontencVersion}`,
+        ]
       : []),
     ...(service === "keycloak"
       ? [
@@ -2674,6 +2680,7 @@ async function buildProductImages({
       keycloakDistributionImage: toolchain.keycloakDistributionImage,
       keycloakRuntimeImage: toolchain.keycloakRuntimeImage,
       libexpatVersion: toolchain.libexpatVersion,
+      libfontencVersion: toolchain.libfontencVersion,
       muslVersion: toolchain.muslVersion,
       pluginContext: vendorPlugins?.path,
     });

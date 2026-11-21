@@ -2634,6 +2634,17 @@ void test("supply_chain builds product images, records pinned upstream identity,
         assert.deepEqual(
           args.flatMap((value, index) =>
             value === "--build-arg" &&
+            args[index + 1].startsWith("LIBFONTENC_VERSION=")
+              ? [args[index + 1]]
+              : [],
+          ),
+          ["kafka", "keycloak"].includes(service)
+            ? [`LIBFONTENC_VERSION=${toolchain.libfontencVersion}`]
+            : [],
+        );
+        assert.deepEqual(
+          args.flatMap((value, index) =>
+            value === "--build-arg" &&
             args[index + 1].startsWith("MUSL_VERSION=")
               ? [args[index + 1]]
               : [],
