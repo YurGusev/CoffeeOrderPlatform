@@ -34,6 +34,7 @@
     "nodeBookwormSlimImage",
     "kafkaImage",
     "libexpatVersion",
+    "libfontencVersion",
     "muslVersion",
     "keycloakVersion",
     "keycloakDistributionImage",
@@ -148,6 +149,10 @@
     },
     "kafkaImage": { "pattern": "^apache/kafka:4\\.3\\.2@sha256:[0-9a-f]{64}$" },
     "libexpatVersion": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+-r[0-9]+$"
+    },
+    "libfontencVersion": {
       "type": "string",
       "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+-r[0-9]+$"
     },

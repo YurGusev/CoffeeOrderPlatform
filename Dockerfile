@@ -140,22 +140,26 @@ NODE
 FROM ${KAFKA_IMAGE} AS kafka
 ARG MUSL_VERSION
 ARG LIBEXPAT_VERSION
+ARG LIBFONTENC_VERSION
 USER root
 RUN set -eu; \
     apk info -v | sort > /tmp/apk.before; \
     grep -Fxq 'brotli-libs-1.2.0-r1' /tmp/apk.before; \
     grep -Fxq 'libexpat-2.8.5-r0' /tmp/apk.before; \
+    grep -Fxq 'libfontenc-1.1.9-r0' /tmp/apk.before; \
     grep -Fxq 'musl-1.2.6-r2' /tmp/apk.before; \
     grep -Fxq 'musl-utils-1.2.6-r2' /tmp/apk.before; \
-    apk upgrade --no-cache brotli-libs libexpat musl musl-utils; \
+    apk upgrade --no-cache brotli-libs libexpat libfontenc musl musl-utils; \
     apk info -v | sort > /tmp/apk.after; \
     grep -Fxq 'brotli-libs-1.2.1-r0' /tmp/apk.after; \
     grep -Fxq "libexpat-${LIBEXPAT_VERSION}" /tmp/apk.after; \
+    grep -Fxq "libfontenc-${LIBFONTENC_VERSION}" /tmp/apk.after; \
     grep -Fxq "musl-${MUSL_VERSION}" /tmp/apk.after; \
     grep -Fxq "musl-utils-${MUSL_VERSION}" /tmp/apk.after; \
     sed \
       -e 's/^brotli-libs-1\.2\.0-r1$/brotli-libs-1.2.1-r0/' \
       -e "s/^libexpat-2\.8\.5-r0$/libexpat-${LIBEXPAT_VERSION}/" \
+      -e "s/^libfontenc-1\.1\.9-r0$/libfontenc-${LIBFONTENC_VERSION}/" \
       -e "s/^musl-1\.2\.6-r2$/musl-${MUSL_VERSION}/" \
       -e "s/^musl-utils-1\.2\.6-r2$/musl-utils-${MUSL_VERSION}/" \
       /tmp/apk.before > /tmp/apk.expected; \
@@ -188,13 +192,18 @@ ENV GF_PATHS_PLUGINS=/opt/grafana/plugins
 FROM ${KEYCLOAK_DISTRIBUTION_IMAGE} AS keycloak-distribution
 FROM ${KEYCLOAK_RUNTIME_IMAGE} AS keycloak
 ARG LIBEXPAT_VERSION
+ARG LIBFONTENC_VERSION
 RUN set -eu; \
     apk info -v | sort > /tmp/apk.before; \
     grep -Fxq 'libexpat-2.9.0-r0' /tmp/apk.before; \
-    apk upgrade --no-cache libexpat; \
+    grep -Fxq 'libfontenc-1.1.9-r0' /tmp/apk.before; \
+    apk upgrade --no-cache libexpat libfontenc; \
     apk info -v | sort > /tmp/apk.after; \
     grep -Fxq "libexpat-${LIBEXPAT_VERSION}" /tmp/apk.after; \
-    sed "s/^libexpat-2\.9\.0-r0$/libexpat-${LIBEXPAT_VERSION}/" \
+    grep -Fxq "libfontenc-${LIBFONTENC_VERSION}" /tmp/apk.after; \
+    sed \
+      -e "s/^libexpat-2\.9\.0-r0$/libexpat-${LIBEXPAT_VERSION}/" \
+      -e "s/^libfontenc-1\.1\.9-r0$/libfontenc-${LIBFONTENC_VERSION}/" \
       /tmp/apk.before > /tmp/apk.expected; \
     diff -u /tmp/apk.expected /tmp/apk.after; \
     rm -f /tmp/apk.before /tmp/apk.after /tmp/apk.expected
