@@ -104,6 +104,7 @@ import {
   normalizeCleanupFailureOutcome,
   parseArguments as parseAromaArguments,
   runControlledAromaSandboxParent,
+  runControlledPreparationStep,
   safeAromaConvergenceEvidence,
   safeAromaDiagnostic,
   safeAromaFailureCode,
@@ -115,6 +116,7 @@ import {
   verifyControlledAromaSandboxEvidence,
   waitForAromaRestartEligibility,
 } from "./scenarios/aroma-sandbox.mjs";
+import { writeControlledChildContext } from "./scenarios/browser.mjs";
 import {
   parseTapSummary,
   tapSummaryPassed,
@@ -3541,6 +3543,142 @@ setInterval(() => {}, 1000);
   } finally {
     await rm(root, { recursive: true, force: true });
     await rm(foreign, { recursive: true, force: true });
+  }
+});
+
+void test("aroma_sandbox controlled preparation fails with an explicit phase code", async () => {
+  // A preparation step that never settles must not hang the gate; the signer
+  // pipes keep the real process alive, so keep this test's loop alive too.
+  const keepAlive = setTimeout(() => {}, 1000);
+  try {
+    await assert.rejects(
+      runControlledPreparationStep(
+        "child-context",
+        Date.now() + 25,
+        () => new Promise(() => {}),
+      ),
+      (error) =>
+        error.message === "AROMA_SANDBOX_PREPARATION_TIMEOUT" &&
+        error.safeDetails?.phase === "child-context" &&
+        safeAromaFailureCode(error) === "AROMA_SANDBOX_PREPARATION_TIMEOUT",
+    );
+    await assert.rejects(
+      runControlledPreparationStep(
+        "child-context",
+        Date.now() + 1000,
+        async () => {
+          throw new Error("ROLLBACK_GIT_INSPECTION_FAILED");
+        },
+      ),
+      (error) =>
+        error.message === "AROMA_SANDBOX_PREPARATION_FAILED" &&
+        error.safeDetails?.phase === "child-context" &&
+        error.safeDetails?.causeCode === "ROLLBACK_GIT_INSPECTION_FAILED" &&
+        safeAromaFailureCode(error) === "AROMA_SANDBOX_PREPARATION_FAILED",
+    );
+  } finally {
+    clearTimeout(keepAlive);
+  }
+});
+
+void test("aroma_sandbox child context reuses the validated parent and supplied lineage validator", async () => {
+  const temporary = await mkdtemp(join(tmpdir(), "coffee-g16-context-test-"));
+  const childRoot = join(temporary, "child");
+  const childConfigPath = join(childRoot, "config/platform.yaml");
+  try {
+    execFileSync("git", ["init", "--quiet", childRoot], { stdio: "ignore" });
+    await mkdir(dirname(childConfigPath), { recursive: true });
+    await writeFile(childConfigPath, "verification:\n  aromaSandbox: null\n");
+    execFileSync(
+      "git",
+      ["-C", childRoot, "add", "--", "config/platform.yaml"],
+      { stdio: "ignore" },
+    );
+    execFileSync(
+      "git",
+      [
+        "-C",
+        childRoot,
+        "-c",
+        "user.name=aroma_sandbox test",
+        "-c",
+        "user.email=fixture@example.invalid",
+        "commit",
+        "--quiet",
+        "-m",
+        "synthetic child",
+      ],
+      { stdio: "ignore" },
+    );
+    const childSha = execFileSync(
+      "git",
+      ["-C", childRoot, "rev-parse", "HEAD"],
+      { encoding: "utf8" },
+    ).trim();
+    const parentRoot = process.cwd();
+    const parentSha = execFileSync(
+      "git",
+      ["-C", parentRoot, "rev-parse", "HEAD"],
+      { encoding: "utf8" },
+    ).trim();
+    const parentConfigSha256 = createHash("sha256")
+      .update(await readFile(join(parentRoot, "config/platform.yaml")))
+      .digest("hex");
+    const signer = {
+      publicKeyPem: "synthetic",
+      keyId: "g16-test",
+      approver: "g16-operator",
+    };
+    const parentEvidenceDir = join(parentRoot, "evidence/launch/unused");
+    const parentContextPath = join(parentEvidenceDir, "context.json");
+    let validated;
+    let child;
+    try {
+      child = await writeControlledChildContext({
+        contextPath: parentContextPath,
+        parentIdentity: {
+          context: {
+            candidateSha: parentSha,
+            baseConfigSha256: parentConfigSha256,
+          },
+          sourceRoot: parentRoot,
+          candidateRoot: parentRoot,
+          evidenceDir: parentEvidenceDir,
+        },
+        childRoot,
+        childSha,
+        scope: "aroma_sandbox",
+        signer,
+        validateAromaSandboxLineage: async (input) => {
+          validated = input;
+          return { parentConfigSha256 };
+        },
+      });
+    } finally {
+      if (child)
+        await rm(child.context.evidenceDir, { recursive: true, force: true });
+    }
+    assert.deepEqual(validated, {
+      sourceRoot: parentRoot,
+      candidateRoot: parentRoot,
+      candidateSha: parentSha,
+      baselineRoot: childRoot,
+      baselineSha: childSha,
+      ...signer,
+    });
+    assert.equal(child.context.candidateSha, childSha);
+    assert.equal(
+      child.context.baseConfigSha256,
+      createHash("sha256")
+        .update(await readFile(childConfigPath))
+        .digest("hex"),
+    );
+    assert.equal(
+      child.context.resources.controlledParentContextPath,
+      parentContextPath,
+    );
+  } finally {
+    await rm(temporary, { recursive: true, force: true });
   }
 });
 

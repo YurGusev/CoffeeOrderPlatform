@@ -1183,6 +1183,8 @@ const SAFE_FAILURE_CODES = new Set([
   "AROMA_SANDBOX_CATALOG_CHECK_FAILED",
   "RECOVERY_REQUIRED",
   "G16_CHILD_FAILURE_UNVERIFIED",
+  "AROMA_SANDBOX_PREPARATION_FAILED",
+  "AROMA_SANDBOX_PREPARATION_TIMEOUT",
 ]);
 
 export function safeAromaFailureCode(error) {
@@ -4022,6 +4024,79 @@ export async function handleControlledAromaSandboxChildFailure({
   throw failureError;
 }
 
+const MAX_CONTROLLED_PREPARATION_MS = 10 * 60 * 1000;
+const CONTROLLED_LIVE_RESERVE_MS = 10 * 60 * 1000;
+
+function controlledPreparationDeadline() {
+  const now = Date.now();
+  const gateDeadline = Number(process.env.COFFEE_LAUNCH_GATE_DEADLINE_EPOCH_MS);
+  const fallback = now + MAX_CONTROLLED_PREPARATION_MS;
+  if (!Number.isSafeInteger(gateDeadline) || gateDeadline <= now)
+    return fallback;
+  return Math.min(
+    fallback,
+    Math.max(now + 60_000, gateDeadline - CONTROLLED_LIVE_RESERVE_MS),
+  );
+}
+
+function controlledPreparationTimeout(phase) {
+  const error = new Error("AROMA_SANDBOX_PREPARATION_TIMEOUT");
+  error.safeDetails = { phase };
+  return error;
+}
+
+export async function runControlledPreparationStep(phase, deadline, operation) {
+  const remaining = deadline - Date.now();
+  if (remaining <= 0)
+    throw annotateControlledPreparationFailure(
+      controlledPreparationTimeout(phase),
+      phase,
+    );
+  let timer;
+  try {
+    return await Promise.race([
+      operation(),
+      new Promise((_, reject) => {
+        timer = setTimeout(
+          () => reject(controlledPreparationTimeout(phase)),
+          remaining,
+        );
+        timer.unref();
+      }),
+    ]);
+  } catch (error) {
+    throw annotateControlledPreparationFailure(error, phase);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function annotateControlledPreparationFailure(error, phase) {
+  const details =
+    error?.safeDetails && typeof error.safeDetails === "object"
+      ? error.safeDetails
+      : {};
+  if (error?.message === "AROMA_SANDBOX_PREPARATION_TIMEOUT")
+    return Object.assign(error, { safeDetails: { ...details, phase } });
+  const code = safeAromaFailureCode(error);
+  if (code !== "AROMA_SANDBOX_FAILED") {
+    if (error && typeof error === "object")
+      error.safeDetails = { ...details, phase };
+    return error;
+  }
+  const failure = new Error("AROMA_SANDBOX_PREPARATION_FAILED");
+  failure.safeDetails = {
+    ...details,
+    phase,
+    causeCode:
+      typeof error?.message === "string" &&
+      /^[A-Z0-9_]{1,80}$/u.test(error.message)
+        ? error.message
+        : "AROMA_SANDBOX_FAILED",
+  };
+  return failure;
+}
+
 export async function runControlledAromaSandboxParent({
   parentIdentity,
   parentContextPath,
@@ -4069,11 +4144,20 @@ export async function runControlledAromaSandboxParent({
   let ready,
     baseline,
     child,
+    age,
+    signerIdentity,
+    bundle,
     childStarted = false,
     childVerified = false,
     signerDone = false;
   let signerDirectory;
+  let phase = "signer-start";
+  const markPhase = (next) => {
+    phase = next;
+    process.stderr.write(`[aroma_sandbox] phase=${phase}\n`);
+  };
   try {
+    markPhase("signer-start");
     ready = await nextLine();
     if (
       ready.mode !== "G16_RAM_SIGNER_READY" ||
@@ -4096,34 +4180,72 @@ export async function runControlledAromaSandboxParent({
     )
       throw new Error("G16_SIGNER_DIRECTORY_INVALID");
     signerDirectory = readyDirectory;
-    const age = await prepareAromaSandboxAge(parentIdentity, process.env);
-    const signerIdentity = {
-      publicKeyPem: ready.publicKeyPem,
-      keyId: ready.keyId,
-      approver: ready.approver,
-    };
-    baseline = await createAromaSandboxCheckout({
-      candidateRoot,
-      candidateSha: parent.candidateSha,
-      ...signerIdentity,
-    });
-    const { prepareBrowserChildCheckout, writeControlledChildContext } =
-      await import("./browser.mjs");
-    await prepareBrowserChildCheckout(baseline.baselineRoot);
-    child = await writeControlledChildContext({
-      contextPath: parentContextPath,
-      childRoot: baseline.baselineRoot,
-      childSha: baseline.baselineSha,
-      scope: "aroma_sandbox",
-      signer: signerIdentity,
-    });
-    const bundle = await writeRollbackLineageBundle({
-      candidateSha: parent.candidateSha,
-      restoredRoot: baseline.baselineRoot,
-      restoredSha: baseline.baselineSha,
-      evidenceDir,
-      scope: "aroma_sandbox",
-    });
+    markPhase("signer-ready");
+    const preparationDeadline = controlledPreparationDeadline();
+    try {
+      age = await runControlledPreparationStep("age", preparationDeadline, () =>
+        prepareAromaSandboxAge(parentIdentity, process.env),
+      );
+      markPhase("age-ready");
+      signerIdentity = {
+        publicKeyPem: ready.publicKeyPem,
+        keyId: ready.keyId,
+        approver: ready.approver,
+      };
+      baseline = await runControlledPreparationStep(
+        "checkout",
+        preparationDeadline,
+        () =>
+          createAromaSandboxCheckout({
+            candidateRoot,
+            candidateSha: parent.candidateSha,
+            ...signerIdentity,
+          }),
+      );
+      markPhase("checkout-created");
+      const { prepareBrowserChildCheckout, writeControlledChildContext } =
+        await runControlledPreparationStep(
+          "browser-helper",
+          preparationDeadline,
+          () => import("./browser.mjs"),
+        );
+      await runControlledPreparationStep(
+        "child-checkout",
+        preparationDeadline,
+        () => prepareBrowserChildCheckout(baseline.baselineRoot),
+      );
+      markPhase("child-checkout-prepared");
+      child = await runControlledPreparationStep(
+        "child-context",
+        preparationDeadline,
+        () =>
+          writeControlledChildContext({
+            contextPath: parentContextPath,
+            childRoot: baseline.baselineRoot,
+            childSha: baseline.baselineSha,
+            scope: "aroma_sandbox",
+            signer: signerIdentity,
+            parentIdentity,
+            validateAromaSandboxLineage: validateAromaSandboxCheckout,
+          }),
+      );
+      markPhase("child-context-written");
+      bundle = await runControlledPreparationStep(
+        "lineage-bundle",
+        preparationDeadline,
+        () =>
+          writeRollbackLineageBundle({
+            candidateSha: parent.candidateSha,
+            restoredRoot: baseline.baselineRoot,
+            restoredSha: baseline.baselineSha,
+            evidenceDir,
+            scope: "aroma_sandbox",
+          }),
+      );
+      markPhase("lineage-bundle-written");
+    } catch (error) {
+      throw annotateControlledPreparationFailure(error, phase);
+    }
     const artifacts = join(evidenceDir, "gates/aroma_sandbox/artifacts");
     await mkdir(artifacts, { recursive: true, mode: 0o700 });
     const env = {
@@ -4135,7 +4257,9 @@ export async function runControlledAromaSandboxParent({
     let signed;
     let signerApproved = false;
     let approvalRequests = 0;
+    markPhase("child-starting");
     childStarted = true;
+    markPhase("child-started");
     const execution = await runManagedRollbackChild({
       args: [
         join(
@@ -4169,6 +4293,7 @@ export async function runControlledAromaSandboxParent({
           !message.selected.offerRef
         )
           throw new Error("G16_APPROVAL_REQUEST_INVALID");
+        markPhase("approval-requested");
         signer.stdin.end(
           `${JSON.stringify({
             contextPath: child.path,
@@ -4192,6 +4317,7 @@ export async function runControlledAromaSandboxParent({
         )
           throw new Error("G16_SIGNER_RESPONSE_INVALID");
         signerApproved = true;
+        markPhase("approval-signed");
         return {};
       },
     }).catch(async (error) => {
@@ -4205,6 +4331,7 @@ export async function runControlledAromaSandboxParent({
         artifacts,
       });
     });
+    markPhase("child-completed");
     if (!signed || approvalRequests !== 1)
       throw new Error("G16_APPROVAL_MISSING");
     const last = execution.stdout.split(/\r?\n/u).filter(Boolean).at(-1);
@@ -4289,6 +4416,7 @@ export async function runControlledAromaSandboxParent({
       parentContextPath,
       requireCleanup: false,
     });
+    markPhase("child-evidence-verified");
     childVerified = true;
     await rm(baseline.directory, { recursive: true });
     await rm(child.context.evidenceDir, { recursive: true });
@@ -4320,6 +4448,7 @@ export async function runControlledAromaSandboxParent({
       parentIdentity,
       parentContextPath,
     });
+    markPhase("cleanup-complete");
     return {
       schemaVersion: 1,
       controlledChild: {
@@ -4332,6 +4461,15 @@ export async function runControlledAromaSandboxParent({
         sha256: digest(await readFile(receiptPath)),
       },
     };
+  } catch (error) {
+    if (error && typeof error === "object" && !error.safeDetails?.phase) {
+      const details =
+        error.safeDetails && typeof error.safeDetails === "object"
+          ? error.safeDetails
+          : {};
+      error.safeDetails = { ...details, phase };
+    }
+    throw error;
   } finally {
     if (!signerDone) {
       signer.kill("SIGTERM");

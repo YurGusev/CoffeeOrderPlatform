@@ -334,8 +334,19 @@ export async function writeControlledChildContext({
   childSha,
   scope,
   signer,
+  parentIdentity,
+  validateAromaSandboxLineage,
 }) {
-  const launch = await validateLaunchContext(contextPath);
+  // The parent already validated its launch context before starting the signer.
+  // Reuse that identity so this helper does not repeat the git-based validation
+  // (and, importantly, does not import the top-level-await entry module).
+  if (
+    parentIdentity &&
+    (typeof parentIdentity.evidenceDir !== "string" ||
+      resolve(contextPath) !== join(parentIdentity.evidenceDir, "context.json"))
+  )
+    fail("CONTROLLED_PARENT_CONTEXT_MISMATCH");
+  const launch = parentIdentity ?? (await validateLaunchContext(contextPath));
   if (
     launch.candidateRoot !== PROJECT_ROOT ||
     resolve(process.cwd()) !== launch.candidateRoot
@@ -350,9 +361,11 @@ export async function writeControlledChildContext({
       baselineSha: childSha,
     });
   } else if (scope === "aroma_sandbox") {
-    const { validateAromaSandboxCheckout } =
-      await import("./aroma-sandbox.mjs");
-    lineage = await validateAromaSandboxCheckout({
+    // Do not import ./aroma-sandbox.mjs here: it is the TLA entry module, and
+    // importing it from its own async execution deadlocks the gate.
+    if (typeof validateAromaSandboxLineage !== "function")
+      fail("CONTROLLED_AROMA_VALIDATOR_REQUIRED");
+    lineage = await validateAromaSandboxLineage({
       sourceRoot: launch.sourceRoot,
       candidateRoot: launch.candidateRoot,
       candidateSha: launch.context.candidateSha,
