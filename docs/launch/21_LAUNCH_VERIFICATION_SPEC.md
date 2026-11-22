@@ -895,6 +895,13 @@ IDs проверенного `supply_chain`, фактически использ
 доказывает browser OrderConfirm, production IdP или full-system
 `observability`.
 
+Отказ native Kafka driver в soak обязан нести ограниченную очищенную причину:
+операцию (`produce`/`consume`/`commit`/`metadata`/`disconnect`), фазу,
+native code и bounded native message. `NATIVE_OPERATION_FAILED` без такой причины
+не считается диагностируемым отказом; `NATIVE_CONNECT_FAILED` на старте
+сохраняет ту же форму. Диагностика не содержит паролей, SASL credential,
+приватных ключей и печатается `tools/realtime-capacity.mjs` при отказе soak.
+
 `contracts`/`integration`/`browser` принимают outputs #4/#5/#7/#8/#9 по
 [протоколу browser recovery](26_BROWSER_COMMAND_RECOVERY.md): потерянный ответ
 Customer/Draft/Quote, reload до resourceRef, Completed read-only replay без

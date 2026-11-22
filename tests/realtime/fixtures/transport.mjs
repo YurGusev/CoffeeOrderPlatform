@@ -362,9 +362,11 @@ export function openStream(
 }
 export async function nativeProducer() {
   const { assertFixtureKafkaNamespaceBound } = await import("./setup.mjs");
+  // RealtimeInvalidated.v1 belongs to orders-aroma-preparation; deriving the
+  // namespace from orders-service cannot resolve this producer claim.
   const physicalTargets = assertFixtureKafkaNamespaceBound(
     fixture.config,
-    "orders-service",
+    "orders-aroma-preparation",
     fixture.launchIdentity,
   );
   const { createNativeProducer } =

@@ -7,6 +7,7 @@ import {
   invalidationFrame,
 } from "../../apps/realtime-gateway/dist/index.js";
 import { config, fixture, record, envelope } from "./helpers.mjs";
+import { driverFailure } from "./fixtures/protocol.mjs";
 import { processKafkaRecord } from "../../packages/platform-kafka-runtime/dist/index.js";
 async function ingest(hub, r, quarantine = async () => {}) {
   const seen = [];
@@ -209,4 +210,31 @@ void test("retained IDs and subject versions ignore duplicates/stale, quarantine
   assert.equal(hub.stats().dedupEntries, 1);
   assert.equal(hub.stats().versionEntries, 1);
   await hub.shutdown();
+});
+
+void test("driver failure keeps a bounded native diagnostic instead of only a code", () => {
+  const diagnostic =
+    'NATIVE_OPERATION_FAILED operation=produce phase=request nativeCode=-999 nativeMessage="broker unavailable"';
+  const failure = driverFailure(
+    Object.assign(new Error(diagnostic), {
+      code: "NATIVE_OPERATION_FAILED",
+      diagnostic,
+    }),
+  );
+  assert.deepEqual(failure, {
+    code: "NATIVE_OPERATION_FAILED",
+    message: diagnostic,
+    diagnostic,
+  });
+  assert.equal(
+    driverFailure({ code: 7, message: "", diagnostic: "" }).code,
+    "TRANSPORT_PROOF_FAILED",
+  );
+  const bounded = driverFailure({
+    code: "NATIVE_OPERATION_FAILED",
+    message: "bounded",
+    diagnostic: "d".repeat(4096),
+  });
+  assert.equal(bounded.diagnostic.length, 1024);
+  assert.equal(bounded.message, "bounded");
 });
