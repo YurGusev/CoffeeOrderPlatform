@@ -70,6 +70,8 @@ const ROLLBACK_COMPOSE_SOURCE_URL = pathToFileURL(
 ).href;
 const ROLLBACK_COMPOSE_SOURCE = "tools/compose-smoke.mjs";
 const MAX_SOURCE_COORDINATE = 1_000_000;
+export const BROWSER_CHILD_DIRECTORY_NAME =
+  /^\.(?:g15-)?browser-child-[A-Za-z0-9]+$/u;
 const MAX_CHILD_DIAGNOSTIC_CHARS = 4096;
 
 function fail(code) {
@@ -175,7 +177,7 @@ async function inspectCheckout(path, expectedSha, { ownedChildRoot } = {}) {
     const info = await lstat(ownedChildRoot).catch(() => null);
     if (
       dirname(ownedChildRoot) !== canonical ||
-      !/^\.g15-browser-child-[A-Za-z0-9]+$/u.test(name) ||
+      !BROWSER_CHILD_DIRECTORY_NAME.test(name) ||
       !info?.isDirectory() ||
       info.isSymbolicLink() ||
       info.uid !== process.getuid() ||

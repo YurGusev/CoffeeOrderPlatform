@@ -29,7 +29,7 @@ import fsPromises from "node:fs/promises";
 import { syncBuiltinESMExports } from "node:module";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { Readable } from "node:stream";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import test from "node:test";
@@ -121,7 +121,13 @@ import {
   verifyControlledAromaSandboxEvidence,
   waitForAromaRestartEligibility,
 } from "./scenarios/aroma-sandbox.mjs";
-import { writeControlledChildContext } from "./scenarios/browser.mjs";
+import {
+  writeControlledChildContext,
+  BROWSER_CHILD_ARTIFACTS,
+  BROWSER_CHILD_DIRECTORY_PREFIX,
+  BROWSER_CHILD_REF,
+  browserChildBundleRef,
+} from "./scenarios/browser.mjs";
 import {
   parseTapSummary,
   tapSummaryPassed,
@@ -3141,11 +3147,7 @@ void test("browser failed gate records only a matching child failure receipt", a
   const writeJSON = (path, value, mode) =>
     writeFile(path, JSON.stringify(value), { mode });
   await writeJSON(join(evidenceDir, "context.json"), context, 0o400);
-  await writeJSON(
-    join(artifactDir, "g15-child-context.json"),
-    childContext,
-    0o400,
-  );
+  await writeJSON(join(artifactDir, "child-context.json"), childContext, 0o400);
   const failurePath = join(artifactDir, "browser-parent-failure.json");
   const failureReceipt = {
     schemaVersion: 1,
@@ -3221,6 +3223,71 @@ void test("browser failed gate records only a matching child failure receipt", a
   );
   assert.deepEqual(wrongIdentity.artifacts, []);
   assert.equal(wrongIdentity.status, "FAIL");
+});
+
+void test("browser child creates neutral directory, ref and bundle names", async (t) => {
+  for (const name of Object.values(BROWSER_CHILD_ARTIFACTS)) {
+    assert.doesNotMatch(name, /g[0-9]{2}/u);
+    assert.match(name, /^[a-z][a-z0-9.-]*$/u);
+  }
+  assert.doesNotMatch(BROWSER_CHILD_REF, /g[0-9]{2}/u);
+  assert.match(BROWSER_CHILD_REF, /^refs\/heads\/[a-z][a-z0-9-]*$/u);
+  assert.doesNotMatch(BROWSER_CHILD_DIRECTORY_PREFIX, /g[0-9]{2}/u);
+
+  const root = await mkdtemp(join(tmpdir(), "browser-child-naming-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const child = await mkdtemp(join(root, BROWSER_CHILD_DIRECTORY_PREFIX));
+  assert.match(basename(child), /^\.browser-child-[A-Za-z0-9]+$/u);
+  assert.doesNotMatch(basename(child), /g[0-9]{2}/u);
+
+  rollbackGit(root, "init", "-q", "-b", "main");
+  rollbackGit(root, "config", "user.name", "Browser fixture");
+  rollbackGit(root, "config", "user.email", "browser-fixture@example.invalid");
+  await writeFile(join(root, "fixture.txt"), "base\n");
+  rollbackGit(root, "add", "-A");
+  rollbackGit(root, "commit", "-qm", "base");
+  const base = rollbackGit(root, "rev-parse", "HEAD");
+  await writeFile(join(root, "fixture.txt"), "child\n");
+  rollbackGit(root, "add", "-A");
+  rollbackGit(root, "commit", "-qm", "child");
+  const childSha = rollbackGit(root, "rev-parse", "HEAD");
+
+  for (const [ref, name] of [
+    [BROWSER_CHILD_REF, "child.bundle"],
+    ["refs/heads/g15-browser-child", "legacy-child.bundle"],
+  ]) {
+    rollbackGit(root, "update-ref", ref, childSha);
+    const bundle = join(root, name);
+    rollbackGit(root, "bundle", "create", bundle, ref, `^${base}`);
+    const heads = rollbackGit(root, "bundle", "list-heads", bundle).split(
+      /\s+/u,
+    );
+    assert.equal(browserChildBundleRef(heads, childSha), ref);
+  }
+  assert.doesNotMatch(
+    rollbackGit(root, "bundle", "list-heads", join(root, "child.bundle")),
+    /g[0-9]{2}/u,
+  );
+});
+
+void test("browser child accepts legacy owned checkout directory names", async (t) => {
+  const fixture = await rollbackGitFixture(t);
+  for (const prefix of [
+    BROWSER_CHILD_DIRECTORY_PREFIX,
+    ".g15-browser-child-",
+  ]) {
+    const child = await mkdtemp(join(fixture.roots.candidate, prefix));
+    try {
+      rollbackGit(child, "init", "-q");
+      await inspectLaunchCheckout(
+        fixture.roots.candidate,
+        fixture.candidateSha,
+        { ownedChildRoot: child },
+      );
+    } finally {
+      await rm(child, { recursive: true, force: true });
+    }
+  }
 });
 
 void test("browser parent removes its temporary child checkout and keeps qualification evidence private", async (t) => {
@@ -3352,7 +3419,7 @@ void test("browser parent removes its temporary child checkout and keeps qualifi
         assert.equal(dirname(childContext.checkoutDir), root);
         assert.match(
           childContext.checkoutDir.slice(root.length + 1),
-          /^\.g15-browser-child-[A-Za-z0-9]+$/u,
+          /^\.browser-child-[A-Za-z0-9]+$/u,
         );
         await assert.rejects(
           inspectLaunchCheckout(root, sha),
@@ -3368,8 +3435,10 @@ void test("browser parent removes its temporary child checkout and keeps qualifi
   );
   assert.equal(await stat(childContext.checkoutDir).catch(() => null), null);
   assert.equal(
-    (await readdir(root)).some((name) =>
-      name.startsWith(".g15-browser-child-"),
+    (await readdir(root)).some(
+      (name) =>
+        name.startsWith(".browser-child-") ||
+        name.startsWith(".g15-browser-child-"),
     ),
     false,
   );
