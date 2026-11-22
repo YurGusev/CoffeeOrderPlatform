@@ -12,7 +12,7 @@ import {
   writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { isDeepStrictEqual } from "node:util";
 import { loadPlatformConfig } from "../../../../scripts/config-lib.mjs";
@@ -27,6 +27,7 @@ import {
 } from "../../../../tools/browser-proof.mjs";
 import { validateLaunchContext } from "../report.mjs";
 import {
+  BROWSER_CHILD_DIRECTORY_NAME,
   inspectLaunchCheckout,
   runManagedRollbackChild,
   validateRollbackBaseline,
@@ -40,17 +41,20 @@ const SHA = /^[0-9a-f]{40}$/u;
 const SHA256 = /^[0-9a-f]{64}$/u;
 const RUN_ID = /^[0-9]{8}T[0-9]{6}Z-[0-9a-f]{7}$/u;
 const MAX_BUNDLE_BYTES = 64 * 1024 * 1024;
-const CHILD_REF = "refs/heads/g15-browser-child";
+const CHILD_REF = "refs/heads/browser-child";
+const LEGACY_CHILD_REF = "refs/heads/g15-browser-child";
+export const BROWSER_CHILD_DIRECTORY_PREFIX = ".browser-child-";
 const ARTIFACTS = Object.freeze({
-  childContext: "g15-child-context.json",
-  lineage: "g15-oidc-fixture-lineage.json",
-  browserRuntime: "g15-child-browser-runtime.json",
-  bundle: "g15-browser-child.bundle",
-  baseConfig: "g15-base-platform.yaml",
-  childConfig: "g15-child-platform.yaml",
+  childContext: "child-context.json",
+  lineage: "oidc-fixture-lineage.json",
+  browserRuntime: "child-browser-runtime.json",
+  bundle: "browser-child.bundle",
+  baseConfig: "base-platform.yaml",
+  childConfig: "child-platform.yaml",
   parentRuntime: "browser-parent.json",
   parentFailure: "browser-parent-failure.json",
 });
+export { ARTIFACTS as BROWSER_CHILD_ARTIFACTS, CHILD_REF as BROWSER_CHILD_REF };
 const CORRELATION_ARTIFACTS = Object.freeze({
   childContext: "browser-context.json",
   lineage: "browser-lineage.json",
@@ -712,6 +716,17 @@ export function validateBrowserChildProcess(
   return callbackProof;
 }
 
+export function browserChildBundleRef(heads, candidateSha) {
+  const [sha, ref, ...rest] = heads;
+  if (
+    rest.length !== 0 ||
+    sha !== candidateSha ||
+    (ref !== CHILD_REF && ref !== LEGACY_CHILD_REF)
+  )
+    fail("BROWSER_BUNDLE_REF_INVALID");
+  return ref;
+}
+
 export async function verifyBrowserChildBundle({
   bundlePath,
   baseCandidateSha,
@@ -732,7 +747,7 @@ export async function verifyBrowserChildBundle({
       ).equals(baseConfigBytes))
   )
     fail("BROWSER_BUNDLE_BASE_MISMATCH");
-  const tempRoot = await mkdtemp(join(tmpdir(), "coffee-g15-admission-"));
+  const tempRoot = await mkdtemp(join(tmpdir(), "coffee-browser-admission-"));
   const objectStore = join(tempRoot, "objects.git");
   const checkoutRoot = join(tempRoot, "checkout");
   try {
@@ -748,7 +763,7 @@ export async function verifyBrowserChildBundle({
         "fetch",
         "--no-tags",
         baseSourceRoot,
-        `${baseCandidateSha}:refs/heads/g15-base`,
+        `${baseCandidateSha}:refs/heads/browser-base`,
       ],
       "BROWSER_BUNDLE_BASE_MISSING",
       { stdio: "ignore", timeout: 60_000 },
@@ -758,18 +773,6 @@ export async function verifyBrowserChildBundle({
       "BROWSER_BUNDLE_VERIFY_FAILED",
       { stdio: "ignore", timeout: 60_000 },
     );
-    gitAdmission(
-      [
-        "-C",
-        objectStore,
-        "fetch",
-        "--no-tags",
-        bundlePath,
-        `${CHILD_REF}:${CHILD_REF}`,
-      ],
-      "BROWSER_BUNDLE_FETCH_FAILED",
-      { stdio: "ignore", timeout: 60_000 },
-    );
     const heads = gitAdmission(
       ["bundle", "list-heads", bundlePath],
       "BROWSER_BUNDLE_HEADS_FAILED",
@@ -777,8 +780,19 @@ export async function verifyBrowserChildBundle({
     )
       .trim()
       .split(/\s+/u);
-    if (!isDeepStrictEqual(heads, [childContext.candidateSha, CHILD_REF]))
-      fail("BROWSER_BUNDLE_REF_INVALID");
+    const bundleRef = browserChildBundleRef(heads, childContext.candidateSha);
+    gitAdmission(
+      [
+        "-C",
+        objectStore,
+        "fetch",
+        "--no-tags",
+        bundlePath,
+        `${bundleRef}:${bundleRef}`,
+      ],
+      "BROWSER_BUNDLE_FETCH_FAILED",
+      { stdio: "ignore", timeout: 60_000 },
+    );
     gitAdmission(
       [
         "--git-dir",
@@ -1258,9 +1272,7 @@ export async function validateBrowserCorrelation({
     ) ||
     receipt.cleanup.attachment.routePreserved !== true ||
     dirname(childContext.checkoutDir) !== resolve(parentContext.checkoutDir) ||
-    !childContext.checkoutDir.startsWith(
-      join(resolve(parentContext.checkoutDir), ".g15-browser-child-"),
-    )
+    !BROWSER_CHILD_DIRECTORY_NAME.test(basename(childContext.checkoutDir))
   )
     fail("OBSERVABILITY_BROWSER_CORRELATION_RECEIPT_INVALID");
   try {
@@ -1387,7 +1399,9 @@ export async function runBrowserParent({
     fail("BROWSER_PARENT_PROFILE_MUST_BE_NULL");
   const variantBytes = Buffer.from(fixtureConfigText(baseConfigText), "utf8");
   const variantHash = sha256(variantBytes);
-  const childRoot = await mkdtemp(join(candidateRoot, ".g15-browser-child-"));
+  const childRoot = await mkdtemp(
+    join(candidateRoot, BROWSER_CHILD_DIRECTORY_PREFIX),
+  );
   let childEvidenceDir;
   let childContext;
   let childSha;

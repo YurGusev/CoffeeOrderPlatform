@@ -41,6 +41,7 @@ import {
 } from "./scenarios/rollback.mjs";
 import { validateRoleMap } from "../../../scripts/db-bootstrap.mjs";
 import {
+  BROWSER_CHILD_ARTIFACTS,
   validateBrowserChildContext,
   validateBrowserCorrelation,
   validateBrowserFailureReceipt,
@@ -2030,7 +2031,10 @@ export async function verifyGateArtifacts(
         )
           return failure;
         const artifactRoot = join(gateDir, "artifacts");
-        const childContextPath = join(artifactRoot, "g15-child-context.json");
+        const childContextPath = join(
+          artifactRoot,
+          BROWSER_CHILD_ARTIFACTS.childContext,
+        );
         await assertNoSymlinkPath(evidenceDir, childContextPath);
         const childContextInfo = await lstat(childContextPath);
         if (
@@ -2108,13 +2112,13 @@ export async function verifyGateArtifacts(
     }
     const artifactRoot = join(gateDir, "artifacts");
     for (const name of [
-      "browser-parent.json",
-      "g15-child-context.json",
-      "g15-oidc-fixture-lineage.json",
-      "g15-child-browser-runtime.json",
-      "g15-browser-child.bundle",
-      "g15-base-platform.yaml",
-      "g15-child-platform.yaml",
+      BROWSER_CHILD_ARTIFACTS.parentRuntime,
+      BROWSER_CHILD_ARTIFACTS.childContext,
+      BROWSER_CHILD_ARTIFACTS.lineage,
+      BROWSER_CHILD_ARTIFACTS.browserRuntime,
+      BROWSER_CHILD_ARTIFACTS.bundle,
+      BROWSER_CHILD_ARTIFACTS.baseConfig,
+      BROWSER_CHILD_ARTIFACTS.childConfig,
     ])
       additions.push(await hashFile(join(artifactRoot, name)));
   }
