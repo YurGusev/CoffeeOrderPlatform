@@ -26,6 +26,7 @@ import { isDeepStrictEqual } from "node:util";
 import { load as parseYaml } from "js-yaml";
 import {
   EXPECTED_GATES,
+  isLaunchReportPath,
   splitExactCommand,
   validateChecksumManifest,
   validateKafkaNamespaceInventory,
@@ -532,15 +533,30 @@ async function git(cwd, ...args) {
   return result.stdout;
 }
 
+export function sourceChangesWithoutRunnerReports(status) {
+  return String(status)
+    .split(/\r?\n/u)
+    .filter(Boolean)
+    .filter(
+      (line) => !line.startsWith("?? ") || !isLaunchReportPath(line.slice(3)),
+    )
+    .join("\n");
+}
+
 async function sourceState() {
   const sourceSha = await git(ROOT, "rev-parse", "HEAD");
   const status = await git(
     ROOT,
+    "-c",
+    "core.quotePath=false",
     "status",
     "--porcelain=v1",
     "--untracked-files=all",
   );
-  return { sourceSha, status };
+  return {
+    sourceSha,
+    status: sourceChangesWithoutRunnerReports(status),
+  };
 }
 
 export async function normalizeCandidateInputModes(candidate) {
@@ -1063,6 +1079,7 @@ export function selectGates(matrixGates, options = {}) {
   return {
     profile,
     budgetProfile: profile === DIAGNOSTIC_PROFILE ? DEFAULT_PROFILE : profile,
+    publishReport: profile === "release",
     gates,
   };
 }
@@ -1424,6 +1441,7 @@ export async function verifyGateArtifacts(
   record,
   evidenceDir,
   realtimeQualification,
+  { publishReport = true } = {},
 ) {
   const gateDir = join(evidenceDir, "gates", gate.id);
   const context = JSON.parse(
@@ -2241,16 +2259,19 @@ export async function verifyGateArtifacts(
     );
     const checksumPath = join(evidenceDir, "checksums.sha256");
     try {
-      await access(reportPath);
+      if (publishReport) await access(reportPath);
       await access(checksumPath);
     } catch {
-      return "report не создал ОТЧЁТ.md и checksums.sha256";
+      return publishReport
+        ? "report не создал ОТЧЁТ.md и checksums.sha256"
+        : "report не создал checksums.sha256";
     }
     try {
       await validateChecksumManifest(
         evidenceDir,
         context.sourceRepoRoot,
         context.runId,
+        { publishReport },
       );
     } catch (error) {
       return `report checksums manifest invalid: ${redactText(error.message)}`;
@@ -2350,6 +2371,7 @@ export async function runGate(
   g16SignerPath,
   dataTempDir,
   profile = DEFAULT_PROFILE,
+  publishReport = true,
 ) {
   if (outputBudget.exceeded && gate.id !== "report") {
     record.reason =
@@ -2587,6 +2609,7 @@ export async function runGate(
     record,
     evidenceDir,
     realtimeQualification,
+    { publishReport },
   );
   if (artifactError) {
     record.status = "FAIL";
@@ -3136,6 +3159,7 @@ export async function executeRun(options = {}) {
         options.g16SignerPath,
         dataTempDir,
         budgetProfile,
+        selection.publishReport,
       );
       if (gate.id === "preflight" && record.status === "PASS") {
         try {
@@ -3195,9 +3219,12 @@ export async function executeRun(options = {}) {
     await saveCommandsNdjson(evidenceDir, result.gates);
     result.decision = decisive(result.gates, budgetProfile);
     await save();
+    const finalizeArgument = selection.publishReport
+      ? "--finalize"
+      : "--finalize-evidence";
     const reportResult = await runCapture(
       process.execPath,
-      [join(BASE, "report.mjs"), "--finalize", evidenceDir],
+      [join(BASE, "report.mjs"), finalizeArgument, evidenceDir],
       ROOT,
       Math.max(
         1,
@@ -3213,7 +3240,7 @@ export async function executeRun(options = {}) {
       await save();
       await runCapture(
         process.execPath,
-        [join(BASE, "report.mjs"), "--finalize", evidenceDir],
+        [join(BASE, "report.mjs"), finalizeArgument, evidenceDir],
         ROOT,
         Math.max(
           1,

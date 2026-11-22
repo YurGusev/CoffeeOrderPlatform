@@ -61,9 +61,12 @@ rollback — отдельный baseline `B` с единственным изм�
 
 Решение выносится по девятнадцати рабочим гейтам. `report` остаётся
 обязательным артефактом прогона (`evidence/launch/<run-id>`,
-`checksums.sha256`, `docs/reports/launch/<run-id>/ОТЧЁТ.md`), но его статус не
-участвует в решении и публикуется в `run-result.json` отдельным полем
-`reportStatus`.
+`checksums.sha256`), но его статус не участвует в решении и публикуется в
+`run-result.json` отдельным полем `reportStatus`. Отчёт
+`docs/reports/launch/<run-id>/ОТЧЁТ.md` публикуется только полным
+`release`-прогоном; диагностические профили и фильтры `--gate`/`--from`
+финализируют `run-result.json`, `decision.json` и `checksums.sha256` только в
+evidence и не пишут в отслеживаемое дерево.
 
 Результат имеет только два значения:
 
@@ -111,7 +114,7 @@ verification/launch/v1/matrix.yaml
 verification/launch/v1/run.mjs
 verification/launch/v1/schemas/{matrix,run-result}.schema.json
 verification/launch/v1/scenarios/**
-docs/reports/launch/<run-id>/ОТЧЁТ.md
+docs/reports/launch/<run-id>/ОТЧЁТ.md         # только полный release-прогон
 evidence/launch/<run-id>/
   environment.json
   commands.ndjson
@@ -682,7 +685,9 @@ digests, таблицу гейтов запуска, exact commands/durations/re
 артефактов, sandbox account fingerprint без credentials, backup RPO/restore
 times, observability/rollback результаты, defect issues, открытые риски и
 непроверенное поведение. Отчёт генерируется из result JSON; ручное изменение
-decision запрещено schema/checksum check.
+decision запрещено schema/checksum check. Файл публикуется в
+`docs/reports/launch/<run-id>/` только полным `release`-прогоном;
+диагностический прогон не создаёт его и сохраняет решение в evidence.
 
 До заморозки candidate SHA исходный `evidence/handoffs/issue-13.yaml` фиксирует
 фактические inputs, outputs и выполненные проверки на момент подготовки, без
@@ -951,11 +956,13 @@ YAML parser из проверенного исходного checkout; отчё�
 исключительной командой `install`. Exact argv gates не меняется. Это настройка
 инструмента проверки, а не override конфигурации приложения.
 
-Результаты сохраняются в `evidence/launch/<run-id>/` и
-`docs/reports/launch/<run-id>/ОТЧЁТ.md`; временный checkout удаляется после
-сохранения результата. При `НЕ ДОПУСТИТЬ` runner возвращает exit 1. Новый запуск
-требует нового run-id; предыдущие evidence сохраняются. `report` создаёт отчёт и
-checksums даже после отказа `preflight`, когда install и все downstream gates не запущены.
+Результаты сохраняются в `evidence/launch/<run-id>/`; полный `release`-прогон
+дополнительно публикует `docs/reports/launch/<run-id>/ОТЧЁТ.md`. Временный
+checkout удаляется после сохранения результата. При `НЕ ДОПУСТИТЬ` runner
+возвращает exit 1. Новый запуск требует нового run-id; предыдущие evidence
+сохраняются. `report` создаёт evidence и checksums даже после отказа
+`preflight`, когда install и все downstream gates не запущены; отчёт в
+`docs/reports/launch/` при этом создаёт только полный `release`-прогон.
 Новый `checksums.sha256` содержит стандартные строки `SHA-256  relative-path`.
 Проверка из корня репозитория:
 
@@ -999,8 +1006,10 @@ node --test verification/launch/v1/runner.test.mjs \
 единый лимит 120 минут и ограничивает и каждую команду гейта, и прогон целиком.
 Только `release` может вынести `ДОПУСТИТЬ`; `admission`, `fast`, `--gate` и
 `--from` всегда диагностические. `report` публикует статус отчёта отдельно и
-не участвует в решении. Исчерпанный бюджет завершает оставшиеся гейты как
-`NOT_RUN`; решение в этом случае `НЕ ДОПУСТИТЬ`.
+не участвует в решении. `ОТЧЁТ.md` в `docs/reports/launch/` создаёт только
+полный `release`-прогон; диагностический запуск оставляет свой результат в
+evidence. Исчерпанный бюджет завершает оставшиеся гейты как `NOT_RUN`; решение
+в этом случае `НЕ ДОПУСТИТЬ`.
 
 ### 18.2. Фильтры
 

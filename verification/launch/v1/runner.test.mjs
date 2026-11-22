@@ -48,6 +48,7 @@ import {
   runGate,
   selectGates,
   SKIPPED_BY_FILTER,
+  sourceChangesWithoutRunnerReports,
   splitCommand,
   validateRunResult,
   validateLaunchDataTempDir,
@@ -194,6 +195,7 @@ void test("launch controller reaches evidence preflight without compiled service
     "tools/image-inventory.mjs",
     "tools/runtime-image-inventory.mjs",
     "verification/launch/v1/decision.mjs",
+    "verification/launch/v1/report.mjs",
     "verification/launch/v1/run.mjs",
   ])
     await cp(join(source, path), join(controller, path));
@@ -7655,6 +7657,125 @@ void test("candidate report and owner suites accept only the exact launch candid
     /GITHUB_PREDECESSORS: \{"failureCount":1,"missingAcceptedMerge":"#12"\}/,
   );
 
+  const diagnosticRunId = `20261023T130000Z-${candidateSha.slice(0, 7)}`;
+  // --gate install selects the diagnostic profile: its report stays in evidence.
+  const diagnosticEvidenceDir = join(
+    sourceRoot,
+    "evidence/launch",
+    diagnosticRunId,
+  );
+  const diagnosticGates = structuredClone(gates);
+  const diagnosticResult = structuredClone(result);
+  diagnosticResult.profile = "diagnostic";
+  diagnosticResult.runId = diagnosticRunId;
+  diagnosticResult.environment.runId = diagnosticRunId;
+  diagnosticResult.environment.resources.composeProject.name = `coffee-launch-${diagnosticRunId.toLowerCase()}`;
+  diagnosticResult.environment.resources.databases =
+    CANONICAL_DATABASE_OWNERS.map((owner) => ({
+      name: deriveLaunchDatabaseName(
+        { runId: diagnosticRunId, candidateSha },
+        owner,
+      ),
+      created: false,
+    }));
+  diagnosticResult.environment.resources.kafkaPrefix.name = diagnosticRunId;
+  diagnosticResult.gates = diagnosticGates;
+  diagnosticResult.reportStatus = "NOT_RUN";
+  diagnosticResult.decision = "НЕ ДОПУСТИТЬ";
+  await mkdir(diagnosticEvidenceDir, { recursive: true });
+  await writeFile(
+    join(diagnosticEvidenceDir, "context.json"),
+    JSON.stringify({
+      schemaVersion: 1,
+      sourceRepoRoot: sourceRoot,
+      evidenceDir: diagnosticEvidenceDir,
+      runId: diagnosticRunId,
+      candidateSha,
+      checkoutDir: candidateRoot,
+      resources: {
+        composeProject: `coffee-launch-${diagnosticRunId.toLowerCase()}`,
+        kafkaPrefix: diagnosticRunId,
+      },
+    }),
+  );
+  await writeFile(
+    join(diagnosticEvidenceDir, "run-result.json"),
+    JSON.stringify(diagnosticResult),
+  );
+  await writeFile(join(diagnosticEvidenceDir, "commands.ndjson"), "");
+  for (const gate of diagnosticGates) {
+    const gateDir = join(diagnosticEvidenceDir, "gates", gate.id);
+    await mkdir(join(gateDir, "artifacts"), { recursive: true });
+    await writeFile(join(gateDir, "result.json"), JSON.stringify(gate));
+    await writeFile(join(gateDir, "stdout.log"), "");
+    await writeFile(join(gateDir, "stderr.log"), "");
+  }
+  const diagnosticExecuted = spawnSync(process.execPath, [candidateReport], {
+    cwd: candidateRoot,
+    encoding: "utf8",
+    timeout: 10_000,
+    maxBuffer: 64 * 1024,
+    env: {
+      ...process.env,
+      COFFEE_LAUNCH_CONTEXT_FILE: join(diagnosticEvidenceDir, "context.json"),
+    },
+  });
+  assert.equal(diagnosticExecuted.status, 0, diagnosticExecuted.stderr);
+  await assert.rejects(
+    access(
+      join(sourceRoot, "docs/reports/launch", diagnosticRunId, "ОТЧЁТ.md"),
+    ),
+    { code: "ENOENT" },
+  );
+  const diagnosticDecision = JSON.parse(
+    await readFile(join(diagnosticEvidenceDir, "decision.json"), "utf8"),
+  );
+  assert.equal(diagnosticDecision.decision, "НЕ ДОПУСТИТЬ");
+  await validateChecksumManifest(
+    diagnosticEvidenceDir,
+    sourceRoot,
+    diagnosticRunId,
+    { publishReport: false },
+  );
+  const diagnosticReportGate = { artifacts: [], runs: [] };
+  assert.equal(
+    await verifyGateArtifacts(
+      gates[19],
+      diagnosticReportGate,
+      diagnosticEvidenceDir,
+      undefined,
+      { publishReport: false },
+    ),
+    null,
+  );
+  assert.match(
+    await verifyGateArtifacts(
+      gates[19],
+      { artifacts: [], runs: [] },
+      diagnosticEvidenceDir,
+      undefined,
+      { publishReport: true },
+    ),
+    /ОТЧЁТ\.md/u,
+  );
+  const evidenceOnly = spawnSync(
+    process.execPath,
+    [candidateReport, "--finalize-evidence", diagnosticEvidenceDir],
+    {
+      cwd: candidateRoot,
+      encoding: "utf8",
+      timeout: 10_000,
+      maxBuffer: 64 * 1024,
+    },
+  );
+  assert.equal(evidenceOnly.status, 0, evidenceOnly.stderr);
+  await assert.rejects(
+    access(
+      join(sourceRoot, "docs/reports/launch", diagnosticRunId, "ОТЧЁТ.md"),
+    ),
+    { code: "ENOENT" },
+  );
+
   const symlinkTargets = [
     join(evidenceDir, "run-result.json"),
     join(evidenceDir, "defects.json"),
@@ -8615,6 +8736,7 @@ void test("fast profile runs exactly nine gates and filters the other eleven", a
   const selection = selectGates(gates, options);
   assert.equal(selection.profile, "fast");
   assert.equal(selection.budgetProfile, "fast");
+  assert.equal(selection.publishReport, false);
   const running = [...selection.gates.values()]
     .filter((entry) => entry.status === "RUN")
     .map((entry) => entry.id);
@@ -8663,6 +8785,7 @@ void test("fast profile runs exactly nine gates and filters the other eleven", a
     gates,
     parseLaunchArguments(["--profile", "release"]),
   );
+  assert.equal(release.publishReport, true);
   assert.equal(
     [...release.gates.values()].filter((entry) => entry.status === "RUN")
       .length,
@@ -8676,6 +8799,13 @@ void test("single-gate diagnostic skips ancestors and cannot be admitted", async
     gates,
     parseLaunchArguments(["--gate", "compose"]),
   );
+  assert.equal(selection.publishReport, false);
+  const installSelection = selectGates(
+    gates,
+    parseLaunchArguments(["--gate", "install"]),
+  );
+  assert.equal(installSelection.profile, "diagnostic");
+  assert.equal(installSelection.publishReport, false);
   const running = [...selection.gates.values()]
     .filter((entry) => entry.status === "RUN")
     .map((entry) => entry.id);
@@ -8703,6 +8833,69 @@ void test("single-gate diagnostic skips ancestors and cannot be admitted", async
   assert.deepEqual(blockingPredecessors(compose, records), []);
   records.find((gate) => gate.id === "recovery").status = "FAIL";
   assert.deepEqual(blockingPredecessors(compose, records), ["recovery"]);
+});
+
+void test("source dirtiness ignores only runner-owned untracked launch reports", async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), "launch-source-status-"));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const root = join(directory, "source");
+  await mkdir(root);
+  const git = (...args) =>
+    execFileSync(
+      "git",
+      [
+        "-C",
+        root,
+        "-c",
+        "user.name=Launch fixture",
+        "-c",
+        "user.email=launch-fixture@example.invalid",
+        ...args,
+      ],
+      { encoding: "utf8" },
+    );
+  const status = () =>
+    execFileSync(
+      "git",
+      [
+        "-C",
+        root,
+        "-c",
+        "core.quotePath=false",
+        "status",
+        "--porcelain=v1",
+        "--untracked-files=all",
+      ],
+      { encoding: "utf8" },
+    );
+  git("init", "--quiet");
+  await writeFile(join(root, "tracked.txt"), "clean\n");
+  git("add", "tracked.txt");
+  git("commit", "--quiet", "-m", "fixture");
+
+  const previousRunId = "20260101T000000Z-abcdef0";
+  const reportPath = join(
+    root,
+    "docs/reports/launch",
+    previousRunId,
+    "ОТЧЁТ.md",
+  );
+  await mkdir(dirname(reportPath), { recursive: true });
+  await writeFile(reportPath, "# НЕ ДОПУСТИТЬ\n");
+  assert.match(status(), /ОТЧЁТ\.md/u);
+  assert.equal(sourceChangesWithoutRunnerReports(status()), "");
+
+  await writeFile(join(root, "foreign.txt"), "foreign\n");
+  assert.match(sourceChangesWithoutRunnerReports(status()), /foreign\.txt/u);
+  await rm(join(root, "foreign.txt"));
+
+  git("add", "docs/reports/launch");
+  git("commit", "--quiet", "-m", "tracked report");
+  await writeFile(reportPath, "# ДОПУСТИТЬ\n");
+  assert.match(
+    sourceChangesWithoutRunnerReports(status()),
+    /docs\/reports\/launch\/.*ОТЧЁТ\.md/u,
+  );
 });
 
 void test("--from requires PASS ancestors in the resume source", async () => {
@@ -8928,6 +9121,7 @@ void test("admission profile runs only the admission gate and stays diagnostic",
   );
   assert.equal(selection.profile, "admission");
   assert.equal(selection.budgetProfile, "admission");
+  assert.equal(selection.publishReport, false);
   assert.equal(profileBudgetMs("admission"), 90_000);
   const running = [...selection.gates.values()]
     .filter((entry) => entry.status === "RUN")
