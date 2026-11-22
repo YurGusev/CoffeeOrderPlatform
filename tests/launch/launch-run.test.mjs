@@ -71,34 +71,58 @@ void test("нечисловой --g08-expected-system-identifier отклоня�
   assert.equal(existsSync(environment.dockerCalls), false);
 });
 
-void test("числовой идентификатор доходит до выбора кандидата без supply_chain, soak и прогона", async (t) => {
-  const environment = await launchEnvironment(t);
-  // Фейковый git и заранее созданный каталог кандидата останавливают обёртку
-  // ровно на выборе кандидата, не создавая worktree и не трогая настоящий Docker.
-  await mkdir(join(environment.state, "candidates", SHA), {
-    recursive: true,
+for (const variant of [
+  { label: "без ведущего --", args: [] },
+  { label: "с ведущим --", args: ["--"] },
+]) {
+  void test(`${variant.label} числовой идентификатор доходит до выбора кандидата без supply_chain, soak и прогона`, async (t) => {
+    const environment = await launchEnvironment(t);
+    // Фейковый git и заранее созданный каталог кандидата останавливают обёртку
+    // ровно на выборе кандидата, не создавая worktree и не трогая настоящий Docker.
+    await mkdir(join(environment.state, "candidates", SHA), {
+      recursive: true,
+    });
+    const sopsKey = join(environment.root, "sops.key");
+    await writeFile(sopsKey, "");
+    const result = launch(
+      environment,
+      [
+        ...variant.args,
+        "--sha",
+        SHA,
+        "--g08-expected-system-identifier",
+        "1234567890",
+        "--min-free-gib",
+        "0",
+        ...SKIP_FLAGS,
+      ],
+      { SOPS_AGE_KEY_FILE: sopsKey },
+    );
+    assert.equal(result.status, 1, result.stderr);
+    assert.match(result.stderr, /кандидат уже существует/u);
+    assert.doesNotMatch(
+      result.stderr,
+      /неизвестный аргумент|--g08-expected-system-identifier/u,
+    );
+    assert.equal(existsSync(environment.dockerCalls), true);
+    assert.doesNotMatch(
+      result.stdout,
+      /supply_chain\.\.\.|realtime qualification|полный прогон/u,
+    );
   });
-  const sopsKey = join(environment.root, "sops.key");
-  await writeFile(sopsKey, "");
-  const result = launch(
-    environment,
-    [
-      "--sha",
-      SHA,
-      "--g08-expected-system-identifier",
-      "1234567890",
-      "--min-free-gib",
-      "0",
-      ...SKIP_FLAGS,
-    ],
-    { SOPS_AGE_KEY_FILE: sopsKey },
-  );
+}
+
+void test("-- вторым аргументом отклоняется как неизвестный", async (t) => {
+  const environment = await launchEnvironment(t);
+  const result = launch(environment, [
+    "--sha",
+    SHA,
+    "--",
+    "--g08-expected-system-identifier",
+    "1234567890",
+  ]);
   assert.equal(result.status, 1, result.stderr);
-  assert.match(result.stderr, /кандидат уже существует/u);
-  assert.doesNotMatch(result.stderr, /--g08-expected-system-identifier/u);
-  assert.equal(existsSync(environment.dockerCalls), true);
-  assert.doesNotMatch(
-    result.stdout,
-    /supply_chain\.\.\.|realtime qualification|полный прогон/u,
-  );
+  assert.match(result.stderr, /неизвестный аргумент: --/u);
+  assert.equal(existsSync(environment.state), false);
+  assert.equal(existsSync(environment.dockerCalls), false);
 });

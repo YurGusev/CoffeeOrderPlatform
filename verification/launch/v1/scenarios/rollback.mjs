@@ -72,6 +72,7 @@ const ROLLBACK_COMPOSE_SOURCE = "tools/compose-smoke.mjs";
 const MAX_SOURCE_COORDINATE = 1_000_000;
 export const BROWSER_CHILD_DIRECTORY_NAME =
   /^\.(?:g15-)?browser-child-[A-Za-z0-9]+$/u;
+const MAX_CHILD_DIAGNOSTIC_CHARS = 4096;
 
 function fail(code) {
   throw new Error(code);
@@ -735,6 +736,41 @@ export async function createRollbackCheckouts({
   }
 }
 
+function redactChildDiagnostic(text) {
+  return String(text)
+    .replace(
+      /-----BEGIN [^-]*(?:PRIVATE KEY|CERTIFICATE)-----[\s\S]*?-----END [^-]+-----/gu,
+      "[REDACTED PRIVATE MATERIAL]",
+    )
+    .replace(/\bBearer\s+[A-Za-z0-9._~+/-]+=*/giu, "Bearer [REDACTED]")
+    .replace(
+      /\b(?:postgres(?:ql)?|mysql|mongodb(?:\+srv)?):\/\/[^\s"'<>]+/giu,
+      "[REDACTED-URL]",
+    )
+    .replace(
+      /\b(?:password|passwd|secret|token|api[_-]?key|authorization|cookie|set-cookie|client[_-]?secret)(\s*[=:]\s*)("[^"]*"|'[^']*'|[^\s,;}]+)/giu,
+      "$1[REDACTED]",
+    );
+}
+
+function childDiagnostic(result) {
+  const sections = [];
+  for (const [name, value] of [
+    ["stderr", result.stderr],
+    ["stdout", result.stdout],
+  ]) {
+    if (typeof value !== "string") continue;
+    const tail = value.trimEnd().slice(-MAX_CHILD_DIAGNOSTIC_CHARS);
+    if (!tail.trim()) continue;
+    sections.push(`${name}:\n${tail}`);
+  }
+  if (sections.length === 0) return undefined;
+  const text = redactChildDiagnostic(sections.join("\n"));
+  return text.length > MAX_CHILD_DIAGNOSTIC_CHARS
+    ? `[truncated]\n${text.slice(-MAX_CHILD_DIAGNOSTIC_CHARS)}`
+    : text;
+}
+
 export function runManagedRollbackChild({
   args,
   cwd,
@@ -893,6 +929,8 @@ export function runManagedRollbackChild({
                   : "ROLLBACK_CHILD_FAILED",
         );
         error.result = result;
+        const diagnostic = childDiagnostic(result);
+        if (diagnostic !== undefined) error.diagnostic = diagnostic;
         rejectPromise(error);
       } else resolvePromise(result);
     });
