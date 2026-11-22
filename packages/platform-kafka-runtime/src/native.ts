@@ -287,7 +287,7 @@ function boundedNativeMessage(text: string): string | undefined {
       "[REDACTED PRIVATE MATERIAL]",
     )
     .replace(/\bBearer\s+[A-Za-z0-9._~+/=-]+/giu, "Bearer [REDACTED]")
-    .replace(/\b([a-z][a-z0-9+.-]*:\/\/)[^\s/@]+@/giu, "$1[REDACTED]@")
+    .replace(/\b([a-z][a-z0-9+._-]*:\/\/)[^\s/@]+@/giu, "$1[REDACTED]@")
     .replace(
       /\b(password|passwd|secret|token|api[_-]?key|authorization|cookie|client[_-]?secret|sasl\.password)\s*[=:]\s*("[^"]*"|'[^']*'|[^\s,;}]+)/giu,
       "$1=[REDACTED]",

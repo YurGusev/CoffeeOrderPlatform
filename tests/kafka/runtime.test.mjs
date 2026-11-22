@@ -845,6 +845,35 @@ void test("native Kafka errors retain a bounded native cause with operation and 
     );
     clients.producer.failure = undefined;
 
+    const privateMaterial = [
+      ["-----BEGIN", "PRIVATE", "KEY-----"].join(" "),
+      "synthetic",
+      ["-----END", "PRIVATE", "KEY-----"].join(" "),
+    ].join("");
+    const brokerCredentials = ["publisher", "synthetic"].join(":");
+    clients.producer.failure = Object.assign(
+      new Error(
+        `ssl ${privateMaterial} broker sasl_ssl://${brokerCredentials}@broker:9092 token=synthetic-canary`,
+      ),
+      { code: -999 },
+    );
+    await assert.rejects(
+      producer.send(record.topic, "redacted-produce-failure", "{}", {}),
+      (error) => {
+        assert.match(error.nativeMessage, /\[REDACTED PRIVATE MATERIAL\]/u);
+        assert.match(
+          error.nativeMessage,
+          /sasl_ssl:\/\/\[REDACTED\]@broker:9092/u,
+        );
+        assert.doesNotMatch(
+          error.nativeMessage,
+          /synthetic-canary|synthetic@broker/u,
+        );
+        return true;
+      },
+    );
+    clients.producer.failure = undefined;
+
     clients.consumer.pollFailure = {
       code: -999,
       message: "consume callback failed",
