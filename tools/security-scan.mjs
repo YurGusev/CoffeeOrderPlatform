@@ -2919,7 +2919,8 @@ async function inspectDatabaseFile(
   }
 }
 
-async function databaseMetadataFresh(cacheDir, now, policy) {
+async function staleDatabaseDirectories(cacheDir, now, policy) {
+  const stale = [];
   for (const [name, databaseFile] of [
     ["db", "trivy.db"],
     ["java-db", "trivy-java.db"],
@@ -2928,14 +2929,20 @@ async function databaseMetadataFresh(cacheDir, now, policy) {
       join(cacheDir, name, "metadata.json"),
       64 * 1024,
     ).catch(() => null);
-    if (metadataBytes === null) return false;
     const info = await lstat(join(cacheDir, name, databaseFile)).catch(
       () => null,
     );
     // Повреждённая запись кеша (в том числе oversized) — это промах, а не hit:
     // иначе `supply_chain` будет падать на validateDb до истечения metadata.
-    if (!info?.isFile() || info.size < 1 || info.size > MAX_DATABASE_BYTES)
-      return false;
+    if (
+      metadataBytes === null ||
+      !info?.isFile() ||
+      info.size < 1 ||
+      info.size > MAX_DATABASE_BYTES
+    ) {
+      stale.push(name);
+      continue;
+    }
     try {
       validateDatabaseMetadata(
         parseJson(metadataBytes, "VULNERABILITY_DB_METADATA_INVALID"),
@@ -2943,10 +2950,10 @@ async function databaseMetadataFresh(cacheDir, now, policy) {
         policy.maximumDatabaseAgeHours * 60 * 60 * 1000,
       );
     } catch {
-      return false;
+      stale.push(name);
     }
   }
-  return true;
+  return stale;
 }
 
 async function validateDb(
@@ -3666,18 +3673,25 @@ export async function runSecurityScan({
     await freeSpace(cacheRoot, policy, statfsFn);
     // Решение о повторном использовании принимается по свежести metadata:
     // полный hash содержимого считается ровно один раз в validateDb ниже.
-    const metadataFresh = await databaseMetadataFresh(
+    // Trivy пропускает --download-*-only, пока NextUpdate его metadata в
+    // будущем, поэтому stale каталог удаляется до скачивания: политика
+    // maximumDatabaseAgeHours важнее собственного расписания Trivy.
+    const staleDatabases = await staleDatabaseDirectories(
       cacheDir,
       clock(),
       policy,
     );
-    if (!metadataFresh) {
+    for (const name of staleDatabases)
+      await rm(join(cacheDir, name), { recursive: true, force: true });
+    if (staleDatabases.includes("db")) {
       await runDatabaseDownload([
         ...dbPrefix,
         "--db-repository",
         policy.egressRepositories[0],
         "--download-db-only",
       ]);
+    }
+    if (staleDatabases.includes("java-db")) {
       await runDatabaseDownload([
         ...dbPrefix,
         "--java-db-repository",

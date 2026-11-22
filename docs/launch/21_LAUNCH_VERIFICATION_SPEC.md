@@ -318,6 +318,15 @@ provenance и attestation hashes. Инвентарь пишется только
 Standalone-запуски без launch context и без манифеста сохраняют прежнюю сборку.
 Устаревшие образы прошлых launch-проектов удаляются в начале `supply_chain`.
 
+Перед сканированием `supply_chain` проверяет metadata `db` и `java-db` по
+`verification.maximumDatabaseAgeHours` (24 ч). Если metadata соответствующей БД
+устарела или повреждена, её собственный каталог под
+`COFFEE_SCAN_CACHE_DIR/trivy` удаляется до `--download-db-only` /
+`--download-java-db-only`: Trivy не пропускает обновление по своему `NextUpdate`.
+`fanal/`, build-контекст и pinned scanner image не затрагиваются. После
+скачивания обе БД проверяются `validateDatabaseMetadata`; stale metadata,
+`COMMAND_FAILED` и неполный результат не считаются PASS.
+
 ### Единственный контракт образов: artifact manifest
 
 При PASS `supply_chain` публикует рядом с инвентарём
