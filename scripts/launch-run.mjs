@@ -50,6 +50,9 @@ function fail(message) {
 }
 
 function parseArguments(argv) {
+  // pnpm 11 передаёт в скрипт разделитель `--` из документированной команды
+  // `pnpm launch:run -- …`; допускается только один ведущий разделитель.
+  const args = argv[0] === "--" ? argv.slice(1) : argv;
   const options = {
     sha: null,
     base: null,
@@ -63,9 +66,9 @@ function parseArguments(argv) {
     signer: process.env.COFFEE_APPROVAL_SIGNER ?? null,
     systemIdentifier: null,
   };
-  for (let index = 0; index < argv.length; index += 1) {
-    const argument = argv[index];
-    const value = () => argv[++index];
+  for (let index = 0; index < args.length; index += 1) {
+    const argument = args[index];
+    const value = () => args[++index];
     if (argument === "--sha") options.sha = value();
     else if (argument === "--base") options.base = value();
     else if (argument === "--state") options.state = resolve(value());
