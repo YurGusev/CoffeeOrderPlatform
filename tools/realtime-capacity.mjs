@@ -370,6 +370,13 @@ export async function admitRealtimeCapacity({ receiptPath, contextFile }) {
   return { receipt, receiptSha256: hash(receiptBytes), claimPath };
 }
 
+function writeSoakFailure(result) {
+  if (!result.error) return;
+  const diagnostic = result.error.diagnostic ?? result.error.message;
+  if (typeof diagnostic === "string" && diagnostic)
+    process.stderr.write(`soak failed: ${diagnostic}\n`);
+}
+
 async function runWorker(contextFile, resultDir, runId) {
   assert.match(runId, /^i12-[a-f0-9]{16}$/u);
   const prepare = parse([
@@ -383,6 +390,7 @@ async function runWorker(contextFile, resultDir, runId) {
   prepare.qualification = true;
   prepare.launchPath = { launchContextFile: contextFile };
   const prepared = await runTransportFixture(prepare);
+  writeSoakFailure(prepared);
   assert.equal(prepared.status, "prepared-not-launch-proof");
   assert.equal(prepared.error, null);
   const manifestBytes = await readFile(
@@ -402,11 +410,7 @@ async function runWorker(contextFile, resultDir, runId) {
   ]);
   options.runId = runId;
   const result = await runTransportFixture(options);
-  if (result.error) {
-    const diagnostic = result.error.diagnostic ?? result.error.message;
-    if (typeof diagnostic === "string" && diagnostic)
-      process.stderr.write(`soak failed: ${diagnostic}\n`);
-  }
+  writeSoakFailure(result);
   assert.equal(result.status, "PASS");
   assert.equal(result.launchProof, true);
   assert.equal(result.cleanupVerified, true);
