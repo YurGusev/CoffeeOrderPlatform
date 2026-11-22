@@ -915,6 +915,35 @@ void test("native Kafka errors retain a bounded native cause with operation and 
       assert.equal(error.nativeMessage, "disconnect callback failed");
       return true;
     });
+
+    const scopedProducer = await createNativeProducer({
+      ...common,
+      physicalTargets: { topics: {}, groups: {} },
+      producerRetries: 1,
+    });
+    await scopedProducer.connect();
+    try {
+      await assert.rejects(
+        scopedProducer.send(record.topic, "unclaimed-topic", "{}", {}),
+        (error) => {
+          assert.equal(error.code, "NATIVE_OPERATION_FAILED");
+          assert.equal(error.operation, "produce");
+          assert.equal(error.phase, "request");
+          assert.equal(error.nativeCode, undefined);
+          assert.equal(
+            error.nativeMessage,
+            "RUNTIME_KAFKA_TARGET_INVALID: Kafka name отсутствует в runtime claims",
+          );
+          assert.match(
+            error.diagnostic,
+            /nativeMessage="RUNTIME_KAFKA_TARGET_INVALID:/u,
+          );
+          return true;
+        },
+      );
+    } finally {
+      await scopedProducer.close();
+    }
   } finally {
     await consumer.close();
     hook.deregister();
