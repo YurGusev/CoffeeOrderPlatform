@@ -5706,6 +5706,11 @@ void test("supply_chain builds product images, records pinned upstream identity,
     staleMetadataReuse.databases.map(({ name }) => name),
     ["db", "java-db"],
   );
+  assert.notEqual(
+    staleMetadataReuse.databases[1].downloadedAt,
+    staleAt,
+    "java-db metadata обновлена после принудительного скачивания",
+  );
   assert.equal(
     staleMetadataReuse.databases.every(
       ({ updatedAt, downloadedAt, nextUpdate }) =>
