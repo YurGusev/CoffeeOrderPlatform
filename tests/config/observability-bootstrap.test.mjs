@@ -11470,7 +11470,7 @@ void test("browser correlation executes the child lifecycle and preserves early 
     }),
     /synthetic callback failure/u,
   );
-  assert.ok((await stat(failedChild.checkoutDir)).isDirectory());
+  assert.equal(await stat(failedChild.checkoutDir).catch(() => null), null);
   assert.ok((await stat(failedChild.evidenceDir)).isDirectory());
   assert.equal(await stat(synthetic).catch(() => null), null);
   assert.equal(

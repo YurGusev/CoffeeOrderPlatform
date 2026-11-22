@@ -1,5 +1,9 @@
 import assert from "node:assert/strict";
-import { execFileSync, spawn, spawnSync } from "node:child_process";
+import childProcess, {
+  execFileSync,
+  spawn,
+  spawnSync,
+} from "node:child_process";
 import {
   createHash,
   generateKeyPairSync,
@@ -2258,6 +2262,39 @@ try { const init=await request('init',null); if(typeof init.token!=='string'||!i
   );
 });
 
+void test("managed rollback child failure exposes a bounded redacted stderr tail", async () => {
+  const reason = "REALTIME_QUALIFICATION_DIRECTORY_INVALID";
+  const source = `process.stderr.write(${JSON.stringify(`${"x".repeat(20_000)}\nBearer secret-bearer-token\n${reason}\n`)});process.exitCode=7;`;
+  const error = await runManagedRollbackChild({
+    args: ["--input-type=module", "-e", source],
+    cwd: process.cwd(),
+    env: process.env,
+    timeoutMs: 5000,
+  }).catch((cause) => cause);
+  assert.ok(error instanceof Error);
+  assert.equal(error.message, "ROLLBACK_CHILD_FAILED");
+  assert.equal(error.result.code, 7);
+  assert.equal(error.result.stderr.includes(reason), true);
+  assert.equal(typeof error.diagnostic, "string");
+  assert.ok(error.diagnostic.length <= 4096 + "[truncated]\n".length);
+  assert.equal(error.diagnostic.includes(reason), true);
+  assert.equal(error.diagnostic.includes("secret-bearer-token"), false);
+  assert.equal(error.diagnostic.includes("Bearer [REDACTED]"), true);
+
+  const stdoutOnly = await runManagedRollbackChild({
+    args: [
+      "--input-type=module",
+      "-e",
+      "process.stdout.write('stdout-only-reason\\n');process.exitCode=9;",
+    ],
+    cwd: process.cwd(),
+    env: process.env,
+    timeoutMs: 5000,
+  }).catch((cause) => cause);
+  assert.equal(stdoutOnly.message, "ROLLBACK_CHILD_FAILED");
+  assert.match(stdoutOnly.diagnostic, /stdout:\nstdout-only-reason/u);
+});
+
 async function aromaApprovalFixture(overrides = {}) {
   const sha = "1234567890abcdef1234567890abcdef12345678";
   const now = Date.parse("2026-10-23T12:00:00.000Z");
@@ -3184,6 +3221,167 @@ void test("browser failed gate records only a matching child failure receipt", a
   );
   assert.deepEqual(wrongIdentity.artifacts, []);
   assert.equal(wrongIdentity.status, "FAIL");
+});
+
+void test("browser parent removes its temporary child checkout and keeps qualification evidence private", async (t) => {
+  const repoRoot = process.cwd();
+  const directory = await mkdtemp(join(tmpdir(), "launch-browser-parent-"));
+  const originalCwd = process.cwd();
+  const originalContext = process.env.COFFEE_LAUNCH_CONTEXT_FILE;
+  let mock;
+  t.after(async () => {
+    if (mock) {
+      mock.mock.restore();
+      syncBuiltinESMExports();
+    }
+    process.chdir(originalCwd);
+    if (originalContext === undefined)
+      delete process.env.COFFEE_LAUNCH_CONTEXT_FILE;
+    else process.env.COFFEE_LAUNCH_CONTEXT_FILE = originalContext;
+    await rm(directory, { recursive: true, force: true });
+  });
+  const realExecFileSync = childProcess.execFileSync;
+  const root = join(directory, "candidate");
+  realExecFileSync("git", [
+    "clone",
+    "--quiet",
+    "--shared",
+    "--no-hardlinks",
+    repoRoot,
+    root,
+  ]);
+  realExecFileSync("git", [
+    "-C",
+    root,
+    "remote",
+    "set-url",
+    "origin",
+    "https://github.com/YurGusev/CoffeeOrderPlatform",
+  ]);
+  for (const relativePath of [
+    "verification/launch/v1/scenarios/browser.mjs",
+    "verification/launch/v1/scenarios/rollback.mjs",
+  ])
+    await cp(join(repoRoot, relativePath), join(root, relativePath));
+  await writeFile(
+    join(root, ".git/info/exclude"),
+    "/node_modules\n/apps/web/node_modules\n",
+    { flag: "a" },
+  );
+  await symlink(
+    join(repoRoot, "node_modules"),
+    join(root, "node_modules"),
+    "dir",
+  );
+  await symlink(
+    join(repoRoot, "apps/web/node_modules"),
+    join(root, "apps/web/node_modules"),
+    "dir",
+  );
+  const git = (...args) =>
+    realExecFileSync("git", ["-C", root, ...args], {
+      encoding: "utf8",
+    }).trim();
+  for (const relativePath of [
+    "verification/launch/v1/scenarios/browser.mjs",
+    "verification/launch/v1/scenarios/rollback.mjs",
+  ])
+    git("add", relativePath);
+  if (
+    spawnSync("git", ["-C", root, "diff", "--cached", "--quiet"]).status !== 0
+  )
+    git(
+      "-c",
+      "user.name=Fixture",
+      "-c",
+      "user.email=fixture@example.invalid",
+      "commit",
+      "-qm",
+      "Fixture browser parent",
+    );
+  const sha = git("rev-parse", "HEAD");
+  const runId = `20261030T120000Z-${sha.slice(0, 7)}`;
+  const evidenceDir = join(root, "evidence/launch", runId);
+  await mkdir(evidenceDir, { recursive: true, mode: 0o700 });
+  await chmod(join(root, "evidence"), 0o775);
+  await chmod(join(root, "evidence/launch"), 0o775);
+  const configBytes = await readFile(join(root, "config/platform.yaml"));
+  const contextPath = join(evidenceDir, "context.json");
+  const context = {
+    schemaVersion: 1,
+    runId,
+    candidateSha: sha,
+    baseConfigSha256: createHash("sha256").update(configBytes).digest("hex"),
+    checkoutDir: root,
+    sourceRepoRoot: root,
+    evidenceDir,
+    acceptedBaseCommit: sha,
+    startedAtUtc: new Date().toISOString(),
+    githubSnapshotPath: null,
+    resources: { composeProject: `coffee-launch-${runId}`, kafkaPrefix: runId },
+  };
+  await writeFile(contextPath, JSON.stringify(context), { mode: 0o400 });
+  process.env.COFFEE_LAUNCH_CONTEXT_FILE = contextPath;
+  process.chdir(root);
+  mock = t.mock.method(
+    childProcess,
+    "execFileSync",
+    (command, args, options) => {
+      if (command === "docker")
+        throw new Error("Docker is forbidden in this test");
+      if (command === "pnpm" || command === process.execPath)
+        return Buffer.alloc(0);
+      return realExecFileSync(command, args, options);
+    },
+  );
+  syncBuiltinESMExports();
+  const { runBrowserParent } = await import(
+    pathToFileURL(join(root, "verification/launch/v1/scenarios/browser.mjs"))
+      .href
+  );
+  const { inspectLaunchCheckout } = await import(
+    pathToFileURL(join(root, "verification/launch/v1/scenarios/rollback.mjs"))
+      .href
+  );
+  let childContext;
+  await assert.rejects(
+    runBrowserParent({
+      qualificationRunId: "i12-0123456789abcdef",
+      runQualification: async (path) => {
+        childContext = JSON.parse(await readFile(path, "utf8"));
+        assert.equal(dirname(childContext.checkoutDir), root);
+        assert.match(
+          childContext.checkoutDir.slice(root.length + 1),
+          /^\.g15-browser-child-[A-Za-z0-9]+$/u,
+        );
+        await assert.rejects(
+          inspectLaunchCheckout(root, sha),
+          /ROLLBACK_CHECKOUT_DIRTY/u,
+        );
+        await inspectLaunchCheckout(root, sha, {
+          ownedChildRoot: childContext.checkoutDir,
+        });
+        throw new Error("qualification callback failed");
+      },
+    }),
+    /qualification callback failed/u,
+  );
+  assert.equal(await stat(childContext.checkoutDir).catch(() => null), null);
+  assert.equal(
+    (await readdir(root)).some((name) =>
+      name.startsWith(".g15-browser-child-"),
+    ),
+    false,
+  );
+  assert.equal(git("status", "--porcelain=v1", "--untracked-files=all"), "");
+  for (const path of [
+    join(root, "evidence"),
+    join(root, "evidence/launch"),
+    join(root, "evidence/launch/qualifications"),
+    join(root, "evidence/launch/qualifications", "i12-0123456789abcdef"),
+  ])
+    assert.equal((await stat(path)).mode & 0o777, 0o700);
+  await inspectLaunchCheckout(root, sha);
 });
 
 function syntheticControlledAromaSandboxResult(context, policy, image) {

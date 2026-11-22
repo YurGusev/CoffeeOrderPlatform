@@ -874,13 +874,17 @@ Customer/Pricing/auth seams не доказывают production ingress/VK/Agen
 1800000 ms. На подготовку, нагрузку, cleanup и sealing отводится отдельный
 бюджет 2700 s; бюджеты `observability` 1800 s и всего launch 7200 s не изменяются.
 Пакет принимается не позднее 7200 s после завершения и только один раз для
-текущего пользователя на сервере. Он связывает SHA кандидата, исходную
-конфигурацию, BOM и lock, все 15 image IDs проверенного `supply_chain`, фактически
-использованные native images трёх ролей и nginx, Kafka, host profile и
-проверенную OIDC-only lineage. Повторное использование, неизвестный cleanup,
-расхождение или отсутствие PASS блокируют `observability` и merge. Synthetic Orders и IdP
-для transport qualification и отдельного supplemental component diagnostic `observability`:
-ни один из них не доказывает browser OrderConfirm, production IdP или full-system `observability`.
+текущего пользователя на сервере. Перед публикацией qualification-артефактов
+каталоги `evidence`, `evidence/launch` и `evidence/launch/qualifications`
+приводятся к режиму `0700`, а `qualifications/<run-id>` создаётся приватным.
+Пакет связывает SHA кандидата, исходную конфигурацию, BOM и lock, все 15 image
+IDs проверенного `supply_chain`, фактически использованные native images трёх
+ролей и nginx, Kafka, host profile и проверенную OIDC-only lineage. Повторное
+использование, неизвестный cleanup, расхождение или отсутствие PASS блокируют
+`observability` и merge. Synthetic Orders и IdP для transport qualification и
+отдельного supplemental component diagnostic `observability`: ни один из них не
+доказывает browser OrderConfirm, production IdP или full-system
+`observability`.
 
 `contracts`/`integration`/`browser` принимают outputs #4/#5/#7/#8/#9 по
 [протоколу browser recovery](26_BROWSER_COMMAND_RECOVERY.md): потерянный ответ
@@ -922,6 +926,11 @@ identities и отличие единственного поля проверя�
 joined exit code 0, восстановленную Git lineage, owner evidence, stdout receipt
 и отсутствие child checkout/evidence, контейнеров, сетей, volumes, временных
 ключей, NSS profile и Compose override. Один exit code 0 не является PASS.
+Временный child checkout удаляется в `finally` на всех путях, включая отказ
+дочернего процесса; child evidence сохраняется свидетелем отказа. Отказ
+управляемого дочернего процесса содержит ограниченный (не более 4096 символов)
+очищенный хвост `stderr`/`stdout`, поэтому `ROLLBACK_CHILD_FAILED` остаётся
+диагностируемым.
 После cleanup основного browser runtime гейт `browser` выполняет отдельные обязательные
 owner/browser сценарии `positive`, `private-eof` и `reauth` с тем же проверенным
 OIDC-only child context. Parent принимает только все три proof с привязкой к

@@ -1469,6 +1469,9 @@ export async function runBrowserParent({
     });
     let artifactsDir;
     if (runQualification) {
+      // evidence/launch приходит из git worktree с umask хоста (обычно 0775),
+      // а квалификация публикует приватные артефакты. Выравниваем режим
+      // собственного evidence-дерева, не ослабляя проверку.
       for (const directory of [
         join(parentContext.sourceRepoRoot, "evidence"),
         join(parentContext.sourceRepoRoot, "evidence/launch"),
@@ -1484,9 +1487,12 @@ export async function runBrowserParent({
           !info.isDirectory() ||
           info.isSymbolicLink() ||
           info.uid !== process.getuid() ||
-          (info.mode & 0o022) !== 0 ||
           (await realpath(directory)) !== directory
         )
+          fail("REALTIME_QUALIFICATION_DIRECTORY_INVALID");
+        await chmod(directory, 0o700);
+        const secured = await lstat(directory);
+        if ((secured.mode & 0o777) !== 0o700)
           fail("REALTIME_QUALIFICATION_DIRECTORY_INVALID");
       }
       artifactsDir = join(
@@ -1936,7 +1942,8 @@ export async function runBrowserParent({
     return { ...runnerReceipt, parent: admitted.parent };
   } catch (error) {
     if (successfulChild) throw error;
-    // Retain an uncertain child checkout and its evidence as a failure witness.
+    // Child evidence остаётся свидетелем отказа; временный checkout удаляется
+    // в finally на всех путях, чтобы не пачкать candidate root.
     if (
       !runCorrelation &&
       !runQualification &&
@@ -1956,6 +1963,8 @@ export async function runBrowserParent({
       }
     }
     throw error;
+  } finally {
+    await rm(childRoot, { recursive: true, force: true });
   }
 }
 

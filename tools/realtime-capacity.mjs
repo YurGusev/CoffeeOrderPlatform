@@ -551,6 +551,8 @@ if (resolve(process.argv[1] ?? "") === fileURLToPath(import.meta.url)) {
     console.error(
       error instanceof Error ? error.message : "realtime capacity failed",
     );
+    if (typeof error?.diagnostic === "string" && error.diagnostic)
+      console.error(error.diagnostic);
     process.exitCode = 1;
   }
 }
