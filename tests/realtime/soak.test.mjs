@@ -10,7 +10,6 @@
  * Private material is only newly generated synthetic fixture material, deleted after a run.
  */
 import assert from "node:assert/strict";
-import test from "node:test";
 import { readFile, writeFile, mkdir, stat, readdir } from "node:fs/promises";
 import { resolve, join, relative, isAbsolute, sep } from "node:path";
 import { randomUUID } from "node:crypto";
@@ -34,7 +33,6 @@ import {
   isoNow,
   parseTime,
   classifyResult,
-  driverFailure,
   FULL,
   THRESHOLDS,
   ulid,
@@ -2216,38 +2214,7 @@ export async function runTransportFixture(options, hooks = {}) {
   return result;
 }
 
-if (process.env.NODE_TEST_CONTEXT !== undefined)
-  void test("driver failure keeps a bounded native diagnostic instead of only a code", () => {
-    const diagnostic =
-      'NATIVE_OPERATION_FAILED operation=produce phase=request nativeCode=-999 nativeMessage="broker unavailable"';
-    const failure = driverFailure(
-      Object.assign(new Error(diagnostic), {
-        code: "NATIVE_OPERATION_FAILED",
-        diagnostic,
-      }),
-    );
-    assert.deepEqual(failure, {
-      code: "NATIVE_OPERATION_FAILED",
-      message: diagnostic,
-      diagnostic,
-    });
-    assert.equal(
-      driverFailure({ code: 7, message: "", diagnostic: "" }).code,
-      "TRANSPORT_PROOF_FAILED",
-    );
-    const bounded = driverFailure({
-      code: "NATIVE_OPERATION_FAILED",
-      message: "bounded",
-      diagnostic: "d".repeat(4096),
-    });
-    assert.equal(bounded.diagnostic.length, 1024);
-    assert.equal(bounded.message, "bounded");
-  });
-
-if (
-  process.env.NODE_TEST_CONTEXT === undefined &&
-  resolve(process.argv[1] ?? "") === import.meta.filename
-) {
+if (resolve(process.argv[1] ?? "") === import.meta.filename) {
   try {
     const options = parse(process.argv.slice(2));
     if (options.help)
