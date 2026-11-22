@@ -23,6 +23,13 @@ import { gateLabel, gateSlug } from "./gate-identity.mjs";
 export { EXPECTED_GATES };
 
 const SUPPORTED_SCHEMA_VERSIONS = [1, 2];
+const DIAGNOSTIC_PROFILES = new Set(["admission", "fast", "diagnostic"]);
+const LAUNCH_REPORT_PATH_PATTERN =
+  /^docs\/reports\/launch\/\d{8}T\d{6}Z-[0-9a-f]{7}\/ОТЧЁТ\.md$/u;
+
+export function isLaunchReportPath(value) {
+  return typeof value === "string" && LAUNCH_REPORT_PATH_PATTERN.test(value);
+}
 
 // `report` must work even when `preflight`/`install` failed before candidate dependencies were installed.
 // Keep this small validation contract local and builtin-only.
@@ -365,7 +372,12 @@ async function fileDigest(path, root) {
   };
 }
 
-async function validateEvidence(evidenceDir, result, sourceRoot) {
+async function validateEvidence(
+  evidenceDir,
+  result,
+  sourceRoot,
+  { publishReport = true } = {},
+) {
   const errors = [];
   let fileList = [];
   try {
@@ -602,7 +614,7 @@ async function validateEvidence(evidenceDir, result, sourceRoot) {
       "report PASS не подтверждён единственным exact report argv с exit 0",
     );
   }
-  if (g19.status === "PASS") {
+  if (g19.status === "PASS" && publishReport) {
     const reportPath = join(
       sourceRoot,
       "docs/reports/launch",
@@ -721,7 +733,12 @@ export async function writeDefects(evidenceDir, sourceRoot, result) {
   return defects;
 }
 
-export async function validateChecksumManifest(evidenceDir, sourceRoot, runId) {
+export async function validateChecksumManifest(
+  evidenceDir,
+  sourceRoot,
+  runId,
+  { publishReport = true } = {},
+) {
   evidenceDir = resolve(evidenceDir);
   sourceRoot = resolve(sourceRoot);
   if (
@@ -737,7 +754,7 @@ export async function validateChecksumManifest(evidenceDir, sourceRoot, runId) {
   const reportPath = join(sourceRoot, "docs/reports/launch", runId, "ОТЧЁТ.md");
   const evidenceFiles = await listFiles(evidenceDir);
   const expectedPaths = evidenceFiles.filter((file) => file !== manifestPath);
-  expectedPaths.push(reportPath);
+  if (publishReport) expectedPaths.push(reportPath);
   const rows = [];
   for (const file of expectedPaths) {
     const resolved = resolve(file);
@@ -1124,6 +1141,7 @@ async function writeFinalFiles(
   preflight,
   fingerprint,
   sourceDescriptor,
+  { publishReport = true } = {},
 ) {
   const decisionPath = join(evidenceDir, "decision.json");
   const resultPath = join(evidenceDir, "run-result.json");
@@ -1211,39 +1229,46 @@ async function writeFinalFiles(
     }),
   );
   const rows = [];
-  for (const file of await listFiles(evidenceDir))
-    if (file !== join(evidenceDir, "checksums.sha256"))
-      rows.push(await fileDigest(file, evidenceDir));
-  rows.sort((a, b) => a.path.localeCompare(b.path, "en"));
-  await ensureDirectoryTreeNoFollow(sourceRoot, dirname(reportPath));
-  await writeRegularNoFollow(
-    sourceRoot,
-    reportPath,
-    reportMarkdown(
-      result,
-      rows,
-      defects,
-      evidenceErrors,
-      environmentErrors,
-      preflight,
-      fingerprint,
-    ),
-  );
+  if (publishReport) {
+    for (const file of await listFiles(evidenceDir))
+      if (file !== join(evidenceDir, "checksums.sha256"))
+        rows.push(await fileDigest(file, evidenceDir));
+    rows.sort((a, b) => a.path.localeCompare(b.path, "en"));
+    await ensureDirectoryTreeNoFollow(sourceRoot, dirname(reportPath));
+    await writeRegularNoFollow(
+      sourceRoot,
+      reportPath,
+      reportMarkdown(
+        result,
+        rows,
+        defects,
+        evidenceErrors,
+        environmentErrors,
+        preflight,
+        fingerprint,
+      ),
+    );
+  }
   const checksumRows = [];
   for (const file of await listFiles(evidenceDir))
     if (file !== join(evidenceDir, "checksums.sha256"))
       checksumRows.push(await fileDigest(file, sourceRoot));
-  checksumRows.push(await fileDigest(reportPath, sourceRoot));
+  if (publishReport)
+    checksumRows.push(await fileDigest(reportPath, sourceRoot));
   checksumRows.sort((a, b) => a.path.localeCompare(b.path, "en"));
   await writeRegularNoFollow(
     evidenceDir,
     join(evidenceDir, "checksums.sha256"),
     `${checksumRows.map((row) => `${row.sha256}  ${row.path}`).join("\n")}\n`,
   );
-  return reportPath;
+  return publishReport ? reportPath : null;
 }
 
-export async function finalizeReport(evidenceDir, expectedSourceRoot = null) {
+export async function finalizeReport(
+  evidenceDir,
+  expectedSourceRoot = null,
+  options = {},
+) {
   evidenceDir = resolve(evidenceDir);
   const contextPath = join(evidenceDir, "context.json");
   const contextInfo = await lstat(contextPath);
@@ -1266,6 +1291,8 @@ export async function finalizeReport(evidenceDir, expectedSourceRoot = null) {
     );
   const result = JSON.parse(await readFile(resultPath, "utf8"));
   validateRunResultContract(result);
+  const publishReport =
+    options.publishReport ?? !DIAGNOSTIC_PROFILES.has(result.profile);
   if (
     context.schemaVersion !== 1 ||
     context.runId !== result.runId ||
@@ -1282,7 +1309,7 @@ export async function finalizeReport(evidenceDir, expectedSourceRoot = null) {
     result.runId,
     "ОТЧЁТ.md",
   );
-  await assertNoSymlinkPath(sourceRoot, reportTarget, true);
+  if (publishReport) await assertNoSymlinkPath(sourceRoot, reportTarget, true);
   const descriptor = spawnSync(
     "git",
     ["show", `${result.candidateSha}:evidence/handoffs/issue-13.yaml`],
@@ -1313,7 +1340,9 @@ export async function finalizeReport(evidenceDir, expectedSourceRoot = null) {
     );
   }
   const defects = await writeDefects(evidenceDir, sourceRoot, result);
-  let evidenceErrors = await validateEvidence(evidenceDir, result, sourceRoot);
+  let evidenceErrors = await validateEvidence(evidenceDir, result, sourceRoot, {
+    publishReport,
+  });
   if (sourceDescriptor.status !== "BOUND") evidenceErrors.push(descriptorError);
   const environmentErrors = environmentProofErrors(result.environment);
   const preflight = await preflightFindings(
@@ -1332,9 +1361,12 @@ export async function finalizeReport(evidenceDir, expectedSourceRoot = null) {
     preflight,
     fingerprint,
     sourceDescriptor,
+    { publishReport },
   );
   try {
-    await validateChecksumManifest(evidenceDir, sourceRoot, result.runId);
+    await validateChecksumManifest(evidenceDir, sourceRoot, result.runId, {
+      publishReport,
+    });
   } catch (error) {
     evidenceErrors = [...evidenceErrors, redactText(error.message)];
     reportPath = await writeFinalFiles(
@@ -1347,10 +1379,13 @@ export async function finalizeReport(evidenceDir, expectedSourceRoot = null) {
       preflight,
       fingerprint,
       sourceDescriptor,
+      { publishReport },
     );
   }
   try {
-    await validateChecksumManifest(evidenceDir, sourceRoot, result.runId);
+    await validateChecksumManifest(evidenceDir, sourceRoot, result.runId, {
+      publishReport,
+    });
   } catch (error) {
     evidenceErrors = [...evidenceErrors, redactText(error.message)];
   }
@@ -1358,14 +1393,24 @@ export async function finalizeReport(evidenceDir, expectedSourceRoot = null) {
 }
 
 async function main(args) {
-  if (args[0] === "--finalize") {
+  const finalizeMode =
+    args[0] === "--finalize"
+      ? {}
+      : args[0] === "--finalize-evidence"
+        ? { publishReport: false }
+        : null;
+  if (finalizeMode) {
     const requestedEvidenceDir = resolve(args[1] ?? "");
     const { context, sourceRoot, evidenceDir } = await validateLaunchContext(
       join(requestedEvidenceDir, "context.json"),
     );
     if (requestedEvidenceDir !== evidenceDir)
-      throw new Error("--finalize path не совпадает с launch context");
-    const finalized = await finalizeReport(context.evidenceDir, sourceRoot);
+      throw new Error(`${args[0]} path не совпадает с launch context`);
+    const finalized = await finalizeReport(
+      context.evidenceDir,
+      sourceRoot,
+      finalizeMode,
+    );
     process.exitCode = finalized.errors.length ? 1 : 0;
     return;
   }
