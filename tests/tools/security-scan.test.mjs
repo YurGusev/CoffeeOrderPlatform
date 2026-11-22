@@ -2373,6 +2373,7 @@ void test("supply_chain builds product images, records pinned upstream identity,
   let failContainerRemoval = false;
   let failDatabaseDownload = null;
   let failScanReport = null;
+  let javaDatabaseDownloadState = null;
   let omitConvertedPackage = false;
   let failImageInputRemoval = false;
   let mismatchDigestReference = null;
@@ -3205,6 +3206,18 @@ void test("supply_chain builds product images, records pinned upstream identity,
         );
         scanCache = String(cacheMount).match(/src=([^,]+)/u)?.[1];
         assert.ok(scanCache);
+        if (args.includes("--download-java-db-only")) {
+          javaDatabaseDownloadState = {
+            javaDbPresent: await lstat(join(scanCache, "java-db")).then(
+              () => true,
+              () => false,
+            ),
+            vulnerabilityDbPresent: await lstat(join(scanCache, "db")).then(
+              () => true,
+              () => false,
+            ),
+          };
+        }
         if (
           failDatabaseDownload &&
           args.includes(failDatabaseDownload.argument)
@@ -3601,6 +3614,7 @@ void test("supply_chain builds product images, records pinned upstream identity,
   const initialFlowStart = flowEvents.length;
   const initialTimeoutStart = trivyRunTimeouts.length;
   const readsBefore = databaseFullReads;
+  const persistentCacheRoot = nextCacheRoot();
   databaseAdvanceMs = 5 * 60_000;
   process.env.COFFEE_LAUNCH_DATA_TEMP_DIR = selectedTempRoot;
   checkTempPlacement = true;
@@ -3608,7 +3622,7 @@ void test("supply_chain builds product images, records pinned upstream identity,
   const result = await runSecurityScan({
     materializeRegistryCredentials: fakeRegistryCredentials,
     contextFile: contextPath,
-    cacheRoot: nextCacheRoot(),
+    cacheRoot: persistentCacheRoot,
     clock: () => fakeNow,
     validateContext: validateSyntheticContext,
     run: async (command, args, options) => {
@@ -5612,6 +5626,101 @@ void test("supply_chain builds product images, records pinned upstream identity,
   assert.equal(productBuilds, buildsBeforeImageCleanupFailure + 1);
   assert.equal(imageCleanupFailure.reports.length, 4);
   assert.equal(imageCleanupFailure.provenance.status, "PARTIAL");
+
+  // Повторный запуск на том же постоянном кеше: свежие metadata не должны
+  // запускать повторное скачивание.
+  fakeNow = now + 10 * 60_000;
+  javaDatabaseDownloadState = null;
+  const freshMetadataFlowStart = flowEvents.length;
+  const freshMetadataReuse = await runSecurityScan({
+    materializeRegistryCredentials: fakeRegistryCredentials,
+    contextFile: contextPath,
+    cacheRoot: persistentCacheRoot,
+    outputDir: join(gateArtifactsDir, "supply-chain-fresh-db-reuse"),
+    clock: () => fakeNow,
+    validateContext: validateSyntheticContext,
+    run: fakeRun,
+    statfsFn: async () => ({ bavail: 30 * 1024 ** 3, bsize: 1 }),
+    lockPath: join(temp, "scanner-fresh-db-reuse.lock"),
+  });
+  assert.equal(freshMetadataReuse.status, "PASS");
+  assert.deepEqual(
+    flowEvents
+      .slice(freshMetadataFlowStart)
+      .filter((event) => event.startsWith("database:")),
+    [],
+    "свежие db и java-db не скачиваются повторно",
+  );
+  assert.equal(javaDatabaseDownloadState, null);
+
+  // Trivy пропускает --download-java-db-only, пока NextUpdate в будущем,
+  // поэтому stale metadata должна удалить именно java-db до скачивания.
+  const persistentTrivyCache = join(persistentCacheRoot, "trivy");
+  const staleJavaMetadataPath = join(
+    persistentTrivyCache,
+    "java-db/metadata.json",
+  );
+  const staleJavaMetadata = JSON.parse(
+    await readFile(staleJavaMetadataPath, "utf8"),
+  );
+  const staleAt = new Date(fakeNow - 25 * 60 * 60_000).toISOString();
+  await writeFile(
+    staleJavaMetadataPath,
+    JSON.stringify({
+      ...staleJavaMetadata,
+      UpdatedAt: staleAt,
+      DownloadedAt: staleAt,
+      NextUpdate: new Date(fakeNow + 6 * 60 * 60_000).toISOString(),
+    }),
+  );
+  javaDatabaseDownloadState = null;
+  const staleMetadataFlowStart = flowEvents.length;
+  const staleMetadataReuse = await runSecurityScan({
+    materializeRegistryCredentials: fakeRegistryCredentials,
+    contextFile: contextPath,
+    cacheRoot: persistentCacheRoot,
+    outputDir: join(gateArtifactsDir, "supply-chain-stale-java-db-reuse"),
+    clock: () => fakeNow,
+    validateContext: validateSyntheticContext,
+    run: fakeRun,
+    statfsFn: async () => ({ bavail: 30 * 1024 ** 3, bsize: 1 }),
+    lockPath: join(temp, "scanner-stale-java-db-reuse.lock"),
+  });
+  assert.equal(staleMetadataReuse.status, "PASS");
+  assert.deepEqual(
+    flowEvents
+      .slice(staleMetadataFlowStart)
+      .filter((event) => event.startsWith("database:")),
+    ["database:java"],
+    "устаревшая java-db обновляется принудительно",
+  );
+  assert.deepEqual(
+    javaDatabaseDownloadState,
+    {
+      javaDbPresent: false,
+      vulnerabilityDbPresent: true,
+    },
+    "удаляется только stale java-db, свежая db не трогается",
+  );
+  assert.deepEqual(
+    staleMetadataReuse.databases.map(({ name }) => name),
+    ["db", "java-db"],
+  );
+  assert.notEqual(
+    staleMetadataReuse.databases[1].downloadedAt,
+    staleAt,
+    "java-db metadata обновлена после принудительного скачивания",
+  );
+  assert.equal(
+    staleMetadataReuse.databases.every(
+      ({ updatedAt, downloadedAt, nextUpdate }) =>
+        Date.parse(updatedAt) <= fakeNow &&
+        Date.parse(downloadedAt) <= fakeNow &&
+        Date.parse(nextUpdate) > fakeNow,
+    ),
+    true,
+    "обе БД проходят validateDb после принудительного обновления",
+  );
 });
 
 void test("supply_chain scan budget derives from the launch gate deadline and keeps the reserve", () => {
