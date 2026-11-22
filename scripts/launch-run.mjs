@@ -42,7 +42,7 @@ const STATE_README = `# Состояние launch-верификации
 | \`logs/<runId>/\` | логи шагов (supply_chain, soak, run) | да |
 | \`scan-cache/\` | база Trivy для supply_chain | да, скачается заново |
 
-Инструмент: \`node scripts/launch-run.mjs --sha <sha>\`.
+Инструмент: \`node scripts/launch-run.mjs --sha <sha> --g08-expected-system-identifier <id>\`.
 `;
 
 function fail(message) {
@@ -61,7 +61,7 @@ function parseArguments(argv) {
     keepSoak: 3,
     minFreeGiB: 15,
     signer: process.env.COFFEE_APPROVAL_SIGNER ?? null,
-    systemIdentifier: "7613370342949990434",
+    systemIdentifier: null,
   };
   for (let index = 0; index < argv.length; index += 1) {
     const argument = argv[index];
@@ -83,9 +83,10 @@ function parseArguments(argv) {
     else if (argument === "--help" || argument === "-h") {
       process.stdout.write(
         [
-          "Использование: node scripts/launch-run.mjs --sha <commit> [опции]",
+          "Использование: node scripts/launch-run.mjs --sha <commit> --g08-expected-system-identifier <id> [опции]",
           "  --base <commit>        accepted base (по умолчанию develop)",
           "  --state <dir>          корень состояния",
+          "  --g08-expected-system-identifier <id>  утверждённый system identifier PostgreSQL (обязателен)",
           "  --g16-signer <path>    RAM signer для aroma_sandbox",
           "  --skip-supply-chain    не запускать supply_chain, взять готовый инвентарь",
           "  --skip-soak            не запускать realtime qualification",
@@ -97,6 +98,16 @@ function parseArguments(argv) {
       );
       process.exit(0);
     } else fail(`неизвестный аргумент: ${argument}`);
+  }
+  if (
+    typeof options.systemIdentifier !== "string" ||
+    !/^[0-9]+$/u.test(options.systemIdentifier)
+  ) {
+    const error = new Error(
+      "--g08-expected-system-identifier обязателен: передайте утверждённый system identifier PostgreSQL цифрами",
+    );
+    error.exitCode = 2;
+    throw error;
   }
   if (
     typeof options.sha !== "string" ||
@@ -524,9 +535,11 @@ try {
   await main();
 } catch (error) {
   process.stderr.write(`launch-run: ${error.message}\n`);
-  process.exitCode = 1;
+  process.exitCode = error.exitCode ?? 1;
 } finally {
-  if (process.env.COFFEE_LAUNCH_NO_PRUNE !== "1")
+  // Ошибка аргументов возникает до создания состояния, поэтому убирать в нём
+  // нечего, а трогать чужой launch-корень нельзя.
+  if (process.exitCode !== 2 && process.env.COFFEE_LAUNCH_NO_PRUNE !== "1")
     await pruneState({
       keepCandidates: Number(process.env.COFFEE_LAUNCH_KEEP_CANDIDATES ?? 2),
       keepSoak: Number(process.env.COFFEE_LAUNCH_KEEP_SOAK ?? 3),

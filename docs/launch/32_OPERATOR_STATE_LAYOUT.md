@@ -88,7 +88,15 @@ docker buildx prune --builder coffee-platform-mtu --keep-storage 6GB
 ## Единая команда
 
 ```
-pnpm launch:run -- --sha <commit> [--base <commit>] [--g16-signer <path>]
+pnpm launch:run -- --sha <commit> --g08-expected-system-identifier <id> [--base <commit>] [--g16-signer <path>]
+```
+
+`--g08-expected-system-identifier` обязателен: оператор передаёт утверждённый
+system identifier PostgreSQL явно, без него обёртка завершается кодом 2 до
+создания состояния и вызова Docker. Пример полного запуска:
+
+```
+pnpm launch:run -- --sha <commit> --g08-expected-system-identifier <id>
 ```
 
 Шаги: предусловия (SOPS-ключ, закреплённые образы, свободное место, lock
