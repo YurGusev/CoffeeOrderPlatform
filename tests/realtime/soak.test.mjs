@@ -2216,32 +2216,33 @@ export async function runTransportFixture(options, hooks = {}) {
   return result;
 }
 
-void test("driver failure keeps a bounded native diagnostic instead of only a code", () => {
-  const diagnostic =
-    'NATIVE_OPERATION_FAILED operation=produce phase=request nativeCode=-999 nativeMessage="broker unavailable"';
-  const failure = driverFailure(
-    Object.assign(new Error(diagnostic), {
+if (process.env.NODE_TEST_CONTEXT !== undefined)
+  void test("driver failure keeps a bounded native diagnostic instead of only a code", () => {
+    const diagnostic =
+      'NATIVE_OPERATION_FAILED operation=produce phase=request nativeCode=-999 nativeMessage="broker unavailable"';
+    const failure = driverFailure(
+      Object.assign(new Error(diagnostic), {
+        code: "NATIVE_OPERATION_FAILED",
+        diagnostic,
+      }),
+    );
+    assert.deepEqual(failure, {
       code: "NATIVE_OPERATION_FAILED",
+      message: diagnostic,
       diagnostic,
-    }),
-  );
-  assert.deepEqual(failure, {
-    code: "NATIVE_OPERATION_FAILED",
-    message: diagnostic,
-    diagnostic,
+    });
+    assert.equal(
+      driverFailure({ code: 7, message: "", diagnostic: "" }).code,
+      "TRANSPORT_PROOF_FAILED",
+    );
+    const bounded = driverFailure({
+      code: "NATIVE_OPERATION_FAILED",
+      message: "bounded",
+      diagnostic: "d".repeat(4096),
+    });
+    assert.equal(bounded.diagnostic.length, 1024);
+    assert.equal(bounded.message, "bounded");
   });
-  assert.equal(
-    driverFailure({ code: 7, message: "", diagnostic: "" }).code,
-    "TRANSPORT_PROOF_FAILED",
-  );
-  const bounded = driverFailure({
-    code: "NATIVE_OPERATION_FAILED",
-    message: "bounded",
-    diagnostic: "d".repeat(4096),
-  });
-  assert.equal(bounded.diagnostic.length, 1024);
-  assert.equal(bounded.message, "bounded");
-});
 
 if (
   process.env.NODE_TEST_CONTEXT === undefined &&
