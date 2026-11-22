@@ -24,6 +24,7 @@ import {
   parseMetrics,
   metric,
   classifyResult,
+  driverFailure,
   SSE_RETRY_MS,
   SSE_READY_TIMEOUT_MS,
   OIDC_SESSION_LOGIN_INTERVAL_MS,
@@ -973,10 +974,7 @@ try {
   producer = await nativeProducer();
   await measurement(await preflight());
 } catch (e) {
-  result.error = {
-    code: e.code ?? "TRANSPORT_PROOF_FAILED",
-    message: e.message,
-  };
+  result.error = driverFailure(e);
   await record("samples.jsonl", {
     phase: "failure",
     error: result.error,
@@ -998,7 +996,12 @@ try {
   if (result.checkDetails.shutdown)
     result.checkDetails.shutdown.forcedClientClose = forcedClientClose;
   await producer?.close().catch((e) => {
-    result.error ??= { code: "PUBLISHER_CLEANUP_FAILED", message: e.message };
+    const failure = driverFailure(e);
+    result.error ??= {
+      ...failure,
+      code: "PUBLISHER_CLEANUP_FAILED",
+      message: e.message,
+    };
   });
   if (result.status !== "fixture-transport-only-not-launch-proof")
     Object.assign(result, classifyResult(result));

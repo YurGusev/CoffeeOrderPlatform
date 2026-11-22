@@ -14,6 +14,8 @@ const INVALID_ARG = -186;
 const INVALID_MSG_SIZE = 4;
 const MSG_SIZE_TOO_LARGE = 10;
 const MAX_SAFE_OFFSET = Number.MAX_SAFE_INTEGER;
+const MAX_NATIVE_MESSAGE_CHARS = 512;
+const MAX_NATIVE_DIAGNOSTIC_CHARS = 1024;
 
 export type NativeKafkaProtocol = "SASL_SSL" | "PLAINTEXT";
 
@@ -61,13 +63,60 @@ export type NativeKafkaErrorCode =
   | "NATIVE_OFFSET_INVALID"
   | "NATIVE_REBALANCE_FAILED";
 
+export type NativeKafkaOperation =
+  | "connect"
+  | "produce"
+  | "consume"
+  | "commit"
+  | "metadata"
+  | "disconnect"
+  | "subscribe"
+  | "rebalance"
+  | "pause"
+  | "resume"
+  | "assign"
+  | "unassign";
+
+export type NativeKafkaPhase = "start" | "request" | "wait" | "close";
+
+type NativeErrorDetails = Readonly<{
+  operation?: NativeKafkaOperation;
+  phase?: NativeKafkaPhase;
+  native?: unknown;
+}>;
+
+type NativeFailure = Readonly<{
+  code: number | undefined;
+  message: string | undefined;
+}>;
+
 export class NativeKafkaError extends Error {
   public readonly code: NativeKafkaErrorCode;
+  public readonly operation: NativeKafkaOperation | undefined;
+  public readonly phase: NativeKafkaPhase | undefined;
+  public readonly nativeCode: number | undefined;
+  public readonly nativeMessage: string | undefined;
+  public readonly diagnostic: string;
 
-  public constructor(code: NativeKafkaErrorCode) {
-    super(code);
+  public constructor(
+    code: NativeKafkaErrorCode,
+    details: NativeErrorDetails = {},
+  ) {
+    const native = nativeFailure(details.native);
+    const diagnostic = nativeDiagnostic(
+      code,
+      details.operation,
+      details.phase,
+      native,
+    );
+    super(diagnostic);
     this.name = "NativeKafkaError";
     this.code = code;
+    this.operation = details.operation;
+    this.phase = details.phase;
+    this.nativeCode = native.code;
+    this.nativeMessage = native.message;
+    this.diagnostic = diagnostic;
   }
 }
 
@@ -231,8 +280,66 @@ type PendingCommit = Readonly<{
   settled: { value: boolean };
 }>;
 
-function error(code: NativeKafkaErrorCode): NativeKafkaError {
-  return new NativeKafkaError(code);
+function boundedNativeMessage(text: string): string | undefined {
+  const redacted = text
+    .replace(
+      /-----BEGIN [^-]*(?:PRIVATE KEY|CERTIFICATE)-----[\s\S]*?-----END [^-]+-----/gu,
+      "[REDACTED PRIVATE MATERIAL]",
+    )
+    .replace(/\bBearer\s+[A-Za-z0-9._~+/=-]+/giu, "Bearer [REDACTED]")
+    .replace(/\b([a-z][a-z0-9+.-]*:\/\/)[^\s/@]+@/giu, "$1[REDACTED]@")
+    .replace(
+      /\b(password|passwd|secret|token|api[_-]?key|authorization|cookie|client[_-]?secret|sasl\.password)\s*[=:]\s*("[^"]*"|'[^']*'|[^\s,;}]+)/giu,
+      "$1=[REDACTED]",
+    )
+    // eslint-disable-next-line no-control-regex
+    .replace(/[\u0000-\u001f\u007f]+/gu, " ")
+    .trim();
+  if (redacted.length === 0) return undefined;
+  return redacted.length > MAX_NATIVE_MESSAGE_CHARS
+    ? redacted.slice(0, MAX_NATIVE_MESSAGE_CHARS)
+    : redacted;
+}
+
+function nativeFailure(value: unknown): NativeFailure {
+  if (value === null || value === undefined)
+    return { code: undefined, message: undefined };
+  if (typeof value === "string")
+    return { code: undefined, message: boundedNativeMessage(value) };
+  if (typeof value !== "object") return { code: undefined, message: undefined };
+  const source = value as Record<string, unknown>;
+  const code = source["code"];
+  const message = source["message"];
+  return {
+    code: typeof code === "number" && Number.isInteger(code) ? code : undefined,
+    message:
+      typeof message === "string" ? boundedNativeMessage(message) : undefined,
+  };
+}
+
+function nativeDiagnostic(
+  code: NativeKafkaErrorCode,
+  operation: NativeKafkaOperation | undefined,
+  phase: NativeKafkaPhase | undefined,
+  native: NativeFailure,
+): string {
+  const parts: string[] = [code];
+  if (operation !== undefined) parts.push(`operation=${operation}`);
+  if (phase !== undefined) parts.push(`phase=${phase}`);
+  if (native.code !== undefined) parts.push(`nativeCode=${native.code}`);
+  if (native.message !== undefined)
+    parts.push(`nativeMessage=${JSON.stringify(native.message)}`);
+  const diagnostic = parts.join(" ");
+  return diagnostic.length > MAX_NATIVE_DIAGNOSTIC_CHARS
+    ? `${diagnostic.slice(0, MAX_NATIVE_DIAGNOSTIC_CHARS - 1)}…`
+    : diagnostic;
+}
+
+function error(
+  code: NativeKafkaErrorCode,
+  details: NativeErrorDetails = {},
+): NativeKafkaError {
+  return new NativeKafkaError(code, details);
 }
 
 function positiveSafeInteger(value: unknown): value is number {
@@ -527,6 +634,8 @@ function invoke<T>(
   timeoutMs: number,
   signal: AbortSignal | undefined,
   failureCode: NativeKafkaErrorCode,
+  operation: NativeKafkaOperation,
+  phase: NativeKafkaPhase,
 ): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     let settled = false;
@@ -538,33 +647,47 @@ function invoke<T>(
       if (failed) reject(value as NativeKafkaError);
       else resolve(value as T);
     };
-    const abort = (): void => finish(error("NATIVE_OPERATION_ABORTED"), true);
+    const abort = (): void =>
+      finish(
+        error("NATIVE_OPERATION_ABORTED", { operation, phase: "wait" }),
+        true,
+      );
     const cleanup = (): void => {
       if (timer !== undefined) clearTimeout(timer);
       signal?.removeEventListener("abort", abort);
     };
     timer = setTimeout(
-      () => finish(error("NATIVE_OPERATION_TIMEOUT"), true),
+      () =>
+        finish(
+          error("NATIVE_OPERATION_TIMEOUT", { operation, phase: "wait" }),
+          true,
+        ),
       timeoutMs,
     );
     timer.unref?.();
     if (signal?.aborted) {
-      finish(error("NATIVE_OPERATION_ABORTED"), true);
+      finish(
+        error("NATIVE_OPERATION_ABORTED", { operation, phase: "wait" }),
+        true,
+      );
       return;
     }
     signal?.addEventListener("abort", abort, { once: true });
     try {
       start((nativeError, value) => {
         if (nativeError !== undefined && nativeError !== null) {
-          finish(error(failureCode), true);
+          finish(
+            error(failureCode, { operation, phase, native: nativeError }),
+            true,
+          );
         } else if (value === undefined) {
           finish(undefined as T, false);
         } else {
           finish(value, false);
         }
       });
-    } catch {
-      finish(error(failureCode), true);
+    } catch (cause) {
+      finish(error(failureCode, { operation, phase, native: cause }), true);
     }
   });
 }
@@ -572,6 +695,8 @@ function invoke<T>(
 function invokeUntilCallback<T>(
   start: (callback: Callback<T>) => void,
   failureCode: NativeKafkaErrorCode,
+  operation: NativeKafkaOperation,
+  phase: NativeKafkaPhase,
 ): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     let settled = false;
@@ -584,11 +709,14 @@ function invokeUntilCallback<T>(
     try {
       start((nativeError, value) => {
         if (nativeError !== undefined && nativeError !== null)
-          finish(error(failureCode), true);
+          finish(
+            error(failureCode, { operation, phase, native: nativeError }),
+            true,
+          );
         else finish(value as T, false);
       });
-    } catch {
-      finish(error(failureCode), true);
+    } catch (cause) {
+      finish(error(failureCode, { operation, phase, native: cause }), true);
     }
   });
 }
@@ -723,7 +851,13 @@ export async function createNativeProducer(
     if (request.settled.value) return;
     request.settled.value = true;
     if (nativeError !== undefined && nativeError !== null)
-      request.reject(error(producerFailureCode(nativeError)));
+      request.reject(
+        error(producerFailureCode(nativeError), {
+          operation: "produce",
+          phase: "request",
+          native: nativeError,
+        }),
+      );
     else {
       try {
         const delivered = delivery(report);
@@ -733,8 +867,14 @@ export async function createNativeProducer(
             topic: runtimeTopic(options, delivered.topic),
           }),
         );
-      } catch {
-        request.reject(error("NATIVE_DELIVERY_FAILED"));
+      } catch (cause) {
+        request.reject(
+          error("NATIVE_DELIVERY_FAILED", {
+            operation: "produce",
+            phase: "request",
+            native: cause,
+          }),
+        );
       }
     }
   });
@@ -764,9 +904,19 @@ export async function createNativeProducer(
   const connect = (): Promise<void> => {
     if (state === "connected") return Promise.resolve();
     if (state === "failed")
-      return Promise.reject(error("NATIVE_CONNECT_FAILED"));
+      return Promise.reject(
+        error("NATIVE_CONNECT_FAILED", {
+          operation: "connect",
+          phase: "start",
+        }),
+      );
     if (state === "closing" || state === "closed")
-      return Promise.reject(error("NATIVE_CLIENT_CLOSED"));
+      return Promise.reject(
+        error("NATIVE_CLIENT_CLOSED", {
+          operation: "connect",
+          phase: "start",
+        }),
+      );
     if (connectPromise !== undefined) return connectPromise;
     state = "connecting";
     connectPromise = invoke<void>(
@@ -779,6 +929,8 @@ export async function createNativeProducer(
       options.sendTimeoutMs,
       undefined,
       "NATIVE_CONNECT_FAILED",
+      "connect",
+      "start",
     )
       .then(() => {
         if (state !== "connecting") throw error("NATIVE_CLIENT_CLOSED");
@@ -805,6 +957,7 @@ export async function createNativeProducer(
           state === "closing" || state === "closed"
             ? "NATIVE_CLIENT_CLOSED"
             : "NATIVE_NOT_CONNECTED",
+          { operation: "produce", phase: "request" },
         ),
       );
     if (
@@ -822,7 +975,12 @@ export async function createNativeProducer(
     if (pending.size >= options.maxPending)
       return Promise.reject(error("NATIVE_QUEUE_FULL"));
     if (signal?.aborted)
-      return Promise.reject(error("NATIVE_OPERATION_ABORTED"));
+      return Promise.reject(
+        error("NATIVE_OPERATION_ABORTED", {
+          operation: "produce",
+          phase: "wait",
+        }),
+      );
     let nativeHeaders: readonly Readonly<Record<string, string | Buffer>>[];
     try {
       nativeHeaders = encodeHeaders(headers);
@@ -843,11 +1001,25 @@ export async function createNativeProducer(
         reject(reason);
       };
       timer = setTimeout(
-        () => finish(error("NATIVE_OPERATION_TIMEOUT"), false),
+        () =>
+          finish(
+            error("NATIVE_OPERATION_TIMEOUT", {
+              operation: "produce",
+              phase: "wait",
+            }),
+            false,
+          ),
         options.sendTimeoutMs,
       );
       timer.unref?.();
-      abort = (): void => finish(error("NATIVE_OPERATION_ABORTED"), false);
+      abort = (): void =>
+        finish(
+          error("NATIVE_OPERATION_ABORTED", {
+            operation: "produce",
+            phase: "wait",
+          }),
+          false,
+        );
       signal?.addEventListener("abort", abort, { once: true });
       pending.set(opaque, { resolve, reject, timer, signal, abort, settled });
       try {
@@ -867,6 +1039,7 @@ export async function createNativeProducer(
             failure === "NATIVE_DELIVERY_FAILED"
               ? "NATIVE_OPERATION_FAILED"
               : failure,
+            { operation: "produce", phase: "request", native: cause },
           ),
           true,
         );
@@ -887,6 +1060,8 @@ export async function createNativeProducer(
       options.receiveTimeoutMs,
       signal,
       "NATIVE_OPERATION_FAILED",
+      "metadata",
+      "request",
     )
       .then(() => {
         return true;
@@ -903,13 +1078,20 @@ export async function createNativeProducer(
       request.signal?.removeEventListener("abort", request.abort);
       if (!request.settled.value) {
         request.settled.value = true;
-        request.reject(error("NATIVE_CLIENT_CLOSED"));
+        request.reject(
+          error("NATIVE_CLIENT_CLOSED", {
+            operation: "produce",
+            phase: "close",
+          }),
+        );
       }
     }
     pending.clear();
     closePromise = invokeUntilCallback<unknown>(
       (callback) => client.disconnect(callback),
       "NATIVE_OPERATION_FAILED",
+      "disconnect",
+      "close",
     )
       .then(() => undefined)
       .finally(() => {
@@ -965,7 +1147,11 @@ export async function createNativeConsumer(
             : Object.freeze({
                 type: "failed",
                 partitions: current,
-                error: error("NATIVE_REBALANCE_FAILED"),
+                error: error("NATIVE_REBALANCE_FAILED", {
+                  operation: "rebalance",
+                  phase: "request",
+                  native: nativeError,
+                }),
               });
       assigned = current;
       try {
@@ -973,11 +1159,15 @@ export async function createNativeConsumer(
       } catch {
         state = "failed";
       }
-    } catch {
+    } catch (cause) {
       const event = Object.freeze({
         type: "failed",
         partitions: current,
-        error: error("NATIVE_REBALANCE_FAILED"),
+        error: error("NATIVE_REBALANCE_FAILED", {
+          operation: "rebalance",
+          phase: "request",
+          native: cause,
+        }),
       });
       try {
         onRebalance(event);
@@ -1086,9 +1276,19 @@ export async function createNativeConsumer(
   const connect = (): Promise<void> => {
     if (state === "connected") return Promise.resolve();
     if (state === "failed")
-      return Promise.reject(error("NATIVE_CONNECT_FAILED"));
+      return Promise.reject(
+        error("NATIVE_CONNECT_FAILED", {
+          operation: "connect",
+          phase: "start",
+        }),
+      );
     if (state === "closing" || state === "closed")
-      return Promise.reject(error("NATIVE_CLIENT_CLOSED"));
+      return Promise.reject(
+        error("NATIVE_CLIENT_CLOSED", {
+          operation: "connect",
+          phase: "start",
+        }),
+      );
     if (connectPromise !== undefined) return connectPromise;
     state = "connecting";
     connectPromise = invoke<void>(
@@ -1101,6 +1301,8 @@ export async function createNativeConsumer(
       options.receiveTimeoutMs,
       undefined,
       "NATIVE_CONNECT_FAILED",
+      "connect",
+      "start",
     )
       .then(() => {
         if (state !== "connecting") throw error("NATIVE_CLIENT_CLOSED");
@@ -1136,7 +1338,10 @@ export async function createNativeConsumer(
       return Promise.reject(
         cause instanceof NativeKafkaError
           ? cause
-          : error("NATIVE_OPERATION_FAILED"),
+          : error("NATIVE_OPERATION_FAILED", {
+              operation: "subscribe",
+              phase: "request",
+            }),
       );
     }
   };
@@ -1149,7 +1354,12 @@ export async function createNativeConsumer(
       return Promise.reject(error("NATIVE_QUEUE_FULL"));
     if (pollInFlight) return Promise.reject(error("NATIVE_QUEUE_FULL"));
     if (signal?.aborted)
-      return Promise.reject(error("NATIVE_OPERATION_ABORTED"));
+      return Promise.reject(
+        error("NATIVE_OPERATION_ABORTED", {
+          operation: "consume",
+          phase: "wait",
+        }),
+      );
     try {
       requireConnected();
     } catch (cause) {
@@ -1180,6 +1390,8 @@ export async function createNativeConsumer(
       options.receiveTimeoutMs,
       signal,
       "NATIVE_OPERATION_FAILED",
+      "consume",
+      "request",
     ).then((messages) =>
       Object.freeze(
         messages.map((message) => {
@@ -1218,7 +1430,12 @@ export async function createNativeConsumer(
     if (pendingCommits.size >= options.maxPending || pendingCommits.has(key))
       return Promise.reject(error("NATIVE_QUEUE_FULL"));
     if (signal?.aborted)
-      return Promise.reject(error("NATIVE_OPERATION_ABORTED"));
+      return Promise.reject(
+        error("NATIVE_OPERATION_ABORTED", {
+          operation: "commit",
+          phase: "wait",
+        }),
+      );
     let timer: ReturnType<typeof setTimeout>;
     let abort = (): void => undefined;
     const promise = new Promise<void>((resolve, reject) => {
@@ -1232,11 +1449,25 @@ export async function createNativeConsumer(
         reject(reason);
       };
       timer = setTimeout(
-        () => finish(error("NATIVE_OPERATION_TIMEOUT"), false),
+        () =>
+          finish(
+            error("NATIVE_OPERATION_TIMEOUT", {
+              operation: "commit",
+              phase: "wait",
+            }),
+            false,
+          ),
         options.commitTimeoutMs,
       );
       timer.unref?.();
-      abort = (): void => finish(error("NATIVE_OPERATION_ABORTED"), false);
+      abort = (): void =>
+        finish(
+          error("NATIVE_OPERATION_ABORTED", {
+            operation: "commit",
+            phase: "wait",
+          }),
+          false,
+        );
       signal?.addEventListener("abort", abort, { once: true });
       pendingCommits.set(key, {
         resolve,
@@ -1258,7 +1489,13 @@ export async function createNativeConsumer(
             request.signal?.removeEventListener("abort", request.abort);
             if (!request.settled.value) {
               request.settled.value = true;
-              request.reject(error(consumerCommitFailureCode(nativeError)));
+              request.reject(
+                error(consumerCommitFailureCode(nativeError), {
+                  operation: "commit",
+                  phase: "request",
+                  native: nativeError,
+                }),
+              );
             }
           },
         );
@@ -1266,7 +1503,11 @@ export async function createNativeConsumer(
         finish(
           cause instanceof NativeKafkaError
             ? cause
-            : error(consumerCommitFailureCode(cause)),
+            : error(consumerCommitFailureCode(cause), {
+                operation: "commit",
+                phase: "request",
+                native: cause,
+              }),
           true,
         );
       }
@@ -1275,21 +1516,30 @@ export async function createNativeConsumer(
   };
 
   const control = (
-    operation: (partitions: readonly NativePartition[]) => unknown,
+    operation: NativeKafkaOperation,
+    call: (partitions: readonly NativePartition[]) => unknown,
     value: readonly NativePartition[] | undefined,
     signal: AbortSignal | undefined,
   ): Promise<void> => {
     try {
       requireConnected();
-      if (signal?.aborted) throw error("NATIVE_OPERATION_ABORTED");
+      if (signal?.aborted)
+        throw error("NATIVE_OPERATION_ABORTED", {
+          operation,
+          phase: "wait",
+        });
       const target = value === undefined ? assigned : samePartitions(value);
-      operation(target);
+      call(target);
       return Promise.resolve();
     } catch (cause) {
       return Promise.reject(
         cause instanceof NativeKafkaError
           ? cause
-          : error("NATIVE_OPERATION_FAILED"),
+          : error("NATIVE_OPERATION_FAILED", {
+              operation,
+              phase: "request",
+              native: cause,
+            }),
       );
     }
   };
@@ -1306,17 +1556,28 @@ export async function createNativeConsumer(
     value?: readonly NativePartition[],
     signal?: AbortSignal,
   ): Promise<void> =>
-    control((target) => client.pause(brokerPartitions(target)), value, signal);
+    control(
+      "pause",
+      (target) => client.pause(brokerPartitions(target)),
+      value,
+      signal,
+    );
   const resume = (
     value?: readonly NativePartition[],
     signal?: AbortSignal,
   ): Promise<void> =>
-    control((target) => client.resume(brokerPartitions(target)), value, signal);
+    control(
+      "resume",
+      (target) => client.resume(brokerPartitions(target)),
+      value,
+      signal,
+    );
   const assign = (
     value: readonly NativePartition[],
     signal?: AbortSignal,
   ): Promise<void> =>
     control(
+      "assign",
       (target) => {
         client.assign(brokerPartitions(target));
         assigned = target;
@@ -1327,7 +1588,11 @@ export async function createNativeConsumer(
   const unassign = (signal?: AbortSignal): Promise<void> => {
     try {
       requireConnected();
-      if (signal?.aborted) throw error("NATIVE_OPERATION_ABORTED");
+      if (signal?.aborted)
+        throw error("NATIVE_OPERATION_ABORTED", {
+          operation: "unassign",
+          phase: "wait",
+        });
       client.unassign();
       assigned = Object.freeze([]);
       return Promise.resolve();
@@ -1335,7 +1600,11 @@ export async function createNativeConsumer(
       return Promise.reject(
         cause instanceof NativeKafkaError
           ? cause
-          : error("NATIVE_OPERATION_FAILED"),
+          : error("NATIVE_OPERATION_FAILED", {
+              operation: "unassign",
+              phase: "request",
+              native: cause,
+            }),
       );
     }
   };
@@ -1352,6 +1621,8 @@ export async function createNativeConsumer(
       options.receiveTimeoutMs,
       signal,
       "NATIVE_OPERATION_FAILED",
+      "metadata",
+      "request",
     )
       .then(() => {
         if (options.autoOffsetReset === "latest") {
@@ -1394,13 +1665,20 @@ export async function createNativeConsumer(
       request.signal?.removeEventListener("abort", request.abort);
       if (!request.settled.value) {
         request.settled.value = true;
-        request.reject(error("NATIVE_CLIENT_CLOSED"));
+        request.reject(
+          error("NATIVE_CLIENT_CLOSED", {
+            operation: "commit",
+            phase: "close",
+          }),
+        );
       }
     }
     pendingCommits.clear();
     closePromise = invokeUntilCallback<unknown>(
       (callback) => client.disconnect(callback),
       "NATIVE_OPERATION_FAILED",
+      "disconnect",
+      "close",
     )
       .then(() => undefined)
       .finally(() => {

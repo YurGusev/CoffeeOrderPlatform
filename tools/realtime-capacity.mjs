@@ -402,6 +402,11 @@ async function runWorker(contextFile, resultDir, runId) {
   ]);
   options.runId = runId;
   const result = await runTransportFixture(options);
+  if (result.error) {
+    const diagnostic = result.error.diagnostic ?? result.error.message;
+    if (typeof diagnostic === "string" && diagnostic)
+      process.stderr.write(`soak failed: ${diagnostic}\n`);
+  }
   assert.equal(result.status, "PASS");
   assert.equal(result.launchProof, true);
   assert.equal(result.cleanupVerified, true);

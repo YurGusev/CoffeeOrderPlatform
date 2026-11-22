@@ -738,6 +738,161 @@ void test("native Kafka maps broker delivery and commit codes to stable errors",
   }
 });
 
+void test("native Kafka errors retain a bounded native cause with operation and phase", async () => {
+  const nativeKey = Symbol.for("coffee.native-error-diagnostic-regression");
+  const clients = {};
+  class Producer extends EventEmitter {
+    constructor() {
+      super();
+      clients.producer = this;
+    }
+    isConnected() {
+      return true;
+    }
+    connect(_options, callback) {
+      callback(null);
+    }
+    poll() {}
+    produce() {
+      if (this.failure !== undefined) throw this.failure;
+    }
+    disconnect(callback) {
+      callback(this.disconnectFailure ?? null);
+    }
+  }
+  class Consumer extends EventEmitter {
+    constructor() {
+      super();
+      clients.consumer = this;
+    }
+    isConnected() {
+      return true;
+    }
+    setDefaultConsumeTimeout() {}
+    setDefaultIsTimeoutOnlyForFirstMessage() {}
+    connect(_options, callback) {
+      callback(null);
+    }
+    consume(_limit, callback) {
+      callback(this.pollFailure ?? null, []);
+    }
+    commitCb(_offsets, callback) {
+      callback(this.commitFailure ?? null);
+    }
+    disconnect(callback) {
+      callback(null);
+    }
+  }
+  globalThis[nativeKey] = { Producer, KafkaConsumer: Consumer };
+  const url = `data:text/javascript,${encodeURIComponent('export const RdKafka=globalThis[Symbol.for("coffee.native-error-diagnostic-regression")];export default {RdKafka};')}`;
+  const hook = registerHooks({
+    resolve(specifier, context, next) {
+      return specifier === "@confluentinc/kafka-javascript"
+        ? { url, shortCircuit: true }
+        : next(specifier, context);
+    },
+  });
+  const common = {
+    brokers: ["fixture:9092"],
+    clientId: "native-error-diagnostic-regression",
+    protocol: "PLAINTEXT",
+    maxPending: 8,
+    maxMessageBytes: 2048,
+    sendTimeoutMs: 1000,
+    receiveTimeoutMs: 1000,
+    commitTimeoutMs: 1000,
+    shutdownTimeoutMs: 1000,
+  };
+  const producer = await createNativeProducer({
+    ...common,
+    producerRetries: 1,
+  });
+  const consumer = await createNativeConsumer(
+    {
+      ...common,
+      groupId: "fixture-group",
+      topics: [record.topic],
+      autoOffsetReset: "latest",
+    },
+    () => {},
+  );
+  try {
+    await producer.connect();
+    await consumer.connect();
+
+    clients.producer.failure = Object.assign(
+      new Error("broker unavailable: password=synthetic-canary"),
+      { code: -999 },
+    );
+    await assert.rejects(
+      producer.send(record.topic, "synchronous-produce-failure", "{}", {}),
+      (error) => {
+        assert.equal(error.code, "NATIVE_OPERATION_FAILED");
+        assert.equal(error.operation, "produce");
+        assert.equal(error.phase, "request");
+        assert.equal(error.nativeCode, -999);
+        assert.equal(
+          error.nativeMessage,
+          "broker unavailable: password=[REDACTED]",
+        );
+        assert.equal(error.message, error.diagnostic);
+        assert.match(
+          error.diagnostic,
+          /^NATIVE_OPERATION_FAILED operation=produce phase=request nativeCode=-999 nativeMessage=/u,
+        );
+        return true;
+      },
+    );
+    clients.producer.failure = undefined;
+
+    clients.consumer.pollFailure = {
+      code: -999,
+      message: "consume callback failed",
+    };
+    await assert.rejects(consumer.poll(1), (error) => {
+      assert.equal(error.code, "NATIVE_OPERATION_FAILED");
+      assert.equal(error.operation, "consume");
+      assert.equal(error.phase, "request");
+      assert.equal(error.nativeCode, -999);
+      assert.equal(error.nativeMessage, "consume callback failed");
+      return true;
+    });
+    clients.consumer.pollFailure = undefined;
+
+    clients.consumer.commitFailure = {
+      code: -999,
+      message: "x".repeat(4096),
+    };
+    await assert.rejects(consumer.commit(record.topic, 0, "1"), (error) => {
+      assert.equal(error.code, "NATIVE_OPERATION_FAILED");
+      assert.equal(error.operation, "commit");
+      assert.equal(error.phase, "request");
+      assert.equal(error.nativeCode, -999);
+      assert.equal(error.nativeMessage.length, 512);
+      assert.ok(error.diagnostic.length <= 1024);
+      return true;
+    });
+    clients.consumer.commitFailure = undefined;
+
+    clients.producer.disconnectFailure = {
+      code: -999,
+      message: "disconnect callback failed",
+    };
+    await assert.rejects(producer.close(), (error) => {
+      assert.equal(error.code, "NATIVE_OPERATION_FAILED");
+      assert.equal(error.operation, "disconnect");
+      assert.equal(error.phase, "close");
+      assert.equal(error.nativeCode, -999);
+      assert.equal(error.nativeMessage, "disconnect callback failed");
+      return true;
+    });
+  } finally {
+    await consumer.close();
+    hook.deregister();
+    delete globalThis[nativeKey];
+  }
+});
+
 void test(
   "runtime bounds realtime DLQ wire and falls back from invalid transport keys",
   { timeout: 10000 },

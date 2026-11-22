@@ -37,6 +37,23 @@ export const THRESHOLDS = Object.freeze({
   driverRssBytes: 2147483648,
   driverFd: 32768,
 });
+const MAX_DRIVER_DIAGNOSTIC_CHARS = 1024;
+
+export function driverFailure(error) {
+  const code =
+    typeof error?.code === "string" && error.code.length > 0
+      ? error.code
+      : "TRANSPORT_PROOF_FAILED";
+  const message =
+    typeof error?.message === "string" && error.message.length > 0
+      ? error.message
+      : code;
+  const failure = { code, message };
+  if (typeof error?.diagnostic === "string" && error.diagnostic.length > 0)
+    failure.diagnostic = error.diagnostic.slice(-MAX_DRIVER_DIAGNOSTIC_CHARS);
+  return failure;
+}
+
 export function classifyResult(r) {
   const missing = [];
   for (const name of [
