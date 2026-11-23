@@ -60,6 +60,41 @@ import {
   fixture,
 } from "../observability/orders-fixture.mjs";
 
+// Regression for #351: launchPath calls the fixture with launchIdentity and
+// launchContextFile; only the four preparation limits are store options.
+void test("fixture preparation store settings accept only explicit limits", async () => {
+  const { preparationStoreSettings } =
+    await import("../observability/orders-fixture.mjs");
+  assert.deepEqual(
+    preparationStoreSettings({ maxLines: 1, maxSnapshotAgeMs: 15_000 }),
+    {
+      batchSize: 100,
+      maxOrders: 100,
+      maxLines: 1,
+      maxSnapshotAgeMs: 15_000,
+    },
+  );
+  const settings = preparationStoreSettings({
+    launchIdentity: {
+      schemaVersion: 1,
+      runId: "20261123T145204Z-1507a28",
+      candidateSha: `1507a28${"0".repeat(33)}`,
+      baseConfigSha256: "a".repeat(64),
+    },
+    launchContextFile: "/run/coffee-launch/context.json",
+    maxOrders: 1,
+  });
+  assert.deepEqual(settings, {
+    batchSize: 100,
+    maxOrders: 1,
+    maxLines: 1000,
+    maxSnapshotAgeMs: 60_000,
+  });
+  const { createAromaPreparationStore } =
+    await import("../../apps/orders-aroma-preparation/dist/infrastructure/preparation-store.js");
+  assert.doesNotThrow(() => createAromaPreparationStore({}, settings));
+});
+
 // A prerequisite gate, not a substitute for the preparation-store behavioral proofs.
 // Keep the required SELECT positive: expecting a denial would hide the broken contract.
 void test(
