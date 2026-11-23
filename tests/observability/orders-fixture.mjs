@@ -93,6 +93,15 @@ export const live = {
       : false,
 };
 export const customer = "cus_01ARZ3NDEKTSV4RRFFQ69G5FAV";
+export function preparationStoreSettings(options = {}) {
+  const {
+    batchSize = 100,
+    maxOrders = 100,
+    maxLines = 1000,
+    maxSnapshotAgeMs = 60_000,
+  } = options;
+  return { batchSize, maxOrders, maxLines, maxSnapshotAgeMs };
+}
 function envelope(type, payload, aggregate, producer) {
   return {
     envelopeVersion: "1",
@@ -418,13 +427,7 @@ export async function fixture(run, options = {}) {
         migrationDatabaseStarted = false;
         database = await open();
         core = await open("coffee_orders_service_rw");
-        const settings = {
-          batchSize: 100,
-          maxOrders: 100,
-          maxLines: 1000,
-          maxSnapshotAgeMs: 60_000,
-          ...options,
-        };
+        const settings = preparationStoreSettings(options);
         let store = createAromaPreparationStore(database, settings);
         const tx = (callback) =>
           withTransaction(database, { mode: "background" }, callback);
