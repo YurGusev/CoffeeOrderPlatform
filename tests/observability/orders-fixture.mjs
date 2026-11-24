@@ -12,7 +12,7 @@ import { processKafkaRecord } from "../../packages/platform-kafka-runtime/dist/i
 import { toInstant } from "../../packages/platform-time/dist/index.js";
 import { Client } from "pg";
 import { load as parseYaml } from "js-yaml";
-import { validateLaunchContext } from "../../verification/launch/v1/report.mjs";
+import { validateLaunchContext } from "../../scripts/launch-support/launch-context.mjs";
 import {
   createDatabase,
   withTransaction,

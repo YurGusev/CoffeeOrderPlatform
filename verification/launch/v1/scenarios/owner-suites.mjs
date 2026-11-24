@@ -3,7 +3,7 @@ import { readdir } from "node:fs/promises";
 import { spawnSync } from "node:child_process";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { validateLaunchContext } from "../report.mjs";
+import { validateLaunchContext } from "../../../../scripts/launch-support/launch-context.mjs";
 
 const ROOT = resolve(fileURLToPath(new URL("../../../..", import.meta.url)));
 const INTEGRATION_FILES = [

@@ -18,8 +18,6 @@ import {
 } from "../config-bootstrap/index.mjs";
 import { loadVerifiedGateImage } from "../verified-infrastructure-image.mjs";
 
-export { OBSERVABILITY_TARGETS, createRuntimeLoggingOverride };
-
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 export const TELEMETRY_NETWORKS = [
   "coffee_observability",

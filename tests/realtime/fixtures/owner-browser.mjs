@@ -1567,7 +1567,7 @@ export async function proveOwnerBrowser(
 if (process.env.COFFEE_OWNER_BROWSER === "1") {
   const contextPath = process.env.COFFEE_LAUNCH_CONTEXT_FILE;
   const { validateLaunchContext } =
-    await import("../../../verification/launch/v1/report.mjs");
+    await import("../../../scripts/launch-support/launch-context.mjs");
   const { context, evidenceDir } = await validateLaunchContext(contextPath);
   const launchIdentity = {
     schemaVersion: context.schemaVersion,

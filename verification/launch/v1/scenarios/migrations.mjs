@@ -22,7 +22,7 @@ import {
   canonicalJson,
   canonicalRequestHash,
 } from "../../../../packages/platform-idempotency/dist/index.js";
-import { validateLaunchContext } from "../report.mjs";
+import { validateLaunchContext } from "../../../../scripts/launch-support/launch-context.mjs";
 import {
   cleanupMigrationDatabases,
   createMigrationDatabase,

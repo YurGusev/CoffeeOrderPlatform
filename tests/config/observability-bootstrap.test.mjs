@@ -104,7 +104,7 @@ import {
   verifyBrowserChildBundle,
 } from "../../verification/launch/v1/scenarios/browser.mjs";
 import { runMigrationStage } from "../../verification/launch/v1/scenarios/migrations.mjs";
-import { validateLaunchContext } from "../../verification/launch/v1/report.mjs";
+import { validateLaunchContext } from "../../scripts/launch-support/launch-context.mjs";
 import { assertScopedSecrets } from "../../packages/platform-runtime/dist/index.js";
 import { checkObservabilityHealth } from "../../tools/observability/health.mjs";
 import {
@@ -9933,6 +9933,10 @@ void test("browser correlation executes the child lifecycle and preserves early 
         await symlink(dist, join(root, group, name, "dist"), "dir");
     }
   }
+  const rollbackContext = await import(
+    pathToFileURL(join(root, "scripts/launch-support/rollback-context.mjs"))
+      .href
+  );
   const configHash = createHash("sha256")
     .update(await readFile(platformPath))
     .digest("hex");
@@ -9988,8 +9992,12 @@ void test("browser correlation executes the child lifecycle and preserves early 
       .href
   );
   const success = await makeContext("20261030T120000Z");
-  const { createRollbackBaseline, readRollbackParent } = await import(
+  const { createRollbackBaseline } = await import(
     pathToFileURL(join(root, "verification/launch/v1/scenarios/rollback.mjs"))
+      .href
+  );
+  const { readRollbackParent } = await import(
+    pathToFileURL(join(root, "scripts/launch-support/rollback-context.mjs"))
       .href
   );
   const controlled = await createRollbackBaseline({
@@ -10080,7 +10088,7 @@ void test("browser correlation executes the child lifecycle and preserves early 
           candidateRoot: baseline.baselineRoot,
           candidateSha: baseline.baselineSha,
         });
-        const lineage = await rollback.validateRollbackLineage({
+        const lineage = await rollbackContext.validateRollbackLineage({
           launchIdentity: {
             candidateRoot: baseline.baselineRoot,
             context: {
@@ -10092,7 +10100,7 @@ void test("browser correlation executes the child lifecycle and preserves early 
         });
         const retainedName = `${child.context.resources.composeProject}-orders`;
         const receipt = {
-          ...rollback.createRollbackFailureReceipt({
+          ...rollbackContext.createRollbackFailureReceipt({
             runId: child.context.runId,
             candidateSha: child.context.candidateSha,
             stage: "disabled-reconcile",
@@ -10273,7 +10281,7 @@ void test("browser correlation executes the child lifecycle and preserves early 
         candidateRoot: baseline.baselineRoot,
         candidateSha: baseline.baselineSha,
       });
-      const lineage = await rollback.validateRollbackLineage({
+      const lineage = await rollbackContext.validateRollbackLineage({
         launchIdentity: {
           candidateRoot: baseline.baselineRoot,
           context: {
@@ -10515,7 +10523,7 @@ void test("browser correlation executes the child lifecycle and preserves early 
             });
             let runtimeArtifact;
             try {
-              const lineage = await rollback.validateRollbackLineage({
+              const lineage = await rollbackContext.validateRollbackLineage({
                 launchIdentity: {
                   candidateRoot: observed.checkout,
                   context: {
@@ -10752,13 +10760,13 @@ void test("browser correlation executes the child lifecycle and preserves early 
       loadImage: false,
     });
     assert.equal(parentKafka.imageId, expectedKafka.imageId);
-    const childReport = await import(
+    const childLaunchContext = await import(
       pathToFileURL(
-        join(child.checkoutDir, "verification/launch/v1/report.mjs"),
+        join(child.checkoutDir, "scripts/launch-support/launch-context.mjs"),
       ).href
     );
     await assert.rejects(
-      childReport.validateLaunchContext(success.contextPath),
+      childLaunchContext.validateLaunchContext(success.contextPath),
       /Report module не запущен из source root/u,
     );
     assert.equal(
@@ -12575,7 +12583,7 @@ void test("observability telemetry sources require exact child networks and all 
   const { validateObservabilityTelemetrySources } =
     await import("../../tools/observability/verify.mjs");
   const { OBSERVABILITY_TARGETS } =
-    await import("../../tools/observability/generate.mjs");
+    await import("../../scripts/launch-support/runtime-logging.mjs");
   const projectName = "coffee-launch-20261031t120000z-abcdef0";
   const names = [
     "coffee_edge_backend",

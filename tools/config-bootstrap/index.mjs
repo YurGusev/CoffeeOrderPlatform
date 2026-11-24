@@ -4492,13 +4492,13 @@ async function readMigrationPreparationSource(
 
   let sourceValidated;
   try {
-    const reportPath = join(
+    const launchContextPath = join(
       sourceContext.sourceRepoRoot,
-      "verification/launch/v1/report.mjs",
+      "scripts/launch-support/launch-context.mjs",
     );
-    await assertPreparationNoSymlinkPath(reportPath);
+    await assertPreparationNoSymlinkPath(launchContextPath);
     const { validateLaunchContext } = await import(
-      pathToFileURL(reportPath).href
+      pathToFileURL(launchContextPath).href
     );
     sourceValidated = await validateLaunchContext(preparationContextPath);
   } catch {

@@ -24,20 +24,15 @@ import {
   validateBrowserRuntimeArtifact,
   validateObservabilityBrowserEvidence,
 } from "../../../../tools/browser-proof.mjs";
-import { validateLaunchContext } from "../report.mjs";
+import { validateLaunchContext } from "../../../../scripts/launch-support/launch-context.mjs";
 import {
+  validateBrowserChildContext,
+  verifyBrowserChildBundle as verifyBrowserChildBundleAdmission,
   BROWSER_CHILD_DIRECTORY_NAME,
   inspectLaunchCheckout,
   runManagedRollbackChild,
   validateRollbackBaseline,
-} from "./rollback.mjs";
-import {
-  browserChildBundleRef,
-  validateBrowserChildContext,
-  verifyBrowserChildBundle as verifyBrowserChildBundleAdmission,
 } from "../../../../scripts/launch-support/rollback-context.mjs";
-
-export { browserChildBundleRef, validateBrowserChildContext };
 
 export function verifyBrowserChildBundle(options) {
   return verifyBrowserChildBundleAdmission({

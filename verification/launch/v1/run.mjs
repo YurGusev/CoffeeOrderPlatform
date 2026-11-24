@@ -31,18 +31,13 @@ import {
   validateChecksumManifest,
   validateKafkaNamespaceInventory,
   validateRunResultContract,
-  validateLaunchContext,
   writeDefects,
 } from "./report.mjs";
 import { decisive, reportGateStatus, RESUMABLE_GATE_IDS } from "./decision.mjs";
-import {
-  inspectLaunchCheckout,
-  verifyControlledRollbackEvidence,
-} from "./scenarios/rollback.mjs";
+import { verifyControlledRollbackEvidence } from "./scenarios/rollback.mjs";
 import { validateRoleMap } from "../../../scripts/db-bootstrap.mjs";
 import {
   BROWSER_CHILD_ARTIFACTS,
-  validateBrowserChildContext,
   validateBrowserCorrelation,
   validateBrowserFailureReceipt,
   validateBrowserParentRuntime,
@@ -65,6 +60,11 @@ import {
   observabilityVerificationCoverage,
   syntheticNodeNotReadyComplete,
 } from "../../../tools/observability/verify.mjs";
+import { validateLaunchContext } from "../../../scripts/launch-support/launch-context.mjs";
+import {
+  inspectLaunchCheckout,
+  validateBrowserChildContext,
+} from "../../../scripts/launch-support/rollback-context.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 const BASE = join(ROOT, "verification/launch/v1");

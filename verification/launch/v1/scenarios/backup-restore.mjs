@@ -18,7 +18,7 @@ import {
   renderDatabaseSql,
   validateRoleMap,
 } from "../../../../scripts/db-bootstrap.mjs";
-import { validateLaunchContext } from "../report.mjs";
+import { validateLaunchContext } from "../../../../scripts/launch-support/launch-context.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../../../..");
 const RUN_ID = /^[0-9]{8}T[0-9]{6}Z-[0-9a-f]{7}$/u;

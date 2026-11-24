@@ -180,3 +180,81 @@ void test("модули автоматизации запуска не обра�
       .join("\n")}`,
   );
 });
+
+// После #353 перенесённые символы временно реэкспортировались из старых путей;
+// #355 оставляет один канонический путь `scripts/launch-support/*`.
+const CANONICAL_LAYER = "scripts/launch-support/";
+const OLD_MODULES = Object.freeze({
+  "verification/launch/v1/report.mjs": ["validateLaunchContext"],
+  "verification/launch/v1/scenarios/rollback.mjs": [
+    "BROWSER_CHILD_DIRECTORY_NAME",
+    "ROLLBACK_DISABLED_RECONCILE_SUBSTAGES",
+    "ROLLBACK_FAILURE_STAGES",
+    "attachRollbackDisabledReconcileSubstage",
+    "createRollbackFailureReceipt",
+    "inspectLaunchCheckout",
+    "readRollbackParent",
+    "rollbackComposeProjectName",
+    "rollbackComposeSourceLocation",
+    "runManagedRollbackChild",
+    "validateConfigOnlyLineage",
+    "validateRollbackBaseline",
+    "validateRollbackLineage",
+  ],
+  "verification/launch/v1/scenarios/browser.mjs": [
+    "browserChildBundleRef",
+    "validateBrowserChildContext",
+  ],
+  "tools/observability/generate.mjs": [
+    "createRuntimeLoggingOverride",
+    "LOGGED_SERVICES",
+    "OBSERVABILITY_TARGETS",
+  ],
+});
+
+async function staleWrapperViolations() {
+  const violations = [];
+  for (const [file, symbols] of Object.entries(OLD_MODULES)) {
+    const source = await readFile(join(REPO_ROOT, file), "utf8");
+    for (const match of source.matchAll(
+      /export\s+(?:\*|\{[\s\S]*?\})\s+from\s+(["'])([^"']+)\1/g,
+    )) {
+      const resolved = resolve(dirname(join(REPO_ROOT, file)), match[2]).slice(
+        REPO_ROOT.length + 1,
+      );
+      if (!resolved.startsWith(CANONICAL_LAYER)) continue;
+      violations.push(
+        `${file}:${lineOf(source, match.index)} реэкспортирует ${match[2]} вместо прямого импорта из ${CANONICAL_LAYER}*`,
+      );
+    }
+    for (const symbol of symbols) {
+      const pattern = new RegExp(
+        `export\\s+(?:async\\s+)?(?:function|const|let|var|class)\\s+${symbol}\\b`,
+        "u",
+      );
+      const match = pattern.exec(source);
+      if (!match) continue;
+      violations.push(
+        `${file}:${lineOf(source, match.index)} повторно определяет ${symbol} вместо импорта из ${CANONICAL_LAYER}*`,
+      );
+    }
+  }
+  return violations.sort((left, right) => left.localeCompare(right));
+}
+
+void test("старые модули не реэкспортируют перенесённые символы", async () => {
+  assert.deepEqual(
+    await staleWrapperViolations(),
+    [],
+    "Реэкспортные обёртки после стабилизации модулей автоматизации запрещены",
+  );
+});
+
+void test("обёртка verification/launch/v1/gate-identity.mjs удалена", async () => {
+  const wrapper = join(REPO_ROOT, "verification/launch/v1/gate-identity.mjs");
+  await assert.rejects(
+    readFile(wrapper),
+    (error) => error.code === "ENOENT",
+    "verification/launch/v1/gate-identity.mjs должен быть удалён: канонический модуль — scripts/launch-support/gate-identity.mjs",
+  );
+});

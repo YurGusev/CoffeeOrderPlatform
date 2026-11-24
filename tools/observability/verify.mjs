@@ -18,6 +18,10 @@ import { fileURLToPath } from "node:url";
 import { dump as dumpYaml, load as loadYaml } from "js-yaml";
 import { loadPlatformConfig } from "../../scripts/config-lib.mjs";
 import {
+  createRuntimeLoggingOverride,
+  OBSERVABILITY_TARGETS,
+} from "../../scripts/launch-support/runtime-logging.mjs";
+import {
   createAlertDefinitions,
   createGrafanaAlertProvisioning,
   newRunId,
@@ -26,13 +30,11 @@ import {
   discoverContainerLogs,
   createAlloyConfig,
   createComposeOverride,
-  createRuntimeLoggingOverride,
   createBackendConfigs,
   ensureBackendOwnership,
   ensureCollectorConfigOwnership,
   prometheusMetricName,
   verifyBootstrapProbe,
-  OBSERVABILITY_TARGETS,
 } from "./generate.mjs";
 import {
   ensurePrivateSecretDirectory,
@@ -6383,7 +6385,7 @@ export async function runObservabilityVerification({
             });
           };
           const script = `import {runBrowserProof} from './tools/compose-smoke.mjs';
-import {validateLaunchContext} from './verification/launch/v1/report.mjs';
+import {validateLaunchContext} from './scripts/launch-support/launch-context.mjs';
 const identity=await validateLaunchContext(process.env.COFFEE_LAUNCH_CONTEXT_FILE);
 const runId=identity.context.runId;
 const request=(stage,payload)=>new Promise((resolve,reject)=>{

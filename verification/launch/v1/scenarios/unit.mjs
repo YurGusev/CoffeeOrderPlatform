@@ -15,8 +15,8 @@ import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { load as parseYaml } from "js-yaml";
 import { parsePlatformConfig } from "../../../../packages/platform-config/src/index.ts";
-import { validateLaunchContext } from "../report.mjs";
-import { inspectLaunchCheckout } from "./rollback.mjs";
+import { validateLaunchContext } from "../../../../scripts/launch-support/launch-context.mjs";
+import { inspectLaunchCheckout } from "../../../../scripts/launch-support/rollback-context.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../../../..");
 const SOURCE_SUFFIX = /\.(?:[cm]?js|tsx?)$/u;

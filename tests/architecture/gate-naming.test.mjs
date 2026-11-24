@@ -10,7 +10,7 @@ import {
   LEGACY_GATE_IDS,
   gateLabel,
   gateSlug,
-} from "../../verification/launch/v1/gate-identity.mjs";
+} from "../../scripts/launch-support/gate-identity.mjs";
 
 const gateNumber = (number) => `G${String(number).padStart(2, "0")}`;
 
