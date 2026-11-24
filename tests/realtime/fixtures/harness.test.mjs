@@ -67,7 +67,7 @@ void test("operator-1 CLI help describes the approved profile without obsolete f
 
 void test("capacity producer rejects invalid launch context before creating resources", async () => {
   const { runRealtimeCapacity } =
-    await import("../../../tools/realtime-capacity.mjs");
+    await import("../../../verification/launch/v1/realtime-capacity.mjs");
   const { scratchRoot } = await import("../soak.test.mjs");
   const previousScratch = process.env.COFFEE_LAUNCH_SCRATCH;
   process.env.COFFEE_LAUNCH_SCRATCH ??= await mkdtemp(
@@ -151,7 +151,10 @@ void test("observability refuses to launch when qualification is missing", async
 
 void test("qualification claims use one user authority across concurrent packet copies", async () => {
   const source = await readFile(
-    new URL("../../../tools/realtime-capacity.mjs", import.meta.url),
+    new URL(
+      "../../../verification/launch/v1/realtime-capacity.mjs",
+      import.meta.url,
+    ),
     "utf8",
   );
   const start = source.indexOf("async function claimQualification(");

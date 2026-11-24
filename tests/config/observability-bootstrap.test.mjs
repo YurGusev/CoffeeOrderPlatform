@@ -9770,12 +9770,18 @@ void test("browser correlation executes the child lifecycle and preserves early 
     join(root, "tests/realtime/fixtures/setup.mjs"),
   );
   await cp(
-    join(REPO_ROOT, "tools/realtime-capacity.mjs"),
-    join(root, "tools/realtime-capacity.mjs"),
+    join(REPO_ROOT, "verification/launch/v1/realtime-capacity.mjs"),
+    join(root, "verification/launch/v1/realtime-capacity.mjs"),
   );
+  await mkdir(join(root, "scripts/launch-support"), { recursive: true });
   for (const file of [
     "tests/observability/runtime-matrix.mjs",
     "tools/compose-smoke.mjs",
+    "scripts/launch-support/gate-identity.mjs",
+    "scripts/launch-support/launch-context.mjs",
+    "scripts/launch-support/migration-database.mjs",
+    "scripts/launch-support/rollback-context.mjs",
+    "scripts/launch-support/runtime-logging.mjs",
     "verification/launch/v1/scenarios/rollback.mjs",
     "verification/launch/v1/run.mjs",
     "tools/config-bootstrap/index.mjs",
@@ -9866,7 +9872,12 @@ void test("browser correlation executes the child lifecycle and preserves early 
     "tools/compose-smoke.mjs",
     "tools/browser-proof.mjs",
     "tests/realtime/fixtures/setup.mjs",
-    "tools/realtime-capacity.mjs",
+    "verification/launch/v1/realtime-capacity.mjs",
+    "scripts/launch-support/gate-identity.mjs",
+    "scripts/launch-support/launch-context.mjs",
+    "scripts/launch-support/migration-database.mjs",
+    "scripts/launch-support/rollback-context.mjs",
+    "scripts/launch-support/runtime-logging.mjs",
     "verification/launch/v1/scenarios/rollback.mjs",
     "verification/launch/v1/run.mjs",
     "tools/config-bootstrap/index.mjs",
@@ -11341,7 +11352,8 @@ void test("browser correlation executes the child lifecycle and preserves early 
   syncBuiltinESMExports();
   try {
     const { admitRealtimeCapacity } = await import(
-      pathToFileURL(join(root, "tools/realtime-capacity.mjs")).href
+      pathToFileURL(join(root, "verification/launch/v1/realtime-capacity.mjs"))
+        .href
     );
     const replace = async (path, bytes) => {
       await chmod(path, 0o600);
@@ -11702,7 +11714,9 @@ void test("browser correlation executes the child lifecycle and preserves early 
   syncBuiltinESMExports();
   try {
     const { admitRealtimeCapacity: admitCurrent } = await import(
-      pathToFileURL(join(currentRoot, "tools/realtime-capacity.mjs")).href
+      pathToFileURL(
+        join(currentRoot, "verification/launch/v1/realtime-capacity.mjs"),
+      ).href
     );
     const accepted = await admitCurrent({
       receiptPath: join(currentPacket, "qualification.json"),

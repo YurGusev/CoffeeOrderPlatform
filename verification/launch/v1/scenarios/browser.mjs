@@ -11,7 +11,6 @@ import {
   stat,
   writeFile,
 } from "node:fs/promises";
-import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { isDeepStrictEqual } from "node:util";
@@ -32,6 +31,20 @@ import {
   runManagedRollbackChild,
   validateRollbackBaseline,
 } from "./rollback.mjs";
+import {
+  browserChildBundleRef,
+  validateBrowserChildContext,
+  verifyBrowserChildBundle as verifyBrowserChildBundleAdmission,
+} from "../../../../scripts/launch-support/rollback-context.mjs";
+
+export { browserChildBundleRef, validateBrowserChildContext };
+
+export function verifyBrowserChildBundle(options) {
+  return verifyBrowserChildBundleAdmission({
+    ...options,
+    validateLineage: validateBrowserFixtureGitLineage,
+  });
+}
 
 const PROJECT_ROOT = resolve(
   dirname(fileURLToPath(import.meta.url)),
@@ -39,10 +52,8 @@ const PROJECT_ROOT = resolve(
 );
 const SHA = /^[0-9a-f]{40}$/u;
 const SHA256 = /^[0-9a-f]{64}$/u;
-const RUN_ID = /^[0-9]{8}T[0-9]{6}Z-[0-9a-f]{7}$/u;
 const MAX_BUNDLE_BYTES = 64 * 1024 * 1024;
 const CHILD_REF = "refs/heads/browser-child";
-const LEGACY_CHILD_REF = "refs/heads/g15-browser-child";
 export const BROWSER_CHILD_DIRECTORY_PREFIX = ".browser-child-";
 const ARTIFACTS = Object.freeze({
   childContext: "child-context.json",
@@ -88,19 +99,6 @@ const PARENT_KEYS = Object.freeze([
   "child",
   "callbackProof",
   "cleanup",
-]);
-const CHILD_KEYS = Object.freeze([
-  "schemaVersion",
-  "candidateSha",
-  "baseConfigSha256",
-  "runId",
-  "checkoutDir",
-  "sourceRepoRoot",
-  "acceptedBaseCommit",
-  "startedAtUtc",
-  "evidenceDir",
-  "githubSnapshotPath",
-  "resources",
 ]);
 const BROWSER_FAILURE_ERROR_NAMES = new Set([
   "Error",
@@ -196,19 +194,6 @@ function gitBytes(root, ...args) {
     });
   } catch {
     fail("BROWSER_CHILD_GIT_FAILED");
-  }
-}
-
-function gitAdmission(args, stage, options = {}) {
-  try {
-    return execFileSync("git", args, {
-      stdio: ["ignore", "pipe", "pipe"],
-      timeout: 60_000,
-      maxBuffer: 8 * 1024 * 1024,
-      ...options,
-    });
-  } catch {
-    fail(stage);
   }
 }
 
@@ -642,43 +627,6 @@ export function validateBrowserFailureReceipt(
   return true;
 }
 
-export function validateBrowserChildContext(
-  childContext,
-  parentContext,
-  parentCandidateRoot,
-) {
-  if (
-    !exactKeys(childContext, CHILD_KEYS) ||
-    childContext.schemaVersion !== 1 ||
-    !RUN_ID.test(childContext.runId ?? "") ||
-    childContext.runId === parentContext.runId ||
-    !SHA.test(childContext.candidateSha ?? "") ||
-    !SHA256.test(childContext.baseConfigSha256 ?? "") ||
-    childContext.sourceRepoRoot !== parentCandidateRoot ||
-    childContext.acceptedBaseCommit !== parentContext.acceptedBaseCommit ||
-    childContext.evidenceDir !==
-      join(parentCandidateRoot, "evidence/launch", childContext.runId) ||
-    !exactKeys(childContext.resources, [
-      "composeProject",
-      "g08PreparationContextPath",
-      "g15ParentCandidateSha",
-      "g15ParentCheckoutRoot",
-      "g15ParentRunId",
-      "kafkaPrefix",
-    ]) ||
-    childContext.resources?.composeProject !==
-      `coffee-launch-${childContext.runId.toLowerCase()}` ||
-    childContext.resources?.g08PreparationContextPath !==
-      join(parentContext.evidenceDir, "context.json") ||
-    childContext.resources?.g15ParentCandidateSha !==
-      parentContext.candidateSha ||
-    childContext.resources?.g15ParentCheckoutRoot !== parentCandidateRoot ||
-    childContext.resources?.g15ParentRunId !== parentContext.runId ||
-    childContext.resources?.kafkaPrefix !== childContext.runId
-  )
-    fail("BROWSER_CHILD_CONTEXT_INVALID");
-}
-
 export function validateBrowserChildProcess(
   processResult,
   childContext,
@@ -714,128 +662,6 @@ export function validateBrowserChildProcess(
   )
     fail("BROWSER_CHILD_PROCESS_NOT_ADMITTED");
   return callbackProof;
-}
-
-export function browserChildBundleRef(heads, candidateSha) {
-  const [sha, ref, ...rest] = heads;
-  if (
-    rest.length !== 0 ||
-    sha !== candidateSha ||
-    (ref !== CHILD_REF && ref !== LEGACY_CHILD_REF)
-  )
-    fail("BROWSER_BUNDLE_REF_INVALID");
-  return ref;
-}
-
-export async function verifyBrowserChildBundle({
-  bundlePath,
-  baseCandidateSha,
-  childContext,
-  lineageReceipt,
-  baseConfigBytes,
-  childConfigBytes,
-  baseSourceRoot = childContext.sourceRepoRoot,
-}) {
-  if (
-    baseSourceRoot !== childContext.sourceRepoRoot &&
-    (git(baseSourceRoot, "rev-parse", "HEAD") !== baseCandidateSha ||
-      !gitBytes(
-        baseSourceRoot,
-        "cat-file",
-        "blob",
-        `${baseCandidateSha}:config/platform.yaml`,
-      ).equals(baseConfigBytes))
-  )
-    fail("BROWSER_BUNDLE_BASE_MISMATCH");
-  const tempRoot = await mkdtemp(join(tmpdir(), "coffee-browser-admission-"));
-  const objectStore = join(tempRoot, "objects.git");
-  const checkoutRoot = join(tempRoot, "checkout");
-  try {
-    gitAdmission(
-      ["init", "--bare", objectStore],
-      "BROWSER_BUNDLE_STORE_INIT_FAILED",
-      { stdio: "ignore", timeout: 30_000 },
-    );
-    gitAdmission(
-      [
-        "--git-dir",
-        objectStore,
-        "fetch",
-        "--no-tags",
-        baseSourceRoot,
-        `${baseCandidateSha}:refs/heads/browser-base`,
-      ],
-      "BROWSER_BUNDLE_BASE_MISSING",
-      { stdio: "ignore", timeout: 60_000 },
-    );
-    gitAdmission(
-      ["-C", objectStore, "bundle", "verify", bundlePath],
-      "BROWSER_BUNDLE_VERIFY_FAILED",
-      { stdio: "ignore", timeout: 60_000 },
-    );
-    const heads = gitAdmission(
-      ["bundle", "list-heads", bundlePath],
-      "BROWSER_BUNDLE_HEADS_FAILED",
-      { cwd: objectStore, encoding: "utf8", timeout: 30_000 },
-    )
-      .trim()
-      .split(/\s+/u);
-    const bundleRef = browserChildBundleRef(heads, childContext.candidateSha);
-    gitAdmission(
-      [
-        "-C",
-        objectStore,
-        "fetch",
-        "--no-tags",
-        bundlePath,
-        `${bundleRef}:${bundleRef}`,
-      ],
-      "BROWSER_BUNDLE_FETCH_FAILED",
-      { stdio: "ignore", timeout: 60_000 },
-    );
-    gitAdmission(
-      [
-        "--git-dir",
-        objectStore,
-        "worktree",
-        "add",
-        "--detach",
-        checkoutRoot,
-        childContext.candidateSha,
-      ],
-      "BROWSER_BUNDLE_CHECKOUT_FAILED",
-      { stdio: "ignore", timeout: 60_000 },
-    );
-    const checked = await validateBrowserFixtureGitLineage({
-      candidateRoot: checkoutRoot,
-      baseCandidateSha,
-      candidateSha: childContext.candidateSha,
-      runId: childContext.runId,
-      configSha256: childContext.baseConfigSha256,
-    });
-    if (
-      !isDeepStrictEqual(checked.receipt, lineageReceipt) ||
-      !gitBytes(
-        checkoutRoot,
-        "cat-file",
-        "blob",
-        `${baseCandidateSha}:config/platform.yaml`,
-      ).equals(baseConfigBytes) ||
-      !gitBytes(
-        checkoutRoot,
-        "cat-file",
-        "blob",
-        `${childContext.candidateSha}:config/platform.yaml`,
-      ).equals(childConfigBytes)
-    )
-      fail("BROWSER_BUNDLE_LINEAGE_MISMATCH");
-    return checked.receipt;
-  } catch (error) {
-    if (error?.code?.startsWith("BROWSER_")) throw error;
-    fail("BROWSER_BUNDLE_ADMISSION_FAILED");
-  } finally {
-    await rm(tempRoot, { recursive: true, force: true });
-  }
 }
 
 export async function prepareBrowserChildCheckout(childRoot) {

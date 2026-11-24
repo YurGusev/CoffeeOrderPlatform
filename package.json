@@ -12,7 +12,7 @@
   "scripts": {
     "preinstall": "node scripts/check-toolchain-versions.mjs",
     "authority:check": "python3 scripts/validate-launch-authority.py && python3 -m unittest discover -s tests/authority -p 'test_*.py'",
-    "architecture:check": "node scripts/check-architecture.mjs && node --test tests/architecture/checks.test.mjs",
+    "architecture:check": "node scripts/check-architecture.mjs && node --test tests/architecture/checks.test.mjs && node --test tests/architecture/automation-layers.test.mjs",
     "naming:check": "node scripts/check-gate-naming.mjs && node --test tests/architecture/gate-naming.test.mjs",
     "matrix:sync:check": "node scripts/generate-gate-matrix.mjs --check",
     "contracts:lint": "node scripts/contracts-lint.mjs",
@@ -72,7 +72,7 @@
     "security:secrets": "node scripts/check-security-material.mjs",
     "test:backup-restore": "pnpm exec tsc -b --pretty false && node verification/launch/v1/scenarios/backup-restore.mjs",
     "db:bootstrap": "node scripts/db-bootstrap.mjs",
-    "db:smoke": "node scripts/db-smoke.mjs",
+    "db:smoke": "node verification/launch/v1/scenarios/db-smoke.mjs",
     "db:live-proof": "node scripts/db-live-proof.mjs",
     "image:build": "node tools/docker-build.mjs",
     "versions:check": "node scripts/check-toolchain-versions.mjs",

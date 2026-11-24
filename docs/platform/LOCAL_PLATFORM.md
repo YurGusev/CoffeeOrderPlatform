@@ -377,7 +377,7 @@ SOPS_AGE_KEY_FILE=/home/yurgusev/.config/sops/age/keys.txt pnpm security:secrets
 
 ```text
 npx --yes pnpm@11.24.0 db:bootstrap -- --plan
-npx --yes pnpm@11.24.0 db:smoke -- --plan
+npx --yes pnpm@11.24.0 exec node scripts/db-smoke.mjs --plan
 ```
 
 Live bootstrap и role denial smoke выполняются только на явно выбранном trusted

@@ -45,7 +45,7 @@ import {
 } from "../verified-infrastructure-image.mjs";
 import { artifactManifestPath } from "../image-inventory.mjs";
 import { provisionStorage, removeStorage } from "./storage.mjs";
-import { validateLaunchContext } from "../../verification/launch/v1/report.mjs";
+import { validateLaunchContext } from "../../scripts/launch-support/launch-context.mjs";
 import {
   validateDependencyReadiness,
   runtimeMetricFamilies,
@@ -4483,7 +4483,7 @@ export async function startSyntheticAlertWorker({
 }) {
   const runManagedRollbackChild =
     runChild ??
-    (await import("../../verification/launch/v1/scenarios/rollback.mjs"))
+    (await import("../../scripts/launch-support/rollback-context.mjs"))
       .runManagedRollbackChild;
   let resolveSyntheticActivation;
   const syntheticActivation = new Promise((resolve) => {
@@ -4607,6 +4607,7 @@ export async function runObservabilityVerification({
   root = REPO_ROOT,
   run = docker,
   probePath = "/usr/bin/busybox",
+  runBrowserParent,
 } = {}) {
   if (resolve(root) !== REPO_ROOT)
     throw new Error(
@@ -6315,8 +6316,10 @@ export async function runObservabilityVerification({
         throw new Error(
           "observability browser correlation requires isolated launch databases",
         );
-      const { runBrowserParent } =
-        await import("../../verification/launch/v1/scenarios/browser.mjs");
+      if (typeof runBrowserParent !== "function")
+        throw new Error(
+          "observability browser correlation requires runBrowserParent",
+        );
       let browserTelemetry;
       const child = await runBrowserParent({
         runCorrelation: async (contextPath) => {
@@ -6347,7 +6350,7 @@ export async function runObservabilityVerification({
             evidence.launchPathCorrelation = "NOT_PROVEN";
           }
           const { runManagedRollbackChild } =
-            await import("../../verification/launch/v1/scenarios/rollback.mjs");
+            await import("../../scripts/launch-support/rollback-context.mjs");
           const { validateObservabilityBrowserEvidence } =
             await import("../browser-proof.mjs");
           const verifiedImages = await readVerifiedRuntimeImages({
@@ -9392,23 +9395,16 @@ try {
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  try {
-    const args = process.argv.slice(2);
-    if (args[0] === "--") args.shift();
-    let probePath = "/usr/bin/busybox";
-    if (args.length > 0) {
-      if (args.length !== 2 || args[0] !== "--probe" || !isAbsolute(args[1]))
-        throw new Error(
-          "usage: node tools/observability/verify.mjs [--probe <absolutePath>]",
-        );
-      probePath = args[1];
-    }
-    const evidence = await runObservabilityVerification({ probePath });
-    console.log(JSON.stringify(evidence));
-  } catch (error) {
-    if (error.evidence) console.error(JSON.stringify(error.evidence));
-    else
-      console.error(JSON.stringify({ status: "FAIL", failure: error.message }));
-    process.exitCode = 1;
-  }
+  // The launch layer owns browser correlation; it invokes this verifier with the
+  // browser parent callback so this module never imports the verification layer.
+  const result = spawnSync(
+    process.execPath,
+    [
+      ...process.execArgv,
+      join(REPO_ROOT, "verification/launch/v1/observability.mjs"),
+      ...process.argv.slice(2),
+    ],
+    { stdio: "inherit" },
+  );
+  process.exitCode = result.status ?? 1;
 }

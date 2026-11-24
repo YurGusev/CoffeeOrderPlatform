@@ -16,8 +16,8 @@ import { isDeepStrictEqual } from "node:util";
 import { fileURLToPath } from "node:url";
 import { load as parseYaml } from "js-yaml";
 import { loadPlatformConfig } from "../../scripts/config-lib.mjs";
-import { validateLaunchContext } from "../../verification/launch/v1/report.mjs";
-import { inspectLaunchCheckout } from "../../verification/launch/v1/scenarios/rollback.mjs";
+import { validateLaunchContext } from "../../scripts/launch-support/launch-context.mjs";
+import { inspectLaunchCheckout } from "../../scripts/launch-support/rollback-context.mjs";
 
 const CONFIG = "config/platform.yaml";
 const RECEIPT = "gates/browser/artifacts/oidc-fixture-lineage.json";

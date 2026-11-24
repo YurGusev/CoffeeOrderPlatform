@@ -13,7 +13,7 @@ import {
   writePrivateSecret,
 } from "../config-bootstrap/index.mjs";
 import { loadVerifiedGateImage } from "../verified-infrastructure-image.mjs";
-import { validateLaunchContext } from "../../verification/launch/v1/report.mjs";
+import { validateLaunchContext } from "../../scripts/launch-support/launch-context.mjs";
 import {
   assertTelemetryNetworks,
   discoverContainerLogs,

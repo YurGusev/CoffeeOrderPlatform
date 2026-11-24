@@ -59,7 +59,8 @@ legacy/                 посторонние каталоги, ожидающ�
 - Каталог результата realtime qualification должен быть абсолютным, находиться
   внутри объявленного scratch-корня (`COFFEE_LAUNCH_SCRATCH`, затем `TMPDIR`) и
   иметь родителя, принадлежащего пользователю без битов записи для группы и
-  остальных (`tests/realtime/soak.test.mjs`, `tools/realtime-capacity.mjs`).
+  остальных (`tests/realtime/soak.test.mjs`,
+  `verification/launch/v1/realtime-capacity.mjs`).
   Скрытого значения по умолчанию нет: без объявленного корня запуск завершается
   ошибкой. Поэтому `launch/soak` создаётся с правами `0700`.
 - Приватный checkout прогона создаётся в `TMPDIR`, поэтому временные каталоги

@@ -200,11 +200,14 @@ void test("launch controller reaches evidence preflight without compiled service
     maxBuffer: 128 * 1024 * 1024,
   });
   execFileSync("tar", ["-x", "-C", controller], { input: archive });
+  await mkdir(join(controller, "scripts/launch-support"), { recursive: true });
   for (const path of [
     "tools/compose-smoke.mjs",
     "tools/image-inventory.mjs",
     "tools/runtime-image-inventory.mjs",
+    "scripts/launch-support/launch-context.mjs",
     "verification/launch/v1/decision.mjs",
+    "verification/launch/v1/realtime-capacity.mjs",
     "verification/launch/v1/report.mjs",
     "verification/launch/v1/run.mjs",
   ])
@@ -3325,7 +3328,9 @@ void test("browser parent removes its temporary child checkout and keeps qualifi
     "origin",
     "https://github.com/YurGusev/CoffeeOrderPlatform",
   ]);
+  await mkdir(join(root, "scripts/launch-support"), { recursive: true });
   for (const relativePath of [
+    "scripts/launch-support/rollback-context.mjs",
     "verification/launch/v1/scenarios/browser.mjs",
     "verification/launch/v1/scenarios/rollback.mjs",
   ])
@@ -3350,6 +3355,7 @@ void test("browser parent removes its temporary child checkout and keeps qualifi
       encoding: "utf8",
     }).trim();
   for (const relativePath of [
+    "scripts/launch-support/rollback-context.mjs",
     "verification/launch/v1/scenarios/browser.mjs",
     "verification/launch/v1/scenarios/rollback.mjs",
   ])
@@ -7711,6 +7717,16 @@ void test("candidate report and owner suites accept only the exact launch candid
       join(candidateRoot, "verification/launch/v1", name),
       await readFile(new URL(`./${name}`, import.meta.url)),
     );
+  await mkdir(join(candidateRoot, "scripts/launch-support"), {
+    recursive: true,
+  });
+  for (const name of ["launch-context.mjs", "gate-identity.mjs"])
+    await writeFile(
+      join(candidateRoot, "scripts/launch-support", name),
+      await readFile(
+        new URL(`../../../scripts/launch-support/${name}`, import.meta.url),
+      ),
+    );
   const helperPaths = [
     "launch-database-target.ts",
     "launch-database-target.js",
@@ -7849,6 +7865,16 @@ void test("candidate report and owner suites accept only the exact launch candid
     await writeFile(
       join(sourceRoot, "verification/launch/v1", name),
       await readFile(new URL(`./${name}`, import.meta.url)),
+    );
+  await mkdir(join(sourceRoot, "scripts/launch-support"), {
+    recursive: true,
+  });
+  for (const name of ["launch-context.mjs", "gate-identity.mjs"])
+    await writeFile(
+      join(sourceRoot, "scripts/launch-support", name),
+      await readFile(
+        new URL(`../../../scripts/launch-support/${name}`, import.meta.url),
+      ),
     );
   await mkdir(join(sourceRoot, "packages/platform-config/src"), {
     recursive: true,

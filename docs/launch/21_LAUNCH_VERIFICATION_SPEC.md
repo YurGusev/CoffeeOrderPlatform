@@ -766,7 +766,8 @@ Timeout не считается доказательством rollback. Отд�
 `pnpm test:compose-smoke --database-proof` проверяет owner-local pool/readiness
 в изолированном Compose окружении с disposable PG. Общий Kafka readiness gate
 не подменяется этим scoped proof и остаётся зависимым от #63. Structural
-`pnpm db:smoke` доказывает bootstrap/grants contract, не blackhole recovery.
+`node scripts/db-smoke.mjs --plan` доказывает bootstrap/grants contract, не
+blackhole recovery.
 Итоговые команды, измерения и SHA-256 передаются в
 `evidence/handoffs/issue-62.yaml`; они не заменяют launch `integration`/`recovery`/`compose`/`observability`.
 
@@ -812,9 +813,9 @@ topic/group и любой `processing: realtime`, кроме тройки
 
 ### 15.2 Live DB/Kafka and retention proof
 
-Структурная команда `pnpm db:smoke` проверяет owner-local bootstrap/grants и не
-заменяет PostgreSQL failure proof. Обязательные disposable DB сценарии
-запускаются командами `COFFEE_DB_LIVE_PROOF=1 node --test
+Структурная команда `node scripts/db-smoke.mjs --plan` проверяет owner-local
+bootstrap/grants и не заменяет PostgreSQL failure proof. Обязательные
+disposable DB сценарии запускаются командами `COFFEE_DB_LIVE_PROOF=1 node --test
 tests/database/live-db-proof.test.mjs` и `node scripts/db-live-proof.mjs`:
 atomic Inbox/owner/Outbox result, duplicate/conflict, DB unknown, expired lease,
 rollback и pool recovery. Evidence обязана показывать owner schema и role; raw
@@ -900,7 +901,8 @@ IDs проверенного `supply_chain`, фактически использ
 native code и bounded native message. `NATIVE_OPERATION_FAILED` без такой причины
 не считается диагностируемым отказом; `NATIVE_CONNECT_FAILED` на старте
 сохраняет ту же форму. Диагностика не содержит паролей, SASL credential,
-приватных ключей и печатается `tools/realtime-capacity.mjs` при отказе soak.
+приватных ключей и печатается `verification/launch/v1/realtime-capacity.mjs`
+при отказе soak.
 
 `contracts`/`integration`/`browser` принимают outputs #4/#5/#7/#8/#9 по
 [протоколу browser recovery](26_BROWSER_COMMAND_RECOVERY.md): потерянный ответ
@@ -1088,3 +1090,43 @@ admission-прогона. Источник задаётся каталогом e
 для `release`, всех PASS рабочих гейтов и валидного `reusedFrom` (или
 собственного command run) у каждого PASS-гейта; статус `report` публикуется
 как `reportStatus` и в решение не входит.
+
+## 19. Границы модулей автоматизации запуска
+
+Автоматизация запуска разделена на пять модулей: `scripts`,
+`tools-config-bootstrap` (`tools/config-bootstrap`), `tools-observability`
+(`tools/observability`), `tools` (остальные файлы каталога) и `verification`.
+Их зависимости образуют однонаправленный контур:
+
+```text
+verification → tools-observability → tools → tools-config-bootstrap → scripts → packages
+```
+
+Импорт разрешён только по направлению стрелок:
+
+| Модуль | Разрешённые импорты |
+| --- | --- |
+| `scripts/**` | `scripts/**`, `packages/**`, `node:*` |
+| `tools/config-bootstrap/**` | `scripts/**`, `tools/config-bootstrap/**`, `packages/**` |
+| `tools/**` (кроме `tools/config-bootstrap/**` и `tools/observability/**`) | `scripts/**`, `tools/config-bootstrap/**`, `tools/**`, `packages/**`; импорт `tools/observability/**` запрещён |
+| `tools/observability/**` | `scripts/**`, `tools/config-bootstrap/**`, `tools/**`, `tools/observability/**`, `packages/**` |
+| `verification/**` | любой из перечисленных слоёв, `tests/**`, `packages/**` |
+| `tests/**` | `scripts/**`, `tools/**`, `tools/config-bootstrap/**`, `tools/observability/**`, `packages/**`, `node:*`; импорт `verification/**` запрещён |
+
+Восходящий импорт запрещён в любой форме, включая ленивый
+`await import(...)`: динамический импорт создаёт то же ребро, что и статический.
+
+Запуск CLI через границу процесса (spawn), например `node tools/...` из другого
+слоя, импортным ребром не является: процесс не входит в модульный граф, поэтому
+такой вызов направлением импорта не ограничивается.
+
+Направления проверяет `tests/architecture/automation-layers.test.mjs` в составе
+`pnpm architecture:check`; при нарушении сообщаются файл, строка и запрещённое
+направление. Тест проверяет только рёбра между пятью модулями автоматизации
+(направление `tests/**` он не анализирует). Строка `tests/**` остаётся целевым
+направлением: существующие тесты используют `verification/**` как публичный
+контракт сценариев, поэтому в этой задаче такие импорты не переписываются.
+Внутримодульные файловые циклы, например
+`tools/observability/alerts ↔ generate` или
+`verification/launch/v1/scenarios/browser ↔ rollback`, в его область не входят
+и устраняются отдельно.

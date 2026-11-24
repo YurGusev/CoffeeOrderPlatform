@@ -13,21 +13,24 @@ import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import { availableParallelism, cpus, totalmem, userInfo } from "node:os";
 import { fileURLToPath } from "node:url";
 import { performance } from "node:perf_hooks";
-import { loadPlatformConfig } from "../scripts/config-lib.mjs";
-import { validateLaunchContext } from "../verification/launch/v1/report.mjs";
-import { runManagedRollbackChild } from "../verification/launch/v1/scenarios/rollback.mjs";
-import { parse, runTransportFixture } from "../tests/realtime/soak.test.mjs";
-import { hash, ROOT } from "../tests/realtime/fixtures/setup.mjs";
-import { classifyResult } from "../tests/realtime/fixtures/protocol.mjs";
+import { loadPlatformConfig } from "../../../scripts/config-lib.mjs";
+import { validateLaunchContext } from "./report.mjs";
+import { runManagedRollbackChild } from "./scenarios/rollback.mjs";
+import {
+  parse,
+  runTransportFixture,
+} from "../../../tests/realtime/soak.test.mjs";
+import { hash, ROOT } from "../../../tests/realtime/fixtures/setup.mjs";
+import { classifyResult } from "../../../tests/realtime/fixtures/protocol.mjs";
 import {
   runBrowserParent,
   validateBrowserChildContext,
   verifyBrowserChildBundle,
-} from "../verification/launch/v1/scenarios/browser.mjs";
+} from "./scenarios/browser.mjs";
 import {
   loadVerifiedGateImage,
   readVerifiedRuntimeImages,
-} from "./verified-infrastructure-image.mjs";
+} from "../../../tools/verified-infrastructure-image.mjs";
 
 async function readPacketFile(directory, name, limit) {
   const path = join(directory, name);

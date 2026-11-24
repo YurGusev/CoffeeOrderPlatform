@@ -210,7 +210,7 @@ transport. Полный native TLS/Kafka capacity proof выполняется �
 candidate checkout и его проверенного context `supply_chain`:
 
 ```sh
-node tools/realtime-capacity.mjs --context <абсолютный-путь-к-context.json> \
+node verification/launch/v1/realtime-capacity.mjs --context <абсолютный-путь-к-context.json> \
   --result-dir <абсолютный-путь-к-пустому-каталогу-в-scratch>
 ```
 
