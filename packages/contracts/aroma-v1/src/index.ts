@@ -1,3 +1,4 @@
+import { hash as cryptoHash } from "node:crypto";
 import { Ajv2020 } from "ajv/dist/2020.js";
 import type { AnySchema, ValidateFunction } from "ajv";
 import type {
@@ -14,6 +15,11 @@ import type {
 } from "@coffee-platform/generated-internal-v1";
 import { internalV1Schemas } from "@coffee-platform/generated-internal-v1/runtime-schemas.gen.js";
 import { ordersAromaMessageSchemas } from "@coffee-platform/generated-internal-v1/message-schemas.gen.js";
+import {
+  AromaCartNormalizationError,
+  type NormalizedAromaCartLine,
+  type NormalizedAromaCartSnapshot,
+} from "./cart-snapshot.js";
 
 export type {
   AromaCartSnapshot,
@@ -223,6 +229,71 @@ export function isAromaCartSnapshot(
   }
   return true;
 }
+const MAX_INT64 = 9_223_372_036_854_775_807n;
+function invalid(): never {
+  throw new AromaCartNormalizationError();
+}
+function compare(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+function hash(value: unknown): string {
+  return cryptoHash("sha256", JSON.stringify(value), "hex");
+}
+
+/** Strict wire normalization shared by the two Orders-owned snapshot writers.
+ * Freshness is checked by each store against PostgreSQL time, not a process clock.
+ */
+export function normalizeAromaCartSnapshot(
+  value: unknown,
+): NormalizedAromaCartSnapshot {
+  if (
+    !isAromaCartSnapshot(value) ||
+    !/^aroma-gateway:cart-body-sha256:[0-9a-f]{64}$/u.test(
+      value.providerSnapshotRef,
+    )
+  )
+    invalid();
+  const keys = new Set<string>();
+  const canonical = value.lines
+    .map((line) => {
+      const key = `${line.offerRef}:${line.sourceGrindKeyHash ?? ""}`;
+      if (keys.has(key)) invalid();
+      keys.add(key);
+      return {
+        offerRef: line.offerRef,
+        quantity: line.quantity,
+        ...(line.sourceGrindKeyHash === undefined
+          ? {}
+          : { sourceGrindKeyHash: line.sourceGrindKeyHash }),
+      };
+    })
+    .sort(
+      (left, right) =>
+        compare(left.offerRef, right.offerRef) ||
+        compare(left.sourceGrindKeyHash ?? "", right.sourceGrindKeyHash ?? ""),
+    );
+  if (hash(canonical) !== value.cartFingerprint) invalid();
+  const lines = canonical.map((line): NormalizedAromaCartLine => {
+    const [whole, fraction = ""] = line.quantity.split(".");
+    const quantity = BigInt(whole!);
+    const quantityMilli = quantity * 1000n + BigInt(fraction.padEnd(3, "0"));
+    if (
+      quantityMilli <= 0n ||
+      quantity > BigInt(Number.MAX_SAFE_INTEGER) ||
+      quantityMilli > MAX_INT64
+    )
+      invalid();
+    const facts = {
+      offerRef: line.offerRef,
+      quantityMilli: quantityMilli.toString(),
+      ...(line.sourceGrindKeyHash === undefined
+        ? {}
+        : { sourceGrindKeyHash: line.sourceGrindKeyHash }),
+    };
+    return { ...facts, sanitizedLineHash: hash(facts) };
+  });
+  return { snapshot: value, lines };
+}
 export function isAromaSetQuantityRequest(
   value: unknown,
 ): value is AromaSetQuantityRequest {
@@ -265,10 +336,7 @@ export type {
   CatalogJsonPrimitive,
   CatalogJsonValue,
 } from "./catalog-hash.js";
-export {
-  AromaCartNormalizationError,
-  normalizeAromaCartSnapshot,
-} from "./cart-snapshot.js";
+export { AromaCartNormalizationError } from "./cart-snapshot.js";
 export type {
   NormalizedAromaCartLine,
   NormalizedAromaCartSnapshot,
