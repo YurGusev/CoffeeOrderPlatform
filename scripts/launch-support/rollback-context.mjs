@@ -451,7 +451,7 @@ export async function verifyBrowserChildBundle({
 }) {
   if (
     baseSourceRoot !== childContext.sourceRepoRoot &&
-    (gitBytes(baseSourceRoot, "rev-parse", "HEAD") !== baseCandidateSha ||
+    (gitText(baseSourceRoot, "rev-parse", "HEAD") !== baseCandidateSha ||
       !gitBytes(
         baseSourceRoot,
         "cat-file",
