@@ -47,7 +47,7 @@ import {
   validateBrowserFailureReceipt,
   validateBrowserParentRuntime,
 } from "./scenarios/browser.mjs";
-import { admitRealtimeCapacity } from "../../../tools/realtime-capacity.mjs";
+import { admitRealtimeCapacity } from "./realtime-capacity.mjs";
 import {
   loadVerifiedGateImage,
   readVerifiedRuntimeImages,

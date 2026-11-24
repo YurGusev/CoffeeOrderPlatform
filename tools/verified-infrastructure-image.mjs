@@ -17,7 +17,7 @@ import {
   inspectFindings,
   validateOpenVex,
 } from "./security-scan.mjs";
-import { validateLaunchContext } from "../verification/launch/v1/report.mjs";
+import { validateLaunchContext } from "../scripts/launch-support/launch-context.mjs";
 
 const IMAGE_ID = /^sha256:[a-f0-9]{64}$/u;
 const VERIFIED_TAG =

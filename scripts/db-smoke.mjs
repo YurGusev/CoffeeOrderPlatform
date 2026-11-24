@@ -311,13 +311,13 @@ export async function runDatabaseSmoke({
 }
 
 async function main(argv) {
-  const roleMap = await readJson(DEFAULT_ROLE_MAP);
-  const ownership = await readJson(DEFAULT_OWNERSHIP);
   const contextPath = process.env.COFFEE_LAUNCH_CONTEXT_FILE;
   if (
     (argv.length === 1 && argv[0] === "--plan") ||
     (argv.length === 0 && !contextPath)
   ) {
+    const roleMap = await readJson(DEFAULT_ROLE_MAP);
+    const ownership = await readJson(DEFAULT_OWNERSHIP);
     console.log(
       JSON.stringify(
         {
@@ -330,78 +330,9 @@ async function main(argv) {
     );
     return;
   }
-  if (argv.length !== 0 || !contextPath)
-    fail(
-      "live smoke requires the launch runner context; --execute is unsupported",
-    );
-  const { Client } = await import("pg").catch(() => {
-    fail(
-      "the pg dependency is required only for context-bound live smoke; no network was attempted",
-    );
-  });
-  const { loadPlatformConfig } = await import("./config-lib.mjs");
-  const config = await loadPlatformConfig(REPO_ROOT);
-  const { runDatabaseBoundaryStage } =
-    await import("../verification/launch/v1/scenarios/migrations.mjs");
-  await runDatabaseBoundaryStage({
-    root: REPO_ROOT,
-    contextPath,
-    verifyBoundaries: async ({
-      databases,
-      expectedSystemIdentifier,
-      context,
-    }) => {
-      const databaseByOwner = Object.fromEntries(
-        databases.map(({ owner, database }) => [owner, database]),
-      );
-      const runtimeCredentials = new Map();
-      return runDatabaseSmoke({
-        roleMap,
-        ownership,
-        databaseByOwner,
-        runId: context.runId,
-        expectedSystemIdentifier,
-        host: config.postgres.host,
-        port: config.postgres.port,
-        readRuntimeCredential: async ({ owner, runtime: runtimeName }) => {
-          if (!runtimeCredentials.has(runtimeName)) {
-            const { readMigrationCredential } =
-              await import("../tools/config-bootstrap/index.mjs");
-            runtimeCredentials.set(
-              runtimeName,
-              await readMigrationCredential({
-                root: REPO_ROOT,
-                contextPath,
-                owner,
-                kind: "runtime",
-                runtime: runtimeName,
-                expectedSystemIdentifier,
-              }),
-            );
-          }
-          return runtimeCredentials.get(runtimeName);
-        },
-        connectClient: async ({ host, port, database, username, password }) => {
-          const client = new Client({
-            host,
-            port,
-            database,
-            user: username,
-            password,
-            ssl: false,
-            connectionTimeoutMillis: 3_000,
-          });
-          try {
-            await client.connect();
-            return client;
-          } catch (error) {
-            await client.end().catch(() => {});
-            throw error;
-          }
-        },
-      });
-    },
-  });
+  fail(
+    "live smoke moved to verification/launch/v1/scenarios/db-smoke.mjs; run pnpm db:smoke with the launch runner context, or pass --plan for the offline plan",
+  );
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url))

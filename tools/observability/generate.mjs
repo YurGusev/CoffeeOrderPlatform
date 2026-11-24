@@ -7,29 +7,20 @@ import { fileURLToPath } from "node:url";
 import { dump as dumpYaml } from "js-yaml";
 import { loadPlatformConfig } from "../../scripts/config-lib.mjs";
 import {
+  createDockerLogging,
+  createRuntimeLoggingOverride,
+  LOGGED_SERVICES,
+  OBSERVABILITY_TARGETS,
+} from "../../scripts/launch-support/runtime-logging.mjs";
+import {
   ensurePrivateSecretDirectory,
   writePrivateSecret,
 } from "../config-bootstrap/index.mjs";
 import { loadVerifiedGateImage } from "../verified-infrastructure-image.mjs";
 
+export { OBSERVABILITY_TARGETS, createRuntimeLoggingOverride };
+
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
-export const OBSERVABILITY_TARGETS = [
-  "edge-nginx",
-  "edge-gateway",
-  "api-public",
-  "api-internal",
-  "customer-service",
-  "catalog-service",
-  "catalog-supplier-sync",
-  "catalog-activation-worker",
-  "pricing-service",
-  "orders-service",
-  "orders-aroma-preparation",
-  "aroma-observer",
-  "aroma-convergence",
-  "aroma-gateway",
-  "realtime-gateway",
-];
 export const TELEMETRY_NETWORKS = [
   "coffee_observability",
   "coffee_edge_backend",
@@ -37,7 +28,6 @@ export const TELEMETRY_NETWORKS = [
   "coffee_internal_api",
   "coffee_kafka_event",
 ];
-const LOGGED_SERVICES = [...OBSERVABILITY_TARGETS, "kafka"];
 
 export function prometheusMetricName(name) {
   const normalized = name.replace(/[^a-zA-Z0-9_]/gu, "_");
@@ -1416,30 +1406,6 @@ export function createComposeOverride({
           `${name}_data`,
           { external: true, name: storageVolumes[name] },
         ]),
-      ),
-    },
-  };
-}
-
-export function createRuntimeLoggingOverride({ config } = {}) {
-  const logging = createDockerLogging(config);
-  return {
-    services: Object.fromEntries(
-      LOGGED_SERVICES.map((service) => [service, { logging }]),
-    ),
-  };
-}
-
-function createDockerLogging(config) {
-  return {
-    driver: "json-file",
-    options: {
-      "max-size": `${config.telemetry.logging.maxSizeMiB}m`,
-      "max-file": String(config.telemetry.logging.maxFiles),
-      mode: "non-blocking",
-      "max-buffer-size": String(
-        config.telemetry.producer.maxRecordBytes *
-          config.telemetry.producer.queueCapacity,
       ),
     },
   };

@@ -1,4 +1,4 @@
-import { execFileSync, spawn } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
   lstat,
@@ -17,79 +17,52 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { load as parseYaml } from "js-yaml";
 import { validateLaunchContext } from "../report.mjs";
 import { artifactManifestPath } from "../../../../tools/image-inventory.mjs";
+import {
+  BROWSER_CHILD_DIRECTORY_NAME,
+  ROLLBACK_DISABLED_RECONCILE_SUBSTAGES,
+  ROLLBACK_ERROR_NAMES,
+  ROLLBACK_FAILURE_CODES,
+  ROLLBACK_FAILURE_STAGES,
+  assertLiteralFlagChange,
+  attachRollbackDisabledReconcileSubstage,
+  configBytes,
+  createRollbackFailureReceipt,
+  failureCleanupIsValid,
+  inspectLaunchCheckout,
+  parsedConfig,
+  readRollbackParent,
+  rollbackComposeProjectName,
+  rollbackComposeSourceLocation,
+  runManagedRollbackChild,
+  sourceLocationIsValid,
+  validateConfigOnlyLineage,
+  validateRollbackBaseline,
+  validateRollbackLineage,
+} from "../../../../scripts/launch-support/rollback-context.mjs";
 
 const CONFIG_PATH = "config/platform.yaml";
-const CONFIG_PATH_BYTES = Buffer.from(CONFIG_PATH);
 const SHA = /^[0-9a-f]{40}$/u;
-export const ROLLBACK_FAILURE_STAGES = Object.freeze([
-  "preflight",
-  "bootstrap",
-  "build",
-  "up",
-  "readiness",
-  "nginx",
-  "initial-unknown",
-  "disabled-restart",
-  "disabled-reconcile",
-  "disabled-owner-reconcile",
-  "restored-restart",
-  "restored-reconcile",
-  "cleanup",
-  "child-process",
-]);
-const ROLLBACK_FAILURE_CODES = new Set([
-  "ROLLBACK_PHASE_FAILED",
-  "ROLLBACK_CLEANUP_FAILED",
-  "ROLLBACK_FAILURE_RECEIPT_INVALID",
-]);
-const ROLLBACK_ERROR_NAMES = new Set([
-  "Error",
-  "AssertionError",
-  "AggregateError",
-  "TypeError",
-  "RangeError",
-]);
-export const ROLLBACK_DISABLED_RECONCILE_SUBSTAGES = Object.freeze([
-  "restart",
-  "config-attestation",
-  "release",
-  "convergence-readiness",
-  "observer-readiness",
-  "health",
-  "facts",
-]);
 const PROJECT_ROOT = resolve(
   fileURLToPath(new URL("../../../..", import.meta.url)),
 );
-const ROLLBACK_COMPOSE_SOURCE_PATH = join(
-  PROJECT_ROOT,
-  "tools/compose-smoke.mjs",
-);
-const ROLLBACK_COMPOSE_SOURCE_URL = pathToFileURL(
-  ROLLBACK_COMPOSE_SOURCE_PATH,
-).href;
-const ROLLBACK_COMPOSE_SOURCE = "tools/compose-smoke.mjs";
-const MAX_SOURCE_COORDINATE = 1_000_000;
-export const BROWSER_CHILD_DIRECTORY_NAME =
-  /^\.(?:g15-)?browser-child-[A-Za-z0-9]+$/u;
-const MAX_CHILD_DIAGNOSTIC_CHARS = 4096;
-
+export {
+  BROWSER_CHILD_DIRECTORY_NAME,
+  ROLLBACK_DISABLED_RECONCILE_SUBSTAGES,
+  ROLLBACK_FAILURE_STAGES,
+  attachRollbackDisabledReconcileSubstage,
+  createRollbackFailureReceipt,
+  inspectLaunchCheckout,
+  readRollbackParent,
+  rollbackComposeProjectName,
+  rollbackComposeSourceLocation,
+  runManagedRollbackChild,
+  validateConfigOnlyLineage,
+  validateRollbackBaseline,
+  validateRollbackLineage,
+};
+const inspectCheckout = inspectLaunchCheckout;
 function fail(code) {
   throw new Error(code);
-}
-
-export function rollbackComposeProjectName(context) {
-  if (
-    !context ||
-    typeof context.runId !== "string" ||
-    !/^[0-9]{8}T[0-9]{6}Z-[0-9a-f]{7}$/u.test(context.runId)
-  ) {
-    fail("ROLLBACK_LAUNCH_CONTEXT_INVALID");
-  }
-  const expected = `coffee-launch-${context.runId.toLowerCase()}`;
-  if (context.resources?.composeProject !== expected)
-    fail("ROLLBACK_COMPOSE_PROJECT_INVALID");
-  return expected;
 }
 
 function git(root, ...args) {
@@ -109,288 +82,6 @@ function gitText(root, ...args) {
   return git(root, ...args)
     .toString("utf8")
     .trim();
-}
-
-function assertNoHiddenIndexFlags(root) {
-  const entries = git(root, "ls-files", "-v", "-z");
-  let start = 0;
-  while (start < entries.length) {
-    const end = entries.indexOf(0, start);
-    if (end < 0) fail("ROLLBACK_INDEX_INVALID");
-    const entry = entries.subarray(start, end);
-    const tag = entry[0];
-    if (entry[1] !== 32 || tag === 83 || (tag >= 97 && tag <= 122))
-      fail("ROLLBACK_INDEX_FLAGS_SET");
-    start = end + 1;
-  }
-}
-
-async function inspectCheckout(path, expectedSha, { ownedChildRoot } = {}) {
-  if (typeof path !== "string" || !path || !SHA.test(expectedSha ?? ""))
-    fail("ROLLBACK_CHECKOUT_INPUT_INVALID");
-  const absolute = resolve(path);
-  let canonical;
-  try {
-    canonical = await realpath(absolute);
-  } catch {
-    fail("ROLLBACK_CHECKOUT_INVALID");
-  }
-  if (
-    canonical !== absolute ||
-    gitText(canonical, "rev-parse", "--show-toplevel") !== canonical
-  )
-    fail("ROLLBACK_CHECKOUT_INVALID");
-  const head = gitText(canonical, "rev-parse", "--verify", "HEAD^{commit}");
-  if (head !== expectedSha) fail("ROLLBACK_CHECKOUT_HEAD_MISMATCH");
-  assertNoHiddenIndexFlags(canonical);
-  const configPath = join(canonical, CONFIG_PATH);
-  try {
-    const info = await lstat(configPath);
-    if (
-      !info.isFile() ||
-      info.isSymbolicLink() ||
-      (await realpath(configPath)) !== configPath ||
-      !(await readFile(configPath)).equals(
-        git(canonical, "cat-file", "blob", `${head}:${CONFIG_PATH}`),
-      )
-    ) {
-      fail("ROLLBACK_CONFIG_WORKTREE_MISMATCH");
-    }
-  } catch (error) {
-    if (
-      error instanceof Error &&
-      error.message === "ROLLBACK_CONFIG_WORKTREE_MISMATCH"
-    )
-      throw error;
-    fail("ROLLBACK_CONFIG_WORKTREE_INVALID");
-  }
-  const status = git(
-    canonical,
-    "status",
-    "--porcelain=v1",
-    "--untracked-files=all",
-    "--no-renames",
-    "-z",
-  );
-  if (ownedChildRoot !== undefined) {
-    const name = ownedChildRoot.slice(canonical.length + 1);
-    const info = await lstat(ownedChildRoot).catch(() => null);
-    if (
-      dirname(ownedChildRoot) !== canonical ||
-      !BROWSER_CHILD_DIRECTORY_NAME.test(name) ||
-      !info?.isDirectory() ||
-      info.isSymbolicLink() ||
-      info.uid !== process.getuid() ||
-      (info.mode & 0o077) !== 0 ||
-      (await realpath(ownedChildRoot)) !== ownedChildRoot ||
-      git(canonical, "ls-files", "--", name).length !== 0 ||
-      !status.equals(Buffer.from(`?? ${name}/\0`))
-    )
-      fail("ROLLBACK_CHECKOUT_DIRTY");
-  } else if (status.length !== 0) fail("ROLLBACK_CHECKOUT_DIRTY");
-  const commit = gitText(
-    canonical,
-    "show",
-    "-s",
-    "--format=%H%n%P%n%T",
-    head,
-  ).split("\n");
-  const [commitSha, parentLine, treeSha] = commit;
-  if (commitSha !== head || !SHA.test(treeSha ?? ""))
-    fail("ROLLBACK_COMMIT_INVALID");
-  const parents = (parentLine ?? "").split(" ").filter(Boolean);
-  if (parents.some((parent) => !SHA.test(parent)))
-    fail("ROLLBACK_COMMIT_INVALID");
-  return { root: canonical, commitSha, parents, treeSha };
-}
-
-export { inspectCheckout as inspectLaunchCheckout };
-
-function treeEntries(checkout) {
-  const output = git(
-    checkout.root,
-    "ls-tree",
-    "-rz",
-    "--full-tree",
-    checkout.commitSha,
-  );
-  const entries = [];
-  let start = 0;
-  while (start < output.length) {
-    const end = output.indexOf(0, start);
-    if (end < 0) fail("ROLLBACK_TREE_INVALID");
-    const raw = output.subarray(start, end);
-    const separator = raw.indexOf(9);
-    if (separator < 0) fail("ROLLBACK_TREE_INVALID");
-    entries.push({
-      metadata: raw.subarray(0, separator).toString("ascii"),
-      isConfig: raw.subarray(separator + 1).equals(CONFIG_PATH_BYTES),
-      raw,
-    });
-    start = end + 1;
-  }
-  if (!entries.some(({ isConfig }) => isConfig))
-    fail("ROLLBACK_CONFIG_MISSING");
-  if (entries.filter(({ isConfig }) => isConfig).length !== 1)
-    fail("ROLLBACK_CONFIG_AMBIGUOUS");
-  return entries;
-}
-
-function assertOnlyConfigChanged(before, after) {
-  const beforeEntries = treeEntries(before);
-  const afterEntries = treeEntries(after);
-  const otherBefore = beforeEntries
-    .filter(({ isConfig }) => !isConfig)
-    .map(({ raw }) => raw);
-  const otherAfter = afterEntries
-    .filter(({ isConfig }) => !isConfig)
-    .map(({ raw }) => raw);
-  if (
-    otherBefore.length !== otherAfter.length ||
-    otherBefore.some((entry, index) => !entry.equals(otherAfter[index]))
-  ) {
-    fail("ROLLBACK_NON_CONFIG_TREE_CHANGED");
-  }
-  const configBefore = beforeEntries.find(({ isConfig }) => isConfig);
-  const configAfter = afterEntries.find(({ isConfig }) => isConfig);
-  const configBeforeType = configBefore.metadata
-    .split(" ")
-    .slice(0, 2)
-    .join(" ");
-  const configAfterType = configAfter.metadata.split(" ").slice(0, 2).join(" ");
-  if (
-    configBeforeType !== configAfterType ||
-    configBeforeType !== "100644 blob"
-  ) {
-    fail("ROLLBACK_CONFIG_MODE_CHANGED");
-  }
-}
-
-function configBytes(checkout) {
-  return git(
-    checkout.root,
-    "cat-file",
-    "blob",
-    `${checkout.commitSha}:${CONFIG_PATH}`,
-  );
-}
-
-function parsedConfig(checkout) {
-  let value;
-  try {
-    value = parseYaml(configBytes(checkout).toString("utf8"));
-  } catch {
-    fail("ROLLBACK_CONFIG_INVALID");
-  }
-  if (
-    !value ||
-    typeof value !== "object" ||
-    Array.isArray(value) ||
-    !value.services ||
-    typeof value.services !== "object" ||
-    Array.isArray(value.services) ||
-    !value.services["aroma-convergence"] ||
-    typeof value.services["aroma-convergence"] !== "object" ||
-    Array.isArray(value.services["aroma-convergence"])
-  )
-    fail("ROLLBACK_CONFIG_INVALID");
-  return value;
-}
-
-function configSha256(checkout) {
-  return createHash("sha256").update(configBytes(checkout)).digest("hex");
-}
-
-function assertCanonicalConfigTransition(base, disabled) {
-  const baseConfig = parsedConfig(base);
-  const disabledConfig = parsedConfig(disabled);
-  const baseTarget = baseConfig.services["aroma-convergence"];
-  const disabledTarget = disabledConfig.services["aroma-convergence"];
-  if (
-    baseTarget.mutationsEnabled !== true ||
-    disabledTarget.mutationsEnabled !== false
-  )
-    fail("ROLLBACK_MUTATION_FLAG_INVALID");
-  const expected = {
-    ...baseConfig,
-    services: {
-      ...baseConfig.services,
-      "aroma-convergence": { ...baseTarget, mutationsEnabled: false },
-    },
-  };
-  if (!isDeepStrictEqual(expected, disabledConfig))
-    fail("ROLLBACK_EXTRA_CONFIG_CHANGE");
-}
-
-function assertLiteralFlagChange(base, disabled) {
-  let offset = 0;
-  const commonLength = Math.min(base.length, disabled.length);
-  while (offset < commonLength && base[offset] === disabled[offset])
-    offset += 1;
-  if (
-    !base.subarray(offset, offset + 4).equals(Buffer.from("true")) ||
-    !disabled.subarray(offset, offset + 5).equals(Buffer.from("false")) ||
-    !base.subarray(offset + 4).equals(disabled.subarray(offset + 5))
-  ) {
-    fail("ROLLBACK_CONFIG_DIFF_NOT_LITERAL_FLAG");
-  }
-}
-
-/**
- * Verify the ADR-0035 config-only B→D→R lineage without changing any checkout.
- * `launchIdentity` must be the object returned by validateLaunchContext from report.mjs.
- */
-export async function validateRollbackLineage({
-  launchIdentity,
-  disabledRoot,
-  disabledSha,
-  restoredRoot,
-  restoredSha,
-}) {
-  const context = launchIdentity?.context;
-  const candidateRoot = launchIdentity?.candidateRoot;
-  if (
-    !context ||
-    typeof candidateRoot !== "string" ||
-    !SHA.test(context.candidateSha ?? "") ||
-    resolve(context.checkoutDir ?? "") !== candidateRoot
-  )
-    fail("ROLLBACK_LAUNCH_CONTEXT_INVALID");
-
-  const base = await inspectCheckout(candidateRoot, context.candidateSha);
-  if (!SHA.test(disabledSha) || !SHA.test(restoredSha))
-    fail("ROLLBACK_CHECKOUT_INPUT_INVALID");
-  const disabled = await inspectCheckout(disabledRoot, disabledSha);
-  const restored = await inspectCheckout(restoredRoot, restoredSha);
-  if (new Set([base.root, disabled.root, restored.root]).size !== 3)
-    fail("ROLLBACK_CHECKOUTS_NOT_DISTINCT");
-  if (disabled.parents.length !== 1 || disabled.parents[0] !== base.commitSha)
-    fail("ROLLBACK_DISABLED_PARENT_INVALID");
-  if (
-    restored.parents.length !== 1 ||
-    restored.parents[0] !== disabled.commitSha
-  )
-    fail("ROLLBACK_RESTORED_PARENT_INVALID");
-
-  assertOnlyConfigChanged(base, disabled);
-  assertOnlyConfigChanged(disabled, restored);
-  assertCanonicalConfigTransition(base, disabled);
-  assertLiteralFlagChange(configBytes(base), configBytes(disabled));
-  if (!configBytes(restored).equals(configBytes(base)))
-    fail("ROLLBACK_RESTORED_CONFIG_BYTES_DIFFER");
-
-  const receipt = (checkout) => ({
-    commitSha: checkout.commitSha,
-    parentShas: checkout.parents,
-    treeSha: checkout.treeSha,
-    configSha256: configSha256(checkout),
-  });
-  return {
-    schemaVersion: 1,
-    B: receipt(base),
-    D: receipt(disabled),
-    R: receipt(restored),
-  };
 }
 
 function gitOutput(root, ...args) {
@@ -425,112 +116,6 @@ function replaceMutationFlag(configBytes) {
   const match = matches[0];
   const changed = `${source.slice(0, match.index)}${match[1]}false${match[2]}${match[3]}${source.slice(match.index + match[0].length)}`;
   return Buffer.from(changed, "utf8");
-}
-
-export async function validateConfigOnlyLineage({
-  parentRoot,
-  parentSha,
-  baselineRoot,
-  baselineSha,
-}) {
-  const parent = await inspectCheckout(parentRoot, parentSha);
-  const baseline = await inspectCheckout(baselineRoot, baselineSha);
-  if (baseline.parents.length !== 1 || baseline.parents[0] !== parent.commitSha)
-    fail("ROLLBACK_BASELINE_PARENT_INVALID");
-  assertOnlyConfigChanged(parent, baseline);
-  return { parent, baseline };
-}
-
-/** Validate the approved parent(false) → rollback baseline(true) transition. */
-export async function validateRollbackBaseline({
-  parentRoot,
-  parentSha,
-  baselineRoot,
-  baselineSha,
-}) {
-  const { parent, baseline } = await validateConfigOnlyLineage({
-    parentRoot,
-    parentSha,
-    baselineRoot,
-    baselineSha,
-  });
-  assertCanonicalConfigTransition(baseline, parent);
-  assertLiteralFlagChange(configBytes(baseline), configBytes(parent));
-  return {
-    parent: {
-      commitSha: parent.commitSha,
-      treeSha: parent.treeSha,
-      configSha256: configSha256(parent),
-    },
-    baseline: {
-      commitSha: baseline.commitSha,
-      treeSha: baseline.treeSha,
-      configSha256: configSha256(baseline),
-    },
-  };
-}
-
-export async function readRollbackParent(launchIdentity) {
-  const { context, sourceRoot, candidateRoot } = launchIdentity;
-  const resources = context.resources;
-  if (
-    resources?.controlledScope !== "rollback" ||
-    !/^[0-9]{8}T[0-9]{6}Z-[0-9a-f]{7}$/u.test(
-      resources.controlledParentRunId ?? "",
-    ) ||
-    !SHA.test(resources.controlledParentCandidateSha ?? "")
-  )
-    fail("ROLLBACK_CONTROLLED_PARENT_INVALID");
-  const parentPath = join(
-    sourceRoot,
-    "evidence/launch",
-    resources.controlledParentRunId,
-    "context.json",
-  );
-  if (
-    resources.controlledParentContextPath !== parentPath ||
-    (await realpath(parentPath)) !== parentPath
-  )
-    fail("ROLLBACK_CONTROLLED_PARENT_INVALID");
-  const info = await lstat(parentPath);
-  if (
-    !info.isFile() ||
-    info.isSymbolicLink() ||
-    info.uid !== process.getuid() ||
-    (info.mode & 0o777) !== 0o400 ||
-    info.size > 16384
-  )
-    fail("ROLLBACK_CONTROLLED_PARENT_INVALID");
-  const parentContext = JSON.parse(await readFile(parentPath, "utf8"));
-  if (
-    parentContext.runId !== resources.controlledParentRunId ||
-    parentContext.candidateSha !== resources.controlledParentCandidateSha ||
-    parentContext.sourceRepoRoot !== sourceRoot
-  )
-    fail("ROLLBACK_CONTROLLED_PARENT_INVALID");
-  const lineage = await validateRollbackBaseline({
-    parentRoot: parentContext.checkoutDir,
-    parentSha: parentContext.candidateSha,
-    baselineRoot: candidateRoot,
-    baselineSha: context.candidateSha,
-  });
-  if (
-    lineage.parent.configSha256 !== parentContext.baseConfigSha256 ||
-    lineage.baseline.configSha256 !== context.baseConfigSha256
-  )
-    fail("ROLLBACK_CONTROLLED_CONFIG_INVALID");
-  const parentReport = await import(
-    pathToFileURL(
-      join(parentContext.checkoutDir, "verification/launch/v1/report.mjs"),
-    ).href
-  );
-  const parentIdentity = await parentReport.validateLaunchContext(parentPath);
-  if (
-    parentIdentity.sourceRoot !== sourceRoot ||
-    parentIdentity.candidateRoot !== parentContext.checkoutDir
-  )
-    fail("ROLLBACK_CONTROLLED_PARENT_INVALID");
-  return { contextFile: parentPath, identity: parentIdentity, lineage };
 }
 
 export async function createConfigOnlyCheckout({
@@ -736,207 +321,6 @@ export async function createRollbackCheckouts({
   }
 }
 
-function redactChildDiagnostic(text) {
-  return String(text)
-    .replace(
-      /-----BEGIN [^-]*(?:PRIVATE KEY|CERTIFICATE)-----[\s\S]*?-----END [^-]+-----/gu,
-      "[REDACTED PRIVATE MATERIAL]",
-    )
-    .replace(/\bBearer\s+[A-Za-z0-9._~+/-]+=*/giu, "Bearer [REDACTED]")
-    .replace(
-      /\b(?:postgres(?:ql)?|mysql|mongodb(?:\+srv)?):\/\/[^\s"'<>]+/giu,
-      "[REDACTED-URL]",
-    )
-    .replace(
-      /\b(?:password|passwd|secret|token|api[_-]?key|authorization|cookie|set-cookie|client[_-]?secret)(\s*[=:]\s*)("[^"]*"|'[^']*'|[^\s,;}]+)/giu,
-      "$1[REDACTED]",
-    );
-}
-
-function childDiagnostic(result) {
-  const sections = [];
-  for (const [name, value] of [
-    ["stderr", result.stderr],
-    ["stdout", result.stdout],
-  ]) {
-    if (typeof value !== "string") continue;
-    const tail = value.trimEnd().slice(-MAX_CHILD_DIAGNOSTIC_CHARS);
-    if (!tail.trim()) continue;
-    sections.push(`${name}:\n${tail}`);
-  }
-  if (sections.length === 0) return undefined;
-  const text = redactChildDiagnostic(sections.join("\n"));
-  return text.length > MAX_CHILD_DIAGNOSTIC_CHARS
-    ? `[truncated]\n${text.slice(-MAX_CHILD_DIAGNOSTIC_CHARS)}`
-    : text;
-}
-
-export function runManagedRollbackChild({
-  args,
-  cwd,
-  env,
-  timeoutMs = 1_800_000,
-  terminationGraceMs = 30_000,
-  timeoutGate,
-  onIpc,
-}) {
-  return new Promise((resolvePromise, rejectPromise) => {
-    const child = spawn(process.execPath, args, {
-      cwd,
-      env,
-      detached: process.platform !== "win32",
-      stdio: onIpc
-        ? ["ignore", "pipe", "pipe", "ipc"]
-        : ["ignore", "pipe", "pipe"],
-    });
-    const stdout = [];
-    const stderr = [];
-    let outputBytes = 0;
-    let overflow = false;
-    let ipcFailed = false;
-    let ipcBusy = false;
-    let ipcCompleted = false;
-    let timedOut = false;
-    let interruptedBy;
-    let killTimer;
-    let timer;
-    let closed = false;
-    const append = (list, chunk) => {
-      outputBytes += chunk.length;
-      if (outputBytes > 32 * 1024 * 1024) {
-        overflow = true;
-        stopChild("SIGTERM");
-        return;
-      }
-      list.push(chunk);
-    };
-    const sendSignal = (signal) => {
-      if (!child.pid || closed) return;
-      try {
-        if (process.platform !== "win32") process.kill(-child.pid, signal);
-        else child.kill(signal);
-      } catch (error) {
-        if (error?.code !== "ESRCH") throw error;
-      }
-    };
-    const stopChild = (signal) => {
-      try {
-        sendSignal(signal);
-      } catch {
-        /* close/timeout reports the bounded child failure */
-      }
-      if (!killTimer) {
-        killTimer = setTimeout(() => {
-          try {
-            sendSignal("SIGKILL");
-          } catch {
-            /* still await close */
-          }
-        }, terminationGraceMs);
-        killTimer.unref();
-      }
-    };
-    const signalHandler = (signal) => {
-      interruptedBy ??= signal;
-      stopChild(signal);
-    };
-    const armTimeout = () => {
-      timer = setTimeout(() => {
-        timedOut = true;
-        stopChild("SIGTERM");
-      }, timeoutMs);
-    };
-    if (timeoutGate === undefined) armTimeout();
-    else {
-      void Promise.resolve(timeoutGate).then(
-        () => {
-          if (!closed) armTimeout();
-        },
-        () => {
-          if (!closed) stopChild("SIGKILL");
-        },
-      );
-    }
-    process.once("SIGINT", signalHandler);
-    process.once("SIGTERM", signalHandler);
-    if (onIpc)
-      child.on("disconnect", () => {
-        if (!ipcCompleted) ipcFailed = true;
-      });
-    if (onIpc)
-      child.on("message", (message, handle) => {
-        if (
-          handle ||
-          ipcBusy ||
-          !message ||
-          typeof message !== "object" ||
-          Buffer.byteLength(JSON.stringify(message)) > 32768
-        ) {
-          ipcFailed = true;
-          stopChild("SIGTERM");
-          return;
-        }
-        ipcBusy = true;
-        Promise.resolve()
-          .then(() => onIpc(message))
-          .then(
-            (payload) => {
-              if (message.stage === "cleanup") ipcCompleted = true;
-              if (child.connected)
-                child.send(
-                  { ok: true, stage: message.stage, payload },
-                  () => {},
-                );
-            },
-            () => {
-              ipcFailed = true;
-              if (child.connected)
-                child.send({ ok: false, stage: message.stage }, () => {});
-            },
-          )
-          .finally(() => {
-            ipcBusy = false;
-          });
-      });
-    child.stdout.on("data", (chunk) => append(stdout, chunk));
-    child.stderr.on("data", (chunk) => append(stderr, chunk));
-    child.once("error", () => {
-      /* close or spawn error is converted to a finite failure below */
-    });
-    child.once("close", (code, signal) => {
-      closed = true;
-      clearTimeout(timer);
-      clearTimeout(killTimer);
-      process.removeListener("SIGINT", signalHandler);
-      process.removeListener("SIGTERM", signalHandler);
-      const result = {
-        code,
-        signal,
-        stdout: Buffer.concat(stdout).toString("utf8"),
-        stderr: Buffer.concat(stderr).toString("utf8"),
-        joined: true,
-      };
-      if (timedOut || interruptedBy || overflow || ipcFailed || code !== 0) {
-        const error = new Error(
-          timedOut
-            ? "ROLLBACK_CHILD_TIMEOUT"
-            : interruptedBy
-              ? `ROLLBACK_CHILD_INTERRUPTED_${interruptedBy}`
-              : overflow
-                ? "ROLLBACK_CHILD_OUTPUT_LIMIT"
-                : ipcFailed
-                  ? "ROLLBACK_CHILD_IPC_FAILED"
-                  : "ROLLBACK_CHILD_FAILED",
-        );
-        error.result = result;
-        const diagnostic = childDiagnostic(result);
-        if (diagnostic !== undefined) error.diagnostic = diagnostic;
-        rejectPromise(error);
-      } else resolvePromise(result);
-    });
-  });
-}
-
 function lastJsonLine(output) {
   const line = output.split(/\r?\n/u).filter(Boolean).at(-1);
   try {
@@ -944,96 +328,6 @@ function lastJsonLine(output) {
   } catch {
     fail("ROLLBACK_RUNTIME_RECEIPT_INVALID");
   }
-}
-
-function failureCleanupIsValid(cleanup) {
-  if (
-    !cleanup ||
-    typeof cleanup.complete !== "boolean" ||
-    typeof cleanup.verified !== "boolean" ||
-    !Array.isArray(cleanup.failures) ||
-    !Array.isArray(cleanup.retainedResources) ||
-    !cleanup.inventory ||
-    !["containers", "volumes", "networks"].every((kind) =>
-      Array.isArray(cleanup.inventory[kind]),
-    )
-  )
-    return false;
-  if (!cleanup.verified) return cleanup.complete === false;
-  return (
-    ["containers", "volumes", "networks"].every((kind) =>
-      cleanup.inventory[kind].every(
-        (name) =>
-          typeof name === "string" &&
-          /^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$/u.test(name),
-      ),
-    ) &&
-    cleanup.retainedResources.every(
-      (resource) =>
-        resource &&
-        ["containers", "volumes", "networks"].includes(resource.kind) &&
-        typeof resource.name === "string" &&
-        /^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$/u.test(resource.name),
-    ) &&
-    cleanup.failures.every((value) =>
-      [
-        "orders-fixture-tables",
-        "owner-database-client",
-        "compose-down",
-        "postgres-container-remove",
-        "postgres-network-remove",
-        "resource-inventory",
-        "temporary-artifacts",
-      ].includes(value),
-    )
-  );
-}
-
-function sourceLocationIsValid(value) {
-  return (
-    value !== null &&
-    typeof value === "object" &&
-    !Array.isArray(value) &&
-    Object.keys(value).length === 3 &&
-    value.source === ROLLBACK_COMPOSE_SOURCE &&
-    Number.isSafeInteger(value.line) &&
-    value.line > 0 &&
-    value.line <= MAX_SOURCE_COORDINATE &&
-    Number.isSafeInteger(value.column) &&
-    value.column > 0 &&
-    value.column <= MAX_SOURCE_COORDINATE
-  );
-}
-
-export function rollbackComposeSourceLocation(error) {
-  let stack;
-  try {
-    stack = error?.stack;
-  } catch {
-    return undefined;
-  }
-  if (typeof stack !== "string" || stack.length > 131_072) return undefined;
-  for (const frame of stack.split(/\r?\n/u).slice(1, 257)) {
-    const match = /^\s*at (?:(?:.*) \()?(.+?):(\d+):(\d+)\)?$/u.exec(frame);
-    if (
-      !match ||
-      ![ROLLBACK_COMPOSE_SOURCE_PATH, ROLLBACK_COMPOSE_SOURCE_URL].includes(
-        match[1],
-      )
-    )
-      continue;
-    const line = Number(match[2]);
-    const column = Number(match[3]);
-    const location = {
-      source: ROLLBACK_COMPOSE_SOURCE,
-      line,
-      column,
-    };
-    return sourceLocationIsValid(location)
-      ? Object.freeze(location)
-      : undefined;
-  }
-  return undefined;
 }
 
 export function validateRollbackFailureArtifact(
@@ -1063,54 +357,6 @@ export function validateRollbackFailureArtifact(
   )
     fail("ROLLBACK_FAILURE_ARTIFACT_INVALID");
   return true;
-}
-
-export function createRollbackFailureReceipt({
-  runId,
-  candidateSha,
-  stage,
-  error,
-  cleanup,
-  cleanupFailed = false,
-}) {
-  if (
-    !/^[0-9]{8}T[0-9]{6}Z-[0-9a-f]{7}$/u.test(runId ?? "") ||
-    !SHA.test(candidateSha ?? "") ||
-    !runId.endsWith(`-${candidateSha.slice(0, 7)}`)
-  )
-    fail("ROLLBACK_FAILURE_RECEIPT_INVALID");
-  const errorName = ROLLBACK_ERROR_NAMES.has(error?.name)
-    ? error.name
-    : "Error";
-  const message =
-    typeof error?.message === "string"
-      ? error.message
-      : "ROLLBACK_PHASE_FAILED";
-  const receipt = {
-    schemaVersion: 1,
-    gateId: "rollback",
-    outcome: "FAIL",
-    runId,
-    candidateSha,
-    stage: ROLLBACK_FAILURE_STAGES.includes(stage) ? stage : "child-process",
-    code: cleanupFailed ? "ROLLBACK_CLEANUP_FAILED" : "ROLLBACK_PHASE_FAILED",
-    errorName,
-    messageSha256: createHash("sha256").update(message).digest("hex"),
-    cleanup,
-  };
-  const sourceLocation = rollbackComposeSourceLocation(error);
-  if (sourceLocation) receipt.sourceLocation = sourceLocation;
-  if (!failureCleanupIsValid(cleanup)) fail("ROLLBACK_FAILURE_RECEIPT_INVALID");
-  return Object.freeze(receipt);
-}
-
-export function attachRollbackDisabledReconcileSubstage(receipt, substage) {
-  if (
-    receipt?.stage !== "disabled-reconcile" ||
-    !ROLLBACK_DISABLED_RECONCILE_SUBSTAGES.includes(substage)
-  )
-    fail("ROLLBACK_DISABLED_RECONCILE_SUBSTAGE_INVALID");
-  return Object.freeze({ ...receipt, disabledReconcileSubstage: substage });
 }
 
 export async function writeRollbackFailureArtifact({

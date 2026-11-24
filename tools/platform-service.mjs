@@ -30,10 +30,31 @@ import {
   systemdUserUnitRoot,
 } from "./state-paths.mjs";
 import { isDeepStrictEqual } from "node:util";
-import { createRuntimeLoggingOverride } from "./observability/generate.mjs";
+import { createRuntimeLoggingOverride } from "../scripts/launch-support/runtime-logging.mjs";
 import { runtimeContainerLimits } from "../scripts/config-lib.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const OBSERVABILITY_DEPENDENCY = join(
+  ROOT,
+  "verification/launch/v1/observability-dependency.mjs",
+);
+
+function runObservabilityDependency(
+  action,
+  { args = [], input, timeout = 300_000 } = {},
+) {
+  return execFileSync(
+    process.execPath,
+    [OBSERVABILITY_DEPENDENCY, action, ...args],
+    {
+      cwd: ROOT,
+      encoding: "utf8",
+      input,
+      timeout,
+      maxBuffer: 16 * 1024 * 1024,
+    },
+  );
+}
 const PROJECT = "coffee-platform";
 const DOCKER_COMMAND_TIMEOUT_MS = 120_000;
 const TELEMETRY_UNIT_QUERY_TIMEOUT_MS = 10_000;
@@ -735,7 +756,7 @@ export async function startLocalRuntime({
     stdio: "inherit",
   });
   const { validateLaunchContext } =
-    await import("../verification/launch/v1/report.mjs");
+    await import("../scripts/launch-support/launch-context.mjs");
   const {
     readVerifiedRuntimeImages,
     loadVerifiedGateImage,
@@ -1222,6 +1243,9 @@ export async function startLocalRuntime({
         root,
         expectedServerIdentity,
         env: bootstrapEnv,
+        databaseProofService: smoke.databaseProofService,
+        proofDatabaseOptions: smoke.proofDatabaseOptions,
+        externalOwnerMigrations: smoke.externalOwnerMigrations,
       });
       const topicCommands = smoke.buildKafkaRegistryBootstrapScript(projected);
       compose("exec", "-T", "kafka", "sh", "-ceu", topicCommands.join("\n"));
@@ -1257,12 +1281,13 @@ export async function startLocalRuntime({
         throw new Error(
           "RECOVERY_REQUIRED: runtime or observability readiness is not confirmed",
         );
-      const { refreshLocalCollector } =
-        await import("./observability/service.mjs");
-      await refreshLocalCollector({
-        expectedRuntimes: after.filter((entry) =>
-          [...runtimes, "edge-nginx"].includes(entry.service),
-        ),
+      runObservabilityDependency("refresh", {
+        input: JSON.stringify({
+          expectedRuntimes: after.filter((entry) =>
+            [...runtimes, "edge-nginx"].includes(entry.service),
+          ),
+        }),
+        timeout: 900_000,
       });
       const refreshed = await inspectLocalRuntime({ root });
       if (
@@ -1737,7 +1762,13 @@ export async function inspectLocalRuntime({
     throw new Error("observability release directory is unavailable");
   const verifyTelemetry =
     inspectTelemetry ??
-    (await import("./observability/service.mjs")).inspectOwnedTelemetry;
+    (({ root: telemetryReleaseRoot }) =>
+      JSON.parse(
+        runObservabilityDependency("inspect", {
+          args: [telemetryReleaseRoot],
+          timeout: DOCKER_COMMAND_TIMEOUT_MS * 2,
+        }),
+      ));
   const telemetryIds = await verifyTelemetry({ root: observabilityRoot, run });
   const observed = new Map();
   for (const id of telemetryIds) {
@@ -2238,9 +2269,10 @@ export async function publishMaintenanceWarning({
       (!Number.isSafeInteger(publicNotAfter) || publicNotAfter <= 0))
   )
     throw new Error("maintenance warning input is invalid");
-  const telemetry = await import("./observability/service.mjs");
   const accepted = await (
-    readObservability ?? telemetry.readAcceptedObservabilityRelease
+    readObservability ??
+    (() =>
+      JSON.parse(runObservabilityDependency("accepted", { timeout: 60_000 })))
   )();
   const execute =
     run ??
@@ -2250,7 +2282,16 @@ export async function publishMaintenanceWarning({
         timeout: 30_000,
         ...options,
       }));
-  const ids = (inspectTelemetry ?? telemetry.inspectOwnedTelemetry)({
+  const ids = (
+    inspectTelemetry ??
+    (({ root: telemetryReleaseRoot }) =>
+      JSON.parse(
+        runObservabilityDependency("inspect", {
+          args: [telemetryReleaseRoot],
+          timeout: DOCKER_COMMAND_TIMEOUT_MS * 2,
+        }),
+      ))
+  )({
     root: accepted.root,
     run: execute,
   });
@@ -2393,7 +2434,7 @@ export async function maintainLocalCertificates({
     );
   const validate =
     validateContext ??
-    (await import("../verification/launch/v1/report.mjs"))
+    (await import("../scripts/launch-support/launch-context.mjs"))
       .validateLaunchContext;
   const active = await validate(env.COFFEE_LAUNCH_CONTEXT_FILE);
   if (active.candidateRoot !== root)
@@ -2453,7 +2494,7 @@ export async function installLocalRuntimeUnit({
   )
     throw new Error("local unit age key locator is not an owned private file");
   const { validateLaunchContext } =
-    await import("../verification/launch/v1/report.mjs");
+    await import("../scripts/launch-support/launch-context.mjs");
   const active = await validateLaunchContext(contextFile);
   const git = (args) =>
     execFileSync("git", args, {

@@ -8,7 +8,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { load as parseYaml } from "js-yaml";
 import { format as formatPrettier } from "prettier";
-import { GATE_SLUG_PATTERN } from "../verification/launch/v1/gate-identity.mjs";
+import { GATE_SLUG_PATTERN } from "./launch-support/gate-identity.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const MATRIX_PATH = resolve(ROOT, "verification/launch/v1/matrix.yaml");

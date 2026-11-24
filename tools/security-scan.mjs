@@ -26,7 +26,7 @@ import {
   parseSecurityScanVerification,
 } from "../packages/platform-config/src/index.ts";
 import { RUNTIME_NAMES } from "../packages/platform-config/src/index.ts";
-import { validateLaunchContext } from "../verification/launch/v1/report.mjs";
+import { validateLaunchContext } from "../scripts/launch-support/launch-context.mjs";
 import { materializeBuildRegistryCredentials } from "./config-bootstrap/index.mjs";
 import { buildkitPolicy, verifyBuildkitPolicy } from "./buildkit-policy.mjs";
 import {

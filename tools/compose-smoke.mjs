@@ -81,17 +81,17 @@ import {
 import {
   cleanupMigrationDatabases,
   createMigrationDatabase,
-} from "../verification/launch/v1/scenarios/migrations.mjs";
+} from "../scripts/launch-support/migration-database.mjs";
 import {
   createDeliveryTables,
   dropDeliveryTables,
 } from "../scripts/db-live-proof.mjs";
-import { createRuntimeLoggingOverride } from "./observability/generate.mjs";
+import { createRuntimeLoggingOverride } from "../scripts/launch-support/runtime-logging.mjs";
 import {
   createBuildInputSnapshot,
   verifyBuildInputSnapshot,
 } from "./security-scan.mjs";
-import { validateLaunchContext } from "../verification/launch/v1/report.mjs";
+import { validateLaunchContext } from "../scripts/launch-support/launch-context.mjs";
 import {
   loadVerifiedGateImage,
   readVerifiedRuntimeImages,
@@ -118,7 +118,7 @@ import {
   rollbackComposeProjectName,
   rollbackComposeSourceLocation,
   validateRollbackLineage,
-} from "../verification/launch/v1/scenarios/rollback.mjs";
+} from "../scripts/launch-support/rollback-context.mjs";
 import {
   readProviderTrace,
   readRollbackFacts,

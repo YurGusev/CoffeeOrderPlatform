@@ -144,8 +144,8 @@ standalone-запуска без launch context — это отладочный 
 
 Отдельно: `scripts/launch-run.mjs:451-458` вызывает `tools/security-scan.mjs`
 напрямую в pre-launch режиме, а `scripts/launch-run.mjs:468-478` запускает
-`tools/realtime-capacity.mjs` для подготовки qualification. Это обёртки вокруг
-того же канонического пути, а не отдельные гейты.
+`verification/launch/v1/realtime-capacity.mjs` для подготовки qualification. Это
+обёртки вокруг того же канонического пути, а не отдельные гейты.
 
 ### 3.4 Как `compose-smoke` выбирает build или reuse
 
@@ -427,9 +427,9 @@ context.
    `tests/realtime/fixtures/owner-browser.mjs:297-305`). Это не публикация
    канонического набора и не замена manifest-образов.
 2. Подготовка realtime qualification (`tests/realtime/fixtures/setup.mjs:1206-1235`,
-   `tools/realtime-capacity.mjs:252-254`) может пересобрать `edge-gateway`,
-   `api-public`, `realtime-gateway` и `edge-nginx`, если verified image
-   отсутствует в daemon. Это pre-launch шаг, не один из 20 гейтов, и он не
+   `verification/launch/v1/realtime-capacity.mjs:252-254`) может пересобрать
+   `edge-gateway`, `api-public`, `realtime-gateway` и `edge-nginx`, если verified
+   image отсутствует в daemon. Это pre-launch шаг, не один из 20 гейтов, и он не
    расширяет право `compose-smoke` на сборку.
 3. `tools/nginx/fixtures/served-backend.mjs`, `tests/nginx/image.test.mjs` и
    `tests/nginx/cutover.test.mjs` собирают `edge-nginx` только в собственных

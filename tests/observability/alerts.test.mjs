@@ -500,7 +500,7 @@ void test("Tempo effective config is parsed after its native status request head
     assert.throws(() => parseTempoStatusConfigResponse(invalid));
 });
 
-void test("observability CLI can await its runtime and launch modules without an ESM evaluation cycle", async () => {
+void test("observability CLI awaits its runtime and launch modules without an ESM evaluation cycle", async () => {
   const dir = await mkdtemp(
     path.join(tmpdir(), "coffee-observability-import-"),
   );
@@ -509,21 +509,27 @@ void test("observability CLI can await its runtime and launch modules without an
     "../../tools/observability/verify.mjs",
     import.meta.url,
   );
+  const verificationCli = new URL(
+    "../../verification/launch/v1/observability.mjs",
+    import.meta.url,
+  );
+  const runtimeMatrix = new URL(
+    "../../tests/observability/runtime-matrix.mjs",
+    import.meta.url,
+  );
+  const probeSource = `await import(${JSON.stringify(runtimeMatrix.href)});process.stdout.write(JSON.stringify({status: 'probe-pass'}));\n`;
+  const cycleSource = `\nawait import(${JSON.stringify(verificationCli.href)});\n`;
   try {
     await writeFile(
       loader,
       `
 export async function load(url, context, nextLoad) {
   const result = await nextLoad(url, context);
-  if (url === ${JSON.stringify(verify.href)}) {
-    const source = String(result.source);
-    const start = source.indexOf('export async function runObservabilityVerification(');
-    const end = source.indexOf('\\nif (process.argv[1] === fileURLToPath(import.meta.url))', start);
-    if (start < 0 || end < 0) throw new Error('probe cannot locate CLI entry');
-    return {...result, source: source.slice(0, start) + "export async function runObservabilityVerification() { await import('../../tests/observability/runtime-matrix.mjs'); await import('../../tests/observability/launch-path.mjs'); await import('../compose-smoke.mjs'); return {status: 'probe-pass'}; }\\n" + source.slice(end)};
+  if (url === ${JSON.stringify(verificationCli.href)}) {
+    return {...result, source: ${JSON.stringify(probeSource)}};
   }
-  if (process.env.OBSERVABILITY_CYCLE_TEST === '1' && url.endsWith('/tests/observability/runtime-matrix.mjs'))
-    return {...result, source: "import {runObservabilityVerification as cycleProbe} from '../../tools/observability/verify.mjs';\\n" + String(result.source)};
+  if (process.env.OBSERVABILITY_CYCLE_TEST === '1' && url === ${JSON.stringify(runtimeMatrix.href)})
+    return {...result, source: String(result.source) + ${JSON.stringify(cycleSource)}};
   return result;
 }
 `,
@@ -542,7 +548,8 @@ export async function load(url, context, nextLoad) {
     assert.equal(
       negative.status,
       13,
-      "negative control must reproduce the unsettled top-level await",
+      negative.stderr ||
+        "negative control must reproduce the unsettled top-level await",
     );
     const actual = execute(false);
     assert.equal(actual.status, 0, actual.stderr);

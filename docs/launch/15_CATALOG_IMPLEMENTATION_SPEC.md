@@ -283,7 +283,8 @@ Grant и test-local подмены восстанавливаются в `finall
 операции проверяются настоящим login `coffee_catalog_import_rw` с `42501`.
 Foreign CONNECT proof использует существующий live foundation/bootstrap route:
 реальный login importer пробует четыре foreign databases и наблюдает `42501`.
-Вывод `pnpm db:smoke` без `--execute` — только structural plan, не CONNECT proof.
+`node scripts/db-smoke.mjs --plan` выводит только structural plan, не CONNECT proof;
+`pnpm db:smoke` — live-сценарий в контексте launch runner.
 
 Связанная проверка остановки в `test:catalog-copy` пропускает валидные записи
 через `InternalCatalogClient` и настоящее тело HTTP-ответа в `runCatalogImport`.
@@ -544,8 +545,9 @@ provider stop — `Stopped`, неизменённая identity/ref не публ
 - forced crash до/после commit подтверждает atomicity и Outbox recovery;
 - `pnpm architecture:check` запрещает cross-owner imports, чужие DB URLs,
   provider credentials в Catalog и полные Catalog rows в Kafka schemas;
-- `pnpm db:smoke` подтверждает структурный allowlist; живые `permission denied`
-  и owner-транзакции проверяются отдельно в disposable `pnpm db:live-proof`;
+- `node scripts/db-smoke.mjs --plan` подтверждает структурный allowlist; живые
+  `permission denied` и owner-транзакции проверяются отдельно в disposable
+  `pnpm db:live-proof`;
 - generated OpenAPI/JSON Schema и breaking-change checks проходят.
 
 Проверка #18 (`tests/catalog-pipeline/**`) разделяет независимые доказательства:

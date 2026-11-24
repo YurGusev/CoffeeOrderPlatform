@@ -1262,6 +1262,9 @@ export async function provisionLocalBusinessDatabases({
   root = REPO_ROOT,
   expectedServerIdentity,
   env = process.env,
+  databaseProofService,
+  proofDatabaseOptions,
+  externalOwnerMigrations,
 } = {}) {
   const configPath = env.COFFEE_CONFIG_FILE
     ? resolve(env.COFFEE_CONFIG_FILE)
@@ -1303,11 +1306,6 @@ export async function provisionLocalBusinessDatabases({
   localPasswordVerifier(secrets.identity?.databasePassword);
 
   // These controller modules are loaded only for an explicitly compiled launch.
-  const {
-    databaseProofService,
-    proofDatabaseOptions,
-    externalOwnerMigrations,
-  } = await import("../compose-smoke.mjs");
   const { createDatabase } =
     await import("../../packages/platform-database/dist/index.js");
   const { applyMigrations } =
@@ -1781,7 +1779,7 @@ async function validateMigrationTarget({ root, contextPath, env }) {
   let validated;
   try {
     const { validateLaunchContext } =
-      await import("../../verification/launch/v1/report.mjs");
+      await import("../../scripts/launch-support/launch-context.mjs");
     validated = await validateLaunchContext(contextPath);
   } catch {
     fail("CONFIG-MIGRATIONS-CONTEXT", "migrations launch context is invalid");
@@ -1880,7 +1878,7 @@ async function validateMigrationTarget({ root, contextPath, env }) {
 
   try {
     const { inspectLaunchCheckout } =
-      await import("../../verification/launch/v1/scenarios/rollback.mjs");
+      await import("../../scripts/launch-support/rollback-context.mjs");
     await inspectLaunchCheckout(candidateRoot, context.candidateSha);
   } catch {
     fail(
@@ -4559,7 +4557,7 @@ async function readMigrationPreparationSource(
   let inspectLaunchCheckout;
   try {
     ({ inspectLaunchCheckout } =
-      await import("../../verification/launch/v1/scenarios/rollback.mjs"));
+      await import("../../scripts/launch-support/rollback-context.mjs"));
     await inspectLaunchCheckout(
       resources.g15ParentCheckoutRoot,
       sourceContext.candidateSha,
@@ -5809,7 +5807,7 @@ export async function validateBackupTarget({
   let validated;
   try {
     const { validateLaunchContext } =
-      await import("../../verification/launch/v1/report.mjs");
+      await import("../../scripts/launch-support/launch-context.mjs");
     validated = await validateLaunchContext(contextPath);
   } catch {
     fail("CONFIG-BACKUP-CONTEXT", "backup_restore launch context is invalid");

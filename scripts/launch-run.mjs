@@ -483,7 +483,7 @@ async function main() {
       logFile: join(logDir, "soak.log"),
       command: process.execPath,
       args: [
-        join(candidateRoot, "tools/realtime-capacity.mjs"),
+        join(candidateRoot, "verification/launch/v1/realtime-capacity.mjs"),
         "--context",
         join(evidenceDir, "context.json"),
         "--result-dir",
