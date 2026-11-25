@@ -5,7 +5,7 @@ import { createSqlInboxStore } from "@coffee-platform/inbox";
 import { createSqlOutboxStore } from "@coffee-platform/outbox";
 import { createAromaPreparationStore } from "./infrastructure/preparation-store.js";
 import { decodeAromaPreparationEnvelope } from "./application/messages.js";
-import { AromaPreparationTelemetry } from "./observability.js";
+import { AromaPreparationTelemetry } from "./telemetry/index.js";
 
 /** Один process-owned supervisor; бизнес-эффекты и recovery остаются в store. */
 export function createAromaPreparationComposition(): RuntimeComposition {

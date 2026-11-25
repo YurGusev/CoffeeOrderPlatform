@@ -13,6 +13,7 @@ const WORKER_ROOTS = [
   "apps/catalog-activation-worker/src",
   "apps/aroma-observer/src",
   "apps/pricing-service/src",
+  "apps/orders-aroma-preparation/src",
 ];
 
 // Перемещённые модули: старый корневой путь удалён, листовой — существует.
@@ -56,6 +57,10 @@ const MOVED_MODULES = [
   [
     "apps/pricing-service/src/observability.ts",
     "apps/pricing-service/src/telemetry/index.ts",
+  ],
+  [
+    "apps/orders-aroma-preparation/src/observability.ts",
+    "apps/orders-aroma-preparation/src/telemetry/index.ts",
   ],
 ];
 
@@ -116,6 +121,14 @@ const LEAF_IMPORTS = [
   [
     "apps/pricing-service/src/infrastructure/database/pricing-store.ts",
     "../../telemetry/index.js",
+  ],
+  [
+    "apps/orders-aroma-preparation/src/infrastructure/preparation-store.ts",
+    "../telemetry/index.js",
+  ],
+  [
+    "apps/orders-aroma-preparation/src/runtime-composition.ts",
+    "./telemetry/index.js",
   ],
 ];
 

@@ -9862,7 +9862,7 @@ void test("AROMA preparation recovery is idle without work and persists authorit
   });
   const signal = new AbortController().signal;
   const { AromaPreparationTelemetry } =
-    await import("../../../apps/orders-aroma-preparation/dist/observability.js");
+    await import("../../../apps/orders-aroma-preparation/dist/telemetry/index.js");
 
   await t.test(
     "consumed mapping replays and invalid source facts never write owner state",
