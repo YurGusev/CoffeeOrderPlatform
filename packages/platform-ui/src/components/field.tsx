@@ -6,7 +6,7 @@ import {
   TextField,
   type TextFieldProps as AriaTextFieldProps,
 } from "react-aria-components";
-import { cn } from "../cn.js";
+import { cn } from "./cn.js";
 import { Input } from "./input.js";
 
 /** Adapted from shadcn/ui's React Aria field composition; validation stays native to RAC. */

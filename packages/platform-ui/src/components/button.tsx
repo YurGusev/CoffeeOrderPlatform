@@ -3,7 +3,7 @@ import {
   Button as AriaButton,
   type ButtonProps as AriaButtonProps,
 } from "react-aria-components";
-import { cn } from "../cn.js";
+import { cn } from "./cn.js";
 
 /** Adapted from shadcn/ui's React Aria button source; tokens stay package-owned. */
 

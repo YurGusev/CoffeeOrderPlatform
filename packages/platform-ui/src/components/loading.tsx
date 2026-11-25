@@ -1,5 +1,5 @@
 import type { ReactElement } from "react";
-import { cn } from "../cn.js";
+import { cn } from "./cn.js";
 
 export interface LoadingProps {
   className?: string;

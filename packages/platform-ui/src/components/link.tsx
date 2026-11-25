@@ -3,7 +3,7 @@ import {
   Link as AriaLink,
   type LinkProps as AriaLinkProps,
 } from "react-aria-components";
-import { cn } from "../cn.js";
+import { cn } from "./cn.js";
 
 export type LinkProps = Omit<AriaLinkProps, "children" | "className"> & {
   children: ReactNode;
