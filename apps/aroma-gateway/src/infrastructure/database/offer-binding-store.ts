@@ -11,17 +11,17 @@ import {
   type OwnerStatement,
 } from "@coffee-platform/database/owner";
 import {
+  canonicalCatalogJson,
   isAromaOfferBindingRequest,
   type AromaOfferBindingRequest,
   type AromaOfferBindingResponse,
 } from "@coffee-platform/contracts-aroma-v1";
 import {
   CATALOG_SOURCE_IDENTITY_SCHEME,
-  canonicalCatalogJson,
   sha256CatalogHash,
   type CatalogBatchRecord,
   type CatalogExportSummary,
-} from "../../application/catalog-export.js";
+} from "../../domain/catalog-export-contract.js";
 
 const SCHEME = CATALOG_SOURCE_IDENTITY_SCHEME;
 const MAX_BATCH = 500;
