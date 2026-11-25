@@ -19,7 +19,7 @@ import { createServer } from "node:http";
 import { once } from "node:events";
 import { InternalCatalogClient } from "../apps/catalog-supplier-sync/dist/internal-api-client.js";
 import { trace } from "@opentelemetry/api";
-import { CatalogTelemetry } from "../apps/catalog-supplier-sync/dist/observability.js";
+import { CatalogTelemetry } from "../apps/catalog-supplier-sync/dist/telemetry/index.js";
 
 const supplierRef = "sup_00000000000000000000000001";
 const snapshotRef = "snp_01ARZ3NDEKTSV4RRFFQ69G5FAV";

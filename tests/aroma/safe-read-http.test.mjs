@@ -13,7 +13,7 @@ import {
 import {
   AromaConvergenceGatewayClient,
   GatewayClientError as ConvergenceError,
-} from "../../apps/aroma-convergence/dist/gateway-client.js";
+} from "../../apps/aroma-convergence/dist/infrastructure/gateway-client.js";
 
 const requestBody = { cartScopeRef: "aroma-primary" };
 const snapshot = {

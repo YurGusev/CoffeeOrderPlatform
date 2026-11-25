@@ -1146,7 +1146,7 @@ void test(
           async () => {
             await reset();
             const { AromaConvergenceTelemetry } =
-              await import("../../apps/aroma-convergence/dist/observability.js");
+              await import("../../apps/aroma-convergence/dist/telemetry/index.js");
             const telemetry = new AromaConvergenceTelemetry();
             const waitUnknown = async (expected) => {
               for (let tick = 0; tick < 100; tick++) {
@@ -1386,7 +1386,7 @@ void test(
           "only definitive Gateway cart-item 404 is terminal Rejected; 503 remains UnknownOutcome",
           async () => {
             const { GatewayClientError } =
-              await import("../../apps/aroma-convergence/dist/gateway-client.js");
+              await import("../../apps/aroma-convergence/dist/infrastructure/gateway-client.js");
             for (const [status, problemCode, state, attemptState, blockers] of [
               [
                 404,

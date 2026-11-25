@@ -7,7 +7,7 @@ import {
   catalogBatchBytes,
   catalogBatchHash,
 } from "../../packages/contracts/aroma-v1/dist/index.js";
-import { CatalogTelemetry } from "../../apps/catalog-supplier-sync/dist/observability.js";
+import { CatalogTelemetry } from "../../apps/catalog-supplier-sync/dist/telemetry/index.js";
 
 // Production importer/store/telemetry, with only SQL transport and COPY sink replaced.
 const snapshotRef = "snp_01ARZ3NDEKTSV4RRFFQ69G5FBA";

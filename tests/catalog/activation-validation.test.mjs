@@ -9,8 +9,8 @@ import {
 } from "../../packages/contracts/aroma-v1/dist/index.js";
 import { createDatabase } from "../../packages/platform-database/dist/index.js";
 import { createCatalogActivationStore } from "../../apps/catalog-activation-worker/dist/infrastructure/activation-store.js";
-import { semanticFingerprint } from "../../apps/catalog-activation-worker/dist/identity.js";
-import { verifyReceivedGeneration } from "../../apps/catalog-activation-worker/dist/verify-generation.js";
+import { semanticFingerprint } from "../../apps/catalog-activation-worker/dist/domain/identity.js";
+import { verifyReceivedGeneration } from "../../apps/catalog-activation-worker/dist/domain/verify-generation.js";
 
 const P = "1".repeat(64);
 const V = "2".repeat(64);

@@ -12,7 +12,7 @@
   "scripts": {
     "preinstall": "node scripts/check-toolchain-versions.mjs",
     "authority:check": "python3 scripts/validate-launch-authority.py && python3 -m unittest discover -s tests/authority -p 'test_*.py'",
-    "architecture:check": "node scripts/check-architecture.mjs && node --test tests/architecture/checks.test.mjs && node --test tests/architecture/automation-layers.test.mjs",
+    "architecture:check": "node scripts/check-architecture.mjs && node --test tests/architecture/checks.test.mjs && node --test tests/architecture/automation-layers.test.mjs && node --test tests/architecture/worker-module-layout.test.mjs",
     "naming:check": "node scripts/check-gate-naming.mjs && node --test tests/architecture/gate-naming.test.mjs",
     "matrix:sync:check": "node scripts/generate-gate-matrix.mjs --check",
     "contracts:lint": "node scripts/contracts-lint.mjs",
