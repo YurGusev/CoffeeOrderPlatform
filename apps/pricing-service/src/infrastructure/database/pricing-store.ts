@@ -35,7 +35,7 @@ import {
   hashInternalQuote,
   type PricingProofLine,
 } from "../../domain/quote-proof.js";
-import type { PricingTelemetry } from "../../observability.js";
+import type { PricingTelemetry } from "../../telemetry/index.js";
 
 type Row = Readonly<Record<string, unknown>>;
 const rowAjv = new Ajv2020({ allErrors: true, strict: true });

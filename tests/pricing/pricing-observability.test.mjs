@@ -3,7 +3,7 @@ import test from "node:test";
 import { trace } from "@opentelemetry/api";
 import { createPricingAdapters } from "../../apps/pricing-service/dist/http/index.js";
 import { PricingStore } from "../../apps/pricing-service/dist/infrastructure/database/pricing-store.js";
-import { PricingTelemetry } from "../../apps/pricing-service/dist/observability.js";
+import { PricingTelemetry } from "../../apps/pricing-service/dist/telemetry/index.js";
 
 const createOutcomes = [
   "created",

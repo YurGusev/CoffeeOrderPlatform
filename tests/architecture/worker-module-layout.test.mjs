@@ -12,6 +12,7 @@ const WORKER_ROOTS = [
   "apps/aroma-convergence/src",
   "apps/catalog-activation-worker/src",
   "apps/aroma-observer/src",
+  "apps/pricing-service/src",
 ];
 
 // Перемещённые модули: старый корневой путь удалён, листовой — существует.
@@ -51,6 +52,10 @@ const MOVED_MODULES = [
   [
     "apps/aroma-observer/src/gateway-client.ts",
     "apps/aroma-observer/src/infrastructure/gateway-client.ts",
+  ],
+  [
+    "apps/pricing-service/src/observability.ts",
+    "apps/pricing-service/src/telemetry/index.ts",
   ],
 ];
 
@@ -106,6 +111,12 @@ const LEAF_IMPORTS = [
     "./infrastructure/gateway-client.js",
   ],
   ["apps/aroma-observer/src/runtime-composition.ts", "./telemetry/index.js"],
+  ["apps/pricing-service/src/main.ts", "./telemetry/index.js"],
+  ["apps/pricing-service/src/http/index.ts", "../telemetry/index.js"],
+  [
+    "apps/pricing-service/src/infrastructure/database/pricing-store.ts",
+    "../../telemetry/index.js",
+  ],
 ];
 
 async function readSource(path) {
