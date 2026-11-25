@@ -3786,7 +3786,7 @@ void test("AROMA worker telemetry keeps span names and metric series bounded and
       { AromaObserverTelemetry },
       { AromaConvergenceTelemetry },
     ] = await Promise.all([
-      import("../../apps/orders-aroma-preparation/dist/observability.js"),
+      import("../../apps/orders-aroma-preparation/dist/telemetry/index.js"),
       import("../../apps/aroma-observer/dist/observability.js"),
       import("../../apps/aroma-convergence/dist/telemetry/index.js"),
     ]);

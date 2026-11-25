@@ -27,7 +27,7 @@ import {
   type CurrentDesired,
   type ScopeFacts,
 } from "../domain/projection.js";
-import type { AromaPreparationTelemetry } from "../observability.js";
+import type { AromaPreparationTelemetry } from "../telemetry/index.js";
 import {
   decodePreparationAttemptRow,
   decodePreparationBarrierRow,
