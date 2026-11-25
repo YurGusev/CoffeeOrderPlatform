@@ -8,9 +8,9 @@ import type { RuntimeComposition } from "@coffee-platform/runtime";
 import { DatabaseTransactionError } from "@coffee-platform/database";
 import { parseServiceTransportMaterial } from "@coffee-platform/security";
 import { createSqlOutboxStore } from "@coffee-platform/outbox";
-import { AromaObserverGatewayClient } from "./gateway-client.js";
+import { AromaObserverGatewayClient } from "./infrastructure/gateway-client.js";
 import { createAromaObservationStore } from "./infrastructure/observation-store.js";
-import { AromaObserverTelemetry } from "./observability.js";
+import { AromaObserverTelemetry } from "./telemetry/index.js";
 
 /** Scoped transport и bounded supervisor; network остаётся вне owner transaction. */
 export function createAromaObserverComposition(): RuntimeComposition {

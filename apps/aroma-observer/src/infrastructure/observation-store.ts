@@ -13,8 +13,8 @@ import {
   type NormalizedAromaCartSnapshot,
 } from "@coffee-platform/contracts-aroma-v1";
 import { createSqlOutboxStore } from "@coffee-platform/outbox";
-import type { AromaObserverGatewayClient } from "../gateway-client.js";
-import type { AromaObserverTelemetry } from "../observability.js";
+import type { AromaObserverGatewayClient } from "./gateway-client.js";
+import type { AromaObserverTelemetry } from "../telemetry/index.js";
 import {
   decodeObserverBooleanRow,
   decodeObserverClockRow,
