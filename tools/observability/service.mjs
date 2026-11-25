@@ -288,7 +288,7 @@ export async function readAcceptedObservabilityRelease() {
     throw new Error("observability source identity is not clean");
   const old = async (path) => import(pathToFileURL(join(root, path)).href);
   const { validateLaunchContext: validate } = await old(
-    "verification/launch/v1/report.mjs",
+    "scripts/launch-support/launch-context.mjs",
   );
   const active = await validate(match[1]);
   if (active.candidateRoot !== root)

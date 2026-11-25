@@ -68,7 +68,7 @@ import {
   validateRunResultContract,
 } from "./report.mjs";
 import { decisive, reportGateStatus } from "./decision.mjs";
-import { LEGACY_GATE_IDS } from "./gate-identity.mjs";
+import { LEGACY_GATE_IDS } from "../../../scripts/launch-support/gate-identity.mjs";
 import {
   CANONICAL_DATABASE_OWNERS,
   deriveLaunchDatabaseName,
@@ -126,7 +126,6 @@ import {
   BROWSER_CHILD_ARTIFACTS,
   BROWSER_CHILD_DIRECTORY_PREFIX,
   BROWSER_CHILD_REF,
-  browserChildBundleRef,
 } from "./scenarios/browser.mjs";
 import {
   parseTapSummary,
@@ -134,17 +133,9 @@ import {
 } from "./scenarios/owner-suites.mjs";
 import { aromaSandboxResourceNames } from "./scenarios/aroma-sandbox-resources.mjs";
 import {
-  attachRollbackDisabledReconcileSubstage,
   createRollbackBaseline,
   createRollbackCheckouts,
-  createRollbackFailureReceipt,
-  inspectLaunchCheckout,
   persistRollbackFailureFromChild,
-  rollbackComposeProjectName,
-  runManagedRollbackChild,
-  ROLLBACK_DISABLED_RECONCILE_SUBSTAGES,
-  validateRollbackLineage,
-  validateRollbackBaseline,
   validateRollbackFailureArtifact,
   validateRollbackRuntimeArtifact,
   writeRollbackRuntimeArtifact,
@@ -186,6 +177,17 @@ import {
   writeUnitEvidenceArtifacts,
 } from "./scenarios/unit.mjs";
 import { selectFormatPaths } from "../../../scripts/format.mjs";
+import {
+  browserChildBundleRef,
+  attachRollbackDisabledReconcileSubstage,
+  createRollbackFailureReceipt,
+  inspectLaunchCheckout,
+  rollbackComposeProjectName,
+  runManagedRollbackChild,
+  ROLLBACK_DISABLED_RECONCILE_SUBSTAGES,
+  validateRollbackLineage,
+  validateRollbackBaseline,
+} from "../../../scripts/launch-support/rollback-context.mjs";
 
 void test("launch controller reaches evidence preflight without compiled services", async (t) => {
   const source = fileURLToPath(new URL("../../..", import.meta.url));
@@ -2122,7 +2124,10 @@ process.once('SIGTERM', async () => {
 writeFileSync(${JSON.stringify(readyTemporary)}, JSON.stringify({pid:process.pid}));
 renameSync(${JSON.stringify(readyTemporary)}, ${JSON.stringify(ready)});
 setInterval(() => {}, 1000);`;
-  const helperUrl = new URL("./scenarios/rollback.mjs", import.meta.url).href;
+  const helperUrl = new URL(
+    "../../../scripts/launch-support/rollback-context.mjs",
+    import.meta.url,
+  ).href;
   const controllerSource = `import {runManagedRollbackChild} from ${JSON.stringify(helperUrl)};
 try { await runManagedRollbackChild({args:['--input-type=module','-e',${JSON.stringify(childSource)}],cwd:${JSON.stringify(directory)},env:process.env,timeoutMs:120000}); }
 catch(error) { console.log(JSON.stringify({joined:error.result?.joined===true,code:error.message})); }`;
@@ -3413,7 +3418,7 @@ void test("browser parent removes its temporary child checkout and keeps qualifi
       .href
   );
   const { inspectLaunchCheckout } = await import(
-    pathToFileURL(join(root, "verification/launch/v1/scenarios/rollback.mjs"))
+    pathToFileURL(join(root, "scripts/launch-support/rollback-context.mjs"))
       .href
   );
   let childContext;
@@ -7708,11 +7713,7 @@ void test("candidate report and owner suites accept only the exact launch candid
     candidateReport,
     await readFile(new URL("./report.mjs", import.meta.url)),
   );
-  for (const name of [
-    "decision.mjs",
-    "gate-matrix.generated.mjs",
-    "gate-identity.mjs",
-  ])
+  for (const name of ["decision.mjs", "gate-matrix.generated.mjs"])
     await writeFile(
       join(candidateRoot, "verification/launch/v1", name),
       await readFile(new URL(`./${name}`, import.meta.url)),
@@ -7857,11 +7858,7 @@ void test("candidate report and owner suites accept only the exact launch candid
     sourceReport,
     await readFile(new URL("./report.mjs", import.meta.url)),
   );
-  for (const name of [
-    "decision.mjs",
-    "gate-matrix.generated.mjs",
-    "gate-identity.mjs",
-  ])
+  for (const name of ["decision.mjs", "gate-matrix.generated.mjs"])
     await writeFile(
       join(sourceRoot, "verification/launch/v1", name),
       await readFile(new URL(`./${name}`, import.meta.url)),

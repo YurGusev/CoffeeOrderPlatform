@@ -15,7 +15,7 @@ import {
   ROOT,
 } from "../realtime/fixtures/setup.mjs";
 import { fixture, mapping, product } from "./orders-fixture.mjs";
-import { validateLaunchContext } from "../../verification/launch/v1/report.mjs";
+import { validateLaunchContext } from "../../scripts/launch-support/launch-context.mjs";
 
 const shortHash = (value) => hash(String(value));
 const browserRouteTemplate = (value) => {

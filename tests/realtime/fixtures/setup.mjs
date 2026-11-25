@@ -32,7 +32,7 @@ const readBrowserFixtureLineage = async (...args) =>
   ).readBrowserFixtureLineage(...args);
 const validateLaunchContext = async (...args) =>
   (
-    await import("../../../verification/launch/v1/report.mjs")
+    await import("../../../scripts/launch-support/launch-context.mjs")
   ).validateLaunchContext(...args);
 export const loadVerifiedGateImage = async ({ contextFile, ...options }) => {
   const launchPath = contextFile

@@ -14,8 +14,8 @@ import { availableParallelism, cpus, totalmem, userInfo } from "node:os";
 import { fileURLToPath } from "node:url";
 import { performance } from "node:perf_hooks";
 import { loadPlatformConfig } from "../../../scripts/config-lib.mjs";
-import { validateLaunchContext } from "./report.mjs";
-import { runManagedRollbackChild } from "./scenarios/rollback.mjs";
+import { validateLaunchContext } from "../../../scripts/launch-support/launch-context.mjs";
+import { runManagedRollbackChild } from "../../../scripts/launch-support/rollback-context.mjs";
 import {
   parse,
   runTransportFixture,
@@ -24,13 +24,13 @@ import { hash, ROOT } from "../../../tests/realtime/fixtures/setup.mjs";
 import { classifyResult } from "../../../tests/realtime/fixtures/protocol.mjs";
 import {
   runBrowserParent,
-  validateBrowserChildContext,
   verifyBrowserChildBundle,
 } from "./scenarios/browser.mjs";
 import {
   loadVerifiedGateImage,
   readVerifiedRuntimeImages,
 } from "../../../tools/verified-infrastructure-image.mjs";
+import { validateBrowserChildContext } from "../../../scripts/launch-support/rollback-context.mjs";
 
 async function readPacketFile(directory, name, limit) {
   const path = join(directory, name);

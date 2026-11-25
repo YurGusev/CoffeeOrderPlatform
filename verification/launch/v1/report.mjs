@@ -16,10 +16,12 @@ import {
 } from "../../../scripts/launch-support/launch-context.mjs";
 import { EXPECTED_GATES } from "./gate-matrix.generated.mjs";
 import { decisive, reportGateStatus } from "./decision.mjs";
-import { gateLabel, gateSlug } from "./gate-identity.mjs";
+import {
+  gateLabel,
+  gateSlug,
+} from "../../../scripts/launch-support/gate-identity.mjs";
 
 export { EXPECTED_GATES };
-export { validateLaunchContext };
 
 const SUPPORTED_SCHEMA_VERSIONS = [1, 2];
 const DIAGNOSTIC_PROFILES = new Set(["admission", "fast", "diagnostic"]);

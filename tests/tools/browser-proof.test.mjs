@@ -40,7 +40,6 @@ import {
 import {
   validateOwnerBrowserProofHashes,
   validateOwnerBrowserReceipt,
-  validateBrowserChildContext,
   validateBrowserChildProcess,
   validateBrowserFailureReceipt,
   validateBrowserParentRuntime,
@@ -49,6 +48,7 @@ import {
   prepareBrowserChildCheckout,
   validateChildCleanup,
 } from "../../verification/launch/v1/scenarios/browser.mjs";
+import { validateBrowserChildContext } from "../../scripts/launch-support/rollback-context.mjs";
 
 const RUN_ID = "20261025T132252Z-085cdd6";
 const CANDIDATE_SHA = "a".repeat(40);

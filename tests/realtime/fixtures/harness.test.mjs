@@ -3133,7 +3133,7 @@ void test("driver setup links without host-only modules", async () => {
 const denied = new Set([
   new URL(${JSON.stringify(new URL("../../../tools/config-bootstrap/browser-fixture.mjs", import.meta.url).href)}).href,
   new URL(${JSON.stringify(new URL("../../../tools/verified-infrastructure-image.mjs", import.meta.url).href)}).href,
-  new URL(${JSON.stringify(new URL("../../../verification/launch/v1/report.mjs", import.meta.url).href)}).href,
+  new URL(${JSON.stringify(new URL("../../../scripts/launch-support/launch-context.mjs", import.meta.url).href)}).href,
 ]);
 export async function resolve(specifier, context, nextResolve) {
   const result = await nextResolve(specifier, context);

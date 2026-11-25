@@ -1,5 +1,5 @@
 import { EXPECTED_GATES } from "./gate-matrix.generated.mjs";
-import { gateSlug } from "./gate-identity.mjs";
+import { gateSlug } from "../../../scripts/launch-support/gate-identity.mjs";
 
 // `report` публикуется отдельным reportStatus и не участвует в решении о допуске.
 const REPORT_GATE_ID = "report";

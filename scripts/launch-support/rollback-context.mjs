@@ -747,7 +747,7 @@ export function assertLiteralFlagChange(base, disabled) {
 
 /**
  * Verify the ADR-0035 config-only B→D→R lineage without changing any checkout.
- * `launchIdentity` must be the object returned by validateLaunchContext from report.mjs.
+ * `launchIdentity` must be the object returned by validateLaunchContext.
  */
 export async function validateRollbackLineage({
   launchIdentity,
@@ -894,12 +894,16 @@ export async function readRollbackParent(launchIdentity) {
     lineage.baseline.configSha256 !== context.baseConfigSha256
   )
     fail("ROLLBACK_CONTROLLED_CONFIG_INVALID");
-  const parentReport = await import(
+  const parentLaunchContext = await import(
     pathToFileURL(
-      join(parentContext.checkoutDir, "verification/launch/v1/report.mjs"),
+      join(
+        parentContext.checkoutDir,
+        "scripts/launch-support/launch-context.mjs",
+      ),
     ).href
   );
-  const parentIdentity = await parentReport.validateLaunchContext(parentPath);
+  const parentIdentity =
+    await parentLaunchContext.validateLaunchContext(parentPath);
   if (
     parentIdentity.sourceRoot !== sourceRoot ||
     parentIdentity.candidateRoot !== parentContext.checkoutDir

@@ -26,7 +26,6 @@ import {
 import { createAlertSink } from "../../tools/observability/alert-sink.mjs";
 import {
   createCollectorConfig,
-  OBSERVABILITY_TARGETS,
   prometheusMetricName,
 } from "../../tools/observability/generate.mjs";
 import {
@@ -72,6 +71,7 @@ import {
   NODE_RUNTIME_ROLES,
   summarizeRuntimeProbeOutput,
 } from "./runtime-matrix-probe.mjs";
+import { OBSERVABILITY_TARGETS } from "../../scripts/launch-support/runtime-logging.mjs";
 
 const config = {
   environment: "development",
@@ -408,7 +408,7 @@ void test("native collector waits for validated synthetic cleanup and fails clos
 
 void test("supervised alert worker continues while matrix parent blocks", async () => {
   const { runManagedRollbackChild } =
-    await import("../../verification/launch/v1/scenarios/rollback.mjs");
+    await import("../../scripts/launch-support/rollback-context.mjs");
   const definitions = createAlertDefinitions({ config });
   const alerts = definitions
     .filter((rule) => !["diskWatermark", "notReady"].includes(rule.key))
@@ -2826,7 +2826,7 @@ void test("observability component requires five child database removals before 
 
 void test("observability queries actual child telemetry before cleanup and fails closed on missing or private data", async () => {
   const { runManagedRollbackChild } =
-    await import("../../verification/launch/v1/scenarios/rollback.mjs");
+    await import("../../scripts/launch-support/rollback-context.mjs");
   const traceId = "a".repeat(32);
   const cid = "8f53d687-fd3b-47be-b32b-2081d08bc55a";
   const nativeNginxContainerId = "b".repeat(64);

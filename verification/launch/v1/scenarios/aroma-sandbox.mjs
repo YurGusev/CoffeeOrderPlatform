@@ -37,13 +37,15 @@ import {
 } from "./aroma-approval.mjs";
 import {
   createConfigOnlyCheckout,
-  inspectLaunchCheckout,
-  runManagedRollbackChild,
-  validateConfigOnlyLineage,
   writeRollbackLineageBundle,
 } from "./rollback.mjs";
 import { aromaSandboxResourceNames } from "./aroma-sandbox-resources.mjs";
 import { buildBackupRestorePlan } from "./backup-restore.mjs";
+import {
+  inspectLaunchCheckout,
+  runManagedRollbackChild,
+  validateConfigOnlyLineage,
+} from "../../../../scripts/launch-support/rollback-context.mjs";
 
 export async function readApprovedAromaSandboxPolicy(
   candidateRoot,

@@ -19,7 +19,7 @@ import { createRequire } from "node:module";
 import { spawnSync } from "node:child_process";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { validateLaunchContext } from "../report.mjs";
+import { validateLaunchContext } from "../../../../scripts/launch-support/launch-context.mjs";
 
 const MAX_APPROVAL_BYTES = 16 * 1024;
 const MAX_SIGNATURE_BYTES = 1024;

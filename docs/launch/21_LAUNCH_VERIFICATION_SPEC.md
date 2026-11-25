@@ -1120,13 +1120,38 @@ verification → tools-observability → tools → tools-config-bootstrap → sc
 слоя, импортным ребром не является: процесс не входит в модульный граф, поэтому
 такой вызов направлением импорта не ограничивается.
 
+### 19.1. Канонические пути перенесённых символов
+
+Перенесённые из старых модулей символы доступны только по каноническим путям
+`scripts/launch-support/*`:
+
+| Символы | Канонический модуль |
+| --- | --- |
+| `GATE_SLUG_PATTERN`, `LEGACY_GATE_IDS`, `gateSlug`, `gateLabel` | `scripts/launch-support/gate-identity.mjs` |
+| `validateLaunchContext`, `assertNoSymlinkPath`, `redactText` | `scripts/launch-support/launch-context.mjs` |
+| `inspectLaunchCheckout`, `runManagedRollbackChild`, `validateBrowserChildContext`, `browserChildBundleRef`, rollback-константы и lineage-функции | `scripts/launch-support/rollback-context.mjs` |
+| `OBSERVABILITY_TARGETS`, `LOGGED_SERVICES`, `createRuntimeLoggingOverride`, `createDockerLogging` | `scripts/launch-support/runtime-logging.mjs` |
+
+Старые модули `verification/launch/v1/report.mjs`,
+`verification/launch/v1/scenarios/rollback.mjs`,
+`verification/launch/v1/scenarios/browser.mjs` и
+`tools/observability/generate.mjs` больше не реэкспортируют эти символы, а
+обёртка `verification/launch/v1/gate-identity.mjs` удалена. `scenarios/browser.mjs`
+сохраняет только обёртку `verifyBrowserChildBundle`, связывающую базовую проверку
+`rollback-context.mjs` с browser fixture lineage. Реэкспорт из старых путей
+запрещён: `tests/architecture/automation-layers.test.mjs` проверяет отсутствие
+`export ... from "scripts/launch-support/*"`, повторного определения перенесённых
+символов и удаление обёртки, сообщая файл и символ-нарушитель. Статические и
+ленивые импортёры, включая импорт из parent/candidate checkout, используют
+канонический путь.
+
 Направления проверяет `tests/architecture/automation-layers.test.mjs` в составе
 `pnpm architecture:check`; при нарушении сообщаются файл, строка и запрещённое
 направление. Тест проверяет только рёбра между пятью модулями автоматизации
 (направление `tests/**` он не анализирует). Строка `tests/**` остаётся целевым
 направлением: существующие тесты используют `verification/**` как публичный
 контракт сценариев, поэтому в этой задаче такие импорты не переписываются.
-Внутримодульные файловые циклы, например
-`tools/observability/alerts ↔ generate` или
-`verification/launch/v1/scenarios/browser ↔ rollback`, в его область не входят
-и устраняются отдельно.
+Внутримодульные файловые циклы в его область не входят и устраняются отдельно:
+после перевода импортёров на канонические пути циклы
+`verification/launch/v1/scenarios/browser ↔ rollback` и
+`tools/observability/alerts ↔ generate` больше не детектируются.

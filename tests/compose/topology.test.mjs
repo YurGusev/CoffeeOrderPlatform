@@ -20,7 +20,7 @@ import { runInNewContext } from "node:vm";
 import { join, resolve } from "node:path";
 import test from "node:test";
 import { load as parseYaml } from "js-yaml";
-import { createRuntimeLoggingOverride } from "../../tools/observability/generate.mjs";
+import { createRuntimeLoggingOverride } from "../../scripts/launch-support/runtime-logging.mjs";
 import { runtimeContainerLimits } from "../../scripts/config-lib.mjs";
 import { canonicalRequestHash } from "../../packages/platform-idempotency/dist/index.js";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -3701,8 +3701,10 @@ void test("Kafka data uses a project-scoped named volume", async () => {
 });
 
 void test("observability overlay keeps separate backends private and bounds exact Docker log mounts", async () => {
-  const { createComposeOverride, createRuntimeLoggingOverride } =
+  const { createComposeOverride } =
     await import("../../tools/observability/generate.mjs");
+  const { createRuntimeLoggingOverride } =
+    await import("../../scripts/launch-support/runtime-logging.mjs");
   const { loadPlatformConfig } = await import("../../scripts/config-lib.mjs");
   const config = await loadPlatformConfig(REPO_ROOT);
   const imageRefs = JSON.parse(
@@ -4672,8 +4674,10 @@ void test("browser Compose service rows retain the full container ID", async () 
 void test("rollback Compose failure diagnostics preserve the original error and expose only finite process facts", async () => {
   const { ROLLBACK_COMPOSE_OPERATIONS, withRollbackComposeDiagnostic } =
     await import("../../tools/compose-smoke.mjs");
-  const { createRollbackFailureReceipt, validateRollbackFailureArtifact } =
+  const { validateRollbackFailureArtifact } =
     await import("../../verification/launch/v1/scenarios/rollback.mjs");
+  const { createRollbackFailureReceipt } =
+    await import("../../scripts/launch-support/rollback-context.mjs");
   const { persistRollbackFailureFromChild } =
     await import("../../verification/launch/v1/scenarios/rollback.mjs");
   assert.deepEqual(ROLLBACK_COMPOSE_OPERATIONS, [
@@ -5029,8 +5033,10 @@ void test("rollback runtime-stack failure snapshots only bounded project contain
     sanitizeRollbackContainerSnapshot,
     withRollbackComposeDiagnostic,
   } = await import("../../tools/compose-smoke.mjs");
-  const { createRollbackFailureReceipt, persistRollbackFailureFromChild } =
+  const { persistRollbackFailureFromChild } =
     await import("../../verification/launch/v1/scenarios/rollback.mjs");
+  const { createRollbackFailureReceipt } =
+    await import("../../scripts/launch-support/rollback-context.mjs");
   const projectName = "coffee-launch-fixture";
   const postgresName = `${projectName}-postgres-proof`;
   const canary = "RAW_CONTAINER_ENV_SECRET_CANARY";
@@ -7513,8 +7519,10 @@ void test("rollback early database projection guard emits a finite bootstrap rec
   } = await import("../../tools/compose-smoke.mjs");
   const { deriveRuntimeDatabaseTarget } =
     await import("../../packages/platform-config/src/launch-database-target.ts");
-  const { createRollbackFailureReceipt, persistRollbackFailureFromChild } =
+  const { persistRollbackFailureFromChild } =
     await import("../../verification/launch/v1/scenarios/rollback.mjs");
+  const { createRollbackFailureReceipt } =
+    await import("../../scripts/launch-support/rollback-context.mjs");
   const { load } = await import("js-yaml");
   const candidateSha = "3".repeat(40);
   const runId = `20261024T151732Z-${candidateSha.slice(0, 7)}`;

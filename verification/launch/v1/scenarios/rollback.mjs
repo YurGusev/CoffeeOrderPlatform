@@ -15,24 +15,19 @@ import { dirname, join, resolve } from "node:path";
 import { isDeepStrictEqual } from "node:util";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { load as parseYaml } from "js-yaml";
-import { validateLaunchContext } from "../report.mjs";
+import { validateLaunchContext } from "../../../../scripts/launch-support/launch-context.mjs";
 import { artifactManifestPath } from "../../../../tools/image-inventory.mjs";
 import {
-  BROWSER_CHILD_DIRECTORY_NAME,
   ROLLBACK_DISABLED_RECONCILE_SUBSTAGES,
   ROLLBACK_ERROR_NAMES,
   ROLLBACK_FAILURE_CODES,
   ROLLBACK_FAILURE_STAGES,
   assertLiteralFlagChange,
-  attachRollbackDisabledReconcileSubstage,
   configBytes,
-  createRollbackFailureReceipt,
   failureCleanupIsValid,
   inspectLaunchCheckout,
   parsedConfig,
-  readRollbackParent,
   rollbackComposeProjectName,
-  rollbackComposeSourceLocation,
   runManagedRollbackChild,
   sourceLocationIsValid,
   validateConfigOnlyLineage,
@@ -45,22 +40,6 @@ const SHA = /^[0-9a-f]{40}$/u;
 const PROJECT_ROOT = resolve(
   fileURLToPath(new URL("../../../..", import.meta.url)),
 );
-export {
-  BROWSER_CHILD_DIRECTORY_NAME,
-  ROLLBACK_DISABLED_RECONCILE_SUBSTAGES,
-  ROLLBACK_FAILURE_STAGES,
-  attachRollbackDisabledReconcileSubstage,
-  createRollbackFailureReceipt,
-  inspectLaunchCheckout,
-  readRollbackParent,
-  rollbackComposeProjectName,
-  rollbackComposeSourceLocation,
-  runManagedRollbackChild,
-  validateConfigOnlyLineage,
-  validateRollbackBaseline,
-  validateRollbackLineage,
-};
-const inspectCheckout = inspectLaunchCheckout;
 function fail(code) {
   throw new Error(code);
 }
@@ -124,7 +103,7 @@ export async function createConfigOnlyCheckout({
   childConfig,
   parentDirectory = tmpdir(),
 }) {
-  const parent = await inspectCheckout(candidateRoot, candidateSha);
+  const parent = await inspectLaunchCheckout(candidateRoot, candidateSha);
   if (!Buffer.isBuffer(childConfig)) fail("ROLLBACK_CONFIG_INVALID");
   const directory = await mkdtemp(
     join(parentDirectory, "coffee-controlled-config-"),
@@ -191,7 +170,7 @@ export async function createRollbackBaseline({
   candidateSha,
   parentDirectory = tmpdir(),
 }) {
-  const parent = await inspectCheckout(candidateRoot, candidateSha);
+  const parent = await inspectLaunchCheckout(candidateRoot, candidateSha);
   const original = configBytes(parent);
   const text = original.toString("utf8");
   if (!Buffer.from(text, "utf8").equals(original))
@@ -234,7 +213,7 @@ export async function createRollbackCheckouts({
 }) {
   if (typeof candidateRoot !== "string" || !SHA.test(candidateSha ?? ""))
     fail("ROLLBACK_CHECKOUT_INPUT_INVALID");
-  const candidate = await inspectCheckout(candidateRoot, candidateSha);
+  const candidate = await inspectLaunchCheckout(candidateRoot, candidateSha);
   const directory = await mkdtemp(join(parentDirectory, "coffee-g18-lineage-"));
   const disabledRoot = join(directory, "D");
   const restoredRoot = join(directory, "R");
@@ -758,7 +737,7 @@ export async function writeRollbackLineageBundle({
 }) {
   if (!["aroma_sandbox", "rollback"].includes(scope))
     fail("ROLLBACK_BUNDLE_SCOPE_INVALID");
-  await inspectCheckout(restoredRoot, restoredSha);
+  await inspectLaunchCheckout(restoredRoot, restoredSha);
   if (!SHA.test(candidateSha ?? "")) fail("ROLLBACK_CHECKOUT_INPUT_INVALID");
   const temporaryBundle = join(
     restoredRoot,
@@ -884,10 +863,13 @@ export async function runControlledRollbackChild({
       )
         fail("ROLLBACK_CONTROLLED_FAILURE_INVALID");
       const candidateContextBytes = await readFile(child.path);
-      const childReport = await import(
-        pathToFileURL(join(cwd, "verification/launch/v1/report.mjs")).href
+      const childLaunchContext = await import(
+        pathToFileURL(join(cwd, "scripts/launch-support/launch-context.mjs"))
+          .href
       );
-      const identity = await childReport.validateLaunchContext(child.path);
+      const identity = await childLaunchContext.validateLaunchContext(
+        child.path,
+      );
       if (
         candidateContextBytes.length !== contextInfo.size ||
         !isDeepStrictEqual(
@@ -1164,7 +1146,7 @@ export async function runRollbackScenario(
     fail("ROLLBACK_CANDIDATE_EXECUTION_MISMATCH");
   }
   const { context, candidateRoot } = launchIdentity;
-  const parentCheckout = await inspectCheckout(
+  const parentCheckout = await inspectLaunchCheckout(
     candidateRoot,
     context.candidateSha,
   );

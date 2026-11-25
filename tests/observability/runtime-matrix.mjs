@@ -3,9 +3,7 @@ import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
-  createRuntimeLoggingOverride,
   discoverContainerLogs,
-  OBSERVABILITY_TARGETS,
   prometheusMetricName,
 } from "../../tools/observability/generate.mjs";
 import {
@@ -16,6 +14,10 @@ import {
   OPTIONAL_OWNER_TEXT_FAMILIES,
   summarizeRuntimeProbeOutput,
 } from "./runtime-matrix-probe.mjs";
+import {
+  createRuntimeLoggingOverride,
+  OBSERVABILITY_TARGETS,
+} from "../../scripts/launch-support/runtime-logging.mjs";
 
 const ROOT = resolve(fileURLToPath(new URL("../..", import.meta.url)));
 const RUN_PROJECT = /^coffee-launch-[0-9]{8}t[0-9]{6}z-[a-f0-9]{7}$/u;

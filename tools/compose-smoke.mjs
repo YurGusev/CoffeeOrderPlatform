@@ -2560,16 +2560,21 @@ export async function readExternalRecoveryProofCredentials(
 }
 
 export async function loadVerifiedBrowserParentModules(parentRoot) {
-  const [images, report] = await Promise.all([
+  const [images, launchContext] = await Promise.all([
     import(
       pathToFileURL(join(parentRoot, "tools/verified-infrastructure-image.mjs"))
         .href
     ),
     import(
-      pathToFileURL(join(parentRoot, "verification/launch/v1/report.mjs")).href
+      pathToFileURL(
+        join(parentRoot, "scripts/launch-support/launch-context.mjs"),
+      ).href
     ),
   ]);
-  return { images, validateLaunchContext: report.validateLaunchContext };
+  return {
+    images,
+    validateLaunchContext: launchContext.validateLaunchContext,
+  };
 }
 
 export function projectRecoveryPlatformConfig(platformConfig, ownership) {

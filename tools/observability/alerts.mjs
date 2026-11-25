@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { OBSERVABILITY_TARGETS } from "./generate.mjs";
+import { OBSERVABILITY_TARGETS } from "../../scripts/launch-support/runtime-logging.mjs";
 
 const ALERT_METRICS = [
   {
