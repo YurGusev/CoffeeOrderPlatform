@@ -15,14 +15,17 @@ import {
   newCatalogRef,
   snapshotActivatedMessage,
   mappingChangedMessage,
-} from "../events.js";
-import { semanticFingerprint, type SourceIdentity } from "../identity.js";
+} from "../domain/events.js";
+import {
+  semanticFingerprint,
+  type SourceIdentity,
+} from "../domain/identity.js";
 import {
   CatalogActivationError,
   verifyReceivedGeneration,
   type ReceivedGeneration,
   type VerifiedGeneration,
-} from "../verify-generation.js";
+} from "../domain/verify-generation.js";
 
 type Snapshot = ReceivedGeneration["snapshot"];
 type IdentityRow = Readonly<{
