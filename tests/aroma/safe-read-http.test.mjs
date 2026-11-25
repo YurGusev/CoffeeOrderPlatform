@@ -9,7 +9,7 @@ import {
 import {
   AromaObserverGatewayClient,
   GatewayClientError as ObserverError,
-} from "../../apps/aroma-observer/dist/gateway-client.js";
+} from "../../apps/aroma-observer/dist/infrastructure/gateway-client.js";
 import {
   AromaConvergenceGatewayClient,
   GatewayClientError as ConvergenceError,

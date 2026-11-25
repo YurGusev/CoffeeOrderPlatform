@@ -92,7 +92,7 @@ import { createAromaObservationStore } from "../../../apps/aroma-observer/dist/i
 import {
   AromaObserverGatewayClient,
   GatewayClientError as ObserverGatewayClientError,
-} from "../../../apps/aroma-observer/dist/gateway-client.js";
+} from "../../../apps/aroma-observer/dist/infrastructure/gateway-client.js";
 import { createAromaPreparationStore } from "../../../apps/orders-aroma-preparation/dist/infrastructure/preparation-store.js";
 import { buildDesired } from "../../../apps/orders-aroma-preparation/dist/domain/desired.js";
 import { createAromaConvergenceStore } from "../../../apps/aroma-convergence/dist/infrastructure/convergence-store.js";
@@ -9045,7 +9045,7 @@ void test("AROMA observation store schedules, fences, validates, and persists th
     "a schedule recovery SQL failure rolls back, escapes, and reports only recovery error",
     async () => {
       const { AromaObserverTelemetry } =
-        await import("../../../apps/aroma-observer/dist/observability.js");
+        await import("../../../apps/aroma-observer/dist/telemetry/index.js");
       const { database, queries } = makeDatabase({
         recoverScheduleError: Object.assign(
           new Error("schedule insert failed"),
@@ -9138,7 +9138,7 @@ void test("AROMA observation store schedules, fences, validates, and persists th
     "a valid safe read writes normalized lines, revision, owner envelope, outbox, and schedule",
     async () => {
       const { AromaObserverTelemetry } =
-        await import("../../../apps/aroma-observer/dist/observability.js");
+        await import("../../../apps/aroma-observer/dist/telemetry/index.js");
       const { database, queries } = makeDatabase();
       const telemetry = new AromaObserverTelemetry();
       const observer = store(database, {}, telemetry);
@@ -9270,7 +9270,7 @@ void test("AROMA observation store schedules, fences, validates, and persists th
     "a successful Gateway read followed by an owner write error rolls back and escapes without publishing",
     async () => {
       const { AromaObserverTelemetry } =
-        await import("../../../apps/aroma-observer/dist/observability.js");
+        await import("../../../apps/aroma-observer/dist/telemetry/index.js");
       const { database, queries } = makeDatabase({
         insertLinesError: Object.assign(
           new Error("observer-write-private-canary"),
@@ -9444,7 +9444,7 @@ void test("AROMA observation store schedules, fences, validates, and persists th
     "a transient Gateway read failure releases the fenced schedule and a later valid read can persist",
     async () => {
       const { AromaObserverTelemetry } =
-        await import("../../../apps/aroma-observer/dist/observability.js");
+        await import("../../../apps/aroma-observer/dist/telemetry/index.js");
       const { database, queries } = makeDatabase();
       const telemetry = new AromaObserverTelemetry();
       const observer = store(database, {}, telemetry);
@@ -9591,7 +9591,7 @@ void test("AROMA observation store schedules, fences, validates, and persists th
     "stale permit and an overlapping invocation do not issue another read",
     async () => {
       const { AromaObserverTelemetry } =
-        await import("../../../apps/aroma-observer/dist/observability.js");
+        await import("../../../apps/aroma-observer/dist/telemetry/index.js");
       const stale = makeDatabase({ permitValid: false });
       const telemetry = new AromaObserverTelemetry();
       const staleObserver = store(stale.database, {}, telemetry);
@@ -9718,7 +9718,7 @@ void test("AROMA observation store schedules, fences, validates, and persists th
     "a lost fence before persistence leaves the safe read unobserved",
     async () => {
       const { AromaObserverTelemetry } =
-        await import("../../../apps/aroma-observer/dist/observability.js");
+        await import("../../../apps/aroma-observer/dist/telemetry/index.js");
       const { database, queries } = makeDatabase({ permitInvalidAtCall: 2 });
       const telemetry = new AromaObserverTelemetry();
       const observer = store(database, {}, telemetry);
