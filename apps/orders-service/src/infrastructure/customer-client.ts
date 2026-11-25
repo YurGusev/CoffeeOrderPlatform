@@ -4,7 +4,7 @@ import {
   isCustomerRef,
   type CustomerOrderInput,
 } from "@coffee-platform/contracts-customer-v1";
-import { observe } from "../observability.js";
+import { observe } from "../telemetry/index.js";
 
 type HttpClient = Readonly<{
   fetch: (path: string, options?: RequestInit) => Promise<Response>;

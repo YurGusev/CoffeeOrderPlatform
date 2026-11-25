@@ -32,7 +32,7 @@ import {
 } from "../../domain/order-card.js";
 import { nextOrderStatus } from "../../domain/order-state.js";
 import { decodeOrderItemRow, decodeOrderRow } from "./row-schemas.js";
-import { observe } from "../../observability.js";
+import { observe } from "../../telemetry/index.js";
 
 const LEASE_MS = 30_000;
 const RETENTION_MS = 86_400_000;

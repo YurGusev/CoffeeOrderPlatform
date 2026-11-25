@@ -8,7 +8,7 @@ import type {
   OrderReplayResult,
 } from "../infrastructure/database/order-store.js";
 import { hashOrderDraftRequest } from "../infrastructure/database/order-store.js";
-import { observe } from "../observability.js";
+import { observe } from "../telemetry/index.js";
 
 export type CommandContext = Readonly<{
   actorRef: string;
