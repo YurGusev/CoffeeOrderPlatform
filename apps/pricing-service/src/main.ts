@@ -21,7 +21,7 @@ import {
   registerPricingRoutes,
   type PricingSecurity,
 } from "./http/index.js";
-import { PricingTelemetry } from "./observability.js";
+import { PricingTelemetry } from "./telemetry/index.js";
 
 function secretAt(context: RuntimeCompositionContext, path: string): unknown {
   let value: unknown = context.secrets;

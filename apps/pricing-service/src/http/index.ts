@@ -25,7 +25,7 @@ import {
   type CatalogPricingClient,
 } from "../application/create-pricing-quote.js";
 import { PricingStore } from "../infrastructure/database/pricing-store.js";
-import { PricingTelemetry } from "../observability.js";
+import { PricingTelemetry } from "../telemetry/index.js";
 
 type App = Parameters<NonNullable<RuntimeComposition["configure"]>>[0];
 type Request = Readonly<{

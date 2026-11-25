@@ -11,6 +11,7 @@ const WORKER_ROOTS = [
   "apps/catalog-supplier-sync/src",
   "apps/aroma-convergence/src",
   "apps/catalog-activation-worker/src",
+  "apps/pricing-service/src",
 ];
 
 // Перемещённые модули: старый корневой путь удалён, листовой — существует.
@@ -42,6 +43,10 @@ const MOVED_MODULES = [
   [
     "apps/catalog-activation-worker/src/verify-generation.ts",
     "apps/catalog-activation-worker/src/domain/verify-generation.ts",
+  ],
+  [
+    "apps/pricing-service/src/observability.ts",
+    "apps/pricing-service/src/telemetry/index.ts",
   ],
 ];
 
@@ -83,6 +88,12 @@ const LEAF_IMPORTS = [
   [
     "apps/catalog-activation-worker/src/infrastructure/activation-store.ts",
     "../domain/verify-generation.js",
+  ],
+  ["apps/pricing-service/src/main.ts", "./telemetry/index.js"],
+  ["apps/pricing-service/src/http/index.ts", "../telemetry/index.js"],
+  [
+    "apps/pricing-service/src/infrastructure/database/pricing-store.ts",
+    "../../telemetry/index.js",
   ],
 ];
 
