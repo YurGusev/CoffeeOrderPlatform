@@ -9,7 +9,7 @@ import {
 import {
   AromaObserverGatewayClient,
   GatewayClientError as ObserverGatewayClientError,
-} from "../../apps/aroma-observer/dist/gateway-client.js";
+} from "../../apps/aroma-observer/dist/infrastructure/gateway-client.js";
 
 const offerRef = "off_01ARZ3NDEKTSV4RRFFQ69G5FAV";
 const operationRef = "op_01ARZ3NDEKTSV4RRFFQ69G5FAV";
