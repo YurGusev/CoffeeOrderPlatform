@@ -1,5 +1,5 @@
 import { Readable } from "node:stream";
-import { CatalogTelemetry } from "../observability.js";
+import { CatalogTelemetry } from "../telemetry/index.js";
 import {
   CATALOG_MAX_BATCH_BYTES,
   CATALOG_MAX_ITEM_BYTES,
