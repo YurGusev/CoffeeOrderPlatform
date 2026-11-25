@@ -2,7 +2,7 @@ import { Ajv2020 } from "ajv/dist/2020.js";
 import type { ValidateFunction } from "ajv";
 import { isAromaOwnerMessage } from "@coffee-platform/contracts-aroma-v1";
 import type { KafkaEnvelope } from "@coffee-platform/kafka-runtime";
-import type { PhysicalLine } from "../cart-plan.js";
+import type { PhysicalLine } from "../domain/cart-plan.js";
 
 const MAX_INT64 = 9_223_372_036_854_775_807n;
 const REF = (prefix: string): string => `^${prefix}_[0-9A-HJKMNP-TV-Z]{26}$`;

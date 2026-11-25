@@ -9,9 +9,9 @@ import { parseServiceTransportMaterial } from "@coffee-platform/security";
 import { createSqlOutboxStore } from "@coffee-platform/outbox";
 import { createSqlInboxStore } from "@coffee-platform/inbox";
 import { decodeAromaConvergenceEnvelope } from "./application/messages.js";
-import { AromaConvergenceGatewayClient } from "./gateway-client.js";
+import { AromaConvergenceGatewayClient } from "./infrastructure/gateway-client.js";
 import { createAromaConvergenceStore } from "./infrastructure/convergence-store.js";
-import { AromaConvergenceTelemetry } from "./observability.js";
+import { AromaConvergenceTelemetry } from "./telemetry/index.js";
 
 /** Scoped transport и bounded supervisor; network остаётся вне owner transaction. */
 export function createAromaConvergenceComposition(): RuntimeComposition {
