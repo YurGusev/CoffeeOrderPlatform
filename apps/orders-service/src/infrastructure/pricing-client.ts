@@ -4,7 +4,7 @@ import {
   isPricingQuoteVerifyRequest,
   type PricingQuoteVerificationResponse,
 } from "@coffee-platform/contracts-pricing-v1";
-import { observe } from "../observability.js";
+import { observe } from "../telemetry/index.js";
 
 type HttpClient = Readonly<{
   fetch: (path: string, options?: RequestInit) => Promise<Response>;

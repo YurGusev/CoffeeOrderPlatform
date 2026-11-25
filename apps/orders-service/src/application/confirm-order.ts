@@ -3,7 +3,7 @@ import type {
   OrderStore,
   OrderCommandResult,
 } from "../infrastructure/database/order-store.js";
-import { observe } from "../observability.js";
+import { observe } from "../telemetry/index.js";
 import {
   failure,
   lookupReplay,

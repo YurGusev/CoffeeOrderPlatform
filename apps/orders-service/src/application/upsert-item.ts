@@ -5,7 +5,7 @@ import type {
   OrderPutPreflightResult,
 } from "../infrastructure/database/order-store.js";
 import { hashOrderItemPutRequest } from "../infrastructure/database/order-store.js";
-import { observe } from "../observability.js";
+import { observe } from "../telemetry/index.js";
 import {
   failure,
   lookupReplay,

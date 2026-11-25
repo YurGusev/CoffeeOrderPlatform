@@ -52,8 +52,11 @@ precheck/replay и вызов owner store; `src/http/index.ts` ограниче�
 сохраняет Draft/History/Outbox.
 
 В #8 `@opentelemetry/api` создаёт фиксированные route/use-case/proof/transaction/
-Outbox spans и ограниченные метрики `operation/result/state`. In-process
-provider/context проверяются тестами. Production provider, context manager,
+Outbox spans и ограниченные метрики `operation/result/state`. Реализация
+`observe`, имён спанов и метрик лежит в `src/telemetry/`, а `src/observability.ts`
+остаётся совместимым реэкспортом для публичного пути `dist/observability.js`.
+In-process provider/context проверяются тестами
+`tests/orders/observability.test.mjs`. Production provider, context manager,
 exporter и Collector относятся к #64; локальные spans не подтверждают
 production export.
 

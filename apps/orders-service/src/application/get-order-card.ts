@@ -1,5 +1,5 @@
 import type { OrderStore } from "../infrastructure/database/order-store.js";
-import { observe } from "../observability.js";
+import { observe } from "../telemetry/index.js";
 
 export async function getOrderCard(
   store: Pick<OrderStore, "getCard">,

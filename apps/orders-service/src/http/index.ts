@@ -20,7 +20,7 @@ import type {
   OrderReplayResult,
   OrderPrecheckResult,
 } from "../infrastructure/database/order-store.js";
-import { observe, type OrdersSpanName } from "../observability.js";
+import { observe, type OrdersSpanName } from "../telemetry/index.js";
 import {
   createDraft,
   type CommandContext,
