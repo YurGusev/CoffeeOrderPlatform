@@ -5,7 +5,7 @@ import { normalizeAromaCartSnapshot } from "../../packages/contracts/aroma-v1/di
 import {
   AromaConvergenceGatewayClient,
   GatewayClientError,
-} from "../../apps/aroma-convergence/dist/gateway-client.js";
+} from "../../apps/aroma-convergence/dist/infrastructure/gateway-client.js";
 import {
   AromaObserverGatewayClient,
   GatewayClientError as ObserverGatewayClientError,

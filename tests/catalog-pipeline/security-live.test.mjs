@@ -4,11 +4,11 @@ import { resolve } from "node:path";
 import test from "node:test";
 import { Client } from "pg";
 import { createRuntime } from "../../packages/platform-runtime/src/index.ts";
-import { CatalogTelemetry } from "../../apps/catalog-supplier-sync/dist/observability.js";
+import { CatalogTelemetry } from "../../apps/catalog-supplier-sync/dist/telemetry/index.js";
 import {
   snapshotActivatedMessage,
   mappingChangedMessage,
-} from "../../apps/catalog-activation-worker/dist/events.js";
+} from "../../apps/catalog-activation-worker/dist/domain/events.js";
 import {
   createCatalogOwner,
   registerCatalogRoutes,

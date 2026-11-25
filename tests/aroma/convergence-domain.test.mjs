@@ -13,7 +13,7 @@ import {
   firstCartDifference,
   providerQuantity,
   reconcileReservation,
-} from "../../apps/aroma-convergence/dist/cart-plan.js";
+} from "../../apps/aroma-convergence/dist/domain/cart-plan.js";
 import { decodeAromaPreparationEnvelope } from "../../apps/orders-aroma-preparation/dist/application/messages.js";
 import { decodeAromaConvergenceEnvelope } from "../../apps/aroma-convergence/dist/application/messages.js";
 import { projectAromaCard } from "../../apps/orders-aroma-preparation/dist/domain/projection.js";

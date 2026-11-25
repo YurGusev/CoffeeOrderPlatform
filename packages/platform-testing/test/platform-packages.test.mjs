@@ -11995,9 +11995,9 @@ void test("AROMA convergence recovery records an interrupted reservation as Unkn
 
 void test("AROMA convergence blocks disabled mutations and verifies one enabled positive SetQuantity", async (t) => {
   const { GatewayClientError } =
-    await import("../../../apps/aroma-convergence/dist/gateway-client.js");
+    await import("../../../apps/aroma-convergence/dist/infrastructure/gateway-client.js");
   const { AromaConvergenceTelemetry } =
-    await import("../../../apps/aroma-convergence/dist/observability.js");
+    await import("../../../apps/aroma-convergence/dist/telemetry/index.js");
   const telemetry = new AromaConvergenceTelemetry();
   const unknownCountSql =
     "SELECT count(*)::text AS count FROM orders.mutation_reservations WHERE cart_scope_ref='aroma-primary' AND state='UnknownOutcome' AND resolved_at IS NULL";

@@ -5,7 +5,7 @@ import Ajv2020 from "ajv/dist/2020.js";
 import {
   snapshotActivatedMessage,
   mappingChangedMessage,
-} from "../../apps/catalog-activation-worker/dist/events.js";
+} from "../../apps/catalog-activation-worker/dist/domain/events.js";
 
 const root = new URL("../../contracts/schemas/", import.meta.url);
 const ajv = new Ajv2020({ strict: true, allErrors: true });

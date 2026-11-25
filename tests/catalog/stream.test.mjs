@@ -1193,7 +1193,7 @@ void test("import emits real OTel generation/validation spans and bounded metric
       "every span must end",
     );
     const { CatalogTelemetry } =
-      await import("../../apps/catalog-supplier-sync/dist/observability.js");
+      await import("../../apps/catalog-supplier-sync/dist/telemetry/index.js");
     const diagnostics = [];
     let now = 0;
     const telemetry = new CatalogTelemetry(

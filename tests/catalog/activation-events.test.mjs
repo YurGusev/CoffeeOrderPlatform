@@ -5,7 +5,7 @@ import {
   snapshotActivatedMessage,
   mappingChangedMessage,
   newCatalogRef,
-} from "../../apps/catalog-activation-worker/dist/events.js";
+} from "../../apps/catalog-activation-worker/dist/domain/events.js";
 
 const suffix = "0".repeat(26);
 const supplierRef = `sup_${suffix}`;

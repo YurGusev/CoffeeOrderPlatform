@@ -2628,7 +2628,10 @@ async function convergenceWorker(message) {
       ),
       import(
         pathToFileURL(
-          join(root, "apps/aroma-convergence/dist/gateway-client.js"),
+          join(
+            root,
+            "apps/aroma-convergence/dist/infrastructure/gateway-client.js",
+          ),
         ).href
       ),
       import(

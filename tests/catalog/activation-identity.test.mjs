@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { semanticFingerprint } from "../../apps/catalog-activation-worker/dist/identity.js";
+import { semanticFingerprint } from "../../apps/catalog-activation-worker/dist/domain/identity.js";
 
 const P = "1".repeat(64);
 const V = "2".repeat(64);

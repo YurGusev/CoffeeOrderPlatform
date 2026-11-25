@@ -14,7 +14,7 @@ import { createSqlInboxStore } from "../../packages/platform-inbox/dist/index.js
 import { createSqlOutboxStore } from "../../packages/platform-outbox/dist/index.js";
 import { createKafkaRuntime } from "../../packages/platform-kafka-runtime/dist/index.js";
 import { decodeAromaConvergenceEnvelope } from "../../apps/aroma-convergence/dist/application/messages.js";
-import { AromaConvergenceTelemetry } from "../../apps/aroma-convergence/dist/observability.js";
+import { AromaConvergenceTelemetry } from "../../apps/aroma-convergence/dist/telemetry/index.js";
 import { createAromaConvergenceStore } from "../../apps/aroma-convergence/dist/infrastructure/convergence-store.js";
 import {
   deriveRuntimeDatabaseTarget,
