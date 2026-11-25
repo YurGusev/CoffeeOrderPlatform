@@ -24,17 +24,17 @@ import {
   reconcileReservation,
   type PhysicalLine,
   type CartDifference,
-} from "../cart-plan.js";
+} from "../domain/cart-plan.js";
 import {
   GatewayClientError,
   type AromaConvergenceGatewayClient,
   type GatewayCallContext,
-} from "../gateway-client.js";
+} from "./gateway-client.js";
 import {
   assertAromaResultEnvelope,
   decodeAromaConvergenceEnvelope,
 } from "../application/messages.js";
-import type { AromaConvergenceTelemetry } from "../observability.js";
+import type { AromaConvergenceTelemetry } from "../telemetry/index.js";
 import {
   decodeConvergenceAbandonedRow,
   decodeConvergenceBlockerRow,
