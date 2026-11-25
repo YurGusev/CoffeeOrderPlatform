@@ -11,6 +11,7 @@ const WORKER_ROOTS = [
   "apps/catalog-supplier-sync/src",
   "apps/aroma-convergence/src",
   "apps/catalog-activation-worker/src",
+  "apps/aroma-observer/src",
   "apps/pricing-service/src",
 ];
 
@@ -43,6 +44,14 @@ const MOVED_MODULES = [
   [
     "apps/catalog-activation-worker/src/verify-generation.ts",
     "apps/catalog-activation-worker/src/domain/verify-generation.ts",
+  ],
+  [
+    "apps/aroma-observer/src/observability.ts",
+    "apps/aroma-observer/src/telemetry/index.ts",
+  ],
+  [
+    "apps/aroma-observer/src/gateway-client.ts",
+    "apps/aroma-observer/src/infrastructure/gateway-client.ts",
   ],
   [
     "apps/pricing-service/src/observability.ts",
@@ -89,6 +98,19 @@ const LEAF_IMPORTS = [
     "apps/catalog-activation-worker/src/infrastructure/activation-store.ts",
     "../domain/verify-generation.js",
   ],
+  [
+    "apps/aroma-observer/src/infrastructure/observation-store.ts",
+    "./gateway-client.js",
+  ],
+  [
+    "apps/aroma-observer/src/infrastructure/observation-store.ts",
+    "../telemetry/index.js",
+  ],
+  [
+    "apps/aroma-observer/src/runtime-composition.ts",
+    "./infrastructure/gateway-client.js",
+  ],
+  ["apps/aroma-observer/src/runtime-composition.ts", "./telemetry/index.js"],
   ["apps/pricing-service/src/main.ts", "./telemetry/index.js"],
   ["apps/pricing-service/src/http/index.ts", "../telemetry/index.js"],
   [
