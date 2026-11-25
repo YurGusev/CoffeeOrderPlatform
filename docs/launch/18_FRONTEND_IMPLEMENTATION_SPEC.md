@@ -54,6 +54,16 @@ URL, credentials, correlation, AbortSignal и runtime response validation. Он
 использует generated `client-v1` transport types; generated SDK/client и
 handwritten endpoint types запрещены.
 
+Переиспользуемые чистые primitives `assertSchema` (runtime response validation)
+и epoch-времени живут в листовых `apps/web/src/shared/schema.ts` и
+`apps/web/src/shared/time.ts`. `browser/api/schema.ts` и `browser/api/time.ts`
+сохраняют прежние публичные import paths совместимыми `export *`-реэкспортами и
+не содержат второй реализации; `shared/` импортирует только стандартные
+типы/`Date`. `apps/web/src/realtime/order-invalidations.ts` берёт эти helpers из
+`src/shared/`, поэтому `realtime/` не импортирует `browser/`. Размещение
+helpers не меняет SSE-инвалидацию, один `EventSource` на tab, transport
+`client-v1` и TanStack Query policy разделов 4–5.
+
 Feature application импортирует business-neutral primitives из
 `@coffee-platform/ui`; локальный второй каталог UI primitives запрещён. Package
 не импортирует feature models, contracts/generated DTO, Router/Query, `fetch`,
