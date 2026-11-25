@@ -3,7 +3,7 @@ import {
   Input as AriaInput,
   type InputProps as AriaInputProps,
 } from "react-aria-components";
-import { cn } from "../cn.js";
+import { cn } from "./cn.js";
 
 /** Adapted from shadcn/ui's React Aria input source. */
 export type InputProps = Omit<AriaInputProps, "className"> & {

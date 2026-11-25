@@ -1,5 +1,5 @@
 import type { ReactElement, ReactNode } from "react";
-import { cn } from "../cn.js";
+import { cn } from "./cn.js";
 
 export type AlertTone = "info" | "success" | "warning" | "danger";
 
