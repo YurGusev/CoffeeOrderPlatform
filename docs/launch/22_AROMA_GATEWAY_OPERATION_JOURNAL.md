@@ -112,3 +112,19 @@ redaction; Gateway без grants к Orders; Orders без grants к Integration 
 возможного dispatch обрабатывается существующим durable протоколом, без retry.
 Неизвестный универсальный максимум поставщика не превращается в разрешение
 на округление, fractional packages или слепой повтор запроса.
+
+## Экспорт каталога: wire-контракт и граница модулей
+
+Wire-контракт catalog export — константы версии потока и source identity scheme,
+типы записей (`CatalogItem`, `CatalogBatchRecord`, `CatalogExportSummary` и
+связанные) и `sha256CatalogHash` — живёт в листовом модуле
+`apps/aroma-gateway/src/domain/catalog-export-contract.ts`. Модуль не импортирует
+`application`, `infrastructure` или `main`, поэтому
+`infrastructure/database/offer-binding-store` проверяет batch hash напрямую через
+`domain`, и `application` ↔ `infrastructure` не образуют модульного цикла.
+
+`apps/aroma-gateway/src/application/catalog-export.ts` сохраняет прежние
+публичные имена и deep import path `dist/application/catalog-export.js`
+совместимым реэкспортом. Формат catalog snapshot, batch hash,
+`uncompressedBytes`, `contentHash`, порядок записей и семантика `resolve*`
+не меняются.

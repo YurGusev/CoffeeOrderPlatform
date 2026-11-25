@@ -7,30 +7,47 @@ import {
 import type { CatalogJsonValue as JsonValue } from "@coffee-platform/contracts-aroma-v1";
 import { nowInstant, toInstant } from "@coffee-platform/platform-time";
 import {
+  CATALOG_EXPORT_STREAM_VERSION,
+  CATALOG_SOURCE_IDENTITY_SCHEME,
+  sha256CatalogHash,
+  type CatalogAvailability,
+  type CatalogBatchRecord,
+  type CatalogExportSummary,
+  type CatalogGrindOption,
+  type CatalogHashKind,
+  type CatalogHashResolver,
+  type CatalogItem,
+  type CatalogUnit,
+  type Sha256Hash,
+  type SupplierPromotion,
+} from "../domain/catalog-export-contract.js";
+import {
   finishGatewaySpan,
   type GatewayTelemetry,
 } from "../infrastructure/observability.js";
-import { SOURCE_IDENTITY_SCHEME } from "../domain/source-identity.js";
 
-export const CATALOG_EXPORT_STREAM_VERSION = "1" as const;
-export const CATALOG_SOURCE_IDENTITY_SCHEME = SOURCE_IDENTITY_SCHEME;
+export {
+  CATALOG_EXPORT_STREAM_VERSION,
+  CATALOG_SOURCE_IDENTITY_SCHEME,
+  sha256CatalogHash,
+};
+export type {
+  Sha256Hash,
+  CatalogUnit,
+  CatalogAvailability,
+  SupplierPromotion,
+  CatalogGrindOption,
+  CatalogItem,
+  CatalogBatchRecord,
+  CatalogExportSummary,
+  CatalogHashKind,
+  CatalogHashResolver,
+};
+
 export const CATALOG_MAX_OFFERS_PER_BATCH = SHARED_MAX_OFFERS_PER_BATCH;
 export const CATALOG_MAX_BATCH_BYTES = SHARED_MAX_BATCH_BYTES;
 export { canonicalCatalogJson };
 
-export type Sha256Hash = string;
-export type CatalogUnit = "piece" | "gram" | "kilogram";
-export type CatalogAvailability = "Available" | "Unavailable" | "Stopped";
-export type SupplierPromotion = Readonly<{
-  discountBasisPoints: number;
-  minimumWeightRaw: string;
-  providerCreatedAt: string;
-  providerUpdatedAt: string;
-}>;
-export type CatalogGrindOption = Readonly<{
-  sourceGrindKeyHash: Sha256Hash;
-  displayName: string;
-}>;
 export type CatalogExportFailureCode =
   | "PROVIDER_UNAVAILABLE"
   | "PROVIDER_TIMEOUT"
@@ -99,11 +116,6 @@ export type CatalogIdentityResolver = (
 export type CatalogIdentityBoundary =
   CatalogIdentityResolver | Readonly<{ resolve: CatalogIdentityResolver }>;
 
-export type CatalogHashKind = "batch" | "content";
-export type CatalogHashResolver = (
-  bytes: Uint8Array,
-  kind: CatalogHashKind,
-) => string | Promise<string>;
 export type CatalogHashBoundary =
   | CatalogHashResolver
   | Readonly<{ sha256: CatalogHashResolver }>
@@ -116,34 +128,6 @@ export type CatalogStartedRecord = Readonly<{
   supplierRef: string;
   providerSnapshotRef: string;
   startedAt: string;
-}>;
-
-export type CatalogItem = Readonly<{
-  sourceProductKeyHash: Sha256Hash;
-  sourceVariantKeyHash: Sha256Hash;
-  sourceOfferKeyHash: Sha256Hash;
-  displayName: string;
-  categoryName?: string;
-  unit: CatalogUnit;
-  supplierUnitMinor: string;
-  currency: "RUB";
-  availability: CatalogAvailability;
-  imageUrl: string | null;
-  supplierPromotions: readonly SupplierPromotion[];
-  grindOptions?: readonly CatalogGrindOption[];
-  sourceIdentityScheme: typeof CATALOG_SOURCE_IDENTITY_SCHEME;
-}>;
-
-export type CatalogBatchRecord = Readonly<{
-  streamVersion: typeof CATALOG_EXPORT_STREAM_VERSION;
-  recordType: "snapshot-batch";
-  snapshotRef: string;
-  batchNumber: number;
-  offerCount: number;
-  uncompressedBytes: number;
-  batchHash: Sha256Hash;
-  previousBatchHash: Sha256Hash | null;
-  items: readonly CatalogItem[];
 }>;
 
 export type CatalogCompletedRecord = Readonly<{
@@ -171,16 +155,6 @@ export type CatalogExportRecord =
   | CatalogBatchRecord
   | CatalogCompletedRecord
   | CatalogFailedRecord;
-
-export type CatalogExportSummary = Readonly<{
-  snapshotRef: string;
-  supplierRef: string;
-  batchCount: number;
-  productCount: number;
-  variantCount: number;
-  offerCount: number;
-  contentHash: Sha256Hash;
-}>;
 
 export type CatalogExportBatchPersistenceInput = Readonly<{
   record: CatalogBatchRecord;
@@ -1602,7 +1576,3 @@ async function* runExport(
     }
   }
 }
-
-/** The default SHA-256 boundary is injectable so tests and adapters can observe it. */
-export const sha256CatalogHash: CatalogHashResolver = (bytes) =>
-  catalogSha256(bytes);
