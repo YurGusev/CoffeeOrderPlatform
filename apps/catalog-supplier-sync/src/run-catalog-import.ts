@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { CatalogTelemetry } from "./observability.js";
+import { CatalogTelemetry } from "./telemetry/index.js";
 import {
   isAromaCatalogExportRecord,
   type AromaCatalogExportRecord,

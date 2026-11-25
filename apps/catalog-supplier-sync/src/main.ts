@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { CatalogTelemetry } from "./observability.js";
+import { CatalogTelemetry } from "./telemetry/index.js";
 import { AROMA_SUPPLIER_REF } from "@coffee-platform/config";
 import {
   createHttpClient,
