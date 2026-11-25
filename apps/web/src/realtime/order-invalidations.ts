@@ -6,8 +6,8 @@ import type {
 } from "@coffee-platform/generated-client-v1";
 import { clientV1Schemas } from "@coffee-platform/generated-client-v1/runtime-schemas.gen.js";
 import type { Query, QueryClient } from "@tanstack/react-query";
-import { assertSchema } from "../browser/api/schema.js";
-import { instantEpochMilliseconds } from "../browser/api/time.js";
+import { assertSchema } from "../shared/schema.js";
+import { instantEpochMilliseconds } from "../shared/time.js";
 
 const schemas = clientV1Schemas as Record<string, unknown>;
 // Event data uses the same canonical generated schemas as transport proofs.
